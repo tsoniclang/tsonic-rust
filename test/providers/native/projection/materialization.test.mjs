@@ -85,10 +85,11 @@ test("native declarations materialize only demanded members with stable identiti
 test("primitive methods use exact compiler carriers under export aliases and namespace materialization", () => {
   const primitive = { id: "compiler:u32", kind: "primitive", name: "Integer", canonicalPath: ["core", "u32"],
     targetPath: ["core", "u32"], type: { kind: "primitive", name: "u32" }, associatedConstants: [], unsupportedMembers: [],
-    methods: [{ identity: identity("method"), name: "selected", receiver: { kind: "value" },
+    methods: [{ identity: identity("method"), name: "selected", receiver: { kind: "value", type: { kind: "primitive", name: "u32" } },
       parameters: [{ name: "right", type: { kind: "primitive", name: "u32" } }],
       result: { kind: "primitive", name: "u32" }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false,
       typeRequirements: [], genericParameters: [] }] };
+  for (const method of primitive.methods) method.resultLoans = selectRustCompilerResultLoans(method);
   const header = project([primitive], { kind: "incremental", completeExports: [] });
   assert.equal(header.declarationModel.exports[0].kind, "namespace");
   assert.equal(header.declarationModel.exports[0].members.length, 1);

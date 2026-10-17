@@ -1,47 +1,88 @@
 import type { Node } from "@tsonic/tsts";
-import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceStorageBindings,
-  type SourceStorageBoundActivation, type SourceStorageLimits, type SourceStorageQueries,
+import { createSourceStorageBudget, defaultSourceStorageLimits,
+  type SourceStorageLimits, type SourceStorageQueries,
   type SourceStorageSubject, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustFinalizedNativeResultLoans, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import type { RustNativeInputPlace } from "../../target-model/records/ownership.js";
+import type { RustNativeInputPlace, RustNativeResultLoanIndex, RustNativeResultOwnership,
+  RustNativeResultPlaceLoan, RustNativeResultPlaceSelection,
+  RustResultLoanSourceSelection } from "../../target-model/records/ownership.js";
 import type { RustCallableEmissionContexts, RustEmissionProviderOperation,
   RustPhysicalEmissionContext } from "../../target-model/records/physical-emission-contexts.js";
-import type { RustNativeResultLoan, RustNativeResultLoanOrigin } from "../../target-model/operations/result-loans.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-export interface RustNativeResultPlaceLoan {
-  readonly declaration: RustNativeResultLoan;
-  readonly resultPath: readonly string[];
-  readonly origins: readonly { readonly declaration: RustNativeResultLoanOrigin; readonly input: RustNativeInputPlace;
-    readonly kind: "borrow" | "carried" }[];
+export function analyzeRustNativeResultLoans(input: {
+  readonly storage: SourceStorageQueries;
+  readonly physicalEmissionContexts: RustCallableEmissionContexts;
+  readonly nativePlaces: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace>;
+  readonly definitions: RustTypeDefinitions;
+  readonly limits?: Partial<SourceStorageLimits>;
+}): RustNativeResultLoanIndex {
+  const inputs = new Map<RustPhysicalEmissionContext,
+    Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputPlace>>>>();
+  for (const place of input.nativePlaces.values()) {
+    const origin = place.operand.origin;
+    if (origin.kind !== "call-input") throw new Error("Native result inputs require original admitted call-input places.");
+    const operations = inputs.get(place.operand.context) ??
+      new Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputPlace>>>();
+    const nodes = operations.get(origin.operation) ?? new Map<Node, Map<TargetUseSiteRef, RustNativeInputPlace>>();
+    const places = nodes.get(origin.operationNode) ?? new Map<TargetUseSiteRef, RustNativeInputPlace>();
+    places.set(place.operand.use, place);
+    nodes.set(origin.operationNode, places);
+    operations.set(origin.operation, nodes);
+    inputs.set(place.operand.context, operations);
+  }
+  const results = new Map<Node, Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustNativeResultOwnership>>>();
+  const emptyInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace> = new Map();
+  for (const context of input.physicalEmissionContexts.contexts) {
+    if (input.physicalEmissionContexts.contextFor(context.use) !== context)
+      throw new Error("Native returned-loan admission requires each original completed physical context.");
+    for (const origins of context.sourceOrigins) {
+      const { occurrence } = origins;
+      const { node, operation } = occurrence;
+      if (origins.use !== context.use || input.physicalEmissionContexts.sourceFor(node, operation) !== occurrence ||
+        input.physicalEmissionContexts.sourceOriginFor(context.use, occurrence) !== origins)
+        throw new Error("Native returned-loan admission requires its original per-use operation source correspondence.");
+      const operations = results.get(node) ?? new Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustNativeResultOwnership>>();
+      const contexts = operations.get(operation) ?? new Map<TargetUseSiteRef, RustNativeResultOwnership>();
+      if (contexts.has(context.use)) throw new Error("Native returned-loan admission requires one row per original operation and physical context.");
+      const nativePlaces = inputs.get(context)?.get(operation)?.get(node) ?? emptyInputs;
+      const place = selectRustNativeResultPlaces(node, operation, context.use, {
+        physicalEmissionContexts: input.physicalEmissionContexts, nativePlaces, definitions: input.definitions,
+      });
+      const source = place.kind === "unavailable" ? place : selectRustResultLoanSources(place, input);
+      contexts.set(context.use, Object.freeze({ node, operation, context, place, source }));
+      operations.set(operation, contexts);
+      results.set(node, operations);
+    }
+  }
+  return results;
 }
-
-export type RustNativeResultPlaceSelection =
-  | { readonly kind: "resolved"; readonly node: Node; readonly operation: RustEmissionProviderOperation;
-      readonly context: RustPhysicalEmissionContext; readonly carrier: TargetTypeRef;
-      readonly native: RustFinalizedNativeResultLoans; readonly loans: readonly RustNativeResultPlaceLoan[] }
-  | { readonly kind: "unavailable"; readonly node: Node; readonly reasons: readonly string[] };
-
-export type RustResultLoanSourceSelection =
-  | { readonly kind: "resolved"; readonly context: RustPhysicalEmissionContext;
-      readonly alternatives: readonly { readonly activation: SourceStorageBoundActivation;
-        readonly loans: readonly { readonly native: RustNativeResultPlaceLoan;
-          readonly origins: readonly { readonly native: RustNativeResultPlaceLoan["origins"][number];
-            readonly subject: SourceStorageSubject; readonly sources: readonly SourceStorageSubject[] }[] }[] }[] }
-  | { readonly kind: "unavailable"; readonly node: Node; readonly reasons: readonly string[] };
 
 export function selectRustResultLoanSources(
   selected: Extract<RustNativeResultPlaceSelection, { readonly kind: "resolved" }>,
-  bindings: SourceStorageBindings,
-  input: { readonly storage: SourceStorageQueries; readonly limits?: Partial<SourceStorageLimits> },
+  input: { readonly storage: SourceStorageQueries; readonly physicalEmissionContexts: RustCallableEmissionContexts;
+    readonly limits?: Partial<SourceStorageLimits> },
 ): RustResultLoanSourceSelection {
   const unavailable = (...reasons: readonly string[]): RustResultLoanSourceSelection =>
     Object.freeze({ kind: "unavailable", node: selected.node, reasons: Object.freeze([...reasons]) });
-  if (selected.loans.length === 0) return Object.freeze({ kind: "resolved", context: selected.context,
+  if (input.physicalEmissionContexts.contextFor(selected.context.use) !== selected.context ||
+    !input.physicalEmissionContexts.contexts.includes(selected.context))
+    return unavailable("A returned native loan requires its original completed physical context.");
+  if (selected.loans.length === 0) return Object.freeze({ kind: "resolved", context: selected.context, sourceOrigins: undefined,
     alternatives: Object.freeze([]) });
+  const occurrence = input.physicalEmissionContexts.sourceFor(selected.node, selected.operation);
+  if (occurrence === undefined || occurrence.node !== selected.node || occurrence.operation !== selected.operation)
+    return unavailable("A returned native loan requires its original completed operation occurrence.");
+  const sourceOrigins = input.physicalEmissionContexts.sourceOriginFor(selected.context.use, occurrence);
+  if (sourceOrigins === undefined || !selected.context.sourceOrigins.includes(sourceOrigins) ||
+    sourceOrigins.use !== selected.context.use || sourceOrigins.occurrence !== occurrence)
+    return unavailable("A returned native loan requires the exact source-origin record for its context and operation occurrence.");
+  if (sourceOrigins.kind === "unavailable") return unavailable(sourceOrigins.reason);
+  if (sourceOrigins.kind === "open") return unavailable("The returned native loan has an open source-origin domain.");
+  if (sourceOrigins.alternatives.length === 0)
+    return unavailable("The returned native loan has no original source execution alternative.");
   const budget = createSourceStorageBudget({ ...defaultSourceStorageLimits, ...input.limits });
   const subjects = new Map<RustNativeInputPlace, SourceStorageSubject>();
   for (const loan of selected.loans) for (const origin of loan.origins) {
@@ -51,14 +92,11 @@ export function selectRustResultLoanSources(
     if (subject.kind === "unresolved") return unavailable(subject.reason);
     subjects.set(origin.input, subject.subject);
   }
-  const activation = input.storage.boundActivationsFor(selected.context.declaration, bindings);
-  if (activation.kind === "unresolved") return unavailable(activation.reason);
-  if (activation.activations.length === 0) return unavailable("The returned native loan has no original owning source activation.");
   const alternatives: Extract<RustResultLoanSourceSelection, { readonly kind: "resolved" }>["alternatives"][number][] = [];
-  for (const actual of activation.activations) {
+  for (const origin of sourceOrigins.alternatives) {
     if (!budget.step() || !budget.row()) return unavailable(budget.failure()!);
-    if (actual.declaration !== selected.context.declaration)
-      return unavailable("A native result loan source requires the original owning source activation.");
+    const bindings = origin.kind === "module" || origin.kind === "construction"
+      ? origin.selection.bindings : origin.activation.bindings;
     const sources = new Map<SourceStorageSubject, readonly SourceStorageSubject[]>();
     const loans: typeof alternatives[number]["loans"][number][] = [];
     for (const loan of selected.loans) {
@@ -68,7 +106,7 @@ export function selectRustResultLoanSources(
         const subject = subjects.get(native.input)!;
         let selectedSources = sources.get(subject);
         if (selectedSources === undefined) {
-          const origins = input.storage.boundOriginsFor(subject, actual.bindings);
+          const origins = input.storage.boundOriginsFor(subject, bindings);
           if (origins.kind === "unresolved") return unavailable(origins.reason);
           for (const source of origins.subjects) {
             if (!budget.row() || !budget.step()) return unavailable(budget.failure()!);
@@ -81,9 +119,9 @@ export function selectRustResultLoanSources(
       }
       loans.push(Object.freeze({ native: loan, origins: Object.freeze(origins) }));
     }
-    alternatives.push(Object.freeze({ activation: actual, loans: Object.freeze(loans) }));
+    alternatives.push(Object.freeze({ origin, bindings, loans: Object.freeze(loans) }));
   }
-  return Object.freeze({ kind: "resolved", context: selected.context, alternatives: Object.freeze(alternatives) });
+  return Object.freeze({ kind: "resolved", context: selected.context, sourceOrigins, alternatives: Object.freeze(alternatives) });
 }
 
 export function selectRustNativeResultPlaces(
@@ -101,10 +139,11 @@ export function selectRustNativeResultPlaces(
   const native = result.resultLoans;
   if (native === undefined) return unavailable("The native declaration has no published result/formal lifetime correspondence.");
   if (native.contract.kind === "unavailable") return unavailable(...native.contract.reasons);
-  const sourceCarrier = result.kind === "sync" ? result.carrier : result.awaitedCarrier;
-  const carrier = input.physicalEmissionContexts.carrierFor(contextUse, sourceCarrier);
+  if (result.kind === "async") return unavailable(
+    "The awaited native result relation does not establish the Future value's carried input loans.");
+  const carrier = input.physicalEmissionContexts.carrierFor(contextUse, result.carrier);
   if (carrier === undefined) return unavailable("The returned-loan relation has no actual selected result carrier.");
-  const conversion = result.kind === "sync" ? result.conversion : result.awaitedConversion;
+  const conversion = result.conversion;
   const places = new Map<RustFinalizedNativeResultLoans["loans"][number]["origins"][number]["input"], RustNativeInputPlace[]>();
   for (const place of input.nativePlaces.values()) {
     const origin = place.operand.origin;

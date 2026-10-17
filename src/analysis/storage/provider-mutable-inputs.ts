@@ -50,7 +50,7 @@ export function createRustProviderMutableInputPlan(input: RustProviderMutableInp
   for (const [node, operations] of groups) for (const [operation, contexts] of operations) {
     const selectedContexts = new Map<TargetUseSiteRef, RustProviderMutableInputSelection>();
     for (const [contextUse, operands] of contexts) {
-      const selection = selectMutableInputs(node, operation, contextUse, operands, input);
+      const selection = selectRustProviderMutableInputs(node, operation, contextUse, operands, input);
       if (selection === undefined) continue;
       selectedContexts.set(contextUse, selection);
       inventory.push(Object.freeze({ node, operation, contextUse, selection }));
@@ -65,15 +65,6 @@ export function createRustProviderMutableInputPlan(input: RustProviderMutableInp
 }
 
 export function selectRustProviderMutableInputs(
-  operationNode: Node, operation: ProviderOperation, contextUse: TargetUseSiteRef, input: RustProviderMutableInputContext,
-): RustProviderMutableInputSelection | undefined {
-  const operands = input.physicalEmissionContexts.operands.filter(operand => operand.context.use === contextUse &&
-    operand.origin.kind === "call-input" && operand.origin.operationNode === operationNode &&
-    operand.origin.operation === operation && operand.origin.input.mode === "mut-ref");
-  return selectMutableInputs(operationNode, operation, contextUse, operands, input);
-}
-
-function selectMutableInputs(
   operationNode: Node, operation: ProviderOperation, contextUse: TargetUseSiteRef,
   operands: readonly RustPhysicalEmissionOperand[], input: RustProviderMutableInputContext,
 ): RustProviderMutableInputSelection | undefined {

@@ -28,6 +28,7 @@ async function fixture() {
     genericRequirements: { supportsClone: () => true },
     genericCallables: { definitionFor: () => undefined },
     nativeStorage: { subjectFor: () => { throw new Error("This fixture has no native capture demand."); } },
+    lexicalFunctions: { forDeclaration: () => undefined },
     capturesFor: () => undefined,
     invocationTransfersCapture: () => false,
   };
@@ -56,6 +57,13 @@ test("an incomplete or unordered transparent inventory never silently selects a 
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID");
     assert.equal("ownership" in result, false);
   }
+  const nodes = input.nativeNodes.filter(node => node !== operand);
+  const nativeNodes = new Set(nodes);
+  const result = analyzeRustReadOwnership({ ...input, nativeNodes: nodes,
+    borrowEffectsInput: { ...input.borrowEffectsInput, isNativeNode: node => nativeNodes.has(node) } });
+  assert.equal(result.kind, "rejected", "a selected wrapper cannot manufacture an owned value from an excluded runtime operand");
+  assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", "the exact missing input remains an inventory error");
+  assert.equal("ownership" in result, false, "a partial native inventory never publishes a read plan");
 });
 
 test("storage-read materialization respects finite node, work and row budgets before publication", async () => {

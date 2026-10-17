@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { analyzeSourceLiveness, createSourceControlFlow, type SourceFlowLimits,
+import { analyzeSourceLiveness, createSourceControlFlow, createSourceControlFlowDomain, type SourceFlowLimits,
   type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
   type TargetSourceProgram } from "@tsonic/target-api/source";
@@ -32,13 +32,20 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const { source, storage } = input;
   if (storage.source !== source) throw new Error("Rust ownership and flow require the identical checked source program.");
   const { ast } = source;
+  const domain = createSourceControlFlowDomain(source, input.nativeNodes);
+  if (domain.kind === "unresolved") return { kind: "rejected", diagnostics: [{
+    code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",
+    message: domain.reason, sourceNode: domain.source,
+    evidence: ["target.capability=rust.analysis.ownership"],
+  }] };
+  const nativeNodes = new Set(input.nativeNodes);
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
   const graphs = new Map<Node, SourceControlFlowGraph>();
   const livenessByDeclaration = new Map<Node, Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }>>();
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
-    const selected = createSourceControlFlow(source, declaration, { limits: input.limits });
+    const selected = createSourceControlFlow(source, declaration, { domain: domain.domain, limits: input.limits });
     const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
     if (liveness.kind === "unresolved") return { kind: "rejected", diagnostics: [{
       code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",
@@ -62,13 +69,13 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
           sourceNodesEqual(ast, value.declaration, point.operation.kind === "capture" ? point.operation.binding : undefined));
         if (capture === undefined || capture.storage !== "value" ||
           liveness.after.get(point.id)!.has(point.operation.binding) ||
-          !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads)) continue;
+          !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, nativeNodes)) continue;
         const transferred = new Set(captureTransfers.get(point.source));
         transferred.add(capture.declaration);
         captureTransfers.set(point.source, transferred);
       } else if (point.operation.kind === "read" && liveness.lastUses.has(point.source) &&
-        !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input) &&
-        (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads) ||
+        !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input, nativeNodes) &&
+        (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, nativeNodes) ||
           input.isOnceCallable(declaration) && ownedCaptures.has(point.operation.binding))) {
         movingReads.add(point.source);
       }
@@ -78,7 +85,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     if (sourceParameterIsProperty(ast, node)) {
       const summary = source.navigation.declarationUseSummary(node);
       const name = ast.name(node);
-      if (name !== undefined && !summary.bindingWritten && summary.uses.every(use =>
+      if (name !== undefined && !summary.bindingWritten && summary.uses.every(use => !nativeNodes.has(use.reference) ||
         use.kind === "source-linkage" || use.kind === "type-only" || input.isInstanceFieldUse?.(use.reference, node) === true)) {
         movingReads.add(name);
       }
@@ -97,17 +104,19 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers, graphs, liveness: livenessByDeclaration }) };
 }
 
-function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>): boolean {
+function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>,
+  nativeNodes: ReadonlySet<Node>): boolean {
   const { ast, navigation } = input.source;
   if (sourceEnclosingCallable(binding, ast) !== callable) return false;
   const kind = ast.variableDeclarationKind(binding);
   if (kind === "using" || kind === "await using") return false;
   const summary = navigation.declarationUseSummary(binding);
-  return !summary.exported && (!summary.hasUnclassifiedValueUse || summary.uses.every(use =>
-    use.role !== "value" || awaitedReads.has(use.reference)));
+  return !summary.exported && summary.uses.every(use => !nativeNodes.has(use.reference) ||
+    use.role !== "value" || awaitedReads.has(use.reference));
 }
 
-function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: RustOwnershipFlowInput): boolean {
+function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: RustOwnershipFlowInput,
+  nativeNodes: ReadonlySet<Node>): boolean {
   if (input.mayBorrowArgument === undefined) return false;
   const { ast, navigation } = input.source;
   const invocations = new Set<Node>();
@@ -118,7 +127,7 @@ function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: Rus
   const range = ast.authoredRange(reference);
   if (range.kind !== "authored") return true;
   return navigation.declarationUses(binding).some(use => {
-    if (use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return false;
+    if (!nativeNodes.has(use.reference) || use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return false;
     const other = ast.authoredRange(use.reference);
     if (other.kind !== "authored" || other.end > range.start) return false;
     let argument = use.reference;

@@ -1,8 +1,12 @@
 import type { Node } from "@tsonic/tsts";
+import type { SourceStorageBindings, SourceStorageSubject, TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustTargetOperationFact } from "./operations.js";
-import type { RustPhysicalEmissionOperand, RustPhysicalEmissionSourceSlot } from "./physical-emission-contexts.js";
-import type { RustFinalizedSourceInput } from "./finalized-operation.js";
+import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand,
+  RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins,
+  RustPhysicalEmissionSourceSlot } from "./physical-emission-contexts.js";
+import type { RustFinalizedNativeResultLoans, RustFinalizedSourceInput } from "./finalized-operation.js";
+import type { RustNativeResultLoan, RustNativeResultLoanOrigin } from "../operations/result-loans.js";
 
 export type RustValueReadOwnership =
   | { readonly kind: "copy" | "move" | "clone" }
@@ -43,6 +47,8 @@ export interface RustOwnershipRecords {
   readonly reads: ReadonlyMap<Node, RustReadOwnershipFact>;
   readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]>;
   readonly writes: ReadonlyMap<Node, RustBorrowedFieldWrite>;
+  readonly nativePlaces: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace>;
+  readonly nativeResultLoans: RustNativeResultLoanIndex;
 }
 
 export interface RustNativePlace {
@@ -67,3 +73,37 @@ export interface RustNativeInputPlace {
   readonly operand: RustPhysicalEmissionOperand;
   readonly place: RustNativePlace;
 }
+
+export interface RustNativeResultPlaceLoan {
+  readonly declaration: RustNativeResultLoan;
+  readonly resultPath: readonly string[];
+  readonly origins: readonly { readonly declaration: RustNativeResultLoanOrigin; readonly input: RustNativeInputPlace;
+    readonly kind: "borrow" | "carried" }[];
+}
+
+export type RustNativeResultPlaceSelection =
+  | { readonly kind: "resolved"; readonly node: Node; readonly operation: RustEmissionProviderOperation;
+      readonly context: RustPhysicalEmissionContext; readonly carrier: TargetTypeRef;
+      readonly native: RustFinalizedNativeResultLoans; readonly loans: readonly RustNativeResultPlaceLoan[] }
+  | { readonly kind: "unavailable"; readonly node: Node; readonly reasons: readonly string[] };
+
+export type RustResultLoanSourceSelection =
+  | { readonly kind: "resolved"; readonly context: RustPhysicalEmissionContext;
+      readonly sourceOrigins: Extract<RustPhysicalEmissionSourceOrigins, { readonly kind: "resolved" }> | undefined;
+      readonly alternatives: readonly { readonly origin: RustPhysicalEmissionSourceOrigin;
+        readonly bindings: SourceStorageBindings;
+        readonly loans: readonly { readonly native: RustNativeResultPlaceLoan;
+          readonly origins: readonly { readonly native: RustNativeResultPlaceLoan["origins"][number];
+            readonly subject: SourceStorageSubject; readonly sources: readonly SourceStorageSubject[] }[] }[] }[] }
+  | { readonly kind: "unavailable"; readonly node: Node; readonly reasons: readonly string[] };
+
+export interface RustNativeResultOwnership {
+  readonly node: Node;
+  readonly operation: RustEmissionProviderOperation;
+  readonly context: RustPhysicalEmissionContext;
+  readonly place: RustNativeResultPlaceSelection;
+  readonly source: RustResultLoanSourceSelection;
+}
+
+export type RustNativeResultLoanIndex = ReadonlyMap<Node,
+  ReadonlyMap<RustEmissionProviderOperation, ReadonlyMap<TargetUseSiteRef, RustNativeResultOwnership>>>;

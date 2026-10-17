@@ -175,15 +175,16 @@ export function selectRustNativePlace(
       rootDeclaration: rustNativeStorageRoot(receiverNode, input), storagePath: Object.freeze([name]) });
   }
   const kind = ast.kindName(value);
+  const absence = operation?.kind === "option-none" || records.optionProjection.get(value)?.kind === "none";
   const direct = ast.is.IsIdentifier(value) && records.sourceBinding.get(value) !== undefined ||
     kind === "KindThisExpression" || kind === "KindThisKeyword" || rustTargetOperationIsDirectLocation(operation) ||
     field !== undefined && representation?.kind === "value";
   if (direct) {
     return resolved({ kind: "direct" });
   }
-  if (ast.is.IsIdentifier(value) || field !== undefined) return unresolved(
+  if (ast.is.IsIdentifier(value) && !absence || field !== undefined) return unresolved(
     "A native stored input requires its exact admitted storage representation; failed place selection does not create an owned temporary.");
-  const produced = ast.is.IsCallExpression(value) || ast.is.IsNewExpression(value) ||
+  const produced = absence || ast.is.IsCallExpression(value) || ast.is.IsNewExpression(value) ||
     operation?.kind === "source-field" && operation.valueSemantics.kind === "accessor" && operation.accessMode === "read" ||
     operation?.kind === "provider-operation" &&
       operation.abi.target.form !== "field" && operation.abi.target.form !== "index" && operation.abi.target.form !== "static" ||

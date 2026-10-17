@@ -17,6 +17,8 @@ import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-ap
 import { analyzeRustReadUses } from "./uses.js";
 import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import { rustRetainedCallableStorage } from "../callables/results.js";
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
@@ -29,10 +31,11 @@ export function analyzeRustReadOwnership(input: {
   readonly genericRequirements: RustDeclarationGenericRequirementIndex;
   readonly genericCallables: RustGenericCallablePlan;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
+  readonly lexicalFunctions: Pick<RustLexicalFunctionQueries, "forDeclaration">;
   readonly capturesFor: (owner: Node) => RustClosureCaptureFact | undefined;
   readonly invocationTransfersCapture: (owner: Node) => boolean;
   readonly limits?: Partial<SourceStorageLimits>;
-}): { readonly kind: "resolved"; readonly ownership: RustOwnershipRecords }
+}): { readonly kind: "resolved"; readonly ownership: Pick<RustOwnershipRecords, "reads" | "captures" | "writes"> }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
   const { storage, records, flow, borrowEffects } = input;
   const { ast } = storage.source;
@@ -42,14 +45,14 @@ export function analyzeRustReadOwnership(input: {
     message: budget.failure() ?? "Rust ownership reads require a complete finite source-use inventory.",
     evidence: ["target.capability=rust.analysis.ownership"],
   }] });
-  const storageReads = new Map<Node, boolean>();
+  const storageReads = new Map<Node, { readonly storage: boolean; readonly binding: Node | undefined }>();
   for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
     const node = input.nativeNodes[index]!;
     const operand = sourceTransparentExpressionOperand(ast, node);
     const nativeOperand = operand !== undefined && input.borrowEffectsInput.isNativeNode(operand);
     const inherited = nativeOperand ? storageReads.get(operand) : undefined;
-    if (nativeOperand && inherited === undefined) {
+    if (operand !== undefined && (!nativeOperand || inherited === undefined)) {
       return { kind: "rejected", diagnostics: [{
         code: "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", category: "error", source: "tsonic-rust", sourceNode: node,
         message: "Rust ownership requires the complete parent-before-child checked source inventory.",
@@ -57,9 +60,10 @@ export function analyzeRustReadOwnership(input: {
       }] };
     }
     const operation = records.targetOperation.get(node);
-    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) ||
+    storageReads.set(node, inherited ?? Object.freeze({ storage: ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
-      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
+      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored",
+      binding: records.sourceBinding.get(node)?.sourceDeclaration }));
   }
   const uses = analyzeRustReadUses(ast, input.nativeNodes, records);
   const reads = new Map<Node, RustReadOwnershipFact>();
@@ -67,7 +71,8 @@ export function analyzeRustReadOwnership(input: {
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
   const borrowDemands = new Map<Node, Set<Node>>();
   const compare = (source: Node | undefined, later: Node | undefined): void => {
-    if (source === undefined || later === undefined) return;
+    if (source === undefined || later === undefined || !input.borrowEffectsInput.isNativeNode(source) ||
+      !input.borrowEffectsInput.isNativeNode(later)) return;
     const demand = borrowDemands.get(source) ?? new Set<Node>();
     if (demand.has(later) || !budget.row()) return;
     demand.add(later);
@@ -121,27 +126,34 @@ export function analyzeRustReadOwnership(input: {
     const carrier = implicitProperty ? records.sourceParameterAbi.get(parent)?.valueCarrier : records.runtimeCarrier.get(node)?.carrier;
     if (carrier !== undefined) {
       const declaration = sourceEnclosingCallable(node, ast);
+      const sourceStorageRead = storageReads.get(node)!;
+      const captured = declaration === undefined || sourceStorageRead.binding === undefined ? undefined
+        : captures.get(declaration)?.find(capture => capture.declaration === sourceStorageRead.binding);
       const projection = records.flowReadProjection.get(node);
       const valueCarrier = projection?.selectedCarrier ?? carrier;
-      const copy = isRustCopyCarrier(valueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const clone = rustCarrierSupportsClone(valueCarrier, input.definitions) || declaration !== undefined &&
-        input.genericRequirements.supportsClone(declaration, valueCarrier);
+      const physicalValueCarrier = projection === undefined && captured !== undefined ? captured.carrier : valueCarrier;
+      const copy = isRustCopyCarrier(physicalValueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
+      const clone = rustCarrierSupportsClone(physicalValueCarrier, input.definitions) || declaration !== undefined &&
+        input.genericRequirements.supportsClone(declaration, physicalValueCarrier);
       const use = uses.get(node);
       const borrowed = use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
-        use.later.every((later, index) => index < use.laterStart || borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
-      const storageRead = storageReads.get(node)!;
+        use.later.every((later, index) => index < use.laterStart || !input.borrowEffectsInput.isNativeNode(later) ||
+          borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
+      const storageRead = sourceStorageRead.storage;
+      const borrowedCapture = captured?.read.kind === "borrow";
       const value = selectRustValueReadOwnership({ copy, clone, borrowed,
-        transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
-      const sourceCopy = isRustCopyCarrier(carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const sourceClone = rustCarrierSupportsClone(carrier, input.definitions) || declaration !== undefined &&
-        input.genericRequirements.supportsClone(declaration, carrier);
+        transfer: !borrowedCapture && (use?.mode === "move" || flow.movingReads.has(node) || !storageRead) });
+      const physicalSourceCarrier = captured?.carrier ?? carrier;
+      const sourceCopy = isRustCopyCarrier(physicalSourceCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
+      const sourceClone = rustCarrierSupportsClone(physicalSourceCarrier, input.definitions) || declaration !== undefined &&
+        input.genericRequirements.supportsClone(declaration, physicalSourceCarrier);
       const conversion = records.contextualValueConversion.get(node);
       const conversionBorrows = conversion !== undefined &&
         rustContextualRuntimeConversionContract(conversion.conversion, input.definitions)?.sourceMode === "ref";
       const projectBorrows = records.projectDowncast.get(node) !== undefined;
       const constructsContainer = records.optionProjection.get(node)?.kind === "some";
       const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-        transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
+        transfer: !borrowedCapture && (flow.movingReads.has(node) || !storageRead), borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
           ? "shared" : constructsContainer ? undefined : borrowed });
       const operation = records.targetOperation.get(node);
       const binding = records.sourceBinding.get(node);
@@ -181,15 +193,32 @@ export function analyzeRustReadOwnership(input: {
       const copy = isRustCopyCarrier(physicalCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
       const clone = rustCarrierSupportsClone(physicalCarrier, input.definitions) ||
         input.genericRequirements.supportsClone(node, physicalCarrier);
-      const read = selectRustValueReadOwnership({ copy, clone,
+      const ownedRead = selectRustValueReadOwnership({ copy, clone,
         transfer: capture.storage === "cell" || capture.storage === "borrow-cell" ||
           flow.captureTransfers.get(node)?.has(capture.declaration) === true });
+      const lexical = input.lexicalFunctions.forDeclaration(node);
+      if (lexical?.kind === "unresolved") return { kind: "rejected", diagnostics: [{
+        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
+        sourceNode: capture.reference, message: lexical.reason,
+        evidence: ["target.capability=rust.analysis.ownership"],
+      }] };
+      const lexicalCapture = lexical?.captures.find(selected => selected.declaration === capture.declaration);
+      if (lexical !== undefined && lexicalCapture === undefined) return { kind: "rejected", diagnostics: [{
+        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
+        sourceNode: capture.reference, message: "A native lexical capture requires its original selected source capture correspondence.",
+        evidence: ["target.capability=rust.analysis.ownership"],
+      }] };
+      const owned = lexical === undefined || rustRetainedCallableStorage(records, node) !== undefined ||
+        capture.storage === "value" && lexicalCapture?.mutable === false &&
+          (copy || !lexical.valueObserved && ownedRead !== undefined && ownedRead.kind !== "clone");
+      const read = owned ? ownedRead : Object.freeze({ kind: "borrow" as const,
+        mutable: capture.storage === "value" && lexicalCapture?.mutable === true });
       if (read === undefined) return { kind: "rejected", diagnostics: [{
         code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
         sourceNode: capture.reference, message: "A retained capture requires a proven transfer, Copy or Clone contract.",
         evidence: ["target.capability=rust.analysis.ownership"],
       }] };
-      const invocation = input.invocationTransfersCapture(node) ? read :
+      const invocation = read.kind === "borrow" || input.invocationTransfersCapture(node) ? read :
         selectRustValueReadOwnership({ copy, clone, transfer: capture.storage === "cell" || capture.storage === "borrow-cell" });
       if (invocation === undefined) return { kind: "rejected", diagnostics: [{
         code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",

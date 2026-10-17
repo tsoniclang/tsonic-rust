@@ -26,6 +26,8 @@ import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
 import { analyzeRustReadOwnership } from "../ownership/reads.js";
+import { analyzeRustNativePlaces } from "../ownership/native-places.js";
+import { analyzeRustNativeResultLoans } from "../ownership/result-loans.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
@@ -323,7 +325,7 @@ export function analyzeRustTargetProgram(
   const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
-    nativeStorage: context.callableValues.nativeStorage,
+    nativeStorage: context.callableValues.nativeStorage, lexicalFunctions,
     capturesFor, invocationTransfersCapture: owner => {
       const selected = lexicalFunctions.forDeclaration(owner);
       return selected?.kind !== "resolved" || !selected.valueObserved && selected.singleInvocation;
@@ -356,17 +358,6 @@ export function analyzeRustTargetProgram(
     isNativeNode: context.isNativeNode,
     records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
-  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
-    navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
-  const mutableInputDiagnostics: TargetDiagnostic[] = [];
-  for (const node of context.nativeNodes) {
-    const selection = providerMutableInputs.forOperation(node);
-    if (selection?.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
-      category: "error", source: "tsonic-rust", message: selection.reason,
-      sourceNode: selection.node,
-      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
-  }
-  if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const callableValues = context.callableValues.seal({
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     errorRegions: completedErrorRegions, initialization: initializationErrors.value,
@@ -375,6 +366,25 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
+  const nativePlaces = analyzeRustNativePlaces({ ast: context.ast, records,
+    navigation: context.source.navigation, definitions: typeDefinitions,
+    genericCallables: callableValues.value.generic, projectTypes, objectRepresentations,
+    physicalEmissionContexts: callableValues.value.emissionContexts, statementCompletions: statementCompletions.plan });
+  if (nativePlaces.kind === "rejected") return rejectedTargetStage(nativePlaces.diagnostics);
+  const nativeResultLoans = analyzeRustNativeResultLoans({ storage: context.sourceStorage,
+    physicalEmissionContexts: callableValues.value.emissionContexts, nativePlaces: nativePlaces.places,
+    definitions: typeDefinitions });
+  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
+    navigation: context.source.navigation, physicalEmissionContexts: callableValues.value.emissionContexts,
+    nativePlaces: nativePlaces.places });
+  const mutableInputDiagnostics: TargetDiagnostic[] = [];
+  for (const { selection } of providerMutableInputs.operations) {
+    if (selection.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
+      category: "error", source: "tsonic-rust", message: selection.reason,
+      sourceNode: selection.node,
+      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
+  }
+  if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
@@ -416,7 +426,7 @@ export function analyzeRustTargetProgram(
     callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
-    ownership: ownership.ownership,
+    ownership: Object.freeze({ ...ownership.ownership, nativePlaces: nativePlaces.places, nativeResultLoans }),
     borrowedElementReads,
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,

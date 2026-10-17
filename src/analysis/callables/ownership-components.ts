@@ -74,6 +74,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
 }): RustCallableOwnershipComponentQueries {
   const { storage, receiverCaptures } = input;
   const { ast, navigation, semantics } = storage.source;
+  const nativeDomain = new Set(input.nativeNodes);
   const limits = { ...defaultRustCallableOwnershipLimits };
   let failure: string | undefined;
   let steps = 0;
@@ -293,7 +294,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
       environment = sourceLexicalEnvironment(declaration, [...ast.parameters(declaration).flatMap(parameter => {
         const initializer = Node_Initializer(ast, parameter);
         return initializer === undefined ? [] : [initializer];
-      }), body], boundedAst, navigation, input.isRuntimeUse);
+      }), body], boundedAst, navigation, nativeDomain, input.isRuntimeUse);
     } catch (error) {
       if (failure !== undefined) return result();
       throw error;

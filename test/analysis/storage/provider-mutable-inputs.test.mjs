@@ -8,9 +8,12 @@ import { analyzeRustNativePlaces } from "../../../dist/analysis/ownership/native
 
 function selectMutableInputs(node, operation, contextUse, input) {
   const places = analyzeRustNativePlaces(input);
+  const operands = input.physicalEmissionContexts.operands.filter(operand => operand.context.use === contextUse &&
+    operand.origin.kind === "call-input" && operand.origin.operationNode === node &&
+    operand.origin.operation === operation && operand.origin.input.mode === "mut-ref");
   return places.kind === "rejected" ? { kind: "rejected", node: places.diagnostics[0].sourceNode,
     reason: places.diagnostics[0].message } : selectRustProviderMutableInputs(node, operation, contextUse,
-      { ...input, nativePlaces: places.places });
+      operands, { ...input, nativePlaces: places.places });
 }
 
 function fixture() {

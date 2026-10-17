@@ -1,6 +1,8 @@
 import type { AstReader, Node, ReadonlySourceFactResolver } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand,
-  sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+  sourceBindingHasMutableExposure, sourceDeclarationUseSummary, sourceEnclosingCallable,
+  sourceTransparentExpressionOperand, type SourceDeclarationUse,
+  type SourceDeclarationUseSummary } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -69,6 +71,7 @@ export function analyzeRustBorrowEffects(
   const nativeWrites = new Map<Node, readonly Node[]>();
   const stableBindings = new Set<Node>();
   const bindingDecisions = new WeakMap<Node, boolean>();
+  const useSummaries = new Map<Node, SourceDeclarationUseSummary>();
   const directField = (node: Node): boolean => rustDirectBorrowField(node, input);
   let reservations = 0;
   let exhausted = false;
@@ -76,6 +79,20 @@ export function analyzeRustBorrowEffects(
     reservations += count;
     if (reservations > maximumNodes) exhausted = true;
     return !exhausted;
+  };
+  const nativeUseSummary = (declaration: Node): SourceDeclarationUseSummary | undefined => {
+    const existing = useSummaries.get(declaration);
+    if (existing !== undefined) return existing;
+    if (!reserveTargets(1)) return undefined;
+    const uses: SourceDeclarationUse[] = [];
+    for (const use of input.navigation.declarationUseSummary(declaration).uses) {
+      if (!input.isNativeNode(use.reference)) continue;
+      if (!reserveTargets(1)) return undefined;
+      uses.push(use);
+    }
+    const summary = sourceDeclarationUseSummary(input.ast, declaration, Object.freeze(uses));
+    useSummaries.set(declaration, summary);
+    return summary;
   };
   const selectStableBinding = (node: Node): void => {
     const write = input.records.compoundWrite.get(node);
@@ -89,7 +106,8 @@ export function analyzeRustBorrowEffects(
     let stable = bindingDecisions.get(binding.sourceDeclaration);
     if (stable === undefined) {
       if (!reserveTargets(1)) return;
-      const summary = input.navigation.declarationUseSummary(binding.sourceDeclaration);
+      const summary = nativeUseSummary(binding.sourceDeclaration);
+      if (summary === undefined) return;
       stable = !summary.bindingWritten && !summary.exported &&
         !sourceBindingHasMutableExposure({ ast: input.ast, sourceFacts: input.sourceFacts }, summary, () => reserveTargets(1));
       if (exhausted) return;
@@ -102,7 +120,8 @@ export function analyzeRustBorrowEffects(
       "KindTrueKeyword", "KindFalseKeyword"].includes(input.ast.kindName(node))) stableBindings.add(node);
     if (!(input.ast.is.IsVariableDeclaration(node) || input.ast.is.IsParameterDeclaration(node) || input.ast.is.IsBindingElement(node)) ||
       sourceEnclosingCallable(node, input.ast) === undefined) continue;
-    const summary = input.navigation.declarationUseSummary(node);
+    const summary = nativeUseSummary(node);
+    if (summary === undefined) break;
     if (summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten || summary.hasUnclassifiedValueUse) continue;
     let stable = true;
     for (const use of summary.uses) {
