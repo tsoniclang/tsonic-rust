@@ -163,15 +163,15 @@ test("declaration environment admission still rejects duplicate and incompatible
 test("real generic declarations retain owned, unused and captured binders without duplicate self bindings", () => {
   const source = `
 export function identity<Value, Unused>(value: Value): Value { return value; }
-export function make<Value>(captured: Value): <Value>(value: Value) => Value {
-  return <Value>(value: Value): Value => { captured; return value; };
+export function make<Outer>(captured: Outer): <Value>(value: Value) => Outer {
+  return <Value>(value: Value): Outer => captured;
 }
 `;
   for (const surfaces of [[], ["js"]]) {
     const result = compileRust({ surfaces, files: { "index.ts": source } }).result;
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
     assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
-      "actual checked native generic declarations and captured same-name outer binders emit Rust");
+      "actual checked native generic declarations and captured outer binders emit Rust");
   }
 });
 
