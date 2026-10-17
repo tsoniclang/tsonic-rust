@@ -6,7 +6,7 @@ import type {
 } from "../../target-model/types/model.js";
 import {
   rustFixedArrayCarrierValue,
-  rustBuiltInCarrierRenderPaths,
+  rustBuiltInCarrierDefinitions,
   rustCallableTargetId,
   rustAbsenceTargetId,
   rustFutureTargetId,
@@ -135,7 +135,7 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
 }
 
 function rustFoundationForTargetNamedCarrier(id: string): RustFoundation {
-  const renderedPath = rustBuiltInCarrierRenderPaths[id];
+  const renderedPath = rustBuiltInCarrierDefinitions[id]?.renderPath;
   if (renderedPath !== undefined) {
     return rustFoundationForPath(renderedPath);
   }

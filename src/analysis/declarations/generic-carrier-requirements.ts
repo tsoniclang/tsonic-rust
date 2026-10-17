@@ -12,8 +12,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
-import { rustRetainedErrorTargetType, rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId,
-  rustMutableJsErrorTargetId } from "../../target-model/types/carriers/source-error.js";
+import { rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustCarrierSatisfiesTraitRef } from "../../target-model/types/carriers/traits.js";
 import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue,
@@ -31,7 +30,8 @@ import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-n
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import * as nativeIds from "../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustBuiltInCarrierDefinitions } from "../../target-model/types/carriers/built-ins.js";
 import { rustFutureTargetId, rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";
 
 export type RustCarrierRequirementSelection =
@@ -53,28 +53,6 @@ export interface RustStaticRequirementEvidence {
 const supported: RustCarrierRequirementSelection = Object.freeze({ kind: "supported" });
 const unsatisfied = (reason: string): RustCarrierRequirementSelection => Object.freeze({ kind: "unsatisfied", reason });
 const unresolved = (reason: string): RustCarrierRequirementSelection => Object.freeze({ kind: "unresolved", reason });
-
-const ownedNativeIds: ReadonlySet<string> = new Set([
-  nativeIds.rustAbsenceTargetId, nativeIds.rustStringTargetId, nativeIds.rustStrTargetId,
-  nativeIds.rustBigIntTargetId, nativeIds.rustEmptyObjectTargetId, nativeIds.rustObjectIdentityTargetId,
-  nativeIds.rustJsNumericTargetId, nativeIds.rustJsStringNumberTargetId, nativeIds.rustTsValueTargetId,
-  nativeIds.rustJsValueTargetId, nativeIds.rustJsStringTargetId, nativeIds.rustInfallibleTargetId,
-  nativeIds.rustJsErrorTargetId, nativeIds.rustJsDateTargetId, nativeIds.rustJsSymbolTargetId,
-  nativeIds.rustJsPromiseRejectedResultTargetId,
-  rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId, rustMutableJsErrorTargetId,
-  nativeIds.rustJsArrayBufferTargetId, nativeIds.rustJsDataViewTargetId,
-  nativeIds.rustJsInt8ArrayTargetId, nativeIds.rustJsUint8ArrayTargetId, nativeIds.rustJsUint8ClampedArrayTargetId,
-  nativeIds.rustJsInt16ArrayTargetId, nativeIds.rustJsUint16ArrayTargetId, nativeIds.rustJsInt32ArrayTargetId,
-  nativeIds.rustJsUint32ArrayTargetId, nativeIds.rustJsFloat32ArrayTargetId, nativeIds.rustJsFloat64ArrayTargetId,
-]);
-
-const nativeContainerArities: ReadonlyMap<string, number> = new Map([
-  [nativeIds.rustOptionTargetId, 1], [nativeIds.rustLocationTargetId, 2],
-  [nativeIds.rustJsArrayTargetId, 1], [nativeIds.rustJsArrayConcatItemTargetId, 1], [nativeIds.rustJsMapTargetId, 2],
-  [nativeIds.rustJsSetTargetId, 1], [nativeIds.rustJsWeakMapTargetId, 2], [nativeIds.rustJsWeakSetTargetId, 1],
-  [nativeIds.rustJsPromiseFulfilledResultTargetId, 1], [nativeIds.rustJsPromiseSettledResultTargetId, 1],
-  [nativeIds.rustJsPromiseResolutionTargetId, 1], [nativeIds.rustIteratorResultTargetId, 2],
-]);
 
 export function rustFinalContractSupportsStatic(
   contract: RustDeclarationGenericRequirementContract,
@@ -154,28 +132,26 @@ function classifyStaticCarrier(
   definitions: RustTypeDefinitions,
   evidence: RustStaticRequirementEvidence | undefined,
 ): RustCarrierRequirementSelection {
-  type Variance = "positive" | "negative" | "invariant";
   const active = new Set<string>();
-  const flip = (variance: Variance): Variance => variance === "positive" ? "negative" : variance === "negative" ? "positive" : variance;
   const every = (results: readonly RustCarrierRequirementSelection[]): RustCarrierRequirementSelection =>
     results.find(result => result.kind === "unresolved") ?? results.find(result => result.kind === "unsatisfied") ?? supported;
-  const lifetime = (value: RustLifetimeRef | undefined, variance: Variance, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
+  const lifetime = (value: RustLifetimeRef | undefined, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
     if (value === undefined || value.kind === "placeholder" || value.kind === "call-scoped-elision")
       return unresolved("Native static retention requires an exact physical lifetime identity.");
     if (value.kind === "bound" && bound.has(rustLifetimeKey(value))) return supported;
-    if (variance === "negative" || value.kind === "static") return supported;
+    if (value.kind === "static") return supported;
     return evidence?.lifetimeContract !== undefined && rustLifetimeOutlives(value, rustStaticLifetime, evidence.lifetimeContract)
       ? supported : unsatisfied("The actual native stored lifetime does not outlive static.");
   };
-  const argumentsFor = (arguments_: readonly RustTargetGenericArgument[], variance: Variance,
+  const argumentsFor = (arguments_: readonly RustTargetGenericArgument[],
     bound: ReadonlySet<string>): RustCarrierRequirementSelection => every(arguments_.map(argument => argument.kind === "type"
-      ? visit(argument.type, variance, bound) : argument.kind === "lifetime" ? lifetime(argument.lifetime, variance, bound)
+      ? visit(argument.type, bound) : argument.kind === "lifetime" ? lifetime(argument.lifetime, bound)
         : argument.value.kind === "infer" ? unresolved("Native retention requires an exact const argument.") : supported));
   const trait = (value: RustTargetTraitRef, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
     const nested = new Set([...bound, ...value.lifetimeBinder?.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)) ?? []]);
-    return every([argumentsFor(value.genericArguments, "invariant", nested), ...value.associatedConstraints.map(constraint =>
-      constraint.kind === "equality" ? every([argumentsFor(constraint.genericArguments, "invariant", nested), visit(constraint.type, "invariant", nested)])
-        : every([argumentsFor(constraint.genericArguments, "invariant", nested), ...constraint.outlives.map(value => lifetime(value, "invariant", nested))]))]);
+    return every([argumentsFor(value.genericArguments, nested), ...value.associatedConstraints.map(constraint =>
+      constraint.kind === "equality" ? every([argumentsFor(constraint.genericArguments, nested), visit(constraint.type, nested)])
+        : every([argumentsFor(constraint.genericArguments, nested), ...constraint.outlives.map(value => lifetime(value, nested))]))]);
   };
   const apply = (carrier: TargetTypeRef, bindings: RustTargetGenericBindings): TargetTypeRef =>
     substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
@@ -195,7 +171,7 @@ function classifyStaticCarrier(
       (arguments_ as TargetTypeRef[]).map(type => ({ kind: "type", type })));
   };
   const frameEntry = (definition: RustFrameCallableDefinition, entry: RustFrameCallableEntryDefinition,
-    bindings: RustTargetGenericBindings, variance: Variance, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
+    bindings: RustTargetGenericBindings, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
     if (!definition.entries.includes(entry) || entry.implementations.length === 0)
       return unresolved("A native frame slot requires its exact admitted entry alternatives.");
     return every(entry.implementations.map(implementation => {
@@ -214,10 +190,10 @@ function classifyStaticCarrier(
           (definition.activation.kind !== "class" || receiver.owner !== definition.activation.ownerDeclaration)))
         return unresolved("A native frame entry lost its exact receiver-to-activation correspondence.");
       selected.push(...implementation.receivers.map(receiver => apply(receiver.carrier, bindings)));
-      return every(selected.map(carrier => visit(carrier, variance, bound)));
+      return every(selected.map(carrier => visit(carrier, bound)));
     }));
   };
-  const classEnvironment = (carrier: TargetTypeRef, constructor: boolean, variance: Variance,
+  const classEnvironment = (carrier: TargetTypeRef, constructor: boolean,
     bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
     const project = evidence?.projectTypes;
     const source = rustSourceTypeCarrierValue(carrier);
@@ -233,11 +209,11 @@ function classifyStaticCarrier(
     if (bindings === undefined) return unresolved("A class environment lost its exact instance argument correspondence.");
     const arguments_ = environment.genericParameterIndexes.map(index => source.genericArguments[index]);
     if (arguments_.some(argument => argument === undefined)) return unresolved("A class environment has an unbound physical parameter.");
-    return every([argumentsFor(arguments_ as RustTargetGenericArgument[], "invariant", bound),
-      ...environment.captures.map(capture => visit(apply(capture.carrier, bindings), variance, bound)),
-      ...environment.staticFields.map(field => visit(apply(field.carrier, bindings), variance, bound))]);
+    return every([argumentsFor(arguments_ as RustTargetGenericArgument[], bound),
+      ...environment.captures.map(capture => visit(apply(capture.carrier, bindings), bound)),
+      ...environment.staticFields.map(field => visit(apply(field.carrier, bindings), bound))]);
   };
-  const sourceObject = (carrier: TargetTypeRef, variance: Variance, bound: ReadonlySet<string>, wrapper: boolean): RustCarrierRequirementSelection => {
+  const sourceObject = (carrier: TargetTypeRef, bound: ReadonlySet<string>, wrapper: boolean): RustCarrierRequirementSelection => {
     const project = evidence?.projectTypes;
     const source = rustSourceTypeCarrierValue(carrier);
     const definition = project?.definitionForCarrier(carrier);
@@ -251,14 +227,14 @@ function classifyStaticCarrier(
       if (representation?.kind !== "open-hierarchy" || representation.dispatchObjectLifetime === undefined || bindings === undefined)
         return unresolved("A native polymorphic wrapper requires its selected dispatch-object lifetime and exact arguments.");
       const selectedLifetime = bindings.lifetimes.get(rustLifetimeKey(representation.dispatchObjectLifetime)) ?? representation.dispatchObjectLifetime;
-      return every([lifetime(selectedLifetime, variance, bound), argumentsFor(source.genericArguments, "invariant", bound)]);
+      return every([lifetime(selectedLifetime, bound), argumentsFor(source.genericArguments, bound)]);
     }
     const bases = project.directSupertypes(carrier);
     if (bases === undefined) return unresolved("A native object requires its exact physical base layout.");
-    return every([argumentsFor(source.genericArguments, "invariant", bound), ...bases.map(base => {
+    return every([argumentsFor(source.genericArguments, bound), ...bases.map(base => {
       const baseDefinition = project.definitionForCarrier(base);
-      return baseDefinition === undefined ? visit(base, variance, bound)
-        : baseDefinition.kind === "interface" ? supported : sourceObject(base, variance, bound, false);
+      return baseDefinition === undefined ? visit(base, bound)
+        : baseDefinition.kind === "interface" ? supported : sourceObject(base, bound, false);
     }), ...layout.fields.map(field => {
       const frame = evidence?.frameCallables?.bindingFor(field.declaration);
       if (frame?.entry !== undefined) {
@@ -267,15 +243,15 @@ function classifyStaticCarrier(
         const bindings = definition === undefined || instantiated === undefined ? undefined : frameBindings(instantiated, definition, frame.entry);
         return definition === undefined || bindings === undefined || !definition.bindings.includes(frame)
           ? unresolved("A native object frame field lacks its exact selected entry storage.")
-          : frameEntry(definition, frame.entry, bindings, variance, bound);
+          : frameEntry(definition, frame.entry, bindings, bound);
       }
       const declaredCarrier = evidence?.records?.runtimeCarrier.get(field.declaration)?.carrier;
       const selected = declaredCarrier === undefined ? undefined : project.instantiateMemberCarrier(field.declaration, carrier, declaredCarrier);
-      return selected === undefined ? unresolved("A source field lacks its exact native instance storage carrier.") : visit(selected, variance, bound);
-    }), ...(definition.kind === "class" ? [classEnvironment(carrier, false, variance, bound)] : [])]);
+      return selected === undefined ? unresolved("A source field lacks its exact native instance storage carrier.") : visit(selected, bound);
+    }), ...(definition.kind === "class" ? [classEnvironment(carrier, false, bound)] : [])]);
   };
-  const visit = (value: TargetTypeRef, variance: Variance, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
-    const key = closedMetadataKey([value, variance, [...bound]]);
+  const visit = (value: TargetTypeRef, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
+    const key = closedMetadataKey([value, [...bound]]);
     if (active.has(key)) return unresolved("Native static retention requires a completed recursive physical storage contract.");
     active.add(key);
     try {
@@ -286,28 +262,27 @@ function classifyStaticCarrier(
         case "type-parameter":
           if (!declared.has(value.identity) || !byParameter.has(value.identity))
             return unresolved("Native static retention refers to a foreign generic identity.");
-          if (variance !== "negative") byParameter.get(value.identity)!.add("static");
+          byParameter.get(value.identity)!.add("static");
           return supported;
         case "array":
         case "slice":
-          return visit(value.element, variance, bound);
+          return visit(value.element, bound);
         case "tuple":
-          return every(value.elements.map(element => visit(element, variance, bound)));
+          return every(value.elements.map(element => visit(element, bound)));
         case "reference":
-          return every([lifetime(value.lifetime, variance, bound), visit(value.referent, value.mutable ? "invariant" : variance, bound)]);
+          return every([lifetime(value.lifetime, bound), visit(value.referent, bound)]);
         case "pointer":
-          return value.mutability === "target-defined" ? unresolved("Native pointer variance requires its actual native mutability.")
-            : visit(value.pointee, value.mutability === "mut" ? "invariant" : variance, bound);
+          return visit(value.pointee, bound);
         case "function-pointer": {
           const nested = new Set([...bound, ...value.lifetimeBinder?.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)) ?? []]);
-          return every([...value.args.map(argument => visit(argument, flip(variance), nested)), visit(value.result, variance, nested)]);
+          return every([...value.args.map(argument => visit(argument, nested)), visit(value.result, nested)]);
         }
         case "trait-object":
-          return every([lifetime(value.lifetime, variance, bound), trait(value.principal, bound), ...value.autoTraits.map(value => trait(value, bound))]);
+          return every([lifetime(value.lifetime, bound), trait(value.principal, bound), ...value.autoTraits.map(value => trait(value, bound))]);
         case "associated-type":
           return associatedSupports(value, "static") ? supported : unsatisfied("The exact native associated projection has no static bound.");
         case "impl-trait":
-          return value.outlives.some(value => lifetime(value, variance, bound).kind === "supported") ? supported
+          return value.outlives.some(value => lifetime(value, bound).kind === "supported") ? supported
             : unresolved("An opaque native value requires its actual completed capture storage or an explicit native outlives guarantee; Future output is not capture evidence.");
         case "closure":
           return unresolved("A logical native closure signature does not contain its actual physical captured storage.");
@@ -316,48 +291,53 @@ function classifyStaticCarrier(
         case "trait-ref":
           return unresolved("A native trait constraint is not a stored value representation.");
         case "target-named": {
-          if (value.id === rustFutureTargetId || value.id === nativeIds.rustJsPromiseTargetId)
-            return unresolved("A logical Future or Promise result does not prove its physical stored environment.");
-          const errorOwner = rustProgramErrorOwner(value);
-          if (errorOwner?.kind === "physical" && errorOwner.domain === "runtime") return supported;
-          if (ownedNativeIds.has(value.id)) return (value.genericArguments?.length ?? 0) === 0 ? supported
-            : unresolved("A closed native carrier has unexpected generic storage arguments.");
-          if (value.id === nativeIds.rustCallableTargetId) return rustCallableProtocol(value) === undefined
-            ? unresolved("A native callable requires its exact admitted storage protocol.")
-            : argumentsFor(value.genericArguments!, "invariant", bound);
-          const arity = nativeContainerArities.get(value.id);
-          if (arity !== undefined) return value.genericArguments === undefined || value.genericArguments.length !== arity ||
-            value.genericArguments.some(argument => argument.kind !== "type")
-            ? unresolved("A native container requires its exact admitted storage arguments.") : argumentsFor(value.genericArguments, "invariant", bound);
-          return unresolved("Native static retention requires a known physical named carrier, not an unregistered native identity.");
+          if (value.id === rustFutureTargetId)
+            return unresolved("A logical Future result does not prove its physical stored environment.");
+          if (!Object.hasOwn(rustBuiltInCarrierDefinitions, value.id))
+            return unresolved("Native static retention requires a known physical named carrier, not an unregistered native identity.");
+          const definition = rustBuiltInCarrierDefinitions[value.id]!;
+          const arguments_ = value.genericArguments ?? [];
+          if (arguments_.length !== definition.parameters.length ||
+            arguments_.some((argument, index) => argument.kind !== definition.parameters[index]))
+            return unresolved("A native carrier requires its exact declared storage argument count and kinds.");
+          if (definition.storage === "unavailable")
+            return unresolved("This reserved native identity has no admitted physical value representation.");
+          if (definition.storage === "opaque")
+            return unresolved("An opaque native implementation requires its actual physical environment, not its logical signature.");
+          if (definition.storage === "program-error") {
+            const errorOwner = rustProgramErrorOwner(value);
+            return errorOwner?.kind === "physical" && errorOwner.domain === "runtime" ? supported
+              : unresolved("A contextual program error requires its actual admitted native payload representation.");
+          }
+          if (value.id === rustCallableTargetId && rustCallableProtocol(value) === undefined)
+            return unresolved("A native callable requires its exact admitted storage protocol.");
+          return argumentsFor(arguments_, bound);
         }
         case "target-specific": {
           if (isRustNeverCarrier(value)) return supported;
           const fixed = rustFixedArrayCarrierValue(value);
-          if (fixed !== undefined) return every([visit(fixed.element, variance, bound),
+          if (fixed !== undefined) return every([visit(fixed.element, bound),
             fixed.length.kind === "infer" ? unresolved("A native fixed array requires its exact const extent.") : supported]);
           const join = rustNativeErrorJoinReference(value);
-          if (join !== undefined) return every(join.errors.map(error => visit(error, variance, bound)));
+          if (join !== undefined) return every(join.errors.map(error => visit(error, bound)));
           const named = rustNamedTypeCarrierValue(value);
-          if (named !== undefined) return variance === "negative" && named.genericArguments.length !== 0
-            ? unresolved("A native named argument in contravariant position requires its actual native variance metadata.")
-            : argumentsFor(named.genericArguments, "invariant", bound);
+          if (named !== undefined) return argumentsFor(named.genericArguments, bound);
           const union = rustSourceUnionCarrierValue(value);
           if (union !== undefined) {
             const variants = definitions.sourceUnionVariants(value);
             return variants === undefined ? unresolved("Native union retention requires its actual admitted payload variants.")
-              : every(variants.map(variant => visit(variant.carrier, variance, bound)));
+              : every(variants.map(variant => visit(variant.carrier, bound)));
           }
           const structural = rustStructuralObjectCarrierValue(value);
           if (structural !== undefined) {
             const fields = structural.fields.map((field, index) => {
-              if (field.method !== true) return visit(field.type, variance, bound);
+              if (field.method !== true) return visit(field.type, bound);
               const selected = evidence?.structuralShapes?.field(value, index);
               return selected?.methodStorageCarrier === undefined
                 ? unresolved("A structural method requires its completed physical storage, not its logical call signature.")
-                : visit(selected.methodStorageCarrier, variance, bound);
+                : visit(selected.methodStorageCarrier, bound);
             });
-            return every([...structural.bases.map(base => visit(base, variance, bound)), ...fields]);
+            return every([...structural.bases.map(base => visit(base, bound)), ...fields]);
           }
           const generic = rustGenericCallableValue(value);
           if (generic !== undefined) {
@@ -377,7 +357,7 @@ function classifyStaticCarrier(
                 return unresolved("A generic callable member lacks its completed physical captured storage.");
               return every([...environment.captures, ...environment.receiverFields, ...environment.receivers].map(capture => {
                 const memberCarrier = substituteRustTargetGenerics(capture.storageCarrier, bindings.types, bindings.lifetimes, bindings.consts);
-                return visit(substituteRustTargetGenerics(memberCarrier, familyBindings.types, familyBindings.lifetimes, familyBindings.consts), variance, bound);
+                return visit(substituteRustTargetGenerics(memberCarrier, familyBindings.types, familyBindings.lifetimes, familyBindings.consts), bound);
               }));
             }));
           }
@@ -388,21 +368,21 @@ function classifyStaticCarrier(
             const bindings = definition === undefined || entry === undefined ? undefined : frameBindings(value, definition, entry);
             if (definition === undefined || entry === undefined || bindings === undefined || !definition.entries.includes(entry))
               return unresolved("A retained frame requires its complete admitted activation, entry and physical arguments.");
-            const entries = definition.entries.map(entry => frameEntry(definition, entry, bindings, variance, bound));
-            const fields = definition.bindings.map(binding => binding.entry === undefined ? visit(apply(binding.carrier, bindings), variance, bound)
+            const entries = definition.entries.map(entry => frameEntry(definition, entry, bindings, bound));
+            const fields = definition.bindings.map(binding => binding.entry === undefined ? visit(apply(binding.carrier, bindings), bound)
               : definition.entries.includes(binding.entry) ? supported
                 : unresolved("A native frame binding does not belong to its selected entry family."));
-            return every([argumentsFor([...bindings.types.values()].map(type => ({ kind: "type", type })), "invariant", bound),
+            return every([argumentsFor([...bindings.types.values()].map(type => ({ kind: "type", type })), bound),
               ...entries, ...fields, ...(definition.storage.kind === "object" && frame.owner.kind === "class"
-                ? [sourceObject(frame.owner.instance, variance, bound, false)] : [])]);
+                ? [sourceObject(frame.owner.instance, bound, false)] : [])]);
           }
           const constructor = rustClassConstructorContract(value);
-          if (constructor !== undefined) return classEnvironment(constructor.instance, true, variance, bound);
+          if (constructor !== undefined) return classEnvironment(constructor.instance, true, bound);
           const source = rustSourceTypeCarrierValue(value);
           if (source !== undefined) {
             if (source.shape === "enum") return definitions.sourceEnumDefinition(value) !== undefined
-              ? argumentsFor(source.genericArguments, variance, bound) : unresolved("A source enum requires its admitted native definition.");
-            return sourceObject(value, variance, bound, true);
+              ? argumentsFor(source.genericArguments, bound) : unresolved("A source enum requires its admitted native definition.");
+            return sourceObject(value, bound, true);
           }
           return unresolved("Native static retention requires actual physical storage for this target-specific carrier.");
         }
@@ -411,5 +391,5 @@ function classifyStaticCarrier(
       active.delete(key);
     }
   };
-  return visit(carrier, "positive", new Set());
+  return visit(carrier, new Set());
 }
