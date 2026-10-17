@@ -22,6 +22,7 @@ export interface RustConstructionExpression {
 
 export interface RustConstructionPoint {
   readonly node: Node;
+  readonly layer: RustProjectTypeDefinition;
   readonly initializedFields: readonly Node[];
   readonly possiblyInitializedFields: readonly Node[];
   readonly published: boolean;
@@ -83,7 +84,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   const layerCompletion = new Map<RustProjectTypeDefinition, boolean>();
   const layerEarlyReturn = new Set<RustProjectTypeDefinition>();
   const returnLayers = new Map<Node, RustProjectTypeDefinition>();
-  let currentLayer: RustProjectTypeDefinition | undefined;
+  let currentLayer = input.definition;
   let earlyReturns = 0;
   let visited = 0;
   let publishesReceiver = false;
@@ -146,7 +147,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   };
   const record = (node: Node, state: ConstructionState, publishBefore = false, publishAfter = false): void => {
     if (node !== input.definition.declaration) selectedExpressions(node);
-    points.set(node, Object.freeze({ node, initializedFields: Object.freeze([...state.initialized]),
+    points.set(node, Object.freeze({ node, layer: currentLayer, initializedFields: Object.freeze([...state.initialized]),
       possiblyInitializedFields: Object.freeze([...state.possiblyInitialized]),
       published: state.published, publishBefore, publishAfter, publishMissingElse: false }));
   };
@@ -408,7 +409,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     if (kind === "KindReturnStatement") {
       if (Node_Expression(input.ast, node) === undefined) {
         earlyReturns += 1;
-        if (currentLayer !== undefined) returnLayers.set(node, currentLayer);
+        returnLayers.set(node, currentLayer);
       }
       return { ...fallthrough(), returned: [after] };
     }
@@ -447,6 +448,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     if (continuing.some(result => required.some(field => !result.initialized.has(field.declaration))))
       issue(layer.constructor ?? layer.definition.declaration, "A successful native constructor path leaves required physical storage uninitialized.");
   }
+  currentLayer = input.definition;
   record(input.definition.declaration, state);
   const indexedExpressions = new Map<Node, RustConstructionExpression>();
   for (const entries of expressions.values()) for (const entry of entries) indexedExpressions.set(entry.node, entry);

@@ -5,7 +5,8 @@ import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
-import { prepareRustEmissionContextRequests } from "../../../dist/analysis/callables/emission-contexts.js";
+import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
+import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustPhysicalEmissionContexts } from "../../../dist/analysis/program/physical-emission-contexts.js";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
 
@@ -33,6 +34,17 @@ class Item {
 export function value(limit: number): number { return new Item(limit, true).read(); }
 `;
 
+const inheritedConstructorSource = `
+class Detail<Value> extends Error {
+  detail: Value;
+  constructor(message: string, detail: Value) { super(message); this.detail = detail; }
+}
+class Specific extends Detail<number> {
+  constructor(value: number) { super("detail", value); }
+}
+export function detail(value: number): number { return new Specific(value).detail; }
+`;
+
 const frameSource = `
 class Value {
   recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
@@ -50,6 +62,21 @@ function actual(source, surfaces) {
   return analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
     files: { "index.ts": source } }).program;
 }
+
+test("higher-ranked emission identity bindings preserve distinct actual binder identities", () => {
+  const first = Object.freeze({ kind: "bound", binderIdentity: "first", identity: "region", name: "region" });
+  const second = Object.freeze({ kind: "bound", binderIdentity: "second", identity: "region", name: "region" });
+  const bindings = rustEmissionIdentityBindings([
+    { kind: "lifetime", lifetime: first }, { kind: "lifetime", lifetime: second },
+  ]);
+  assert.equal(bindings !== undefined, true, "actual higher-ranked parameters are canonical binding inputs");
+  assert.equal(bindings.lifetimes.size, 2, "equal spelling cannot merge distinct native binders");
+  for (const lifetime of [first, second]) assert.equal(rustLifetimeKey(bindings.lifetimes.get(rustLifetimeKey(lifetime))),
+    rustLifetimeKey(lifetime), "each immutable binding preserves its original lifetime identity");
+  assert.equal(bindings.lifetimes.has(rustLifetimeKey({ ...first, binderIdentity: "foreign" })), false,
+    "a foreign higher-ranked binder is absent");
+  assert.equal(Object.isFrozen(bindings), true);
+});
 
 function observeCallablePublication(registry, assertions, carriers, observations) {
   let physical;
@@ -191,6 +218,7 @@ for (const surfaces of [[], ["js"]]) {
     for (const point of plan.points) {
       const selected = plan.emission.preparationFor(point.node);
       assert.equal(selected !== undefined && selected.point === point, true, "the owner supplies the exact preselected point");
+      assert.equal(selected.layer.definition === point.layer, true, "the source traversal publishes the actual native layer once");
       assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.projections), true);
       assert.equal(plan.emission.preparationFor(point.node) === selected, true);
       for (const projection of selected.projections) {
@@ -220,17 +248,61 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(Object.isFrozen(selected.operands), true);
     }
   });
+
+  test(`external and generic construction layers retain their original source traversal owner (${surfaces[0] ?? "native"})`, () => {
+    const program = actual(inheritedConstructorSource, surfaces);
+    const definition = program.projectTypes.definitions.find(candidate => candidate.sourceName === "Specific");
+    assert.equal(definition !== undefined, true, "the actual derived native definition is selected");
+    const plan = program.projectConstructions.forDefinition(definition);
+    assert.equal(plan !== undefined && plan.emission.issues.length === 0, true, "the whole inherited native constructor is admitted");
+    assert.equal(plan.layers.length > 1 && plan.points.length > 1, true, "real inherited constructor layers and points are nonempty");
+    const root = plan.pointFor(definition.declaration);
+    assert.equal(root !== undefined && root.layer === definition, true, "the final root point belongs to the constructed definition");
+    let inherited = 0;
+    for (const point of plan.points) {
+      const selected = plan.emission.preparationFor(point.node);
+      assert.equal(selected !== undefined && selected.point === point && selected.layer.definition === point.layer, true,
+        "each exact source point consumes its original layer, without declaration-owner reconstruction");
+      if (point.layer !== definition) inherited++;
+    }
+    assert.equal(inherited > 0, true, "the actual inherited field or constructor points are covered");
+  });
 }
 
 test("published context, operand, carrier and source occurrence readers cannot consult or mutate producers", () => {
   const gate = { closed: false, after: 0 };
-  const guard = (service, label) => new Proxy(service, { get(target, property) {
-    const value = Reflect.get(target, property, target);
-    return typeof value !== "function" ? value : (...argumentsList) => {
-      if (gate.closed) { gate.after++; throw new Error(`${label} queried after publication`); }
-      return value.apply(target, argumentsList);
-    };
-  } });
+  const services = new WeakMap();
+  const guard = (service, label) => {
+    if (service === undefined || service === null) return service;
+    const previous = services.get(service);
+    if (previous !== undefined) return previous;
+    const methods = new Map();
+    const facade = new Proxy(Object.create(null), {
+      ownKeys: () => Reflect.ownKeys(service),
+      has: (_target, property) => Reflect.has(service, property),
+      getOwnPropertyDescriptor(_target, property) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(service, property);
+        return descriptor === undefined ? undefined : {
+          configurable: true, enumerable: descriptor.enumerable, get: () => facade[property],
+        };
+      },
+      get(_target, property) {
+        const value = Reflect.get(service, property, service);
+        if (typeof value === "function") {
+          if (!methods.has(property)) methods.set(property, (...argumentsList) => {
+            if (gate.closed) { gate.after++; throw new Error(`${label}.${String(property)} queried after publication`); }
+            const result = Reflect.apply(value, service, argumentsList);
+            return property === "forNode" || property === "forFile" ? guard(result, `${label}.${String(property)}`) : result;
+          });
+          return methods.get(property);
+        }
+        return value !== null && typeof value === "object" && !Array.isArray(value) &&
+          Reflect.ownKeys(value).some(key => typeof value[key] === "function") ? guard(value, `${label}.${String(property)}`) : value;
+      },
+    });
+    services.set(service, facade);
+    return facade;
+  };
   let program;
   let source;
   const compiled = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },

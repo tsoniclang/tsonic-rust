@@ -22,7 +22,7 @@ export function rustGenericCallablePhysicalBindings(
   for (const argument of parameters) {
     if (argument.kind === "type" && argument.type.kind === "type-parameter")
       selected.push({ kind: "type", sourceName: argument.type.name, targetIdentity: argument.type.identity });
-    else if (argument.kind === "lifetime" && argument.lifetime.kind === "parameter")
+    else if (argument.kind === "lifetime" && (argument.lifetime.kind === "parameter" || argument.lifetime.kind === "bound"))
       selected.push({ kind: "lifetime", sourceName: argument.lifetime.name, targetIdentity: rustLifetimeKey(argument.lifetime) });
     else if (argument.kind === "const" && argument.value.kind === "parameter")
       selected.push({ kind: "const", sourceName: argument.value.name, targetIdentity: argument.value.identity });

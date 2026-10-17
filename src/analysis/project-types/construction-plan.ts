@@ -254,8 +254,7 @@ function prepareRustConstructionEmission(input: RustConstructionAnalysisInput, d
   }
   const preparations = new Map<Node, RustConstructionPreparationSelection>();
   for (const point of readiness.points) {
-    const owner = point.node === definition.declaration ? definition : input.projectTypes.definitionContainingDeclaration(point.node);
-    const layer = layers.find(selected => selected.definition === owner);
+    const layer = layers.find(selected => selected.definition === point.layer);
     if (layer === undefined) {
       issue(point.node, "A construction point has no exact selected native source layer.");
       continue;
