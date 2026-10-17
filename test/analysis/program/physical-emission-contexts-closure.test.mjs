@@ -3,7 +3,7 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
-import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
@@ -93,6 +93,33 @@ function actual(source, surfaces) {
   return analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
     files: { "index.ts": source } }).program;
 }
+
+test("module and non-callable metadata owners never enter callable TypeParameterList extraction", () => {
+  const result = compileRust({surfaces: [], files: {"index.ts": `
+export const seed: number = 1;
+export enum State { First = 1, Second = 2 }
+class Item { static value: number = 2; field: number = 3; }
+export function read(): number { return seed + Item.value + new Item().field; }
+export function state(): State { return State.First; }
+`}}).result;
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+  assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
+    "the actual module, enum, class and static/instance metadata requests emit without a non-callable AST panic");
+});
+
+test("annotated native parameter and return carriers stay selected at their declaration owners", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const result = compileRust({surfaces, files: {"index.ts": `
+import type {float32, int64} from "@tsonic/core/types.js";
+export function narrow(value: float32): float32 { return value; }
+export function wide(value: int64): int64 { return value; }
+`}}).result;
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+    const output = rustSourceText(result);
+    assert.equal(/\bf32\b/u.test(output), true, "the actual native f32 carrier is required and retained");
+    assert.equal(/\bi64\b/u.test(output), true, "the actual native i64 carrier is required and retained");
+  }
+});
 
 test("higher-ranked emission identity bindings preserve distinct actual binder identities", () => {
   const first = Object.freeze({ kind: "bound", binderIdentity: "first", identity: "region", name: "region" });
