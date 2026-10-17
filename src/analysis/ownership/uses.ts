@@ -32,10 +32,11 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
   const uses = new Map<Node, RustReadUse>();
   for (const node of nodes) {
     const operation = records.targetOperation.get(node);
+    const computedMember = records.computedMember.get(node);
     const address = records.rawAddressPlan.get(node);
     const location = records.typedLocationPlan.get(node);
     const guard = records.optionalChain.get(node)?.guard;
-    if (operation === undefined && address === undefined && location === undefined && guard === undefined) continue;
+    if (operation === undefined && computedMember === undefined && address === undefined && location === undefined && guard === undefined) continue;
     const callable = operation?.kind === "source-call" && operation.target.form === "callable" ? operation.target.carrier : undefined;
     const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
     const callableMode = callTrait === "FnOnce" ? "move" : callTrait === "FnMut" ? "mutable"
@@ -46,7 +47,7 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
         ? [left === undefined ? undefined : ElementAccessExpression_ArgumentExpression(ast, left), BinaryExpression_Right(ast, node)]
         : [BinaryExpression_Right(ast, node)]
       : rustBorrowedOperationArguments(node, ast);
-    const selected = selectRustOperationReadUses(ast, node, { operation, address, location, guard, callableMode, arguments: argumentsList,
+    const selected = selectRustOperationReadUses(ast, node, { operation, computedMember, address, location, guard, callableMode, arguments: argumentsList,
       nativeInputs: operation?.kind === "provider-operation" || operation?.kind === "runtime-set" ? rustFinalizedSourceInputs(operation.abi).map(input =>
         ({ source: input.source, mode: rustProviderInputBorrowMode(input) })) : [],
       argumentModes: (argumentsList ?? []).map(argument => records.argumentPassing.get(argument)?.mode) });

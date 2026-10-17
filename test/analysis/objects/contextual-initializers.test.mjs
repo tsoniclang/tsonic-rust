@@ -4,8 +4,6 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const sourceText = `
-const nativeKey = "value";
-interface Holder { [nativeKey]: number; }
 function direct(): number {
   const { value } = { value: 7 } as const;
   return value;
@@ -24,7 +22,7 @@ function tuple(): number {
 }
 function exactKey(): number {
   const { key } = { key: "value" } as const;
-  const value: Holder = { [key]: 23 };
+  const value = { [key]: 23 };
   return value[key];
 }
 export function run(): boolean {
@@ -32,6 +30,17 @@ export function run(): boolean {
     nonNull() === 17 && tuple() === 19 && exactKey() === 23;
 }
 if (!run()) throw new Error("contextual initializer counterpart");
+`;
+
+const metadataScaffoldSource = `
+const nativeKey = "value";
+interface Holder { [nativeKey]: number; }
+function exactKey(): number {
+  const { key } = { key: "value" } as const;
+  const value: Holder = { [key]: 23 };
+  return value[key];
+}
+export function run(): boolean { return exactKey() === 23; }
 `;
 
 const nativeCounterpart = `
@@ -64,6 +73,15 @@ fn native_contextual_initializers() {
 `;
 
 for (const surfaces of [[], ["js"]]) {
+  test(`Rust ${surfaces[0] ?? "native"} metadata-only computed key scaffold preserves the actual source`, { timeout: 300_000 }, () => {
+    const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `${metadataScaffoldSource}
+if (!run()) throw new Error("metadata key counterpart");` } });
+    assert.equal(compiled.result.diagnostics.length, 0,
+      compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
+    assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true, "metadata is not an invalid native program");
+    validateGeneratedProject(`contextual-key-metadata-${surfaces[0] ?? "native"}`, compiled.result.artifacts, { run: true });
+  });
+
   test(`Rust ${surfaces[0] ?? "native"} local initializers keep actual fields and match native values`, { timeout: 300_000 }, () => {
     const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": sourceText } });
@@ -88,7 +106,7 @@ export function make(): number {
     assert.equal(compiled.result.diagnostics.length, 1, "C122 keeps one actual module initializer owner, not a key refusal");
     assert.equal(compiled.result.diagnostics[0]?.code, "RUST_SOURCE_PACKAGE_INITIALIZER_FACT_MISSING",
       "the unchanged K01 capability is mapped to R02, not reported accepted with P01");
-    assert.equal(compiled.result.diagnostics[0]?.message, "Top-level variable declaration has no finalized Rust module-binding fact.",
+    assert.equal(compiled.result.diagnostics[0]?.message, "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.",
       "the precise current module-root/leaf boundary is retained");
     assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true,
       "the unsupported module shape stops before sealing and planning");
