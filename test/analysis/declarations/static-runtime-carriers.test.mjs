@@ -11,7 +11,7 @@ import { rustJsArrayEntriesTargetId } from "../../../dist/target-model/types/car
 import * as carrierExports from "../../../dist/target-model/types/carriers/built-ins.js";
 import { classifyCarrierRequirements, rustFinalContractSupportsStatic } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustCallableInputTargetType, rustJsPromiseTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCallableInputTargetType, rustFutureTargetType, rustJsPromiseTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust, compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -90,8 +90,8 @@ const declarations = [
   [nativeIds.rustJsRegExpNamedGroupsTargetId, [], "arguments", "js_abi::JsRegExpNamedGroups"],
   [nativeIds.rustJsRegExpNamedIndicesTargetId, [], "arguments", "js_abi::JsRegExpNamedIndices"],
   [nativeIds.rustJsRegExpStringIteratorTargetId, [], "arguments", "js_abi::JsRegExpStringIterator"],
-  [extraIds.rustSourceErrorTargetId, [], "program-error", undefined],
-  [extraIds.rustWritableSourceErrorTargetId, [], "program-error", undefined],
+  [extraIds.rustSourceErrorTargetId, [], "arguments", undefined],
+  [extraIds.rustWritableSourceErrorTargetId, [], "arguments", undefined],
   [extraIds.rustMutableJsErrorTargetId, [], "arguments", "rt::MutableJsError"],
   [extraIds.rustRetainedErrorTargetId, [], "arguments", "rt::RetainedError"],
   [extraIds.rustWritableRetainedErrorTargetId, [], "arguments", "rt::WritableRetainedError"],
@@ -172,11 +172,17 @@ test("native storage checks exact argument kinds, all free parameters and every 
         emptyRustTypeDefinitions, undefined).kind, "supported", `${id}: exact generic ${index} bound is sufficient`);
     }
   }
-  for (const errorOwner of [undefined, { kind: "logical" }, { kind: "physical", domain: "project", componentId: "source" }])
+  for (const errorOwner of [undefined, { kind: "logical" },
+    { kind: "physical", domain: "project", componentId: "" }, { kind: "physical", domain: "foreign" }])
     assert.equal(selected({ kind: "target-named", id: nativeIds.rustProgramErrorTargetId, ...(errorOwner === undefined ? {} : { errorOwner }) }).kind,
-      "unresolved", "a project or logical error ID alone does not prove its payload storage");
-  for (const id of ["foreign:Carrier", "constructor", "__proto__", "rust.native.Future"])
+      "unresolved", "a missing, logical or invalid error owner does not prove native payload storage");
+  for (const errorOwner of [{ kind: "physical", domain: "runtime" }, { kind: "physical", domain: "project", componentId: "source" }])
+    assert.equal(selected({ kind: "target-named", id: nativeIds.rustProgramErrorTargetId, errorOwner }).kind,
+      "supported", `${errorOwner.domain}: the actual admitted physical error owner has a closed native payload`);
+  for (const id of ["foreign:Carrier", "constructor", "__proto__"])
     assert.equal(selected(carrier(id)).kind, "unresolved", `${id}: unknown is not static`);
+  assert.equal(selected(rustFutureTargetType(scalar)).kind, "unresolved", "the real native Future output does not prove its captured storage");
+  assert.equal(selected(rustFutureTargetType(borrowed)).kind, "unresolved", "the real borrowed-output Future still has no physical capture proof");
   assert.equal(selected(rustCallableInputTargetType([], scalar, staticLifetime)).kind,
     "unresolved", "an input signature does not reveal its implementation environment");
   assert.equal(selected(rustJsPromiseTargetType(borrowed)).kind, "unsatisfied", "a real resolved Promise can store nonstatic T");
@@ -363,3 +369,50 @@ verify();
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("static-regexp-factory", result.artifacts, { run: true });
 });
+
+for (const [label, surfaces] of [["native", []], ["js", ["js"]]]) {
+  test(`closed source error payloads retain their actual native static representation (${label})`, { timeout: 300_000 }, () => {
+    const crateName = `static_source_errors_${label}`;
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { crateName } }, files: { "index.ts": `
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
+import type { Pointer } from "@tsonic/core/types.js";
+
+class AppError extends Error {}
+export function keep(error: Error): Pointer<Error> { return allocateptr(error); }
+export function make(): AppError { return new AppError("x"); }
+export function verify(): void {
+  const original: Error = make();
+  const retained = loadptr(keep(original));
+  if (retained.message !== "x") throw new Error("retained source error payload");
+}
+` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const transports = result.artifacts.filter(artifact => /^src\/[^/]+\.rs$/u.test(artifact.path) &&
+      /pub struct SourceError\s*\{/u.test(artifact.text));
+    assert.equal(transports.length, 1, "one actual generated source-error transport owner exists");
+    const transport = transports[0];
+    assert.equal(/pub struct WritableSourceError\s*\{/u.test(transport.text), true,
+      "the actual writable source-error payload is non-generic");
+    assert.equal(/pub type TsonicError\s*=/u.test(transport.text), true,
+      "the actual project program error is a closed non-generic alias");
+    const moduleName = transport.path.slice(4, -3);
+    assert.equal(artifactText(result, "src/lib.rs").includes(`pub mod ${moduleName};`), true,
+      "the native proof imports the actual emitted transport module");
+    const native = `use ${crateName}::${moduleName}::{SourceError, TsonicError, WritableSourceError};
+
+fn require_static_type<Value: ?Sized + 'static>() {}
+
+#[test]
+fn actual_generated_source_error_payloads_are_static() {
+    require_static_type::<SourceError>();
+    require_static_type::<WritableSourceError>();
+    require_static_type::<TsonicError>();
+    ${crateName}::index::verify().unwrap();
+}
+`;
+    const formatted = spawnSync("rustfmt", ["--edition", "2021"], { input: native, encoding: "utf8", timeout: 30_000 });
+    assert.equal(formatted.status, 0, "the actual generated-error native control formats");
+    validateGeneratedProject(`static-source-errors-${label}`,
+      [...result.artifacts, { path: "tests/static_errors.rs", text: formatted.stdout }]);
+  });
+}

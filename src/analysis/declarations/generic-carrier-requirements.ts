@@ -306,7 +306,7 @@ function classifyStaticCarrier(
             return unresolved("An opaque native implementation requires its actual physical environment, not its logical signature.");
           if (definition.storage === "program-error") {
             const errorOwner = rustProgramErrorOwner(value);
-            return errorOwner?.kind === "physical" && errorOwner.domain === "runtime" ? supported
+            return errorOwner?.kind === "physical" ? supported
               : unresolved("A contextual program error requires its actual admitted native payload representation.");
           }
           if (value.id === rustCallableTargetId && rustCallableProtocol(value) === undefined)
