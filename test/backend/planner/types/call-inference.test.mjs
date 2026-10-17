@@ -4,12 +4,22 @@ import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFr
   rustUnionTypePathInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, rustSourceOptionalTargetType,
   rustSourceUnionTargetType, rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustTypeIsLegalInPosition } from "../../../../dist/backend/planner/types/type-observations.js";
+import { selectRustNativeTypeCarrier } from "../../../../dist/policy/types/model/native-type-selection.js";
 import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { createRustGeneratedUnionPlan } from "../../../../dist/analysis/objects/generated-union-plan.js";
 
 const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions } } };
+const nativeInput = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: undefined,
+  pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
+  producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
+const nativeTrait = (path, associatedConstraints = [], genericArguments = []) => ({
+  kind: "trait-ref", id: path, path, genericArguments, associatedConstraints,
+});
+const nativeOpaque = bounds => ({ kind: "impl-trait", id: "fixture:opaque", bounds, outlives: [] });
+const nativeEquality = type => ({ kind: "equality", identity: "fixture:Output", name: "Output", genericArguments: [], type });
+const nativeOption = type => rustNamedTargetType("fixture:Option", "Option", [{ kind: "type", type }], [], undefined, [], undefined, []);
+const admitted = (type, position) => selectRustNativeTypeCarrier(type, nativeInput, position).kind === "resolved";
 
 test("borrowed invocation protocols render only in native parameter or return positions", () => {
   const input = rustCallableInputTargetType([scalar], scalar);
@@ -54,44 +64,43 @@ test("optional invocation parameters keep static dispatch and absence uses a con
 });
 
 test("native anonymous signature containers do not admit anonymous storage or nested callable bounds", () => {
-  const anonymous = { kind: "impl-trait", bounds: [{ kind: "trait", path: "core::fmt::Debug" }], outlives: [] };
+  const anonymous = nativeOpaque([nativeTrait("core::fmt::Debug")]);
   for (const type of [anonymous, { kind: "reference", referent: anonymous, mutable: false },
     { kind: "tuple", elements: [anonymous] },
-    { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: anonymous }] },
+    nativeOption(anonymous),
     { kind: "slice", element: anonymous }]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
+    assert.equal(admitted(type, "parameter"), true);
+    assert.equal(admitted(type, "return"), true);
+    assert.equal(admitted(type, "general"), false);
   }
   for (const type of [
-    { kind: "function-pointer", parameters: [anonymous], result: { kind: "unit" } },
-    { kind: "impl-trait", bounds: [{ kind: "callable", trait: "Fn", binder: [], parameters: [anonymous], result: { kind: "unit" } }], outlives: [] },
+    { kind: "function-pointer", args: [anonymous], result: { kind: "tuple", elements: [] } },
+    nativeOpaque([nativeTrait("Fn", [nativeEquality({ kind: "tuple", elements: [] })], [{ kind: "type", type: anonymous }])]),
   ]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), false);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), false);
+    assert.equal(admitted(type, "parameter"), false);
+    assert.equal(admitted(type, "return"), false);
   }
 });
 
 test("anonymous implementation bounds admit exact associated outputs without positional nesting", () => {
-  const output = { kind: "impl-trait", bounds: [{ kind: "trait", path: "core::fmt::Debug" }], outlives: [] };
-  const optional = { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: output }] };
-  const selected = argument => ({ kind: "impl-trait", outlives: [], bounds: [{ kind: "trait-type", reference: {
-    trait: { kind: "named", path: "example::Invocation", genericArguments: [argument] },
-  } }] });
-  const equality = type => ({ kind: "associated-equality", name: "Output", genericArguments: [], type });
+  const output = nativeOpaque([nativeTrait("core::fmt::Debug")]);
+  const optional = nativeOption(output);
+  const selected = argument => nativeOpaque([nativeTrait("example::Invocation",
+    argument.kind === "type" ? [] : [argument], argument.kind === "type" ? [argument] : [])]);
+  const equality = nativeEquality;
   for (const type of [selected(equality(output)), selected(equality(optional)),
-    selected(equality(selected(equality(output)))), selected({ kind: "associated-bounds", name: "Output", genericArguments: [],
-      bounds: [{ kind: "trait-type", reference: { trait: { kind: "named", path: "Iterator", genericArguments: [equality(output)] } } }] })]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
+    selected(equality(selected(equality(output)))), selected({ kind: "bounds", identity: "fixture:Output", name: "Output", genericArguments: [],
+      traits: [nativeTrait("Iterator", [equality(output)])], outlives: [] })]) {
+    assert.equal(admitted(type, "parameter"), true);
+    assert.equal(admitted(type, "return"), true);
+    assert.equal(admitted(type, "general"), false);
   }
   for (const type of [selected({ kind: "type", type: output }), selected({ kind: "type", type: optional }),
-    selected({ ...equality({ kind: "unit" }), genericArguments: [{ kind: "type", type: output }] }),
+    selected({ ...equality({ kind: "tuple", elements: [] }), genericArguments: [{ kind: "type", type: output }] }),
     { ...selected(equality(output)), captures: [{ kind: "type", type: output }] }]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), false);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), false);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
+    assert.equal(admitted(type, "parameter"), false);
+    assert.equal(admitted(type, "return"), false);
+    assert.equal(admitted(type, "general"), false);
   }
 });
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };

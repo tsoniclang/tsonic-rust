@@ -257,18 +257,19 @@ function planModuleItems(
     else items.push(...views);
   }
   const asynchronous = context.input.program.errorRegions.initialization.moduleFor(context.sourceFile)?.asynchronous === true;
-  const errorRegion = context.input.program.errorRegions.get(context.sourceFile);
-  const region = planRustErrorRegion(context.sourceFile, context);
-  if (errorRegion === undefined || region === undefined) {
+  const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
+  if (emissionContext === undefined) failRustPlannerInvariant("Module initializer requires its original sealed physical context.", context.sourceFile);
+  const selectedContext = rustContextForEmission(context, emissionContext);
+  const region = planRustErrorRegion(context.sourceFile, selectedContext);
+  if (region === undefined) {
     failRustPlannerInvariant(
       "Module initializer has no exact finalized error region.",
       context.sourceFile);
   }
   const errorBoundary = region.boundary;
   const fallible = errorBoundary !== undefined;
-  const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
   const initializationContext: RustPlanContext = {
-    ...(emissionContext === undefined ? context : rustContextForEmission(context, emissionContext)),
+    ...selectedContext,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },

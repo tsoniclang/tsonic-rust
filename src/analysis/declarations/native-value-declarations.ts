@@ -44,6 +44,12 @@ export type RustNativeDeclarationAdmission =
   | { readonly kind: "erased" }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
 
+export type RustPreparedNativeInterfaceDeclaration = Omit<RustNativeInterfaceDeclaration,
+  "nativeCarrier" | "nativeStateCarrier" | "fields" | "index"> & {
+    readonly fields: readonly Omit<RustNativeInterfaceField, "nativeCarrier">[];
+    readonly index?: Omit<NonNullable<RustNativeInterfaceDeclaration["index"]>, "nativeKeyCarrier" | "nativeValueCarrier">;
+  };
+
 export function admitRustNativeValueDeclaration(
   declaration: Node,
   input: RustNativeValueDeclarationInput,
@@ -80,7 +86,7 @@ export function admitRustNativeValueDeclaration(
 export function admitRustNativeInterfaceFields(
   declaration: Node,
   input: Pick<RustNativeValueDeclarationInput, "ast" | "semanticsFor" | "records" | "names" | "projectTypes" | "objectRepresentations">,
-): { readonly kind: "accepted"; readonly form: Omit<RustNativeInterfaceDeclaration, "physical"> } |
+): { readonly kind: "accepted"; readonly form: Omit<RustPreparedNativeInterfaceDeclaration, "physical"> } |
   Extract<RustNativeDeclarationAdmission, { readonly kind: "rejected" }> {
   const { ast, records, projectTypes } = input;
   const name = input.names.nameForDeclaration(declaration);
@@ -123,9 +129,8 @@ export function admitRustNativeInterfaceFields(
   if (!isDenseDataArray(members) || members.some(member => member === undefined)) {
     return reject(declaration, "RUST_SOURCE_AST_INCOMPLETE", "Interface declaration contains an undefined member slot.");
   }
-  const fields: RustNativeInterfaceField[] = [];
-  const nativeTypes = nativeTypeInputForDeclaration(declaration, input);
-  let index: Extract<RustNativeDeclarationForm, { readonly kind: "interface" }>["index"];
+  const fields: Omit<RustNativeInterfaceField, "nativeCarrier">[] = [];
+  let index: RustPreparedNativeInterfaceDeclaration["index"];
   for (const member of members as readonly Node[]) {
     const targetName = projectTypes.fieldStorageName(definition, member);
     const carrier = records.runtimeCarrier.get(member)?.carrier ?? records.runtimeCarrier.get(Node_Type(ast, member))?.carrier;
@@ -138,14 +143,7 @@ export function admitRustNativeInterfaceFields(
         return reject(member, "RUST_INTERFACE_INDEX_CARRIER_NOT_SUPPORTED",
           "Rust index-backed interfaces require a closed string/integer key, an exact value carrier, and deterministic generated storage.");
       }
-      const nativeKey = selectRustNativeTypeCarrier(keyCarrier, nativeTypes, "general");
-      if (nativeKey.kind === "rejected") return reject(selected.keyParameter,
-        "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", nativeKey.reason);
-      const nativeValue = selectRustNativeTypeCarrier(carrier, nativeTypes, "general");
-      if (nativeValue.kind === "rejected") return reject(member,
-        "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", nativeValue.reason);
-      index = Object.freeze({ declaration: member, targetName, keyCarrier, valueCarrier: carrier,
-        nativeKeyCarrier: nativeKey.carrier, nativeValueCarrier: nativeValue.carrier });
+      index = Object.freeze({ declaration: member, targetName, keyCarrier, valueCarrier: carrier });
       continue;
     }
     if (ast.kindName(member) !== "KindPropertySignature") {
@@ -156,26 +154,48 @@ export function admitRustNativeInterfaceFields(
       return reject(member, "RUST_INTERFACE_FIELD_NOT_CLOSED",
         "A record field requires its exact selected name, native carrier and project-object storage slot.");
     }
-    const native = selectRustNativeTypeCarrier(carrier, nativeTypes, "general");
-    if (native.kind === "rejected") return reject(member,
-      "RUST_INTERFACE_FIELD_TYPE_NOT_REPRESENTABLE", native.reason);
     fields.push(Object.freeze({ declaration: member, sourceName: selected.sourceName, targetName,
-      storageIndex: selected.storageIndex, carrier, nativeCarrier: native.carrier }));
+      storageIndex: selected.storageIndex, carrier }));
   }
   if (fields.length !== layout.fields.length) {
     return reject(declaration, "RUST_INTERFACE_FIELD_COVERAGE_NOT_CLOSED",
       "Record field selections do not cover its exact project-object storage layout.");
   }
-  const native = selectRustNativeTypeCarrier(projectTypes.openCarrier(definition), nativeTypes, "general");
+  return { kind: "accepted", form: Object.freeze({ kind: "interface", name, definition,
+    fields: Object.freeze(fields), ...(index === undefined ? {} : { index }) }) };
+}
+
+export function publishRustNativeInterfaceDeclaration(
+  prepared: RustPreparedNativeInterfaceDeclaration,
+  input: RustNativeValueDeclarationInput,
+): RustNativeDeclarationAdmission {
+  const declaration = prepared.definition.declaration;
+  const nativeTypes = nativeTypeInputForDeclaration(declaration, input);
+  const fields: RustNativeInterfaceField[] = [];
+  for (const field of prepared.fields) {
+    const native = selectRustNativeTypeCarrier(field.carrier, nativeTypes, "general");
+    if (native.kind === "rejected") return reject(field.declaration, "RUST_INTERFACE_FIELD_TYPE_NOT_REPRESENTABLE", native.reason);
+    fields.push(Object.freeze({ ...field, nativeCarrier: native.carrier }));
+  }
+  let index: RustNativeInterfaceDeclaration["index"];
+  if (prepared.index !== undefined) {
+    const key = selectRustNativeTypeCarrier(prepared.index.keyCarrier, nativeTypes, "general");
+    const value = selectRustNativeTypeCarrier(prepared.index.valueCarrier, nativeTypes, "general");
+    if (key.kind === "rejected") return reject(input.ast.parameters(prepared.index.declaration)[0] ?? prepared.index.declaration,
+      "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", key.reason);
+    if (value.kind === "rejected") return reject(prepared.index.declaration, "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", value.reason);
+    index = Object.freeze({ ...prepared.index, nativeKeyCarrier: key.carrier, nativeValueCarrier: value.carrier });
+  }
+  const native = selectRustNativeTypeCarrier(input.projectTypes.openCarrier(prepared.definition), nativeTypes, "general");
   if (native.kind === "rejected") return reject(declaration,
     "RUST_INTERFACE_NATIVE_TYPE_NOT_REPRESENTABLE", native.reason);
-  const stateCarrier = input.nativeStateCarrierFor(definition);
+  const stateCarrier = input.nativeStateCarrierFor(prepared.definition);
   if (stateCarrier === undefined) return reject(declaration, "RUST_INTERFACE_NATIVE_STATE_NOT_CLOSED",
     "A record interface requires its exact selected native state identity and generic arguments.");
   const state = selectRustNativeTypeCarrier(stateCarrier, nativeTypes, "general");
   if (state.kind === "rejected") return reject(declaration,
     "RUST_INTERFACE_NATIVE_TYPE_NOT_REPRESENTABLE", state.reason);
-  return { kind: "accepted", form: Object.freeze({ kind: "interface", name, definition,
+  return { kind: "accepted", form: Object.freeze({ ...prepared,
     nativeCarrier: native.carrier, nativeStateCarrier: state.carrier,
     fields: Object.freeze(fields), ...(index === undefined ? {} : { index }) }) };
 }

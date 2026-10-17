@@ -68,8 +68,12 @@ main();
     program.source.ast.text(program.source.ast.name(node)) === "run");
   const protectedBody = nodes.find(node => program.source.ast.is.IsTryStatement(node));
   const body = program.source.ast.as.AsTryStatement(protectedBody)?.TryBlock;
-  assert.equal(program.errorRegions.get(callable)?.kind, "infallible", "caught cleanup does not make the outward callable fallible");
-  assert.equal(program.errorRegions.get(body)?.kind, "package", "the actual protected body owns the cleanup error");
+  const context = program.physicalEmissionContexts.contextForOwner(callable, "native-body");
+  assert.equal(context?.error.kind === "region" && context.error.region.kind === "infallible", true,
+    "caught cleanup does not make the outward callable fallible");
+  const protectedEffects = program.records.errorEffects.get(body);
+  assert.equal(protectedEffects?.localErrors === true && protectedEffects.nativeErrors.length === 0, true,
+    "the actual protected body owns the cleanup error");
   const { result } = compileRust({ surfaces: [], packages,
     target: { id: "rust", options: { outputType: "bin", crateName: "r05_caught_cleanup" } },
     files: { "index.ts": source } });

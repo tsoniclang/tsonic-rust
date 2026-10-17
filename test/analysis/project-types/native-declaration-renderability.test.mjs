@@ -9,7 +9,8 @@ import { rustTypeFromCarrier, rustTypeFromSelectedNativeCarrier } from "../../..
 import { printRustType } from "../../../dist/print/source/types.js";
 import { compoundTypeFamilyOwnerFiles } from "../../fixtures/compound-type-family-owners.mjs";
 import { rustRuntimeErrorTargetType, rustRuntimeErrorTypeIdentity } from "../../../dist/target-model/operations/error-boundary.js";
-import { admitRustNativeValueDeclaration } from "../../../dist/analysis/declarations/native-value-declarations.js";
+import { admitRustNativeValueDeclaration, admitRustNativeInterfaceFields,
+  publishRustNativeInterfaceDeclaration } from "../../../dist/analysis/declarations/native-value-declarations.js";
 import { rustRuntimeRecordFieldTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selection.mjs";
@@ -178,7 +179,10 @@ export function keep<Region extends Life>(value: Borrowed<Region>): Borrowed<Reg
     } }, union, "RUST_TYPE_ALIAS_PAYLOAD_TYPE_NOT_REPRESENTABLE"],
   ];
   for (const [label, subject, selectedInput, expectedNode, code] of cases) {
-    const selected = admitRustNativeValueDeclaration(subject, selectedInput);
+    const fields = source.ast.is.IsInterfaceDeclaration(subject) ? admitRustNativeInterfaceFields(subject, selectedInput) : undefined;
+    const selected = fields === undefined ? admitRustNativeValueDeclaration(subject, selectedInput, program.nativeDeclarations)
+      : fields.kind === "rejected" ? fields : publishRustNativeInterfaceDeclaration({ ...fields.form,
+        physical: program.nativeDeclarations.get(subject).physical }, selectedInput);
     assert.equal(selected.kind, "rejected", `${label}: unresolved native storage is refused at admission`);
     assert.equal(selected.form === undefined, true, `${label}: no native declaration is published`);
     assert.equal(selected.diagnostics.length, 1, `${label}: one deciding owner reports the refusal`);

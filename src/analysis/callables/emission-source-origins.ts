@@ -13,13 +13,16 @@ import type { RustProjectConstructionPlan, RustConstructionLayer } from "../proj
 import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";
+import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export type RustEmissionSourceOwner =
   | { readonly kind: "declaration" }
   | { readonly kind: "callable"; readonly implementation: Node; readonly member: object | undefined }
   | { readonly kind: "construction"; readonly plan: RustProjectConstructionPlan; readonly layer: RustConstructionLayer | undefined }
-  | { readonly kind: "module"; readonly module: RustModuleErrorInitializer; readonly initializers: readonly RustInitializerSelection[] }
-  | { readonly kind: "worker"; readonly initializer: RustInitializerSelection };
+  | { readonly kind: "module"; readonly module: RustModuleErrorInitializer<RustNativeErrorSource<TargetTypeRef>>;
+      readonly initializers: readonly RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>>[] }
+  | { readonly kind: "worker"; readonly initializer: RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>> };
 
 export interface RustEmissionSourceRequest {
   readonly use: TargetUseSiteRef;
@@ -36,7 +39,7 @@ interface RustEmissionSourceInput {
   readonly genericBindingsFor: RustNativeStoragePlan["genericBindingsFor"];
   readonly physical: Pick<RustGenericCallablePhysicalPlan, "definitions">;
   readonly emissionRequests: readonly RustPhysicalCallableEmissionRequest[];
-  readonly initialization: RustInitializationErrorRecords;
+  readonly initialization: RustInitializationErrorRecords<RustNativeErrorSource<TargetTypeRef>>;
 }
 
 type Origins =
@@ -55,7 +58,8 @@ type CallerSelection = { readonly origins: Origins; readonly callers: readonly S
 type Construction = Extract<SourceStorageConstructionSelection, { readonly kind: "resolved" }>["alternatives"][number];
 type Bindings = Extract<SourceStorageBindingsSelection, { readonly kind: "resolved" }>;
 type ConstructionOrigin = Extract<RustPhysicalEmissionSourceOrigin, { readonly kind: "construction" }>;
-type Module = { readonly module: RustModuleErrorInitializer; readonly initializers: readonly RustInitializerSelection[] };
+type Module = { readonly module: RustModuleErrorInitializer<RustNativeErrorSource<TargetTypeRef>>;
+  readonly initializers: readonly RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>>[] };
 type ConstructionState =
   | { readonly kind: "unavailable"; readonly reason: string }
   | { readonly kind: "open"; readonly boundaries: readonly SourceStorageDomainBoundary[] };

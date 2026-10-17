@@ -93,9 +93,9 @@ export interface RustCallableValueSealInput {
   readonly projectMethodDispatch: import("../project-types/method-dispatch.js").RustProjectMethodDispatchPlan;
   readonly lexicalFunctions: import("./lexical-functions.js").RustLexicalFunctionQueries;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
-  readonly genericErrors: RustGenericCallableErrorIndex;
-  readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;
-  readonly initialization: RustInitializationErrorRecords;
+  readonly genericErrors: RustGenericCallableErrorIndex<import("../../target-model/types/native-error-joins.js").RustNativeErrorSource<TargetTypeRef>>;
+  readonly errorRegions: Pick<import("../errors/regions.js").RustAnalyzedErrorRegions, "get" | "sourceFor">;
+  readonly initialization: RustInitializationErrorRecords<import("../../target-model/types/native-error-joins.js").RustNativeErrorSource<TargetTypeRef>>;
   readonly constructions: readonly RustProjectConstructionPlan[];
 }
 

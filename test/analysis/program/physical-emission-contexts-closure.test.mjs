@@ -1205,7 +1205,7 @@ export const seed: number = checked(1);`,
   const selected = analyzeRustInitializationErrors({ ast: source.ast, sourceFiles: program.sourceFiles,
     navigation: source.navigation, moduleInitialization: program.moduleInitialization,
     sourceModules: { ...program.sourceModuleConstructions, targets: () => [worker] },
-    components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: program.errorRegions,
+    components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: observations.preparationInput.errorRegions,
     binaryHooks: [], outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
   assert.equal(selected.kind, "resolved", "the existing initializer owner supplies the exact worker composition");
   assert.equal(observations.calls, 1, "the actual selecting owner ran exactly once");

@@ -1,14 +1,15 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
-import { rustCallableConversionPhysical, type RustCallablePhysicalConversion,
+import { type RustCallablePhysicalConversion,
   type RustCallablePhysicalValueConversion } from "../../../target-model/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/index.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext, rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
+import type { RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
 import { rustCallableConstructionType } from "./fundamentals.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -50,17 +51,24 @@ export function planRustCallableConversion(
   const reference = context.input.program.records.directCallableReference.get(node);
   if (reference !== undefined && !rustTargetTypeRefEquals(reference.carrier, conversion.source)) return undefined;
   const selected = reference === undefined ? expression : planRustSourceCallableValue(reference, context);
-  const source = physicalCallableSource(conversion.source, node, context);
+  const operand = context.emissionContext === undefined ? undefined
+    : context.input.program.physicalEmissionContexts.sourceErrorOperandFor(context.emissionContext.use, node);
+  const adapters = operand?.callableAdapters;
+  const adapter = adapters?.length === 1 ? adapters[0] : undefined;
+  const input = adapter?.sourceInput === undefined ? undefined
+    : context.input.program.callableValues.native.inputs.find(input => input.subject === adapter.sourceInput);
+  if (adapter?.sourceInput !== undefined && input === undefined) return undefined;
+  const source: RustNativeCallablePhysicalSource | undefined = adapter === undefined ? undefined : {
+    carrier: adapter.sourceCarrier, signature: adapter.conversion.source, ...(input === undefined ? {} : { input }) };
   const file = context.input.program.source.ast.getSourceFile(node);
   const fileName = file === undefined ? undefined : context.input.program.source.ast.getFileName(file);
-  const physical = source === undefined || fileName === undefined ? undefined :
-    rustCallableConversionPhysical(conversion, source.signature, fileName, context.input.program.typeDefinitions);
+  const physical = adapter?.conversion;
   return selected === undefined || source === undefined || physical === undefined || fileName === undefined ? undefined
     : planSelectedRustCallableConversion(physical, source, selected, fileName, node, context);
 }
 
 function planSelectedRustCallableConversion(
-  conversion: RustCallablePhysicalConversion,
+  conversion: RustCallablePhysicalConversion<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>,
   source: RustNativeCallablePhysicalSource,
   expression: RustExpr,
   fileName: string,
@@ -72,14 +80,14 @@ function planSelectedRustCallableConversion(
   const sourceType = rustCallableConstructionType(source.carrier, context);
   const targetType = native || input ? undefined : rustCallableConstructionType(conversion.carrier, context);
   const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: conversion.parameters }, context);
-  const errorType = rustTypeFromCarrierInContext(conversion.error, context);
+  const errorType = rustTypeFromSelectedNativeCarrierInContext(conversion.nativeErrorType, context);
   if (sourceType === undefined || argumentsType === undefined || errorType === undefined) return undefined;
   if (!native && !input && targetType === undefined) return undefined;
   const arity = conversion.errors.length;
   const joinName = arity === 1 ? "NativeErrors1" : context.input.errorRegions.nameFor(fileName, arity);
   const errorSources = conversion.errors.map(error => {
-    const errorType = rustTypeFromCarrierInContext(error.errorType, context);
-    return errorType === undefined ? undefined : { ...error, errorType };
+    const errorType = rustTypeFromSelectedNativeCarrierInContext(error.nativeType, context);
+    return { identity: error.identity, variant: error.variant, errorType };
   });
   const join = joinName === undefined || errorSources.some(error => error === undefined) ? undefined : planRustNativeErrorJoin({
     identity: rustNativeErrorJoinIdentity(fileName, arity), name: joinName, visibility: "public",
@@ -150,7 +158,7 @@ function planSelectedRustCallableConversion(
   } }] } };
   return input ? { kind: "reference", expr: adapted } : adapted;
 
-  function lowerValue(selected: RustCallablePhysicalValueConversion, value: RustExpr): RustExpr | undefined {
+  function lowerValue(selected: RustCallablePhysicalValueConversion<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>, value: RustExpr): RustExpr | undefined {
     if (selected.kind === "identity") return value;
     if (selected.kind === "borrow") return { kind: "reference", expr: value };
     if (selected.kind === "callable") {

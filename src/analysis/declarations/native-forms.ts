@@ -4,13 +4,14 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
 import { admitRustNativeValueDeclaration, admitRustNativeInterfaceFields,
+  publishRustNativeInterfaceDeclaration, type RustPreparedNativeInterfaceDeclaration,
   type RustNativeValueDeclarationInput } from "./native-value-declarations.js";
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustGeneratedTypeParameterNames } from "../../target-model/names/type-parameters.js";
 import { selectRustNativeTypeCarrier } from "../../policy/types/model/native-type-selection.js";
 import { isRustCopyCarrier, selectRustCloneRequirements } from "../../target-model/types/index.js";
-import type { RustNativeClassDeclaration, RustNativeClassField, RustNativeInterfaceDeclaration,
+import type { RustNativeClassDeclaration, RustNativeClassField,
   RustNativeObjectPhysicalDeclaration, RustNativeObjectPhysicalField } from "../../target-model/records/native-value-declarations.js";
 import type { RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import type { RustSourceObjectPhysicalDefinition } from "../../target-model/types/source-union-definitions.js";
@@ -24,7 +25,8 @@ import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustProjectObjectStateField, rustProjectObjectIdentityField,
   rustProjectObjectDispatchField } from "../../target-model/types/field-storage.js";
 
-interface RustNativeObjectDeclarationInput extends Omit<RustNativeValueDeclarationInput, "typeFamilies"> {
+interface RustNativeObjectDeclarationInput extends Omit<RustNativeValueDeclarationInput,
+  "typeFamilies" | "nativeTypeInputFor" | "nativeStateCarrierFor"> {
   readonly typeDefinitions: RustTypeDefinitionRegistry;
   readonly frames: RustFrameCallablePlan;
   readonly classValues: RustClassValuePlan;
@@ -34,22 +36,26 @@ interface RustNativeObjectDeclarationInput extends Omit<RustNativeValueDeclarati
 }
 
 export interface RustPreparedNativeDeclarationForms {
-  get(declaration: Node): RustNativeDeclarationForm | undefined;
+  get(declaration: Node): RustPreparedNativeClassDeclaration | RustPreparedNativeInterfaceDeclaration | undefined;
   complete(input: RustNativeValueDeclarationInput & { readonly sourceFiles: readonly SourceFile[];
     readonly genericRequirements: RustDeclarationGenericRequirementIndex }): AnalyzeRustNativeDeclarationFormsResult;
 }
 
+type RustPreparedNativeClassDeclaration = Omit<RustNativeClassDeclaration, "fields"> & {
+  readonly fields: readonly Omit<RustNativeClassField, "nativeCarrier">[];
+};
+
 export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclarationInput):
   | { readonly kind: "resolved"; readonly forms: RustPreparedNativeDeclarationForms }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
-  const forms = new WeakMap<Node, RustNativeDeclarationForm>();
-  const objects: { readonly declaration: Node; readonly form: RustNativeClassDeclaration | RustNativeInterfaceDeclaration }[] = [];
+  const forms = new WeakMap<Node, RustPreparedNativeClassDeclaration | RustPreparedNativeInterfaceDeclaration>();
+  const objects: { readonly declaration: Node; readonly form: RustPreparedNativeClassDeclaration | RustPreparedNativeInterfaceDeclaration }[] = [];
   const diagnostics: TargetDiagnostic[] = [];
   const { ast, projectTypes } = input;
   for (const definition of projectTypes.definitions) {
     const declaration = definition.declaration;
     if (!input.isNativeNode(declaration) || input.records.typeOnlyDeclaration.get(declaration) !== undefined) continue;
-    let form: RustNativeClassDeclaration | RustNativeInterfaceDeclaration;
+    let form: RustPreparedNativeClassDeclaration | RustPreparedNativeInterfaceDeclaration;
     if (definition.kind === "interface") {
       if (ast.parent(declaration) !== ast.getSourceFile(declaration)) continue;
       if (projectTypes.isPolymorphic(definition)) {
@@ -78,7 +84,7 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
         diagnostics.push(objectIssue(declaration, "Class declaration requires its exact native name and physical field layout."));
         continue;
       }
-      const fields: RustNativeClassField[] = [];
+      const fields: Omit<RustNativeClassField, "nativeCarrier">[] = [];
       const frame = input.frames.definitionForOwner(declaration);
       const frameCounterName = frame === undefined ? undefined : rustRetainedFrameCounterName(frame,
         { callableValues: { frames: input.frames }, projectTypes, projectConstructions: input.projectConstructions });
@@ -155,12 +161,34 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
       : Object.freeze({ kind: "conditional" as const, requirements: Object.freeze(requirements) });
     forms.set(declaration, Object.freeze({ ...form, physical: Object.freeze({ ...form.physical, clone }) }));
   }
-  const get = (declaration: Node): RustNativeDeclarationForm | undefined => forms.get(declaration);
+  const get = (declaration: Node) => forms.get(declaration);
   let completed = false;
   return { kind: "resolved", forms: Object.freeze({ get, complete(finalInput: Parameters<RustPreparedNativeDeclarationForms["complete"]>[0]) {
     if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native declaration forms may be completed only once.");
     completed = true;
-    return analyzeRustNativeDeclarationForms(finalInput, forms);
+    const published = new WeakMap<Node, RustNativeDeclarationForm>();
+    const diagnostics: TargetDiagnostic[] = [];
+    for (const { declaration } of objects) {
+      const prepared = forms.get(declaration);
+      if (prepared === undefined) failTargetAnalysisInvariant("tsonic-rust", "A prepared native object lost its original field selection.", declaration);
+      if (prepared.kind === "interface") {
+        const selected = publishRustNativeInterfaceDeclaration(prepared, finalInput);
+        if (selected.kind === "rejected") diagnostics.push(...selected.diagnostics);
+        else if (selected.kind === "accepted") published.set(declaration, selected.form);
+        continue;
+      }
+      const nativeInput = finalInput.nativeTypeInputFor(prepared.definition.fileName, undefined);
+      const fields: RustNativeClassField[] = [];
+      for (const field of prepared.fields) {
+        const native = selectRustNativeTypeCarrier(field.carrier, nativeInput, "general");
+        if (native.kind === "rejected") diagnostics.push({ code: "RUST_CLASS_FIELD_TYPE_NOT_REPRESENTABLE", category: "error",
+          source: "tsonic-rust", sourceNode: field.declaration, message: native.reason });
+        else fields.push(Object.freeze({ ...field, nativeCarrier: native.carrier }));
+      }
+      published.set(declaration, Object.freeze({ ...prepared, fields: Object.freeze(fields) }));
+    }
+    return diagnostics.length === 0 ? analyzeRustNativeDeclarationForms(finalInput, published)
+      : { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   } }) };
 
   function marker(definition: RustNativeClassDeclaration["definition"]): RustNativeObjectPhysicalField {

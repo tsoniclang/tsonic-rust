@@ -1,8 +1,7 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { SourceFile } from "@tsonic/tsts";
 import type { RustProgramErrorOwner, TargetTypeRef } from "../types/model.js";
 import type { RustNativeErrorSource } from "../types/native-error-joins.js";
 import type { RustProducerErrorReference } from "../types/carriers/producer-errors.js";
-import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
 import type { RustErrorDomain } from "../operations/error-boundary.js";
 import type { RustProjectTypeDefinition } from "../types/project-types.js";
 
@@ -54,16 +53,18 @@ export interface RustJsRejectionRegion {
   readonly requiredCarriers: readonly TargetTypeRef[];
 }
 
-export interface RustErrorRegionSelection {
+export interface RustErrorRegionSelection<Source extends RustNativeErrorSource<TargetTypeRef> =
+  RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> {
   readonly kind: "infallible" | "package" | "native";
   readonly fileName: string;
   readonly localOwner: RustPhysicalErrorOwner | undefined;
-  readonly sources: readonly RustNativeErrorSource<TargetTypeRef>[];
+  readonly sources: readonly Source[];
   readonly jsRejection?: RustJsRejectionRegion;
 }
 
-export interface RustSourceErrorRegionSelection {
-  readonly operand: RustErrorRegionSelection;
+export interface RustSourceErrorRegionSelection<Source extends RustNativeErrorSource<TargetTypeRef> =
+  RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> {
+  readonly operand: RustErrorRegionSelection<Source>;
   readonly channels: readonly {
     readonly sourceIdentity: string;
     readonly targetIdentity: string;
@@ -71,11 +72,12 @@ export interface RustSourceErrorRegionSelection {
   }[];
 }
 
-export interface RustModuleErrorInitializer {
+export interface RustModuleErrorInitializer<Source extends RustNativeErrorSource<TargetTypeRef> =
+  RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> {
   readonly sourceFile: SourceFile;
   readonly identity: string;
   readonly asynchronous: boolean;
-  readonly region: RustErrorRegionSelection;
+  readonly region: RustErrorRegionSelection<Source>;
 }
 
 export type RustInitializerErrorSelection =
@@ -86,8 +88,9 @@ export type RustInitializerErrorSelection =
       | { readonly kind: "module"; readonly identity: string; readonly variant: string; readonly sourceFile: SourceFile }
     )[] };
 
-export interface RustInitializerSelection {
-  readonly modules: readonly RustModuleErrorInitializer[];
+export interface RustInitializerSelection<Source extends RustNativeErrorSource<TargetTypeRef> =
+  RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> {
+  readonly modules: readonly RustModuleErrorInitializer<Source>[];
   readonly asynchronous: boolean;
   readonly error: RustInitializerErrorSelection;
 }
@@ -100,13 +103,14 @@ export interface RustBinaryErrorSelection {
   )[];
 }
 
-export interface RustInitializationErrorRecords {
+export interface RustInitializationErrorRecords<Source extends RustNativeErrorSource<TargetTypeRef> =
+  RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> {
   readonly entrySourceFile: SourceFile | undefined;
-  readonly root: RustInitializerSelection;
-  readonly workers: readonly { readonly sourceFile: SourceFile; readonly initializer: RustInitializerSelection }[];
+  readonly root: RustInitializerSelection<Source>;
+  readonly workers: readonly { readonly sourceFile: SourceFile; readonly initializer: RustInitializerSelection<Source> }[];
   readonly binary: RustBinaryErrorSelection;
-  readonly moduleFor: (sourceFile: SourceFile) => RustModuleErrorInitializer | undefined;
-  readonly workerFor: (sourceFile: SourceFile) => RustInitializerSelection | undefined;
+  readonly moduleFor: (sourceFile: SourceFile) => RustModuleErrorInitializer<Source> | undefined;
+  readonly workerFor: (sourceFile: SourceFile) => RustInitializerSelection<Source> | undefined;
 }
 
 export interface RustErrorJoinDeclaration {
@@ -116,8 +120,6 @@ export interface RustErrorJoinDeclaration {
 }
 
 export interface RustErrorRegionRecords {
-  readonly get: (declaration: Node) => RustErrorRegionSelection | undefined;
-  readonly sourceFor: (edge: RustSourceErrorEffectEdge) => RustSourceErrorRegionSelection | undefined;
   readonly declarationsFor: (fileName: string) => readonly RustErrorJoinDeclaration[];
   readonly producerError: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;
   readonly initialization: RustInitializationErrorRecords;

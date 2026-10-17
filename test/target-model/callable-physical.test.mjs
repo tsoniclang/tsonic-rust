@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableConversionPhysical, rustCallableConversionErrorArities, rustCallablePhysicalSignature }
+import { rustCallableConversionPhysical, rustCallableConversionErrorArities, rustCallablePhysicalSignature, substituteRustCallablePhysicalConversion }
   from "../../dist/target-model/conversions/callable-physical.js";
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
@@ -12,6 +12,7 @@ import { rustNativeErrorJoinReference } from "../../dist/target-model/types/nati
 import { rustRuntimeErrorTargetType } from "../../dist/target-model/operations/error-boundary.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
+import { substituteRustTargetGenerics } from "../../dist/target-model/types/carriers/substitution.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -34,6 +35,7 @@ test("physical adapters preserve source error and native Future payload without 
   for (const error of [infallible, failure]) {
     const physical = rustCallableConversionPhysical(selected, { parameters: [], result: native, error }, file);
     assert.equal(physical !== undefined, true);
+    assert.equal(Object.hasOwn(physical, "nativeErrorType"), false, "private physical preparation is not a fabricated native admission");
     assert.equal(rustTargetTypeRefEquals(physical.result, native), true);
     assert.equal(rustTargetTypeRefEquals(physical.error, error), true);
     assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical.carrier).result, native), true);
@@ -43,6 +45,24 @@ test("physical adapters preserve source error and native Future payload without 
     assert.equal(Object.isFrozen(physical.result.bounds), true);
   }
   assert.deepEqual(rustCallableConversionErrorArities(selected), []);
+});
+
+test("physical adapter substitution preserves selected nested contracts and every error channel", () => {
+  const parameter = { kind: "type-parameter", identity: "fixture:Value", name: "Value" };
+  const nativeError = rustNamedTargetType("fixture:GenericError", "GenericError", [{ kind: "type", type: parameter }],
+    [], undefined, [], undefined, []);
+  const selected = select(rustCallableTargetType([], parameter), rustCallableTargetType([integer], parameter));
+  const prepared = rustCallableConversionPhysical(selected, { parameters: [], result: parameter, error: nativeError }, file);
+  assert.equal(prepared !== undefined, true, "the exact generic physical adapter is selected once");
+  const bindings = { types: new Map([[parameter.identity, wide]]), lifetimes: new Map(), consts: new Map() };
+  const apply = carrier => carrier === parameter ? wide : substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
+  const substituted = substituteRustCallablePhysicalConversion(prepared, bindings, apply);
+  assert.equal(rustTargetTypeRefEquals(substituted.result, wide), true, "result uses the actual physical context");
+  assert.equal(substituted.errors[0].identity, prepared.errors[0].identity, "source error identity is unchanged");
+  assert.equal(substituted.errors[0].variant, prepared.errors[0].variant, "source variant is unchanged");
+  assert.equal(rustTargetTypeRefEquals(substituted.errors[0].errorType, apply(nativeError)), true, "full selected native error arguments survive");
+  assert.equal(rustTargetTypeRefEquals(prepared.result, parameter), true, "early selected evidence remains immutable");
+  assert.equal(Object.hasOwn(substituted, "nativeErrorType"), false, "substitution never pretends to admit native syntax");
 });
 
 test("fallible argument and result adapters expose canonical distinct exact error channels", () => {

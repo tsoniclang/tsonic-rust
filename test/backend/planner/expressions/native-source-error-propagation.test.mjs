@@ -6,7 +6,8 @@ import { planRustSourceErrorPropagation } from "../../../../dist/backend/planner
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { rustNativeFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { nativeProducerFixture } from "../../../helpers/native-producer-bridges.mjs";
-import { analyzeRustErrorRegions } from "../../../../dist/analysis/errors/regions.js";
+import { analyzeRustErrorRegions, publishRustErrorRegion } from "../../../../dist/analysis/errors/regions.js";
+import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createRustErrorRegionCatalog } from "../../../../dist/backend/planner/program/error-regions.js";
 
 function fixture(joined = false) {
@@ -51,7 +52,21 @@ function fixture(joined = false) {
   const selected = regions.value.sourceFor(edge);
   assert.equal(selected?.channels.length === 1 && selected.channels[0].sourceIdentity === source.identity &&
     selected.channels[0].targetIdentity === target.identity, true, "the sealed source-to-caller error identity is exact");
-  context.input.program.errorRegions = regions.value;
+  const native = publishRustErrorRegion(selected.operand, node, {
+    typeDefinitions: context.input.program.typeDefinitions, typeParameterNames: undefined,
+    pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
+    producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined,
+  });
+  assert.equal(native.kind, "resolved", "the original exact payload is admitted before native planning");
+  const use = targetUseSiteRef(declaration, "native-body", "/index.ts:fixture");
+  context.emissionContext = Object.freeze({ use });
+  const operand = Object.freeze({ sourceErrorRegions: Object.freeze([
+    Object.freeze({ edge, selection: Object.freeze({ ...selected, operand: native.value }) }),
+  ]) });
+  context.input.program.physicalEmissionContexts = {
+    sourceErrorOperandFor: (selectedUse, subject) => selectedUse === use && subject === node ? operand : undefined,
+  };
+  context.input.program.errorRegions = { declarationsFor: regions.value.declarationsFor, producerError: regions.value.producerError };
   context.input.errorRegions = createRustErrorRegionCatalog(context.input.program);
   return { context, node, edge, expression: { kind: "call", path: "invoke", args: [] } };
 }

@@ -198,6 +198,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const operation = records.targetOperation.get(node);
     const handler = records.nativeHandler.get(node);
     const flow = records.contextualValueConversion.get(node)?.conversion;
+    if (records.sourceErrorEffects.get(node)?.edges.length || records.awaitSourceErrorEffects.get(node)?.branches.length ||
+      records.genericCallableInvocation.get(node) !== undefined || flow?.kind === "callable-adapter")
+      runtime(owner, node, "source-errors", node);
     if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter")
       runtime(owner, node, role, sourceOwner);
     if (handler?.kind === "memory-binding") {

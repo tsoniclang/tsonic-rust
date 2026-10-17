@@ -26,7 +26,7 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
       asyncFunction: { get: node => asynchronous && node === declaration
         ? { kind: "js-promise", outputCarrier, futureCarrier: rustJsPromiseTargetType(outputCarrier),
           lowering: { kind: "settled", settledAwaits: [] } } : undefined },
-      sourceCallableReturn: empty, sourceErrorEffects: empty, contextualValueConversion: empty,
+      sourceCallableReturn: empty, sourceErrorEffects: empty, awaitSourceErrorEffects: empty, contextualValueConversion: empty,
       projectCallableAdapters: empty, targetOperation: empty },
     names: { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined,
       callableValueNameForDeclaration: () => undefined },

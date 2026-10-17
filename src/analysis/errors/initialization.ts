@@ -13,6 +13,9 @@ import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 import type { RustAnalyzedErrorRegions } from "./regions.js";
 import type { RustBinaryErrorSelection, RustInitializationErrorRecords, RustInitializerErrorSelection,
   RustInitializerSelection, RustModuleErrorInitializer, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
+import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustCallableEmissionContexts } from "../../target-model/records/physical-emission-contexts.js";
 
 export function analyzeRustInitializationErrors(input: {
   readonly ast: AstReader;
@@ -27,7 +30,7 @@ export function analyzeRustInitializationErrors(input: {
   readonly outputType: "bin" | "lib";
   readonly projectRoot: string;
   readonly entryPoint: string;
-}): TargetStageResult<RustInitializationErrorRecords> {
+}): TargetStageResult<RustInitializationErrorRecords<RustNativeErrorSource<TargetTypeRef>>> {
   const diagnostics: TargetDiagnostic[] = [];
   const reject = (code: string, message: string, sourceNode?: SourceFile): void => {
     diagnostics.push({ code, category: "error", source: "tsonic-rust", message,
@@ -35,7 +38,7 @@ export function analyzeRustInitializationErrors(input: {
       evidence: ["target.capability=rust.analysis.initialization-errors"] });
   };
   const byFileName = new Map(input.sourceFiles.map(file => [normalizePath(input.ast.getFileName(file)), file] as const));
-  const modules = new Map<SourceFile, RustModuleErrorInitializer>();
+  const modules = new Map<SourceFile, RustModuleErrorInitializer<RustNativeErrorSource<TargetTypeRef>>>();
   for (const file of input.sourceFiles) {
     const requirement = input.moduleInitialization.requirementFor(file);
     if (requirement.kind === "unresolved") {
@@ -68,10 +71,10 @@ export function analyzeRustInitializationErrors(input: {
       `Initializer component '${componentId}' has no exact physical error owner.`, file);
     return selected;
   };
-  const compose = (roots: readonly SourceFile[], owner: RustPhysicalErrorOwner): RustInitializerSelection => {
+  const compose = (roots: readonly SourceFile[], owner: RustPhysicalErrorOwner): RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>> => {
     const visited = new Set<SourceFile>();
     const active = new Set<SourceFile>();
-    const ordered: RustModuleErrorInitializer[] = [];
+    const ordered: RustModuleErrorInitializer<RustNativeErrorSource<TargetTypeRef>>[] = [];
     const visit = (file: SourceFile): void => {
       if (visited.has(file) || active.has(file)) return;
       active.add(file);
@@ -125,8 +128,8 @@ export function analyzeRustInitializationErrors(input: {
     }
   }
   const root = compose([...roots].sort(([left], [right]) => compareNames(left, right)).map(([, file]) => file), rootOwner);
-  const workers: { readonly sourceFile: SourceFile; readonly initializer: RustInitializerSelection }[] = [];
-  const workerByFile = new Map<SourceFile, RustInitializerSelection>();
+  const workers: { readonly sourceFile: SourceFile; readonly initializer: RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>> }[] = [];
+  const workerByFile = new Map<SourceFile, RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>>>();
   for (const sourceFile of [...input.sourceModules.targets()].sort((left, right) =>
     compareNames(input.ast.getFileName(left), input.ast.getFileName(right)))) {
     const component = input.components.componentForFile(input.ast.getFileName(sourceFile));
@@ -159,4 +162,51 @@ function normalizePath(path: string): string {
 
 function compareNames(left: string, right: string): number {
   return left.localeCompare(right, "en");
+}
+
+export function publishRustInitializerSelection(
+  preparation: RustInitializerSelection<RustNativeErrorSource<TargetTypeRef>>,
+  moduleFor: (sourceFile: SourceFile) => RustModuleErrorInitializer | undefined,
+): TargetStageResult<RustInitializerSelection> {
+  const modules: RustModuleErrorInitializer[] = [];
+  for (const prepared of preparation.modules) {
+    const selected = moduleFor(prepared.sourceFile);
+    if (selected === undefined || selected.identity !== prepared.identity || selected.asynchronous !== prepared.asynchronous)
+      return rejectedTargetStage([{ code: "RUST_SOURCE_PACKAGE_INITIALIZER_ERROR_BOUNDARY_MISSING", category: "error",
+        source: "tsonic-rust", sourceNode: prepared.sourceFile,
+        message: "A native initializer requires its original selected module and completed physical error region." }]);
+    modules.push(selected);
+  }
+  return resolvedTargetStage(Object.freeze({ ...preparation, modules: Object.freeze(modules) }));
+}
+
+export function publishRustInitializationErrors(
+  preparation: RustInitializationErrorRecords<RustNativeErrorSource<TargetTypeRef>>,
+  contexts: RustCallableEmissionContexts,
+): TargetStageResult<RustInitializationErrorRecords> {
+  const modules = new Map<SourceFile, RustModuleErrorInitializer>();
+  for (const initializer of [preparation.root, ...preparation.workers.map(worker => worker.initializer)])
+    for (const module of initializer.modules) {
+      if (modules.has(module.sourceFile)) continue;
+      const selected = contexts.contextForOwner(module.sourceFile, "module-initializer");
+      if (selected?.error.kind !== "region" || selected.error.owner !== module.sourceFile)
+        return rejectedTargetStage([{ code: "RUST_SOURCE_PACKAGE_INITIALIZER_ERROR_BOUNDARY_MISSING", category: "error",
+          source: "tsonic-rust", sourceNode: module.sourceFile,
+          message: "A module initializer requires its exact published physical error context." }]);
+      modules.set(module.sourceFile, Object.freeze({ ...module, region: selected.error.region }));
+    }
+  const root = publishRustInitializerSelection(preparation.root, sourceFile => modules.get(sourceFile));
+  if (root.kind === "rejected") return root;
+  const workers: RustInitializationErrorRecords["workers"][number][] = [];
+  for (const worker of preparation.workers) {
+    const selected = contexts.contextForOwner(worker.sourceFile, "worker-initializer");
+    if (selected?.error.kind !== "initializer" || selected.error.owner !== worker.sourceFile)
+      return rejectedTargetStage([{ code: "RUST_WORKER_ENTRY_ERROR_DOMAIN_MISSING", category: "error",
+        source: "tsonic-rust", sourceNode: worker.sourceFile,
+        message: "A worker initializer requires its exact published physical error context." }]);
+    workers.push(Object.freeze({ sourceFile: worker.sourceFile, initializer: selected.error.initializer }));
+  }
+  const byWorker = new Map(workers.map(worker => [worker.sourceFile, worker.initializer]));
+  return resolvedTargetStage(Object.freeze({ ...preparation, root: root.value, workers: Object.freeze(workers),
+    moduleFor: (sourceFile: SourceFile) => modules.get(sourceFile), workerFor: (sourceFile: SourceFile) => byWorker.get(sourceFile) }));
 }

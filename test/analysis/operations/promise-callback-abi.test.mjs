@@ -40,7 +40,8 @@ test("Promise callback contexts select their physical rejection type before the 
   assert.equal(callback !== undefined, true);
   const carrier = program.records.runtimeCarrier.get(callback)?.carrier;
   assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(carrier)?.error, rustJsValueTargetType()), true);
-  const region = program.errorRegions.get(callback);
+  const context = program.physicalEmissionContexts.contextForOwner(callback, "native-body");
+  const region = context?.error.kind === "region" ? context.error.region : undefined;
   assert.equal(region?.jsRejection !== undefined, true);
   const reference = program.callableValues.nativeProducers.errorFor(callback, "invoke");
   assert.equal(reference?.kind, "target-specific");

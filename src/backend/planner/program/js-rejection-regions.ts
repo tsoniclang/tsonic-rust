@@ -8,7 +8,7 @@ import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { planRustProgramErrorClosedValue } from "../expressions/program-error-values.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustJsRejectionErrorType } from "../types/error-boundary.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import { rustErrorType, rustNativeFallibleBoundary, type RustFallibleBoundary } from "./fallible-boundaries.js";
 import { registerAliasFromPath, type RustPlanContext } from "./plan-context.js";
@@ -32,8 +32,9 @@ export function planRustJsRejectionRegion(
   if (local !== undefined && rejection.local !== undefined)
     conversions.set(local.source.identity, { errorType: local.source.errorType, conversion: rejection.local });
   for (const source of rejection.sources) {
-    const errorType = rustTypeFromCarrierInContext(source.conversion.carrier, context);
-    if (errorType === undefined) return undefined;
+    const selectedSource = selected.sources.find(selected => selected.identity === source.identity);
+    if (selectedSource === undefined) return undefined;
+    const errorType = rustTypeFromSelectedNativeCarrierInContext(selectedSource.nativeType, context);
     conversions.set(source.identity, { errorType, conversion: source.conversion });
   }
   const binding = (base: string): string => {
@@ -41,7 +42,7 @@ export function planRustJsRejectionRegion(
       failTargetPlannerInvariant("tsonic-rust", "JS rejection reconstruction requires sealed hygienic name state.", declaration);
     return allocateRustSyntheticName(context.syntheticNames, base);
   };
-  const convert = (conversion: RustJsRejectionConversion, error: RustExpr): RustExpr | undefined => {
+  const convert = (conversion: RustJsRejectionConversion, error: RustExpr, carrier: RustType): RustExpr | undefined => {
     switch (conversion.kind) {
       case "identity": return error;
       case "uninhabited": return { kind: "match", expression: error, arms: [] };
@@ -53,13 +54,14 @@ export function planRustJsRejectionRegion(
           : planRustProgramErrorClosedValue(error, rustJsValueTargetType(), declaration, context, boundary);
       }
       case "native-join": {
-        const carrier = rustTypeFromCarrierInContext(conversion.carrier, context);
-        if (carrier?.kind !== "named") return undefined;
+        if (carrier.kind !== "named") return undefined;
         const name = binding("rejection_payload");
         const payload: RustExpr = { kind: "path", path: name };
         const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
         for (const [index, arm] of conversion.arms.entries()) {
-          const expression = convert(arm, payload);
+          const argument = carrier.genericArguments?.[index];
+          if (argument?.kind !== "type") return undefined;
+          const expression = convert(arm, payload, argument.type);
           if (expression === undefined) return undefined;
           arms.push({ pattern: { kind: "tuple-variant", path: `${carrier.path}::Error${index}`,
             elements: [{ kind: "binding", name }] }, expression });
@@ -76,14 +78,14 @@ export function planRustJsRejectionRegion(
     accepts: (source: RustNativeErrorJoinSelection) => lookup(source) !== undefined,
     inject(source: RustNativeErrorJoinSelection, error: RustExpr): RustExpr | undefined {
       const selected = lookup(source);
-      return selected === undefined ? undefined : convert(selected.conversion, error);
+      return selected === undefined ? undefined : convert(selected.conversion, error, selected.errorType);
     },
     propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined {
       const selected = lookup(source);
       if (selected === undefined) return undefined;
       const name = selected.conversion.kind === "identity" ? undefined : binding("rejection_error");
       const error: RustExpr | undefined = name === undefined ? undefined
-        : convert(selected.conversion, { kind: "path", path: name });
+        : convert(selected.conversion, { kind: "path", path: name }, selected.errorType);
       if (name !== undefined && error === undefined) return undefined;
       const mapped: RustExpr = name === undefined ? result : { kind: "method-call", receiver: result, method: "map_err",
         genericArguments: [{ kind: "type", type: rustJsRejectionErrorType }, { kind: "type", type: { kind: "infer" } }],

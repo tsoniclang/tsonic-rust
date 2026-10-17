@@ -61,7 +61,7 @@ import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-fl
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";
-import { analyzeRustInitializationErrors } from "../errors/initialization.js";
+import { analyzeRustInitializationErrors, publishRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
@@ -71,7 +71,7 @@ import { prepareRustNativeDeclarationForms } from "../declarations/native-forms.
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
-import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
+import { analyzeRustGenericCallableErrors, publishRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { analyzeRustReachability } from "../reachability/plan.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
@@ -383,12 +383,12 @@ export function analyzeRustTargetProgram(
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
-  const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
+  const preparedErrorRegions = Object.freeze({ ...errorRegions.value, initialization: initializationErrors.value });
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode, records });
   const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
-    records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections });
+    records, names: context.names, typeDefinitions, errorRegions: preparedErrorRegions, projectFlowReadSelections });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
     navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
@@ -426,7 +426,7 @@ export function analyzeRustTargetProgram(
       nativeTypeItemFor: sourcePackageFacades.plan.nativeTypeItemFor,
       typeDefinitions, projectTypes, objectRepresentations,
       structuralShapes: context.structuralShapes, callableValues: callables, classValues,
-      errorRegions: completedErrorRegions,
+      errorRegions: errorRegions.value,
       additionalArgumentsFor: (carrier, parameterIndexes) => selectRustOptionalStorageTypeArguments(carrier, {
         genericRequirements: declarationGenericRequirements.index, projectTypes, normalize: normalizeNativeFamily,
       }, parameterIndexes),
@@ -439,12 +439,19 @@ export function analyzeRustTargetProgram(
     nativeTypeInputFor: (fileName, callables) => rustNativeTypeSelectionInput(nativeContextFor(fileName, undefined, callables)),
     sourceCallableSpecializations, projectMethodDispatch, lexicalFunctions,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
-    errorRegions: completedErrorRegions, initialization: initializationErrors.value,
+    errorRegions: errorRegions.value, initialization: initializationErrors.value,
     constructions: context.projectTypes.definitions.flatMap(definition => {
       const plan = projectConstructions.forDefinition(definition);
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
+  const nativeInitialization = publishRustInitializationErrors(initializationErrors.value, callableValues.value.emissionContexts);
+  if (nativeInitialization.kind === "rejected") return nativeInitialization;
+  const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, nativeInitialization.value);
+  const nativeGenericErrors = publishRustGenericCallableErrors(genericCallableErrors.value,
+    callableValues.value.generic.physical.definitions(), fileName => rustNativeTypeSelectionInput(
+      nativeContextFor(fileName, undefined, callableValues.value)));
+  if (nativeGenericErrors.kind === "rejected") return nativeGenericErrors;
   const ownership = analyzeRustReadOwnership({ requirements: readRequirements.requirements,
     movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
     borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
@@ -479,7 +486,7 @@ export function analyzeRustTargetProgram(
     physicalEmissionContexts: callableValues.value.emissionContexts,
     statementCompletions: statementCompletions.plan,
     errorRegions: completedErrorRegions,
-    genericCallableErrors: genericCallableErrors.value,
+    genericCallableErrors: nativeGenericErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records }),
     promiseResults: promiseResults.results,
     promiseBodies: context.promiseBodies.plan,

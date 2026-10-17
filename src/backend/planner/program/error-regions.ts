@@ -1,14 +1,13 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
-import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
+import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
-import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
+import { rustTypeFromSelectedNativeCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   type RustFallibleBoundary } from "./fallible-boundaries.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
 import { registerAliasFromPath, type RustPlanContext } from "./plan-context.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
 import { planRustJsRejectionRegion } from "./js-rejection-regions.js";
 
@@ -45,7 +44,8 @@ export function planRustErrorRegion(
   declaration: Node,
   context: RustPlanContext,
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
-  const selected = context.input.program.errorRegions.get(declaration);
+  const active = context.emissionContext?.error;
+  const selected = active?.kind === "region" && active.owner === declaration ? active.region : undefined;
   return selected === undefined ? undefined : selected.jsRejection === undefined || context.promiseBody === true
     ? planRustSelectedErrorRegion(selected, context) : planRustJsRejectionRegion(declaration, selected, context);
 }
@@ -53,7 +53,6 @@ export function planRustErrorRegion(
 export function planRustSelectedErrorRegion(
   selected: RustErrorRegionSelection,
   context: RustTypeRenderingContext,
-  render: (carrier: TargetTypeRef) => RustType | undefined = carrier => rustTypeFromCarrierInContext(carrier, context),
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
   const owner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
     : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, selected.localOwner);
@@ -68,8 +67,8 @@ export function planRustSelectedErrorRegion(
   const external = context.externalCrateNameByFileName.get(selected.fileName);
   const referencePath = `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`;
   const nativeSources = selected.sources.map(source => {
-    const errorType = render(source.errorType);
-    return errorType === undefined ? undefined : { ...source, errorType };
+    const errorType = rustTypeFromSelectedNativeCarrierInContext(source.nativeType, context);
+    return { identity: source.identity, variant: source.variant, errorType };
   });
   if (nativeSources.some(source => source === undefined)) return undefined;
   const local = owner === undefined ? undefined : { identity: `package:${owner.errorTypeIdentity}`,

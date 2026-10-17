@@ -4,7 +4,10 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { printRustType } from "../../../dist/print/source/index.js";
-import { rustTypeIsLegalInPosition } from "../../../dist/backend/planner/types/type-observations.js";
+import { selectRustNativeTypeCarrier } from "../../../dist/policy/types/model/native-type-selection.js";
+import { rustTypeFromSelectedNativeCarrier } from "../../../dist/backend/planner/types/render.js";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const rejected = [
   {
@@ -50,29 +53,33 @@ test("native callable output contracts reject removed syntax, wrong results and 
 });
 
 test("opaque associated outputs print and typecheck in parameters and returns", { timeout: 300_000 }, () => {
-  const opaque = trait => ({ kind: "impl-trait", bounds: [{ kind: "trait-type", reference: { trait } }], outlives: [] });
-  const equality = (name, type) => ({ kind: "associated-equality", name, genericArguments: [], type });
-  const invocation = output => opaque({ kind: "named", path: "CallableImplementation", genericArguments: [
-    { kind: "type", type: { kind: "unit" } }, output,
-  ] });
-  const future = opaque({ kind: "named", path: "core::future::Future", genericArguments: [
-    equality("Output", { kind: "primitive", name: "usize" }),
-  ] });
-  const debug = opaque({ kind: "named", path: "core::fmt::Debug" });
+  const trait = (path, associatedConstraints = [], genericArguments = []) => ({
+    kind: "trait-ref", id: path, path, genericArguments, associatedConstraints });
+  const opaque = selected => ({ kind: "impl-trait", id: "fixture:associated-output", bounds: [selected], outlives: [] });
+  const equality = (name, type) => ({ kind: "equality", identity: `fixture:${name}`, name, genericArguments: [], type });
+  const invocation = output => opaque(trait("CallableImplementation", [output], [
+    { kind: "type", type: { kind: "tuple", elements: [] } },
+  ]));
+  const future = opaque(trait("core::future::Future", [equality("Output", { kind: "source-primitive", name: "native-uint" })]));
+  const debug = opaque(trait("core::fmt::Debug"));
+  const input = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: undefined,
+    pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
+    producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
   const cases = [
     [invocation(equality("Output", future)), "|()| async { 7_usize }"],
-    [invocation(equality("Output", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: future }] })),
+    [invocation(equality("Output", rustNamedTargetType("fixture:Option", "Option", [{ kind: "type", type: future }], [], undefined, [], undefined, []))),
       "|()| Some(async { 7_usize })"],
     [invocation(equality("Output", invocation(equality("Output", future)))), "|()| |()| async { 7_usize }"],
-    [invocation({ kind: "associated-bounds", name: "Output", genericArguments: [], bounds: [{ kind: "trait-type", reference: {
-      trait: { kind: "named", path: "Iterator", genericArguments: [equality("Item", debug)] },
-    } }] }), "|()| [7_usize].into_iter()"],
+    [invocation({ kind: "bounds", identity: "fixture:Output", name: "Output", genericArguments: [],
+      traits: [trait("Iterator", [equality("Item", debug)])], outlives: [] }), "|()| [7_usize].into_iter()"],
   ];
   const declarations = cases.map(([type, body], index) => {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true, `parameter ${index}`);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), true, `return ${index}`);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false, `storage ${index}`);
-    const printed = printRustType(type);
+    const parameter = selectRustNativeTypeCarrier(type, input, "parameter");
+    const returned = selectRustNativeTypeCarrier(type, input, "return");
+    assert.equal(parameter.kind, "resolved", `parameter ${index}`);
+    assert.equal(returned.kind, "resolved", `return ${index}`);
+    assert.equal(selectRustNativeTypeCarrier(type, input, "general").kind, "rejected", `storage ${index}`);
+    const printed = printRustType(rustTypeFromSelectedNativeCarrier(returned.carrier));
     return `fn producer_${index}() -> ${printed} { ${body} }
 fn consumer_${index}(callback: ${printed}) { drop(callback.invoke(())); }`;
   });

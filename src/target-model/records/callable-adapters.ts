@@ -2,6 +2,17 @@ import type { RustArgumentMode } from "../operations/model.js";
 import type { RustContextualValueConversion } from "../conversions/contextual.js";
 import type { RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { TargetTypeRef } from "../types/model.js";
+import type { Node } from "@tsonic/tsts";
+import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { RustCallablePhysicalConversion } from "../conversions/callable-physical.js";
+import type { RustNativeErrorSource } from "../types/native-error-joins.js";
+
+export interface RustCallablePhysicalAdapter<Source extends RustNativeErrorSource<TargetTypeRef> = RustNativeErrorSource<TargetTypeRef>> {
+  readonly node: Node;
+  readonly sourceCarrier: TargetTypeRef;
+  readonly sourceInput: SourceStorageSubject | undefined;
+  readonly conversion: RustCallablePhysicalConversion<Source>;
+}
 
 export type RustCallableValueAdapter =
   | { readonly kind: "absent-completion"; readonly sourceCarrier: TargetTypeRef; readonly targetCarrier: TargetTypeRef }

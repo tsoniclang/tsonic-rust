@@ -3,7 +3,6 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
-import { rustTypeIsLegalInPosition } from "./type-observations.js";
 import { hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources, type RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
 
@@ -29,8 +28,7 @@ export function planRustNativeErrorJoin(input: {
   readonly sources: readonly RustNativeErrorJoinSource[];
   readonly clone?: boolean;
 }): RustNativeErrorJoinPlan | undefined {
-  const selectedSources = snapshotRustNativeErrorSources(input.sources, errorType => errorType !== undefined &&
-    errorType.kind !== "infer" && rustTypeIsLegalInPosition(errorType, "general"));
+  const selectedSources = snapshotRustNativeErrorSources(input.sources, errorType => errorType !== undefined && errorType.kind !== "infer");
   if (!hasExactObjectKeys(input, ["identity", "name", "visibility", "sources",
       ...(input.referencePath === undefined ? [] : ["referencePath"]),
       ...(input.clone === undefined ? [] : ["clone"])]) ||

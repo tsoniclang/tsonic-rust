@@ -12,7 +12,10 @@ export function planRustGenericCallableErrorPropagation(
   expression: RustExpr, context: RustPlanContext,
 ): RustExpr | undefined {
   const active = context.fallibleBoundary;
-  const operand = planRustGenericCallableErrorJoin(selection.ownerFileName, selection[channel], context);
+  const actual = context.emissionContext === undefined ? undefined
+    : context.input.program.physicalEmissionContexts.sourceErrorOperandFor(context.emissionContext.use, node)?.genericInvocation;
+  const operand = actual === undefined || actual.ownerFileName !== selection.ownerFileName ? undefined
+    : planRustGenericCallableErrorJoin(actual.ownerFileName, actual[channel], context);
   const result = active === undefined || operand === undefined || context.syntheticNames === undefined ? undefined
     : rustPropagateMappedErrorJoin(active, operand, expression,
       allocateRustSyntheticName(context.syntheticNames, "generic_error"),

@@ -23,7 +23,8 @@ export function planRustPromiseBodyObjectAdapter(
   if (asynchronous?.kind !== "js-promise") return undefined;
   let completion: RustExpr = asynchronous.lowering.kind === "factory" ? { kind: "await", expr: invocation } : invocation;
   if (nativeBoundary !== undefined) {
-    const region = context.input.program.errorRegions.get(declaration);
+    const selected = context.emissionContext?.error;
+    const region = selected?.kind === "region" && selected.owner === declaration ? selected.region : undefined;
     const objectBoundary = region === undefined ? undefined : planRustJsRejectionRegion(declaration, region, context)?.boundary;
     if (objectBoundary === undefined || context.syntheticNames === undefined) return undefined;
     const sameErrorType = rustTypeEquals(nativeBoundary.errorType, objectBoundary.errorType);

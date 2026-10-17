@@ -292,7 +292,7 @@ export function selectRustNativeTypeCarrier(
       }
       const union = rustSourceUnionCarrierValue(type);
       if (union !== undefined) {
-        if (union.origin === "generated") return replacement(type, input.structuralCarrier(type));
+        if (union.origin === "generated") return replacement(type, input.structuralCarrier(type), nativePosition);
         const path = input.pathFor(union);
         const arguments_ = rustSourceUnionPayloadArguments(type, input.typeDefinitions);
         if (path === undefined || arguments_ === undefined) return reject(type,

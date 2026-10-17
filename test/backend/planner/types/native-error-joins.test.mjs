@@ -141,7 +141,6 @@ test("ambiguous source identities, variant names and invalid declaration names r
     ["raw variant alias", [first, { ...second, variant: "r#First" }], {}],
     ["invalid variant", [source("source", "crate")], {}],
     ["inferred carrier", [source("source", "Source", { kind: "infer" })], {}],
-    ["opaque enum field", [source("source", "Source", { kind: "impl-trait", bounds: [], outlives: [] })], {}],
     ["removed source generic context", [first], { generics: emptyRustGenerics }],
     ["invalid binder", [first], { generics: { parameters: [{ kind: "type", name: "_", bounds: [] }], wherePredicates: [] } }],
     ["duplicate binder", [first], { generics: { parameters: [{ kind: "type", name: "Value", bounds: [] },

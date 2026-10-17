@@ -207,8 +207,11 @@ for (const [label, carrier, expected] of [
 
 test("closure construction rejects missing error evidence rather than selecting the ambient error", () => {
   const fixture = nativeClosureProducerFixture({
-    selectErrorRegions: (regions, producer) => ({ ...regions,
-      get: node => node === producer ? undefined : regions.get(node) }),
+    selectEmissionContexts: (contexts, producer) => ({ ...contexts,
+      bodyContextFor: (use, node) => {
+        const selected = contexts.bodyContextFor(use, node);
+        return node !== producer || selected === undefined ? selected : { ...selected, error: { kind: "none" } };
+      } }),
   });
   assert.equal(fixture.plan() === undefined, true, "missing error fact rejects");
   assert.equal(fixture.bodyContexts.length, 0, "invalid producer never plans its body");

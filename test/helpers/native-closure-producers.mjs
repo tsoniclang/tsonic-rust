@@ -9,10 +9,11 @@ import { planRustSourcePackageComponents } from "../../dist/backend/planner/prog
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 
 export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source, packages = [],
   selectRecords = records => records, selectProducers = value => value,
-  selectErrorRegions = regions => regions,
+  selectEmissionContexts = contexts => contexts,
   body = () => ({ kind: "int-literal", text: "3" }),
 } = {}) {
   const output = asynchronous ? "Promise<int32>" : "int32";
@@ -33,7 +34,7 @@ export function create(): () => ${output} {
   assert.equal(closures.length, 1, "one checked closure producer");
   const node = closures[0];
   const records = selectRecords(original.records, node);
-  const program = { ...original, records, errorRegions: selectErrorRegions(original.errorRegions, node),
+  const program = { ...original, records, physicalEmissionContexts: selectEmissionContexts(original.physicalEmissionContexts, node),
     callableValues: { ...original.callableValues,
     nativeProducers: selectProducers(original.callableValues.nativeProducers),
   } };
@@ -51,7 +52,12 @@ export function create(): () => ${output} {
   const component = components.components.find(value => value.componentId === identity?.componentId);
   assert.equal(identity !== undefined && component !== undefined, true, "the producer has its exact native source identity");
   const bodyContexts = [];
+  const owner = sourceEnclosingCallable(ast.parent(node), ast);
+  assert.equal(owner !== undefined, true, "the fixture closure has its original checked lexical owner");
+  const emissionContext = program.physicalEmissionContexts.contextForOwner(owner, "native-body");
+  assert.equal(emissionContext !== undefined, true, "the fixture uses its exact published enclosing native body");
   const context = {
+    emissionContext,
     input: planning,
     sourceFile, sourcePackageComponentId: component.componentId, moduleName: identity.moduleName,
     moduleNameByFileName: new Map([...program.sourceOutputIdentities].map(([file, identity]) => [file, identity.moduleName])),

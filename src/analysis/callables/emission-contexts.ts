@@ -5,7 +5,7 @@ import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustFinalizedOperationAbi, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import type { RustErrorRegionRecords, RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
+import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
 import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination,
   RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin,
   RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins, RustPhysicalEmissionRole,
@@ -36,6 +36,13 @@ import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner,
   type RustEmissionSourceRequest } from "./emission-source-origins.js";
+import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
+import type { RustSourceErrorRegionSelection } from "../../target-model/records/error-regions.js";
+import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
+import type { RustNativeStorageSelection, RustCallablePhysicalAdapterPreparation } from "./native-storage.js";
+import { prepareRustErrorRegion, type RustAnalyzedErrorRegions } from "../errors/regions.js";
+import { substituteRustCallablePhysicalConversion } from "../../target-model/conversions/callable-physical.js";
 
 
 export interface RustCallableEmissionPreparationInput {
@@ -52,10 +59,10 @@ export interface RustCallableEmissionPreparationInput {
   readonly nativeStorage: RustPhysicalCallableStorage;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly genericCompletions: Pick<RustGenericCallableCompletionPlan, "forDefinition">;
-  readonly genericErrors: RustGenericCallableErrorIndex;
+  readonly genericErrors: RustGenericCallableErrorIndex<RustNativeErrorSource<TargetTypeRef>>;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
-  readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;
-  readonly initialization: RustInitializationErrorRecords;
+  readonly errorRegions: Pick<RustAnalyzedErrorRegions, "get" | "sourceFor">;
+  readonly initialization: RustInitializationErrorRecords<RustNativeErrorSource<TargetTypeRef>>;
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   readonly emissionRequests: readonly RustPhysicalCallableEmissionRequest[];
   readonly constructions: readonly RustProjectConstructionPlan[];
@@ -70,7 +77,8 @@ export interface RustCallableEmissionPreparation {
   readonly physicalOperands: readonly TargetTypeRef[];
 }
 
-export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysicalEmissionContext, "targetGenericArguments"> {
+export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysicalEmissionContext, "targetGenericArguments" | "error"> {
+  readonly error: RustEmissionErrorContext<RustNativeErrorSource<TargetTypeRef>>;
   readonly nativeOwnerFileName: string;
   readonly nativeOperations: ReadonlyMap<RustFinalizedOperationAbi, {
     readonly node: Node;
@@ -78,17 +86,25 @@ export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysica
   }>;
 }
 
-export interface RustPhysicalEmissionOperandPreparation extends Omit<RustPhysicalEmissionOperand, "context"> {
+export interface RustPhysicalEmissionOperandPreparation extends Omit<RustPhysicalEmissionOperand,
+  "context" | "sourceErrorRegions" | "genericInvocation" | "callableAdapters"> {
   readonly context: RustPhysicalEmissionContextPreparation;
+  readonly sourceErrorRegions: readonly { readonly edge: RustSourceErrorEffectEdge;
+    readonly selection: RustSourceErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> }[];
+  readonly genericInvocation: RustGenericCallableInvocationFact | undefined;
+  readonly callableAdapters: readonly RustCallablePhysicalAdapterPreparation[];
 }
 
 export interface RustCallableEmissionContextPreparation extends
-  Omit<RustCallableEmissionContexts, "contexts" | "operands" | "contextFor" | "contextForOwner" | "operandFor"> {
+  Omit<RustCallableEmissionContexts, "contexts" | "operands" | "contextFor" | "contextForOwner" | "operandFor" |
+    "bodyContextFor" | "sourceErrorOperandFor"> {
   readonly contexts: readonly RustPhysicalEmissionContextPreparation[];
   readonly operands: readonly RustPhysicalEmissionOperandPreparation[];
   contextFor(use: TargetUseSiteRef): RustPhysicalEmissionContextPreparation | undefined;
   contextForOwner(subject: object, role: RustPhysicalEmissionRole): RustPhysicalEmissionContextPreparation | undefined;
   operandFor(use: TargetUseSiteRef): RustPhysicalEmissionOperandPreparation | undefined;
+  bodyContextFor(enclosingUse: TargetUseSiteRef, declaration: Node): RustPhysicalEmissionContextPreparation | undefined;
+  sourceErrorOperandFor(context: TargetUseSiteRef, node: Node): RustPhysicalEmissionOperandPreparation | undefined;
 }
 
 export interface RustEmissionContextRequest extends RustEmissionSourceRequest {
@@ -96,7 +112,7 @@ export interface RustEmissionContextRequest extends RustEmissionSourceRequest {
   readonly role: RustPhysicalEmissionRole;
   readonly specialization: RustEmissionCallableSpecialization;
   readonly returnDestination: RustEmissionReturnDestination;
-  readonly error: RustEmissionErrorContext;
+  readonly error: RustEmissionErrorContext<RustNativeErrorSource<TargetTypeRef>>;
   readonly sourceCarriers: readonly TargetTypeRef[];
   readonly physicalCarriers: readonly TargetTypeRef[];
 }
@@ -243,7 +259,7 @@ export function prepareRustCallableEmissionRequests(
       : generator !== undefined ? Object.freeze({ kind: "value", carrier: generator.returnType, borrowedParameter: undefined })
       : selected === undefined ? Object.freeze({ kind: "none" })
       : Object.freeze({ kind: "value", carrier: selected.carrier, borrowedParameter: returned?.borrowedParameter });
-    const error: RustEmissionErrorContext = region === undefined ? Object.freeze({ kind: "none" })
+    const error: RustEmissionErrorContext<RustNativeErrorSource<TargetTypeRef>> = region === undefined ? Object.freeze({ kind: "none" })
       : Object.freeze({ kind: "region", owner: declaration, region });
     const requirements = input.declarationGenericRequirements.contractFor(declaration,
       role === "body" || role === "native-body" || role === "specialized-body" || role === "project-body" ? true : undefined);
@@ -430,7 +446,7 @@ export function prepareRustEmissionContextRequests(
   const contextIndex = new Map<TargetUseSiteRef, RustPhysicalEmissionContextPreparation>();
   const ownerIndex = new Map<object, Map<RustPhysicalEmissionRole, RustPhysicalEmissionContextPreparation>>();
   const sourceOrigins = new Map<TargetUseSiteRef, ReadonlyMap<RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins>>();
-  const operandIndex = new Map<TargetUseSiteRef, RustPhysicalEmissionOperandPreparation>();
+  const operandIndex = new Map<object, Map<string, RustPhysicalEmissionOperandPreparation>>();
   const applications = new Map<TargetUseSiteRef, ReadonlyMap<TargetTypeRef, TargetTypeRef>>();
   const physicalOperands = new Set<TargetTypeRef>();
   const diagnostics: TargetDiagnostic[] = [];
@@ -541,28 +557,56 @@ export function prepareRustEmissionContextRequests(
         : substituteRustTargetGenericArgument(argument, request.bindings.types, request.bindings.lifetimes, request.bindings.consts));
       nativeOperations.set(abi, Object.freeze({ node, arguments: Object.freeze(arguments_) }));
     };
+    const error = request.error.kind === "region"
+      ? Object.freeze({ ...request.error, region: prepareRustErrorRegion(request.error.region, apply) }) : request.error;
     const context: RustPhysicalEmissionContextPreparation = { use: request.use, role: request.role,
       specialization: request.specialization, declaration: request.declaration,
       nativeOwnerFileName: request.nativeOwnerFileName, nativeOperations,
-      bindings: request.bindings, returnDestination, error: request.error, operands: contextCarriers, sourceOrigins: contextOrigins };
+      bindings: request.bindings, returnDestination, error, operands: contextCarriers, sourceOrigins: contextOrigins };
     const add = (node: Node, origin: RustPhysicalEmissionOperandOrigin, source: TargetTypeRef,
-      destination: TargetTypeRef | undefined, endpoints: readonly TargetTypeRef[], inputOrdinal?: number): void => {
-      const role = origin.kind === "call-input" ? `call-input:${providerSourceInputKey(origin.input)}:${inputOrdinal}`
+      destination: TargetTypeRef | undefined, endpoints: readonly TargetTypeRef[],
+      storage: Exclude<RustNativeStorageSelection, { readonly kind: "unresolved" }>, inputOrdinal?: number): void => {
+      const sourceError = origin.kind === "operand" && origin.evaluation.kind === "ordinary" && origin.evaluation.site.role === "source-errors";
+      const role = sourceError ? "source-error"
+        : origin.kind === "call-input" ? `call-input:${providerSourceInputKey(origin.input)}:${inputOrdinal}`
         : origin.evaluation.kind === "ordinary" ? `${origin.kind}:${targetUseSiteIdentity(origin.evaluation.site)}` : origin.kind;
-      const subject = origin.kind === "call-input" ? origin.input
+      const subject = sourceError ? node : origin.kind === "call-input" ? origin.input
         : origin.evaluation.kind === "provider-source" ? origin.evaluation.slot : origin.evaluation.site.subject;
       const use = targetUseSiteRef(subject, role,
-        request.use.enclosingContract, request.use.role);
+        sourceError ? targetUseSiteIdentity(request.use) : request.use.enclosingContract, request.use.role);
       const values = new Map<TargetTypeRef, TargetTypeRef>();
       for (const endpoint of [source, ...endpoints, ...destination === undefined ? [] : [destination]]) {
         const carrier = apply(endpoint);
         values.set(endpoint, carrier);
         values.set(carrier, carrier);
       }
+      const sourceErrorRegions: RustPhysicalEmissionOperandPreparation["sourceErrorRegions"][number][] = [];
+      let genericInvocation: RustGenericCallableInvocationFact | undefined;
+      const callableAdapters: RustCallablePhysicalAdapterPreparation[] = [];
+      if (sourceError) {
+        const edges = new Set([...(input.records.sourceErrorEffects.get(node)?.edges ?? []),
+          ...(input.records.awaitSourceErrorEffects.get(node)?.branches.map(branch => branch.edge) ?? [])]);
+        for (const edge of edges) {
+          const selected = input.errorRegions.sourceFor(edge);
+          if (selected === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source call has no selected native error correspondence."));
+          else sourceErrorRegions.push(Object.freeze({ edge,
+            selection: Object.freeze({ ...selected, operand: prepareRustErrorRegion(selected.operand, apply) }) }));
+        }
+        const invocation = input.records.genericCallableInvocation.get(node);
+        if (invocation !== undefined) genericInvocation = Object.freeze({ ...invocation, carrier: apply(invocation.carrier),
+          invocation: Object.freeze(invocation.invocation.map(source => Object.freeze({ ...source, errorType: apply(source.errorType) }))),
+          awaiting: Object.freeze(invocation.awaiting.map(source => Object.freeze({ ...source, errorType: apply(source.errorType) }))) });
+        for (const adapter of storage.callableAdapters) if (adapter.node === node)
+          callableAdapters.push(Object.freeze({ ...adapter, sourceCarrier: apply(adapter.sourceCarrier),
+            conversion: substituteRustCallablePhysicalConversion(adapter.conversion, request.bindings, apply) }));
+      }
       const operand = Object.freeze({ use, node, context, origin, carrier: apply(source),
-        destination: destination === undefined ? undefined : apply(destination) });
+        destination: destination === undefined ? undefined : apply(destination), sourceErrorRegions: Object.freeze(sourceErrorRegions),
+        genericInvocation, callableAdapters: Object.freeze(callableAdapters) });
       operands.push(operand);
-      operandIndex.set(use, operand);
+      const indexed = operandIndex.get(use.subject) ?? new Map<string, RustPhysicalEmissionOperandPreparation>();
+      indexed.set(targetUseSiteIdentity(use), operand);
+      operandIndex.set(use.subject, indexed);
       applications.set(use, values);
     };
     const nodes = [...new Set(request.demands.map(demand => demand.subject))];
@@ -584,14 +628,6 @@ export function prepareRustEmissionContextRequests(
       if (resource?.form !== "provider") continue;
       for (const carrier of rustPhysicalEmissionOperationCarriers(resource.abi)) apply(carrier);
       nativeOperation(node, resource.abi);
-    }
-    for (const node of nodes) {
-      for (const edge of input.records.sourceErrorEffects.get(node)?.edges ?? []) {
-        const selected = input.errorRegions.sourceFor(edge);
-        if (selected === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source call has no selected native error correspondence."));
-        else for (const carrier of [...selected.operand.sources.map(source => source.errorType),
-          ...selected.operand.jsRejection?.requiredCarriers ?? []]) apply(carrier);
-      }
     }
     for (const demand of request.demands) {
       if (demand.kind === "type") {
@@ -616,7 +652,11 @@ export function prepareRustEmissionContextRequests(
       const endpoints = rustPhysicalEmissionRecordCarriers(input.records, node);
       const destination = input.records.contextualValueConversion.get(node)?.targetCarrier;
       const evaluation = Object.freeze({ kind: "ordinary" as const, site: demand.context });
-      add(node, Object.freeze({ kind: demand.kind, evaluation }), selected.carrier, destination, endpoints);
+      if (demand.kind === "operand" && demand.context.role === "source-errors") {
+        const value = input.nativeStorage.valueFor(node);
+        if (value.kind === "unresolved") diagnostics.push(emissionDiagnostic(node, value.reason));
+        else add(node, Object.freeze({ kind: "operand", evaluation }), selected.carrier, destination, endpoints, value);
+      } else add(node, Object.freeze({ kind: demand.kind, evaluation }), selected.carrier, destination, endpoints, selected);
     }
     for (const occurrence of occurrences) for (const slot of occurrence.slots) {
       const value = input.nativeStorage.valueFor(slot.node);
@@ -629,8 +669,8 @@ export function prepareRustEmissionContextRequests(
       const evaluation = Object.freeze({ kind: "provider-source" as const, slot });
       const endpoints = [slot.source.row.carrier, ...rustPhysicalEmissionRecordCarriers(input.records, slot.node)];
       const destination = input.records.contextualValueConversion.get(slot.node)?.targetCarrier;
-      add(slot.node, Object.freeze({ kind: "value", evaluation }), value.carrier, destination, endpoints);
-      add(slot.node, Object.freeze({ kind: "operand", evaluation }), operand.carrier, destination, endpoints);
+      add(slot.node, Object.freeze({ kind: "value", evaluation }), value.carrier, destination, endpoints, value);
+      add(slot.node, Object.freeze({ kind: "operand", evaluation }), operand.carrier, destination, endpoints, operand);
     }
     for (const occurrence of occurrences) for (const [ordinal, { input: value, slot }] of occurrence.inputs.entries()) {
       const source = input.nativeStorage.operandFor(slot.node);
@@ -641,7 +681,7 @@ export function prepareRustEmissionContextRequests(
       add(slot.node, Object.freeze({ kind: "call-input", operationNode: occurrence.node, operation: occurrence.operation, input: value }),
         source.carrier, value.parameterCarrier, [value.sourceCarrier, value.conversion.sourceCarrier, value.conversion.targetCarrier,
           ...(value.conversion.kind === "sequence" ? value.conversion.steps.flatMap(step => [step.sourceCarrier, step.targetCarrier]) : []),
-          ...rustPhysicalEmissionRecordCarriers(input.records, slot.node)], ordinal);
+          ...rustPhysicalEmissionRecordCarriers(input.records, slot.node)], source, ordinal);
     }
     if (request.error.kind === "region") {
       for (const source of request.error.region.sources) apply(source.errorType);
@@ -668,7 +708,10 @@ export function prepareRustEmissionContextRequests(
         const use = bodyUses.get(enclosingUse)?.get(declaration);
         return use === undefined ? undefined : contextIndex.get(use);
       },
-      operandFor: (use: TargetUseSiteRef) => operandIndex.get(use),
+      operandFor: (use: TargetUseSiteRef) => applications.has(use) ? operandIndex.get(use.subject)?.get(targetUseSiteIdentity(use)) : undefined,
+      sourceErrorOperandFor: (context: TargetUseSiteRef, node: Node) => contextIndex.has(context)
+        ? operandIndex.get(node)?.get(targetUseSiteIdentity(
+          { role: "source-error", enclosingContract: targetUseSiteIdentity(context), specialization: context.role })) : undefined,
       carrierFor: (use: TargetUseSiteRef, source: TargetTypeRef) => applications.get(use)?.get(source),
       sourceOriginFor: (use: TargetUseSiteRef, occurrence: RustPhysicalEmissionSourceOccurrence) => sourceOrigins.get(use)?.get(occurrence),
       sourceFor: (node: Node, operation: RustEmissionProviderOperation) => sourceIndex.get(node)?.get(operation) }) }));
