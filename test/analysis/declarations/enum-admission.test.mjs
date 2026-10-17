@@ -46,6 +46,23 @@ const numericUses = [
   ["inferred collection escape", "export function use(): number { const values = [~Value.First]; return values[0] + 1; }"],
   ["generic call numeric escape", "function identity<T>(value: T): T { return value; } export function use(value: Value): number { const result = identity(~value); return result; }"],
   ["inferred callable return escape", "function produce(value: Value) { return ~value; } export function use(value: Value): number { return produce(value); }"],
+  ["written inferred numeric local","export function use(value: Value): number { let result = ~value; result = 3; return result; }"],
+  ["numeric class field","export class Holder { value: number = Value.First; }"],
+  ["numeric parameter default","export function use(value: number = Value.First): number { return value; }"],
+  ["unknown assertion chain","export function use(value: Value): number { return value as unknown as number; }"],
+  ["any assertion chain","export function use(value: Value): number { return <number><any>value; }"],
+  ["unknown local store","export function use(value: Value): void { const result: unknown = value; }"],
+  ["any local store","export function use(value: Value): void { const result: any = value; }"],
+  ["unknown destination","function accept(value: unknown): void {} export function use(value: Value): void { accept(value); }"],
+  ["object assertion destination","export function use(value: Value): object { return value as unknown as object; }"],
+  ["any destination","function accept(value: any): void {} export function use(value: Value): void { accept(value); }"],
+  ["rest any destination","function accept(...values: any[]): void {} export function use(value: Value): void { accept(value); }"],
+  ["unknown conditional destination","function accept(value: unknown): void {} export function use(left: Value, right: Value, flag: boolean): void { accept(flag ? left : right); }"],
+  ["unknown logical destination","function accept(value: unknown): void {} export function use(left: Value, right: Value): void { accept(left || right); }"],
+  ["unknown nullish destination","function accept(value: unknown): void {} export function use(left: Value | undefined, right: Value): void { accept(left ?? right); }"],
+  ["unknown comma destination","function touch(): void {} function accept(value: unknown): void {} export function use(value: Value): void { accept((touch(), value)); }"],
+  ["unknown wrapped destination","function accept(value: unknown): void {} export function use(value: Value): void { accept(((value)!)); }"],
+  ["mutable union without enum destination","export function use(value: Value): number | undefined { let result: number | undefined = value; result = undefined; return result; }"],
 ];
 
 const stringUses = [
@@ -56,6 +73,12 @@ const stringUses = [
   ["left concatenation", "export function use(value: Value): string { return '' + value; }", false],
   ["right concatenation", "export function use(value: Value): string { return value + ''; }", false],
   ["compound concatenation", "export function use(value: Value): string { let result = ''; result += value; return result; }", false],
+  ["string index", "export function use(values: { [key: string]: number }, key: Value): number { return values[key]; }", false],
+  ["toFixed", "export function use(value: Value): string { return value.toFixed(); }", true],
+  ["toPrecision", "export function use(value: Value): string { return value.toPrecision(); }", true],
+  ["toExponential", "export function use(value: Value): string { return value.toExponential(); }", true],
+  ["toLocaleString", "export function use(value: Value): string { return value.toLocaleString(); }", true],
+  ["computed toFixed", "export function use(value: Value): string { return value['toFixed'](); }", true],
 ];
 
 for (const [label, declaration] of [
@@ -84,6 +107,42 @@ ${body}
         "the message is identical on both targets");
       assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "rejection precedes sealing and planning");
       assert.equal(compiled.result.artifacts.length, 0, "a refused enum use emits no artifact");
+    });
+  }
+
+  if (surfaces[0] === "js") for (const [label, body] of [
+    ["console log", "export function use(value: Value): void { console.log(value); }"],
+    ["JSON stringify", "export function use(value: Value): string { return JSON.stringify(value); }"],
+    ["Number valueOf", "export function use(value: Value): number { return value.valueOf(); }"],
+    ["Number method value", "export function use(value: Value): () => number { return value.valueOf; }"],
+  ]) {
+    test(`Rust ${surfaces[0] ?? "native"} refuses closed enum ${label} before target planning`, () => {
+      const sourceText = `export enum Value { First = 1, Second = 2 } ${body}`;
+      const compiled = compileRust({ surfaces, files: { "index.ts": sourceText } });
+      assert.equal(compiled.result.diagnostics.length, 1, `${label}: one actual enum use`);
+      assert.equal(compiled.result.diagnostics[0]?.code, "TSONIC_ENUM_NUMERIC_USE_NOT_SUPPORTED", `${label}: shared admission owner`);
+      assert.equal(compiled.result.diagnostics[0]?.message, "Enum value 'Value' is used as a number; enum-numeric operations are not supported yet. Use equality or bitwise operations within the same enum instead.", `${label}: no target-specific or missing-fact refusal`);
+      assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, `${label}: before seal`);
+      assert.equal(compiled.result.artifacts.length, 0, `${label}: no output`);
+    });
+  }
+
+  for (const [label, body] of [
+    ["same-enum mutable destination", "export function use(value: Value): Value { let result: Value = value; result = value; return result; }"],
+    ["same-enum class field", "export class Holder { value: Value = Value.First; }"],
+    ["same-enum parameter default", "export function use(value: Value = Value.First): Value { return value; }"],
+    ["same-enum assertion", "export function use(value: Value): Value { return value as Value; }"],
+    ["actual instantiated T", "function identity<T>(value: T): T { return value; } export function use(value: Value): Value { return identity<Value>(value); }"],
+    ["enum-containing union destination", "function accept(value: Value | string): void {} export function use(value: Value): void { accept(value); }"],
+    ["fixed tuple enum index", "export function use(values: [number, number]): number { return values[Value.First]; }"],
+    ["static enum key metadata", "interface Named { [Value.First]: number; } export function use(value: Named): number { return value[Value.First]; }"],
+  ]) {
+    test(`Rust ${surfaces[0] ?? "native"} retains closed enum twin ${label}`, () => {
+      const sourceText = `export enum Value { First = 1, Second = 2 } ${body}`;
+      const compiled = compileRust({ surfaces, files: { "index.ts": sourceText } });
+      assert.equal(compiled.result.diagnostics.length, 0, compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\\n").slice(0, 2048));
+      assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true, `${label}: actual native program`);
+      assert.equal(compiled.result.artifacts.length > 0, true, `${label}: retained native emission`);
     });
   }
 
