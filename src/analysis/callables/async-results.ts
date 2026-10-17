@@ -19,7 +19,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
-import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
+import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
@@ -30,6 +30,7 @@ import type {
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../program/records/async-function.js";
 import { rustDirectPromiseBodyCallee } from "./promise-bodies.js";
+import { mapSelectedProjectGenericArguments } from "../operations/provider/calls/instantiation.js";
 
 export type RustAsyncBodyPromiseSelection =
   | {
@@ -238,6 +239,28 @@ function loadRustAsyncCompletion(
         if (callee === undefined) {
           suspends = true;
           return;
+        }
+        const asynchronous = walk.context.records.asyncFunction.get(callee);
+        if (asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "settled" &&
+          asynchronous.outputCarrier.kind === "type-parameter") {
+          const output = asynchronous.outputCarrier;
+          const checked = walk.context.semanticsFor(operand!).operations.call(operand!);
+          const contract = walk.context.sourceLifetimes.contractFor(callee);
+          const index = contract?.parameters.findIndex(parameter => parameter.kind === "type" &&
+            parameter.identity === output.identity);
+          const arguments_ = checked?.sourceSelectedSignatureKind === "resolved" && index !== undefined && index >= 0
+            ? mapSelectedProjectGenericArguments({ target: "rust", source: checked, sourceSelectedDeclaration: callee },
+              callee, rustOperationContext(walk, operand!), walk.operationOptions) : undefined;
+          const actual = index === undefined ? undefined : arguments_?.[index];
+          const selected = actual?.kind === "type" ? rustAwaitSelection(actual.type, walk.context.typeDefinitions) : undefined;
+          if (selected === undefined) {
+            pending = true;
+            return;
+          }
+          if (rustAwaitSelectionLeaves(selected).some(leaf => leaf.future !== undefined)) {
+            suspends = true;
+            return;
+          }
         }
         neighbours.add(callee);
         settledAwaits.push(Object.freeze({ expression: node, callee }));

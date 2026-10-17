@@ -19,7 +19,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
-import { expressionCarrier, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
+import { effectivePlannedExpressionCarrier, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import {
   KindSpreadAssignment,
   ObjectLiteralProperty_Value,
@@ -190,7 +190,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         : storageCarrier;
       if (rawStorageCarrier === undefined ||
         !rustTargetTypeRefEquals(
-          independent?.carrier ?? expressionCarrier(contribution.expression, context),
+          independent?.carrier ?? effectivePlannedExpressionCarrier(contribution.expression, context),
           rawStorageCarrier,
         )) {
         return undefined;

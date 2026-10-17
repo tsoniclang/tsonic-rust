@@ -47,6 +47,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
+import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
 import { planRustFrameCallableValue, rustIndependentFrameConstruction } from "./frame-callables.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";
 import { planRustGeneratorBody } from "../declarations/callables/generator-body.js";
@@ -284,8 +285,11 @@ export function planRustCallableExpressionBody(
   const callableErrorBoundary = generator === undefined ? errorRegion.boundary
     : generatorErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(generatorErrorOwner);
   const producerContext = { ...context, callableDeclaration: node, fallibleBoundary: callableErrorBoundary };
-  const invocationErrorCarrier = resultIsFallible
-    ? context.input.program.callableValues.nativeProducers.errorFor(node, "invoke") : undefined;
+  const physicalCarrier = callableProtocol === undefined ? undefined
+    : context.input.program.callableValues.nativeProducers.physicalFor(node, constructionCarrier);
+  const invocationErrorCarrier = !resultIsFallible ? undefined : callableProtocol === undefined
+    ? context.input.program.callableValues.nativeProducers.errorFor(node, "invoke")
+    : physicalCarrier === undefined ? undefined : rustCallablePhysicalSignature(physicalCarrier)?.error;
   const invocationErrorType = invocationErrorCarrier === undefined ? undefined
     : rustTypeFromCarrierInContext(invocationErrorCarrier, producerContext);
   if (resultIsFallible && invocationErrorType === undefined || generator !== undefined && callableErrorBoundary === undefined) {
@@ -299,8 +303,6 @@ export function planRustCallableExpressionBody(
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
   }
-  const physicalCarrier = callableProtocol === undefined ? undefined
-    : context.input.program.callableValues.nativeProducers.physicalFor(node, constructionCarrier);
   const callableType = physicalCarrier === undefined || borrowedInput ? undefined
     : rustCallableConstructionType(physicalCarrier, producerContext);
   if (callableProtocol !== undefined && (physicalCarrier === undefined || !borrowedInput && callableType === undefined)) {
@@ -354,7 +356,8 @@ export function planRustCallableExpressionBody(
     capturedFieldOwners: undefined,
     capturedFieldIdentities: undefined,
     fallibleBoundary: callableErrorBoundary,
-    asyncContext: asynchronous !== undefined || generator?.kind === "async",
+    asyncContext: asynchronous?.kind === "native-future" ||
+      asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "factory" || generator?.kind === "async",
     generator: generator === undefined ? undefined : {
       declaration: node, controllerName: controllerName!, protocol: generator,
     },

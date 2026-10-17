@@ -9,6 +9,9 @@ import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustE
   rustPropagateLocalError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
+import { rustJsRejectionErrorIdentity } from "../../../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorType } from "../../types/error-boundary.js";
+import { planRustJsRejectionValue } from "../js-rejection.js";
 
 export function planRustSourceErrorPropagation(
   node: Node,
@@ -42,6 +45,8 @@ export function planRustSourceErrorPropagation(
     const channel = channels.get(selected.identity);
     if (channel?.uninhabited === true)
       return { kind: "match", expression: payload, arms: [] };
+    if (channel?.targetIdentity === rustJsRejectionErrorIdentity && rustTypeEquals(selected.errorType, rustJsRejectionErrorType))
+      return planRustJsRejectionValue(node, payload, context);
     return channel === undefined ? undefined : rustInjectNativeError(active,
       { identity: channel.targetIdentity, errorType: selected.errorType }, payload);
   }) ?? reject(node, context);

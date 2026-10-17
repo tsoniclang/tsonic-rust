@@ -749,17 +749,14 @@ export function selectRustOptionalCallResult(
   }
   const receiver = request.source.sourceReceiver;
   const guard = exactGuard?.guard ?? receiver?.expression ?? request.source.sourceCallee.expression;
+  const receiverType = receiver === undefined ? undefined : context.currentSemantics.types.expressionType(receiver.expression);
   const sourceGuardCarrier = exactGuard?.sourceGuardCarrier ?? (receiver === undefined
     ? resolveRustTargetTypeRef(
         selectedCallCalleeDeclaration(request) ?? request.source.sourceCallee.expression,
         context,
         options,
       )
-    : resolveRustTargetTypeRef(
-        receiver.expression,
-        context,
-        options,
-      ));
+    : resolveRustTargetTypeRef(receiverType, context, options));
   const selectedGuardCarrier = exactGuard?.selectedGuardCarrier ?? (receiver === undefined
     ? resolveRustTargetTypeRef(
         request.sourceSelectedDeclaration,

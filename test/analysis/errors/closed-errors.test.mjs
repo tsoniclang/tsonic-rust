@@ -12,6 +12,8 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { rustJsErrorTargetType, rustJsValueTargetType, rustTsValueTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustRetainedErrorTargetType, rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 
+const noCatchEffects = () => assert.fail("Non-try fixtures must not read caught-region effects.");
+
 const projectTypes = { sourceErrorDefinitions: [], sourceCreatedErrorOrigins: [],
   definitionForCarrier: () => undefined, sourceErrorCarrier: rustSourceErrorTargetType };
 
@@ -30,7 +32,7 @@ function fixtureNativeDomain(file, ast) {
 test("native admission seals the existing native closed payload family", () => {
   const { file, ast, records } = scenario(rustSourcePrimitiveTargetType("uint64"));
   assert.deepEqual(rustClosedErrorTransportDemand(file, ast, records, emptyRustTypeDefinitions, projectTypes,
-    () => undefined, fixtureNativeDomain(file, ast)),
+    noCatchEffects, fixtureNativeDomain(file, ast)),
     { thrownCarriers: [rustTsValueTargetType()], retained: true, sourceView: false });
 });
 
@@ -39,7 +41,7 @@ test("typed admission seals the selected profile's exact closed payload carrier"
     const definitions = { ...emptyRustTypeDefinitions, closedValueCarrier: carrier };
     const { file, ast, records } = scenario(rustSourcePrimitiveTargetType("uint64"), operation => operation, definitions);
     assert.deepEqual(rustClosedErrorTransportDemand(file, ast, records, definitions, projectTypes,
-      () => undefined, fixtureNativeDomain(file, ast)),
+      noCatchEffects, fixtureNativeDomain(file, ast)),
       { thrownCarriers: [carrier], retained: true, sourceView: false });
   }
 });
@@ -65,7 +67,7 @@ test("component demand reads only exact retained throw operands and carrier fact
   for (const source of [rustTsValueTargetType(), rustJsValueTargetType()]) {
     const { file, ast, records } = scenario(source);
     const result = rustClosedErrorTransportDemand(file, ast, records, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(file, ast));
+      noCatchEffects, fixtureNativeDomain(file, ast));
     assert.deepEqual(result, { thrownCarriers: [source], retained: true, sourceView: false });
     assert.equal(Object.isFrozen(result) && Object.isFrozen(result.thrownCarriers), true);
     for (const mutate of [operation => ({ ...operation, error: { ...operation.error, expression: {} } }),
@@ -77,12 +79,12 @@ test("component demand reads only exact retained throw operands and carrier fact
       } } })]) {
       const changed = scenario(source, mutate);
       assert.equal(rustClosedErrorTransportDemand(changed.file, changed.ast, changed.records, emptyRustTypeDefinitions, projectTypes,
-        () => undefined, fixtureNativeDomain(changed.file, changed.ast)).thrownCarriers.length, 0);
+        noCatchEffects, fixtureNativeDomain(changed.file, changed.ast)).thrownCarriers.length, 0);
     }
     const misplaced = scenario(source);
     misplaced.statement.kind = "KindExpressionStatement";
     assert.equal(rustClosedErrorTransportDemand(misplaced.file, misplaced.ast, misplaced.records, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(misplaced.file, misplaced.ast)).thrownCarriers.length, 0);
+      noCatchEffects, fixtureNativeDomain(misplaced.file, misplaced.ast)).thrownCarriers.length, 0);
   }
 });
 
@@ -96,7 +98,7 @@ test("closed demand does not accept an immutable-only or unrelated Error project
         : records.flowReadProjection.get(node),
     } };
     assert.deepEqual(rustClosedErrorTransportDemand(file, ast, selected, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(file, ast)),
+      noCatchEffects, fixtureNativeDomain(file, ast)),
       { thrownCarriers: [], retained: false, sourceView: false });
   }
 });
@@ -104,7 +106,7 @@ test("closed demand does not accept an immutable-only or unrelated Error project
 test("retained narrowed throws retain Error transport without a non-Error payload variant", () => {
   const { file, ast, records } = scenario(rustRetainedErrorTargetType());
   assert.deepEqual(rustClosedErrorTransportDemand(file, ast, records, emptyRustTypeDefinitions, projectTypes,
-    () => undefined, fixtureNativeDomain(file, ast)),
+    noCatchEffects, fixtureNativeDomain(file, ast)),
     { thrownCarriers: [], retained: true, sourceView: false });
 });
 
@@ -120,12 +122,12 @@ test("closed contextual admission has the same component demand and rejects alte
       get: node => node === expression ? contextual : original(node),
     } };
     const result = rustClosedErrorTransportDemand(file, ast, contextualRecords, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(file, ast));
+      noCatchEffects, fixtureNativeDomain(file, ast));
     assert.deepEqual(result, { thrownCarriers: source.id !== rustRetainedErrorTargetType().id ? [source] : [],
       retained: true, sourceView: false });
     contextual = { ...contextual, sourceCarrier: rustSourcePrimitiveTargetType("uint64") };
     assert.deepEqual(rustClosedErrorTransportDemand(file, ast, contextualRecords, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(file, ast)),
+      noCatchEffects, fixtureNativeDomain(file, ast)),
       { thrownCarriers: [], retained: false, sourceView: false });
   }
 });
@@ -139,7 +141,7 @@ test("a closed Error-only projection retains its capability even without a gener
       : records.flowReadProjection.get(node),
   } };
   assert.deepEqual(rustClosedErrorTransportDemand(file, ast, selected, emptyRustTypeDefinitions, projectTypes,
-    () => undefined, fixtureNativeDomain(file, ast)),
+    noCatchEffects, fixtureNativeDomain(file, ast)),
     { thrownCarriers: [], retained: true, sourceView: true });
 });
 
@@ -155,7 +157,7 @@ test("native Error views in storage, parameter and return carriers demand declar
         get: node => node === statement ? { [property]: carrier } : records[key].get(node),
       } };
       assert.deepEqual(rustClosedErrorTransportDemand(file, ast, selected, emptyRustTypeDefinitions, projectTypes,
-        () => undefined, fixtureNativeDomain(file, ast)),
+        noCatchEffects, fixtureNativeDomain(file, ast)),
         { thrownCarriers: [], retained: false, sourceView: true });
     }
   }
@@ -171,7 +173,7 @@ test("native Error-view demand rejects invalid projections and bounds carrier gr
       : original(node),
   } };
   assert.deepEqual(rustClosedErrorTransportDemand(invalid.file, invalid.ast, invalid.records, emptyRustTypeDefinitions, projectTypes,
-    () => undefined, fixtureNativeDomain(invalid.file, invalid.ast)),
+    noCatchEffects, fixtureNativeDomain(invalid.file, invalid.ast)),
     { thrownCarriers: [], retained: false, sourceView: false });
   for (const mode of ["depth", "rows", "recursive"]) {
     const fixture = scenario(rustJsErrorTargetType());
@@ -190,7 +192,7 @@ test("native Error-view demand rejects invalid projections and bounds carrier gr
       get: node => node === fixture.statement ? { carrier } : get(node),
     } };
     const result = rustClosedErrorTransportDemand(fixture.file, fixture.ast, fixture.records, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(fixture.file, fixture.ast));
+      noCatchEffects, fixtureNativeDomain(fixture.file, fixture.ast));
     if (mode === "recursive") assert.deepEqual(result, { thrownCarriers: [], retained: false, sourceView: true });
     else assert.equal(result === undefined, true, mode);
   }
@@ -218,7 +220,7 @@ test("closed demand rejects cyclic, missing and over-deep source rows", () => {
       };
     }
     assert.equal(rustClosedErrorTransportDemand(file, ast, records, emptyRustTypeDefinitions, projectTypes,
-      () => undefined, fixtureNativeDomain(file, ast)) === undefined,
+      noCatchEffects, fixtureNativeDomain(file, ast)) === undefined,
       true, mode);
   }
 });
