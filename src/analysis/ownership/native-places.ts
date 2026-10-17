@@ -135,6 +135,10 @@ export function selectRustNativePlace(
   const actualCarrier = read === undefined ? undefined : input.physicalEmissionContexts.carrierFor(operand.use, read.operandCarrier);
   if (read === undefined || actualCarrier === undefined || !rustTargetTypeRefEquals(actualCarrier, operand.carrier))
     return unresolved("A native place requires the original physical formation read in its exact selected input context.");
+  if (!read.readsStorage && !read.sharedReference && read.formation.kind !== "borrow") return Object.freeze({
+    kind: "resolved", place: Object.freeze({ node, operand, carrier: operand.carrier, sourcePath: undefined,
+      storage: Object.freeze({ kind: "owned", read: read.formation }) }),
+  });
   const root = rustNativeStorageRoot(node, input);
   const projections = root === undefined ? undefined : rustNativeStorageProjections(node, root, input);
   const sourcePath = root === undefined || projections === undefined ? undefined

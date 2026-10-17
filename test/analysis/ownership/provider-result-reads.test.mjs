@@ -4,6 +4,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { prepareRustReadOwnership, analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { planRustFinalizedOperationForm } from "../../../dist/backend/planner/expressions/finalized-operation-form.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
@@ -54,7 +55,9 @@ function read(holder: Holder): unknown { return observe(${form === "index" ? "ho
   const effects = { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() };
   const input = { storage, nativeNodes: storage.nodes, records,
     flow: { readTransfers: new Map(), captureRequirements: new Map(), captureTransfers: new Map(), graphs: new Map(), liveness: new Map() },
-    borrowEffects: effects, borrowEffectsInput: { ast: source.ast, isNativeNode: candidate => nodes.has(candidate) },
+    borrowEffects: effects, borrowEffectsInput: { ast: source.ast, records, navigation: source.navigation,
+      readUses: analyzeRustReadUses(source.ast, storage.nodes, records),
+      isNativeNode: candidate => nodes.has(candidate) },
     definitions: emptyRustTypeDefinitions, genericCallables: { definitionFor: () => undefined } };
   const prepared = prepareRustReadOwnership(input);
   assert.equal(prepared.kind, "resolved", "the raw-result requirements are complete before generic closure");
@@ -130,7 +133,7 @@ test("provider union arms retain each original finalized operation in the same r
 test("native borrowed-string fields copy their raw reference with exactly the handwritten allocation cost", { timeout: 300_000 }, () => {
   const fixtureRoot = writeGeneratedProject("raw-provider-field-fixture", [
     { path: "Cargo.toml", text: '[package]\nname = "raw_field_fixture"\nversion = "0.0.0"\nedition = "2021"\n' },
-    { path: "src/lib.rs", text: "pub struct NativeText { pub text: &'static str }\n" },
+    { path: "src/lib.rs", text: "pub struct NativeText { pub text: &'static str }\npub fn count(value: &str) -> i32 { value.len() as i32 }\n" },
   ]);
   const carrier = rustNamedTargetType("raw.fixture.NativeText", "raw_field_fixture::NativeText");
   const provider = createRustProviderPackage({
@@ -139,7 +142,10 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
       id: "@raw/native::NativeText", name: "NativeText", kind: "class", members: [{
         id: "@raw/native::NativeText.text", name: "text", kind: "property", readonly: true, type: { kind: "string" },
       }],
-    }] }],
+    }, { id: "@raw/native::count", name: "count", kind: "function", signatures: [{
+      id: "@raw/native::count(value)", name: "count", parameters: [{ name: "value", type: { kind: "string" } }],
+      returnType: { kind: "source-primitive", name: "int32" },
+    }] }] }],
     types: [{ exportId: "@raw/native::NativeText", targetCarrier: carrier }],
     carrierPaths: { "raw.fixture.NativeText": "raw_field_fixture::NativeText" },
     carrierTraits: { "raw.fixture.NativeText": { implementations: [] } },
@@ -147,18 +153,33 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
       target: { form: "field", name: "text" }, resultCarrier: string, resultConversion: rustBorrowedStrToStringValueConversion,
       resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::NativeText::text",
         resultTypeIdentity: "&'static str", valueTypeIdentity: "&'static str", loans: [] },
+    }, { exportId: "@raw/native::count", operationKind: "method",
+      target: { form: "call", path: "raw_field_fixture::count", argModes: ["value"],
+        argConversions: [rustStringToBorrowedStrValueConversion] },
+      parameterCarriers: [rustBorrowedStrTargetType()], resultCarrier: integer,
+      resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::count",
+        resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [] },
     }],
     crates: [{ crateName: "raw_field_fixture", cargoPath: fixtureRoot }],
   });
   const { result } = compileRust({ packages: [provider],
     target: { id: "rust", options: { outputType: "lib", crateName: "raw_field_control" } },
-    files: { "index.ts": 'import { NativeText } from "@raw/native";\nexport function read(value: NativeText): string { return value.text; }\n' },
+    files: { "index.ts": 'import { NativeText, count } from "@raw/native";\nexport function read(value: NativeText): string { return value.text; }\nexport function length(value: NativeText): number { return count(value.text); }\n' },
   });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
+  const program = result.program;
+  assert.equal(program !== undefined, true, "the real target pipeline publishes its completed native input proofs");
   assert.equal(nativeMethods(nativeFunction(result, "read"), "clone").length, 0, "the native &str field is Copy, not the converted String");
+  assert.equal(nativeMethods(nativeFunction(result, "length"), "clone").length, 0, "borrowing the already-owned converted result needs no new snapshot");
+  const converted = [...program.ownership.nativeInputs.values()].find(input => input.kind === "place" &&
+    program.source.ast.is.IsPropertyAccessExpression(input.node));
+  assert.equal(converted !== undefined, true, "the outer borrowed call uses the original authored field-result input");
+  assert.equal(converted.place.storage.kind, "owned", "the actual conversion forms a new native String, not the source field place");
+  assert.equal(converted.place.sourcePath, undefined, "the new value does not forge the native receiver's storage provenance");
+  assert.equal(program.ownership.reads.get(converted.node).readsStorage, false, "raw field storage does not become converted result storage");
   const directory = writeGeneratedProject("raw-provider-field-native", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/field.rs"), `use raw_field_control::index::read;
+  writeFileSync(join(directory, "tests/field.rs"), `use raw_field_control::index::{length, read};
 use raw_field_fixture::NativeText;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -181,6 +202,7 @@ unsafe impl GlobalAlloc for Counting {
 }
 
 fn handwritten(value: NativeText) -> String { value.text.to_owned() }
+fn handwritten_length(value: NativeText) -> f64 { raw_field_fixture::count(&value.text.to_owned()) as f64 }
 
 #[test]
 fn identical_native_field_cost() {
@@ -199,6 +221,20 @@ fn identical_native_field_cost() {
     assert_eq!(bytes, expected_bytes);
     assert_eq!(allocations, 1);
     assert_eq!(bytes, 12);
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    BYTES.store(0, Ordering::Relaxed);
+    let actual_length = length(NativeText { text: "native-value" });
+    let actual_allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    let actual_bytes = BYTES.load(Ordering::Relaxed);
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    BYTES.store(0, Ordering::Relaxed);
+    let expected_length = handwritten_length(NativeText { text: "native-value" });
+    let expected_allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    let expected_bytes = BYTES.load(Ordering::Relaxed);
+    assert_eq!(actual_length, expected_length);
+    assert_eq!(actual_allocations, expected_allocations);
+    assert_eq!(actual_bytes, expected_bytes);
+    assert_eq!((actual_allocations, actual_bytes), (1, 12));
 }
 `);
   runCargo(directory, ["generate-lockfile", "--offline"]);

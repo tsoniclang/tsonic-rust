@@ -5,9 +5,12 @@ import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowEffects, createRustBorrowUseAnalysis, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
+import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
+import { rustNativeWriteTargets } from "../../../dist/analysis/ownership/effect-paths.js";
 
 function analyze(input, maximumNodes) {
-  input = { ...input, borrowUses: createRustBorrowUseAnalysis(input, maximumNodes) };
+  input = { ...input, borrowUses: createRustBorrowUseAnalysis(input, maximumNodes),
+    readUses: analyzeRustReadUses(input.ast, input.nodes, input.records) };
   const selected = analyzeRustBorrowEffects(input, maximumNodes);
   return selected.kind === "resolved" ? { ...selected, input } : selected;
 }
@@ -135,6 +138,39 @@ targetOperation: { get: (node) => {
   }
 });
 
+test("selected direct field and tuple reads retain the effects of their original receiver and key", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function read(holder: { value: number }, tuple: [number]): number {
+  return holder.value + tuple[0];
+}` } });
+  const { ast } = program.source;
+  const nodes = rustNativeFixtureNodes(program).filter(node => ast.is.IsPropertyAccessExpression(node) ||
+    ast.is.IsElementAccessExpression(node));
+  assert.equal(nodes.length, 2, "both exact authored projection forms are checked");
+  for (const node of nodes) {
+    const receiver = Node_Expression(ast, node);
+    const key = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node).ArgumentExpression : undefined;
+    const writes = new Map([[receiver, [receiver]], ...(key === undefined ? [] : [[key, [key]]])]);
+    const reservations = [];
+    const selected = rustNativeWriteTargets(node, { ast, records: program.records },
+      child => writes.get(child), child => child === node, count => { reservations.push(count); return true; });
+    assert.equal(selected.length, key === undefined ? 1 : 2, "all receiver and key effects remain ordered");
+    assert.equal(selected[0] === receiver, true, "the original receiver write retains identity");
+    if (key !== undefined) assert.equal(selected[1] === key, true, "the original key write follows its receiver");
+    assert.equal(reservations.length, 1, "the finite owner accounts for the composed effect row once");
+    assert.equal(reservations[0], selected.length, "every retained effect is charged");
+    for (const missing of [receiver, ...(key === undefined ? [] : [key])]) {
+      assert.equal(rustNativeWriteTargets(node, { ast, records: program.records },
+        child => child === missing ? undefined : writes.get(child), child => child === node, () => true), undefined,
+      "an unknown receiver or key never becomes a pure projection");
+    }
+    assert.equal(rustNativeWriteTargets(node, { ast, records: program.records }, child => writes.get(child),
+      child => child === node, () => false), undefined, "exhausted effect accounting refuses partial composition");
+    const pure = rustNativeWriteTargets(node, { ast, records: program.records }, () => [], child => child === node, () => true);
+    assert.equal(pure.length, 0, "a genuinely effect-free receiver and key remain effect-free");
+  }
+});
+
 function analysisInput(program, sourceFacts, records = program.records) {
   const nodes = rustNativeFixtureNodes(program);
   const nativeNodes = new Set(nodes);
@@ -218,7 +254,8 @@ test("borrow consumers reuse one original native-use summary and accounting owne
   const borrowUses = createRustBorrowUseAnalysis(fixture.input, 128);
   const summary = borrowUses.useSummaryFor(declaration);
   assert.equal(summary !== undefined, true, "the original use producer admits its checked declaration once");
-  const selected = analyzeRustBorrowEffects({ ...fixture.input, borrowUses }, 128);
+  const selected = analyzeRustBorrowEffects({ ...fixture.input, borrowUses,
+    readUses: analyzeRustReadUses(fixture.input.ast, fixture.input.nodes, fixture.input.records) }, 128);
   assert.equal(selected.kind, "resolved", "the same producer also accounts for all effect work");
   assert.equal(borrowUses.useSummaryFor(declaration) === summary, true, "later consumers read the identical native summary");
   assert.equal(fixture.summaries(), 1, "source use facts are not selected a second time");

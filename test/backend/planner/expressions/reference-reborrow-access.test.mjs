@@ -1,4 +1,5 @@
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
+import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
@@ -19,7 +20,8 @@ function context(selectedSource = source, selectedTarget = integer) {
 runtimeCarrier: { get: () => ({ carrier: selectedSource }) },
 conversion: { get: () => undefined }});
   return { diagnostics: [], expressionOverrides: new Map([[node, { expression, carrier: selectedSource }]]),
-    input: { program: { records, typeDefinitions: emptyRustTypeDefinitions, source: { ast: { kindName: () => "KindIdentifier" } } } } };
+    input: { program: { records, ownership: createRustOwnershipFixture(node, selectedSource, "borrow"),
+      typeDefinitions: emptyRustTypeDefinitions, source: { ast: { kindName: () => "KindIdentifier" } } } } };
 }
 
 test("shared expression access retains an exact native reference reborrow once", () => {

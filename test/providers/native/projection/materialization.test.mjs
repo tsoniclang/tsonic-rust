@@ -3,6 +3,9 @@ import test from "node:test";
 import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
 import { rustCompilerProviderProtocolVersion } from "../../../../dist/providers/native/model/model.js";
 import { selectRustCompilerResultLoans } from "../../../../dist/providers/native/model/normalization/functions.js";
+import { targetTypeFor } from "../../../../dist/providers/native/projection/types.js";
+import { compilerTargetTypeId } from "../../../../dist/providers/native/projection/operations.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/index.js";
 
 const dependency = { alias: "example", packageId: "example 1", packageName: "example", packageVersion: "1",
   crateName: "example", targetCrateName: "example", manifestPath: "/example/Cargo.toml",
@@ -35,6 +38,37 @@ function project(exports, materialization) {
   return projectRustCompilerModule({ protocolVersion: rustCompilerProviderProtocolVersion, projectDigest: "example", dependency, modulePath: [],
     exports, unsupportedExports: [], standardTypeLocations: [] }, owner, materialization);
 }
+
+test("normalized Self paths retain the same native owner traits and actual application arguments", () => {
+  const parameter = { kind: "type", name: "Value", identity: identity("Owner::Value"), requirements: [],
+    outlives: [], maybeSized: false, defaultType: { kind: "primitive", name: "bool" } };
+  const traits = { implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone",
+    path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] },
+    requirements: [{ typeArgumentIndex: 0, trait: { kind: "trait-ref", id: "core::clone::Clone",
+      path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] } }] }] };
+  const native = { kind: "path", identity: identity("Owner"), crateName: "example", modulePath: [], name: "Owner",
+    genericArguments: [{ kind: "type", type: scalar }] };
+  for (const standard of [false, true]) {
+    const id = standard ? "exact-snapshot-owner" : compilerTargetTypeId(dependency, native.identity.canonicalPath);
+    const context = { dependency, carrierPaths: new Map(), localTypeLocations: new Map(),
+      genericNames: new Map(), defaultGenericBindings: undefined,
+      standardTypes: new Map(standard ? [[native.identity.canonicalPath.join("\0"), {
+        targetId: id, targetPath: ["example", "Owner"], genericParameters: [parameter],
+      }]] : []),
+      currentType: { carrier: rustNamedTargetType(id, "example::Owner", [], [], traits) } };
+    context.localTypeLocations.set(native.identity.canonicalPath.join("\0"), {
+      targetPath: ["example", "Owner"], genericParameters: [parameter], sourceExportName: "Owner",
+    });
+    const selected = rustNamedTypeCarrierValue(targetTypeFor(native, context, "result"));
+    assert.equal(selected.traits, traits, "only the exact declared native identity supplies its complete trait evidence");
+    assert.equal(selected.genericArguments.length, 1, "the authored application keeps its original argument");
+    assert.equal(selected.genericArguments[0].type.name, "uint64", "the actual argument is not replaced by the owner's generic placeholder");
+    assert.equal(selected.genericDefaults[0].type.name, "bool", "the original native declaration default is retained");
+    context.currentType = { carrier: rustNamedTargetType("different-native-owner", "example::Owner", [], [], traits) };
+    assert.equal(rustNamedTypeCarrierValue(targetTypeFor(native, context, "result")).traits.implementations.length, 0,
+      "equal path spelling cannot borrow a different declaration's native trait contract");
+  }
+});
 
 test("native trait projection preserves instantiated arguments and conditional bounds including Self", () => {
   const exported = declaration("First");

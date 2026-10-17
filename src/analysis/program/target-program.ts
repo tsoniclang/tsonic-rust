@@ -33,6 +33,7 @@ import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import { analyzeRustBorrowEffects, createRustBorrowUseAnalysis } from "../ownership/effects.js";
+import { analyzeRustReadUses } from "../ownership/uses.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustDispatchContextCatalog,
@@ -207,9 +208,18 @@ export function analyzeRustTargetProgram(
   };
   const borrowUses = createRustBorrowUseAnalysis({ ast: context.ast,
     navigation: context.source.navigation, isNativeNode: context.isNativeNode });
+  const isOnceCallable = (closure: import("@tsonic/tsts").Node): boolean => {
+    const carrier = records.runtimeCarrier.get(closure)?.carrier;
+    const selection = lexicalFunctions.forDeclaration(closure);
+    return carrier?.kind === "closure" && carrier.callTrait === "FnOnce" ||
+      selection?.kind === "resolved" && selection.captureRoots.every(root => {
+        const captured = lexicalFunctions.forDeclaration(root);
+        return captured?.kind === "resolved" && captured.singleInvocation;
+      });
+  };
   const captureRequirements = prepareRustCaptureReadRequirements({ storage: context.sourceStorage,
     nativeNodes: context.nativeNodes, records, genericCallables: context.callableValues.generic,
-    nativeStorage: context.callableValues.nativeStorage, lexicalFunctions, capturesFor });
+    nativeStorage: context.callableValues.nativeStorage, lexicalFunctions, capturesFor, isOnceCallable });
   if (captureRequirements.kind === "rejected") return rejectedTargetStage(captureRequirements.diagnostics);
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
@@ -224,15 +234,7 @@ export function analyzeRustTargetProgram(
       const operation = records.targetOperation.get(reference);
       return operation?.kind === "source-field" && operation.declaration === declaration;
     },
-    isOnceCallable: (closure) => {
-      const carrier = records.runtimeCarrier.get(closure)?.carrier;
-      const selection = lexicalFunctions.forDeclaration(closure);
-      return carrier?.kind === "closure" && carrier.callTrait === "FnOnce" ||
-        selection?.kind === "resolved" && selection.captureRoots.every(root => {
-          const captured = lexicalFunctions.forDeclaration(root);
-          return captured?.kind === "resolved" && captured.singleInvocation;
-        });
-    },
+    isOnceCallable,
     isOwnedOperationResult: (expression) => {
       const operation = records.targetOperation.get(expression);
       return operation?.kind === "source-field" && operation.valueSemantics.kind === "accessor" && operation.accessMode === "read" ||
@@ -261,6 +263,7 @@ export function analyzeRustTargetProgram(
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
   const borrowEffectsInput = {
     borrowUses,
+    readUses: analyzeRustReadUses(context.ast, context.nativeNodes, records),
     isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,

@@ -18,6 +18,7 @@ import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { rustCallArgumentMode } from "../callables/parameter-passing.js";
+import type { RustReadUse } from "../../policy/ownership/read-use.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -42,6 +43,7 @@ export interface RustBorrowEffectsInput {
   readonly structuralShapes: RustTargetProgram["structuralShapes"];
   readonly navigation: RustTargetProgram["sourceNavigation"];
   readonly borrowUses: RustBorrowUseAnalysis;
+  readonly readUses: ReadonlyMap<Node, RustReadUse>;
 }
 
 export interface RustBorrowUseAnalysis {
@@ -102,6 +104,8 @@ export function analyzeRustBorrowEffects(
   });
   if (input.borrowUses === undefined || input.borrowUses.maximumNodes !== maximumNodes)
     return rejected("Rust borrow effects require their one original native-use analysis and exact accounting bound.");
+  if (input.readUses === undefined)
+    return rejected("Rust borrow effects require the original selected operation-read inventory.");
   const initialFailure = input.borrowUses.failure();
   if (initialFailure !== undefined) return rejected(initialFailure);
   const positions = new Map(input.nodes.map((node, index) => [node, index]));
@@ -161,6 +165,7 @@ export function analyzeRustBorrowEffects(
       for (let parent = input.ast.parent(argument); parent !== undefined &&
         sourceTransparentExpressionOperand(input.ast, parent) === argument; parent = input.ast.parent(argument)) argument = parent;
       if (!["comparison", "condition", "return", "storage"].includes(use.role) &&
+        !(use.role === "receiver" && input.readUses.get(use.reference)?.mode === "shared") &&
         !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref")) {
         stable = false;
         break;

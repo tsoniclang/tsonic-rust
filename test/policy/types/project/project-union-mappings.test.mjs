@@ -182,7 +182,8 @@ test("canonical nominal union emission moves owned fields and borrows views with
     assert.equal(upcast.kind, "block");
     assert.equal(upcast.body.statements.length, 2);
     assert.equal(upcast.body.statements[0].kind, "let");
-    assert.equal(upcast.body.statements[0].init.kind, "path");
+    assert.equal(upcast.body.statements[0].init.kind, owned ? "path" : "reference");
+    if (!owned) assert.equal(upcast.body.statements[0].init.expr.kind, "path", "the same exact borrowed arm path is retained");
     assert.equal(upcast.body.statements[1].kind, "tail");
     const constructed = upcast.body.statements[1].expr;
     assert.equal(constructed.kind, "struct-literal");

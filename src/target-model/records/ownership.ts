@@ -33,6 +33,8 @@ export interface RustReadOwnershipFact {
   readonly readsStorage: boolean;
   readonly pure: boolean;
   readonly sharedReference: boolean;
+  readonly flowResultBorrow: boolean;
+  readonly flowConversionInputBorrow: boolean;
   readonly borrowedAcross: ReadonlySet<Node>;
   readonly nativeResults: readonly { readonly abi: RustFinalizedOperationAbi; readonly carrier: TargetTypeRef;
     readonly read: RustValueReadOwnership }[];

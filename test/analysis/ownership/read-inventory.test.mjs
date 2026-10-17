@@ -4,6 +4,7 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustReadOwnership, prepareRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
@@ -39,7 +40,8 @@ async function fixture() {
       return { kind: "resolved", carrier: records.runtimeCarrier.get(node).carrier };
     } },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
-    borrowEffectsInput: { ast: source.ast, isNativeNode: node => nativeNodes.has(node) },
+    borrowEffectsInput: { ast: source.ast, records, navigation: source.navigation,
+      readUses: analyzeRustReadUses(source.ast, storage.nodes, records), isNativeNode: node => nativeNodes.has(node) },
     definitions: emptyRustTypeDefinitions,
     genericRequirements: { supportsClone: () => true },
     genericCallables: { definitionFor: () => undefined },
@@ -91,4 +93,20 @@ test("storage-read materialization respects finite node, work and row budgets be
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED");
     assert.equal("ownership" in result, false);
   }
+});
+
+test("prepared and completed reads share their original cumulative work budget", async () => {
+  const { input } = await fixture();
+  const measured = prepareRustReadOwnership(input);
+  assert.equal(measured.kind, "resolved", "the complete original source preparation is available");
+  const work = measured.requirements.budget.usage().steps;
+  assert.equal(measured.requirements.budget.usage().nodes, input.nativeNodes.length,
+    "the original checked nodes are charged once");
+  const prepared = prepareRustReadOwnership({ ...input,
+    limits: { maximumSteps: work + input.nativeNodes.length - 1 } });
+  assert.equal(prepared.kind, "resolved", "the same finite budget admits preparation");
+  const selected = analyzeRustReadOwnership({ ...input, requirements: prepared.requirements });
+  assert.equal(selected.kind, "rejected", "completion cannot reset the same work budget");
+  assert.equal(selected.diagnostics[0].code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED", "the original finite owner rejects exhaustion");
+  assert.equal("ownership" in selected, false, "no partial read records are published");
 });

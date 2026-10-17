@@ -11,7 +11,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys } from "./provider-source-inputs.js";
 import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
-import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
+import { planRustValueFormation } from "../expressions/entry.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import { rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
@@ -245,12 +245,13 @@ export function planRustProviderEvaluationScope(
         ));
         return { kind: "failed" };
       }
-      const owner = planExpressionBeforeContextualConversion(slot.node, context);
+      const owner = planRustValueFormation(slot.node, context);
       if (owner === undefined || carrier === undefined) return { kind: "failed" };
       const ownerName = allocateRustSyntheticName(syntheticNames, `operation_input_${index}_value`);
       steps.push({ kind: "binding", name: ownerName, value: owner });
       const expressionOverrides = new Map(context.expressionOverrides);
-      expressionOverrides.set(slot.node, { expression: { kind: "path", path: ownerName }, carrier, valueForm: "value" });
+      expressionOverrides.set(slot.node, { expression: { kind: "path", path: ownerName }, carrier,
+        valueForm: requireRustReadOwnership(slot.node, context).formation.kind === "borrow" ? "shared-reference" : "value" });
       valueContext = { ...context, expressionOverrides };
     }
     const value = planExpression(slot.node, valueContext);

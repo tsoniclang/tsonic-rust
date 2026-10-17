@@ -182,7 +182,7 @@ export function planRustSharedReceiver(
       ? captured.expression
       : { kind: "reference", expr: { kind: "dereference", pointer: captured.expression } };
   }
-  if (read.sharedReference) return value;
+  if (read.sharedReference && override === undefined && context.flowReadOverrides?.has(node) !== true) return value;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")
