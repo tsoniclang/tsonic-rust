@@ -9,7 +9,6 @@ import {
 } from "@tsonic/target-api/analysis";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
-import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { createRustProgramRecords } from "./records/create.js";
 import type { RustAnalysisRecords } from "./records/model.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
@@ -166,14 +165,11 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
-    context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     isNativeNode: context.isNativeNode,
     typeDefinitions: context.typeDefinitions,
-    projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
-    receiverCaptures: objectRepresentations.receiverCaptures,
+    projectTypes: context.projectTypes, objectRepresentations, frames: context.callableValues.selected.frames,
     mayThrow(node) {
       const accessor = records.sourceAccessorEffects.get(node);
       return records.sourceCallEffects.get(node)?.invocation === "fallible" ||
@@ -184,6 +180,7 @@ export function analyzeRustTargetProgram(
   });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
     context.ast, context.sourceFiles, records, sourcePackageComponents, context.isNativeNode, dispatchContexts.plan,
+    binaryHooks.flatMap(hook => hook.dispatchGroups.flatMap(group => group.contextIds)),
   );
   if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
   const binaryDispatchDemand = analyzeRustBinaryDispatchDemand(
@@ -370,10 +367,19 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
+  const callableValues = context.callableValues.seal({
+    declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
+    errorRegions: completedErrorRegions, initialization: initializationErrors.value,
+    constructions: context.projectTypes.definitions.flatMap(definition => {
+      const plan = projectConstructions.forDefinition(definition);
+      return plan === undefined ? [] : [plan];
+    }) });
+  if (callableValues.kind === "rejected") return callableValues;
   const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
     sourceOutputIdentities: sourceOutputIdentities.identities,
+    physicalEmissionContexts: callableValues.value.emissionContexts,
     statementCompletions: statementCompletions.plan,
     errorRegions: completedErrorRegions,
     genericCallableErrors: genericCallableErrors.value,
@@ -406,7 +412,7 @@ export function analyzeRustTargetProgram(
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
-    callableValues: context.callableValues.seal(),
+    callableValues: callableValues.value,
     callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
@@ -419,7 +425,7 @@ export function analyzeRustTargetProgram(
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues,
     runtimeReferences: runtimeReferences.plan,
-    dispatchContexts: dispatchContexts.plan,
+    dispatchContexts: dispatchContexts.plan.declarations,
     dispatchContextDemand: dispatchContextDemand.plan,
     binaryDispatchDemand: binaryDispatchDemand.plan,
     foundation: foundation.plan,

@@ -552,7 +552,7 @@ function planConstructor(
     rustProjectImplementationVisibility(publiclyReachable));
   if (frame !== undefined && frameLayout === undefined) return undefined;
   const construction = planRustConstructionBody(constructionPlan, fields,
-    context.input.program.projectTypes.openCarrier(definition), classType,
+    classType,
     (values, identity, frameCounter, retainedFrame) => {
       return createRustProjectObject(className, stateName,
       fields.filter(field => frameLayout?.ownsField(field.declaration) !== true)

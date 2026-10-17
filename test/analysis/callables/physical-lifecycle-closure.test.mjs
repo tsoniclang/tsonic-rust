@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createSourceStorageQuery, targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -600,13 +600,18 @@ export function choose(): typeof identity { return identity; }
   construction.selectConstructionErrors(new Map());
   const captured = Object.fromEntries(["outwardReturnFor", "invocationResultFor", "bodyResultFor", "errorFor", "physicalFor"]
     .map(name => [name, construction[name]]));
-  const requests = new Map();
+  const requests = [];
+  const bindings = Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() });
   for (const node of sourceNodes(program)) {
     const value = program.records.directCallableReference.get(node);
     if (value !== undefined && rustCallableProtocol(value.carrier) !== undefined)
-      requests.set(value.sourceDeclaration, [...requests.get(value.sourceDeclaration) ?? [], value.carrier]);
+      requests.push(Object.freeze({ kind: "producer", subject: node, owner: program.source.ast.getSourceFile(node),
+        declaration: value.sourceDeclaration, carrier: value.carrier, bindings,
+        context: targetUseSiteRef(node, "native-producer", "completed-native-producer-control") }));
   }
-  const published = construction.seal(requests);
+  const finalized = construction.seal(Object.freeze(requests));
+  assert.equal(finalized.kind, "resolved", "every original required native producer correspondence is complete");
+  const published = finalized.value;
   assert.equal("seal" in published, false, "the producer construction port is private");
   assert.equal("selectConstructionErrors" in published, false, "constructor ABI selection is private");
   const before = selections;
@@ -628,7 +633,7 @@ export function choose(): typeof identity { return identity; }
     assert.equal(published.invocationResultFor(declaration) === invocation, true, "invocation result identity");
     assert.equal(published.bodyResultFor(declaration) === body, true, "body result identity");
     assert.equal(published.errorFor(declaration, "invoke") === error, true, "producer error identity");
-    for (const carrier of requests.get(declaration) ?? []) {
+    for (const { carrier } of requests.filter(request => request.declaration === declaration)) {
       const physical = published.physicalFor(declaration, carrier);
       assert.equal(captured.physicalFor(declaration, carrier) === physical, true, "captured physical reader is terminal");
       assert.equal(physical !== undefined, true, "required physical request selected before publication");
@@ -660,7 +665,7 @@ test("a physical reader captured during construction becomes the same terminal l
     assert.equal(open, true, "logical family selection is construction-only");
     selections += 1;
     return generic.definitionFor(carrier);
-  }, { ast: context.ast, storage: context.sourceStorage, captures, native: context.callableValues.native,
+  }, { ast: context.ast, lifetimes: context.sourceLifetimes, storage: context.sourceStorage, captures, native: context.callableValues.native,
     boundSubjectFor: (subject, carrier, bindings) =>
       context.callableValues.nativeStorage.boundSubjectFor(subject, carrier, bindings) });
   const implementation = generic.definitions[0].implementations[0];

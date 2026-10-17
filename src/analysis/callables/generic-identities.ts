@@ -97,23 +97,41 @@ function selectIdentity(
   return Object.freeze({ leftCarrier, rightCarrier, left, right, pairs: Object.freeze(pairs), exhaustive });
 }
 
-export interface RustGenericCallableIdentityRequests {
-  readonly operands: ReadonlyMap<Node, {
-    readonly left: RustNativeStorageSelection | undefined;
-    readonly right: RustNativeStorageSelection | undefined;
-  }>;
+export interface RustGenericCallableIdentitySource {
+  readonly node: Node;
+  readonly operation: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>;
+  readonly leftNode: Node | undefined;
+  readonly rightNode: Node | undefined;
+  readonly leftLogical: TargetTypeRef | undefined;
+  readonly rightLogical: TargetTypeRef | undefined;
+}
+
+export interface RustGenericCallableIdentitySources {
+  readonly comparisons: readonly RustGenericCallableIdentitySource[];
   readonly budget: RustEffectsWorkBudget;
   readonly failure: ReturnType<RustEffectsWorkBudget["run"]>;
   readonly subject: Node | undefined;
 }
 
-export function prepareRustGenericCallableIdentityRequests(input: {
+interface RustGenericCallableIdentityOperandRequest {
+  readonly source: RustGenericCallableIdentitySource;
+  readonly left: RustNativeStorageSelection | undefined;
+  readonly right: RustNativeStorageSelection | undefined;
+}
+
+export interface RustGenericCallableIdentityRequests {
+  readonly operands: ReadonlyMap<Node, RustGenericCallableIdentityOperandRequest>;
+  readonly budget: RustEffectsWorkBudget;
+  readonly failure: ReturnType<RustEffectsWorkBudget["run"]>;
+  readonly subject: Node | undefined;
+}
+
+export function prepareRustGenericCallableIdentitySources(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
-  readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
-}): RustGenericCallableIdentityRequests {
-  const operands = new Map<Node, { readonly left: RustNativeStorageSelection | undefined; readonly right: RustNativeStorageSelection | undefined }>();
+}): RustGenericCallableIdentitySources {
+  const comparisons: RustGenericCallableIdentitySource[] = [];
   const budget = createRustEffectsWorkBudget();
   let subject: Node | undefined;
   const failure = budget.run(() => {
@@ -124,18 +142,29 @@ export function prepareRustGenericCallableIdentityRequests(input: {
       if (operation?.kind !== "operator-token" || operation.operator !== "==" && operation.operator !== "!=") continue;
       const leftNode = BinaryExpression_Left(input.ast, node);
       const rightNode = BinaryExpression_Right(input.ast, node);
-      if (rustGenericCallableValue(rustEffectiveValueCarrier(input.records, leftNode)) === undefined &&
-        rustGenericCallableValue(rustEffectiveValueCarrier(input.records, rightNode)) === undefined) continue;
-      operands.set(node, Object.freeze({ left: leftNode === undefined ? undefined : input.nativeStorage.valueFor(leftNode),
-        right: rightNode === undefined ? undefined : input.nativeStorage.valueFor(rightNode) }));
+      const leftLogical = rustEffectiveValueCarrier(input.records, leftNode);
+      const rightLogical = rustEffectiveValueCarrier(input.records, rightNode);
+      if (rustGenericCallableValue(leftLogical) === undefined && rustGenericCallableValue(rightLogical) === undefined) continue;
+      comparisons.push(Object.freeze({ node, operation, leftNode, rightNode, leftLogical, rightLogical }));
     }
   });
+  return Object.freeze({ comparisons: Object.freeze(comparisons), budget, failure, subject });
+}
+
+export function prepareRustGenericCallableIdentityRequests(input: {
+  readonly sources: RustGenericCallableIdentitySources;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
+}): RustGenericCallableIdentityRequests {
+  if (input.sources === undefined) throw new Error("Native callable identity requires its exact selected source comparison inventory.");
+  const operands = new Map<Node, RustGenericCallableIdentityOperandRequest>();
+  const { comparisons, budget, failure, subject } = input.sources;
+  if (failure === undefined) for (const source of comparisons) operands.set(source.node, Object.freeze({ source,
+    left: source.leftNode === undefined ? undefined : input.nativeStorage.valueFor(source.leftNode),
+    right: source.rightNode === undefined ? undefined : input.nativeStorage.valueFor(source.rightNode) }));
   return Object.freeze({ operands, budget, failure, subject });
 }
 
 export function createRustGenericCallableIdentityPlan(input: {
-  readonly ast: AstReader;
-  readonly records: RustProgramRecords;
   readonly physical: RustGenericCallablePhysicalPlan;
   readonly requests: RustGenericCallableIdentityRequests;
 }): RustGenericCallableIdentityPlan {
@@ -152,17 +181,10 @@ export function createRustGenericCallableIdentityPlan(input: {
     if (selected !== undefined) definitions.set(definition, selected);
     return selected;
   };
-  const visit = (node: Node): void => {
-    const operation = input.records.targetOperation.get(node);
-    if (operation?.kind !== "operator-token" || operation.operator !== "==" && operation.operator !== "!=") return;
-    const leftNode = BinaryExpression_Left(input.ast, node);
-    const rightNode = BinaryExpression_Right(input.ast, node);
-    const leftLogical = rustEffectiveValueCarrier(input.records, leftNode);
-    const rightLogical = rustEffectiveValueCarrier(input.records, rightNode);
-    if (rustGenericCallableValue(leftLogical) === undefined && rustGenericCallableValue(rightLogical) === undefined) return;
-    const requested = input.requests.operands.get(node);
-    const leftStorage = requested?.left;
-    const rightStorage = requested?.right;
+  const visit = (node: Node, requested: RustGenericCallableIdentityOperandRequest): void => {
+    const { operation, leftNode, rightNode, leftLogical, rightLogical } = requested.source;
+    const leftStorage = requested.left;
+    const rightStorage = requested.right;
     const leftDefinition = leftStorage === undefined || leftStorage.kind === "unresolved" ? undefined
       : input.physical.definitionFor(leftStorage.carrier);
     const rightDefinition = rightStorage === undefined || rightStorage.kind === "unresolved" ? undefined
@@ -182,9 +204,9 @@ export function createRustGenericCallableIdentityPlan(input: {
     comparisons.set(node, Object.freeze({ ...selected, operation, leftNode, rightNode }));
   };
   const failure = input.requests.failure ?? budget.run(() => {
-    for (const node of input.requests.operands.keys()) {
+    for (const [node, requested] of input.requests.operands) {
       subject = node;
-      visit(node);
+      visit(node, requested);
     }
     for (const definition of input.physical.definitions()) {
       subject = definition.members[0]?.implementation.declaration;

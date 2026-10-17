@@ -6,7 +6,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
-import { rustGenericCallableInvocationBindings, rustGenericCallableMemberBindings,
+import { rustGenericCallableInvocationBindings,
   type RustGenericCallableBindingContext } from "./generic-bindings.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "./generic-physical.js";
 
@@ -47,7 +47,7 @@ export function createRustGenericCallableCompletionPlan(
     const members = new Map<RustGenericCallablePhysicalMember, { result: TargetTypeRef; index: number }>();
     for (const member of definition.members) {
       const declaration = member.implementation.declaration;
-      const bindings = rustGenericCallableMemberBindings(definition, member, input);
+      const bindings = member.bindings;
       const produced = input.producers.invocationResultFor(declaration);
       if (bindings === undefined || produced === undefined)
         return unresolved("A generic callable member has no exact physical invocation result or environment binding.");

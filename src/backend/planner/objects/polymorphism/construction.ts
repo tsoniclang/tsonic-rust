@@ -67,7 +67,6 @@ export function planProjectClassConstructor(
     functionAbsenceReturnCarrier: undefined,
     fallibleBoundary: boundary === undefined ? undefined : rustPackageFallibleBoundary(boundary),
   };
-  const carrier = context.input.program.projectTypes.openCarrier(definition);
   const materialize = (values: ReadonlyMap<Node, RustExpr>, retainedIdentity?: RustExpr): RustExpr => {
     let state: RustExpr | undefined;
     for (const layer of layers) {
@@ -96,7 +95,7 @@ export function planProjectClassConstructor(
       ] } },
     ] } };
   };
-  const construction = planRustConstructionBody(plan, layers.flatMap(layer => layer.fields), carrier,
+  const construction = planRustConstructionBody(plan, layers.flatMap(layer => layer.fields),
     wrapperType, materialize, constructorContext);
   if (construction === undefined) return undefined;
   const body = planRustConstructionLayers(plan, layers, parameterPlan, construction, constructorContext);

@@ -17,6 +17,7 @@ import { rustContextualRuntimeConversionContract } from "../../../target-model/c
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import {
+  failRustPlannerInvariant,
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "../diagnostics.js";
@@ -93,15 +94,8 @@ export function planRustProviderEvaluationScope(
   if (!mutableRootsAreDisjoint(operationNode, fact, mutableInputs, context)) {
     return { kind: "failed" };
   }
-  const sourceSlots = sourceRuntimeSlots(fact, receiverNode, argumentNodes);
-  if (sourceSlots === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, receiverNode ?? context.sourceFile),
-      "rust.backend.provider-operation-source-slots",
-      "Finalized Rust provider operation has no exact source node for every runtime input slot.",
-    ));
-    return { kind: "failed" };
-  }
+  const sourceSlots = sourceRuntimeSlots(context.input.program.physicalEmissionContexts, operationNode, fact);
+  if (sourceSlots === undefined) failRustPlannerInvariant("Provider rendering requires its admitted original source occurrence and evaluation slots.", operationNode);
   const stabilizationKeys = providerInputStabilizationKeys(
     context,
     fact,
@@ -351,7 +345,7 @@ function providerInputStabilizationKeys(
     .filter(([, inputs]) => inputs.length > 0 && inputs.every((input) =>
       preplannedInputs?.has(input) === true))
     .map(([key]) => key));
-  const targetOrder = providerTargetRuntimeSlotKeys(fact)
+  const targetOrder = providerTargetRuntimeSlotKeys(context.input.program.physicalEmissionContexts, operationNode, fact)!
     .filter((key) => !preplannedKeys.has(key));
   const targetCounts = new Map<string, number>();
   for (const key of targetOrder) {
