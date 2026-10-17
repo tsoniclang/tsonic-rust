@@ -40,7 +40,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
-import { rustSourceFunctionValueCarrier } from "./function-values.js";
+import { rustSourceFunctionValueCarrier, rustSourceClosureValueCarrier } from "./function-values.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
@@ -48,7 +48,7 @@ import { rustGenericCallableValueOwner } from "../../policy/types/callables/call
 import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
 import { resolveRustRetainedResult } from "../../policy/types/resolution/retained-results.js";
 
-import { selectRustInferredReturn } from "./inferred-return.js";
+import { selectRustInferredReturn, selectRustRetainedReturn } from "./inferred-return.js";
 import type { RustInferredReturnSelection } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
@@ -332,9 +332,13 @@ function recordCallableValueSignatureFacts(
     ...parameterCarriers.slice(parameters.length),
   ];
   const valueReturnCarrier = selectedCallableValueReturn(walk, expression, returnCarrier);
-  const runtimeCarrier = rebindRustCallableCarrier(selectedCarrier, runtimeParameterCarriers, valueReturnCarrier,
+  const signatureCarrier = rebindRustCallableCarrier(selectedCarrier, runtimeParameterCarriers, valueReturnCarrier,
     { typeParameters: ownParameters ?? [] });
-  if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
+  const runtimeCarrier = signatureCarrier === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, signatureCarrier);
+  if (runtimeCarrier !== undefined) {
+    setCarrierFact(walk, expression, runtimeCarrier);
+    setCarrierFact(walk, declaration, runtimeCarrier);
+  }
 }
 
 function selectedCallableValueReturn(
@@ -393,8 +397,11 @@ export function selectRustSourceCallableReturn(
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
     parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
   if (parameterCarriers.some(parameter => parameter === undefined)) return undefined;
-  const retained = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
-    : resolveRustRetainedResult(declaration, sourceReturn, rawCarrier, parameterCarriers,
+  const nativeReturn = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
+    : selectRustRetainedReturn(walk, declaration, rawCarrier);
+  if (nativeReturn?.kind === "pending") return undefined;
+  const retained = nativeReturn?.kind !== "complete" ? undefined
+    : resolveRustRetainedResult(declaration, sourceReturn, nativeReturn.carrier, parameterCarriers,
         rustResolutionContext(walk, declaration), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
   if (carrier !== undefined) {

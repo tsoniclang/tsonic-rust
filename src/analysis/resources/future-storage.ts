@@ -8,7 +8,7 @@ import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeF
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { createRustSourceErrorEffectSelection, type RustSourceErrorBindings } from "./source-error-effects.js";
+import type { RustSourceErrorBindings, RustSourceErrorEffectSelection } from "./source-error-effects.js";
 import type { RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import { finalizedConversionIsValid } from "../operations/finalized-operation/conversions.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
@@ -19,6 +19,7 @@ export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
   node: Node,
   branch: TargetTypeRef,
+  rebind: RustSourceErrorEffectSelection,
 ): RustFutureValueFact | undefined {
   if (rustAwaitCarrier(branch) === undefined) return undefined;
   const { sourceStorage: storage, ast } = walk.context;
@@ -28,7 +29,7 @@ export function rustFutureValueForStoredBranch(
   const declaration = sourceEnclosingCallable(node, ast);
   const bindings = declaration === undefined ? storage.emptyBindings : walk.context.callableValues.native.bindingsFor(declaration);
   if (subject.kind !== "resolved" || bindings === undefined) return undefined;
-  const sources = rustStoredFutureValues(walk, node, subject.subject, branch, bindings);
+  const sources = rustStoredFutureValues(walk, node, subject.subject, branch, bindings, rebind);
   if (sources === undefined) return undefined;
   let selected: RustFutureValueFact | undefined;
   for (const source of sources) {
@@ -49,6 +50,7 @@ export function rustStoredFutureValues(
   subject: SourceStorageSubject,
   branch: TargetTypeRef,
   bindings: SourceStorageBindings,
+  rebind: RustSourceErrorEffectSelection,
 ): readonly RustStoredFutureValue[] | undefined {
   const { records, sourceStorage: storage, typeDefinitions: definitions, ast } = walk.context;
   const sources = storage.storageProducersFor(subject, bindings);
@@ -57,7 +59,6 @@ export function rustStoredFutureValues(
     !sources.producers.some(producer => producer.subject.node === boundary.exposure))) return undefined;
   if (sources.producers.length === 0) return undefined;
   const selected: RustStoredFutureValue[] = [];
-  const rebind = createRustSourceErrorEffectSelection(walk);
   for (const source of sources.producers) {
     if (source.subject.kind !== "value" || source.subject.projection.length !== 0) return undefined;
     const producer = source.subject.node;

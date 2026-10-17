@@ -185,14 +185,14 @@ test("catch suppresses escaping native errors without losing try and finally reg
 });
 
 test("nested source functions propagate captures only when invoked", () => {
-  const current = fixture(`
+  const current = analyzedFixture(analyzeRustErrorEffects(`
     export function dormant(callback: () => number): number {
       function hidden(): number { return callback(); } return 1;
     }
     export function active(callback: () => number): number {
       function inner(): number { return callback(); } return inner();
     }
-  `);
+  `));
   assertChannels(current.callable("dormant"), []);
   const hidden = current.declaration("hidden");
   assert.equal(current.program.records.nativeParticipation.get(hidden), "erased", "the actual unused lexical body is not native work");

@@ -38,7 +38,6 @@ import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/reso
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/identities/source-union-members.js";
 import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
-import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
 import { resolveRustContextualParameterAbi, type RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
@@ -81,13 +80,6 @@ export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | unde
   return carrier === undefined ? undefined : setCarrierFact(walk, typeNode, carrier);
 }
 
-export function closeRustBindingStorage(
-  walk: RustFactWalk, declaration: Node, carrier: TargetTypeRef | undefined,
-): TargetTypeRef | undefined {
-  return carrier === undefined ? undefined : closeRustSuspendedStorage(carrier, [],
-    rustEnclosingStorageContract(declaration, walk.context.ast, walk.context.sourceLifetimes), "field");
-}
-
 export function resolveRustDeclaredBindingStorage(
   walk: RustFactWalk,
   declaration: Node,
@@ -103,7 +95,7 @@ export function resolveRustDeclaredBindingStorage(
   ) ? context.currentSemantics.declarations.declaredValueType(declaration) : undefined;
   const carrier = authored === undefined ? resolveRustTargetTypeRef(selected, context, walk.operationOptions)
     : resolveTypeNodeCarrier(walk, authored);
-  return closeRustBindingStorage(walk, declaration, carrier);
+  return carrier === undefined ? undefined : closeRustSuspendedStorage(carrier, "field");
 }
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
@@ -222,7 +214,7 @@ export function selectRustTypeAliasDeclaration(
     walk.operationOptions,
   ) : undefined;
   if (compositeCarrier !== undefined) {
-    const carrier = closeRustSuspendedStorage(compositeCarrier, [], genericContract, "field");
+    const carrier = closeRustSuspendedStorage(compositeCarrier, "field");
     if (carrier === undefined || !walk.sourceTypes.registerRepresentationAlias(declaration, carrier)) {
       return undefined;
     }
@@ -252,7 +244,7 @@ export function selectRustTypeAliasDeclaration(
       walk.operationOptions,
       new Set(),
     );
-    const carrier = resolved === undefined ? undefined : closeRustSuspendedStorage(resolved, [], genericContract, "field");
+    const carrier = resolved === undefined ? undefined : closeRustSuspendedStorage(resolved, "field");
     if (carrier === undefined) {
       return undefined;
     }

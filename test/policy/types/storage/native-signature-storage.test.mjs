@@ -20,7 +20,7 @@ const field = (sourceName, type, method = false) => ({ sourceName, type, presenc
 test("native constructor signatures and native methods never become stored closure environments", () => {
   const value = factory([field("invoke", callback, true)]);
   assert.equal(rustOwnedStorageChildren(value).length, 0);
-  const closed = closeRustSuspendedStorage(value, [], undefined, "callable-result");
+  const closed = closeRustSuspendedStorage(value, "callable-result");
   const native = rustStructuralObjectCarrierValue(closed);
   assert.equal(native.construction === callback, true, "constructor signature is preserved by identity");
   assert.equal(native.fields[0].type === callback, true, "native method signature is preserved by identity");
@@ -65,7 +65,7 @@ test("child selection preserves native width, authored lifetimes and owned field
   assert.equal(borrowedField.type.referent.name, "int64");
   assert.equal(borrowedField.type.lifetime.kind, "static");
   const authored = rustCallableTargetType([], reference, lifetime);
-  const closed = closeRustSuspendedStorage(factory([field("stored", authored)]), [], undefined, "callable-result");
+  const closed = closeRustSuspendedStorage(factory([field("stored", authored)]), "callable-result");
   const stored = rustStructuralObjectCarrierValue(closed).fields[0].type;
   assert.equal(rustCallableProtocol(stored).lifetime === lifetime, true);
   assert.equal(rustCallableProtocol(stored).result.lifetime === lifetime, true);
@@ -90,6 +90,42 @@ test("structural child roles account for base slots before exact field indices",
 test("ordinary structural method storage remains an owned callable without native dispatch evidence", () => {
   const value = rustStructuralObjectTargetType("/src/record.ts", [field("invoke", callback, true)]);
   assert.equal(rustOwnedStorageChildren(value)[0] === callback, true);
-  const closed = closeRustSuspendedStorage(value, [], undefined, "callable-result");
+  const closed = closeRustSuspendedStorage(value, "callable-result", { kind: "static" });
   assert.equal(rustCallableProtocol(rustStructuralObjectCarrierValue(closed).fields[0].type).lifetime.kind, "static");
+});
+
+test("native retained storage never infers static from absent source retention or unknown generic inputs", () => {
+  const owner = {};
+  const input = {};
+  const context = {
+    ast: { body: () => ({}), parameters: () => [input], is: {
+      IsFunctionTypeNode: () => false, IsCallSignatureDeclaration: () => false,
+      IsConstructSignatureDeclaration: () => false, IsMethodSignatureDeclaration: () => false,
+    } },
+    sourceLifetimes: { contractFor: () => ({ declaration: owner, parameters: [] }) },
+    retainedEnvironments: { environmentFor: () => ({ kind: "none" }) },
+  };
+  for (const [label, inputs] of [["opaque callable input", [callback]], ["unproved generic input", [parameter]]]) {
+    assert.equal(closeRustRetainedResult(owner, callback, inputs, context) === undefined, true,
+      `${label}: source none is not native static evidence`);
+  }
+  assert.equal(closeRustSuspendedStorage(callback, "callable-result") === undefined, true,
+    "a missing native construction lifetime is not replaced by a static default");
+  const native = rustCallableTargetType([parameter], integer, lifetime);
+  assert.equal(closeRustRetainedResult(owner, native, [parameter], context)?.carrier === native, true,
+    "an exact opaque native return keeps its authored loan independent of source retention");
+  const copied = rustCallableTargetType([], integer, { kind: "static" });
+  const borrowed = { kind: "reference", mutable: false, referent: integer, lifetime };
+  assert.equal(closeRustRetainedResult(owner, copied, [borrowed], context)?.carrier === copied, true,
+    "an actual native copied environment is not constrained by an unrelated formal loan");
+  const environment = Object.freeze({ lifetime, parameters: Object.freeze([input]) });
+  const retained = closeRustRetainedResult(owner, callback, [parameter], { ...context,
+    retainedEnvironments: { environmentFor: () => ({ kind: "selected", environment }) } });
+  assert.equal(retained !== undefined, true, "an actual captured generic input uses its exact symbolic environment");
+  assert.equal(retained.environment === environment, true, "the one source retention decision is preserved");
+  assert.equal(rustCallableProtocol(retained.carrier).lifetime === lifetime, true,
+    "a retained free generic input is not silently made static");
+  const foreign = closeRustRetainedResult(owner, callback, [parameter], { ...context,
+    retainedEnvironments: { environmentFor: () => ({ kind: "selected", environment: { lifetime, parameters: [{}] } }) } });
+  assert.equal(foreign === undefined, true, "foreign source-retention parameters prove no native environment");
 });

@@ -21,6 +21,7 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 export function recordResourceManagementFacts(walk: RustFactWalk): void {
   walk.context.records.assertOpen();
@@ -59,7 +60,7 @@ export function recordResourceManagementFacts(walk: RustFactWalk): void {
   }
 }
 
-export function recordFutureValueFacts(walk: RustFactWalk): void {
+export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSourceErrorEffectSelection): void {
   walk.context.records.assertOpen();
   const resolve = (node: Node): RustFutureValueFact | undefined => walk.context.records.futureValues.resolve(node, () => {
     const transport = (operand: Node | undefined): RustFutureValueFact | undefined => {
@@ -84,7 +85,7 @@ export function recordFutureValueFacts(walk: RustFactWalk): void {
       ? walk.context.records.sourceCallEffects.get(node)
       : undefined;
     let fact = operation?.kind === "source-call"
-      ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier)
+      ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier, sourceErrors)
       : rustFutureValueForOperation(operation, effects, walk.context.typeDefinitions);
     if (fact === undefined) {
       const kind = walk.context.ast.kindName(node);
@@ -135,7 +136,7 @@ export function recordFutureValueFacts(walk: RustFactWalk): void {
       "await", "recordFutureValueFacts");
     const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf =>
       knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
-        ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf) ?? rustFutureValueForSourceStorage(leaf),
+        ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf, sourceErrors) ?? rustFutureValueForSourceStorage(leaf),
     (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions));
     if (awaiting === undefined) {
       appendRustDiagnostic(walk, "RUST_AWAIT_VALUE_CONTRACT_NOT_PROVEN",

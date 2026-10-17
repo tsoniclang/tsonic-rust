@@ -251,19 +251,25 @@ fn an_actual_borrow_in_either_result_branch_keeps_its_region() {
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--locked", "--offline"]);
-  writeFileSync(path, `${controls}
+  for (const [name, inverse] of [
+    ["borrowed", `
 fn illegal_escape<'region>(value: &'region i32)
     -> tsonic_rust_runtime::Callable<'static, (), Result<i32, core::convert::Infallible>> {
     index::borrowed(value)
 }
+`],
+    ["mixed", `
 fn illegal_mixed_escape<'region>(value: &'region i32)
     -> tsonic_rust_runtime::Callable<'static, (), Result<i32, core::convert::Infallible>> {
     index::mixed(value, true)
 }
-`);
-  assert.throws(() => runCargo(root, ["check", "--all-targets", "--locked", "--offline"]),
-    /(?:borrowed data escapes|lifetime may not live long enough|must outlive.*static)/u,
-    "an actual input loan cannot be promoted to static or escape its native region");
+`],
+  ]) {
+    writeFileSync(path, `${controls}${inverse}`);
+    assert.throws(() => runCargo(root, ["check", "--all-targets", "--locked", "--offline"]),
+      /(?:borrowed data escapes|lifetime may not live long enough|must outlive.*static)/u,
+      `${name}: an actual input loan cannot be promoted to static or escape its native region`);
+  }
 });
 
 test("checked adapters retain all error sources and match handwritten native allocation costs", { timeout: 300_000 }, () => {

@@ -12,16 +12,15 @@ export function closeRustRetainedResult(
 ): { readonly carrier: TargetTypeRef; readonly environment?: RustRetainedEnvironment } | undefined {
   if (!containsStorage(result)) return Object.freeze({ carrier: result });
   if (context.ast.is.IsFunctionTypeNode(declaration) || context.ast.is.IsCallSignatureDeclaration(declaration) ||
-    context.ast.is.IsConstructSignatureDeclaration(declaration) || context.ast.is.IsMethodSignatureDeclaration(declaration)) {
-    const carrier = closeRustSuspendedStorage(result, parameters, context.sourceLifetimes.contractFor(declaration),
-      "callable-signature");
+    context.ast.is.IsConstructSignatureDeclaration(declaration) || context.ast.is.IsMethodSignatureDeclaration(declaration) ||
+    context.ast.body(declaration) === undefined) {
+    const carrier = closeRustSuspendedStorage(result, "callable-signature");
     return carrier === undefined ? undefined : Object.freeze({ carrier });
   }
   const retained = rustRetainedEnvironment(declaration, parameters, context);
   if (retained.kind === "unresolved") return undefined;
   const environment = retained.kind === "selected" ? retained.environment : undefined;
-  const carrier = closeRustSuspendedStorage(result, parameters, context.sourceLifetimes.contractFor(declaration),
-    "callable-result", environment?.lifetime);
+  const carrier = closeRustSuspendedStorage(result, "callable-result", environment?.lifetime);
   return carrier === undefined ? undefined : Object.freeze({ carrier, ...(environment === undefined ? {} : { environment }) });
 }
 

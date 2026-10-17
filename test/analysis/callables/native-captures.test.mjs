@@ -5,7 +5,11 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native-captures.js";
+import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { rustFixedArrayTargetType, rustFixedArrayCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
+import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
+import { rustProducerErrorTargetType } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 function fixture(text) {
   const program = analyzeRustErrorEffects(text, { surfaces: [] });
@@ -124,4 +128,65 @@ test("native capture query rejects foreign declarations without inspecting custo
     "unresolved", "the actual completed owner also excludes an unrequired declaration");
   assert.equal(current.plan.complete().forDeclaration(make).kind, "unresolved",
     "the valid fresh construction plan does not publish an unrequested outer declaration");
+});
+
+test("completed capture tuples bind every storage category before error normalization without deciding retention", () => {
+  const parameter = { kind: "type-parameter", identity: "capture:Value", name: "Value" };
+  const integer = { kind: "source-primitive", name: "int32" };
+  const lifetime = { kind: "parameter", identity: "capture:Region", name: "Region" };
+  const selectedLifetime = { kind: "parameter", identity: "actual:Region", name: "ActualRegion" };
+  const length = { kind: "parameter", identity: "capture:Length", name: "Length" };
+  const reference = { kind: "reference", mutable: false, referent: parameter, lifetime };
+  const array = rustFixedArrayTargetType(parameter, length);
+  const original = Object.freeze({ kind: "resolved", captures: Object.freeze([parameter]),
+    receiverFields: Object.freeze([reference]), receivers: Object.freeze([array]), inputs: Object.freeze([]),
+    environment: rustTargetGenericReferences({ kind: "tuple", elements: [parameter, reference, array] }) });
+  const bindings = { types: new Map([[parameter.identity, integer]]),
+    lifetimes: new Map([[rustLifetimeKey(lifetime), selectedLifetime]]),
+    consts: new Map([[length.identity, { kind: "integer", value: "7" }]]) };
+  let unrelatedReads = 0;
+  const errorTypes = Object.defineProperties({}, Object.fromEntries(["ast", "components", "producers", "records", "definitions"]
+    .map(name => [name, { get() { unrelatedReads++; assert.fail(`closed native captures do not query ${name}`); } }])));
+  const selected = completeRustNativeCaptureCarrier({}, original, bindings, errorTypes);
+  assert.equal(selected.kind, "resolved", "all three actual capture categories complete together");
+  assert.equal(selected.carrier.kind, "tuple", "the result is physical captured storage, not a static verdict");
+  assert.equal(selected.carrier.elements.length, 3, "ordinary captures, receiver fields and receivers are all retained");
+  assert.equal(rustTargetTypeRefEquals(selected.carrier.elements[0], integer), true, "actual type binding reaches ordinary captures");
+  const field = selected.carrier.elements[1];
+  assert.equal(field.kind === "reference" && rustTargetTypeRefEquals(field.referent, integer), true,
+    "the same actual type binding reaches the receiver field");
+  assert.equal(field.lifetime.identity, selectedLifetime.identity, "the actual borrowed lifetime is preserved, never made static");
+  const receiver = rustFixedArrayCarrierValue(selected.carrier.elements[2]);
+  assert.equal(receiver !== undefined && rustTargetTypeRefEquals(receiver.element, integer), true,
+    "receiver storage receives the same type binding");
+  assert.equal(receiver.length.kind === "integer" && receiver.length.value === "7", true,
+    "receiver storage retains the actual const binding");
+  assert.equal(unrelatedReads, 0, "normal closed carriers require no second source or static classifier");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.carrier) && Object.isFrozen(selected.carrier.elements), true,
+    "the completed tuple is immutable");
+  assert.equal(original.captures[0] === parameter && original.receiverFields[0] === reference && original.receivers[0] === array,
+    true, "completion never rewrites the original capture inventory");
+  assert.equal(original.receiverFields[0].lifetime === lifetime, true, "the original template lifetime stays intact");
+});
+
+test("capture completion preserves unresolved evidence and refuses an unregistered physical error", () => {
+  const unresolved = Object.freeze({ kind: "unresolved", reason: "the exact captured native owner is unavailable" });
+  const bindings = { types: new Map(), lifetimes: new Map(), consts: new Map() };
+  assert.equal(completeRustNativeCaptureCarrier({}, unresolved, bindings, {}) === unresolved, true,
+    "unresolved evidence is not an empty successful environment");
+  const error = rustProducerErrorTargetType({ identity: "missing:producer", fileName: "/missing.ts",
+    channel: "invoke", genericArguments: [] });
+  const captures = { kind: "resolved", captures: [error], receiverFields: [], receivers: [], inputs: [],
+    environment: rustTargetGenericReferences(error) };
+  let lookups = 0;
+  const selected = completeRustNativeCaptureCarrier({}, captures, bindings, { producers: {
+    forIdentity(identity) {
+      lookups++;
+      assert.equal(identity, "missing:producer", "the existing error owner receives the exact source identity");
+      return undefined;
+    },
+  } });
+  assert.equal(lookups, 1, "the original error normalizer is the only physical error lookup");
+  assert.equal(selected.kind === "unresolved" && /admitted physical error-boundary carriers/u.test(selected.reason), true,
+    "missing native error evidence is not relabelled as an empty or infallible capture");
 });
