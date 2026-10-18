@@ -775,3 +775,36 @@ export function rustNativeFrameDefinitionCarrier(
     ...(selectedEnvironment === undefined ? [] : [{ kind: "type" as const, type: selectedEnvironment }])],
     [], undefined, [], undefined, []);
 }
+
+export function selectRustNativeCallableEnvironment(
+  environment: {
+    readonly fileName: string;
+    readonly stateName: string;
+    readonly arguments: readonly RustTargetGenericArgument[];
+    readonly typeRequirements: readonly RustNamedTypeTraitRequirement[];
+    readonly storage: "value" | "shared" | "cyclic";
+  },
+  context: RustNativeTypeInputContext,
+): { readonly kind: "resolved"; readonly stateCarrier: TargetTypeRef;
+  readonly holderCarrier: TargetTypeRef; readonly constructor: string | null }
+  | Extract<RustNativeTypeSelectionResult, { readonly kind: "rejected" }> {
+  const subject: TargetTypeRef = { kind: "tuple", elements: environment.arguments.flatMap(argument =>
+    argument.kind === "type" ? [argument.type] : []) };
+  if (!Array.isArray(environment.typeRequirements) || environment.storage !== "value" &&
+    environment.storage !== "shared" && environment.storage !== "cyclic") return { kind: "rejected", subject,
+    reason: "A native callable environment requires its complete original requirements and selected storage disposition." };
+  const path = nativeItemPath(context, environment.fileName, environment.stateName, true);
+  if (path === undefined || !isValidRustIdentifier(environment.stateName)) return { kind: "rejected", subject,
+    reason: "A native callable environment requires its exact original generated state and defining package path." };
+  const selected = selectRustNativeTypeCarrier(rustNamedTargetType(
+    closedMetadataKey([environment.fileName, environment.stateName]), path, environment.arguments,
+    [], undefined, [], undefined, environment.typeRequirements), rustNativeTypeSelectionInput(context), "general");
+  if (selected.kind === "rejected") return selected;
+  const stateCarrier = selected.carrier;
+  const holderCarrier = environment.storage === "value" ? stateCarrier
+    : rustNamedTargetType("rust.alloc.rc.Rc", "alloc::rc::Rc", [{ kind: "type", type: stateCarrier }],
+      [], undefined, [], undefined, []);
+  return Object.freeze({ kind: "resolved", stateCarrier, holderCarrier,
+    constructor: environment.storage === "value" ? null
+      : environment.storage === "shared" ? "alloc::rc::Rc::new" : "alloc::rc::Rc::new_cyclic" });
+}
