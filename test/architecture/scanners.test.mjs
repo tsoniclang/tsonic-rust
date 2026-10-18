@@ -280,8 +280,18 @@ test("bounded tests cap and report nested Cargo parallelism", () => {
   assert.match(worker, /test\/scripts\/run-parallel\.mjs/u);
   assert.match(worker, /--scope tsonic-rust/u);
   const queue = readFileSync(join(hostRoot, "test/scripts/parallel-scheduler.mjs"), "utf8");
+  const resources = readFileSync(join(hostRoot, "test/scripts/parallel-task-resources.mjs"), "utf8");
+  const budget = readFileSync(join(hostRoot, "test/scripts/test-resource-budget.mjs"), "utf8");
   assert.match(queue, /running\.size >= options\.workers/u);
-  assert.match(queue, /memoryMiB \+ memory > options\.memoryMiB/u);
+  assert.match(queue, /!Number\.isSafeInteger\(value\) \|\| value <= 0/u);
+  assert.doesNotMatch(queue, /\bmemoryMiB\b/u);
+  assert.match(queue, /groupCount >= groupLimit/u);
+  assert.match(queue, /task\.exclusive === true && running\.size > 0/u);
+  assert.match(resources, /memoryAdmission: "outer-job-cgroup-only"/u);
+  assert.match(budget, /TSONIC_TEST_WORKERS, "TSONIC_TEST_WORKERS"\) \?\? availableCpus/u);
+  assert.match(guard, /MemoryMax=\$\{memory_max\}/u);
+  assert.match(guard, /MemorySwapMax=0/u);
+  assert.match(guard, /if \[\[ "\$scope_drained" != true \]\]; then drain_test_scope; fi/u);
 });
 
 test("no product dependency on analysis files", () => {
