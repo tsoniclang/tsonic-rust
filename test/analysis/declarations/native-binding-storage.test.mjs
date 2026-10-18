@@ -15,10 +15,20 @@ test("native binding storage retains its original declaration, selected use and 
   assert.equal(rows.length > 0, true, "the actual emitted local bindings have final storage");
   for (const context of program.physicalEmissionContexts.contexts) {
     const declarations = new Set();
+    const capturedSlots = new Map();
     for (const row of context.nativeBindings) {
       assert.equal(row.contextUse === context.use, true, "publication retains the exact selecting physical context");
-      assert.equal(declarations.has(row.declaration), false, "one source declaration has one physical storage per context");
-      declarations.add(row.declaration);
+      if (row.owner.kind === "capture") {
+        const slots = capturedSlots.get(row.owner.environment) ?? new Set();
+        assert.equal(slots.has(row.owner.slotIndex), false, "one actual capture owner publishes each physical slot once");
+        slots.add(row.owner.slotIndex);
+        capturedSlots.set(row.owner.environment, slots);
+        assert.equal(context.nativeEnvironments.includes(row.owner.environment), true,
+          "the slot references the identical completed owner in its physical context");
+      } else {
+        assert.equal(declarations.has(row.declaration), false, "one original local or field has one physical storage per context");
+        declarations.add(row.declaration);
+      }
       assert.equal(program.source.ast.getSourceFile(row.declaration) !== undefined, true, "the owner is an actual checked declaration");
       assert.equal(Object.isFrozen(row) && Object.isFrozen(row.storage), true, "a consumer cannot mutate the final native choice");
       assert.equal(row.readCarrier !== undefined, true, "a native read has an explicit carrier, not a storage spelling guess");
@@ -41,12 +51,44 @@ export function observed(start: number): number {
     .filter(row => row.source.kind === "capture");
   assert.equal(captures.length > 0, true, "the actual capture inventories supply the storage request");
   for (const row of captures) {
-    assert.equal(row.owner.kind, "binding", "a captured read is not silently replaced by a stored frame entry");
-    assert.equal(program.source.ast.getSourceFile(row.source.reference) !== undefined, true,
+    assert.equal(row.owner.kind, "capture", "a captured read retains its actual enclosing environment, not a declaration-only or frame-entry surrogate");
+    const slot = row.source.slot;
+    assert.equal(program.source.ast.getSourceFile(slot.capture.reference) !== undefined, true,
       "the exact original captured reference is preserved");
-    assert.equal(row.storage.kind, row.source.storage, "the original capture mode owns the native slot");
+    assert.equal(row.owner.environment.slots[row.owner.slotIndex] === slot, true,
+      "the original capture and its completed owner's physical field keep identical correlation");
+    const storage = slot.kind === "binding" ? slot.capture.storage : slot.kind === "receiver" ? "value"
+      : slot.capture.storage.kind === "copy" || slot.capture.storage.kind === "shared" ? "value" : slot.capture.storage.kind;
+    assert.equal(row.storage.kind, storage, "the original capture mode owns the native slot");
     assert.equal(rustTargetTypeRefEquals(row.readCarrier, row.storage.payloadCarrier), true,
       "the captured payload's native read is distinct from any enclosing slot wrappers");
+  }
+});
+
+test("native capture environments publish complete owner inventories and no private preparation", () => {
+  const program = programFor(`
+export function observed(start: number): number {
+  let value = start;
+  const next = () => ++value;
+  return next();
+}`);
+  const environments = program.physicalEmissionContexts.contexts.flatMap(context => context.nativeEnvironments);
+  assert.equal(environments.length > 0, true, "real emitted captures publish their complete native owner inventory");
+  for (const context of program.physicalEmissionContexts.contexts) for (const environment of context.nativeEnvironments) {
+    assert.equal(environment.use === context.use && environment.sourceBindings === context.bindings, true,
+      "the owner retains its original physical context and correlated bindings");
+    assert.equal(Object.isFrozen(environment) && Object.isFrozen(environment.slots), true,
+      "native ownership publication has no mutable slot inventory");
+    assert.equal(typeof environment.nativeOwnerFileName === "string" && environment.nativeOwnerFileName.length > 0, true,
+      "the actual native defining file survives preparation");
+    for (const slot of environment.slots) {
+      const rows = context.nativeBindings.filter(binding => binding.owner.kind === "capture" &&
+        binding.owner.environment === environment && binding.source.kind === "capture" && binding.source.slot === slot);
+      assert.equal(rows.length, 1, "every original capture has one completed physical slot in this exact owner");
+      assert.equal("input" in rows[0].source, false, "private capture preparation never leaks into a sealed row");
+    }
+    if (environment.kind === "frame" && environment.payload.kind === "none")
+      assert.equal(environment.slots.length, 0, "an absent actual frame state is not an unavailable captured payload");
   }
 });
 

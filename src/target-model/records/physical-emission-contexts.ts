@@ -15,6 +15,7 @@ import type { RustGenericCallableInvocationFact } from "./generic-callable-effec
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 import type { RustCallablePhysicalSignature } from "../conversions/callable-physical.js";
 import type { RustNativeClassField } from "./native-value-declarations.js";
+import type { RustClosureCaptureFact } from "./operation-selections.js";
 
 export type RustPhysicalCallableSourceActivations =
   | { readonly kind: "resolved"; readonly rows: readonly {
@@ -97,6 +98,64 @@ export interface RustNativeBindingStorage {
   readonly requirements: readonly ("copy" | "clone" | "static")[];
 }
 
+export type RustNativeCaptureSlotFact =
+  | { readonly kind: "binding"; readonly capture: RustClosureCaptureFact["captures"][number] }
+  | { readonly kind: "receiver-field"; readonly capture: RustClosureCaptureFact["receiverFields"][number] }
+  | { readonly kind: "receiver"; readonly capture: RustClosureCaptureFact["receivers"][number] };
+
+export interface RustNativeCaptureEnvironmentBase {
+  readonly use: TargetUseSiteRef;
+  readonly nativeOwnerFileName: string;
+  readonly sourceBindings: RustTargetGenericBindings;
+  readonly slots: readonly RustNativeCaptureSlotFact[];
+}
+
+export interface RustNativeNamedCaptureEnvironmentStorage {
+  readonly stateCarrier: TargetTypeRef;
+  readonly holderCarrier: TargetTypeRef;
+  readonly constructor: string | null;
+  readonly slotPaths: readonly (readonly string[])[];
+}
+
+export type RustNativeCaptureEnvironmentStorage = RustNativeCaptureEnvironmentBase & (
+  | (RustNativeNamedCaptureEnvironmentStorage & {
+      readonly kind: "generic"; readonly definition: object; readonly implementation: object;
+      readonly member: object | undefined; readonly arguments: readonly RustTargetGenericArgument[];
+    })
+  | {
+      readonly kind: "frame"; readonly definition: object; readonly entry: object;
+      readonly implementation: object; readonly arguments: readonly RustTargetGenericArgument[];
+      readonly frame: Pick<RustNativeFrameStorageOwner, "frameCarrier" | "holderCarrier" | "constructor">;
+      readonly payload: { readonly kind: "none" }
+        | ({ readonly kind: "named" } & RustNativeNamedCaptureEnvironmentStorage);
+    }
+  | (RustNativeNamedCaptureEnvironmentStorage & {
+      readonly kind: "suspended"; readonly implementation: object;
+      readonly arguments: readonly RustTargetGenericArgument[];
+    })
+  | {
+      readonly kind: "native"; readonly producer: object; readonly declaration: Node;
+      readonly bodyUse: TargetUseSiteRef;
+      readonly creation: { readonly kind: "definition" }
+        | { readonly kind: "expression"; readonly use: TargetUseSiteRef };
+    }
+  | {
+      readonly kind: "lexical"; readonly declaration: Node;
+      readonly endpoints: readonly (
+        | { readonly kind: "implicit-parameter"; readonly declaration: Node;
+            readonly reference: Node; readonly parameterIndex: number }
+        | { readonly kind: "receiver-field"; readonly capture: RustClosureCaptureFact["receiverFields"][number] }
+        | { readonly kind: "receiver"; readonly capture: RustClosureCaptureFact["receivers"][number] }
+      )[];
+    }
+);
+
+export interface RustNativeCaptureStorageOwner {
+  readonly kind: "capture";
+  readonly slotIndex: number;
+  readonly environment: RustNativeCaptureEnvironmentStorage;
+}
+
 export interface RustNativeStorageBindingRequest {
   readonly use: TargetUseSiteRef;
   readonly declaration: Node;
@@ -105,8 +164,7 @@ export interface RustNativeStorageBindingRequest {
   readonly sourceBindings: RustTargetGenericBindings;
   readonly source:
     | { readonly kind: "binding" }
-    | { readonly kind: "capture"; readonly reference: Node;
-        readonly storage: "value" | "location" | "cell" | "borrow-cell";
+    | { readonly kind: "capture"; readonly slot: RustNativeCaptureSlotFact;
         readonly initialization: "ready" | "deferred" }
     | { readonly kind: "module"; readonly sourceFile: SourceFile; readonly initialization: "ready" | "deferred" }
     | { readonly kind: "field"; readonly definingOwner: Node; readonly storageIndex: number;
@@ -121,6 +179,7 @@ export interface RustNativeStorageBinding extends RustNativeStorageBindingReques
     | { readonly kind: "binding"; readonly declaration: Node }
     | { readonly kind: "module"; readonly sourceFile: SourceFile }
     | RustNativeFrameStorageOwner
+    | RustNativeCaptureStorageOwner
     | { readonly kind: "field"; readonly declaration: Node; readonly definingOwner: Node;
         readonly storageIndex: number; readonly targetName: string };
 }
@@ -159,6 +218,7 @@ export interface RustPhysicalEmissionContext {
   readonly error: RustEmissionErrorContext;
   readonly operands: readonly TargetTypeRef[];
   readonly nativeBindings: readonly RustNativeStorageBinding[];
+  readonly nativeEnvironments: readonly RustNativeCaptureEnvironmentStorage[];
   readonly sourceOrigins: readonly RustPhysicalEmissionSourceOrigins[];
   readonly callableAdapters: readonly RustCallablePhysicalAdapter<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>[];
   readonly targetGenericArguments: ReadonlyMap<RustFinalizedOperationAbi, readonly RustPhysicalTargetGenericArgument[]>;
