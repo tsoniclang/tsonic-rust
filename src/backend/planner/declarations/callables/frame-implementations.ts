@@ -217,32 +217,44 @@ function planFrameEntry(
   return items;
 }
 
+export function planRustNativeFrameStorageItems(
+  definition: RustFrameCallableDefinition, context: RustPlanContext,
+): readonly RustItem[] | undefined {
+  const local = definitionContext(definition, context);
+  const fields: { readonly name: string; readonly type: RustType; readonly visibility: "public" }[] = [];
+  for (const binding of definition.bindings) {
+    const type = rustFrameBindingType(binding, local);
+    if (type === undefined) return undefined;
+    fields.push({ name: binding.fieldName, type, visibility: "public" });
+  }
+  if (definition.storage.kind !== "standalone") return [];
+  const generics = definitionGenerics(definition, local);
+  const marker = definitionMarker(generics);
+  const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+  context.usedAliases?.add("rt");
+  return [{ kind: "struct", name: definition.targetName, visibility: "public", generics, fields: [
+    ...(counterName === undefined ? [] : [{ name: counterName,
+      type: { kind: "named" as const, path: "rt::FrameEntryCounter" }, visibility: "public" as const }]),
+    ...fields,
+    ...(marker === undefined ? [] : [{ name: "marker", type: marker, visibility: "public" as const }]),
+  ] }];
+}
+
 export function planRustFrameCallableItems(context: RustPlanContext): readonly RustItem[] {
   const result: RustItem[] = [];
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   for (const definition of context.input.program.callableValues.frames.definitions) {
     if (definition.ownerFileName !== fileName) continue;
     const local = definitionContext(definition, context);
-    const fields = definition.bindings.map(binding => {
-      const type = rustFrameBindingType(binding, local);
-      return type === undefined ? undefined : { name: binding.fieldName, type, visibility: "public" as const };
-    });
+    const storage = planRustNativeFrameStorageItems(definition, context);
     const entries = definition.entries.map(entry => planFrameEntry(definition, entry, local));
-    if (fields.some(field => field === undefined) || entries.some(items => items === undefined)) {
+    if (storage === undefined || entries.some(items => items === undefined)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, definition.activation.ownerDeclaration),
         "rust.backend.frame-declaration", "A native frame requires its complete selected storage and invocation protocol."));
       continue;
     }
     context.usedAliases?.add("rt");
-    const generics = definitionGenerics(definition, local);
-    const marker = definitionMarker(generics);
-    const counterName = rustRetainedFrameCounterName(definition, context.input.program);
-    if (definition.storage.kind === "standalone") result.push({ kind: "struct", name: definition.targetName, visibility: "public",
-      generics, fields: [
-        ...(counterName === undefined ? [] : [{ name: counterName, type: { kind: "named" as const, path: "rt::FrameEntryCounter" }, visibility: "public" as const }]),
-        ...fields as { readonly name: string; readonly type: RustType; readonly visibility: "public" }[],
-        ...(marker === undefined ? [] : [{ name: "marker", type: marker, visibility: "public" as const }]),
-      ] });
+    result.push(...storage);
     result.push(...(entries as readonly (readonly RustItem[])[]).flat());
   }
   return result;

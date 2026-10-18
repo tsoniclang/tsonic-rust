@@ -6,6 +6,8 @@ import { rustRawLocationRoot, planRustSourceLocationStorage } from "../../../../
 import { planRustProjectedObjectLocation } from "../../../../dist/backend/planner/expressions/object-field-locations.js";
 import { writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
 import { createRustNativeFrameOwner } from "../../../../dist/backend/planner/bindings/frame-storage.js";
+import { planRustNativeFrameStorageItems } from "../../../../dist/backend/planner/declarations/callables/frame-implementations.js";
+import { rustTypeFromSelectedNativeCarrier } from "../../../../dist/backend/planner/types/render.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { recursiveCallbackProtocolCases } from "../../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 
@@ -32,6 +34,20 @@ for (const name of ["addressed-lexical-frame", "captured-class-field"]) {
     const counter = counterName === undefined ? undefined : { name: counterName,
       value: { kind: "call", path: "rt::FrameEntryCounter::new", args: [] } };
     const context = { input: { program }, emissionContext, usedAliases: new Set() };
+    const declarations = planRustNativeFrameStorageItems(definition, context);
+    assert.equal(declarations?.length, 1, "the canonical owner supplies its real native frame declaration");
+    const declaration = declarations[0];
+    assert.equal(declaration.kind, "struct");
+    assert.equal(declaration.name, definition.targetName, "query and output do not create two nominal storage types");
+    const declaredContext = program.physicalEmissionContexts.contextForOwner(definition, "frame");
+    assert.equal(declaredContext !== undefined, true, "the template declaration retains its own original native use");
+    for (const binding of definition.bindings) {
+      const field = declaration.fields.find(field => field.name === binding.fieldName);
+      const storage = declaredContext.nativeBindings.find(row => row.declaration === binding.declaration);
+      assert.equal(storage !== undefined && field !== undefined, true, "every original slot has completed native declaration evidence");
+      assert.equal(JSON.stringify(field.type) === JSON.stringify(rustTypeFromSelectedNativeCarrier(storage.storage.slotCarrier)),
+        true, "the real declaration renders the complete slot, not its logical payload or a structural lookalike");
+    }
     const selected = createRustNativeFrameOwner(definition, values, counter, context);
     assert.equal(selected?.kind, "call", "the exact native holder constructor is emitted once");
     assert.equal(selected.path, native.storage.ownerConstructor, "the canonical native policy owns the constructor");
