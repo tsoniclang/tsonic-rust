@@ -2,7 +2,7 @@ import type {
   RustCompilerAssociatedConstraint, RustCompilerConstArgument, RustCompilerGenericArgument,
   RustCompilerLifetime, RustCompilerNativeRetentionQuestion,
   RustCompilerNativeRetentionQuestionSpan, RustCompilerTraitDispatch, RustCompilerType,
-  RustCompilerTypeRequirement,
+  RustCompilerTypeRequirement, RustCompilerLifetimeBinder,
 } from "../model/model.js";
 import { rustCompilerLifetimeSemanticKey } from "../model/rustdoc-types.js";
 
@@ -13,7 +13,7 @@ export interface RustNativeRetentionSource {
 
 export function renderRustNativeResultRetentionSource(input: {
   readonly questions: readonly RustCompilerNativeRetentionQuestion[];
-  readonly phase: "challenge" | "certify-permitted";
+  readonly phase: "baseline" | "challenge" | "certify-permitted";
   readonly permitted?: ReadonlySet<string>;
 }): RustNativeRetentionSource {
   const lines = ["#![allow(dead_code, unused_variables, unused_mut)]", "extern crate alloc;"];
@@ -65,6 +65,13 @@ export function renderRustNativeResultRetentionSource(input: {
         result = `match ${result} { ::core::result::Result::Ok(value) => value, ::core::result::Result::Err(_) => return }`;
       return result;
     };
+    if (input.phase === "baseline") {
+      const startLine = lines.length + 1;
+      lines.push(`${question.phase === "completion" ? "async " : ""}fn __baseline_${index}${outerGenerics}(mut __owner: ::alloc::boxed::Box<${originType}>)${outerRequirements} {`,
+        `    let __held = ${call("__owner")};`, "    ::core::hint::black_box(&__held);", "}");
+      spans.push(Object.freeze({ questionId: question.id, phase: "use", startLine, endLine: lines.length }));
+      continue;
+    }
     for (const phase of ["use", "cleanup"] as const) {
       const key = `${question.id}:${phase}`;
       if (input.phase === "certify-permitted" && input.permitted?.has(key) !== true) continue;
@@ -87,6 +94,7 @@ export function renderRustNativeResultRetentionSource(input: {
 function createNativeTypeRenderer(question: RustCompilerNativeRetentionQuestion) {
   const selected = rustCompilerLifetimeSemanticKey(question.origin.lifetime);
   const names = new Map<string, string>([[selected, "'__loan"]]);
+  let nextBinder = 0;
   for (const [index, parameter] of question.parameters.entries()) {
     if (parameter.kind === "lifetime") {
       const identity = rustCompilerLifetimeSemanticKey(parameter.lifetime);
@@ -136,11 +144,10 @@ function createNativeTypeRenderer(question: RustCompilerNativeRetentionQuestion)
     });
   }
   function trait(value: RustCompilerTraitDispatch): string {
-    const arguments_ = [...value.genericArguments.map(argument), ...constraints(value.associatedConstraints)];
-    if (value.lifetimeBinder !== undefined) {
-      throw new Error(`Native retention question '${question.id}' requires its higher-ranked native binder application.`);
-    }
-    return `${path(value.path.split("::"))}${arguments_.length === 0 ? "" : `<${arguments_.join(", ")}>`}`;
+    return withBinder(value.lifetimeBinder, () => {
+      const arguments_ = [...value.genericArguments.map(argument), ...constraints(value.associatedConstraints)];
+      return `${path(value.path.split("::"))}${arguments_.length === 0 ? "" : `<${arguments_.join(", ")}>`}`;
+    });
   }
   function requirement(value: RustCompilerTypeRequirement): string {
     return value === "copy" ? "::core::marker::Copy" : value === "clone" ? "::core::clone::Clone" : trait(value.trait);
@@ -165,11 +172,32 @@ function createNativeTypeRenderer(question: RustCompilerNativeRetentionQuestion)
         `<${value.genericArguments.map(argument).join(", ")}>`}`;
       case "trait-object": return `dyn ${[trait(value.principal), ...value.autoTraits.map(trait), lifetime(value.lifetime)].join(" + ")}`;
       case "function-pointer": {
-        if (value.lifetimeBinder !== undefined) throw new Error(`Native retention question '${question.id}' has an unapplied higher-ranked function binder.`);
-        return `${value.unsafe ? "unsafe " : ""}${value.abi === "Rust" ? "" : `extern ${JSON.stringify(value.abi)} `}fn(${value.parameters.map(type).join(", ")}) -> ${type(value.result)}`;
+        return withBinder(value.lifetimeBinder, () => `${value.unsafe ? "unsafe " : ""}${value.abi === "Rust" ? "" :
+          `extern ${JSON.stringify(value.abi)} `}fn(${value.parameters.map(type).join(", ")}) -> ${type(value.result)}`);
       }
       case "self": throw new Error(`Native retention question '${question.id}' has an unapplied original Self identity.`);
       case "opaque": throw new Error(`Native retention question '${question.id}' requires the original native opaque-result constructor application.`);
+    }
+  }
+  function withBinder(binder: RustCompilerLifetimeBinder | undefined, render: () => string): string {
+    if (binder === undefined) return render();
+    const ordinal = nextBinder++;
+    const previous = new Map<string, string | undefined>();
+    for (const [index, parameter] of binder.parameters.entries()) {
+      const identity = rustCompilerLifetimeSemanticKey(parameter.lifetime);
+      if (previous.has(identity)) throw new Error("Native retention requires distinct original bound lifetime identities.");
+      previous.set(identity, names.get(identity));
+      names.set(identity, `'__bound_${ordinal}_${index}`);
+    }
+    try {
+      const parameters = binder.parameters.map(parameter => `${lifetime(parameter.lifetime)}${parameter.outlives.length === 0
+        ? "" : `: ${parameter.outlives.map(lifetime).join(" + ")}`}`);
+      return `${parameters.length === 0 ? "" : `for<${parameters.join(", ")}> `}${render()}`;
+    } finally {
+      for (const [identity, value] of previous) {
+        if (value === undefined) names.delete(identity);
+        else names.set(identity, value);
+      }
     }
   }
   function containsLifetime(value: RustCompilerType, identity: string): boolean {

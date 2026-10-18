@@ -175,6 +175,29 @@ export function substituteRustCompilerArgument(
   }
 }
 
+export function substituteRustCompilerGenericParameter(
+  parameter: RustCompilerGenericParameter,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerGenericParameter {
+  if (parameter.kind === "lifetime") return Object.freeze({ ...parameter,
+    outlives: Object.freeze(parameter.outlives.map(lifetime => substituteRustCompilerLifetime(lifetime, substitutions))),
+  });
+  if (parameter.kind === "const") return Object.freeze({ ...parameter,
+    type: substituteRustCompilerType(parameter.type, substitutions),
+    ...(parameter.defaultValue === undefined ? {} : {
+      defaultValue: substituteRustCompilerConstArgument(parameter.defaultValue, substitutions),
+    }),
+  });
+  return Object.freeze({ ...parameter,
+    requirements: Object.freeze(parameter.requirements.map(requirement => typeof requirement === "string" ? requirement
+      : Object.freeze({ kind: "trait" as const, trait: substituteRustCompilerTrait(requirement.trait, substitutions) }))),
+    outlives: Object.freeze(parameter.outlives.map(lifetime => substituteRustCompilerLifetime(lifetime, substitutions))),
+    ...(parameter.defaultType === undefined ? {} : {
+      defaultType: substituteRustCompilerType(parameter.defaultType, substitutions),
+    }),
+  });
+}
+
 export function substituteRustCompilerTrait(
   trait: RustCompilerTraitDispatch,
   substitutions: RustCompilerSubstitutions,

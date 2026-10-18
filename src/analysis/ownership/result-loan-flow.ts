@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { solveSourceFlow, type SourceControlFlowGraph, type SourceFlowLimits,
   type SourceFlowWork, type SourceStorageQueries, type SourceStorageSubject,
-  type TargetUseSiteRef } from "@tsonic/target-api/analysis";
+  type SourceStorageBindings, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { sourceBindingScope, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustNativeResultRetentionRequest } from "../../providers/native/projection/model.js";
@@ -23,7 +23,11 @@ interface Loan {
   readonly root: RustNativeInputPlace;
 }
 type Values = ReadonlyMap<Loan, boolean>;
-type State = ReadonlyMap<SourceStorageSubject, Values>;
+interface State {
+  readonly expressions: ReadonlyMap<Node, Values>;
+  readonly storage: ReadonlyMap<SourceStorageSubject, Values>;
+}
+type WriteSelection = Extract<ReturnType<SourceStorageQueries["writeAt"]>, { readonly kind: "resolved" }>;
 
 export function analyzeRustCarriedLoanAdmission(input: {
   readonly source: TargetSourceProgram;
@@ -153,16 +157,28 @@ export function analyzeRustCarriedLoanAdmission(input: {
       }
     }
     for (const loan of loans) needed.add(loan.retention.origin.input.node);
+    for (const operand of input.contexts.operands) if (operand.context === context && operand.origin.kind !== "call-input" &&
+      operand.origin.evaluation.kind === "provider-source") needed.add(operand.origin.evaluation.slot.node);
     for (const node of needed) {
       const selected = input.storage.subjectFor(node);
       if (selected.kind === "unresolved") { reject(node, selected.reason); return; }
       selectedSubjects.set(node, selected.subject);
     }
-    const locations = new Map<Node, SourceStorageSubject>();
-    for (const point of graph.points) if (point.operation.kind === "write-location") {
-      const location = input.storage.storageSubjectFor(point.operation.location);
-      if (location.kind === "unresolved") { reject(point.operation.location, location.reason); return; }
-      locations.set(point.operation.location, location.subject);
+    const writes = new Map<number, WriteSelection>();
+    const pointBindings = new Map<number, SourceStorageBindings>();
+    for (const point of graph.points) {
+      const operation = point.operation;
+      const region = graph.executionRegions.get(point.id);
+      if (region?.selection.kind === "unresolved") { reject(point.source ?? graph.declaration, region.selection.reason); return; }
+      const bindings = region?.selection.bindings ?? execution.bindings;
+      pointBindings.set(point.id, bindings);
+      if (operation.kind !== "write" && operation.kind !== "write-location" || operation.value === undefined) continue;
+      if (operation.kind === "write" && (input.source.ast.is.IsClassDeclaration(operation.binding) ||
+        input.source.ast.is.IsClassExpression(operation.binding))) continue;
+      const selected = input.storage.writeAt(operation.kind === "write" ? operation.reference : operation.location, bindings);
+      if (selected.kind === "unresolved") { reject(point.source ?? graph.declaration, selected.reason); return; }
+      if (selected.write.reason !== undefined) { reject(selected.write.reference, selected.write.reason); return; }
+      writes.set(point.id, selected);
     }
     const subject = (node: Node): SourceStorageSubject => {
       const selected = selectedSubjects.get(node);
@@ -171,83 +187,90 @@ export function analyzeRustCarriedLoanAdmission(input: {
     };
     const subjectsByNode = new Map<Node, SourceStorageSubject[]>();
     for (const value of input.storage.subjects) {
+      if (value.kind !== "value") continue;
       const existing = subjectsByNode.get(value.node) ?? [];
       existing.push(value);
       subjectsByNode.set(value.node, existing);
     }
+    const boundaries = Object.freeze([...new Set([
+      ...[...writes.values()].flatMap(selected => selected.write.destinations),
+      ...[...graph.bindings].flatMap(binding => subjectsByNode.get(binding) ?? []),
+      ...loans.map(loan => subject(loan.row.node)),
+      ...graph.points.flatMap(point => point.operation.kind === "capture" && point.source !== undefined ? [subject(point.source)] : []),
+    ])]);
     let unresolvedValue: string | undefined;
     const forward = solveSourceFlow<State>(graph, {
       direction: "forward",
       lattice: {
-        empty: () => new Map(),
+        empty: () => ({ expressions: new Map(), storage: new Map() }),
         join(left, right, work) {
-          const merged = new Map(left);
-          for (const [subject, values] of right) { work.step(); merged.set(subject, union(merged.get(subject) ?? new Map(), values, work)); }
-          return merged;
+          return { expressions: joinValues(left.expressions, right.expressions, work),
+            storage: joinValues(left.storage, right.storage, work) };
         },
         equals(left, right, work) {
-          if (left.size !== right.size) return false;
-          for (const [subject, values] of left) {
-            work.step();
-            const other = right.get(subject);
-            if (other === undefined || values.size !== other.size) return false;
-            for (const [loan, owned] of values) { work.step(); if (other.get(loan) !== owned) return false; }
-          }
-          return true;
+          return equalValues(left.expressions, right.expressions, work) && equalValues(left.storage, right.storage, work);
         },
       },
       transfer(point, incoming, work) {
-        const state = new Map(incoming);
+        const expressions = new Map(incoming.expressions);
+        const storage = new Map(incoming.storage);
+        const state = { expressions, storage };
         if (point.source === undefined) return state;
         const operation = point.operation;
+        const bindings = pointBindings.get(point.id)!;
         if (operation.kind === "read") {
           const value = subject(point.source);
-          const selected = valueFor(value, incoming, work);
+          const selected = valueFor(value, incoming, bindings, work);
           const read = input.ownership.reads.get(point.source);
-          state.set(value, withOwnership(selected, read?.value.kind !== "borrow", work));
+          if (selected.size > 0 && read === undefined) {
+            unresolvedValue = "A carried native loan read requires its original admitted physical read formation.";
+            return undefined;
+          }
+          expressions.set(point.source, withOwnership(selected, read?.value.kind !== "borrow", work));
           if (read?.value.kind === "move") for (const key of subjectsByNode.get(operation.binding) ?? []) {
-            if (key !== value) state.set(key, withOwnership(incoming.get(key) ?? new Map(), false, work));
+            storage.set(key, withOwnership(incoming.storage.get(key) ?? new Map(), false, work));
           }
         } else if (operation.kind === "write" || operation.kind === "write-location") {
-          const selected = operation.value === undefined ? undefined : subject(operation.value.expression);
-          const destinations = operation.kind === "write-location" ? [locations.get(operation.location)!]
-            : subjectsByNode.get(operation.binding) ?? [subject(operation.binding)];
+          const selected = writes.get(point.id);
+          const destinations = selected?.write.destinations ?? (operation.kind === "write"
+            ? subjectsByNode.get(operation.binding) ?? [subject(operation.binding)] : []);
+          let values: Values = new Map();
+          if (operation.value !== undefined && selected !== undefined) {
+            const actual = operation.value;
+            const alternatives = selected.write.values.filter(value => value.source !== undefined && value.source.kind === actual.kind &&
+              value.source.expression === actual.expression && value.source.projection.length === actual.projection.length &&
+              value.source.projection.every((part, index) => part === actual.projection[index]));
+            if (alternatives.length === 0) return undefined;
+            for (const alternative of alternatives) for (const original of alternative.subjects) {
+              work.step();
+              values = union(values, valueFor(original, incoming, selected.bindings, work), work);
+            }
+          } else if (operation.kind === "write" && operation.value === undefined)
+            values = valueFor(subject(operation.binding), incoming, bindings, work);
           for (const destination of destinations) {
             work.step();
-            if (selected === undefined) { state.set(destination, new Map()); continue; }
-            if (operation.value!.projection.length === 0 && destination.projection.length === 0)
-              state.set(destination, valueFor(selected, incoming, work));
-            else {
-              const candidates = input.storage.incomingFor(destination);
-              if (candidates.kind === "unresolved") return undefined;
-              const actual = valueFor(selected, incoming, work);
-              const exact = candidates.subjects.filter(value => value.node === selected.node);
-              let values: Values = new Map();
-              for (const value of exact) values = union(values, valueFor(value, incoming, work), work);
-              if (actual.size > 0 && exact.length === 0) return undefined;
-              state.set(destination, values);
-            }
+            storage.set(destination, values);
           }
         } else if (operation.kind === "scope-exit") {
-          for (const key of state.keys()) {
+          for (const key of storage.keys()) {
             work.step();
-            if (sourceBindingScope(key.node, input.source.ast) === operation.owner) state.set(key, new Map());
+            if (sourceBindingScope(key.node, input.source.ast) === operation.owner) storage.set(key, new Map());
           }
         } else if (operation.kind === "capture") {
           const captured = input.ownership.captures.get(point.source)?.find(capture => capture.declaration === operation.binding);
           if (captured === undefined) return undefined;
-          const value = valueFor(subject(operation.binding), incoming, work);
+          const value = valueFor(subject(operation.binding), incoming, bindings, work);
           const borrowed = captured.read.kind === "borrow";
           const selected: Values = new Map([...value].map(([loan, owned]) => [loan, owned && !borrowed]));
-          const target = subject(point.source);
-          state.set(target, union(incoming.get(target) ?? new Map(), selected, work));
+          expressions.set(point.source, union(incoming.expressions.get(point.source) ?? new Map(), selected, work));
           if (captured.read.kind === "move") for (const key of subjectsByNode.get(operation.binding) ?? [])
-            state.set(key, withOwnership(incoming.get(key) ?? new Map(), false, work));
+            storage.set(key, withOwnership(incoming.storage.get(key) ?? new Map(), false, work));
         } else if (operation.kind === "evaluate") {
           const value = subject(point.source);
-          state.set(value, valueFor(value, incoming, work));
+          expressions.set(point.source, input.nativeResults.has(point.source) ? new Map()
+            : valueFor(value, incoming, bindings, work, "input"));
         } else if (operation.kind === "await" && operation.value !== undefined) {
-          const awaited = valueFor(subject(operation.value), incoming, work);
+          const awaited = valueFor(subject(operation.value), incoming, bindings, work);
           const completed = new Map<Loan, boolean>();
           for (const original of awaited.keys()) {
             work.step();
@@ -261,16 +284,15 @@ export function analyzeRustCarriedLoanAdmission(input: {
               completed.set(loan, true);
             }
           }
-          state.set(subject(point.source), completed);
+          expressions.set(point.source, completed);
         }
         for (const loan of loans) if (loan.row.node === point.source && (operation.kind === "evaluate" || operation.kind === "write-location") &&
           !(loan.row.operation.abi.result.kind === "async" && loan.retention.loan.kind === "value")) {
           work.step();
-          const value = subject(loan.row.node);
-          const selected = new Map(state.get(value) ?? []);
+          const selected = new Map(expressions.get(loan.row.node) ?? []);
           if (loan.retention.origin.kind === "borrow") selected.set(loan, true);
           else {
-            const carried = valueFor(subject(loan.retention.origin.input.node), incoming, work);
+            const carried = valueFor(subject(loan.retention.origin.input.node), incoming, bindings, work);
             for (const original of carried.keys()) {
               work.step();
               if (original.root !== loan.root) continue;
@@ -280,41 +302,43 @@ export function analyzeRustCarriedLoanAdmission(input: {
               if (original.retention.loan.kind === "value" && samePath(original.retention.loan.resultPath, selectedPath)) selected.set(loan, true);
             }
           }
-          state.set(value, selected);
+          expressions.set(loan.row.node, selected);
         }
         return state;
       },
     }, input.limits);
     if (forward.kind === "unresolved") { reject(graph.declaration, forward.reason); return; }
     if (unresolvedValue !== undefined) { reject(graph.declaration, unresolvedValue); return; }
-    const demands = new Map<number, Set<Loan>>();
-    const addDemand = (point: number, value: Values, cleanup: boolean): void => {
-      const selected = demands.get(point) ?? new Set<Loan>();
-      for (const [loan, owned] of value) if (cleanup ? owned && loan.retention.cleanup === "retained" : loan.retention.use === "retained") selected.add(loan);
+    const demands = new Map<number, { readonly subject: SourceStorageSubject; readonly cleanup: boolean }[]>();
+    const addDemand = (point: number, subject: SourceStorageSubject, cleanup: boolean): void => {
+      const selected = demands.get(point) ?? [];
+      selected.push({ subject, cleanup });
       demands.set(point, selected);
     };
     for (const point of graph.points) {
       if (!forward.reachable.has(point.id) || point.source === undefined) continue;
       const state = forward.before.get(point.id)!;
       if (point.operation.kind === "read" || point.operation.kind === "capture") {
-        addDemand(point.id, valuesForNode(point.operation.binding, state), false);
-      } else if (point.operation.kind === "write") addDemand(point.id, valuesForNode(point.operation.binding, state), true);
-      else if (point.operation.kind === "write-location") addDemand(point.id,
-        state.get(locations.get(point.operation.location)!) ?? new Map(), true);
+        addDemand(point.id, subject(point.operation.binding), false);
+      } else if (point.operation.kind === "write") addDemand(point.id, subject(point.operation.binding), true);
+      else if (point.operation.kind === "write-location") {
+        for (const location of writes.get(point.id)?.write.destinations ?? [])
+          addDemand(point.id, location, true);
+      }
       else if (point.operation.kind === "await" && point.operation.value !== undefined)
-        addDemand(point.id, valuesForNode(point.operation.value, state), false);
+        addDemand(point.id, subject(point.operation.value), false);
       else if (point.operation.kind === "scope-exit") {
-        for (const [value, selected] of state) if (sourceBindingScope(value.node, input.source.ast) === point.operation.owner) {
+        for (const [value, selected] of state.storage) if (sourceBindingScope(value.node, input.source.ast) === point.operation.owner) {
           if (input.records.bindingStorage.get(value.node) !== undefined && [...selected].some(([loan, owned]) => owned && loan.retention.cleanup === "retained")) {
             reject(value.node, "The carried-loan cleanup requires the completed promoted native storage destruction endpoint.");
-          } else addDemand(point.id, selected, true);
+          } else addDemand(point.id, value, true);
         }
       }
       for (const operand of input.contexts.operands) {
         if (operand.context !== context || operand.origin.kind === "call-input" || operand.origin.evaluation.kind !== "provider-source") continue;
         const slot = operand.origin.evaluation.slot;
         if (slot.operationNode !== point.source || point.operation.kind !== "evaluate" && point.operation.kind !== "write-location") continue;
-        addDemand(point.id, valuesForNode(slot.node, state), slot.evaluationOnly !== undefined);
+        addDemand(point.id, subject(slot.node), slot.evaluationOnly !== undefined);
       }
     }
     const backward = solveSourceFlow<ReadonlySet<Loan>>(graph, {
@@ -330,18 +354,28 @@ export function analyzeRustCarriedLoanAdmission(input: {
           const completion = loan.row.operation.abi.result.kind === "async" && loan.retention.loan.kind === "value";
           if (!completion && loan.row.node === point.source && (point.operation.kind === "evaluate" || point.operation.kind === "write-location") ||
             completion && point.operation.kind === "await" && point.source !== undefined &&
-              [...(forward.after.get(point.id)?.get(subject(point.source))?.keys() ?? [])].includes(loan)) selected.delete(loan);
+              [...(forward.after.get(point.id)?.expressions.get(point.source)?.keys() ?? [])].includes(loan)) selected.delete(loan);
         }
-        for (const loan of demands.get(point.id) ?? []) { work.step(); selected.add(loan); }
+        const state = forward.before.get(point.id);
+        if (state !== undefined) for (const demand of demands.get(point.id) ?? []) {
+          const values = valueFor(demand.subject, state, pointBindings.get(point.id)!, work);
+          for (const [loan, owned] of values) {
+            work.step();
+            if (demand.cleanup ? owned && loan.retention.cleanup === "retained" : loan.retention.use === "retained") selected.add(loan);
+          }
+        }
         return selected;
       },
     }, input.limits);
     if (backward.kind === "unresolved") { reject(graph.declaration, backward.reason); return; }
+    if (unresolvedValue !== undefined) { reject(graph.declaration, unresolvedValue); return; }
     const reported = new Set<string>();
     for (const point of graph.points) {
       if (point.source === undefined || !forward.reachable.has(point.id)) continue;
       const active = new Set<Loan>();
-      for (const value of forward.before.get(point.id)!.values()) for (const loan of value.keys()) active.add(loan);
+      const state = forward.before.get(point.id)!;
+      for (const values of [state.expressions, state.storage]) for (const value of values.values())
+        for (const loan of value.keys()) active.add(loan);
       for (const use of input.nativeInputs.values()) {
         if (use.operand.context !== context) continue;
         const origin = use.operand.origin;
@@ -371,26 +405,32 @@ export function analyzeRustCarriedLoanAdmission(input: {
       }
     }
 
-    function valueFor(selected: SourceStorageSubject, state: State, work: SourceFlowWork,
-      visited: ReadonlySet<SourceStorageSubject> = new Set()): Values {
+    function valueFor(selected: SourceStorageSubject, state: State, bindings: SourceStorageBindings, work: SourceFlowWork,
+      position: "value" | "input" = "value"): Values {
       work.step();
-      const known = state.get(selected);
-      if (known !== undefined) return known;
-      if (visited.has(selected)) {
-        unresolvedValue = "The native carried-loan value requires an original current flow value at a cyclic source-storage boundary.";
-        return new Map();
+      if (position === "value") {
+        const expression = selected.projection.length === 0 ? state.expressions.get(selected.node) : undefined;
+        if (expression !== undefined) return expression;
+        const known = state.storage.get(selected);
+        if (known !== undefined) return known;
       }
-      const seen = new Set(visited); seen.add(selected);
-      const incoming = input.storage.incomingFor(selected);
-      if (incoming.kind === "unresolved") { unresolvedValue = incoming.reason; return new Map(); }
+      const selection = input.storage.boundValueFrontierFor(selected, bindings, boundaries, "input");
+      if (selection.kind === "unresolved") { unresolvedValue = selection.reason; return new Map(); }
       let values: Values = new Map();
-      for (const source of incoming.subjects) values = union(values, valueFor(source, state, work, seen), work);
+      for (const source of selection.frontier) {
+        work.step();
+        const expression = source.subject.projection.length === 0 ? state.expressions.get(source.subject.node) : undefined;
+        const current = expression ?? state.storage.get(source.subject);
+        if (current !== undefined) values = union(values, current, work);
+        else if (source.kind === "boundary") unresolvedValue = "A carried native loan boundary has no original current physical flow value in its selected execution.";
+        else {
+          const native = input.nativeResults.get(source.subject.node);
+          if (native !== undefined && [...native.values()].some(contexts => [...contexts.values()].some(row =>
+            row.place.kind === "resolved" && row.place.loans.length > 0)))
+            unresolvedValue = "A carried native loan input requires its actual producing execution and current physical value, not a flow-insensitive origin.";
+        }
+      }
       return values;
-    }
-    function valuesForNode(node: Node, state: State): Values {
-      const selected = input.storage.subjectFor(node);
-      if (selected.kind === "unresolved") { reject(node, selected.reason); return new Map(); }
-      return state.get(selected.subject) ?? new Map();
     }
   }
 
@@ -406,6 +446,30 @@ function union(left: Values, right: Values, work: SourceFlowWork): Values {
   const selected = new Map(left);
   for (const [loan, owned] of right) { work.step(); selected.set(loan, owned || selected.get(loan) === true); }
   return selected;
+}
+
+function joinValues<Key>(left: ReadonlyMap<Key, Values>, right: ReadonlyMap<Key, Values>,
+  work: SourceFlowWork): ReadonlyMap<Key, Values> {
+  const merged = new Map(left);
+  for (const [key, values] of right) {
+    work.step();
+    merged.set(key, union(merged.get(key) ?? new Map(), values, work));
+  }
+  return merged;
+}
+
+function equalValues<Key>(left: ReadonlyMap<Key, Values>, right: ReadonlyMap<Key, Values>, work: SourceFlowWork): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, values] of left) {
+    work.step();
+    const other = right.get(key);
+    if (other === undefined || values.size !== other.size) return false;
+    for (const [loan, owned] of values) {
+      work.step();
+      if (other.get(loan) !== owned) return false;
+    }
+  }
+  return true;
 }
 
 function withOwnership(values: Values, owned: boolean, work: SourceFlowWork): Values {

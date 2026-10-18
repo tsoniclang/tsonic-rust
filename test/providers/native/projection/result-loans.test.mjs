@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { projectRustNativeResultLoans, projectRustNativeExplicitReceiverResultLoans } from "../../../../dist/providers/native/projection/result-loans.js";
+import { projectRustNativeResultLoans, projectRustNativeExplicitReceiverResultLoans,
+  projectRustNativeResultRetentionQuestion } from "../../../../dist/providers/native/projection/result-loans.js";
+import { substituteRustCompilerGenericParameter } from "../../../../dist/providers/native/model/types/substitution.js";
 import { isRustNativeResultLoanContract } from "../../../../dist/target-model/operations/result-loans.js";
 import { rustCompilerLifetimeSemanticKey } from "../../../../dist/providers/native/model/rustdoc-types.js";
 import { selectRustCompilerResultLoans } from "../../../../dist/providers/native/model/normalization/functions.js";
@@ -222,4 +224,64 @@ test("native result-loan metadata rejects extra fields, duplicates and fake empt
     "the same returned lifetime position cannot be published twice");
   assert.equal(isRustNativeResultLoanContract({ ...contract, kind: "unavailable", reasons: [] }), false,
     "an unavailable relation requires its actual reason");
+});
+
+test("native retention questions consume the normalized formal identity without redoing elision", () => {
+  const selected = lifetime("question::owner");
+  const parameter = { kind: "lifetime", lifetime: selected, outlives: [] };
+  const result = native("Guard", [selected]);
+  const declaration = callable(result, [reference(selected)], undefined, [parameter]);
+  const origin = declaration.resultLoans.loans[0].origins[0];
+  const dependency = { crateName: "loan_fixture", targetCrateName: "loan_fixture" };
+  Object.defineProperty(declaration, "parameters", { get() { throw new Error("second formal/elision selection"); } });
+  const question = projectRustNativeResultRetentionQuestion({ id: "normalized-formal", declarationIdentity: declaration.identity.itemId,
+    resultTypeIdentity: declaration.resultLoans.valueTypeIdentity, phase: "value", origin,
+    application: { types: new Map(), lifetimes: new Map(), consts: new Map() }, arguments: [] },
+  { declaration, dependency, publicPath: ["loan_fixture", "guard"], ownerParameters: [],
+    parameters: [{ native: parameter, projected: { kind: "lifetime", sourceName: "owner", targetIdentity: "owner" } }] }, []);
+  assert.equal(question.invocation.inputs[0].input === declaration.resultLoanTypes.inputs[0].input, true,
+    "the canonical normalized receiver/formal token is preserved");
+  assert.equal(question.origin.referent.identity.itemId, "Owner", "the actual original normalized referent is retained");
+  assert.equal(question.origin.lifetime === selected, true, "the original declared lifetime identity is never chosen by spelling");
+});
+
+test("an erased target carrier cannot select the first of distinct native applications", () => {
+  const selected = lifetime("question::owner");
+  const lifetimeParameter = { kind: "lifetime", lifetime: selected, outlives: [] };
+  const typeParameter = { kind: "type", identity: identity("question::Value"), name: "Value", requirements: [], outlives: [], maybeSized: false };
+  const result = native("Guard", [selected]);
+  const declaration = callable(result, [reference(selected), { kind: "generic", identity: typeParameter.identity, name: "Value" }],
+    undefined, [lifetimeParameter, typeParameter]);
+  const carrier = { kind: "target-named", id: "erased-native-value" };
+  const projection = { declaration, dependency: { crateName: "loan_fixture", targetCrateName: "loan_fixture" },
+    publicPath: ["loan_fixture", "guard"], ownerParameters: [], parameters: [
+      { native: lifetimeParameter, projected: { kind: "lifetime", sourceName: "owner", targetIdentity: "owner" } },
+      { native: typeParameter, projected: { kind: "type", sourceName: "Value", targetIdentity: typeParameter.identity.itemId } },
+    ] };
+  const request = { id: "ambiguous-native-application", declarationIdentity: declaration.identity.itemId,
+    resultTypeIdentity: declaration.resultLoans.valueTypeIdentity, phase: "value", origin: declaration.resultLoans.loans[0].origins[0],
+    application: { types: new Map([[typeParameter.identity.itemId, carrier]]), lifetimes: new Map(), consts: new Map() }, arguments: [] };
+  const first = native("Token", [lifetime("Token::first")]);
+  const second = native("Token", [lifetime("Token::second")]);
+  assert.throws(() => projectRustNativeResultRetentionQuestion(request, projection,
+    [{ native: first, target: carrier }, { native: second, target: carrier }]), /not an erased carrier/u,
+  "structurally equal target carriers do not erase distinct native lifetime applications");
+  const question = projectRustNativeResultRetentionQuestion(request, projection, [{ native: first, target: carrier }]);
+  assert.equal(question.invocation.genericArguments[0].type === first, true,
+    "an unambiguous actual forward native projection is transported unchanged");
+});
+
+test("native parameter environments substitute nested trait and default arguments once", () => {
+  const actual = { kind: "primitive", name: "i32" };
+  const parameterType = { kind: "generic", identity: identity("question::Argument"), name: "Argument" };
+  const trait = { identity: identity("NativeTrait"), path: "loan_fixture::NativeTrait", genericArguments: [{ kind: "type", type: parameterType }],
+    associatedConstraints: [] };
+  const parameter = { kind: "type", identity: identity("question::Value"), name: "Value", maybeSized: false, outlives: [],
+    requirements: [{ kind: "trait", trait }], defaultType: parameterType };
+  const selected = substituteRustCompilerGenericParameter(parameter,
+    { types: new Map([[parameterType.identity.itemId, actual]]), lifetimes: new Map(), consts: new Map() });
+  assert.equal(selected.identity === parameter.identity, true, "the native parameter keeps its exact declaration identity");
+  assert.equal(selected.requirements[0].trait.genericArguments[0].type === actual, true, "the trait consumes the actual selected argument");
+  assert.equal(selected.defaultType === actual, true, "the default uses the same original application");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.requirements), true, "the substituted parameter environment remains immutable");
 });

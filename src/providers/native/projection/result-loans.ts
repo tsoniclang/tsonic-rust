@@ -5,6 +5,7 @@ import { compilerFunctionResult } from "./representability.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { substituteRustCompilerType, substituteRustCompilerArgument, substituteRustCompilerTrait } from "../model/rustdoc-types.js";
+import { substituteRustCompilerGenericParameter } from "../model/types/substitution.js";
 import type { RustCompilerNativeDeclarationProjection, RustCompilerNativeTypeProjection,
   RustNativeResultRetentionRequest } from "./model.js";
 import type { RustCompilerGenericArgument, RustCompilerNativeRetentionQuestion,
@@ -60,6 +61,7 @@ export function projectRustNativeResultRetentionQuestion(
   if (original === undefined) throw new Error("A native retention request has a foreign declared input/lifetime relation.");
   const types = new Map<string, RustCompilerType>();
   const consts = new Map<string, import("../model/model.js").RustCompilerConstArgument>();
+  const lifetimes = new Map<string, RustCompilerLifetime>();
   const parameters = declaration.parameters.map(row => row.native);
   const applicationIdentity = closedMetadataKey({
     declaration: fn.identity, result: request.resultTypeIdentity, phase: request.phase,
@@ -79,21 +81,28 @@ export function projectRustNativeResultRetentionQuestion(
         if (actual.kind === "parameter" || actual.kind === "infer") throw new Error("Native retention requires its actual normalized const argument, not an unresolved target substitution.");
         consts.set(row.native.identity.itemId, actual);
       }
+    } else if (row.native.kind === "lifetime" && row.projected.kind === "lifetime") {
+      const actual = argument?.kind === "lifetime" ? argument.lifetime : request.application.lifetimes.get(row.projected.targetIdentity);
+      if (actual === undefined || row.native.lifetime.kind !== "parameter" || rustLifetimeKey(actual) === row.projected.targetIdentity) continue;
+      const selected = nativeArgument({ kind: "lifetime", lifetime: actual }, { kind: "lifetime", lifetime: row.native.lifetime });
+      if (selected.kind !== "lifetime") throw new Error("Native lifetime application must preserve its original generic kind.");
+      lifetimes.set(row.native.lifetime.identity.itemId, selected.lifetime);
     }
   }
-  const substitutions = { types, consts, lifetimes: new Map<string, RustCompilerLifetime>() };
+  const substitutions = { types, consts, lifetimes };
   const resultType = substituteRustCompilerType(compilerFunctionResult(fn.resultLoanTypes.result).type, substitutions);
   const lifetime = fn.resultLoanTypes.lifetimes.find(value => value.key === original.lifetime)?.lifetime;
   if (lifetime === undefined || lifetime.kind === "static" || lifetime.kind === "placeholder")
     throw new Error("A native retention question has no exact applied result lifetime corresponding to its original input relation.");
-  const inputType = original.input.kind === "receiver" ? fn.receiver?.type :
-    fn.receiver?.kind === "custom" ? original.input.sourceIndex === 0 ? fn.receiver.type : fn.parameters[original.input.sourceIndex - 1]?.type
-      : fn.parameters[original.input.sourceIndex]?.type;
-  if (inputType === undefined) throw new Error("A native retention question has no original native input type.");
-  const appliedInput = substituteRustCompilerType(inputType, substitutions);
+  const inputs = fn.resultLoanTypes.inputs.filter(row => original.input.kind === "receiver" ? row.input.kind === "receiver"
+    : row.input.kind === "argument" && row.input.sourceIndex === original.input.sourceIndex);
+  if (inputs.length !== 1) throw new Error("A native retention question requires its identical normalized formal and applied input type.");
+  const appliedInput = substituteRustCompilerType(inputs[0]!.type, substitutions);
   const referent = appliedInput.kind === "reference" ? appliedInput.target : { kind: "unit" as const };
-  const remaining: RustCompilerNativeRetentionQuestion["parameters"][number][] = parameters.filter(parameter => parameter.kind === "lifetime" ||
-    !(parameter.kind === "type" ? types.has(parameter.identity.itemId) : consts.has(parameter.identity.itemId)));
+  const remaining: RustCompilerNativeRetentionQuestion["parameters"][number][] = parameters.filter(parameter =>
+    parameter.kind === "lifetime" ? parameter.lifetime.kind !== "parameter" || !lifetimes.has(parameter.lifetime.identity.itemId)
+      : !(parameter.kind === "type" ? types.has(parameter.identity.itemId) : consts.has(parameter.identity.itemId)))
+    .map(parameter => substituteRustCompilerGenericParameter(parameter, substitutions));
   for (const row of fn.resultLoanTypes.lifetimes) {
     const lifetime = row.lifetime;
     if (lifetime.kind === "elided" && !remaining.some(parameter => parameter.kind === "lifetime" &&
@@ -114,7 +123,12 @@ export function projectRustNativeResultRetentionQuestion(
       selectedInput: original.input, selectedKind: original.kind, asynchronous: fn.asynchronous, unsafe: fn.unsafe,
       fallible: compilerFunctionResult(fn.result).fallible,
     }),
-    parameters: Object.freeze(remaining), requirements: Object.freeze(fn.typeRequirements.filter(parameter => !types.has(parameter.identity.itemId))) });
+    parameters: Object.freeze(remaining), requirements: Object.freeze(fn.typeRequirements.filter(parameter => !types.has(parameter.identity.itemId))
+      .map(parameter => {
+        const selected = substituteRustCompilerGenericParameter(parameter, substitutions);
+        if (selected.kind !== "type") throw new Error("Native parameter-environment requirements retain their original type parameter kind.");
+        return selected;
+      })) });
 
   function parameterArgument(parameter: import("../model/model.js").RustCompilerGenericParameter): RustCompilerGenericArgument {
     return substituteRustCompilerArgument(parameter.kind === "type"
@@ -128,9 +142,10 @@ export function projectRustNativeResultRetentionQuestion(
       const primitive = [...sourcePrimitiveByRustName].find(([, source]) => source === actual.name);
       if (primitive !== undefined) return { kind: "primitive", name: primitive[0] };
     }
-    for (const projected of applications) {
-      if (rustTargetTypeRefEquals(projected.target, actual)) return projected.native;
-    }
+    const exact = new Map(applications.filter(projected => rustTargetTypeRefEquals(projected.target, actual))
+      .map(projected => [rustCompilerTypeSemanticKey(projected.native), projected.native]));
+    if (exact.size === 1) return exact.values().next().value!;
+    if (exact.size > 1) throw new Error("Native retention requires one original native application, not an erased carrier shared by distinct native lifetime or type applications.");
     if (actual.kind === "type-parameter") {
       const found = declaration.parameters.find(row => row.native.kind === "type" && row.projected.targetIdentity === actual.identity);
       if (found?.native.kind === "type") return { kind: "generic", identity: found.native.identity, name: found.native.name };
@@ -141,7 +156,7 @@ export function projectRustNativeResultRetentionQuestion(
       const identity = actualNamed?.id ?? (actual.kind === "target-named" ? actual.id : undefined);
       const candidates = applications.filter(row => (row.target.kind === "target-named" && row.target.id === identity ||
         rustNamedTypeCarrierValue(row.target)?.id === identity) && row.native.kind === "path");
-      const identities = new Set(candidates.map(row => row.native.kind === "path" ? row.native.identity.itemId : ""));
+      const identities = new Set(candidates.map(row => rustCompilerTypeSemanticKey(row.native)));
       const found = candidates[0];
       if (found?.native.kind === "path" && identities.size === 1) {
         const arguments_ = actualNamed?.genericArguments ?? (actual.kind === "target-named" ? actual.genericArguments ?? [] : []);

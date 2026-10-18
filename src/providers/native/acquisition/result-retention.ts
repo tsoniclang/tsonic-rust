@@ -15,6 +15,10 @@ import { renderRustNativeResultRetentionSource, type RustNativeRetentionSource }
 const expectedCodes = Object.freeze({ use: new Set(["E0499", "E0502", "E0505"]), cleanup: new Set(["E0597"]) });
 const commandTimeout = 540_000;
 const commandBuffer = 64 * 1024 * 1024;
+const implementationIdentity = digest(JSON.stringify([
+  digest(readFileSync(new URL(import.meta.url))),
+  digest(readFileSync(new URL("./result-retention-source.js", import.meta.url))),
+]));
 
 export function loadRustNativeResultRetentionBatch(input: {
   readonly snapshot: RustCompilerProjectSnapshot;
@@ -24,7 +28,7 @@ export function loadRustNativeResultRetentionBatch(input: {
 }): RustCompilerNativeRetentionBatch {
   const { snapshot } = input;
   const workingDirectory = dirname(snapshot.manifestPath);
-  const questionDigest = digest(JSON.stringify({ questions: input.questions, foundation: input.foundation }));
+  const questionDigest = digest(JSON.stringify({ questions: input.questions, foundation: input.foundation, implementationIdentity }));
   const identity: Pick<RustCompilerNativeRetentionBatch, "protocolVersion" | "snapshotDigest" | "compilerIdentity" | "questionDigest"> =
     { protocolVersion: rustCompilerProviderProtocolVersion, snapshotDigest: snapshot.digest,
     compilerIdentity: snapshot.compiler.rustcVerboseVersion, questionDigest };
@@ -71,33 +75,42 @@ export function loadRustNativeResultRetentionBatch(input: {
   }
   if (questions.length > 0) {
     const manifest = renderManifest(snapshot);
-    const challenge = renderRustNativeResultRetentionSource({ questions, phase: "challenge" });
-    const challengeEvidence = check("challenge", challenge, manifest);
-    evidence.push(challengeEvidence);
-    const retained = new Set<string>();
-    const unexpected = challengeEvidence.diagnostics.filter(diagnostic => {
-      const matches = challenge.originalQuestionSpans.filter(span => expectedCodes[span.phase].has(diagnostic.code ?? "") &&
-        diagnostic.spans.some(position => position.primary && position.startLine >= span.startLine && position.endLine <= span.endLine));
-      if (matches.length !== 1) return true;
-      retained.add(`${matches[0]!.questionId}:${matches[0]!.phase}`);
-      return false;
-    });
-    const permitted = new Set(questions.flatMap(question => ["use", "cleanup"].map(phase => `${question.id}:${phase}`))
-      .filter(key => !retained.has(key)));
-    if (unexpected.length > 0 || challengeEvidence.exitCode !== 0 && retained.size === 0) {
-      const reasons = unexpected.map(diagnostic => `${diagnostic.code ?? "cargo"}: ${diagnostic.message}`);
+    const baseline = renderRustNativeResultRetentionSource({ questions, phase: "baseline" });
+    const baselineEvidence = check("baseline", baseline, manifest);
+    evidence.push(baselineEvidence);
+    if (baselineEvidence.exitCode !== 0 || baselineEvidence.diagnostics.length !== 0) {
       for (const question of questions) facts.push(unavailable(question,
-        ...(reasons.length > 0 ? reasons : ["The native challenge failed without an exact expected original-question diagnostic."])));
+        "The original selected native invocation and parameter environment did not compile before either retention challenge.",
+        ...baselineEvidence.diagnostics.map(diagnostic => `${diagnostic.code ?? "cargo"}: ${diagnostic.message}`)));
     } else {
-      const certification = renderRustNativeResultRetentionSource({ questions, phase: "certify-permitted", permitted });
-      const certificate = check("certify-permitted", certification, manifest);
-      evidence.push(certificate);
-      for (const question of questions) facts.push(certificate.exitCode === 0 && certificate.diagnostics.length === 0
-        ? Object.freeze({ questionId: question.id, applicationIdentity: question.applicationIdentity, kind: "resolved" as const,
-          use: retained.has(`${question.id}:use`) ? "retained" as const : "released" as const,
-          cleanup: retained.has(`${question.id}:cleanup`) ? "retained" as const : "released" as const })
-        : unavailable(question, "The complete permitted native question batch did not compile successfully.",
-          ...certificate.diagnostics.map(diagnostic => `${diagnostic.code ?? "cargo"}: ${diagnostic.message}`)));
+      const challenge = renderRustNativeResultRetentionSource({ questions, phase: "challenge" });
+      const challengeEvidence = check("challenge", challenge, manifest);
+      evidence.push(challengeEvidence);
+      const retained = new Set<string>();
+      const unexpected = challengeEvidence.diagnostics.filter(diagnostic => {
+        const matches = challenge.originalQuestionSpans.filter(span => expectedCodes[span.phase].has(diagnostic.code ?? "") &&
+          diagnostic.spans.some(position => position.primary && position.startLine >= span.startLine && position.endLine <= span.endLine));
+        if (matches.length !== 1) return true;
+        retained.add(`${matches[0]!.questionId}:${matches[0]!.phase}`);
+        return false;
+      });
+      const permitted = new Set(questions.flatMap(question => ["use", "cleanup"].map(phase => `${question.id}:${phase}`))
+        .filter(key => !retained.has(key)));
+      if (unexpected.length > 0 || challengeEvidence.exitCode !== 0 && retained.size === 0) {
+        const reasons = unexpected.map(diagnostic => `${diagnostic.code ?? "cargo"}: ${diagnostic.message}`);
+        for (const question of questions) facts.push(unavailable(question,
+          ...(reasons.length > 0 ? reasons : ["The native challenge failed without an exact expected original-question diagnostic."])));
+      } else {
+        const certification = renderRustNativeResultRetentionSource({ questions, phase: "certify-permitted", permitted });
+        const certificate = check("certify-permitted", certification, manifest);
+        evidence.push(certificate);
+        for (const question of questions) facts.push(certificate.exitCode === 0 && certificate.diagnostics.length === 0
+          ? Object.freeze({ questionId: question.id, applicationIdentity: question.applicationIdentity, kind: "resolved" as const,
+            use: retained.has(`${question.id}:use`) ? "retained" as const : "released" as const,
+            cleanup: retained.has(`${question.id}:cleanup`) ? "retained" as const : "released" as const })
+          : unavailable(question, "The complete permitted native question batch did not compile successfully.",
+            ...certificate.diagnostics.map(diagnostic => `${diagnostic.code ?? "cargo"}: ${diagnostic.message}`)));
+      }
     }
   }
   verify();
@@ -225,8 +238,8 @@ function isBatch(value: unknown, identity: { readonly snapshotDigest: string; re
         typeof span.endLine === "number" && Number.isSafeInteger(span.endLine) && span.endLine >= span.startLine &&
         typeof span.primary === "boolean")))) return false;
   if (value.facts.some((fact: unknown) => record(fact) && fact.kind === "resolved") &&
-    (value.evidence.length !== 2 || !record(value.evidence[1]) || value.evidence[1].exitCode !== 0 ||
-      !Array.isArray(value.evidence[1].diagnostics) || value.evidence[1].diagnostics.length !== 0)) return false;
+    (value.evidence.length !== 3 || [0, 2].some(index => !record(value.evidence[index]) || value.evidence[index].exitCode !== 0 ||
+      !Array.isArray(value.evidence[index].diagnostics) || value.evidence[index].diagnostics.length !== 0))) return false;
   return value.facts.every((fact: unknown, index: number) => record(fact) && fact.questionId === questions[index]!.id &&
     fact.applicationIdentity === questions[index]!.applicationIdentity && (fact.kind === "resolved" &&
       (fact.use === "retained" || fact.use === "released") && (fact.cleanup === "retained" || fact.cleanup === "released") ||

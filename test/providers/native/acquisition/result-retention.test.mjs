@@ -22,6 +22,9 @@ pub fn plain<'owner>(owner: &'owner Owner) -> Plain<'owner> { Plain { owner } }
 pub fn contra<'owner>(_: &'owner Owner) -> Contra<'owner> { Contra { marker: PhantomData } }
 pub fn borrowed_vector<'owner>(owner: &'owner Owner) -> Vec<&'owner Owner> { vec![owner] }
 pub fn elided(owner: &Owner) -> Guard<'_> { Guard { value: owner.value.borrow() } }
+pub fn with_callback<'owner>(owner: &'owner Owner, _callback: for<'input> fn(&'input Owner) -> &'input Owner) -> Guard<'owner> {
+    observing(owner)
+}
 `;
 
 test("normal Cargo facts distinguish actual use, observing cleanup, variance and Vec cleanup", { timeout: 300_000 }, () => {
@@ -38,7 +41,7 @@ test("normal Cargo facts distinguish actual use, observing cleanup, variance and
   const snapshot = worker.snapshot(join(project, "Cargo.toml"));
   const dependency = snapshot.dependencies.find(entry => entry.alias === "native_alias");
   assert.equal(dependency !== undefined, true, "the actual native alias belongs to the frozen Cargo snapshot");
-  const names = ["observing", "plain", "contra", "borrowed_vector", "elided"];
+  const names = ["observing", "plain", "contra", "borrowed_vector", "elided", "with_callback"];
   const module = worker.module({ snapshot, dependency, modulePath: [], requestedExports: names, foundation: "std" });
   const projected = projectRustCompilerModule(module, { moduleSpecifier: "@tsonic/rust/crates/native_alias/index.js",
     providerModuleId: "actual-retention-fixture" });
@@ -58,21 +61,31 @@ test("normal Cargo facts distinguish actual use, observing cleanup, variance and
     projected.nativeDeclarations.get(fn.identity.itemId), projected.nativeApplications);
   });
   const batch = worker.resultRetention({ snapshot, questions, foundation: "std" });
-  assert.equal(batch.facts.length, 5, "every original native question has one fact");
+  assert.equal(batch.facts.length, 6, "every original native question has one fact");
   const expected = new Map([["observing", ["retained", "retained"]], ["plain", ["retained", "released"]],
-    ["contra", ["released", "released"]], ["borrowed_vector", ["retained", "released"]], ["elided", ["retained", "retained"]]]);
+    ["contra", ["released", "released"]], ["borrowed_vector", ["retained", "released"]], ["elided", ["retained", "retained"]],
+    ["with_callback", ["retained", "retained"]]]);
   for (const fact of batch.facts) {
     assert.equal(fact.kind, "resolved", `${fact.questionId}: ${fact.kind === "unavailable" ? fact.reasons.join("; ") : "actual native fact"}`);
     assert.equal(fact.use, expected.get(fact.questionId)[0], `${fact.questionId}: actual native use liveness`);
     assert.equal(fact.cleanup, expected.get(fact.questionId)[1], `${fact.questionId}: actual native cleanup liveness`);
   }
-  assert.equal(batch.evidence.length, 2, "one challenge and one successful complete-permitted certification");
-  assert.equal(batch.evidence[0].exitCode, 101, "the challenge really contains native borrow errors");
-  assert.equal(batch.evidence[1].exitCode, 0, "absence on a failed batch is never a permissive fact");
-  assert.equal(batch.evidence[0].diagnostics.some(diagnostic => diagnostic.code === "E0597"), true, "native destructor observation is measured");
-  assert.equal(batch.evidence[0].diagnostics.some(diagnostic => diagnostic.code === "E0502"), true, "native use conflicts are measured");
+  assert.equal(batch.evidence.length, 3, "the original invocation baseline, challenge and complete-permitted certification are all retained");
+  assert.equal(batch.evidence[0].exitCode, 0, "the original native invocation is valid before any challenge is interpreted");
+  assert.equal(batch.evidence[1].exitCode, 101, "the challenge really contains native borrow errors");
+  assert.equal(batch.evidence[2].exitCode, 0, "absence on a failed batch is never a permissive fact");
+  assert.equal(batch.evidence[1].diagnostics.some(diagnostic => diagnostic.code === "E0597"), true, "native destructor observation is measured");
+  assert.equal(batch.evidence[1].diagnostics.some(diagnostic => diagnostic.code === "E0502"), true, "native use conflicts are measured");
   const cached = worker.resultRetention({ snapshot, questions, foundation: "std" });
   assert.equal(JSON.stringify(cached), JSON.stringify(batch), "the same exact snapshot/compiler/application batch is reusable");
+  const invalid = Object.freeze({ ...questions[0], id: "invalid-original-invocation", invocation: Object.freeze({
+    ...questions[0].invocation, path: Object.freeze(["native_alias", "missing_original_function"]),
+  }) });
+  const unproved = worker.resultRetention({ snapshot, questions: [invalid], foundation: "std" });
+  assert.equal(unproved.facts.length === 1 && unproved.facts[0].kind === "unavailable", true,
+    "an invalid original invocation cannot masquerade as either retained or permitted native evidence");
+  assert.equal(unproved.evidence.length === 1 && unproved.evidence[0].exitCode !== 0, true,
+    "the failed native baseline is retained and neither challenge is interpreted");
   const nativeBefore = readFileSync(join(native, "src", "lib.rs"), "utf8");
   writeFileSync(join(native, "src", "lib.rs"), `${nativeBefore}\npub fn source_changed() {}\n`);
   assert.throws(() => worker.resultRetention({ snapshot, questions, foundation: "std" }), /changed after the compiler-provider snapshot/u,
