@@ -160,7 +160,7 @@ export function prepareRustHelperCallableEmissionRequests(
         if (field.accessor?.read !== undefined) collect(field.declaration, field.readAdapter,
           Object.freeze({ kind: "return", declaration: field.accessor.read.declaration }), selected);
         else if (field.field !== undefined) collect(field.declaration, field.readAdapter,
-          Object.freeze({ kind: "field", declaration: field.field.declaration, carrier: field.field.resultCarrier }), selected);
+          Object.freeze({ kind: "field", selection: field.field }), selected);
         else reject(field.declaration, "A generated structural read requires its exact original selected field or accessor.");
       }
       if (bindings === undefined || identity === undefined || field.readAdapter === undefined) {

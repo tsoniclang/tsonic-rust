@@ -416,7 +416,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       selectedPlan = plan;
       return resolvedTargetStage(Object.freeze({ plan, issues: selectedIssues }));
     },
-    prepareHelperEmissionRequests(classValues: RustClassValuePlan, dispatch: RustProjectMethodDispatchPlan) {
+    prepareHelperEmissionRequests(classValues: RustClassValuePlan,
+      dispatch: RustProjectMethodDispatchPlan): TargetStageResult<readonly RustHelperCallableEmissionRequest[]> {
       if (emissionRequests === undefined || selectedPlan === undefined)
         throw new Error("Helper emission inputs require completed original callable selection.");
       if (declaredBindings !== undefined) throw new Error("Helper emission inputs are selected exactly once before error catalogs.");

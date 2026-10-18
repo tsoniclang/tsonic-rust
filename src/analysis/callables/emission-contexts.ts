@@ -756,6 +756,6 @@ function sameAdapterOrigin(left: RustCallablePhysicalAdapter["origin"], right: R
     case "expression": return right.kind === "expression" && left.subject === right.subject;
     case "parameter": return right.kind === "parameter" && left.abi === right.abi;
     case "return": return right.kind === "return" && left.declaration === right.declaration;
-    case "field": return right.kind === "field" && left.declaration === right.declaration && rustTargetTypeRefEquals(left.carrier, right.carrier);
+    case "field": return right.kind === "field" && left.selection === right.selection;
   }
 }

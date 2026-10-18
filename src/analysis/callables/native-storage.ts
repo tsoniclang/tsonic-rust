@@ -600,7 +600,7 @@ export function createRustNativeStorageQueries(input: {
         code: "RUST_NATIVE_CALLABLE_ADAPTER_NOT_PROVEN", category: "error", source: "tsonic-rust", sourceNode: node,
         message, evidence: ["target.capability=rust.callable-value.exact-implementation"],
       }]);
-      if (!nodes.has(node) || origin.kind !== "parameter" && !nodes.has(origin.declaration))
+      if (!nodes.has(node) || origin.kind === "return" && !nodes.has(origin.declaration))
         return reject("A generated callable adaptation requires its original checked helper and selected ABI slot.");
       const sourceFile = input.ast.getSourceFile(node);
       if (sourceFile === undefined || nativeOwnerFileName.length === 0)
