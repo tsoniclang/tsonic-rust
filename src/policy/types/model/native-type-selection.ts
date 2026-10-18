@@ -67,7 +67,7 @@ export type RustNativeTypeSelectionResult =
   | { readonly kind: "resolved"; readonly carrier: TargetTypeRef }
   | { readonly kind: "rejected"; readonly subject: TargetTypeRef; readonly reason: string };
 
-type RustLogicalNativeCallableAbi =
+export type RustLogicalNativeCallableAbi =
   | { readonly kind: "stored"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
       readonly error: TargetTypeRef; readonly lifetime: RustLifetimeRef; readonly runtimeResult: boolean }
   | { readonly kind: "input"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
@@ -146,6 +146,27 @@ export function selectRustNativeTypeCarrier(
   input: RustNativeTypeSelectionInput,
   position: RustNativeTypePosition,
 ): RustNativeTypeSelectionResult {
+  return selectRustNativeTypeRoot({ kind: "type", carrier }, input, position);
+}
+
+export function selectRustNativeCallableTypeCarrier(
+  subject: TargetTypeRef,
+  abi: Extract<RustLogicalNativeCallableAbi, { readonly kind: "stored" }>,
+  input: RustNativeTypeSelectionInput,
+  position: RustNativeTypePosition,
+): RustNativeTypeSelectionResult {
+  if (abi.kind !== "stored") return { kind: "rejected", subject,
+    reason: "A declared native field callable requires its selected stored invocation ABI." };
+  return selectRustNativeTypeRoot({ kind: "callable", carrier: subject, abi }, input, position);
+}
+
+function selectRustNativeTypeRoot(
+  root: { readonly kind: "type"; readonly carrier: TargetTypeRef }
+    | { readonly kind: "callable"; readonly carrier: TargetTypeRef; readonly abi: RustLogicalNativeCallableAbi },
+  input: RustNativeTypeSelectionInput,
+  position: RustNativeTypePosition,
+): RustNativeTypeSelectionResult {
+  const carrier = root.carrier;
   let rejection: Extract<RustNativeTypeSelectionResult, { readonly kind: "rejected" }> | undefined;
   const active = new Set<TargetTypeRef>();
   const resolvingProducerErrors = new Set<string>();
@@ -234,7 +255,11 @@ export function selectRustNativeTypeCarrier(
         ? reject(type, "Source primitive has no selected native Rust type.") : type;
       if (type.kind === "target-named") {
         if (type.id === rustStringTargetId || type.id === rustStrTargetId) return type;
-        if (type.id === rustCallableTargetId || type.id === rustCallableInputTargetId) return callableFor(type, nativePosition);
+        if (type.id === rustCallableTargetId || type.id === rustCallableInputTargetId) {
+          const signature = rustNativeCallableAbi({ kind: "logical", carrier: type });
+          return signature === undefined ? reject(type, "Native callable requires its exact argument, result, error and lifetime contract.")
+            : callableFor(type, signature, nativePosition);
+        }
         if (type.id === rustProgramErrorTargetId) {
           const owner = rustProgramErrorOwner(type);
           return owner === undefined ? reject(type, "Program error requires its exact physical owner.")
@@ -379,15 +404,13 @@ export function selectRustNativeTypeCarrier(
       return reject(type, "Carrier has no completed native Rust type representation.");
     } finally { active.delete(type); }
   };
-  const callableFor = (type: Extract<TargetTypeRef, { readonly kind: "target-named" }>,
+  const callableFor = (type: TargetTypeRef, signature: RustLogicalNativeCallableAbi,
     nativePosition: RustNativeTypePosition): TargetTypeRef | undefined => {
-    const signature = rustNativeCallableAbi({ kind: "logical", carrier: type });
-    if (signature === undefined) return reject(type, "Native callable requires its exact argument, result, error and lifetime contract.");
     const selectedParameters = select({ kind: "tuple", elements: signature.parameters }, "general");
     const selectedResult = select(signature.result, "general");
     if (selectedParameters === undefined || selectedResult === undefined) return undefined;
     if (signature.kind === "input") {
-      return { kind: "impl-trait", id: type.id, bounds: [{ kind: "trait-ref", id: rustCallableInputTargetId,
+      return { kind: "impl-trait", id: rustCallableInputTargetId, bounds: [{ kind: "trait-ref", id: rustCallableInputTargetId,
         path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: selectedParameters }],
         associatedConstraints: [{ kind: "equality", identity: `${rustCallableInputTargetId}.Output`, name: "Output",
           genericArguments: [], type: rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult",
@@ -403,7 +426,13 @@ export function selectRustNativeTypeCarrier(
     return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [{ kind: "lifetime", lifetime: signature.lifetime },
       { kind: "type", type: selectedParameters }, { kind: "type", type: resultType }], [], undefined, [], undefined, []);
   };
-  const selected = select(carrier, position);
+  let selected: TargetTypeRef | undefined;
+  if (root.kind === "type") selected = select(carrier, position);
+  else {
+    active.add(carrier);
+    try { selected = callableFor(carrier, root.abi, position); }
+    finally { active.delete(carrier); }
+  }
   if (selected === undefined) return rejection ?? { kind: "rejected", subject: carrier,
     reason: "Native type requires completed physical metadata." };
   if (!nativeTypeLegalInPosition(selected, position)) return { kind: "rejected", subject: carrier,
