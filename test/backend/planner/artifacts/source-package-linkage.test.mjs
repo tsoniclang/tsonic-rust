@@ -12,6 +12,7 @@ import {
 import {
   planRustSourcePackageCargo,
 } from "../../../../dist/backend/planner/program/source-package-crates.js";
+import { validateRustSourcePackageCrateIdentities } from "../../../../dist/analysis/names/source-output-identities.js";
 import { printCargoManifest } from "../../../../dist/print/project/manifest.js";
 import {
   resolveRustProgramErrorRoute,
@@ -155,7 +156,6 @@ test("library roots retain exact facade linkage and component cycles fail closed
 });
 
 test("source-package components become one exact generated Cargo workspace", () => {
-  const diagnostics = [];
   const plan = planRustSourcePackageCargo({
     packageName: "application",
     edition: "2024",
@@ -170,9 +170,7 @@ test("source-package components become one exact generated Cargo workspace", () 
     component("leaf", [], "acme_leaf"),
     component("domain", ["leaf"], "acme_domain"),
     component("root", ["domain"], undefined, true),
-  ], diagnostics);
-
-  assertNoTargetDiagnostics(diagnostics);
+  ]);
   assert.notEqual(plan, undefined);
   assert.deepEqual(plan.rootManifest.workspace.members, [
     "crates/acme_domain",
@@ -205,36 +203,26 @@ test("source-package components become one exact generated Cargo workspace", () 
 });
 
 test("source-package Cargo identities fail closed on target crate collisions", () => {
-  const diagnostics = [];
-  const plan = planRustSourcePackageCargo({
-    packageName: "acme_domain",
-    edition: "2024",
-    outputType: "lib",
-    dependencies: [],
-    workspace: { members: [] },
-  }, [
+  const diagnostics = validateRustSourcePackageCrateIdentities({
+    crateName: "acme_domain", project: { kind: "generated" },
+  }, [], [
     component("domain", [], "acme_domain"),
     component("root", ["domain"], undefined, true),
-  ], diagnostics);
+  ]);
 
-  assert.equal(plan, undefined);
+  assert.equal(diagnostics.length, 1, "the same root collision is rejected by analysis before publication");
   assert.deepEqual(diagnostics.map((diagnostic) => diagnostic.code), [
     "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
   ]);
 
-  const duplicateDiagnostics = [];
-  const duplicate = planRustSourcePackageCargo({
-    packageName: "application",
-    edition: "2024",
-    outputType: "lib",
-    dependencies: [],
-    workspace: { members: [] },
-  }, [
+  const duplicateDiagnostics = validateRustSourcePackageCrateIdentities({
+    crateName: "application", project: { kind: "generated" },
+  }, [], [
     component("first", [], "shared_identity"),
     component("second", [], "shared_identity"),
     component("root", ["first", "second"], undefined, true),
-  ], duplicateDiagnostics);
-  assert.equal(duplicate, undefined);
+  ]);
+  assert.equal(duplicateDiagnostics.length, 1, "the same duplicate native identities are rejected before publication");
   assert.deepEqual(duplicateDiagnostics.map((diagnostic) => diagnostic.code), [
     "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
   ]);
@@ -622,7 +610,6 @@ function sourceIdentity(fileName, componentId, externalCrateName) {
     relativeSourcePath: "index.ts",
     moduleSegments: ["index"],
     moduleName: "index",
-    artifactPath: "src/index.rs",
     childModuleNames: [],
     packageId: `${componentId}-package`,
     componentId,

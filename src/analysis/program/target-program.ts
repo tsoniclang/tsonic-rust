@@ -125,8 +125,12 @@ export function analyzeRustTargetProgram(
   const genericAdoption = analyzeRustGenericAdoption({ source: context.source, projectRoot: input.paths.projectRoot,
     storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
   if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
+  const componentIdentities = context.sourcePackageComponentIdentities;
+  if (componentIdentities.kind === "rejected") return rejectedTargetStage(componentIdentities.diagnostics);
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
-    sourceFiles: context.sourceFiles, sourcePackages: input.sourcePackages });
+    sourceFiles: context.sourceFiles, sourcePackages: input.sourcePackages,
+    componentOrder: componentIdentities.identities.componentOrder,
+    configuration, runtimeDependencies: runtimeReferences.plan.cargoDependencies });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
   const sourceStage = analyzeRustProgram(context, configuration.outputType, sourceOutputIdentities.identities);
   if (context.diagnostics.length > 0) {

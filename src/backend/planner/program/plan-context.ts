@@ -13,7 +13,7 @@ import type { RustFrameOwner } from "./frame-owners.js";
 import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/error-regions.js";
-import { rustSourceItemIdentity } from "./source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 export { rustErrorType } from "./fallible-boundaries.js";
 import type { RustBlock, RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";

@@ -42,12 +42,14 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
         members: owner.members.map(member => member.kind === "function" ? finalizeRustDeadCodeOwner(member) : member),
       };
     }
-    case "impl":
+    case "impl": {
+      const owner = finalizeRustDeadCodeOwner(item);
       return {
-        ...item,
-        members: item.members.map(member => member.kind === "function" || member.kind === "const"
+        ...owner,
+        members: owner.members.map(member => member.kind === "function" || member.kind === "const"
           ? finalizeRustDeadCodeOwner(member) : member),
       };
+    }
     case "enum": {
       const owner = finalizeRustDeadCodeOwner(item);
       return {

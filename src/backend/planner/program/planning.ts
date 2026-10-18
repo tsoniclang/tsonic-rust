@@ -219,12 +219,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     input.program.runtimeReferences,
   );
   const sourcePackageCargo = cargoProject.kind === "generated"
-    ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans, diagnostics,
+    ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans,
       input.program.configuration.outputType === "bin" ? input.program.binaryDispatchDemand.linkedComponentIds : [])
     : undefined;
-  if (cargoProject.kind === "generated" && sourcePackageCargo === undefined) {
-    return rejectedTargetStage(diagnostics);
-  }
 
   const outputType = input.program.configuration.outputType;
   const initialization = input.program.errorRegions.initialization;
@@ -305,7 +302,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     rootCrateContent,
     identities,
     facadePlan,
-    diagnostics,
     {
       prefix: "",
       ...(sourcePackageCargo === undefined
@@ -317,7 +313,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ],
     },
   );
-  if (rootArtifacts === undefined || diagnostics.length > 0) {
+  if (diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);
   }
   const artifacts: RustPlannedArtifact[] = [...rootArtifacts];
@@ -342,7 +338,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         content,
         identities,
         facadePlan,
-        diagnostics,
         {
           prefix: cargo.directory,
           manifest: cargo.manifest,
@@ -350,9 +345,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
             workerEntries.itemsByComponentId.get(component.componentId) ?? [],
         },
       );
-      if (externalArtifacts !== undefined) {
-        artifacts.push(...externalArtifacts);
-      }
+      artifacts.push(...externalArtifacts);
     }
   }
   if (diagnostics.length > 0) {

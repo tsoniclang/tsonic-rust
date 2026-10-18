@@ -11,6 +11,10 @@ export interface RustSourceFileOutputIdentity {
   readonly externalCrateName?: string;
 }
 
+export function rustSourceItemIdentity(fileName: string, itemName: string): string {
+  return `${fileName.length}:${fileName}${itemName.length}:${itemName}`;
+}
+
 export function rustModuleNameForSourcePath(
   relativeSourcePath: string,
 ): string | undefined {

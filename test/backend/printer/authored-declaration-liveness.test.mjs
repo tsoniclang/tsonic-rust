@@ -271,6 +271,10 @@ main();
   assert.equal(itemHasAttribute(source, "enum UnusedSelection"), true);
   assert.equal(itemHasAttribute(source, "struct UsedChoice "), false);
   assert.equal(itemHasAttribute(source, "struct UnusedChoice "), true);
+  assert.equal(itemHasAttribute(source, "impl UnusedChoice"), true,
+    "the unused authored enum's separate constant implementation retains its declaration disposition");
+  assert.equal(itemHasAttribute(source, "impl UsedChoice"), false,
+    "the live authored enum receives no blanket implementation disposition");
   const usedChoice = rustBracedItem(source, "impl UsedChoice");
   assert.equal(itemHasAttribute(usedChoice, "const First:"), false);
   assert.equal(itemHasAttribute(usedChoice, "const Second:", authoredUnusedVariant), true);

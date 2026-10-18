@@ -23,8 +23,9 @@ import type {
 } from "../program/source-file.js";
 import type { RustSourcePackageComponentPlan } from "../program/source-package-components.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 const minimumRustArtifactReconstructionCount = 64;
 const maximumReconstructionsPerSourceFile = 32;
@@ -65,18 +66,16 @@ export function reconstructRustSourceFiles(
   for (const sourceFile of input.program.sourceFiles) {
     const owner = sourceFileArtifactOwner(input, sourceFile);
     if (owner === undefined) {
-      diagnostics.push(reconstructionDiagnostic(
-        "RUST_SOURCE_FILE_ARTIFACT_IDENTITY_MISSING",
+      failRustPlannerInvariant(
         "One project source file has no stable compiler-owned identity for Rust artifact reconstruction.",
-      ));
-      return undefined;
+        sourceFile,
+      );
     }
     if (sourceFilesByOwner.has(owner)) {
-      diagnostics.push(reconstructionDiagnostic(
-        "RUST_SOURCE_FILE_ARTIFACT_IDENTITY_CONFLICT",
+      failRustPlannerInvariant(
         `Multiple project source files resolve to Rust artifact owner '${owner}'.`,
-      ));
-      return undefined;
+        sourceFile,
+      );
     }
     sourceFilesByOwner.set(owner, sourceFile);
     ownerBySourceFile.set(sourceFile, owner);
@@ -86,11 +85,10 @@ export function reconstructRustSourceFiles(
       ? undefined
       : componentById.get(identity.componentId);
     if (identity === undefined || component === undefined) {
-      diagnostics.push(reconstructionDiagnostic(
-        "RUST_SOURCE_PACKAGE_COMPONENT_IDENTITY_MISSING",
+      failRustPlannerInvariant(
         `Rust source file '${fileName}' has no exact source-package component plan.`,
-      ));
-      return undefined;
+        sourceFile,
+      );
     }
     const owners = ownersByComponent.get(component.componentId) ?? [];
     owners.push(owner);
@@ -125,28 +123,16 @@ export function reconstructRustSourceFiles(
     > => {
       const sourceFile = sourceFilesByOwner.get(owner);
       if (sourceFile === undefined) {
-        return {
-          kind: "rejected",
-          code: "RUST_TARGET_ARTIFACT_RECONSTRUCTOR_MISSING",
-          reason: `Dirty Rust target artifact '${owner}' has no source-file reconstructor.`,
-        };
+        failRustPlannerInvariant(`Dirty Rust target artifact '${owner}' has no source-file reconstructor.`);
       }
       const fileName = input.program.source.ast.getFileName(sourceFile);
       const identity = identitiesByFileName.get(fileName);
       if (identity === undefined) {
-        return {
-          kind: "rejected",
-          code: "RUST_SOURCE_FILE_MODULE_IDENTITY_MISSING",
-          reason: `Rust source artifact '${owner}' has no finalized module identity.`,
-        };
+        failRustPlannerInvariant(`Rust source artifact '${owner}' has no finalized module identity.`, sourceFile);
       }
       const component = componentById.get(identity.componentId);
       if (component === undefined) {
-        return {
-          kind: "rejected",
-          code: "RUST_SOURCE_PACKAGE_COMPONENT_IDENTITY_MISSING",
-          reason: `Rust source artifact '${owner}' has no exact source-package component plan.`,
-        };
+        failRustPlannerInvariant(`Rust source artifact '${owner}' has no exact source-package component plan.`, sourceFile);
       }
       const componentDependencies = component.dependencyComponentIds.flatMap(
         (dependencyComponentId) =>
@@ -205,9 +191,6 @@ export function reconstructRustSourceFiles(
         owner,
         ownerBySourceFile,
       );
-      if (moduleDependencies.kind === "rejected") {
-        return moduleDependencies;
-      }
       if (component.crateName !== undefined) {
         const itemNames = rustSourceFileItemNames(planned.model);
         plannedExternalItemIdentitiesByOwner.set(owner, new Set(
@@ -226,7 +209,7 @@ export function reconstructRustSourceFiles(
       const candidate = rustSourceFileContractCandidate(
         owner,
         planned.model,
-        moduleDependencies.dependencies,
+        moduleDependencies,
       );
       plannedByOwner.set(owner, planned);
       return {
@@ -281,11 +264,9 @@ export function reconstructRustSourceFiles(
   }
   const rootComponent = components.find((component) => component.root);
   if (rootComponent === undefined) {
-    diagnostics.push(reconstructionDiagnostic(
-      "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING",
+    failRustPlannerInvariant(
       "Rust source reconstruction has no exact root source-package component.",
-    ));
-    return undefined;
+    );
   }
   const sourcesByComponentId = new Map(components.map((component) => [
     component.componentId,
@@ -332,27 +313,14 @@ function sourceFilePublicDependencies(
   sourceFile: SourceFile,
   owner: string,
   ownerBySourceFile: ReadonlyMap<SourceFile, string>,
-):
-  | {
-      readonly kind: "resolved";
-      readonly dependencies: readonly TargetArtifactDependency<RustArtifactFacet>[];
-    }
-  | {
-      readonly kind: "rejected";
-      readonly code: string;
-      readonly reason: string;
-    } {
+): readonly TargetArtifactDependency<RustArtifactFacet>[] {
   const dependencies: TargetArtifactDependency<RustArtifactFacet>[] = [];
   for (const reference of input.program.sourceNavigation.moduleReferences(sourceFile)) {
     const dependencyOwner = ownerBySourceFile.get(reference.sourceFile) ??
       sourceFileArtifactOwner(input, reference.sourceFile);
     if (dependencyOwner === undefined) {
-      return {
-        kind: "rejected",
-        code: "RUST_SOURCE_FILE_DEPENDENCY_IDENTITY_MISSING",
-        reason:
-          `A project module referenced by '${owner}' has no stable Rust artifact identity.`,
-      };
+      failRustPlannerInvariant(
+        `A project module referenced by '${owner}' has no stable Rust artifact identity.`, reference.sourceFile);
     }
     if (dependencyOwner !== owner) {
       dependencies.push({
@@ -365,11 +333,8 @@ function sourceFilePublicDependencies(
     const dependencyOwner = ownerBySourceFile.get(construction.targetSourceFile) ??
       sourceFileArtifactOwner(input, construction.targetSourceFile);
     if (dependencyOwner === undefined) {
-      return {
-        kind: "rejected",
-        code: "RUST_SOURCE_MODULE_DEPENDENCY_IDENTITY_MISSING",
-        reason: `A source module constructed by '${owner}' has no stable Rust artifact identity.`,
-      };
+      failRustPlannerInvariant(
+        `A source module constructed by '${owner}' has no stable Rust artifact identity.`, construction.targetSourceFile);
     }
     if (dependencyOwner !== owner) {
       dependencies.push({
@@ -378,10 +343,7 @@ function sourceFilePublicDependencies(
       });
     }
   }
-  return {
-    kind: "resolved",
-    dependencies: Object.freeze(uniqueDependencies(dependencies)),
-  };
+  return Object.freeze(uniqueDependencies(dependencies));
 }
 
 function uniqueDependencies(

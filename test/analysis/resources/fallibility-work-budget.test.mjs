@@ -24,8 +24,11 @@ function fixture(text) {
       request.rootPublishesLibrary, dispatch.plan);
     assert.equal(created.kind, "resolved", "the checked context is complete before the fallibility worklist");
     const context = created.value;
+    const componentIdentities = context.sourcePackageComponentIdentities;
+    assert.equal(componentIdentities.kind, "resolved", "the checked context supplies its completed source component order");
     const identities = analyzeRustSourceOutputIdentities({ ast: context.ast, sourceFiles: context.sourceFiles,
-      sourcePackages: context.sourcePackages, paths: request.input.paths });
+      sourcePackages: context.sourcePackages, componentOrder: componentIdentities.identities.componentOrder,
+      configuration: request.configuration, runtimeDependencies: references.plan.cargoDependencies });
     assert.equal(identities.kind, "accepted", "the checked fixture supplies its actual native output identities");
     analyzeRustProgram(context, request.configuration.outputType, identities.identities);
     program = { ...context, records: context.records.seal(context.requiredRecords) };

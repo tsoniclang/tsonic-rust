@@ -79,23 +79,19 @@ export function planRustWorkerEntries(input: {
       : input.contentByComponentId.get(component.componentId);
     if (identity === undefined || component === undefined || content === undefined ||
       sourceFileByName.get(target.fileName) !== target.sourceFile) {
-      input.diagnostics.push(workerDiagnostic(
-        "RUST_WORKER_ENTRY_OUTPUT_IDENTITY_MISSING",
+      failRustPlannerInvariant(
         `Worker source module '${target.fileName}' has no exact generated crate/module identity.`,
         target.sourceFile,
-      ));
-      continue;
+      );
     }
     const componentErrorDomain = input.sourcePackageErrors.domainsByComponentId.get(
       component.componentId,
     );
     if (componentErrorDomain === undefined) {
-      input.diagnostics.push(workerDiagnostic(
-        "RUST_WORKER_ENTRY_ERROR_DOMAIN_MISSING",
+      failRustPlannerInvariant(
         `Worker source module '${target.fileName}' has no exact source-package error domain.`,
         target.sourceFile,
-      ));
-      continue;
+      );
     }
     const selection = input.planning.program.errorRegions.initialization.workerFor(target.sourceFile);
     if (selection === undefined) {

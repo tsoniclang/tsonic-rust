@@ -1,9 +1,7 @@
 import type {
   TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
-import {
-  rustSourceItemIdentity,
-} from "../../../analysis/program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type {
   RustSourcePackageFacadeExportContract,
 } from "../../../analysis/program/source-package-facades.js";
@@ -13,8 +11,6 @@ import type {
 import type {
   RustSourceFileOutputIdentity,
 } from "../../../target-model/names/source-output-identities.js";
-
-export { rustSourceItemIdentity };
 
 export interface RustSourcePackageFacadeExport
   extends RustSourcePackageFacadeExportContract {

@@ -7,6 +7,8 @@ import type {
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
+import type { RustCargoDependency } from "../../target-model/project/model.js";
 import {
   rustModuleSegmentName,
   rustPackageModuleName,
@@ -31,6 +33,9 @@ export interface RustSourceOutputIdentityAnalysisInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetSourcePackageGraph;
+  readonly componentOrder: readonly string[];
+  readonly configuration: Pick<RustTargetConfiguration, "project" | "crateName">;
+  readonly runtimeDependencies: readonly Pick<RustCargoDependency, "name">[];
 }
 
 export function selectRustNativeTypeItemNames(input: {
@@ -254,9 +259,54 @@ export function analyzeRustSourceOutputIdentities(
     }));
   }
 
+  const activeComponents = new Set(sourcePaths.map(sourcePath => sourcePath.componentId));
+  diagnostics.push(...validateRustSourcePackageCrateIdentities(host.configuration, host.runtimeDependencies,
+    host.componentOrder.filter(componentId => activeComponents.has(componentId)).map(componentId => ({
+      componentId, root: componentId === rootPackage.componentId, crateName: externalCrateNames.get(componentId),
+    }))));
   return diagnostics.length === 0
     ? { kind: "accepted", identities: new Map(byFileName) }
     : { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+}
+
+export function validateRustSourcePackageCrateIdentities(
+  configuration: Pick<RustTargetConfiguration, "project" | "crateName">,
+  runtimeDependencies: readonly Pick<RustCargoDependency, "name">[],
+  components: readonly { readonly componentId: string; readonly root: boolean; readonly crateName: string | undefined }[],
+): readonly TargetDiagnostic[] {
+  if (configuration.project.kind !== "generated") return Object.freeze([]);
+  const diagnostics: TargetDiagnostic[] = [];
+  const runtimeNames = new Set(runtimeDependencies.map(dependency => dependency.name));
+  const componentByCrateName = new Map<string, string>();
+  for (const component of components) {
+    if (component.root) continue;
+    const { componentId, crateName } = component;
+    if (crateName === undefined || crateName === configuration.crateName || runtimeNames.has(crateName)) {
+      diagnostics.push(crateIdentityDiagnostic(
+        `Generated source-package component '${componentId}' has conflicting Rust crate identity '${String(crateName)}'.`,
+      ));
+      continue;
+    }
+    const existing = componentByCrateName.get(crateName);
+    if (existing !== undefined) {
+      diagnostics.push(crateIdentityDiagnostic(
+        `Source-package components '${existing}' and '${componentId}' share Rust crate identity '${crateName}'.`,
+      ));
+      continue;
+    }
+    componentByCrateName.set(crateName, componentId);
+  }
+  return Object.freeze(diagnostics);
+}
+
+function crateIdentityDiagnostic(message: string): TargetDiagnostic {
+  return {
+    code: "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
+    category: "error",
+    source: "tsonic-rust",
+    message,
+    evidence: ["target.capability=rust.backend.source-package-crates"],
+  };
 }
 
 interface ModuleSegmentNode {

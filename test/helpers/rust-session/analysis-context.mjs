@@ -14,8 +14,11 @@ export function analyzeRustCheckedContext(request, configureContext) {
   assert.equal(created.kind, "resolved", "the actual checked native context is admitted before body analysis");
   let context = created.value;
   if (configureContext !== undefined) context = configureContext(context);
+  const componentIdentities = context.sourcePackageComponentIdentities;
+  assert.equal(componentIdentities.kind, "resolved", "the checked context supplies its completed source component order");
   const identities = analyzeRustSourceOutputIdentities({ ast: context.ast, sourceFiles: context.sourceFiles,
-    sourcePackages: context.sourcePackages, paths: request.input.paths });
+    sourcePackages: context.sourcePackages, componentOrder: componentIdentities.identities.componentOrder,
+    configuration: request.configuration, runtimeDependencies: references.plan.cargoDependencies });
   assert.equal(identities.kind, "accepted", "the actual checked source output identities are selected before body analysis");
   const sourceStage = analyzeRustProgram(context, request.configuration.outputType, identities.identities);
   return Object.freeze({ ...context, sourceOutputIdentities: identities.identities, sourceStage });
