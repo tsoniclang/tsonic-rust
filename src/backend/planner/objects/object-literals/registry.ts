@@ -346,6 +346,7 @@ export function createImplementationPlan(
       implementation,
       parameters: shape.params,
       adapter: {
+        selection: dispatch,
         parameterAbis: dispatch.parameters,
         parameterAdapters: dispatch.parameterAdapters,
         resultAdapter: dispatch.resultAdapter,

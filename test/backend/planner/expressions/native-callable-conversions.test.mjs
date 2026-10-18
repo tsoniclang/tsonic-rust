@@ -110,7 +110,8 @@ test("adapter emission requires the exact source-node callable identity", () => 
   const conversion = selectRustCallableConversion(foreign, rustCallableTargetType([integer, integer], integer),
     () => undefined, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true);
-  admitNativeCallableAdapter(current, conversion, node);
+  assert.equal(current.context.emissionContext.callableAdapters.some(adapter => adapter.selection === conversion), false,
+    "a foreign logical source cannot supply an admitted adapter selection");
   assert.equal(planRustCallableConversion(conversion, current.expression, current.node, current.context) === undefined, true);
 });
 
@@ -149,6 +150,7 @@ export function create(): () => int32 { return (): int32 => { return 3; }; }
   const conversion = selectRustCallableConversion(input.carrier, rustCallableInputTargetType([integer], integer),
     () => undefined, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true);
+  admitNativeCallableAdapter(current, conversion, node);
   const converted = planRustCallableConversion(conversion, { kind: "path", path: "callback" }, node, current.context);
   assert.equal(converted !== undefined, true, "formal protocol adaptation plans");
   const text = printRustExpr(converted);

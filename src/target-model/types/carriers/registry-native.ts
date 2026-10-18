@@ -170,6 +170,15 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     frozen: false,
   },
   {
+    id: "src/target-model/types/carriers/native.ts#rustNativeTraitRef",
+    kinds: ["trait-ref"],
+    declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustNativeTraitRef" },
+    counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
+    divergence: { register: "S11-12",
+      reason: "Rust native trait references carry exact trait paths and native generic arguments. CLR interface constraints are nominal types and do not expose Rust associated-type or lifetime syntax; no fabricated C# trait-reference factory is required." },
+    frozen: false,
+  },
+  {
     id: "src/target-model/types/carriers/native.ts#rustFixedArrayTargetType",
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustFixedArrayTargetType" },

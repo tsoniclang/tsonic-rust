@@ -32,6 +32,7 @@ export interface RustPhysicalCallableEmissionRequestInput {
   readonly sourceFiles: readonly SourceFile[];
   readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
+  readonly sourceErrorOperandRequired: (node: Node) => boolean;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly generic: RustGenericCallablePlan;
   readonly frames: RustFrameCallablePlan;
@@ -81,6 +82,8 @@ export function rustEmissionDeclarationBindings(
 export function prepareRustPhysicalCallableEmissionRequests(
   input: RustPhysicalCallableEmissionRequestInput,
 ): TargetStageResult<readonly RustPhysicalCallableEmissionRequest[]> {
+  if (typeof input.sourceErrorOperandRequired !== "function")
+    throw new Error("Physical emission requires the completed logical source-error demand owner.");
   const { ast, records } = input;
   const requests: RustPhysicalCallableEmissionRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
@@ -198,8 +201,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const operation = records.targetOperation.get(node);
     const handler = records.nativeHandler.get(node);
     const flow = records.contextualValueConversion.get(node)?.conversion;
-    if (records.sourceErrorEffects.get(node)?.edges.length || records.awaitSourceErrorEffects.get(node)?.branches.length ||
-      records.genericCallableInvocation.get(node) !== undefined || flow?.kind === "callable-adapter")
+    if (input.sourceErrorOperandRequired(node) || flow?.kind === "callable-adapter")
       runtime(owner, node, "source-errors", node);
     if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter")
       runtime(owner, node, role, sourceOwner);

@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -62,6 +62,11 @@ import { prepareRustProviderSourceOccurrences } from "../operations/provider-sou
 import { prepareRustPhysicalEmissionContexts, publishRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import type { RustNativeTypeInputContext, RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
+import { prepareRustHelperCallableEmissionRequests, type RustHelperCallableEmissionRequest } from "./emission-adapters.js";
+import { rustEmissionIdentityBindings } from "./emission-contexts.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import type { RustTargetGenericArgument } from "../../target-model/types/model.js";
+import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 
 export interface RustCallableValuePlan {
   readonly emissionContexts: RustCallableEmissionContexts;
@@ -135,7 +140,9 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
   initialize(input: RustCallableValuePlanInput): RustCallableValueConstruction;
   preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined): readonly RustSourceCallableSpecializationIssue[];
-  finalizeSelected(): TargetStageResult<readonly RustSourceCallableSpecializationIssue[]>;
+  finalizeSelected(sourceErrorOperandRequired: (node: Node) => boolean): TargetStageResult<readonly RustSourceCallableSpecializationIssue[]>;
+  prepareHelperEmissionRequests(classValues: RustClassValuePlan,
+    dispatch: RustProjectMethodDispatchPlan): TargetStageResult<readonly RustHelperCallableEmissionRequest[]>;
   readonly selected: RustCallableValueSelection;
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
@@ -150,7 +157,10 @@ interface RustCallableValueLifecycle {
   readonly construction: RustCallableValueConstruction;
   preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined): readonly RustSourceCallableSpecializationIssue[];
-  finalizeSelected(): TargetStageResult<{ readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] }>;
+  finalizeSelected(sourceErrorOperandRequired: (node: Node) => boolean): TargetStageResult<{
+    readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] }>;
+  prepareHelperEmissionRequests(classValues: RustClassValuePlan,
+    dispatch: RustProjectMethodDispatchPlan): TargetStageResult<readonly RustHelperCallableEmissionRequest[]>;
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
     families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
@@ -182,16 +192,18 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
       lifecycle = createRustCallableValueLifecycle(input, requireCompletions);
       return lifecycle.construction;
     },
-    finalizeSelected(): TargetStageResult<readonly RustSourceCallableSpecializationIssue[]> {
+    finalizeSelected(sourceErrorOperandRequired: (node: Node) => boolean): TargetStageResult<readonly RustSourceCallableSpecializationIssue[]> {
       const current = requireLifecycle();
       if (finalizedSelection) throw new Error("Rust callable value inventories finalize exactly once.");
-      const finalized = current.finalizeSelected();
+      const finalized = current.finalizeSelected(sourceErrorOperandRequired);
       finalizedSelection = true;
       if (finalized.kind === "rejected") return finalized;
       selected = finalized.value.plan;
       return resolvedTargetStage(finalized.value.issues);
     },
     get selected() { return requireSelected(); },
+    prepareHelperEmissionRequests: (classValues: RustClassValuePlan, dispatch: RustProjectMethodDispatchPlan) =>
+      requireLifecycle().prepareHelperEmissionRequests(classValues, dispatch),
     preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
       effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined) {
       return requireLifecycle().preparePhysicalStorage(components, effectsFor);
@@ -332,6 +344,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let physicalLifecycle: RustPhysicalCallableLifecycle | undefined;
   let emissionRequests: readonly RustPhysicalCallableEmissionRequest[] | undefined;
   let sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[] | undefined;
+  let helperEmissionRequests: readonly RustHelperCallableEmissionRequest[] | undefined;
+  let declaredBindings: ((declaration: Node) => RustTargetGenericBindings | undefined) | undefined;
   let structuralMethodStorage: ReturnType<typeof createRustStructuralMethodStorage> | undefined;
   let selectedPlan: RustCallableValueSelection | undefined;
   let publishedPlan: RustCallableValuePlan | undefined;
@@ -358,7 +372,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);
       return Object.freeze([]);
     },
-    finalizeSelected() {
+    finalizeSelected(sourceErrorOperandRequired: (node: Node) => boolean) {
       if (structuralMethodStorage === undefined) throw new Error("Physical callable families require their completed constructor and field storage selection.");
       const suspended = createRustSuspendedCallablePlan(input.ast, input.nativeNodes, input.records, input.names, input.lifetimes,
         Object.freeze({ forDeclaration: captures.require }));
@@ -372,7 +386,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       }
       sourceOccurrences = occurrences.value;
       const identitySources = prepareRustGenericCallableIdentitySources({ ast: input.ast, nodes: input.nativeNodes, records: input.records });
-      const requests = prepareRustPhysicalCallableEmissionRequests({ ...input, sourceLifetimes: input.lifetimes,
+      const requests = prepareRustPhysicalCallableEmissionRequests({ ...input, sourceLifetimes: input.lifetimes, sourceErrorOperandRequired,
         generic, frames, suspended, native, nativeProducers, adapterFlows: flows, sourceOccurrences, identitySources });
       if (requests.kind === "rejected") {
         sealResult = rejectedTargetStage(requests.diagnostics);
@@ -402,6 +416,50 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       selectedPlan = plan;
       return resolvedTargetStage(Object.freeze({ plan, issues: selectedIssues }));
     },
+    prepareHelperEmissionRequests(classValues: RustClassValuePlan, dispatch: RustProjectMethodDispatchPlan) {
+      if (emissionRequests === undefined || selectedPlan === undefined)
+        throw new Error("Helper emission inputs require completed original callable selection.");
+      if (declaredBindings !== undefined) throw new Error("Helper emission inputs are selected exactly once before error catalogs.");
+      const diagnostics: TargetDiagnostic[] = [];
+      const reject = (node: Node, message: string): void => {
+        diagnostics.push({ code: "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED", category: "error", source: "tsonic-rust",
+          sourceNode: node, message, evidence: ["rust.callable-value.physical-emission-context"] });
+      };
+      const ownerBindings = new Map<Node, RustTargetGenericBindings>();
+      for (const demand of emissionRequests) {
+        const existing = ownerBindings.get(demand.owner);
+        if (existing !== undefined && existing !== demand.bindings)
+          reject(demand.subject, "One original emitted source owner requires one canonical immutable binding input.");
+        else ownerBindings.set(demand.owner, demand.bindings);
+      }
+      for (const definition of generic.physical.definitions()) for (const implementation of definition.implementations) {
+        if (implementation.creation !== "activation") continue;
+        const environment = generic.physical.environmentFor(implementation);
+        if (environment === undefined)
+          reject(implementation.declaration, "An emitted generic callable has no completed canonical physical environment.");
+        else ownerBindings.set(implementation.declaration, environment.substitutions);
+      }
+      declaredBindings = (declaration: Node): RustTargetGenericBindings | undefined => {
+        const existing = ownerBindings.get(declaration);
+        if (existing !== undefined) return existing;
+        const contract = input.lifetimes.contractFor(declaration);
+        if (contract === undefined && input.records.sourceCallableReturn.get(declaration) !== undefined &&
+          input.ast.typeParameters(declaration).length !== 0) return undefined;
+        const arguments_: RustTargetGenericArgument[] = (contract?.parameters ?? []).map(parameter => parameter.kind === "lifetime"
+          ? { kind: "lifetime", lifetime: parameter.lifetime }
+          : { kind: "type", type: { kind: "type-parameter", identity: parameter.identity, name: parameter.targetName } });
+        const bindings = rustEmissionIdentityBindings(arguments_);
+        if (bindings !== undefined) ownerBindings.set(declaration, bindings);
+        return bindings;
+      };
+      if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
+      const helpers = prepareRustHelperCallableEmissionRequests({ ast: input.ast, records: input.records,
+        nativeNodes: input.nativeNodes, isNativeNode: input.isNativeNode, projectTypes: input.projectTypes,
+        classValues, projectMethodDispatch: dispatch }, declaredBindings);
+      if (helpers.kind === "rejected") return helpers;
+      helperEmissionRequests = helpers.value;
+      return helpers;
+    },
     finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">) {
       if (structuralMethodStorage === undefined) throw new Error("Structural physical storage requires selected callable families.");
       structuralMethodStorage.validateErrors(errors);
@@ -416,7 +474,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;
       const completedSelection = selectedPlan;
-      if (physicalLifecycle === undefined || completedSelection === undefined || emissionRequests === undefined || sourceOccurrences === undefined)
+      if (physicalLifecycle === undefined || completedSelection === undefined || emissionRequests === undefined || sourceOccurrences === undefined ||
+        helperEmissionRequests === undefined || declaredBindings === undefined)
         throw new Error("Physical callable publication requires completed source-selected families and effects.");
       const publication = physicalLifecycle.complete(physical);
       if (publication.kind === "rejected") {
@@ -424,11 +483,13 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         return sealResult;
       }
       const emission = prepareRustPhysicalEmissionContexts({ ...late, ast: input.ast, sourceFiles: input.sourceFiles,
+        helperEmissionRequests, declaredBindings,
         isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
         sourceStorage: input.sourceStorage, genericBindingsFor: nativeStorage.genericBindingsFor,
         projectTypes: input.projectTypes,
         generic, frames: completedSelection.frames, suspended: completedSelection.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
+        prepareCallableAdapter: nativeStorage.prepareCallableAdapter,
         genericCompletions: completions(), sourceOccurrences, emissionRequests });
       if (emission.kind === "rejected") {
         sealResult = rejectedTargetStage(emission.diagnostics);

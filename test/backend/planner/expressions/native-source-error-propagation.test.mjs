@@ -42,6 +42,7 @@ function fixture(joined = false) {
   });
   context.input.program.records = records;
   const regions = analyzeRustErrorRegions({ ast, sourceFiles: [context.sourceFile], isNativeNode: () => true,
+    helperEmissionRequests: [],
     records, definitions: context.input.program.typeDefinitions, producers: { producers: [] },
     names: { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined,
       callableValueNameForDeclaration: () => undefined },

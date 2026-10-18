@@ -27,6 +27,27 @@ const absentOwner = Object.freeze({ kind: "physical", domain: "project", compone
 const warning = Object.freeze({ code: "ANALYSIS_WARNING", category: "warning", message: "A prior analysis warning is retained." });
 const programs = new Map();
 
+for (const [name, files] of [
+  ["interface-only", { "index.ts": "export interface Box { value: number; }" }],
+  ["alias-only", { "index.ts": "export type Amount = number;" }],
+  ["function-only", { "index.ts": "export function value(): number { return 7; }" }],
+  ["imported type-only", { "box.ts": "export interface Box { value: number; }",
+    "index.ts": "import type { Box } from './box.js'; export type Item = Box;" }],
+]) {
+  test(`declaration module ${name} emits without a runtime initializer context`, () => {
+    const { program } = analyzeRust({ surfaces: [], files });
+    for (const sourceFile of program.sourceFiles.filter(file => program.source.ast.getFileName(file).startsWith("/src/"))) {
+      assert.equal(program.moduleInitialization.requirementFor(sourceFile).kind, "not-required",
+        `${name}: the original analysis owner selects no initializer`);
+      assert.equal(program.physicalEmissionContexts.contextForOwner(sourceFile, "module-initializer") === undefined, true,
+        `${name}: no fabricated empty initializer context`);
+    }
+    const planned = planRustOutput(createRustPlanningContext(program));
+    assert.equal(planned.kind, "resolved", `${name}: sealed declarations reach native planning`);
+    assert.equal(planned.diagnostics.length, 0, `${name}: no initializer invariant failure`);
+  });
+}
+
 function replaceModuleRegion(program, sourceFile, change) {
   const original = program.physicalEmissionContexts.contextForOwner(sourceFile, "module-initializer");
   assert.equal(original?.error.kind, "region", "the invariant starts from the identical real module context");
@@ -52,7 +73,7 @@ function initializerProgram(surfaces) {
 for (const surfaces of [[], ["js"]]) {
   for (const [name, replace, message] of [
     ["missing source error region", (program, sourceFile) => replaceModuleRegion(program, sourceFile,
-      () => Object.freeze({ kind: "none" })), "Module initializer has no exact finalized error region."],
+      () => Object.freeze({ kind: "none" })), "Module initializer requires its original sealed physical context and error region."],
     ["unrenderable source error region", (program, sourceFile) => replaceModuleRegion(program, sourceFile,
       error => Object.freeze({ ...error, region: Object.freeze({ ...error.region, localOwner: absentOwner }) })),
     "Module initializer has no exact finalized error region."],

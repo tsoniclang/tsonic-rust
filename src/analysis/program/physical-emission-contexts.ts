@@ -45,6 +45,7 @@ export function prepareRustPhysicalEmissionContexts(
       source: { kind: "module", module, initializers },
       bindings, returnDestination: Object.freeze({ kind: "none" }),
       error: Object.freeze({ kind: "region", owner: sourceFile, region: module.region }), sourceCarriers: [],
+      callableAdapterInputs: [],
       physicalCarriers: module.region.sources.map(source => source.errorType),
       demands: input.emissionRequests.filter(demand => demand.owner === sourceFile) });
   }
@@ -54,6 +55,7 @@ export function prepareRustPhysicalEmissionContexts(
       nativeOwnerFileName: input.ast.getFileName(worker.sourceFile),
       source: { kind: "worker", initializer: worker.initializer },
       declaration: worker.sourceFile, bindings, returnDestination: Object.freeze({ kind: "none" }), demands: [],
+      callableAdapterInputs: [],
       error: Object.freeze({ kind: "initializer", owner: worker.sourceFile, initializer: worker.initializer }), sourceCarriers: [],
       physicalCarriers: worker.initializer.modules.flatMap(module => module.region.sources.map(source => source.errorType)) });
   }
@@ -69,6 +71,12 @@ export function publishRustPhysicalEmissionContexts(
   for (const prepared of preparation.contexts.contexts) {
     const argumentsByAbi = new Map<RustFinalizedOperationAbi, readonly RustPhysicalTargetGenericArgument[]>();
     const input = nativeTypeInputFor(prepared.nativeOwnerFileName);
+    const callableAdapters: RustPhysicalEmissionContext["callableAdapters"][number][] = [];
+    for (const adapter of prepared.callableAdapters) {
+      const conversion = publishRustCallablePhysicalConversion(adapter.conversion, adapter.node, input);
+      if (conversion.kind === "rejected") diagnostics.push(...conversion.diagnostics);
+      else callableAdapters.push(Object.freeze({ ...adapter, conversion: conversion.value }));
+    }
     let error: RustEmissionErrorContext;
     if (prepared.error.kind === "region") {
       const region = publishRustErrorRegion(prepared.error.region, prepared.error.owner, input);
@@ -102,7 +110,8 @@ export function publishRustPhysicalEmissionContexts(
       argumentsByAbi.set(abi, Object.freeze(arguments_));
     }
     const { nativeOwnerFileName: _nativeOwnerFileName, nativeOperations: _nativeOperations, ...context } = prepared;
-    contexts.set(prepared.use, Object.freeze({ ...context, error, targetGenericArguments: Object.freeze(argumentsByAbi) }));
+    contexts.set(prepared.use, Object.freeze({ ...context, error, callableAdapters: Object.freeze(callableAdapters),
+      targetGenericArguments: Object.freeze(argumentsByAbi) }));
   }
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   const operands = new Map<TargetUseSiteRef, RustPhysicalEmissionOperand>();
@@ -129,14 +138,8 @@ export function publishRustPhysicalEmissionContexts(
       if (invocation.kind === "resolved" && awaiting.kind === "resolved") genericInvocation = Object.freeze({
         ...prepared.genericInvocation, invocation: invocation.value, awaiting: awaiting.value });
     }
-    const callableAdapters: RustPhysicalEmissionOperand["callableAdapters"][number][] = [];
-    for (const adapter of prepared.callableAdapters) {
-      const conversion = publishRustCallablePhysicalConversion(adapter.conversion, prepared.node, input);
-      if (conversion.kind === "rejected") diagnostics.push(...conversion.diagnostics);
-      else callableAdapters.push(Object.freeze({ ...adapter, conversion: conversion.value }));
-    }
     operands.set(prepared.use, Object.freeze({ ...prepared, context, sourceErrorRegions: Object.freeze(sourceErrorRegions),
-      genericInvocation, callableAdapters: Object.freeze(callableAdapters) }));
+      genericInvocation }));
   }
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   return resolvedTargetStage(Object.freeze({ ...preparation.contexts,

@@ -22,6 +22,8 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
+  requireRustEmissionContext,
+  rustContextForEmission,
 } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
@@ -269,8 +271,10 @@ export function planContractImplementation(
           !rustTypeEquals(rustErrorType(methodErrorBoundary), method.errorType))) {
         return undefined;
       }
+      const selectedContext = method.adapter === undefined ? context : rustContextForEmission(context,
+        requireRustEmissionContext(context, method.adapter.selection, "helper", method.contractMethod));
       const adapterContext: RustPlanContext = {
-        ...context,
+        ...selectedContext,
         fallibleBoundary: methodErrorBoundary === undefined ? undefined : rustPackageFallibleBoundary(methodErrorBoundary),
       };
       const implementationBinding: RustExpr = {

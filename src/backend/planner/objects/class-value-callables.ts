@@ -3,7 +3,8 @@ import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 
 import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
+import { requireRustEmissionContext, rustContextForEmission, rustCurrentErrorBoundary,
+  rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { applyRustCallableValueAdapter } from "../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../declarations/callables/parameter-adapters.js";
@@ -14,6 +15,8 @@ import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 export function planRustClassValueForwarder(
   callable: RustClassValueCallable, name: string, context: RustPlanContext, construction = false,
 ): RustImplFunction | undefined {
+  const emission = requireRustEmissionContext(context, callable, "helper", callable.declaration);
+  context = rustContextForEmission(context, emission);
   const boundary = rustCurrentErrorBoundary(context);
   const owner = rustTypeFromCarrierInContext(callable.ownerCarrier, context);
   const returnType = rustTypeFromCarrierInContext(callable.resultAdapter.targetCarrier, context);

@@ -285,10 +285,14 @@ export function analyzeRustTargetProgram(
   if (readRequirements.kind === "rejected") return rejectedTargetStage(readRequirements.diagnostics);
   const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
+  const projectMethodDispatch = context.projectMethodDispatch.seal();
+  const helperEmissionRequests = context.callableValues.prepareHelperEmissionRequests(classValues, projectMethodDispatch);
+  if (helperEmissionRequests.kind === "rejected") return helperEmissionRequests;
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
     promiseBodies: context.promiseBodies.plan,
-    names: context.names, callables: context.callableValues.selected });
+    names: context.names, callables: context.callableValues.selected,
+    helperEmissionRequests: helperEmissionRequests.value });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const preparedNativeDeclarations = prepareRustNativeDeclarationForms({ ast: context.ast, semanticsFor: context.semanticsFor,
@@ -423,7 +427,6 @@ export function analyzeRustTargetProgram(
     };
   };
   const sourceCallableSpecializations = context.sourceCallableSpecializations.seal();
-  const projectMethodDispatch = context.projectMethodDispatch.seal();
   const callableValues = context.callableValues.seal({
     nativeTypeInputFor: (fileName, callables) => rustNativeTypeSelectionInput(nativeContextFor(fileName, undefined, callables)),
     sourceCallableSpecializations, projectMethodDispatch, lexicalFunctions,

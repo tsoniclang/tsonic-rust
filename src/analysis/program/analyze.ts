@@ -634,7 +634,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     callableValues.nativeStorage, callableValues.native);
   const effectDiagnosticEnd = context.diagnostics.length;
   try {
-    const callableSelection = context.callableValues.finalizeSelected();
+    const callableSelection = context.callableValues.finalizeSelected(fallibility.sourceErrorOperandRequired);
     if (callableSelection.kind === "rejected") {
       context.diagnostics.push(...callableSelection.diagnostics);
       return undefined;

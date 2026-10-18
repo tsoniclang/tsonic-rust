@@ -117,8 +117,11 @@ export function rustCallableConversionPhysical(
   conversion: RustCallableConversion,
   source: RustCallablePhysicalSignature,
   fileName: string,
-  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  definitions: RustTypeDefinitions,
+  sourceSignatureFor: (carrier: TargetTypeRef) => RustCallablePhysicalSignature | undefined,
 ): RustCallablePhysicalConversionPreparation | undefined {
+  if (definitions === undefined || typeof sourceSignatureFor !== "function")
+    throw new Error("Callable physical conversion requires its explicit type definitions and selected source signature decoder.");
   let remaining = 4096;
   const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number): RustCallablePhysicalConversionPreparation | undefined => {
     if (remaining-- <= 0 || depth > 128 || logical === null || typeof logical !== "object" ||
@@ -158,7 +161,7 @@ export function rustCallableConversionPhysical(
       result = target.result;
       resultPlan = { kind: logical.result.kind };
     } else if (logical.result.kind === "value" && logical.result.conversion.kind === "callable-adapter") {
-      const nestedSignature = rustCallablePhysicalSignature(actual.result);
+      const nestedSignature = sourceSignatureFor(actual.result);
       const nested = nestedSignature === undefined ? undefined : select(logical.result.conversion, nestedSignature, depth + 1);
       if (nested === undefined) return undefined;
       result = nested.carrier;

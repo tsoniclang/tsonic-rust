@@ -218,8 +218,8 @@ test("callable value plans seal only after adapter classification and cannot be 
           preparationIssues = current.preparePhysicalStorage(input, effects);
           return preparationIssues;
         } },
-        finalizeSelected: { value() {
-          selectionIssues = current.finalizeSelected();
+        finalizeSelected: { value(sourceErrorOperandRequired) {
+          selectionIssues = current.finalizeSelected(sourceErrorOperandRequired);
           return selectionIssues;
         } },
         initializeCompletions: { value(input) {

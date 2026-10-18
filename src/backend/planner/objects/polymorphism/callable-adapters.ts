@@ -11,7 +11,8 @@ import { planRustCallableArguments } from "../../declarations/callables/paramete
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput, rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
+import { diagnosticInput, requireRustEmissionContext, rustContextForEmission,
+  rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import { rustParameterTypeFromCarrierInContext, rustReturnTypeFromCarrierInContext } from "../../types/render.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { readRustProjectMethodOverride } from "../project-objects.js";
@@ -35,22 +36,24 @@ export function planRootCallableForwarder(
     : (context.input.program.records.projectCallableAdapters.get(concrete.declaration) ?? [])
       .filter(adapter => adapter.contract === contract && adapter.implementation === implementation && adapter.slot === slot);
   const adapter = matches.length === 1 ? matches[0] : undefined;
-  if (representation === undefined || adapter === undefined ||
-    !matchesAbi(adapter.parameters, adapter.returnCarrier, shape.params, shape.returnType, shape.errorType, context) ||
+  if (representation === undefined || adapter === undefined) return reject();
+  const emission = requireRustEmissionContext(context, adapter, "helper", contract);
+  const selectedContext = rustContextForEmission(context, emission);
+  if (!matchesAbi(adapter.parameters, adapter.returnCarrier, shape.params, shape.returnType, shape.errorType, selectedContext) ||
     !matchesAbi(adapter.implementationParameters, adapter.implementationReturnCarrier,
-      helper.params, helper.returnType, helper.errorType, context) ||
+      helper.params, helper.returnType, helper.errorType, selectedContext) ||
     !matchesAbi(adapter.parameterAdapters.map(parameter => parameter.target), adapter.implementationReturnCarrier,
-      helper.params, helper.returnType, helper.errorType, context) ||
+      helper.params, helper.returnType, helper.errorType, selectedContext) ||
     helper.errorType !== undefined && !rustTypeEquals(helper.errorType, shape.errorType) ||
     (helper.isUnsafe === true) !== shape.isUnsafe) {
     return reject();
   }
-  const boundary = shape.errorType === undefined ? undefined : rustErrorBoundaryForProjectMember(contract, context);
+  const boundary = shape.errorType === undefined ? undefined : rustErrorBoundaryForProjectMember(contract, selectedContext);
   if (shape.errorType !== undefined && (boundary === undefined || !rustTypeEquals(rustErrorType(boundary), shape.errorType))) {
     return reject();
   }
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, contract, shape.params.map(parameter => parameter.name));
-  const selectedContext = { ...context, syntheticNames,
+  const localContext = { ...selectedContext, syntheticNames,
     fallibleBoundary: boundary === undefined ? undefined : rustPackageFallibleBoundary(boundary) };
   const parameters = shape.params.map(parameter => ({
     ...parameter,
@@ -61,7 +64,7 @@ export function planRootCallableForwarder(
     parameters,
     parameterAbis: adapter.parameters,
     parameterAdapters: adapter.parameterAdapters,
-  }, selectedContext);
+  }, localContext);
   if (arguments_ === undefined) return reject();
   const result = adaptResult({
     kind: "associated-call", owner: rootType, method: helper.name,
@@ -94,7 +97,7 @@ export function planRootCallableForwarder(
     const value: RustExpr = invocationErrorType === undefined ? call : {
       kind: "try", expr: call, operandErrorType: invocationErrorType, resultErrorType: shape.errorType!,
     };
-    const converted = applyRustCallableValueAdapter(value, adapter!.resultAdapter, contract, selectedContext);
+    const converted = applyRustCallableValueAdapter(value, adapter!.resultAdapter, contract, localContext);
     return converted === undefined || shape.errorType === undefined ? converted
       : applyRustFallibleResultExpression(converted, { errorType: shape.errorType });
   }

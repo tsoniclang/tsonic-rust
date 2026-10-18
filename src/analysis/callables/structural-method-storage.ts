@@ -376,7 +376,7 @@ export function createRustStructuralMethodStorage(input: {
           const logical = records.receiverIndependentMethod.get(subject.node)?.carrier ?? operation.resultCarrier;
           const physical = input.nativeProducers.physicalFor(subject.node, logical);
           const source = physical === undefined ? undefined : rustNativeCallablePhysicalSource(logical,
-            { kind: "identity", carrier: physical }, input.typeDefinitions);
+            { kind: "identity", carrier: physical }, input.typeDefinitions, carrier => carrier);
           if (source === undefined || protocol.lifetime === undefined)
             throw new Error("Structural method storage requires its existing physical callable signature and destination lifetime.");
           const templateCarrier = normalize(source.carrier);

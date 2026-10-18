@@ -7,6 +7,8 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { RustLifetimeBinder, RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import { rustRuntimeErrorTargetType } from "../../../target-model/operations/error-boundary.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import type { RustErrorRegionRecords, RustSourcePackageErrorBoundary } from "../../../target-model/records/error-regions.js";
@@ -63,6 +65,30 @@ export interface RustNativeTypeSelectionInput {
 export type RustNativeTypeSelectionResult =
   | { readonly kind: "resolved"; readonly carrier: TargetTypeRef }
   | { readonly kind: "rejected"; readonly subject: TargetTypeRef; readonly reason: string };
+
+export function rustNativeCallableAbi(carrier: TargetTypeRef):
+  | { readonly kind: "stored"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
+      readonly error: TargetTypeRef; readonly lifetime: RustLifetimeRef; readonly runtimeResult: boolean }
+  | { readonly kind: "input"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
+      readonly error: TargetTypeRef; readonly binder: RustLifetimeBinder }
+  | undefined {
+  const type = carrier.kind === "reference" && !carrier.mutable && carrier.referent.kind === "target-named" &&
+    carrier.referent.id === rustCallableInputTargetId ? carrier.referent : carrier;
+  if (type.kind !== "target-named" || type.id !== rustCallableTargetId && type.id !== rustCallableInputTargetId) return undefined;
+  const lifetime = type.id === rustCallableTargetId ? type.genericArguments?.[0] : undefined;
+  if (type.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(lifetime === undefined ? type.genericArguments : type.genericArguments?.slice(1));
+  const [parameters, result, error] = arguments_ ?? [];
+  if (arguments_?.length !== (lifetime === undefined ? 2 : 3) || parameters?.kind !== "tuple" || result === undefined) return undefined;
+  if (type.id === rustCallableInputTargetId) {
+    const signature = bindRustCallableInputLifetimes(parameters.elements, result);
+    return signature === undefined ? undefined : Object.freeze({ kind: "input", ...signature, error: rustRuntimeErrorTargetType() });
+  }
+  if (lifetime?.kind !== "lifetime" || error === undefined) return undefined;
+  const runtimeResult = rustProgramErrorOwner(error)?.kind === "logical";
+  return Object.freeze({ kind: "stored", parameters: parameters.elements, result, lifetime: lifetime.lifetime,
+    error: runtimeResult ? rustRuntimeErrorTargetType() : error, runtimeResult });
+}
 
 export function selectRustNativeCallTypeCarrier(
   carrier: TargetTypeRef,
@@ -345,22 +371,12 @@ export function selectRustNativeTypeCarrier(
   };
   const callableFor = (type: Extract<TargetTypeRef, { readonly kind: "target-named" }>,
     nativePosition: RustNativeTypePosition): TargetTypeRef | undefined => {
-    const lifetime = type.id === rustCallableTargetId ? type.genericArguments?.[0] : undefined;
-    if (type.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return reject(type,
-      "Stored native callable requires its exact storage lifetime.");
-    const types = rustOnlyTypeGenericArguments(lifetime === undefined ? type.genericArguments : type.genericArguments?.slice(1));
-    const [parameters, result, error] = types ?? [];
-    if (types?.length !== (lifetime === undefined ? 2 : 3) || parameters?.kind !== "tuple" || result === undefined) {
-      return reject(type, "Native callable requires its exact argument, result and error carriers.");
-    }
-    const signature = type.id === rustCallableInputTargetId ? bindRustCallableInputLifetimes(parameters.elements, result) : undefined;
-    if (type.id === rustCallableInputTargetId && signature === undefined) return reject(type,
-      "Native callable input has no exact higher-ranked lifetime correspondence.");
-    const selectedParameters = select(signature === undefined ? parameters : { kind: "tuple", elements: signature.parameters }, "general");
-    const selectedResult = select(signature?.result ?? result, "general");
+    const signature = rustNativeCallableAbi(type);
+    if (signature === undefined) return reject(type, "Native callable requires its exact argument, result, error and lifetime contract.");
+    const selectedParameters = select({ kind: "tuple", elements: signature.parameters }, "general");
+    const selectedResult = select(signature.result, "general");
     if (selectedParameters === undefined || selectedResult === undefined) return undefined;
-    const packageResult = rustProgramErrorOwner(error)?.kind === "logical";
-    if (signature !== undefined) {
+    if (signature.kind === "input") {
       return { kind: "impl-trait", id: type.id, bounds: [{ kind: "trait-ref", id: rustCallableInputTargetId,
         path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: selectedParameters }],
         associatedConstraints: [{ kind: "equality", identity: `${rustCallableInputTargetId}.Output`, name: "Output",
@@ -368,13 +384,13 @@ export function selectRustNativeTypeCarrier(
             [{ kind: "type", type: selectedResult }], [], undefined, [], undefined, []) }], lifetimeBinder: signature.binder }], outlives: [],
         ...(nativePosition === "parameter" ? {} : { captures: [] }) };
     }
-    const selectedError = error === undefined || packageResult ? undefined : select(error, "general");
-    if (lifetime?.kind !== "lifetime" || !packageResult && selectedError === undefined) return reject(type,
+    const selectedError = signature.runtimeResult ? undefined : select(signature.error, "general");
+    if (!signature.runtimeResult && selectedError === undefined) return reject(type,
       "Stored native callable has no exact selected error representation.");
-    const resultType = packageResult ? rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult",
+    const resultType = signature.runtimeResult ? rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult",
       [{ kind: "type", type: selectedResult }], [], undefined, [], undefined, []) : rustNamedTargetType("rust.core.Result", "Result",
       [{ kind: "type", type: selectedResult }, { kind: "type", type: selectedError! }], [], undefined, [], undefined, []);
-    return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [lifetime,
+    return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [{ kind: "lifetime", lifetime: signature.lifetime },
       { kind: "type", type: selectedParameters }, { kind: "type", type: resultType }], [], undefined, [], undefined, []);
   };
   const selected = select(carrier, position);

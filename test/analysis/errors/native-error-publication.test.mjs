@@ -6,12 +6,53 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 const input = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: undefined,
   pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
   producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
 const node = Object.freeze({ fixture: "original-source-error" });
 const integer = Object.freeze({ kind: "source-primitive", name: "int32" });
+
+test("the single physical request selection consumes completed logical demands before native payload publication", () => {
+  let requested;
+  let requestSelections = 0;
+  let earlySourceRows = 0;
+  const context = analyzeRustErrorEffects(`
+export function invoke(action: () => number): number { return action(); }
+export function run(): number { return invoke(() => 3); }
+`, { surfaces: [] }, current => {
+    const original = current.callableValues;
+    return { ...current, callableValues: Object.create(original, {
+      finalizeSelected: { value(sourceErrorOperandRequired) {
+        requestSelections += 1;
+        assert.equal(typeof sourceErrorOperandRequired, "function", "the logical demand owner is a required construction input");
+        requested = new Map(current.nativeNodes.map(node => {
+          const needed = sourceErrorOperandRequired(node);
+          if (needed) {
+            earlySourceRows += 1;
+            assert.equal(current.records.sourceErrorEffects.get(node) === undefined, true,
+              "native source payloads have not been fabricated before physical selection");
+            assert.equal(current.records.awaitSourceErrorEffects.get(node) === undefined, true,
+              "native await payloads have not been fabricated before physical selection");
+            assert.equal(current.records.genericCallableInvocation.get(node) === undefined, true,
+              "native generic payloads have not been fabricated before physical selection");
+          }
+          return [node, needed];
+        }));
+        return original.finalizeSelected(sourceErrorOperandRequired);
+      } },
+    }) };
+  });
+  assert.equal(requestSelections, 1, "the selecting lifecycle is not repeated after native error completion");
+  assert.equal(earlySourceRows > 0, true, "ordinary invocation edges already require exact source operands");
+  for (const node of context.nativeNodes) {
+    const finalRequired = (context.records.sourceErrorEffects.get(node)?.edges.length ?? 0) !== 0 ||
+      (context.records.awaitSourceErrorEffects.get(node)?.branches.length ?? 0) !== 0 ||
+      context.records.genericCallableInvocation.get(node) !== undefined;
+    assert.equal(requested.get(node), finalRequired, "physical payload completion never changes original logical demand membership");
+  }
+});
 
 test("late native error publication preserves the complete source row without mutating its preparation", () => {
   const sources = Object.freeze([Object.freeze({ identity: "actual:first", variant: "Error0", errorType: integer }),
@@ -75,4 +116,35 @@ export function run(): number { return invoke(() => 3); }
     }
   }
   assert.equal(sourceEdges > 0, true, "the real source invocation exercises actual channel publication");
+});
+
+test("synthesized callable adapters retain original helper slots and the selected native join owner", () => {
+  const { program } = analyzeRust({ surfaces: [], files: {
+    "contract.ts": `export interface Wide { get(): () => number | undefined; }`,
+    "model.ts": `import type { Wide } from "./contract.js";
+export class Concrete implements Wide { get(): () => number { return () => 7; } }`,
+    "index.ts": `import type { Wide } from "./contract.js";
+import { Concrete } from "./model.js";
+export function run(): number | undefined { const selected: Wide = new Concrete(); return selected.get()(); }`,
+  } });
+  const definition = program.projectTypes.definitions.find(candidate => candidate.targetName === "Concrete");
+  assert.equal(definition !== undefined, true, "the actual concrete type is selected");
+  const adapters = program.records.projectCallableAdapters.get(definition.declaration);
+  const selected = adapters.find(adapter => adapter.resultAdapter.kind === "conversion" &&
+    adapter.resultAdapter.conversion.kind === "callable-adapter");
+  assert.equal(selected !== undefined, true, "the original method contract selects a result adaptation");
+  const context = program.physicalEmissionContexts.contextForOwner(selected, "helper");
+  assert.equal(context !== undefined, true, "the generated helper has its own complete physical environment");
+  const conversion = selected.resultAdapter.conversion;
+  const row = context.callableAdapters.find(candidate => candidate.node === selected.contract && candidate.selection === conversion);
+  assert.equal(row !== undefined, true, "the helper consumes the exact original logical selection identity");
+  assert.equal(row.origin.kind === "return" && row.origin.declaration === selected.implementation, true,
+    "a result slot is not fabricated as a runtime AST operand");
+  assert.equal(row.joinOwnerFileName, definition.fileName, "join ownership is selected with the actual concrete helper");
+  const contractFile = program.source.ast.getFileName(program.source.ast.getSourceFile(selected.contract));
+  assert.notEqual(row.joinOwnerFileName, contractFile, "a foreign contract node cannot replace the native helper's catalog");
+  assert.equal(Object.isFrozen(context.callableAdapters) && Object.isFrozen(row), true, "the complete helper descriptors seal once");
+  assert.equal(Object.hasOwn(row.conversion, "nativeErrorType"), true, "the nested physical descriptor publishes its admitted native error");
+  assert.equal(program.physicalEmissionContexts.contextForOwner({ ...selected }, "helper") === undefined, true,
+    "equal-shaped helper records cannot impersonate an admitted original owner");
 });
