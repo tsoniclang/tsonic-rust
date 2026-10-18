@@ -206,6 +206,31 @@ export function rustFrameBindingContext(
   return { ...context, frameOwners, bindingLocations, valueFieldLocations };
 }
 
+export function createRustNativeFrameOwner(
+  definition: RustFrameCallableDefinition, values: ReadonlyMap<Node, RustExpr>,
+  counter: { readonly name: string; readonly value: RustExpr } | undefined, context: RustPlanContext,
+): RustExpr | undefined {
+  const selected = requireRustNativeFrameStorage(definition, context.emissionContext);
+  const frameType = rustTypeFromSelectedNativeCarrierInContext(selected.carrier, context);
+  if (definition.storage.kind !== "standalone" || frameType.kind !== "named" || selected.constructor === null ||
+    definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
+  const declaration = definition.activation.kind === "class"
+    ? context.input.program.nativeDeclarations.get(definition.activation.ownerDeclaration) : undefined;
+  if (definition.activation.kind === "class" && declaration?.kind !== "class") return undefined;
+  const counterName = definition.activation.kind === "class" && declaration?.kind === "class"
+    ? declaration.frameCounterName : definition.counterName;
+  if (counterName !== counter?.name) return undefined;
+  return { kind: "call", path: selected.constructor, args: [{
+    kind: "struct-literal", path: frameType.path, fields: [
+      ...(counter === undefined ? [] : [counter]),
+      ...definition.bindings.map(binding => ({ name: binding.fieldName, value: values.get(binding.declaration)! })),
+      ...(definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: {
+        kind: "path" as const, path: "core::marker::PhantomData",
+      } }]),
+    ],
+  }] };
+}
+
 export function prepareRustFrameScope(
   scope: Node, context: RustPlanContext,
 ): { readonly context: RustPlanContext; readonly statements: readonly RustStmt[] } | undefined {
@@ -215,15 +240,12 @@ export function prepareRustFrameScope(
   if (definitions.length === 0) return { context, statements: [] };
   if (definitions.length !== 1 || context.syntheticNames === undefined) return undefined;
   const definition = definitions[0]!;
-  const nativeFrame = requireRustNativeFrameStorage(definition, context.emissionContext);
-  const frameType = rustTypeFromSelectedNativeCarrierInContext(nativeFrame.carrier, context);
-  if (frameType.kind !== "named" || nativeFrame.constructor === null) return failRustPlannerInvariant(
-    "A standalone frame requires its completed native layout and selected owner constructor.", scope);
   const name = allocateRustSyntheticName(context.syntheticNames, "callable_frame");
   const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: name },
     borrowed: false, data: { kind: "direct" } };
   const selected = rustFrameBindingContext(definition, owner, context);
-  const fields = definition.bindings.map(binding => {
+  const values = new Map<Node, RustExpr>();
+  for (const binding of definition.bindings) {
     const parameter = binding.initialization === "ready" ? context.input.program.names.nameForDeclaration(binding.declaration) : undefined;
     const native = requireRustNativeBindingStorage(binding.declaration, context);
     const initial: RustExpr | undefined = parameter === undefined ? undefined : { kind: "path", path: parameter };
@@ -231,16 +253,14 @@ export function prepareRustFrameScope(
       ? native.deferredConstructor === null ? undefined : { kind: "call" as const, path: native.deferredConstructor, args: [] }
       : initial === undefined ? undefined : native.kind === "value" || native.kind === "location" ? initial
         : createRustNativeBindingPayload(native, initial, context);
-    return value === undefined ? undefined : { name: binding.fieldName, value };
-  });
-  if (fields.some(field => field === undefined)) return undefined;
-  const statements: RustStmt[] = [{ kind: "let", name, mutable: false, init: { kind: "call", path: nativeFrame.constructor, args: [{
-    kind: "struct-literal", path: frameType.path, fields: [
-      { name: definition.counterName, value: { kind: "call", path: "rt::FrameEntryCounter::new", args: [] } },
-      ...fields as { readonly name: string; readonly value: RustExpr }[],
-      ...(definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }]),
-    ],
-  }] } }];
+    if (value === undefined) return undefined;
+    values.set(binding.declaration, value);
+  }
+  const value = createRustNativeFrameOwner(definition, values, { name: definition.counterName,
+    value: { kind: "call", path: "rt::FrameEntryCounter::new", args: [] } }, context);
+  if (value === undefined) return failRustPlannerInvariant(
+    "A standalone frame requires its completed native layout and selected owner constructor.", scope);
+  const statements: RustStmt[] = [{ kind: "let", name, mutable: false, init: value }];
   context.usedAliases?.add("rt");
   return { context: selected, statements };
 }

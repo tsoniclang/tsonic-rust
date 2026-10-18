@@ -5,8 +5,53 @@ import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/pr
 import { rustRawLocationRoot, planRustSourceLocationStorage } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { planRustProjectedObjectLocation } from "../../../../dist/backend/planner/expressions/object-field-locations.js";
 import { writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
+import { createRustNativeFrameOwner } from "../../../../dist/backend/planner/bindings/frame-storage.js";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { recursiveCallbackProtocolCases } from "../../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+
+for (const name of ["addressed-lexical-frame", "captured-class-field"]) {
+  test(`${name} constructs its one actual native frame owner with exact original slots`, () => {
+    const source = recursiveCallbackProtocolCases.find(current => current.name === name).source;
+    const { program } = analyzeRust({ files: { "index.ts": source } });
+    assert.equal(program !== undefined, true, "the original checked frame program is admitted");
+    assert.equal(program.callableValues.frames.definitions.length, 1, "one actual recursive activation");
+    const definition = program.callableValues.frames.definitions[0];
+    assert.equal(definition.storage.kind, "standalone", "the real selected activation owns a separate frame");
+    const emissionContext = program.physicalEmissionContexts.contexts.find(context => context.nativeBindings.some(row =>
+      row.owner.kind === "frame" && row.owner.declaration === definition.activation.ownerDeclaration));
+    assert.equal(emissionContext !== undefined, true, "the original native holder is completed before rendering");
+    const native = emissionContext.nativeBindings.find(row =>
+      row.owner.kind === "frame" && row.owner.declaration === definition.activation.ownerDeclaration);
+    const values = new Map(definition.bindings.map((binding, index) =>
+      [binding.declaration, { kind: "path", path: `native_slot_${index}` }]));
+    const form = definition.activation.kind === "class"
+      ? program.nativeDeclarations.get(definition.activation.ownerDeclaration) : undefined;
+    const counterName = definition.activation.kind === "class" ? form.frameCounterName : definition.counterName;
+    const counter = counterName === undefined ? undefined : { name: counterName,
+      value: { kind: "call", path: "rt::FrameEntryCounter::new", args: [] } };
+    const context = { input: { program }, emissionContext, usedAliases: new Set() };
+    const selected = createRustNativeFrameOwner(definition, values, counter, context);
+    assert.equal(selected?.kind, "call", "the exact native holder constructor is emitted once");
+    assert.equal(selected.path, native.storage.ownerConstructor, "the canonical native policy owns the constructor");
+    assert.equal(selected.args.length, 1, "the actual frame is its sole owner-constructor argument");
+    const fields = selected.args[0].fields;
+    assert.equal(fields.length, definition.bindings.length + (counter === undefined ? 0 : 1) +
+      (definition.environmentParameters.length === 0 ? 0 : 1), "no invented fields or erased environment marker");
+    for (const binding of definition.bindings) {
+      const field = fields.find(field => field.name === binding.fieldName);
+      assert.equal(field?.value === values.get(binding.declaration), true, "the original slot expression is neither copied nor rebuilt");
+    }
+    const missing = new Map(values);
+    missing.delete(definition.bindings[0].declaration);
+    assert.equal(createRustNativeFrameOwner(definition, missing, counter, context), undefined,
+      "an incomplete actual holder is not synthesized from a tuple or payload fallback");
+    assert.equal(createRustNativeFrameOwner(definition, values,
+      { name: "foreign_counter", value: { kind: "path", path: "foreign" } }, context), undefined,
+    "a different activation counter cannot replace the original frame owner");
+  });
+}
 
 test("dispatched field writes borrow their physical receiver instead of consuming or cloning it", () => {
   const owner = { kind: "path", path: "owner" };
