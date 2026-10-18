@@ -4,6 +4,7 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { completeRustNativeCallableStorageAdapter } from "../../../dist/analysis/callables/native-storage-adapters.js";
+import { rustNativeCallableAbi } from "../../../dist/policy/types/model/native-type-selection.js";
 
 const sources = [
   ["declared", `
@@ -70,4 +71,50 @@ for (const [kind, source] of sources) test(`${kind} field adapters retain the ac
     checked += 1;
   }
   assert.equal(checked > 0, true, `${kind}: the actual source produces a field adaptation, not merely a type alias`);
+});
+
+for (const [label, source, propagation] of [
+  ["promise object methods", `
+    const api = {
+      async read(): Promise<number> { return 7; },
+      async reject(): Promise<void> { throw new Error("rejection belongs to the awaited promise"); },
+    };
+    export async function value(): Promise<number> {
+      const result = await api.read();
+      try { await api.reject(); } catch {}
+      return result;
+    }
+  `, "infallible"],
+  ["throwing object method", `
+    const api = { read(fail: boolean): number { if (fail) throw new Error("native source failure"); return 7; } };
+    export function value(fail: boolean): number { try { return api.read(fail); } catch { return 0; } }
+  `, "fallible"],
+]) test(`${label} publish the complete stored invocation Result ABI before planning`, () => {
+  const compiled = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
+    files: { "index.ts": source } }).result;
+  assert.equal(compiled.diagnostics.length, 0,
+    compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+  const program = compiled.program;
+  const rows = program.physicalEmissionContexts.operands.filter(operand => {
+    const operation = program.records.targetOperation.get(operand.node);
+    return operation?.kind === "source-call" && operation.target.form === "structural-method" &&
+      operand.nativeCallResult.kind === "result";
+  });
+  assert.equal(rows.length >= (propagation === "infallible" ? 2 : 1), true,
+    `${label}: real stored method invocations carry native result evidence`);
+  for (const row of rows) {
+    const result = row.nativeCallResult;
+    const signature = rustNativeCallableAbi({ kind: "physical", carrier: result.nativeCarrier });
+    assert.equal(signature !== undefined, true, `${label}: the emitted callable has its real native tuple/Result ABI`);
+    assert.equal(result.propagation.kind === "infallible", propagation === "infallible",
+      `${label}: immediate invocation does not borrow the await rejection channel`);
+    assert.equal(rustTargetTypeRefEquals(signature.error, result.signature.error), true,
+      `${label}: the original selected native error identity is not replaced by an ambient error`);
+    assert.equal(rustTargetTypeRefEquals(signature.result, result.signature.result), true,
+      `${label}: the native promise/value result is unchanged`);
+    assert.equal(Object.isFrozen(result) && Object.isFrozen(result.signature) && Object.isFrozen(result.signature.parameters), true,
+      `${label}: complete native call evidence is sealed data`);
+    assert.equal(program.physicalEmissionContexts.sourceErrorOperandFor(row.context.use, row.node) === row, true,
+      `${label}: consumers use the exact original physical context and invocation`);
+  }
 });

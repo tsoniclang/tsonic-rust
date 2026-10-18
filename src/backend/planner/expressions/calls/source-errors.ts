@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
+import type { RustSourceErrorRegionSelection } from "../../../../target-model/records/error-regions.js";
 
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
@@ -24,6 +25,15 @@ export function planRustSourceErrorPropagation(
     : context.input.program.physicalEmissionContexts.sourceErrorOperandFor(activeContext.use, node);
   const selection = operandSelection?.sourceErrorRegions.find(source => source.edge === edge)?.selection;
   if (selection === undefined) return reject(node, context);
+  return planRustSelectedSourceErrorPropagation(node, selection, expression, context);
+}
+
+export function planRustSelectedSourceErrorPropagation(
+  node: Node,
+  selection: RustSourceErrorRegionSelection,
+  expression: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
   const channels = new Map(selection.channels.map(channel => [channel.sourceIdentity, channel]));
   const planned = planRustSelectedErrorRegion(selection.operand, context);
   if (planned === undefined) return reject(node, context);

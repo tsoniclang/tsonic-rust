@@ -31,7 +31,7 @@ import type { RustNativeStorageConstruction, RustNativeStoragePlan } from "./nat
 import type { RustSourceCallableSpecializationPlan } from "./specializations.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
-import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner,
+import { createRustEmissionSourceOriginPreparation,
   type RustEmissionSourceRequest } from "./emission-source-origins.js";
 import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
@@ -45,6 +45,10 @@ import type { RustCallablePhysicalAdapter } from "../../target-model/records/cal
 import type { RustHelperCallableEmissionRequest } from "./emission-adapters.js";
 import type { RustPreparedNativeDeclarationForms } from "../declarations/native-forms.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
+import type { RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustNativeFrameCallableEnvironment } from "../../policy/types/model/native-type-selection.js";
 
 
 export interface RustCallableEmissionPreparationInput {
@@ -100,11 +104,15 @@ export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysica
 }
 
 export interface RustPhysicalEmissionOperandPreparation extends Omit<RustPhysicalEmissionOperand,
-  "context" | "sourceErrorRegions" | "genericInvocation"> {
+  "context" | "sourceErrorRegions" | "genericInvocation" | "nativeCallResult"> {
   readonly context: RustPhysicalEmissionContextPreparation;
   readonly sourceErrorRegions: readonly { readonly edge: RustSourceErrorEffectEdge;
     readonly selection: RustSourceErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> }[];
   readonly genericInvocation: RustGenericCallableInvocationFact | undefined;
+  readonly nativeCallResult:
+    | { readonly kind: "none" }
+    | { readonly kind: "callable"; readonly carrier: TargetTypeRef }
+    | { readonly kind: "frame"; readonly carrier: TargetTypeRef; readonly signature: RustCallablePhysicalSignature };
 }
 
 export interface RustCallableEmissionContextPreparation extends
@@ -305,6 +313,37 @@ export function prepareRustEmissionContextRequests(
           "One physical helper boundary requires its exact original source slot and complete selected conversion."));
       else if (existing === undefined) contextAdapters.push(selected);
     };
+    const nativeCallResultFor = (node: Node): RustPhysicalEmissionOperandPreparation["nativeCallResult"] => {
+      const invocations = request.demands.filter((demand): demand is Extract<RustPhysicalCallableEmissionRequest, { readonly kind: "invocation" }> =>
+        demand.kind === "invocation" && demand.subject === node);
+      if (invocations.length === 0 || invocations.every(demand => demand.callableKind === "generic")) return Object.freeze({ kind: "none" });
+      if (!invocations.every(demand => demand.callableKind === "retained")) {
+        diagnostics.push(emissionDiagnostic(node, "One original invocation requires one consistent admitted callable ABI class."));
+        return Object.freeze({ kind: "none" });
+      }
+      const storage = input.nativeStorage.invocationCallableFor(node);
+      if (storage.kind === "unresolved") {
+        diagnostics.push(emissionDiagnostic(node, storage.reason));
+        return Object.freeze({ kind: "none" });
+      }
+      const carrier = apply(storage.carrier);
+      if (rustFrameCallableValue(storage.carrier) === undefined) return Object.freeze({ kind: "callable", carrier });
+      const environment = rustNativeFrameCallableEnvironment(storage.carrier, input.frames);
+      const rows = environment === undefined ? [] : frameSignatures.value.filter(row =>
+        row.frame === environment.definition && row.entry === environment.entry);
+      const bindings = environment === undefined ? undefined : rustGenericCallablePhysicalBindings(
+        rustTypeGenericArguments(environment.definition.environmentParameters), rustTypeGenericArguments(environment.environment));
+      if (rows.length !== 1 || bindings === undefined) {
+        diagnostics.push(emissionDiagnostic(node,
+          "A frame invocation requires its original one entry ABI and complete correlated native environment."));
+        return Object.freeze({ kind: "none" });
+      }
+      const bind = (type: TargetTypeRef): TargetTypeRef => apply(substituteRustTargetGenerics(type,
+        bindings.types, bindings.lifetimes, bindings.consts));
+      const signature = rows[0]!.signature;
+      return Object.freeze({ kind: "frame", carrier, signature: Object.freeze({
+        parameters: Object.freeze(signature.parameters.map(bind)), result: bind(signature.result), error: bind(signature.error) }) });
+    };
     const nativeOperations = new Map<RustFinalizedOperationAbi, { readonly node: Node; readonly arguments: readonly RustTargetGenericArgument[] }>();
     const nativeOperation = (node: Node, abi: RustFinalizedOperationAbi): void => {
       if (nativeOperations.has(abi)) return;
@@ -395,7 +434,7 @@ export function prepareRustEmissionContextRequests(
       }
       const operand = Object.freeze({ use, node, context, origin, carrier: apply(source),
         destination: destination === undefined ? undefined : apply(destination), sourceErrorRegions: Object.freeze(sourceErrorRegions),
-        genericInvocation });
+        genericInvocation, nativeCallResult: sourceError ? nativeCallResultFor(node) : Object.freeze({ kind: "none" as const }) });
       operands.push(operand);
       const indexed = operandIndex.get(use.subject) ?? new Map<string, RustPhysicalEmissionOperandPreparation>();
       indexed.set(targetUseSiteIdentity(use), operand);

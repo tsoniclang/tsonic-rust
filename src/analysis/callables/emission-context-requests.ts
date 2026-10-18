@@ -13,7 +13,7 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
-import { emissionDiagnostic, rustEmissionSourceIdentity, rustEmissionIdentityBindings,
+import { emissionDiagnostic, rustEmissionSourceIdentity,
   type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "./emission-contexts.js";
 import type { RustEmissionSourceOwner } from "./emission-source-origins.js";
 
@@ -141,7 +141,8 @@ export function prepareRustCallableEmissionRequests(
           const carrier = input.records.runtimeCarrier.get(capture.declaration)?.carrier;
           if (carrier === undefined) diagnostics.push(emissionDiagnostic(capture.reference,
             "A lexical capture requires its original declared logical carrier before native storage publication."));
-          else captures.push(Object.freeze({ ...capture, carrier,
+          else captures.push(Object.freeze({ declaration: capture.declaration, reference: capture.reference, carrier,
+            ...(capture.mutable ? { mutable: true as const } : {}),
             storage: input.records.bindingStorage.get(capture.declaration)?.storage ?? "value" }));
         }
         nativeCaptureInputs = Object.freeze(captures);

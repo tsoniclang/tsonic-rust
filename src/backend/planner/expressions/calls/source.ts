@@ -34,7 +34,6 @@ import {
 } from "./arguments.js";
 import { planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression, rustEliminateInfallibleResult } from "../../types/fallible-shape.js";
-import { rustNativeCallableOperand } from "../../../../analysis/callables/native-conversions.js";
 import {
   planRustExactProjectMethodCall,
   planRustVirtualProjectMethodCall,
@@ -43,6 +42,7 @@ import {
 import {
   rustTargetCallGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
+  rustTypeFromSelectedNativeCarrierInContext,
 } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
@@ -63,9 +63,8 @@ import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expres
 import { planRustNativeInputInvocation, planRustNativeInputPropagation, rustNativeInputEffectsMatch } from "./native-input.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 
-import { planRustSourceErrorPropagation } from "./source-errors.js";
+import { planRustSelectedSourceErrorPropagation, planRustSourceErrorPropagation } from "./source-errors.js";
 import { rustRetainedCallSubstitutions } from "../../../../analysis/callables/retained-call-lifetimes.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustNativeCallableCompletion } from "../../../../target-model/types/callable-completions.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 
@@ -542,17 +541,27 @@ export function planSelectedSourceCall(
     return result === undefined ? undefined : isRustNeverCarrier(fact.resultCarrier)
       ? rustBottomAfterEffect(result, "fallible never call returned") : result;
   }
-  if (fact.target.form === "callable" && rustCallableProtocol(fact.target.carrier) !== undefined && callee !== undefined) {
-    const source = rustValueCarrierBeforeContextualConversion(context.input.program.records, callee);
-    const physical = source === undefined ? undefined : rustNativeCallableOperand(source, callee, {
-      records: context.input.program.records, storage: context.input.program.callableValues.nativeStorage,
-      producers: context.input.program.callableValues.nativeProducers, definitions: context.input.program.typeDefinitions,
-    });
-    const error = physical === undefined ? undefined : rustTypeFromCarrierInContext(physical.signature.error, context);
-    if (error?.kind === "named" && error.path === "core::convert::Infallible" && context.syntheticNames !== undefined) {
+  const invocation = context.emissionContext === undefined ? undefined
+    : context.input.program.physicalEmissionContexts.sourceErrorOperandFor(context.emissionContext.use, node);
+  if (invocation === undefined) return failRustPlannerInvariant(
+    "A source call requires its original sealed physical invocation result disposition.");
+  const nativeResult = invocation.nativeCallResult;
+  if (nativeResult.kind === "result") {
+    if (nativeResult.propagation.kind === "infallible") {
+      if (context.syntheticNames === undefined) return failRustPlannerInvariant(
+        "An admitted native Infallible call requires its existing synthetic-name owner.");
       return rustEliminateInfallibleResult(planned, allocateRustSyntheticName(context.syntheticNames, "call_value"),
         allocateRustSyntheticName(context.syntheticNames, "call_error"));
     }
+    const errorType = rustTypeFromSelectedNativeCarrierInContext(nativeResult.signature.error, context);
+    const propagated = nativeResult.propagation.kind === "source"
+      ? planRustSelectedSourceErrorPropagation(node, nativeResult.propagation.selection, planned, context)
+      : context.fallibleBoundary === undefined ? undefined
+        : rustPropagateLocalError(context.fallibleBoundary, errorType, planned);
+    if (propagated === undefined) return failRustPlannerInvariant(
+      "An admitted native callable requires its exact selected error transport in the current physical context.");
+    return isRustNeverCarrier(fact.resultCarrier)
+      ? rustBottomAfterEffect(propagated, "fallible never call returned") : propagated;
   }
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;

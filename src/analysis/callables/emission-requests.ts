@@ -151,7 +151,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
     return selected;
   };
   const request = (owner: Node, subject: Node, role: string,
-    selected: { readonly kind: "value" | "operand" | "return" | "invocation" }
+    selected: { readonly kind: "value" | "operand" | "return" }
+      | { readonly kind: "invocation"; readonly callableKind: "generic" | "retained" }
       | { readonly kind: "type"; readonly carrier: TargetTypeRef }
       | { readonly kind: "producer"; readonly declaration: Node; readonly carrier: TargetTypeRef }, sourceOwner: object): void => {
     const context = declared(owner);
@@ -264,6 +265,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
         }
       }
     } else if (operation?.kind === "source-call") {
+      runtime(owner, node, "source-errors", node);
       const sourceFile = checkedSourceFile(node);
       if (sourceFile === undefined) {
         rows.set(key, "closed");
@@ -289,8 +291,16 @@ export function prepareRustPhysicalCallableEmissionRequests(
       if (checked === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source call requires its original checked argument occurrences."));
       else for (const [index, argument] of checked.sourceArguments.entries()) visitUse(argument.expression, owner, `argument:${index}`, node);
       const callable = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
-      if (input.native.callFor(node) === undefined && rustGenericCallableValue(callable) !== undefined)
-        request(owner, node, "invocation", { kind: "invocation" }, node);
+      if (input.native.callFor(node) === undefined) {
+        const generic = rustGenericCallableValue(callable) !== undefined;
+        const field = target.form === "structural-method"
+          ? input.structuralShapes.field(target.receiverCarrier, target.storageIndex) : undefined;
+        const retained = target.form === "callable" && rustCallableProtocol(callable) !== undefined ||
+          field !== undefined && field.nativeMethod !== true && rustCallableProtocol(callable) !== undefined;
+        if (generic || retained) {
+          request(owner, node, "invocation", { kind: "invocation", callableKind: generic ? "generic" : "retained" }, node);
+        }
+      }
     } else if (operation?.kind === "closure") {
       const implementation = input.frames.implementationFor(node);
       const frame = input.frames.entryFor(operation.resultCarrier);
