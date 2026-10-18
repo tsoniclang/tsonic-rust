@@ -33,6 +33,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     fields: [{ name: "value", type: { kind: "primitive", name: integerType }, visibility: "private" }],
   }, {
     kind: "impl",
+    ...(deadCode === undefined ? {} : { deadCode }),
     generics: emptyRustGenerics,
     target: enumType,
     members: variants.map(variant => {
