@@ -1,7 +1,8 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustNativeBindingStorage, RustNativeStorageBinding, RustPhysicalEmissionContext, RustNativeCaptureEnvironmentStorage }
+import type { RustNativeBindingStorage, RustNativeStorageBinding, RustPhysicalEmissionContext, RustNativeCaptureEnvironmentStorage,
+  RustNativeCaptureStorageOwner }
   from "../../../target-model/records/physical-emission-contexts.js";
 import type { RustFrameCallableDefinition } from "../../../analysis/callables/frame-values.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -57,11 +58,13 @@ export function requireRustNativeCaptureEnvironment(
 export function requireRustNativeCaptureStorage(
   environment: RustNativeCaptureEnvironmentStorage, slotIndex: number,
   emission: RustPhysicalEmissionContext, context: RustPlanContext,
-): RustNativeStorageBinding {
+): RustNativeStorageBinding & { readonly owner: RustNativeCaptureStorageOwner } {
   if (context.input.program.physicalEmissionContexts.contextFor(emission.use) !== emission ||
     !emission.nativeEnvironments.includes(environment) || environment.slots[slotIndex] === undefined)
     return failRustPlannerInvariant("A native capture slot requires its original completed environment and physical context.");
-  const selected = emission.nativeBindings.filter(binding => binding.owner.kind === "capture" &&
+  const selected = emission.nativeBindings.filter((binding): binding is RustNativeStorageBinding & {
+    readonly owner: RustNativeCaptureStorageOwner;
+  } => binding.owner.kind === "capture" &&
     binding.owner.environment === environment && binding.owner.slotIndex === slotIndex);
   const binding = selected[0];
   if (selected.length !== 1 || binding === undefined)

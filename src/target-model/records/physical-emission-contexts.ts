@@ -154,6 +154,7 @@ export interface RustNativeCaptureStorageOwner {
   readonly kind: "capture";
   readonly slotIndex: number;
   readonly environment: RustNativeCaptureEnvironmentStorage;
+  readonly fieldCarrier: TargetTypeRef;
 }
 
 export interface RustNativeStorageBindingRequest {

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { publishRustNativeBindingStorage } from "../../../dist/analysis/declarations/native-binding-storage.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 function programFor(source) {
   const { program } = analyzeRust({ files: { "index.ts": source } });
@@ -62,6 +65,8 @@ export function observed(start: number): number {
     assert.equal(row.storage.kind, storage, "the original capture mode owns the native slot");
     assert.equal(rustTargetTypeRefEquals(row.readCarrier, row.storage.payloadCarrier), true,
       "the captured payload's native read is distinct from any enclosing slot wrappers");
+    if (slot.kind !== "receiver-field") assert.equal(row.owner.fieldCarrier === row.storage.slotCarrier, true,
+      "ordinary bindings and whole receivers keep their exact original emitted slot without an identity wrapper");
   }
 });
 
@@ -89,6 +94,66 @@ export function observed(start: number): number {
     }
     if (environment.kind === "frame" && environment.payload.kind === "none")
       assert.equal(environment.slots.length, 0, "an absent actual frame state is not an unavailable captured payload");
+  }
+});
+
+test("receiver-field capture publication retains its exact shared owner and selected freeze identity envelope", () => {
+  const payload = Object.freeze({ kind: "source-primitive", name: "number" });
+  const bindings = Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() });
+  const unavailable = () => undefined;
+  const records = { bindingStorage: { get: unavailable }, moduleBinding: { get: unavailable } };
+  for (const kind of ["copy", "shared", "cell", "borrow-cell"]) {
+    for (const initialization of kind === "copy" ? ["ready"] : ["ready", "deferred"]) {
+      for (const guarded of [false, true]) {
+        const label = `${kind}/${initialization}/${guarded ? "guarded" : "unguarded"}`;
+        const declaration = {};
+        const reference = {};
+        const use = {};
+        const slot = Object.freeze({ kind: "receiver-field", capture: Object.freeze({ declaration, reference,
+          receiver: {}, references: Object.freeze([reference]), carrier: payload,
+          storage: Object.freeze({ kind, initialization }) }) });
+        const input = Object.freeze({ slots: Object.freeze([Object.freeze({ slot, slotIndex: 0 })]) });
+        const environment = Object.freeze({ kind: "native", use, sourceBindings: bindings,
+          slots: Object.freeze([slot]) });
+        let identityQueries = 0;
+        const result = publishRustNativeBindingStorage({
+          ast: {}, contextUse: use, fieldBindings: [], records, frames: {}, projectTypes: {},
+          nativeTypeContext: { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: new Map() },
+          physicalCarrierFor: () => payload, captureEnvironments: [{ input, environment }],
+          requests: [{ use, declaration, logicalCarrier: payload, physicalCarrier: payload, sourceBindings: bindings,
+            source: { kind: "capture", input, slot, slotIndex: 0, initialization } }],
+          frozenDataWrites: { capturesFieldIdentity(selectedDeclaration, selectedReference) {
+            identityQueries++;
+            assert.equal(selectedDeclaration === declaration && selectedReference === reference, true,
+              `${label}: only the original field and exact captured use decide identity retention`);
+            return guarded;
+          } },
+        });
+        assert.equal(result.kind, "resolved", `${label}: exact capture storage is published`);
+        assert.equal(result.value.length, 1, `${label}: one original captured field`);
+        const row = result.value[0];
+        assert.equal(row.owner.kind, "capture", `${label}: original capture owner`);
+        assert.equal(row.owner.environment === environment && row.source.slot === slot, true,
+          `${label}: original owner, field and selecting bindings remain correlated`);
+        assert.equal(identityQueries, 1, `${label}: the existing selected identity fact is consumed once`);
+        const field = row.owner.fieldCarrier;
+        const holder = guarded ? field.elements[1] : field;
+        if (guarded) {
+          assert.equal(field.kind, "tuple", `${label}: the writer retains the required envelope`);
+          assert.equal(field.elements.length, 2, `${label}: exactly the identity and original owner`);
+          assert.equal(rustNamedTypeCarrierValue(field.elements[0])?.path, "rt::ObjectIdentity",
+            `${label}: the native identity is not a logical EmptyObject substitute`);
+          assert.equal(Object.isFrozen(field) && Object.isFrozen(field.elements), true,
+            `${label}: the completed envelope cannot change after publication`);
+        }
+        assert.equal(holder === row.storage.holderCarrier, true, `${label}: no copy, unwrapping or second owner`);
+        assert.equal(row.readCarrier === payload, true, `${label}: field reads retain the original payload`);
+        if (kind !== "copy") {
+          assert.equal(rustNamedTypeCarrierValue(holder)?.path, "alloc::rc::Rc", `${label}: the shared field owner is retained`);
+          assert.equal(holder === row.storage.slotCarrier, false, `${label}: a bare interior slot is never the captured owner`);
+        } else assert.equal(holder === payload, true, `${label}: readonly-copy storage acquires no shared owner`);
+      }
+    }
   }
 });
 
