@@ -44,8 +44,8 @@ import {
 } from "../project/index.js";
 import {
   analyzeRustSourcePackageFacades,
-  rustSourceItemIdentity,
 } from "./source-package-facades.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";

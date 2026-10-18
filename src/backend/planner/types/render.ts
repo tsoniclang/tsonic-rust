@@ -39,7 +39,7 @@ import {
 import { selectRustNativeTypeCarrier, selectRustNativeCallTypeCarrier, rustNativeTypeSelectionInput, type RustNativeTypeInputContext, type RustNativeTypeSelectionInput } from "../../../policy/types/model/native-type-selection.js";
 import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { rustSourceItemIdentity } from "../../../analysis/program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 
 export const rustStrRefType: RustType = {
   kind: "reference",
