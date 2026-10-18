@@ -85,7 +85,7 @@ mod field_transfer {
 }
 `);
       runCargo(directory, ["generate-lockfile", "--offline"]);
-      runCargo(directory, ["fmt", "--all"]);
+      runCargo(directory, ["fmt"]);
       runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
       runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
       runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);

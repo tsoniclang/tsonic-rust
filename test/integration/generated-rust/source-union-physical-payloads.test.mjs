@@ -97,7 +97,7 @@ fn main() {
 ` },
   ]);
   runCargo(project, ["generate-lockfile", "--offline"]);
-  runCargo(project, ["fmt", "--all"]);
+  runCargo(project, ["fmt"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(project, ["run", "--locked", "--offline"]);
 });
@@ -215,7 +215,7 @@ fn main() {
 ` },
     ]);
     runCargo(project, ["generate-lockfile", "--offline"]);
-    runCargo(project, ["fmt", "--all"]);
+    runCargo(project, ["fmt"]);
     runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     runCargo(project, ["run", "--locked", "--offline"]);
   }

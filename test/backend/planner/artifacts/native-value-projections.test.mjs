@@ -40,7 +40,7 @@ fn main() {
 ` },
   ]);
   runCargo(project, ["generate-lockfile", "--offline"]);
-  runCargo(project, ["fmt", "--all"]);
+  runCargo(project, ["fmt"]);
   runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(project, ["run", "--locked", "--offline"]);

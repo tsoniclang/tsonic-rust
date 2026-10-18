@@ -341,9 +341,9 @@ for (const caseInput of cases) {
         assert.equal(typeof emitted === "string", true, "the public compiler produces actual native source");
         const directory = writeGeneratedProject(`recursive-callback-${caseInput.name}-${profile}`, result.artifacts);
         runCargo(directory, ["generate-lockfile", "--offline"]);
-        runCargo(directory, ["fmt", "--all", "--check"]);
+        runCargo(directory, ["fmt", "--check"]);
         appendFileSync(join(directory, "src/index.rs"), nativeProof(caseInput));
-        runCargo(directory, ["fmt", "--all"]);
+        runCargo(directory, ["fmt"]);
         runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
         runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
         runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);

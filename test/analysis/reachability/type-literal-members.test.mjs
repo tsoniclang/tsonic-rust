@@ -47,7 +47,7 @@ for (const [surface, selected] of surfaces) {
     const projectRoot = writeGeneratedProject(`type-literal-members-${surface}`, result.artifacts.map(artifact =>
       ({ path: String(artifact.path), text: String(artifact.text) })));
     runCargo(projectRoot, ["generate-lockfile", "--offline"]);
-    runCargo(projectRoot, ["fmt", "--all", "--check"]);
+    runCargo(projectRoot, ["fmt", "--check"]);
     runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
   });
 }

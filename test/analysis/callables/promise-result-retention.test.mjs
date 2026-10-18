@@ -289,8 +289,8 @@ mod scoped_native_view {
 }
 `);
   runCargo(directory, ["generate-lockfile", "--offline"]);
-  runCargo(directory, ["fmt", "--all"]);
-  runCargo(directory, ["fmt", "--all", "--check"]);
+  runCargo(directory, ["fmt"]);
+  runCargo(directory, ["fmt", "--check"]);
   runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(directory, ["test", "--locked", "--offline", "--", "--test-threads=1"]);

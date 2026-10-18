@@ -63,7 +63,7 @@ mod string_input_cost {
 }
 `);
   runCargo(directory, ["generate-lockfile", "--offline"]);
-  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["fmt"]);
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
 });

@@ -330,7 +330,7 @@ mod explicit_safety_closure_contract {
   });
   const directory = writeGeneratedProject("explicit-safety-closure-unused", proofArtifacts);
   runCargo(directory, ["generate-lockfile", "--offline"]);
-  runCargo(directory, ["fmt", "--all", "--check"]);
+  runCargo(directory, ["fmt", "--check"]);
   runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   const valueRun = runCargo(directory, ["test", "--locked", "--offline", "--", "--test-threads=1"]);

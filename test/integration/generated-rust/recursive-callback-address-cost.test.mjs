@@ -104,9 +104,9 @@ for (const [name, selectedProof] of [["addressed-lexical-frame", () => lexicalPr
       const directory = writeGeneratedProject(`recursive-address-cost-${name}-${profile}`, result.artifacts);
       const proof = selectedProof(profile);
       runCargo(directory, ["generate-lockfile", "--offline"]);
-      runCargo(directory, ["fmt", "--all", "--check"]);
+      runCargo(directory, ["fmt", "--check"]);
       appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod address_cost {\nuse super::*;\n${nativeOwnershipCostSupport}\n${proof}\n}\n`);
-      runCargo(directory, ["fmt", "--all"]);
+      runCargo(directory, ["fmt"]);
       runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
       runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
       runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);

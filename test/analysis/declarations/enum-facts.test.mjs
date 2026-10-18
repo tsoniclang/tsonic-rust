@@ -232,8 +232,8 @@ mod enum_layout_control {
       ? { ...artifact, text: artifact.text + nativeControl } : artifact);
     const project = writeGeneratedProject("enum-native-layout", artifacts);
     runCargo(project, ["generate-lockfile", "--offline"]);
-    runCargo(project, ["fmt", "--all"]);
-    runCargo(project, ["fmt", "--all", "--check"]);
+    runCargo(project, ["fmt"]);
+    runCargo(project, ["fmt", "--check"]);
     runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const native = runCargo(project, ["test", "--locked", "--offline"]);
