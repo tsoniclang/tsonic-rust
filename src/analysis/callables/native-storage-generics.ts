@@ -184,7 +184,7 @@ export function selectRustSourceMethodInvocation(input: {
   const operation = input.records.targetOperation.get(invocation);
   if (operation?.kind !== "source-call" || operation.target.form !== "method") return undefined;
   if (operation.target.dispatch === undefined) return resolvedTargetStage(Object.freeze([]));
-  const reject = (reason: string): ReturnType<typeof rejectedTargetStage> => rejectedTargetStage([{
+  const reject = (reason: string): TargetStageResult<never> => rejectedTargetStage([{
     code: "RUST_NATIVE_CALLABLE_ADAPTER_NOT_PROVEN", category: "error", source: "tsonic-rust", sourceNode: invocation,
     message: reason, evidence: ["target.capability=rust.callable-value.exact-implementation"],
   }]);

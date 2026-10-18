@@ -5,16 +5,18 @@ import { rustCallableConversionPhysical, rustCallableConversionErrorArities, rus
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../dist/target-model/types/carriers/callables.js";
-import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
-import { rustCallableTargetId, rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../dist/target-model/types/carriers/native.js";
+import { rustCallableTargetId, rustInfallibleTargetId, rustOptionTargetId } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../dist/target-model/types/carriers/primitives.js";
+import { rustOptionTargetType } from "../../dist/target-model/types/carriers/optional.js";
 import { rustNativeErrorJoinReference } from "../../dist/target-model/types/native-error-joins.js";
 import { rustRuntimeErrorTargetType } from "../../dist/target-model/operations/error-boundary.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
 import { substituteRustTargetGenerics } from "../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../dist/target-model/types/source-union-definitions.js";
-import { rustNativeCallableAbi, selectRustNativeTypeCarrier } from "../../dist/policy/types/model/native-type-selection.js";
+import { rustNativeCallableAbi, selectRustNativeCallableTypeCarrier, selectRustNativeTypeCarrier }
+  from "../../dist/policy/types/model/native-type-selection.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -91,6 +93,66 @@ test("the canonical native callable ABI preserves runtime aliases and producer-s
   const borrowed = rustNativeCallableAbi({ kind: "logical", carrier: rustCallableInputTargetType([integer], wide) });
   assert.equal(borrowed?.kind, "input", "native input and storage use the same owner with distinct native contracts");
   assert.equal(borrowed.binder.parameters.length, 0, "a non-borrowing input never invents a higher-ranked binder");
+});
+
+test("prepared declared callable ABI publishes through the same native type owner without choosing its error again", () => {
+  const input = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: undefined,
+    pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
+    producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
+  for (const [label, logical] of [["runtime alias", rustCallableTargetType([integer], wide)],
+    ["native producer error", rustCallableTargetType([integer], wide, { kind: "static" }, failure)]]) {
+    const abi = rustNativeCallableAbi({ kind: "logical", carrier: logical });
+    assert.equal(abi?.kind, "stored", `${label}: complete declared storage ABI is selected before native publication`);
+    const original = selectRustNativeTypeCarrier(logical, input, "general");
+    const published = selectRustNativeCallableTypeCarrier(logical, logical, abi, input, "general");
+    assert.equal(original.kind, "resolved", `${label}: retained native declaration is representable`);
+    assert.equal(published.kind, "resolved", `${label}: native syntax consumes the prepared signature`);
+    assert.equal(rustTargetTypeRefEquals(original.carrier, published.carrier), true,
+      `${label}: prepared and direct entrypoints share the same grammar and native result identity`);
+    assert.equal(rustTargetTypeRefEquals(published.carrier, published.payloadCarrier), true,
+      `${label}: an unwrapped field has the same full carrier and exact callable payload`);
+    const physical = rustNativeCallableAbi({ kind: "physical", carrier: published.payloadCarrier });
+    assert.equal(rustTargetTypeRefEquals(physical.error, abi.error), true,
+      `${label}: the originally selected declared error is not replaced by a requested adapter target`);
+  }
+  const logical = rustCallableTargetType([integer], { kind: "opaque", id: "missing:field-output" });
+  const abi = rustNativeCallableAbi({ kind: "logical", carrier: logical });
+  assert.equal(selectRustNativeCallableTypeCarrier(logical, logical, abi, input, "general").kind, "rejected",
+    "prepared ABI cannot invent missing native child metadata");
+  const borrowed = rustCallableInputTargetType([integer], wide);
+  const inputAbi = rustNativeCallableAbi({ kind: "logical", carrier: borrowed });
+  assert.equal(selectRustNativeCallableTypeCarrier(borrowed, borrowed, inputAbi, input, "general").kind, "rejected",
+    "an invocation-only input is not silently accepted as a stored field ABI");
+});
+
+test("prepared field callable completion retains every original optional container and its exact selected leaf", () => {
+  const input = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: undefined,
+    pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
+    producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
+  const payload = rustCallableTargetType([integer], wide);
+  const abi = rustNativeCallableAbi({ kind: "logical", carrier: payload });
+  for (const [label, container, depth] of [["required", payload, 0], ["optional", rustOptionTargetType(payload), 1],
+    ["nested original option", rustOptionTargetType(rustOptionTargetType(payload)), 2]]) {
+    const selected = selectRustNativeCallableTypeCarrier(container, payload, abi, input, "general");
+    assert.equal(selected.kind, "resolved", `${label}: exact original field container is admitted`);
+    let native = selected.carrier;
+    for (let index = 0; index < depth; index += 1) {
+      const wrapper = rustNamedTypeCarrierValue(native);
+      assert.equal(wrapper?.id, rustOptionTargetId, `${label}: original native wrapper ${index} survives publication`);
+      assert.equal(wrapper.genericArguments.length, 1, `${label}: wrapper ${index} has its exact one payload`);
+      assert.equal(wrapper.genericArguments[0].kind, "type", `${label}: wrapper ${index} retains its native type argument`);
+      native = wrapper.genericArguments[0].type;
+    }
+    assert.equal(rustTargetTypeRefEquals(native, selected.payloadCarrier), true,
+      `${label}: published leaf is the same canonical callable ABI, not the entire optional slot`);
+    assert.equal(rustNativeCallableAbi({ kind: "physical", carrier: selected.payloadCarrier }) !== undefined, true,
+      `${label}: the selected callable payload has its exact physical signature`);
+  }
+  const sameTypeDifferentLeaf = rustCallableTargetType([integer], wide);
+  assert.equal(selectRustNativeCallableTypeCarrier(rustOptionTargetType(payload), sameTypeDifferentLeaf, abi, input, "general").kind,
+    "rejected", "equal-looking foreign payloads cannot replace the exact original selected field leaf");
+  assert.equal(selectRustNativeCallableTypeCarrier(integer, payload, abi, input, "general").kind, "rejected",
+    "a missing original callable payload is not silently selected outside its container");
 });
 
 test("physical adapters preserve source error and native Future payload without ambient substitution", () => {
