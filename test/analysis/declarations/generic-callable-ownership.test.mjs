@@ -9,19 +9,7 @@ import { rustGenericCallableTargetType } from "../../../dist/target-model/types/
 import { createRustGenericCallableFlowIndex } from "../../../dist/analysis/callables/generic-callable-flow.js";
 import { rustGenericCallableConversionMatches } from "../../../dist/target-model/conversions/generic-callable.js";
 import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/callables/value-plan.js";
-import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
-import { createRustSourceCallableQueries } from "../../../dist/policy/ownership/source-borrowed-return.js";
-import { createRustRuntimeValueUsePlan } from "../../../dist/analysis/program/runtime-value-uses.js";
-import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
-import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
-import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/type-policy.js";
-import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
-import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types/receiver-storage.js";
-import { createRustObjectRepresentationPlan } from "../../../dist/analysis/project-types/object-representation.js";
-import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/structural-shape-plan.js";
-import { createRustRetainedEnvironmentQueries } from "../../../dist/policy/ownership/retained-environment-queries.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
 
@@ -31,7 +19,7 @@ import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../
 
 
 import { fakeAstReader, fakeCompileInput, fakeSourcePackageGraph } from "../../helpers/fake-compile-input.mjs";
-import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { nativeCallableConstructionFixture } from "../../helpers/physical-callable-adapters.mjs";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 function input() {
@@ -126,58 +114,48 @@ closureCapture: { get: (node) => {
     classValueAdapters: [], closedSourceFiles: new Set(),
     ownership: { components: [], activations: [], failureReason: () => undefined } };
   const materialize = () => {
-    const sourceStorage = createSourceStorageQuery(currentSource, files);
-    const builder = createRustProgramRecordBuilder();
-    const participation = analyzeRustNativeParticipation({ ast, storage: sourceStorage,
-      navigation: currentSource.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
-    assert.equal(participation.kind, "resolved", "the current mutated fixture has one complete canonical native domain");
-    const membership = new Set(participation.nodes);
-    const isNativeNode = node => membership.has(node);
-    const runtimeValueUses = createRustRuntimeValueUsePlan({ ast, navigation: currentSource.navigation,
-      safetyApplications: { isCompileTimeApplicationReference: () => false } });
-    const lexicalFunctions = createRustLexicalFunctionEnvironmentPlan(currentSource, participation.nodes, records,
-      runtimeValueUses, createRustSourceCallableQueries(sourceStorage));
-    const typeDefinitions = createRustTypeDefinitionRegistry();
-    const sourceTypes = createRustSourceTypeRegistry(undefined, typeDefinitions);
-    const projectTypes = createRustProjectTypePolicy({ ast, names, navigation: currentSource.navigation,
-      sourceFiles: files, sourceNodes: participation.nodes, isNativeNode,
-      semanticsFor: currentSource.semantics.forNode, sourceLifetimes: emptyRustLifetimeIndex,
-      collectImplicitInterfaces: () => [], thrownClassDeclarations: new Set(), sourceCreatedErrorOrigins: [],
-      normalizeCarrier: carrier => carrier, isRepresentationAlias: () => false,
-      genericParametersFor() { assert.fail("logical implementation fixtures contain no native class declarations"); },
-      externallyExtensible() { assert.fail("logical implementation fixtures contain no extensible native classes"); },
-      targetNameForCallable: names.functionNameForDeclaration,
-      sourcePackageComponentForFile(file) {
-        const selected = planInput.sourcePackages.packages.find(candidate => candidate.sourceFiles.includes(file));
-        return selected === undefined ? undefined : planInput.sourcePackages.components.find(component =>
-          component.packages.includes(selected.id))?.id;
-      },
-      resolveSelectedType() { assert.fail("logical implementation fixtures contain no native heritage"); },
-      resolveExternalHeritage() { assert.fail("logical implementation fixtures contain no native external bases"); },
-    }, () => {});
-    assert.equal(projectTypes.definitions.length, 0, "logical carrier fixtures have no checked native class layouts");
-    const receiverInput = { ast, navigation: currentSource.navigation, semantics: currentSource.semantics,
-      sourceFiles: files, isNativeNode, projectTypes };
-    const receiverStorage = analyzeRustReceiverStorage(receiverInput);
-    const objectRepresentations = createRustObjectRepresentationPlan({ ...receiverInput, receiverStorage,
-      sourceStorage,
-      valueWrites: new Set(), hasPromotedStorage: () => false, hasMutableStorageUse: () => false });
-    const structuralShapes = createRustStructuralShapePlanRegistry();
-    structuralShapes.initialize(sourceTypes.structuralObjects(), sourceTypes.structuralFieldImplementations(),
-      () => "logical-callable-fixture", [], sourceTypes.structuralInstantiations());
-    const carrierHost = { sourceStorage, sourceTypes,
-      projectFieldProjection() { assert.fail("logical carrier fixtures have no checked project-field projections"); },
-      types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
-      semantics: currentSource.semantics.forFile };
-    const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,
-      sourceLifetimes: emptyRustLifetimeIndex, domain: Object.freeze({ has: isNativeNode }) });
-    return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
-      isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
-      structuralShapes, carrierHost, retainedEnvironments };
+    const checked = nativeCallableConstructionFixture({ surfaces: [], files: Object.fromEntries(files.map(file =>
+      [file.name.slice(1), "export const value = <Value>(value: Value): Value => value; export const boundary = {};"])) });
+    const actual = checked.input;
+    assert.equal(actual.nativeNodes.every(actual.isNativeNode), true,
+      "the current mutated fixture has one complete canonical native domain");
+    assert.equal(actual.projectTypes.definitions.length, 0, "logical carrier fixtures have no checked native class layouts");
+    const syntheticFor = new Map();
+    const actualFor = new Map();
+    for (const [index, file] of files.entries()) {
+      const checkedFiles = actual.sourceFiles.filter(candidate => actual.ast.getFileName(candidate).endsWith(file.name));
+      assert.equal(checkedFiles.length, 1, `${file.name}: one exact original checked source file`);
+      const checkedFile = checkedFiles[0];
+      const owned = actual.nativeNodes.filter(node => actual.ast.getSourceFile(node) === checkedFile);
+      const functions = owned.filter(node => actual.ast.is.IsArrowFunction(node));
+      const boundaries = owned.filter(node => actual.ast.is.IsObjectLiteralExpression(node));
+      assert.equal(functions.length, 1, `${file.name}: one original generic implementation`);
+      assert.equal(boundaries.length, 1, `${file.name}: one original selected transport boundary`);
+      const selected = [functions[0], boundaries[0]];
+      assert.equal(file.nodes.length <= selected.length, true, "each injected unit record retains one exact checked original source node");
+      for (const [ordinal, node] of file.nodes.entries()) {
+        const original = selected[ordinal];
+        syntheticFor.set(original, node);
+        actualFor.set(node, original);
+      }
+      assert.equal(actualFor.get(closures[index]) === functions[0], true, "implementation identity is the exact original checked closure");
+    }
+    const selectedRecords = createRustRecordFixture(Object.fromEntries([
+      "runtimeCarrier", "targetOperation", "objectLiteralMethodAdapter", "projectCallableAdapters", "receiverIndependentMethod",
+      "objectReferenceView", "bindingProjection", "contextualValueConversion", "closureCapture",
+    ].map(family => [family, { get(node) {
+      const selected = syntheticFor.get(node);
+      return selected === undefined ? actual.records[family].get(node) : records[family].get(selected);
+    } }])), actual.records);
+    return { ...actual, records: selectedRecords, classValueAdapters: planInput.classValueAdapters.map(value => {
+      const subject = actualFor.get(value.subject);
+      assert.equal(subject !== undefined, true, "the selected adapter keeps its exact original checked source subject");
+      return { ...value, subject };
+    }) };
   };
   return { closures, planInput, materialize,
     create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names,
-      currentSource.navigation, materialize().isNativeNode, [], closed).plan };
+      currentSource.navigation, node => files.includes(node) || files.some(file => file.nodes.includes(node)), [], closed).plan };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {
@@ -309,9 +287,10 @@ for (const owner of ["class", "object", "project"]) {
     if (owner === "object") closures[0].objectAdapters = { dispatches: [dispatch] };
     if (owner === "project") closures[0].projectAdapters = [dispatch];
     const plan = createRustCallableValuePlanRegistry().initialize(materialize());
-    assert.deepEqual(plan.issues, []);
+    assert.equal(plan.issues.length, 0, `${owner}: every original callable transport is admitted`);
     assert.equal(plan.generic.definitions.length, 1);
-    assert.equal(plan.generic.definitionFor(closures[0].carrier), plan.generic.definitionFor(closures[1].carrier));
+    assert.equal(plan.generic.definitionFor(closures[0].carrier) === plan.generic.definitionFor(closures[1].carrier), true,
+      `${owner}: the two exact original carriers share the identical selected family`);
     assert.equal(plan.generic.definitions[0].implementations.length, 2);
   });
 }
@@ -539,7 +518,8 @@ for (const transport of ["spread", "reference", "rest"]) {
       assert.equal(plan.issues.length, incompatible ? 1 : 0);
       assert.equal(plan.generic.definitions.length, incompatible ? 2 : 1);
       if (incompatible) assert.match(plan.issues[0].message, /contradictory selected native signatures/u);
-      else assert.equal(plan.generic.definitionFor(source), plan.generic.definitionFor(target));
+      else assert.equal(plan.generic.definitionFor(source) === plan.generic.definitionFor(target), true,
+        `${transport}: both original carriers retain the identical selected family`);
     });
   }
 }

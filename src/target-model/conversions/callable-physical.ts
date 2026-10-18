@@ -107,10 +107,12 @@ export function rustCallablePhysicalSignature(carrier: TargetTypeRef): RustCalla
     : carrier.kind === "closure" && carrier.fallible !== true && carrier.args.length === 1 ? carrier.args[0] : undefined;
   const resultCarrier = tuple?.kind === "tuple" ? arguments_?.[1] ?? (carrier.kind === "closure" ? carrier.result : undefined) : undefined;
   const result = rustNamedTypeCarrierValue(resultCarrier);
-  const resultArguments = result?.id === "rust.core.Result" ? rustOnlyTypeGenericArguments(result.genericArguments) : undefined;
-  return tuple?.kind !== "tuple" || resultArguments?.length !== 2 ? undefined : Object.freeze({
-    parameters: tuple.elements, result: resultArguments[0]!, error: resultArguments[1]!,
-  });
+  if (tuple?.kind !== "tuple" || result === undefined) return undefined;
+  const resultArguments = rustOnlyTypeGenericArguments(result.genericArguments);
+  if (result.id === "rust.runtime.TsonicResult" && resultArguments?.length === 1)
+    return Object.freeze({ parameters: tuple.elements, result: resultArguments[0]!, error: rustRuntimeErrorTargetType() });
+  return result.id !== "rust.core.Result" || resultArguments?.length !== 2 ? undefined
+    : Object.freeze({ parameters: tuple.elements, result: resultArguments[0]!, error: resultArguments[1]! });
 }
 
 export function rustCallableConversionPhysical(

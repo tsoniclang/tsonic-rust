@@ -47,22 +47,41 @@ export function prepareRustHelperCallableEmissionRequests(
     }
     return `${input.ast.getFileName(file)}:${identity}:${suffix}`;
   };
-  const collect = (node: Node, adapter: RustCallableValueAdapter, origin: AdapterInput["origin"], selected: AdapterInput[]): void => {
-    if (adapter.kind === "option-map" || adapter.kind === "option-some") collect(node, adapter.element, origin, selected);
+  const collect = (node: Node, adapter: RustCallableValueAdapter, origin: AdapterInput["origin"],
+    sourceBindings: RustTargetGenericBindings, selected: AdapterInput[]): void => {
+    if (adapter.kind === "option-map" || adapter.kind === "option-some") collect(node, adapter.element, origin, sourceBindings, selected);
     else if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter")
-      selected.push(Object.freeze({ node, selection: adapter.conversion, origin }));
+      selected.push(Object.freeze({ node, selection: adapter.conversion, origin, sourceBindings }));
   };
   const adaptersFor = (node: Node, parameters: readonly RustCallableParameterAdapter[], result: RustCallableValueAdapter,
-    resultOrigin: AdapterInput["origin"]): readonly AdapterInput[] => {
+    resultOrigin: AdapterInput["origin"], parameterSource: "original-formal" | "generated-abi",
+    parameterBindings: RustTargetGenericBindings, resultBindings: RustTargetGenericBindings): readonly AdapterInput[] => {
     const selected: AdapterInput[] = [];
+    const formalParameters = input.ast.parameters(node);
+    const parameterOrigin = (abi: Extract<AdapterInput["origin"], { readonly kind: "parameter" }>["abi"],
+      index: number): Extract<AdapterInput["origin"], { readonly kind: "parameter" }> | undefined => {
+      if (parameterSource === "generated-abi") return Object.freeze({ kind: "parameter", abi,
+        source: Object.freeze({ kind: "generated-abi" }) });
+      const parameter = formalParameters[index];
+      if (parameter === undefined) {
+        reject(node, "A generated dispatch input requires its original contract formal and exact ABI index.");
+        return undefined;
+      }
+      return Object.freeze({ kind: "parameter", abi, source: Object.freeze({ kind: "original-formal", parameter }) });
+    };
     for (const parameter of parameters) {
       if (parameter.kind === "omitted") continue;
       if (parameter.kind === "rest") {
-        for (const segment of parameter.segments) collect(node, segment.adapter,
-          Object.freeze({ kind: "parameter", abi: segment.source }), selected);
-      } else collect(node, parameter.adapter, Object.freeze({ kind: "parameter", abi: parameter.source }), selected);
+        for (const segment of parameter.segments) {
+          const origin = parameterOrigin(segment.source, segment.contractParameterIndex);
+          if (origin !== undefined) collect(node, segment.adapter, origin, parameterBindings, selected);
+        }
+      } else {
+        const origin = parameterOrigin(parameter.source, parameter.contractParameterIndex);
+        if (origin !== undefined) collect(node, parameter.adapter, origin, parameterBindings, selected);
+      }
     }
-    collect(node, result, resultOrigin, selected);
+    collect(node, result, resultOrigin, resultBindings, selected);
     return Object.freeze(selected);
   };
   const ownerBindings = (declaration: Node, carrier: TargetTypeRef): RustTargetGenericBindings | undefined => {
@@ -89,7 +108,8 @@ export function prepareRustHelperCallableEmissionRequests(
     append({ subject: callable, declaration: callable.declaration, identity, nativeOwnerFileName, bindings,
       sourceCarriers: [callable.ownerCarrier, callable.carrier, ...callable.parameters.map(parameter => parameter.parameterCarrier)],
       returnCarrier: callable.resultAdapter.targetCarrier, callableAdapterInputs: adaptersFor(callable.declaration,
-        callable.parameterAdapters, callable.resultAdapter, Object.freeze({ kind: "return", declaration: callable.declaration })) });
+        callable.parameterAdapters, callable.resultAdapter, Object.freeze({ kind: "return", declaration: callable.declaration }),
+        "generated-abi", bindings, bindings) });
   };
   for (const concrete of input.projectTypes.definitions) {
     if (!input.isNativeNode(concrete.declaration)) continue;
@@ -108,15 +128,16 @@ export function prepareRustHelperCallableEmissionRequests(
         continue;
       }
       const bindings = snapshotRustCallableBindings({
-        types: new Map([...lexical.types, ...body.bindings.types, ...body.contractBindings.types]),
-        lifetimes: new Map([...lexical.lifetimes, ...body.bindings.lifetimes, ...body.contractBindings.lifetimes]),
-        consts: new Map([...lexical.consts, ...body.bindings.consts, ...body.contractBindings.consts]),
+        types: new Map([...lexical.types, ...body.contractBindings.types]),
+        lifetimes: new Map([...lexical.lifetimes, ...body.contractBindings.lifetimes]),
+        consts: new Map([...lexical.consts, ...body.contractBindings.consts]),
       });
       append({ subject: adapter, declaration: adapter.contract, identity, nativeOwnerFileName: concrete.fileName, bindings,
         sourceCarriers: [...adapter.parameters.map(parameter => parameter.parameterCarrier), adapter.returnCarrier,
           ...adapter.implementationParameters.map(parameter => parameter.parameterCarrier), adapter.implementationReturnCarrier],
         returnCarrier: adapter.returnCarrier, callableAdapterInputs: adaptersFor(adapter.contract, adapter.parameterAdapters,
-          adapter.resultAdapter, Object.freeze({ kind: "return", declaration: adapter.implementation })) });
+          adapter.resultAdapter, Object.freeze({ kind: "return", declaration: adapter.implementation }),
+          "original-formal", bindings, body.bindings) });
     }
   }
   for (const node of input.nativeNodes) {
@@ -130,14 +151,20 @@ export function prepareRustHelperCallableEmissionRequests(
         reject(node, "A generated object dispatch requires its original implementation, slot and source owner.");
         continue;
       }
-      const bindings = snapshotRustCallableBindings({ types: new Map([...lexical.types, ...implementation.typeParameterSubstitutions]),
+      const bindings = declaredBindings(dispatch.contractMethod);
+      const implementationBindings = snapshotRustCallableBindings({ types: new Map([...lexical.types, ...implementation.typeParameterSubstitutions]),
         lifetimes: lexical.lifetimes, consts: lexical.consts });
+      if (bindings === undefined) {
+        reject(node, "A generated object dispatch requires its original contract generic bindings.");
+        continue;
+      }
       append({ subject: dispatch, declaration: dispatch.contractMethod, identity,
         nativeOwnerFileName: input.ast.getFileName(sourceFile), bindings,
         sourceCarriers: [...dispatch.parameters.map(parameter => parameter.parameterCarrier), dispatch.returnCarrier,
           ...implementation.parameters.map(parameter => parameter.parameterCarrier), implementation.returnCarrier],
         returnCarrier: dispatch.returnCarrier, callableAdapterInputs: adaptersFor(dispatch.contractMethod, dispatch.parameterAdapters,
-          dispatch.resultAdapter, Object.freeze({ kind: "return", declaration: implementation.sourceCallable })) });
+          dispatch.resultAdapter, Object.freeze({ kind: "return", declaration: implementation.sourceCallable }),
+          "original-formal", bindings, implementationBindings) });
     }
   }
   for (const view of input.classValues.constructorViewImplementations) {
@@ -156,11 +183,11 @@ export function prepareRustHelperCallableEmissionRequests(
       const bindings = ownerBindings(field.declaration, view.sourceCarrier);
       const identity = identityFor(field.declaration, `${suffix}:field:${field.storageIndex}`);
       const selected: AdapterInput[] = [];
-      if (field.readAdapter !== undefined) {
+      if (field.readAdapter !== undefined && bindings !== undefined) {
         if (field.accessor?.read !== undefined) collect(field.declaration, field.readAdapter,
-          Object.freeze({ kind: "return", declaration: field.accessor.read.declaration }), selected);
+          Object.freeze({ kind: "return", declaration: field.accessor.read.declaration }), bindings, selected);
         else if (field.field !== undefined) collect(field.declaration, field.readAdapter,
-          Object.freeze({ kind: "field", selection: field.field }), selected);
+          Object.freeze({ kind: "field", selection: field.field }), bindings, selected);
         else reject(field.declaration, "A generated structural read requires its exact original selected field or accessor.");
       }
       if (bindings === undefined || identity === undefined || field.readAdapter === undefined) {

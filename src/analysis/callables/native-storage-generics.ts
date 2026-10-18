@@ -1,6 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
@@ -12,7 +13,7 @@ import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustStructuralMethodStorageCarrier } from "../../target-model/types/carriers/callables.js";
@@ -21,7 +22,11 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustPhysicalCallableSourceActivations } from "../../target-model/records/physical-emission-contexts.js";
-import { snapshotRustCallableBindings } from "./generic-bindings.js";
+import { snapshotRustCallableBindings, rustGenericCallablePhysicalBindings } from "./generic-bindings.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import type { RustProjectMethodBodySelection, RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
+import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
+import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
 
 type RustNativeStorageTargetBindingsSelection =
   | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings }
@@ -159,16 +164,140 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
   return select;
 }
 
+export function selectRustSourceMethodInvocation(input: {
+  readonly ast: AstReader;
+  readonly records: RustProgramRecords;
+  readonly storage: SourceStorageQueries;
+  readonly projectTypes: RustProjectTypePolicy;
+  readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
+  readonly logicalCarrierFor: (subject: SourceStorageSubject, bindings: SourceStorageBindings) => TargetTypeRef | undefined;
+}, invocation: Node, callerBindings: SourceStorageBindings, caller: RustTargetGenericBindings): TargetStageResult<readonly {
+  readonly body: RustProjectMethodBodySelection;
+  readonly adapter: RustProjectCallableAdapter;
+  readonly receiver: SourceStorageProducer;
+  readonly receiverCarrier: TargetTypeRef;
+  readonly activation: SourceStorageBindings;
+  readonly implementationBindings: RustTargetGenericBindings;
+  readonly contractBindings: RustTargetGenericBindings;
+  readonly receiverBindings: RustTargetGenericBindings;
+}[]> | undefined {
+  const operation = input.records.targetOperation.get(invocation);
+  if (operation?.kind !== "source-call" || operation.target.form !== "method") return undefined;
+  if (operation.target.dispatch === undefined) return resolvedTargetStage(Object.freeze([]));
+  const reject = (reason: string): ReturnType<typeof rejectedTargetStage> => rejectedTargetStage([{
+    code: "RUST_NATIVE_CALLABLE_ADAPTER_NOT_PROVEN", category: "error", source: "tsonic-rust", sourceNode: invocation,
+    message: reason, evidence: ["target.capability=rust.callable-value.exact-implementation"],
+  }]);
+  const signature = input.records.selectedCall.get(invocation);
+  const contract = asSourceNode(signature?.sourceDeclaration, input.ast);
+  const checked = input.storage.source.semantics.forNode(invocation).operations.call(invocation);
+  const receiver = checked?.sourceReceiver?.expression ?? checked?.sourceCalleeAccess?.receiver.expression;
+  const receiverSubject = receiver === undefined ? undefined : input.storage.subjectFor(receiver);
+  const calleeSubject = checked === undefined ? undefined : input.storage.subjectFor(checked.sourceCallee.expression);
+  const implementations = input.storage.invocationImplementationsFor(invocation, callerBindings);
+  const receiverProducers = receiverSubject?.kind !== "resolved" ? undefined
+    : input.storage.storageProducersFor(receiverSubject.subject, callerBindings);
+  const calleeProducers = calleeSubject?.kind !== "resolved" ? undefined
+    : input.storage.storageProducersFor(calleeSubject.subject, callerBindings);
+  if (contract === undefined || checked === undefined || implementations.kind !== "resolved" || !implementations.exact ||
+    receiverProducers?.kind !== "complete" || calleeProducers?.kind !== "complete")
+    return reject("A native method adaptation requires its exact checked receiver, implementation and correlated source activations.");
+  const methodArguments = (operation.targetGenericArguments ?? []).flatMap(argument => argument.kind === "type"
+    ? [substituteRustTargetGenerics(argument.type, caller.types, caller.lifetimes, caller.consts)] : []);
+  const selectedReceiver = signature?.sourceSelectedReceiverCarrier;
+  const variant = selectedReceiver === undefined ? undefined : input.projectMethodDispatch.variantForMember(contract,
+    methodArguments, substituteRustTargetGenerics(selectedReceiver, caller.types, caller.lifetimes, caller.consts));
+  if (variant === undefined) return reject("A native method adaptation requires its one already-selected original dispatch variant.");
+  const rows: Extract<ReturnType<typeof selectRustSourceMethodInvocation>, { readonly kind: "resolved" }>["value"][number][] = [];
+  for (const producer of calleeProducers.producers) {
+    const selected = input.storage.source.navigation.callableImplementation(producer.subject.node);
+    if (producer.subject.projection.length !== 0 || selected.kind !== "resolved" ||
+      !implementations.nodes.includes(selected.implementation.declaration))
+      return reject("A native method adaptation has an unselected original implementation activation.");
+    const declaration = selected.implementation.declaration;
+    const activation = input.storage.bindingsForInvocation(declaration, invocation, callerBindings, producer);
+    const formalReceiver = input.storage.subject(declaration, "receiver");
+    const actualReceivers = activation.kind !== "resolved" || formalReceiver.kind !== "resolved" ? undefined
+      : input.storage.storageProducersFor(formalReceiver.subject, activation.bindings);
+    if (activation.kind !== "resolved" || actualReceivers?.kind !== "complete")
+      return reject("A native method adaptation lost the original implementation's exact receiver activation.");
+    for (const actual of actualReceivers.producers) {
+      if (!receiverProducers.producers.some(candidate => candidate.subject === actual.subject && candidate.bindings === actual.bindings))
+        return reject("A native method adaptation cannot substitute an unrelated receiver or source binding.");
+      const carrier = input.logicalCarrierFor(actual.subject, actual.bindings);
+      const concrete = carrier === undefined ? undefined : input.projectTypes.definitionForCarrier(carrier);
+      const named = rustSourceTypeCarrierValue(carrier);
+      const body = concrete === undefined ? undefined : input.projectMethodDispatch.bodyFor(concrete, declaration, variant);
+      const role = operation.target.dispatch.selected;
+      const selectedBody = concrete === undefined ? undefined : input.projectMethodDispatch.implementationFor(concrete, variant, role);
+      const adapters = concrete === undefined ? [] : (input.records.projectCallableAdapters.get(concrete.declaration) ?? [])
+        .filter(adapter => adapter.contract === contract && adapter.implementation === declaration &&
+          adapter.slot === (role === "virtual" ? variant.virtualSlot : variant.exactSlot));
+      if (carrier === undefined || concrete?.kind !== "class" || named === undefined || body === undefined || selectedBody !== body || adapters.length !== 1)
+        return reject("A native method adaptation requires its exact original concrete body and admitted callable adapter.");
+      const parameters: RustTargetGenericArgument[] = concrete.genericParameters.map(parameter => parameter.kind === "lifetime"
+        ? { kind: "lifetime", lifetime: parameter.lifetime }
+        : { kind: "type", type: { kind: "type-parameter", identity: parameter.identity, name: parameter.targetName } });
+      const bindings = rustGenericCallablePhysicalBindings(parameters, named.genericArguments);
+      if (bindings === undefined) return reject("A native method adaptation requires the complete original concrete receiver arguments.");
+      const bind = (selected: RustTargetGenericBindings): RustTargetGenericBindings | undefined => {
+        const consts = new Map<string, RustTargetConstArgument>();
+        for (const [identity, value] of selected.consts) {
+          const argument = substituteRustTargetGenericArgument({ kind: "const", value }, bindings.types, bindings.lifetimes, bindings.consts);
+          if (argument.kind !== "const") return undefined;
+          consts.set(identity, argument.value);
+        }
+        return snapshotRustCallableBindings({
+          types: new Map([...selected.types].map(([identity, type]) => [identity,
+            substituteRustTargetGenerics(type, bindings.types, bindings.lifetimes, bindings.consts)])),
+          lifetimes: new Map([...selected.lifetimes].map(([identity, lifetime]) =>
+            [identity, bindings.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime])),
+          consts,
+        });
+      };
+      const implementationBindings = bind(body.bindings);
+      const contractBindings = bind(body.contractBindings);
+      if (implementationBindings === undefined || contractBindings === undefined)
+        return reject("A native method adaptation lost an original constant argument correspondence.");
+      rows.push(Object.freeze({ body, adapter: adapters[0]!, receiver: actual, receiverCarrier: carrier,
+        activation: activation.bindings, implementationBindings, contractBindings,
+        receiverBindings: bindings }));
+    }
+  }
+  return rows.length === 0 ? reject("A native method adaptation has no exact original receiver activation.")
+    : resolvedTargetStage(Object.freeze(rows));
+}
+
 export function selectRustSourceCallableInvocationBindings(input: {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly lifetimes: RustLifetimeIndex;
   readonly generic: Pick<RustGenericCallablePlan, "implementationFor">;
+  readonly projectTypes: RustProjectTypePolicy;
+  readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
+  readonly logicalCarrierFor: (subject: SourceStorageSubject, bindings: SourceStorageBindings) => TargetTypeRef | undefined;
 }, declaration: Node, invocation: Node, bindings: SourceStorageBindings,
   arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings): RustNativeStorageTargetBindingsSelection | undefined {
   const operation = input.records.targetOperation.get(invocation);
   if (operation?.kind !== "source-call") return undefined;
+  const method = selectRustSourceMethodInvocation(input, invocation, bindings, caller);
+  if (method?.kind === "rejected") return Object.freeze({ kind: "unresolved", reason: method.diagnostics[0]!.message });
+  if (method?.kind === "resolved" && method.value.length !== 0) {
+    const matching = method.value.filter(row => row.body.declaration === declaration);
+    if (matching.length === 0 || matching.some(row => !sameBindings(row.implementationBindings, matching[0]!.implementationBindings)))
+      return Object.freeze({ kind: "unresolved", reason: "A native method activation requires its exact single original implementation binder substitution." });
+    return Object.freeze({ kind: "resolved", bindings: matching[0]!.implementationBindings });
+  }
+  if (method?.kind === "resolved") {
+    const signature = input.records.selectedCall.get(invocation);
+    if (asSourceNode(signature?.sourceDeclaration, input.ast) !== declaration)
+      return Object.freeze({ kind: "unresolved", reason: "A direct native method activation requires its original selected source declaration." });
+    const selected = rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [], arguments_);
+    return selected === undefined
+      ? Object.freeze({ kind: "unresolved", reason: "A direct native method activation lost its exact selected generic arguments." })
+      : Object.freeze({ kind: "resolved", bindings: selected });
+  }
   const target = operation.target;
   const logical = target.form === "callable" ? target.carrier
     : target.form === "structural-method" || target.form === "constructor-value" ? target.callableCarrier : undefined;

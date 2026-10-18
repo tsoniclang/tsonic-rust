@@ -17,6 +17,6 @@ export function analyzeRustCheckedContext(request, configureContext) {
   const identities = analyzeRustSourceOutputIdentities({ ast: context.ast, sourceFiles: context.sourceFiles,
     sourcePackages: context.sourcePackages, paths: request.input.paths });
   assert.equal(identities.kind, "accepted", "the actual checked source output identities are selected before body analysis");
-  analyzeRustProgram(context, request.configuration.outputType, identities.identities);
-  return Object.freeze({ ...context, sourceOutputIdentities: identities.identities });
+  const sourceStage = analyzeRustProgram(context, request.configuration.outputType, identities.identities);
+  return Object.freeze({ ...context, sourceOutputIdentities: identities.identities, sourceStage });
 }

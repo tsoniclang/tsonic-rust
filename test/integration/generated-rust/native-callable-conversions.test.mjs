@@ -398,6 +398,33 @@ if (callback === undefined || callback() !== 7) throw new Error("optional helper
   validateGeneratedProject("selected-callable-helper-abi", result.artifacts, { run: true });
 });
 
+test("nested callable results and rest dispatch retain their distinct original helper ABI slots", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "contract.ts": `export interface NestedWide { read(): () => () => number | undefined; }
+export interface NestedNarrow { read(): () => () => number; }
+export interface RestReceiver { use(first: () => number, second: () => number): number; }`,
+    "model.ts": `import type { NestedWide, NestedNarrow, RestReceiver } from "./contract.js";
+export class Nested implements NestedWide, NestedNarrow {
+  read(): () => () => number { return () => () => 23; }
+}
+export class Rest implements RestReceiver {
+  use(...callbacks: ((unused: number) => number)[]): number {
+    return callbacks[0](0) + callbacks[1](0);
+  }
+}`,
+    "index.ts": `import type { NestedWide, NestedNarrow, RestReceiver } from "./contract.js";
+import { Nested, Rest } from "./model.js";
+const first: NestedWide = new Nested();
+const second: NestedNarrow = new Nested();
+if (first.read()()() !== 23) throw new Error("nested wide result adapter");
+if (second.read()()() !== 23) throw new Error("distinct narrow helper view");
+const receiver: RestReceiver = new Rest();
+if (receiver.use(() => 29, () => 31) !== 60) throw new Error("both original rest adapter segments");`,
+  } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
+  validateGeneratedProject("nested-rest-callable-helper-abi", result.artifacts, { run: true });
+});
+
 test("physical callable adaptation retains exact E with one owning frame or zero borrowed allocations", { timeout: 300_000 }, () => {
   const pure = fixtureExpressions(false);
   const throwing = fixtureExpressions(true);

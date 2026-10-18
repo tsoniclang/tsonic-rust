@@ -21,8 +21,11 @@ import { rustJsPromiseOutputTargetType } from "../../../../target-model/types/ca
 
 export function planRustNativeProducerBridge(
   protocol: RustNativeCallableProtocol,
-  context: RustPlanContext,
+  enclosingContext: RustPlanContext,
 ): readonly RustItem[] | undefined {
+  const context: RustPlanContext = { ...enclosingContext, typeParameterNames: new Map([
+    ...enclosingContext.typeParameterNames ?? [], [protocol.implicitSelf.identity, protocol.implicitSelf.name],
+  ]) };
   const signature = protocol.signature;
   const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
   if (signature.typeParameters.length !== 0) return [];
@@ -125,7 +128,7 @@ export function planRustNativeProducerBridge(
   }] : [])],
   };
   if (lifetimes.length === 0) return [direct];
-  const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
+  const self = protocol.implicitSelf;
   const associated = (name: string): TargetTypeRef => ({ kind: "associated-type", owner: self, name, genericArguments: [] });
   const helperResult = result(associated("InvocationError"), ordinal => associated(`AwaitError${ordinal}`), [
     ...targetLifetimes, ...rustTypeGenericArguments([self, ...boundTypes]),

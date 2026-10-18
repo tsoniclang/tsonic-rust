@@ -13,6 +13,7 @@ import { createRustSourceCallableAbiResolver } from "../../policy/ownership/sour
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   KindExportAssignment,
@@ -67,6 +68,7 @@ interface RustSourceStageOutput {
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
+  readonly classValues: RustClassValuePlan;
 }
 
 export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib",
@@ -592,13 +594,16 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   recordRustLexicalValueEnvironments(walk, lexical);
   analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
+  const classValueAdapters = context.classValues.valueAdapters();
+  const classValues = context.classValues.seal(context);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
-    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
+    classValueAdapters, classValues, closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     sourceTypes: walk.sourceTypes,
-    projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
+    projectTypes: context.projectTypes, projectMethodDispatch: context.projectMethodDispatch,
+    objectRepresentations: context.objectRepresentations,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
     retainedEnvironments: context.retainedEnvironments,
     carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
@@ -645,6 +650,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
   return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan,
+    classValues,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }
 

@@ -7,6 +7,7 @@ import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSu
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
+import { selectRustSourceMethodInvocation } from "../../../dist/analysis/callables/native-storage-generics.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
@@ -23,6 +24,7 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/targ
 import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { nativeCallableConstructionFixture } from "../../helpers/physical-callable-adapters.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 
@@ -80,7 +82,7 @@ test("a named generic body retains the same actual free environment before and a
 });
 
 function fixture(text, options = {}) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
+  const { program, source: checked, input: constructionInput } = nativeCallableConstructionFixture({ surfaces: [], files: { "index.ts": text }, ...options });
   const checkedSource = createTargetSourceProgram(checked);
   const guardedAst = Proxy.revocable(checkedSource.ast, {});
   const source = { ...checkedSource, ast: guardedAst.proxy };
@@ -94,7 +96,11 @@ function fixture(text, options = {}) {
     node => nativeNodeSet.has(node));
   const generic = genericRegistry.plan;
   let physical;
+  let plan;
   const input = { ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
+    carrierHost: { ...constructionInput.carrierHost, sourceStorage: storage }, classValues: constructionInput.classValues,
+    projectTypes: program.projectTypes, projectMethodDispatch: program.projectMethodDispatch,
+    parameterFor: parameter => plan.parameterFor(parameter),
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
@@ -120,7 +126,7 @@ function fixture(text, options = {}) {
   physical = genericRegistry.initializePhysical({ ...input, native, captures,
     genericBindingsFor: (declaration, bindings) => queries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
-  const plan = finalizeRustNativeParameterStorage(input, queries);
+  plan = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
     source.ast.text(source.ast.name(node)) === name &&
     (source.ast.is.IsFunctionDeclaration(node) || source.ast.is.IsVariableDeclaration(node) ||
@@ -775,5 +781,72 @@ test("raw callable and Future data fields still require their own exact physical
     assert.match(selected.reason, /physical aggregate layout owner/u,
       `${name} retains the exact physical data-layout obligation`);
     assert.equal(Object.isFrozen(selected), true, `${name} preserves its immutable unresolved physical storage`);
+  }
+});
+
+test("method adaptation retains every original receiver activation and never renames implementation binders", () => {
+  const current = fixture(`
+    interface Receiver { use(callback: () => number): number; }
+    class Concrete implements Receiver {
+      use(callback: (unused: number) => number): number { return callback(0); }
+    }
+    export function run(flag: boolean): number {
+      const receiver: Receiver = flag ? new Concrete() : new Concrete();
+      return receiver.use(() => 19);
+    }
+  `);
+  const methods = current.storage.invocations.filter(node => {
+    const operation = current.program.records.targetOperation.get(node);
+    return operation?.kind === "source-call" && operation.target.form === "method" && operation.target.dispatch !== undefined;
+  });
+  assert.equal(methods.length, 1, "one actual checked contract invocation");
+  const invocation = methods[0];
+  const caller = current.storage.bindingsForLexicalOwner(invocation);
+  assert.equal(caller.kind, "resolved", "the exact caller's original storage environment is complete");
+  const generics = current.plan.genericBindingsFor(current.declaration("run"), caller.bindings);
+  assert.equal(generics.kind, "resolved", "the actual caller's generic arguments are complete");
+  const input = { ...current.input, logicalCarrierFor: current.plan.logicalCarrierFor };
+  const selected = selectRustSourceMethodInvocation(input, invocation, caller.bindings, generics.bindings);
+  assert.equal(selected?.kind, "resolved", "the original checked method correspondence is admitted");
+  assert.equal(selected.value.length, 2, "both actual receiver producers retain their correlated activation");
+  assert.equal(new Set(selected.value.map(row => row.receiver.subject)).size, 2,
+    "two distinct original constructor subjects are not collapsed to the first receiver");
+  const contract = selected.value[0].adapter.contract;
+  for (const row of selected.value) {
+    assert.equal(row.adapter.contract === contract && row.adapter.implementation === row.body.declaration, true,
+      "the exact admitted contract and implementation remain different original source identities");
+    assert.equal(row.adapter.contract === row.body.declaration, false, "the interface declaration is not relabelled as its implementation");
+    const formal = current.source.ast.parameters(row.body.declaration)[0];
+    const native = current.native.inputsFor(row.body.declaration).filter(input => input.subject.node === formal);
+    assert.equal(native.length, 1, "the original implementation's callable input remains authoritative");
+    assert.equal(current.native.inputsFor(contract).includes(native[0]), false,
+      "distinct native input identities are proved through the actual activation, never renamed into the contract");
+    const receivers = current.storage.subject(row.body.declaration, "receiver");
+    assert.equal(receivers.kind, "resolved", "the exact implementation has its original receiver subject");
+    const producers = current.storage.storageProducersFor(receivers.subject, row.activation);
+    assert.equal(producers.kind === "complete" && producers.producers.some(producer =>
+      producer.subject === row.receiver.subject && producer.bindings === row.receiver.bindings), true,
+    "the published row retains the same receiver and binding correlation");
+  }
+  const body = selected.value[0].body;
+  const adapters = current.program.records.projectCallableAdapters.get(body.concrete.declaration);
+  for (const [label, changed] of [
+    ["inexact implementations", { storage: { ...current.storage,
+      invocationImplementationsFor: () => ({ kind: "resolved", nodes: [body.declaration], exact: false }) } }],
+    ["unselected implementation", { storage: { ...current.storage,
+      invocationImplementationsFor: () => ({ kind: "resolved", nodes: [contract], exact: true }) } }],
+    ["unproved activation", { storage: { ...current.storage,
+      bindingsForInvocation: () => ({ kind: "unresolved", reason: "The selected invocation has no exact activation." }) } }],
+    ["missing concrete receiver evidence", { logicalCarrierFor: () => undefined }],
+    ["missing body", { projectMethodDispatch: { ...current.input.projectMethodDispatch, bodyFor: () => undefined } }],
+    ["unselected body", { projectMethodDispatch: { ...current.input.projectMethodDispatch, implementationFor: () => undefined } }],
+    ["ambiguous adapter", { records: createRustRecordFixture({ projectCallableAdapters: { get: node =>
+      node === body.concrete.declaration ? [...adapters, selected.value[0].adapter]
+        : current.program.records.projectCallableAdapters.get(node) } }, current.program.records) }],
+  ]) {
+    const rejected = selectRustSourceMethodInvocation({ ...input, ...changed }, invocation, caller.bindings, generics.bindings);
+    assert.equal(rejected?.kind, "rejected", `${label}: an unresolved method is not treated as an ordinary non-method invocation`);
+    assert.equal(rejected.diagnostics.every(diagnostic => diagnostic.code === "RUST_NATIVE_CALLABLE_ADAPTER_NOT_PROVEN"), true,
+      `${label}: the owning source admission reports its precise missing correspondence`);
   }
 });

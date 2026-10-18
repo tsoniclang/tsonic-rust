@@ -345,7 +345,7 @@ test("the real frame inventory proves the exact emitted fields without a fictiti
   const plan = program.callableValues.selected;
   assert.equal(program.diagnostics.length, 0, "the real source premise has no diagnostics");
   assert.equal(plan.frames.definitions.length, 1, "one actual owning activation");
-  const classValues = program.classValues.seal(program);
+  const classValues = program.sourceStage.classValues;
   for (const definition of plan.frames.definitions) for (const entry of definition.entries) {
     assert.equal(definition.bindings.length, 2, "the actual frame stores both seed and its callable entry slot");
     assert.equal(definition.bindings.some(binding => binding.entry === entry), true, "the self slot stores the exact entry enum");
@@ -370,7 +370,7 @@ test("the real class factory plan preserves lexical environment fields before fi
   `, { surfaces: [] });
   const definition = program.projectTypes.definitions.find(definition => definition.kind === "class");
   assert.equal(definition !== undefined, true, "actual local class declaration");
-  const classValues = program.classValues.seal(program);
+  const classValues = program.sourceStage.classValues;
   const environment = classValues.forDeclaration(definition.declaration)?.environment;
   assert.equal(environment !== undefined, true, "sealed actual lexical class environment");
   assert.equal(environment.captures.length, 1, "the lexical capture is not an empty signature");

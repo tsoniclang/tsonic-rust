@@ -40,8 +40,11 @@ export function planRustNativeGenericProducerBridges(
 function planImplementation(
   protocol: RustNativeCallableProtocol,
   definition: RustGenericCallablePhysicalDefinition,
-  context: RustPlanContext,
+  enclosingContext: RustPlanContext,
 ): RustItem | undefined {
+  const context: RustPlanContext = { ...enclosingContext, typeParameterNames: new Map([
+    ...enclosingContext.typeParameterNames ?? [], [protocol.implicitSelf.identity, protocol.implicitSelf.name],
+  ]) };
   const signature = protocol.signature;
   const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
@@ -55,7 +58,7 @@ function planImplementation(
   const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(mapRustTargetTypes(result, type => {
     if (type.kind !== "impl-trait" || type.captures === undefined) return type;
     return { ...type, captures: type.captures.filter(argument => argument.kind !== "type" ||
-      argument.type.kind !== "type-parameter" || argument.type.identity !== `${protocol.identity}:Self`) };
+      argument.type.kind !== "type-parameter" || argument.type.identity !== protocol.implicitSelf.identity) };
   }), context, "return");
   const parameters = protocol.method.parameters.map(carrier => rustTypeFromCarrierInContext(carrier, context, "parameter"));
   if (methodGenerics === undefined || errors === undefined || target === undefined || trait === undefined || returnType === undefined ||

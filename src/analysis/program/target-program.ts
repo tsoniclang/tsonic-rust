@@ -132,7 +132,7 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(context.diagnostics);
   }
   if (sourceStage === undefined) throw new Error("Rust program analysis completed without its sealed source-stage output.");
-  const { lexicalFunctions, sourcePackageComponents } = sourceStage;
+  const { lexicalFunctions, sourcePackageComponents, classValues } = sourceStage;
 
   const sourcePackageFacades = analyzeRustSourcePackageFacades(context, sourceOutputIdentities.identities);
   if (sourcePackageFacades.kind === "rejected") {
@@ -146,7 +146,6 @@ export function analyzeRustTargetProgram(
     components: sourcePackageComponents });
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
-  const classValues = context.classValues.seal(context);
   const moduleInitialization = createRustModuleInitializationPlan(context, classValues, {
     outputType: configuration.outputType,
     projectRoot: input.paths.projectRoot,

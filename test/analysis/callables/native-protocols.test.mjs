@@ -31,6 +31,10 @@ test("equal native signatures share one protocol while implementation and associ
   assert.equal(error.name, "InvocationError");
   assert.equal(rustNativeCallableErrorType(left, implementation, 0, []) === undefined, true);
   assert.equal(left.protocol.completion === undefined, true);
+  assert.equal(Object.isFrozen(left.protocol.implicitSelf), true, "the actual implicit native binder is sealed once");
+  const result = rustNativeCallableProtocolResult(left.protocol, emptyRustTypeDefinitions);
+  assert.equal(result.value.genericArguments[1].type.owner === left.protocol.implicitSelf, true,
+    "the native associated error consumes the original implicit Self object");
   assert.equal(Object.isFrozen(left.protocol.signature) && Object.isFrozen(left.environment), true);
 });
 

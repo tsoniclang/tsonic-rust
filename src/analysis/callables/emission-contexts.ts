@@ -117,6 +117,7 @@ export interface RustCallableEmissionContextPreparation extends
 export interface RustEmissionContextRequest extends RustEmissionSourceRequest {
   readonly callableAdapterInputs: readonly (Pick<RustCallablePhysicalAdapter, "node" | "selection"> & {
     readonly origin: Exclude<RustCallablePhysicalAdapter["origin"], { readonly kind: "expression" }>;
+    readonly sourceBindings: RustTargetGenericBindings;
   })[];
   readonly nativeOwnerFileName: string;
   readonly role: RustPhysicalEmissionRole;
@@ -576,7 +577,7 @@ export function prepareRustEmissionContextRequests(
       callableAdapters: contextAdapters };
     for (const adapter of request.callableAdapterInputs) {
       const prepared = input.prepareCallableAdapter(adapter.node, adapter.selection, adapter.origin,
-        request.bindings, request.nativeOwnerFileName);
+        adapter.sourceBindings, request.nativeOwnerFileName);
       if (prepared.kind === "rejected") { diagnostics.push(...prepared.diagnostics); continue; }
       retainAdapter(prepared.value);
       const retain = (selected: RustCallablePhysicalAdapterPreparation["conversion"]): void => {
@@ -611,6 +612,7 @@ export function prepareRustEmissionContextRequests(
       const sourceErrorRegions: RustPhysicalEmissionOperandPreparation["sourceErrorRegions"][number][] = [];
       let genericInvocation: RustGenericCallableInvocationFact | undefined;
       for (const adapter of storage.callableAdapters) {
+        if (adapter.node !== node) continue;
         retainAdapter(Object.freeze({ ...adapter, sourceCarrier: apply(adapter.sourceCarrier),
           conversion: substituteRustCallablePhysicalConversion(adapter.conversion, request.bindings, apply) }));
       }

@@ -787,9 +787,13 @@ function applySelectedRuntimeCallableCall(
         callableCarrier: carrier,
       };
   if (target.form === "callable" && optionalCall === undefined) {
-    const projection = calleeCarrier === undefined ? undefined : walk.context.records.flowReadProjections.resolve(
-      walk.context.requiredRecords, callee, calleeCarrier, invocationCarrier, walk.context.projectTypes, walk.context.typeDefinitions);
-    if (projection === undefined || projection.kind === "incompatible") {
+    const admitted = walk.context.records.flowReadProjection.get(callee);
+    const projection = admitted === undefined
+      ? calleeCarrier === undefined ? undefined : walk.context.records.flowReadProjections.resolve(
+        walk.context.requiredRecords, callee, calleeCarrier, invocationCarrier, walk.context.projectTypes, walk.context.typeDefinitions)
+      : { kind: "projection" as const, fact: admitted };
+    if (projection === undefined || projection.kind === "incompatible" ||
+      projection.kind === "projection" && !rustTargetTypeRefEquals(projection.fact.selectedCarrier, invocationCarrier)) {
       appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
         "The runtime callee cannot project to its exact checked callable carrier.", callee,
         ["target.capability=rust.source-call.runtime-callable-value"]);

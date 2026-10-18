@@ -32,19 +32,20 @@ const physicalCarrier = ({ parameters, result, error }) => rustNamedTargetType(r
 
 test("the canonical native callable ABI preserves runtime aliases and producer-specific errors separately", () => {
   const logical = rustCallableTargetType([integer], wide);
-  const signature = rustNativeCallableAbi(logical);
+  const signature = rustNativeCallableAbi({ kind: "logical", carrier: logical });
   assert.equal(signature?.kind, "stored", "the original stored ABI is selected once");
   assert.equal(signature.runtimeResult, true, "the authored callable uses the existing TsonicResult contract");
   assert.equal(rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType()), true, "the runtime result has its exact error ABI");
   const physical = physicalCarrier({ parameters: [integer], result: wide, error: failure });
-  assert.equal(rustNativeCallableAbi(physical) === undefined, true, "physical metadata is not reinterpreted as a logical stored signature");
+  assert.equal(rustNativeCallableAbi({ kind: "logical", carrier: physical }) === undefined, true,
+    "physical metadata is not reinterpreted as a logical stored signature");
   assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical).error, failure), true,
     "producer-specific error identity is never replaced by the runtime alias");
   const nested = select(rustCallableTargetType([], logical),
     rustCallableTargetType([], rustCallableTargetType([integer, integer], wide)));
   const selected = rustCallableConversionPhysical(nested, { parameters: [], result: logical, error: failure }, file,
     emptyRustTypeDefinitions, carrier => {
-      const inner = rustNativeCallableAbi(carrier);
+      const inner = rustNativeCallableAbi({ kind: "logical", carrier });
       return inner === undefined ? undefined : { parameters: inner.parameters, result: inner.result, error: inner.error };
     });
   assert.equal(selected?.resultPlan.kind, "callable", "the original ABI decoder owns nested logical results");
@@ -57,7 +58,37 @@ test("the canonical native callable ABI preserves runtime aliases and producer-s
   const native = selectRustNativeTypeCarrier(logical, input, "general");
   assert.equal(native.kind, "resolved", "the same selector renders the admitted stored ABI");
   assert.equal(native.carrier.value.genericArguments[2].type.value.path, "rt::TsonicResult", "native syntax keeps its original result alias");
-  const borrowed = rustNativeCallableAbi(rustCallableInputTargetType([integer], wide));
+  const nativeAlias = rustNativeCallableAbi({ kind: "physical", carrier: native.carrier });
+  const nativeProducer = rustNativeCallableAbi({ kind: "physical", carrier: physical });
+  assert.equal(nativeAlias !== undefined && nativeProducer !== undefined, true,
+    "only the explicit physical contract decodes the actual selected emitted slots");
+  assert.equal(rustTargetTypeRefEquals(nativeAlias.result, wide), true, "the selected runtime alias preserves its native result");
+  assert.equal(rustTargetTypeRefEquals(nativeAlias.error, rustRuntimeErrorTargetType()), true,
+    "rt::TsonicResult retains its exact runtime error, not a requested producer error");
+  assert.equal(rustTargetTypeRefEquals(nativeProducer.error, failure), true,
+    "Result retains its original producer-specific native error identity");
+  assert.equal(rustNativeCallableAbi({ kind: "physical", carrier: logical }) === undefined, true,
+    "the physical contract cannot relabel raw logical storage as selected native ABI");
+  assert.equal(rustNativeCallableAbi(logical) === undefined && rustNativeCallableAbi(physical) === undefined, true,
+    "the superseded raw-carrier API has no compatibility overload");
+  for (const [label, result] of [
+    ["foreign alias identity", rustNamedTargetType("fixture:OtherResult", "rt::TsonicResult", [
+      { kind: "type", type: wide },
+    ], [], undefined, [], undefined, [])],
+    ["extra runtime error argument", rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult", [
+      { kind: "type", type: wide }, { kind: "type", type: failure },
+    ], [], undefined, [], undefined, [])],
+    ["missing native error argument", rustNamedTargetType("rust.core.Result", "Result", [
+      { kind: "type", type: wide },
+    ], [], undefined, [], undefined, [])],
+  ]) {
+    const selected = rustNamedTargetType(rustCallableTargetId, "rt::Callable", [
+      native.carrier.value.genericArguments[0], native.carrier.value.genericArguments[1], { kind: "type", type: result },
+    ], [], undefined, [], undefined, []);
+    assert.equal(rustNativeCallableAbi({ kind: "physical", carrier: selected }) === undefined, true,
+      `${label}: names or arity cannot manufacture a different native result contract`);
+  }
+  const borrowed = rustNativeCallableAbi({ kind: "logical", carrier: rustCallableInputTargetType([integer], wide) });
   assert.equal(borrowed?.kind, "input", "native input and storage use the same owner with distinct native contracts");
   assert.equal(borrowed.binder.parameters.length, 0, "a non-borrowing input never invents a higher-ranked binder");
 });

@@ -339,6 +339,13 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
   const adaptedInput = current.initializer("widened");
   const conversion = current.program.records.contextualValueConversion.get(adaptedInput);
   assert.equal(conversion?.conversion.kind, "callable-adapter", "the required argument adapter is retained");
+  const adaptedContext = current.program.physicalEmissionContexts.contextForOwner(current.declaration("adapt"), "native-body");
+  const callerContext = current.program.physicalEmissionContexts.contextForOwner(current.declaration("forward"), "native-body");
+  assert.equal(adaptedContext !== undefined && callerContext !== undefined, true, "both actual emitted owners retain their own contexts");
+  assert.equal(adaptedContext.callableAdapters.some(row => row.node === adaptedInput && row.selection === conversion.conversion), true,
+    "the original conversion is rendered in its actual selecting body");
+  assert.equal(callerContext.callableAdapters.some(row => row.node === adaptedInput), false,
+    "callee storage provenance does not re-emit that conversion in either caller environment");
   assert.equal(rustTargetTypeRefEquals(adapted, conversion.targetCarrier), true,
     "binding storage publishes the selected exact destination, not its annotation's placeholder");
   const returns = [];
@@ -362,6 +369,29 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
     assert.equal(rustTargetTypeRefEquals(physical.error.owner, inputs[index].implementation), true,
       `${name}: error projection uses the activated caller input`);
   }
+});
+
+test("an already narrowed optional callee consumes its original admitted projection", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function call(callback: (() => int32) | undefined): int32 {
+      return callback !== undefined ? callback() : 0;
+    }
+  `);
+  const calls = [];
+  const visit = node => {
+    if (current.ast.is.IsCallExpression(node)) calls.push(node);
+    current.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(current.declaration("call"));
+  assert.equal(calls.length, 1, "the original narrowed call is selected once");
+  const callee = Node_Expression(current.ast, calls[0]);
+  const projection = current.program.records.flowReadProjection.get(callee);
+  assert.equal(projection?.kind, "option-value", "the original absence projection is not replaced with identity");
+  const operation = current.program.records.targetOperation.get(calls[0]);
+  assert.equal(operation?.kind === "source-call" && operation.target.form === "callable", true,
+    "the actual source invocation retains its finalized callable contract");
+  assert.equal(rustTargetTypeRefEquals(operation.target.carrier, projection.selectedCarrier), true,
+    "the callable consumer uses exactly the admitted narrowed carrier");
 });
 
 test("captured native inputs bind through their actual lexical invocation without rebinding the outer declaration", () => {
