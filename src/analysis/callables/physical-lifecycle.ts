@@ -20,8 +20,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
   from "../conversions/value-carrier-queries.js";
-import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup }
-  from "../operations/target-operation.js";
+import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustGenericCallablePhysicalConstruction } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
@@ -52,7 +51,8 @@ interface RustPhysicalCallableEmissionUse {
 }
 
 export type RustPhysicalCallableEmissionRequest = RustPhysicalCallableEmissionUse & (
-  | { readonly kind: "value" | "operand" | "return" | "invocation" }
+  | { readonly kind: "value" | "operand" | "return" }
+  | { readonly kind: "invocation"; readonly callableKind: "generic" | "retained" }
   | { readonly kind: "type"; readonly carrier: TargetTypeRef }
   | { readonly kind: "producer"; readonly declaration: Node; readonly carrier: TargetTypeRef }
 );
@@ -122,7 +122,8 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       typeof request.context.role !== "string" || request.context.role.length === 0 ||
       typeof request.context.enclosingContract !== "string" || request.context.enclosingContract.length === 0 ||
       request.bindings.types === undefined || request.bindings.lifetimes === undefined || request.bindings.consts === undefined ||
-      (request.kind === "type" || request.kind === "producer") && request.carrier === undefined) {
+      (request.kind === "type" || request.kind === "producer") && request.carrier === undefined ||
+      request.kind === "invocation" && request.callableKind !== "generic" && request.callableKind !== "retained") {
       reject(request.subject, "A required physical callable use has no complete original use-site, binding or carrier input.");
       continue;
     }
@@ -186,9 +187,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       case "operand": return operand(request.subject);
       case "return": return returned(request.subject);
       case "invocation": {
-        const operation = records.targetOperation.get(request.subject);
-        const storage = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
-        if (!storageReady && rustGenericCallableValue(storage) === undefined) return unpreparedStorage;
+        if (!storageReady && request.callableKind !== "generic") return unpreparedStorage;
         return queries.prepareInvocation(request.subject);
       }
       case "type": return undefined;

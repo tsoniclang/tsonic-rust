@@ -9,6 +9,10 @@ import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../dist/ta
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustProgramErrorOwner } from "../../../dist/target-model/types/carriers/program-errors.js";
 import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { selectRustNativeInvocationErrorPropagation } from "../../../dist/analysis/errors/regions.js";
+import { rustRuntimeErrorTargetType } from "../../../dist/target-model/operations/error-boundary.js";
 import { analyzeRust, artifactText, compileRust, nodejsCapability, stringCarrier, unitCarrier } from "../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -65,6 +69,102 @@ function preparation(contexts, operands = []) {
   };
 }
 
+test("retained native invocation results preserve Infallible and reject an unproved Result ABI before publication", () => {
+  const context = preparedContext("native-call-result", operation([]), []);
+  const use = targetUseSiteRef(context.declaration, "source-error", "native-call-result");
+  const infallible = Object.freeze({ kind: "target-named", id: "rust.core.Infallible" });
+  const carrier = rustCallableTargetType([integer], wide, { kind: "static" }, infallible);
+  const operand = nativeCallResult => Object.freeze({ use, node: context.declaration, context,
+    origin: { kind: "operand", evaluation: { kind: "ordinary", site: use } }, carrier: wide,
+    destination: undefined, sourceErrorRegions: [], genericInvocation: undefined, nativeCallResult });
+  const published = publishRustPhysicalEmissionContexts(preparation([context], [operand({ kind: "callable", carrier })]),
+    () => nativeInput(), noNativeBindings);
+  assert.equal(published.kind, "resolved", "the selected Infallible Result is valid without inventing a fallible context");
+  const result = published.value.operandFor(use).nativeCallResult;
+  assert.equal(result.kind, "result", "the full native invocation signature is required sealed data");
+  assert.equal(result.propagation.kind, "infallible", "immediate invocation does not inherit a future's rejection effects");
+  assert.equal(rustTargetTypeRefEquals(result.signature.result, wide), true, "the native result width is unchanged");
+  assert.equal(result.signature.parameters.length === 1 && rustTargetTypeRefEquals(result.signature.parameters[0], integer), true,
+    "the exact original native argument tuple is retained");
+  assert.equal(Object.isFrozen(result) && Object.isFrozen(result.signature), true, "native call decisions are immutable");
+  const invalid = publishRustPhysicalEmissionContexts(preparation([context], [operand({ kind: "callable", carrier: integer })]),
+    () => nativeInput(), noNativeBindings);
+  assert.equal(invalid.kind, "rejected", "a native scalar is never accepted as an unknown or identity callable ABI");
+  assert.equal(invalid.diagnostics.length === 1 && invalid.diagnostics[0].code === "RUST_NATIVE_CALL_RESULT_NOT_PROVEN", true,
+    "the original missing Result contract is diagnosed at admission");
+  assert.equal("value" in invalid, false, "no incomplete physical invocation escapes publication");
+});
+
+test("retained native Result errors require the original invocation channels, not an ambient error or equal payload type", () => {
+  const error = rustNamedTargetType("native:provider-error", "native::Failure", [], [], undefined, [], "native:provider-error", []);
+  const foreign = rustNamedTargetType("native:foreign-error", "native::ForeignFailure", [], [], undefined, [], "native:foreign-error", []);
+  const original = preparedContext("native-error-channel", operation([]), []);
+  const source = Object.freeze({ identity: "definition-error", variant: "Error0", errorType: error });
+  const target = Object.freeze({ identity: "caller-error", variant: "Error0", errorType: error });
+  const context = Object.freeze({ ...original, error: Object.freeze({ kind: "region", owner: original.declaration,
+    region: Object.freeze({ kind: "native", fileName: "/src/index.ts", localOwner: undefined, sources: Object.freeze([target]) }) }) });
+  const edge = Object.freeze({ kind: "invoke", declaration: {},
+    effects: { localErrors: false, nativeErrors: [{ identity: target.identity, errorType: error }] },
+    nativeErrors: [{ source: { identity: source.identity, errorType: error }, target: { identity: target.identity, errorType: error } }] });
+  const selection = Object.freeze({
+    operand: Object.freeze({ kind: "native", fileName: "/dependency/index.ts", localOwner: undefined,
+      sources: Object.freeze([source]) }),
+    channels: Object.freeze([Object.freeze({ sourceIdentity: source.identity, targetIdentity: target.identity, uninhabited: false })]),
+  });
+  const use = targetUseSiteRef(context.declaration, "source-error", "native-error-channel");
+  const operand = (carrier, sourceErrorRegions) => Object.freeze({ use, node: context.declaration, context,
+    origin: { kind: "operand", evaluation: { kind: "ordinary", site: use } }, carrier: integer,
+    destination: undefined, sourceErrorRegions, genericInvocation: undefined,
+    nativeCallResult: Object.freeze({ kind: "callable", carrier }) });
+  const carrier = rustCallableTargetType([], integer, { kind: "static" }, error);
+  const publish = (selectedCarrier, regions) => publishRustPhysicalEmissionContexts(
+    preparation([context], [operand(selectedCarrier, regions)]), () => nativeInput(), noNativeBindings);
+  const accepted = publish(carrier, [{ edge, selection }]);
+  assert.equal(accepted.kind, "resolved", "the original exact native Result channel is admitted");
+  const result = accepted.value.operandFor(use).nativeCallResult;
+  assert.equal(result.propagation.kind, "source", "provider errors retain source-to-caller channel transport");
+  const publishedSelection = accepted.value.operandFor(use).sourceErrorRegions[0].selection;
+  assert.equal(result.propagation.selection === publishedSelection, true,
+    "the identical already-published selection is reused, never a second reconstruction");
+  assert.equal(result.propagation.selection.channels[0].targetIdentity, target.identity, "the exact caller identity is retained");
+  assert.equal(rustTargetTypeRefEquals(result.signature.error, error), true, "the actual provider E is not replaced by TsonicError");
+  const conflicting = { ...selection, channels: [{ ...selection.channels[0], targetIdentity: "different-caller-error" }] };
+  for (const [label, rejected] of [
+    ["no invocation correspondence", publish(carrier, [])],
+    ["await correspondence is not invocation correspondence", publish(carrier, [{ edge: { ...edge, kind: "await" }, selection }])],
+    ["different native error identity", publish(rustCallableTargetType([], integer, { kind: "static" }, foreign), [{ edge, selection }])],
+    ["ambiguous original channel mapping", publish(carrier, [{ edge, selection }, { edge: { ...edge, declaration: {} }, selection: conflicting }])],
+  ]) {
+    assert.equal(rejected.kind, "rejected", label);
+    assert.equal("value" in rejected, false, `${label}: no partially validated native result is published`);
+    assert.equal(rejected.diagnostics.some(issue => issue.code === "RUST_NATIVE_CALL_RESULT_NOT_PROVEN"), true,
+      `${label}: the refusal belongs to native admission before planning`);
+  }
+});
+
+test("native frame invocation errors retain the defining package across a different caller's physical context", () => {
+  const owner = Object.freeze({ kind: "physical", domain: "project", componentId: "definition" });
+  const caller = Object.freeze({ kind: "physical", domain: "project", componentId: "caller" });
+  const error = rustNamedTargetType("error:definition", "dependency::program::TsonicError", [], [], undefined, [], "error:definition", []);
+  const callerError = rustNamedTargetType("error:caller", "crate::program::TsonicError", [], [], undefined, [], "error:caller", []);
+  const context = Object.freeze({ kind: "region", owner: {}, region: Object.freeze({ kind: "package",
+    fileName: "/caller/index.ts", localOwner: caller, sources: Object.freeze([]) }) });
+  const input = nativeInput(selected => selected.kind !== "physical" ? undefined
+    : selected.componentId === owner.componentId ? error : selected.componentId === caller.componentId ? callerError : undefined);
+  const selected = selectRustNativeInvocationErrorPropagation(context.owner, error, context, [], owner, input);
+  assert.equal(selected.kind === "resolved" && selected.value.kind === "local", true,
+    "the actual defining-package E is transported through the caller's real package boundary");
+  const foreign = selectRustNativeInvocationErrorPropagation(context.owner, callerError, context, [], owner, input);
+  assert.equal(foreign.kind, "rejected", "a frame cannot substitute the caller's error type for its defining package E");
+  const runtime = selectRustNativeInvocationErrorPropagation(context.owner, rustRuntimeErrorTargetType(), context, [], undefined, input);
+  assert.equal(runtime.kind === "resolved" && runtime.value.kind === "local", true,
+    "only the authoritative runtime error identity selects the runtime-to-package route");
+  const noLocal = selectRustNativeInvocationErrorPropagation(context.owner, rustRuntimeErrorTargetType(), {
+    ...context, region: { ...context.region, kind: "infallible", localOwner: undefined },
+  }, [], undefined, input);
+  assert.equal(noLocal.kind, "rejected", "a missing physical local channel is rejected before the planner sees the call");
+});
+
 test("one immutable source ABI publishes separate required native arguments in actual physical environments", () => {
   const parameter = Object.freeze({ kind: "type-parameter", identity: "source:Value", name: "Value" });
   const abi = operation([{ kind: "type", type: parameter }]);
@@ -75,7 +175,8 @@ test("one immutable source ABI publishes separate required native arguments in a
   const operandUse = targetUseSiteRef(first.declaration, "operand", "first");
   const operand = Object.freeze({ use: operandUse, node: first.declaration, context: first,
     origin: { kind: "operand", evaluation: { kind: "ordinary", site: first.use } },
-    carrier: integer, destination: undefined, sourceErrorRegions: [], genericInvocation: undefined });
+    carrier: integer, destination: undefined, sourceErrorRegions: [], genericInvocation: undefined,
+    nativeCallResult: Object.freeze({ kind: "none" }) });
   const published = publishRustPhysicalEmissionContexts(preparation([first, second], [operand]), () => nativeInput(), noNativeBindings);
   assert.equal(published.kind, "resolved", "both actual native environments publish");
   const firstNative = published.value.contextFor(first.use);

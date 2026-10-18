@@ -99,7 +99,7 @@ export interface RustCallableValueSealInput {
   readonly frameErrorOwnerFor: (fileName: string) => Extract<RustProgramErrorOwner, { readonly kind: "physical" }> | undefined;
   readonly prepareCallableField: RustPreparedNativeDeclarationForms["prepareCallableField"];
   readonly prepareStorageField: RustPreparedNativeDeclarationForms["prepareStorageField"];
-  readonly completeNativeDeclarations: (callables: RustNativeTypeInputContext["callableValues"],
+  readonly completeNativeDeclarations: (callables: Pick<RustCallableValueSelection, "generic" | "frames">,
     emission: RustCallableEmissionPreparation) => TargetStageResult<{
       readonly forms: RustNativeDeclarationForms;
       readonly fieldBindings: readonly RustNativeCallableFieldBinding[];

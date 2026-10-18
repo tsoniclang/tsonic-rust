@@ -705,13 +705,15 @@ export function rustNativeObjectOwnerPaths(
   }
 }
 
-export function rustNativeFrameCallableCarriers(
+export function rustNativeFrameCallableEnvironment(
   carrier: TargetTypeRef,
-  context: RustNativeTypeInputContext,
-): { readonly frame: TargetTypeRef; readonly entry: TargetTypeRef; readonly root: TargetTypeRef } | undefined {
+  frames: RustNativeTypeInputContext["callableValues"]["frames"],
+): { readonly definition: NonNullable<ReturnType<RustNativeTypeInputContext["callableValues"]["frames"]["definitionFor"]>>;
+  readonly entry: NonNullable<ReturnType<RustNativeTypeInputContext["callableValues"]["frames"]["entryFor"]>>;
+  readonly environment: readonly TargetTypeRef[] } | undefined {
   const value = rustFrameCallableValue(carrier);
-  const definition = context.callableValues.frames.definitionFor(carrier);
-  const entry = context.callableValues.frames.entryFor(carrier);
+  const definition = frames.definitionFor(carrier);
+  const entry = frames.entryFor(carrier);
   if (value === undefined || definition === undefined || entry === undefined ||
     value.environment.length !== entry.environmentIndexes.length) return undefined;
   const environment: (TargetTypeRef | undefined)[] = Array.from({ length: definition.environmentParameters.length }, () => undefined);
@@ -724,11 +726,22 @@ export function rustNativeFrameCallableCarriers(
     if (type === undefined) return undefined;
     selectedEnvironment.push(type);
   }
-  const frame = rustNativeFrameDefinitionCarrier(definition, selectedEnvironment,
+  return Object.freeze({ definition, entry, environment: Object.freeze(selectedEnvironment) });
+}
+
+export function rustNativeFrameCallableCarriers(
+  carrier: TargetTypeRef,
+  context: RustNativeTypeInputContext,
+): { readonly frame: TargetTypeRef; readonly entry: TargetTypeRef; readonly root: TargetTypeRef } | undefined {
+  const value = rustFrameCallableValue(carrier);
+  const selected = rustNativeFrameCallableEnvironment(carrier, context.callableValues.frames);
+  if (value === undefined || selected === undefined) return undefined;
+  const { definition, entry, environment } = selected;
+  const frame = rustNativeFrameDefinitionCarrier(definition, environment,
     value.owner.kind === "class" ? value.owner.instance : undefined, context);
   const entryPath = nativeItemPath(context, definition.ownerFileName, entry.targetName, true);
   if (frame === undefined || entryPath === undefined) return undefined;
-  const arguments_: RustTargetGenericArgument[] = selectedEnvironment.map(type => ({ kind: "type", type }));
+  const arguments_: RustTargetGenericArgument[] = environment.map(type => ({ kind: "type", type }));
   const selectedEntry = rustNamedTargetType(closedMetadataKey([definition.ownerFileName, entry.targetName]), entryPath, arguments_,
     [], undefined, [], undefined, []);
   return { frame, entry: selectedEntry, root: rustNamedTargetType(

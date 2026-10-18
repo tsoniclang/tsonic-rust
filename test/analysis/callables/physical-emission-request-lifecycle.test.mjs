@@ -186,6 +186,7 @@ export function inspect(value: string, word: string): boolean { return value.inc
   const bindings = Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() });
   const request = (kind, subject, extra = {}, specialization = "original") => Object.freeze({
     kind, subject, owner: ast.getSourceFile(subject), bindings,
+    ...(kind === "invocation" ? { callableKind: "retained" } : {}),
     context: targetUseSiteRef(subject, `physical-${kind}`, rustEmissionSourceIdentity(ast, ast.getSourceFile(subject)), specialization), ...extra,
   });
   const input = requests => ({ ast, records, sourceStorage, requests: Object.freeze(requests),
@@ -245,6 +246,16 @@ test("all four required runtime roles materialize the exact original checked sub
       `${request.kind}: early and final views never create a second cache or replay the selector`);
   }
   assert.equal(current.calls.length, requests.length, "all repeated view reads leave exactly the four real required selections");
+});
+
+test("an invocation request without its required selected callable class is rejected before storage preparation", () => {
+  const current = fixture();
+  const original = current.request("invocation", current.invocation);
+  const { callableKind: _callableKind, ...missing } = original;
+  const result = completeLifecycle(current.input([Object.freeze(missing)]), current.physical);
+  assert.equal(result.kind, "rejected", "the removed unclassified request form is not inferred from a later carrier");
+  assert.equal("value" in result, false, "unknown invocation metadata cannot publish a physical program");
+  assert.equal(current.calls.length, 0, "no native storage selector repairs the missing producer decision");
 });
 
 test("an invented invocation-storage request for a direct native function is rejected rather than fabricated", () => {

@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRustSourceErrorPropagation } from "../../../../dist/backend/planner/expressions/calls/source-errors.js";
+import { planRustSelectedSourceErrorPropagation, planRustSourceErrorPropagation } from "../../../../dist/backend/planner/expressions/calls/source-errors.js";
 
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { rustNativeFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
@@ -61,7 +61,7 @@ function fixture(joined = false) {
   assert.equal(native.kind, "resolved", "the original exact payload is admitted before native planning");
   const use = targetUseSiteRef(declaration, "native-body", "/index.ts:fixture");
   context.emissionContext = Object.freeze({ use });
-  const operand = Object.freeze({ sourceErrorRegions: Object.freeze([
+  const operand = Object.freeze({ nativeCallResult: Object.freeze({ kind: "none" }), sourceErrorRegions: Object.freeze([
     Object.freeze({ edge, selection: Object.freeze({ ...selected, operand: native.value }) }),
   ]) });
   context.input.program.physicalEmissionContexts = {
@@ -69,7 +69,7 @@ function fixture(joined = false) {
   };
   context.input.program.errorRegions = { declarationsFor: regions.value.declarationsFor, producerError: regions.value.producerError };
   context.input.errorRegions = createRustErrorRegionCatalog(context.input.program);
-  return { context, node, edge, expression: { kind: "call", path: "invoke", args: [] } };
+  return { context, node, edge, selection: operand.sourceErrorRegions[0].selection, expression: { kind: "call", path: "invoke", args: [] } };
 }
 
 test("exact unchanged source errors propagate without an identity map closure", () => {
@@ -89,6 +89,20 @@ test("a source error entering a real join retains the exact variant adapter", ()
   assert.equal(result.expr.receiver === current.expression, true);
   assert.equal(result.expr.args[0].body.method, "Target");
   assert.equal(current.context.diagnostics.length, 0);
+});
+
+test("an admitted retained-call error uses the same source-channel renderer as its original source edge", () => {
+  const current = fixture(true);
+  const fromEdge = planRustSourceErrorPropagation(current.node, current.edge, current.expression, current.context);
+  current.context.syntheticNames = { reserved: new Set(), nextSuffixByBase: new Map() };
+  const fromSelection = planRustSelectedSourceErrorPropagation(current.node, current.selection, current.expression, current.context);
+  assert.equal(fromSelection?.kind, "try", "the admitted native invocation propagates a Result");
+  assert.equal(fromSelection.expr.args[0].body.method, "Target", "the original exact target channel is preserved");
+  assert.equal(fromSelection.expr.receiver === current.expression && fromEdge.expr.receiver === current.expression, true,
+    "both consumers retain the identical original invocation without evaluation duplication");
+  assert.equal(fromSelection.expr.args[0].body.method, fromEdge.expr.args[0].body.method,
+    "both consumers use the identical preselected native channel");
+  assert.equal(current.context.diagnostics.length, 0, "data-only rendering adds no source rejection");
 });
 
 test("equal native error types never bypass missing source correspondence", () => {

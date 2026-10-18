@@ -3,7 +3,7 @@ import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/art
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionSelection,
-  RustInitializationErrorRecords, RustSourceErrorRegionSelection } from "../../target-model/records/error-regions.js";
+  RustInitializationErrorRecords, RustSourceErrorRegionSelection, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
@@ -18,14 +18,14 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner, type RustErrorTypeContext } from "./error-types.js";
-import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
+import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataEquals, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
 import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import { selectRustJsRejectionRegion } from "./js-rejection.js";
@@ -33,6 +33,10 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import { selectRustNativeTypeCarrier, type RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
+import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
+import type { RustEmissionErrorContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
 
 export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "producerError" | "declarationsFor"> {
   readonly get: (declaration: Node) => RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> | undefined;
@@ -267,4 +271,54 @@ export function publishRustErrorRegion(
 ): TargetStageResult<RustErrorRegionSelection> {
   const sources = publishRustNativeErrorSources(region.sources, node, input);
   return sources.kind === "rejected" ? sources : resolvedTargetStage(Object.freeze({ ...region, sources: sources.value }));
+}
+
+export function selectRustNativeInvocationErrorPropagation(
+  node: Node,
+  error: TargetTypeRef,
+  context: RustEmissionErrorContext,
+  sources: RustPhysicalEmissionOperand["sourceErrorRegions"],
+  sourceProgramOwner: RustPhysicalErrorOwner | undefined,
+  input: RustNativeTypeSelectionInput,
+): TargetStageResult<Extract<RustPhysicalEmissionOperand["nativeCallResult"], { readonly kind: "result" }>["propagation"]> {
+  const reject = (message: string) => rejectedTargetStage([{
+    code: "RUST_NATIVE_CALL_RESULT_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
+    sourceNode: node, message,
+  }]);
+  if (rustNamedTypeCarrierValue(error)?.id === rustInfallibleTargetId)
+    return resolvedTargetStage(Object.freeze({ kind: "infallible" }));
+  if (context.kind === "none") return reject("A fallible retained invocation requires its original selected physical error context.");
+  let selected: RustSourceErrorRegionSelection | undefined;
+  for (const source of sources) {
+    if (source.edge.kind !== "invoke") continue;
+    const region = source.selection.operand;
+    const carrier = rustNativeErrorJoinTargetType(region.fileName, [
+      ...region.localOwner === undefined ? [] : [rustProgramErrorTargetType(region.localOwner)],
+      ...region.sources.map(source => source.nativeType),
+    ]);
+    if (carrier === undefined) return reject("A native invocation requires its original complete error-region carrier.");
+    const native = selectRustNativeTypeCarrier(carrier, input, "general");
+    if (native.kind === "rejected") return reject(native.reason);
+    if (!rustTargetTypeRefEquals(error, native.carrier)) continue;
+    if (selected !== undefined && !closedMetadataEquals(selected, source.selection))
+      return reject("Native invocation alternatives require identical original error-channel correspondence.");
+    selected = source.selection;
+  }
+  if (selected !== undefined) return resolvedTargetStage(Object.freeze({ kind: "source", selection: selected }));
+  const localOwner = context.kind === "region" ? context.region.localOwner
+    : context.initializer.error.kind === "infallible" ? undefined : context.initializer.error.owner;
+  if (localOwner === undefined) return reject("A retained native invocation has no exact admitted destination for a program error.");
+  if (sourceProgramOwner !== undefined) {
+    const local = selectRustNativeTypeCarrier(rustProgramErrorTargetType(sourceProgramOwner), input, "general");
+    if (local.kind === "rejected") return reject(local.reason);
+    if (!rustTargetTypeRefEquals(error, local.carrier))
+      return reject("A native frame invocation must retain its original defining package error identity.");
+    return resolvedTargetStage(Object.freeze({ kind: "local" }));
+  }
+  if (rustNamedTypeCarrierValue(error)?.nativeErrorIdentity === rustRuntimeErrorTypeIdentity)
+    return resolvedTargetStage(Object.freeze({ kind: "local" }));
+  const local = selectRustNativeTypeCarrier(rustProgramErrorTargetType(localOwner), input, "general");
+  if (local.kind === "rejected") return reject(local.reason);
+  if (rustTargetTypeRefEquals(error, local.carrier)) return resolvedTargetStage(Object.freeze({ kind: "local" }));
+  return reject("A retained native invocation requires its original exact source or package error channel.");
 }
