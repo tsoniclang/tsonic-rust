@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-workspaces.mjs";
 import { createRustCompilerWorkerClient } from "../../../dist/providers/native/acquisition/worker-client.js";
 import { projectRustCompilerModule } from "../../../dist/providers/native/projection/declarations.js";
@@ -144,8 +145,22 @@ function fixture() {
       files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard } from ${JSON.stringify(nativeModule)};
         import { owner, take } from ${JSON.stringify(sourceModule)};
         export function observed(): number { ${body} }` } });
+    const ast = compiled.source.ast;
+    const sourceText = node => Buffer.from(ast.getSourceText(ast.getSourceFile(node)))
+      .subarray(ast.pos(node), ast.end(node)).toString("utf8").trim().slice(0, 512);
     writeFileSync(join(client, `source-control-${compilation++}.json`), JSON.stringify({ source: body,
-      diagnostics: compiled.result.diagnostics.map(value => ({ code: value.code, message: value.message })),
+      diagnostics: compiled.result.diagnostics.map(value => {
+        const node = value.sourceNode;
+        const parent = node === undefined ? undefined : ast.parent(node);
+        const owner = node === undefined ? undefined : sourceEnclosingCallable(node, ast);
+        return { code: value.code, message: value.message,
+          selectedSource: node === undefined ? null : sourceText(node),
+          nodeKind: node === undefined ? null : ast.kindName(node),
+          parentKind: parent === undefined ? null : ast.kindName(parent),
+          isDeclarationName: parent === undefined ? null : ast.name(parent) === node,
+          owner: owner === undefined ? null : { kind: ast.kindName(owner), text: sourceText(owner) },
+          physicalContext: null, contextStatus: "analysis rejected before sealed program publication" };
+      }),
       artifactPaths: compiled.result.artifacts.map(value => value.path) }));
     return compiled;
   };
