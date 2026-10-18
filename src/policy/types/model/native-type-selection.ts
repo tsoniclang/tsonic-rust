@@ -679,37 +679,46 @@ export function rustNativeFrameCallableCarriers(
     const target = entry.environmentIndexes[index]!;
     if (target >= 0 && target < environment.length) environment[target] = type;
   });
-  const arguments_: RustTargetGenericArgument[] = [];
+  const selectedEnvironment: TargetTypeRef[] = [];
   for (const type of environment) {
     if (type === undefined) return undefined;
-    arguments_.push({ kind: "type", type });
+    selectedEnvironment.push(type);
   }
-  const path = nativeItemPath(context, definition.ownerFileName, definition.targetName, true);
+  const frame = rustNativeFrameDefinitionCarrier(definition, selectedEnvironment,
+    value.owner.kind === "class" ? value.owner.instance : undefined, context);
   const entryPath = nativeItemPath(context, definition.ownerFileName, entry.targetName, true);
-  if (path === undefined || entryPath === undefined) return undefined;
-  let frame: TargetTypeRef;
-  if (definition.storage.kind === "standalone") frame = rustNamedTargetType(closedMetadataKey([definition.ownerFileName,
-    definition.targetName]), path, arguments_, [], undefined, [], undefined, []);
-  else {
-    if (value.owner.kind !== "class") return undefined;
-    const instance = value.owner.instance;
-    const owner = context.projectTypes.definitionForCarrier(instance);
-    const representation = context.objectRepresentations.representationFor(owner);
-    if (owner?.kind !== "class" || owner.declaration !== definition.activation.ownerDeclaration || representation === undefined) return undefined;
-    const state = rustNativeProjectGeneratedCarrier(instance, owner.stateName, context);
-    const environment = context.classValues.forDeclaration(owner.declaration)?.environment;
-    const selectedEnvironment = environment?.instancesUseEnvironment !== true ? undefined
-      : rustNativeClassEnvironmentCarrier(instance, context, true);
-    const paths = rustNativeObjectOwnerPaths(representation.kind);
-    if (state === undefined || paths === undefined || environment?.instancesUseEnvironment === true && selectedEnvironment === undefined) return undefined;
-    frame = rustNamedTargetType(paths.state, paths.state, [{ kind: "type", type: state },
-      ...(selectedEnvironment === undefined ? [] : [{ kind: "type" as const, type: selectedEnvironment }])],
-      [], undefined, [], undefined, []);
-  }
+  if (frame === undefined || entryPath === undefined) return undefined;
+  const arguments_: RustTargetGenericArgument[] = selectedEnvironment.map(type => ({ kind: "type", type }));
   const selectedEntry = rustNamedTargetType(closedMetadataKey([definition.ownerFileName, entry.targetName]), entryPath, arguments_,
     [], undefined, [], undefined, []);
   return { frame, entry: selectedEntry, root: rustNamedTargetType(
     entry.hasIndependent ? "rust.runtime.FrameCallableFamily" : "rust.runtime.FrameCallable",
     entry.hasIndependent ? "rt::FrameCallableFamily" : "rt::FrameCallable",
     [{ kind: "type", type: frame }, { kind: "type", type: selectedEntry }], [], undefined, [], undefined, []) };
+}
+
+export function rustNativeFrameDefinitionCarrier(
+  definition: NonNullable<ReturnType<RustNativeTypeInputContext["callableValues"]["frames"]["definitionFor"]>>,
+  environment: readonly TargetTypeRef[],
+  ownerInstance: TargetTypeRef | undefined,
+  context: RustNativeTypeInputContext,
+): TargetTypeRef | undefined {
+  if (environment.length !== definition.environmentParameters.length) return undefined;
+  const path = nativeItemPath(context, definition.ownerFileName, definition.targetName, true);
+  if (path === undefined) return undefined;
+  if (definition.storage.kind === "standalone") return rustNamedTargetType(closedMetadataKey([definition.ownerFileName,
+    definition.targetName]), path, environment.map(type => ({ kind: "type", type })), [], undefined, [], undefined, []);
+  if (ownerInstance === undefined) return undefined;
+  const owner = context.projectTypes.definitionForCarrier(ownerInstance);
+  const representation = context.objectRepresentations.representationFor(owner);
+  if (owner?.kind !== "class" || owner.declaration !== definition.activation.ownerDeclaration || representation === undefined) return undefined;
+  const state = rustNativeProjectGeneratedCarrier(ownerInstance, owner.stateName, context);
+  const selected = context.classValues.forDeclaration(owner.declaration)?.environment;
+  const selectedEnvironment = selected?.instancesUseEnvironment !== true ? undefined
+    : rustNativeClassEnvironmentCarrier(ownerInstance, context, true);
+  const paths = rustNativeObjectOwnerPaths(representation.kind);
+  if (state === undefined || paths === undefined || selected?.instancesUseEnvironment === true && selectedEnvironment === undefined) return undefined;
+  return rustNamedTargetType(paths.state, paths.state, [{ kind: "type", type: state },
+    ...(selectedEnvironment === undefined ? [] : [{ kind: "type" as const, type: selectedEnvironment }])],
+    [], undefined, [], undefined, []);
 }
