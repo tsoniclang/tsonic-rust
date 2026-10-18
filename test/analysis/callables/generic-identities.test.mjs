@@ -105,6 +105,41 @@ test("static identity keeps the same signature's different closed native factory
   assert.equal(same.pairs.length, 1, "one original definition at the same closed binding keeps its static identity");
   assert.equal(same.pairs[0].kind, "static");
   assert.equal(other.pairs.length, 0, "the same native signature does not collapse distinct closed original factory bindings");
+  assert.equal(other.exhaustive, false, "definition-level cached correspondence cannot erase distinct actual operand bindings");
+  assert.equal(current.program.callableValues.generic.physical.argumentsFor(other.leftCarrier).length, 1,
+    "the original enclosing native binding survives independently from the invocation signature and runtime captures");
+  assert.equal(current.program.callableValues.generic.physical.argumentsFor(other.rightCarrier).length, 1,
+    "the other operand retains its own actual native instantiation");
+});
+
+test("unused enclosing native factory bindings retain static identity without becoming source captures", () => {
+  const current = fixture(`
+    import type { uint8, uint64 } from "@tsonic/core/types.js";
+    type Identity = <Value>(value: Value) => Value;
+    type Narrow = uint8;
+    function make<Unused>(): Identity { return <Value>(value: Value): Value => value; }
+    export function compare(): boolean {
+      const first = make<uint8>();
+      const same = make<Narrow>();
+      const other = make<uint64>();
+      return first === same && first !== other;
+    }
+  `);
+  assert.equal(current.program.callableValues.genericIdentities.issues.length, 0, "the original native identity proof is complete");
+  assert.equal(current.comparisons.length, 2, "both original same-signature comparisons survive");
+  const [same, other] = current.comparisons.map(row => row.selected);
+  assert.equal(same.pairs.length === 1 && same.pairs[0].kind === "static" && same.exhaustive, true,
+    "a native alias of the same closed type keeps its identical cached original expression");
+  assert.equal(other.pairs.length === 0 && !other.exhaustive, true,
+    "unused native closed bindings are not inferred from capture fields, parameter types or the return type");
+  const implementation = same.left.members[0].implementation;
+  const original = rustGenericCallableValue(implementation.carrier);
+  const environment = current.program.callableValues.generic.physical.environmentFor(implementation);
+  assert.equal(original.retainedEnvironment.length, 1, "the logical producer retains the original enclosing TYPE identity");
+  assert.equal(environment.arguments.length, 1, "the physical environment transports that same existing generic argument");
+  assert.equal(implementation.storage === "value" && implementation.identity === "static" &&
+    implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length === 0, true,
+  "an identity-only native generic marker is not a runtime capture, activation allocation or Rc fallback");
 });
 
 test("identity admission rejects an implementation row missing its required identity", () => {

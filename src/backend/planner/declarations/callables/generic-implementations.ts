@@ -78,7 +78,7 @@ function planImplementation(
   const nativeEnvironment = requireRustNativeCaptureEnvironment(emission,
     { kind: "generic", definition, implementation, member: undefined }, helperContext);
   const captures = nativeEnvironment.slots.map((_slot, index) => rustTypeFromSelectedNativeCarrierInContext(
-    requireRustNativeCaptureStorage(nativeEnvironment, index, emission, helperContext).storage.slotCarrier, helperContext));
+    requireRustNativeCaptureStorage(nativeEnvironment, index, emission, helperContext).owner.fieldCarrier, helperContext));
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
   const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
@@ -101,7 +101,7 @@ function planImplementation(
     const argument = arguments_[index]!;
     if (argument.kind !== "type" || argument.type.kind !== "type-parameter") return parameter;
     const identity = argument.type.identity;
-    const original = implementation.substitutions.find(([_identity, type]) => type.kind === "type-parameter" && type.identity === identity)?.[0];
+    const original = [...selected.substitutions.types].find(([_identity, type]) => type.kind === "type-parameter" && type.identity === identity)?.[0];
     const requirements = contract.capturedTypeParameters.find(parameter => parameter.identity === original)?.requirements ?? [];
     return { ...parameter, bounds: rustGenericRequirementBounds(requirements) };
   });

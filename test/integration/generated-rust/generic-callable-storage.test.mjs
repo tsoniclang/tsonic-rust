@@ -126,6 +126,26 @@ main();
   assert.doesNotMatch(generated, /core::ptr::addr_eq/u);
 });
 
+test("unused closed native bindings keep capture-free factory identity without an allocation", { timeout: 300_000 }, () => {
+  const generated = compileAndRun("static_quantified_unused_bindings", `
+import type { uint8, uint64 } from "@tsonic/core/types.js";
+type Identity = <Value>(value: Value) => Value;
+type Narrow = uint8;
+function make<Unused>(): Identity { return <Value>(value: Value): Value => value; }
+export function main(): void {
+  const first = make<uint8>();
+  const same = make<Narrow>();
+  const other = make<uint64>();
+  check(first === same && first !== other);
+  check(first<int32>(7) === 7 && other<string>("native") === "native");
+}
+main();
+`);
+  assert.match(generated, /impl<[^>]+> Copy for GenericCallable/u);
+  assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
+  assert.doesNotMatch(generated, /core::ptr::addr_eq/u);
+});
+
 test("quantified async callbacks retain one environment while pending work outlives the callable", { timeout: 300_000 }, () => {
   const generated = compileAndRun("suspended_quantified_values", `
 async function resolved<Value>(value: Value): Promise<Value> { return value; }

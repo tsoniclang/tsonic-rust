@@ -26,8 +26,10 @@ test("completed native capture readers use exact context, owner and slot identit
   const frame = Object.freeze({ kind: "frame", use, definition, implementation, entry: {}, slots: Object.freeze([]),
     payload: Object.freeze({ kind: "none" }) });
   const suspended = Object.freeze({ kind: "suspended", use, implementation, slots });
+  const fieldCarrier = Object.freeze({});
   const bindings = [generic, suspended].map(environment => Object.freeze({ declaration,
-    owner: Object.freeze({ kind: "capture", environment, slotIndex: 0 }), storage: {}, readCarrier: {} }));
+    owner: Object.freeze({ kind: "capture", environment, slotIndex: 0, fieldCarrier }),
+    storage: { slotCarrier: Object.freeze({}) }, readCarrier: {} }));
   const emission = Object.freeze({ use, nativeEnvironments: Object.freeze([generic, frame, suspended]),
     nativeBindings: Object.freeze(bindings) });
   const context = { input: { program: {
@@ -44,9 +46,12 @@ test("completed native capture readers use exact context, owner and slot identit
   assert.equal(requireRustNativeCaptureEnvironment(emission,
     { kind: "suspended", implementation }, context) === suspended, true,
   "the original suspended implementation selects its identical owner");
-  for (const [index, environment] of [generic, suspended].entries())
+  for (const [index, environment] of [generic, suspended].entries()) {
     assert.equal(requireRustNativeCaptureStorage(environment, 0, emission, context) === bindings[index], true,
       "identical source declarations in distinct environments never select the first unrelated slot");
+    assert.equal(requireRustNativeCaptureStorage(environment, 0, emission, context).owner.fieldCarrier === fieldCarrier, true,
+      "the published emitted field keeps its exact owner envelope rather than substituting the payload slot");
+  }
   assert.throws(() => requireRustNativeCaptureEnvironment(emission,
     { kind: "generic", definition, implementation, member: {} }, context), /one completed original owner/,
   "an equal-shaped foreign member cannot replace the admitted identity");

@@ -5,6 +5,27 @@ import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carrier.js";
+import { sourceEnclosingGenericParameters } from "@tsonic/target-api/source";
+import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
+
+export function resolveRustGenericCallableEnvironment(
+  declaration: Node | undefined,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): readonly TargetTypeRef[] | undefined {
+  if (declaration === undefined) return undefined;
+  const enclosing = sourceEnclosingGenericParameters(declaration, context.ast);
+  const captured = resolveRustCallableEnvironment(declaration, context, options, resolving);
+  if (enclosing === undefined || captured === undefined) return undefined;
+  const environment: TargetTypeRef[] = [...captured];
+  for (const declaration of enclosing) {
+    const parameter = context.sourceLifetimes.parameterFor(declaration);
+    if (parameter === undefined) return undefined;
+    if (parameter.kind === "type") environment.push(rustTypeParameterFromSourceContract(parameter));
+  }
+  return Object.freeze(environment);
+}
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
