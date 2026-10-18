@@ -63,6 +63,16 @@ export function prepareRustCallableEmissionRequests(
     });
     return changed ? snapshotRustCallableBindings({ types: bindings.types, lifetimes, consts: bindings.consts }) : bindings;
   };
+  const nativeCaptures = (declaration: Node, capture: RustClosureCaptureFact): readonly RustPreparedNativeCaptureInput[] => {
+    const producer = input.nativeProducers.forDeclaration(declaration);
+    if (producer === undefined) {
+      diagnostics.push(emissionDiagnostic(declaration,
+        "A native inferred capture environment requires its exact original callable producer."));
+      return [];
+    }
+    return rustNativeCaptureInputs(Object.freeze({ kind: "native", producer, capture,
+      creation: Object.freeze({ kind: "definition" }) }), capture);
+  };
   const bodyCaptures = (declaration: Node): readonly RustPreparedNativeCaptureInput[] => {
     const frameImplementation = input.frames.implementationFor(declaration);
     if (frameImplementation !== undefined) {
@@ -74,6 +84,7 @@ export function prepareRustCallableEmissionRequests(
           "A frame body capture requires its exact original definition, entry and implementation."));
         return [];
       }
+      if (frameImplementation.independent) return nativeCaptures(declaration, frameImplementation.capture);
       return rustNativeCaptureInputs(Object.freeze({ kind: "frame", definition, entry,
         implementation: frameImplementation }), frameImplementation);
     }
@@ -85,6 +96,12 @@ export function prepareRustCallableEmissionRequests(
       return [];
     }
     if (lexical !== undefined) {
+      const producer = input.nativeProducers.forDeclaration(declaration);
+      if (producer?.parameterCarriers === undefined) {
+        diagnostics.push(emissionDiagnostic(declaration,
+          "A lexical capture environment requires its exact completed native parameter inventory."));
+        return [];
+      }
       const captureFact = input.records.closureCapture.get(declaration);
       const captures: RustClosureCaptureFact["captures"][number][] = [];
       for (const capture of lexical.captures) {
@@ -95,19 +112,11 @@ export function prepareRustCallableEmissionRequests(
           ...(capture.mutable ? { mutable: true as const } : {}),
           storage: input.records.bindingStorage.get(capture.declaration)?.storage ?? "value" }));
       }
-      return rustNativeCaptureInputs(Object.freeze({ kind: "lexical", declaration, lexical }),
+      return rustNativeCaptureInputs(Object.freeze({ kind: "lexical", declaration, producer, lexical }),
         { captures, receiverFields: captureFact?.receiverFields ?? [], receivers: captureFact?.receivers ?? [] });
     }
     const capture = input.records.closureCapture.get(declaration);
-    if (capture === undefined) return [];
-    const producer = input.nativeProducers.forDeclaration(declaration);
-    if (producer === undefined) {
-      diagnostics.push(emissionDiagnostic(declaration,
-        "A native inferred capture environment requires its exact original callable producer."));
-      return [];
-    }
-    return rustNativeCaptureInputs(Object.freeze({ kind: "native", producer, capture,
-      creation: Object.freeze({ kind: "definition" }) }), capture);
+    return capture === undefined ? [] : nativeCaptures(declaration, capture);
   };
   const request = (subject: object, role: RustPhysicalEmissionRole, declaration: Node, identity: string, nativeOwnerFileName: string,
     bindings: RustTargetGenericBindings | undefined, demands: readonly RustPhysicalCallableEmissionRequest[], source: RustEmissionSourceOwner,
@@ -293,7 +302,8 @@ export function prepareRustCallableEmissionRequests(
     request(frame, "frame", declaration, identity, frame.ownerFileName, bindings, [], { kind: "declaration" }, [...frame.bindings.map(value => value.carrier),
       ...frame.entries.flatMap(entry => [...entry.signature.parameters, entry.signature.result])], [],
       frame.entries.flatMap(entry => entry.implementations.flatMap(implementation =>
-        rustNativeCaptureInputs(Object.freeze({ kind: "frame", definition: frame, entry, implementation }), implementation))));
+        implementation.independent ? nativeCaptures(implementation.declaration, implementation.capture)
+          : rustNativeCaptureInputs(Object.freeze({ kind: "frame", definition: frame, entry, implementation }), implementation))));
   }
   for (const plan of input.constructions) {
     if (!input.isNativeNode(plan.definition.declaration) || input.ast.hasModifierKind(plan.definition.declaration, "abstract")) continue;

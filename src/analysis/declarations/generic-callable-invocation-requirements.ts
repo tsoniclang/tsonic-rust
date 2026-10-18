@@ -11,7 +11,7 @@ import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js"
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
-import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 import type { RequirementContractState } from "./generic-requirement-contract.js";
 import type { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 import type { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";

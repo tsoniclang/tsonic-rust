@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
-import { rustNativeCaptureInputs, rustNativeCaptureInputsForCreation } from "../../../dist/analysis/callables/emission-capture-environments.js";
+import { completeRustNativeNamedCaptureEnvironment, rustNativeCaptureInputs, rustNativeCaptureInputsForCreation } from "../../../dist/analysis/callables/emission-capture-environments.js";
 import { selectRustNativeCallableEnvironment } from "../../../dist/policy/types/model/native-type-selection.js";
 import { rustNamedTypeCarrierValue, rustNativeTraitRef } from "../../../dist/target-model/types/carriers/native.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { rustGenericRequirementBound } from "../../../dist/target-model/lifetimes/model.js";
+import { rustBuiltInCarrierDefinitions } from "../../../dist/target-model/types/carriers/built-ins.js";
+import { rustRetainedErrorTargetId } from "../../../dist/target-model/types/carriers/source-error.js";
 
 function captures() {
   const carrier = { kind: "source-primitive", name: "number" };
@@ -199,4 +203,125 @@ test("native environment selection refuses missing evidence, foreign paths and i
   const anonymous = selectRustNativeCallableEnvironment({ ...environment, arguments: [{ kind: "type", type: {
     kind: "closure", args: [], result: { kind: "tuple", elements: [] } } }], typeRequirements: [] }, context);
   assert.equal(anonymous.kind, "rejected", "an inferred callable signature is not a nameable environment allocation type");
+});
+
+test("the native bound model loads cold before carrier metadata without an ESM initialization cycle", () => {
+  const model = new URL("../../../dist/target-model/lifetimes/model.js", import.meta.url).href;
+  const builtIns = new URL("../../../dist/target-model/types/carriers/built-ins.js", import.meta.url).href;
+  const sourceError = new URL("../../../dist/target-model/types/carriers/source-error.js", import.meta.url).href;
+  const cold = spawnSync(process.execPath, ["--input-type=module", "--eval", `
+    import assert from "node:assert/strict";
+    const { rustGenericRequirementBound } = await import(${JSON.stringify(model)});
+    const { rustBuiltInCarrierDefinitions } = await import(${JSON.stringify(builtIns)});
+    const { rustRetainedErrorTargetId } = await import(${JSON.stringify(sourceError)});
+    const retained = Object.freeze({ identity: rustRetainedErrorTargetId,
+      path: rustBuiltInCarrierDefinitions[rustRetainedErrorTargetId].renderPath });
+    const expected = ["core::clone::Clone", "core::default::Default", "static", "js_abi::SourceNumeric",
+      "js_abi::NativeNumberPredicate", "core::convert::Into"];
+    for (const [index, requirement] of ["clone", "default", "static", "source-numeric", "number-predicate", "js-rejection"].entries()) {
+      const bound = rustGenericRequirementBound(requirement, retained);
+      assert.equal(bound === undefined ? undefined : bound.kind === "static" ? "static" : bound.path,
+        expected[index], requirement);
+    }
+  `], { encoding: "utf8", timeout: 10_000 });
+  assert.equal(cold.error === undefined, true, "the cold module process starts and completes within its bound");
+  assert.equal(cold.status, 0, cold.stderr);
+});
+
+test("one pure native bound constructor retains all six selected grammars and the exact retained error argument", () => {
+  const retained = Object.freeze({ identity: rustRetainedErrorTargetId,
+    path: rustBuiltInCarrierDefinitions[rustRetainedErrorTargetId].renderPath });
+  for (const [requirement, path] of [["clone", "core::clone::Clone"], ["default", "core::default::Default"],
+    ["source-numeric", "js_abi::SourceNumeric"], ["number-predicate", "js_abi::NativeNumberPredicate"],
+    ["js-rejection", "core::convert::Into"]]) {
+    const bound = rustGenericRequirementBound(requirement, retained);
+    assert.equal(bound?.kind, "trait-ref", `${requirement}: the original native constraint remains typed data`);
+    assert.equal(bound.path, path, `${requirement}: native identity is selected once`);
+    assert.equal(Object.isFrozen(bound) && Object.isFrozen(bound.genericArguments), true, `${requirement}: data is immutable`);
+  }
+  assert.equal(rustGenericRequirementBound("static", retained).kind, "static", "static remains a lifetime, not a fake trait");
+  const rejectedError = rustGenericRequirementBound("js-rejection", retained).genericArguments[0];
+  const nativeError = rustNamedTypeCarrierValue(rejectedError.type);
+  assert.equal(nativeError.path, retained.path, "Into uses the actual retained runtime error declaration, never TsonicError or E");
+  assert.equal(nativeError.nativeErrorIdentity, rustRetainedErrorTargetId, "the genuine native error identity is retained");
+  assert.equal(nativeError.genericArguments.length + nativeError.typeRequirements.length, 0,
+    "the concrete non-generic runtime declaration has proved empty arguments and requirements");
+  for (const evidence of [undefined, { ...retained, path: undefined }, { ...retained, path: "" },
+    { ...retained, identity: "foreign:error" }]) {
+    assert.equal(rustGenericRequirementBound("js-rejection", evidence) === undefined, true,
+      "missing or foreign runtime evidence never becomes an empty requirement");
+  }
+  assert.equal(rustGenericRequirementBound("unknown", retained) === undefined, true,
+    "an unselected grammar is not recovered as source-numeric");
+});
+
+function requirementContract(declaration, parameters) {
+  return { declaration, typeParameters: parameters, capturedTypeParameters: [], nativeInputs: [],
+    associatedTypes: [], projectProjections: [], optionalStorage: [] };
+}
+
+test("native frame state uses every entry contract and original TYPE geometry before concrete binding substitution", () => {
+  const capture = captures();
+  const parameter = { kind: "type-parameter", identity: "owner:T", name: "T" };
+  const first = { ...capture, declaration: {}, carrier: parameter, stateName: "FirstState", copy: false, independent: false };
+  const second = { ...capture, declaration: {}, carrier: parameter, stateName: "SecondState", copy: true, independent: false };
+  const entry = { implementations: [first] };
+  const other = { implementations: [second] };
+  const definition = { ownerFileName: "/owner.ts", environmentParameters: [parameter], entries: [entry, other] };
+  const firstContract = requirementContract(first.declaration, [{ identity: parameter.identity, name: "T", requirements: ["clone", "static"] }]);
+  const secondContract = requirementContract(second.declaration, [{ identity: parameter.identity, name: "T", requirements: ["default"] }]);
+  const contracts = new Map([[first.declaration, firstContract], [second.declaration, secondContract]]);
+  const bindings = { types: new Map([[parameter.identity, { kind: "source-primitive", name: "int32" }]]),
+    lifetimes: new Map(), consts: new Map() };
+  const environment = { kind: "frame", definition, entry, implementation: first };
+  const input = { bindings, nativeContext: nativeContext(), declarationGenericRequirements: { contractFor: node => contracts.get(node) } };
+  const result = completeRustNativeNamedCaptureEnvironment(environment, input);
+  assert.equal(result.kind, "resolved", "the real original native state is selected");
+  const state = rustNamedTypeCarrierValue(result.stateCarrier);
+  assert.equal(state.path, "owner_crate::owner::FirstState");
+  assert.equal(state.genericArguments[0].kind === "type" && state.genericArguments[0].type.name === "int32", true,
+    "actual substitution follows original template-index selection");
+  assert.equal(state.typeRequirements.length, 2, "another entry's Default is retained alongside original Clone");
+  assert.equal(state.typeRequirements.every(row => row.typeArgumentIndex === 0), true,
+    "concrete substitution cannot erase the original TYPE slot identity");
+  assert.equal(state.typeRequirements.some(row => row.trait.path === "core::clone::Clone") &&
+    state.typeRequirements.some(row => row.trait.path === "core::default::Default"), true);
+  assert.equal(firstContract.typeParameters[0].requirements.includes("static"), true,
+    "the full original static/lifetime contract is not mutated or replaced by a TYPE-only vector");
+  assert.equal(result.slotPaths.length, 3, "all original capture sections retain their native field paths");
+  assert.equal(result.slotPaths.every((path, index) => path.length === 1 && path[0] === `capture_${index}`), true);
+  assert.equal(result.constructor, "alloc::rc::Rc::new", "the complete actual non-Copy environment owns the holder");
+  const missing = completeRustNativeNamedCaptureEnvironment(environment, { ...input,
+    declarationGenericRequirements: { contractFor: node => node === first.declaration ? firstContract : undefined } });
+  assert.equal(missing.kind, "rejected", "a missing second entry is never silently ignored");
+  const unmatched = completeRustNativeNamedCaptureEnvironment(environment, { ...input,
+    declarationGenericRequirements: { contractFor: node => requirementContract(node, []) } });
+  assert.equal(unmatched.kind, "rejected", "an unknown generic requirement row never becomes proved empty");
+});
+
+test("empty frame payload absence is distinct from a real generic ZST and a marker-only frame state", () => {
+  const capture = { captures: [], receiverFields: [], receivers: [] };
+  const implementation = { ...capture, declaration: {}, carrier: { kind: "tuple", elements: [] },
+    sourceFileName: "/owner.ts", stateName: "EmptyState", copy: true, storage: "value", independent: false };
+  const entry = { implementations: [implementation] };
+  const definition = { ownerFileName: "/owner.ts", environmentParameters: [], entries: [entry] };
+  const bindings = { types: new Map(), lifetimes: new Map(), consts: new Map() };
+  const input = { bindings, nativeContext: nativeContext(), declarationGenericRequirements: {
+    contractFor: node => requirementContract(node, []) } };
+  const frame = completeRustNativeNamedCaptureEnvironment({ kind: "frame", definition, entry, implementation }, input);
+  assert.equal(frame.kind, "none", "no un-emitted named frame state is fabricated for absent payload");
+  const generic = completeRustNativeNamedCaptureEnvironment({ kind: "generic", definition: { signature: { environmentParameters: [] } },
+    implementation, member: undefined, environment: { ...capture }, arguments: [] }, input);
+  assert.equal(generic.kind, "resolved", "the actual generic ZST is a real named emitted state even with no slots");
+  assert.equal(rustNamedTypeCarrierValue(generic.stateCarrier).path, "owner_crate::owner::EmptyState");
+  assert.equal(generic.slotPaths.length, 0, "the real empty state needs no fabricated cleanup slot");
+  const parameter = { kind: "type-parameter", identity: "owner:T", name: "T" };
+  const marker = completeRustNativeNamedCaptureEnvironment({ kind: "frame", definition: { ...definition, environmentParameters: [parameter] },
+    entry, implementation }, { ...input, declarationGenericRequirements: { contractFor: node =>
+      requirementContract(node, [{ identity: parameter.identity, name: "T", requirements: [] }]) } });
+  assert.equal(marker.kind, "resolved", "a real retained type marker still requires its original named frame state");
+  assert.equal(marker.slotPaths.length, 0, "a marker is not misreported as a captured binding");
+  const independent = completeRustNativeNamedCaptureEnvironment({ kind: "frame", definition, entry,
+    implementation: { ...implementation, independent: true } }, input);
+  assert.equal(independent.kind, "rejected", "an independent native producer cannot be relabelled as a frame state");
 });

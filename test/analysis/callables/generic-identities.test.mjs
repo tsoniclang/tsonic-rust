@@ -82,6 +82,31 @@ test("proven empty generic environments retain static identity without changing 
   assert.equal(current.comparisons[2].selected.pairs.length, 0, "distinct original expressions have no shared identity pair");
 });
 
+test("static identity keeps the same signature's different closed native factory bindings distinct", () => {
+  const current = fixture(`
+    import type { uint8, uint64 } from "@tsonic/core/types.js";
+    type Identity = <Value>(value: Value) => Value;
+    function make<Bound>(): Identity {
+      return <Value>(value: Value): Value => {
+        const marker: Bound | undefined = undefined;
+        return value;
+      };
+    }
+    export function compare(): boolean {
+      const first = make<uint8>();
+      const same = make<uint8>();
+      const other = make<uint64>();
+      return first === same && first !== other;
+    }
+  `);
+  assert.equal(current.program.callableValues.genericIdentities.issues.length, 0);
+  assert.equal(current.comparisons.length, 2, "both original source comparisons are admitted");
+  const [same, other] = current.comparisons.map(row => row.selected);
+  assert.equal(same.pairs.length, 1, "one original definition at the same closed binding keeps its static identity");
+  assert.equal(same.pairs[0].kind, "static");
+  assert.equal(other.pairs.length, 0, "the same native signature does not collapse distinct closed original factory bindings");
+});
+
 test("identity admission rejects an implementation row missing its required identity", () => {
   const current = fixture(declarations);
   const selected = current.comparisons[0].selected;

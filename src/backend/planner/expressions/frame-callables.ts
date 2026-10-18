@@ -2,8 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput } from "../program/plan-context.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { diagnosticInput, registerAliasFromPath, requireRustEmissionContext } from "../program/plan-context.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
 import { rustFrameCallableTypes, type RustFrameCallableTypes } from "../types/frame-callables.js";
 import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
 import { planRustCaptureValue } from "./typed-locations.js";
@@ -13,6 +13,8 @@ import { planRustReceiverFieldOwners, planRustReceiverOwners, validateRustCaptur
   validateRustCapturedReceivers } from "./receiver-captures.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../target-model/types/carriers/callables.js";
 import { rustRetainedFrameCounterName } from "../../../analysis/callables/frame-counter-storage.js";
+import { requireRustNativeCaptureEnvironment } from "./binding-storage.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 
 function planFrameEntry(
   node: Node, carrier: TargetTypeRef, context: RustPlanContext,
@@ -53,14 +55,27 @@ function planFrameEntry(
   if (fields === undefined || receivers === undefined) return undefined;
   const receiverBindings = [...fields.bindings, ...receivers.bindings];
   values.push(...receiverBindings.map(binding => ({ kind: "path" as const, path: binding.name })));
-  const module = context.moduleNameByFileName.get(types.definition.ownerFileName);
-  const state: RustExpr | undefined = (values.length === 0 && types.definition.environmentParameters.length === 0) || module === undefined ? undefined : {
-    kind: "struct-literal", path: `crate::${module}::${implementation.stateName}`,
-    fields: [...(values as RustExpr[]).map((value, index) => ({ name: `capture_${index}`, value })),
-      ...(types.definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }])],
-  };
-  const payload = state === undefined ? [] : [implementation.copy ? state
-    : { kind: "call" as const, path: "alloc::rc::Rc::new", args: [state] }];
+  const emission = requireRustEmissionContext(context, types.definition, "frame", types.definition.activation.ownerDeclaration);
+  const environment = requireRustNativeCaptureEnvironment(emission,
+    { kind: "frame", definition: types.definition, entry: types.entry, implementation }, context);
+  const payload: RustExpr[] = [];
+  if (environment.payload.kind === "named") {
+    const selected = environment.payload;
+    const stateType = rustTypeFromSelectedNativeCarrierInContext(selected.stateCarrier, context);
+    if (stateType.kind !== "named") return failRustPlannerInvariant(
+      "A sealed frame capture payload requires its exact native named state.", node);
+    const state: RustExpr = { kind: "struct-literal", path: stateType.path,
+      fields: [...values.map((value, index) => {
+        const path = selected.slotPaths[index];
+        if (value === undefined || path?.length !== 1 || path[0] === undefined) return failRustPlannerInvariant(
+          "A frame creation requires every original selected native capture field.", node);
+        return { name: path[0], value };
+      }), ...(types.definition.environmentParameters.length === 0 ? [] : [
+        { name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }])],
+    };
+    if (selected.constructor !== null) registerAliasFromPath(context, selected.constructor);
+    payload.push(selected.constructor === null ? state : { kind: "call", path: selected.constructor, args: [state] });
+  }
   context.usedAliases?.add("rt");
   return { bindings: [{ name: identity, value: allocated }, ...receiverBindings],
     entry: { kind: "call", path: `${types.entryType.path}::${implementation.variantName}`,

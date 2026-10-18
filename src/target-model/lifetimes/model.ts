@@ -1,4 +1,31 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustTargetTraitRef } from "../types/model.js";
+import { rustNamedTargetType, rustNativeTraitRef } from "../types/carriers/native.js";
+import { rustRetainedErrorTargetId } from "../types/carriers/source-error.js";
+import { snapshotClosedMetadata } from "../metadata/closed-data.js";
+
+export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
+
+export function rustGenericRequirementBound(
+  requirement: RustGenericRequirement,
+  retainedError: { readonly identity: typeof rustRetainedErrorTargetId; readonly path: string | undefined },
+): RustLifetimeRef | RustTargetTraitRef | undefined {
+  switch (requirement) {
+    case "static": return rustStaticLifetime;
+    case "clone": return snapshotClosedMetadata(rustNativeTraitRef("core::clone::Clone"));
+    case "default": return snapshotClosedMetadata(rustNativeTraitRef("core::default::Default"));
+    case "source-numeric": return snapshotClosedMetadata(rustNativeTraitRef("js_abi::SourceNumeric"));
+    case "number-predicate": return snapshotClosedMetadata(rustNativeTraitRef("js_abi::NativeNumberPredicate"));
+    case "js-rejection": {
+      if (retainedError?.identity !== rustRetainedErrorTargetId || retainedError.path === undefined ||
+        retainedError.path.length === 0) return undefined;
+      const carrier = rustNamedTargetType(retainedError.identity, retainedError.path, [], [], undefined, [],
+        retainedError.identity, []);
+      return snapshotClosedMetadata(rustNativeTraitRef("core::convert::Into", [{ kind: "type", type: carrier }]));
+    }
+    default: return undefined;
+  }
+}
 
 export type RustLifetimeRef =
   | { readonly kind: "static" }

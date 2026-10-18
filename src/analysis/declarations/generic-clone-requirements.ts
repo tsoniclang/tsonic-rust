@@ -6,7 +6,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustReadTransferRequirement, type RustOwnershipFlow } from "../ownership/flow.js";
 import type { RustReadOwnershipRequirements } from "../ownership/reads.js";
-import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 import type { RustCallableInvocationRequirementContext } from "./generic-callable-invocation-requirements.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement,
