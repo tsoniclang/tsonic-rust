@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
 import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/program/source-package-components.js";
-import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary, resolveRustPhysicalProgramErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { resolveRustSourcePackageErrorBoundary, resolveRustPhysicalProgramErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { analyzeRustSourcePackageErrors } from "../../../../dist/analysis/program/error-transport.js";
 import { selectRustPhysicalProgramErrorOwner } from "../../../../dist/analysis/errors/error-types.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
@@ -37,7 +38,13 @@ function classify(dependencies, errors, views = []) {
   context.sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(
     context.sourcePackages, context.ast, context.sourceFiles,
   );
-  const classified = analyzeRustSourcePackageComponents(context, "bin", subject => context.records.errorEffects.get(subject));
+  const identities = new Map(names.map(name => [`/${name}/index.ts`, {
+    fileName: `/${name}/index.ts`, packageId: name, componentId: name,
+    moduleSegments: ["index"], moduleName: "index", relativeSourcePath: "index.ts",
+    artifactPath: "src/index.rs", childModuleNames: [],
+    ...(name === "root" ? {} : { externalCrateName: `${name}_crate` }),
+  }]));
+  const classified = analyzeRustSourcePackageComponents(context, "bin", subject => context.records.errorEffects.get(subject), identities);
   assert.equal(classified.kind, "resolved");
   context.sourcePackageComponents = classified.plan;
   const components = classified.plan.components.map(component => ({
@@ -54,7 +61,7 @@ test("chain and diamond error forwarding preserve one sealed owner and one conve
   assert.equal(context.sourcePackageComponents.canReferenceFile("/left/index.ts", "/right/index.ts"), false);
   assert.equal(context.sourcePackageComponents.canReferenceFile("/foreign/index.ts", "/leaf/index.ts"), false);
   assert.ok(components.every(component => component.errorOwnerComponentId === "leaf"));
-  const { plan, diagnostics } = planRustSourcePackageErrors({ program: context }, components);
+  const { plan, diagnostics } = analyzeRustSourcePackageErrors(context, components);
   assertNoTargetDiagnostics(diagnostics);
   const root = plan.domainsByComponentId.get("root");
   assert.equal(root.externalErrors.length, 1);
@@ -74,15 +81,33 @@ test("local errors and independent dependency domains retain distinct closed uni
     const { context, components } = classify({ left: [], right: [], root: ["left", "right"] }, owners);
     const root = components.find(component => component.root);
     assert.equal(root.errorOwnerComponentId, "root");
-    const result = planRustSourcePackageErrors({ program: context }, components);
+    const result = analyzeRustSourcePackageErrors(context, components);
     assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(result.plan.domainsByComponentId.get("root").forwardModulePath, undefined);
   }
 });
 
+test("sparse physical owner selection preserves local forwarding and original dependency order", () => {
+  const { context, components } = classify({ leaf: [], right: ["leaf"], left: ["leaf"], root: ["right", "left"] },
+    ["leaf", "root"]);
+  const { plan, diagnostics } = analyzeRustSourcePackageErrors(context, components);
+  assertNoTargetDiagnostics(diagnostics);
+  const boundary = resolveRustPhysicalProgramErrorBoundary(plan, "root", { kind: "physical", domain: "project", componentId: "leaf" });
+  assert.equal(components.find(component => component.componentId === "root").dependencyComponentIds.join(","), "left,right",
+    "the analysis owner selects the actual canonical dependency order");
+  assert.equal(boundary.errorTypePath, "left_crate::program::TsonicError", "the first actual forwarding dependency retains its spelling");
+  assert.equal(boundary.componentId, "left", "the selected forwarding component remains authoritative");
+  assert.equal(boundary.errorTypeIdentity, plan.domainsByComponentId.get("leaf").errorTypeIdentity, "forwarding does not change native identity");
+  const local = resolveRustPhysicalProgramErrorBoundary(plan, "left", { kind: "physical", domain: "project", componentId: "leaf" });
+  assert.equal(local.errorTypePath, "rt::TsonicError", "a local forwarding alias wins over its own dependency");
+  assert.equal(local.componentId, "left", "the local forwarding component is retained");
+  assert.equal(resolveRustSourcePackageErrorBoundary(plan, "root", "leaf") === undefined, true,
+    "physical owner reachability never fabricates a direct component dependency");
+});
+
 test("physical error normalization and rendering share the actual forwarded component owner, not ambient errors", () => {
   const { context, components } = classify({ leaf: [], left: ["leaf"], right: ["leaf"], root: ["left", "right"] }, ["leaf", "root"]);
-  const { plan, diagnostics } = planRustSourcePackageErrors({ program: context }, components);
+  const { plan, diagnostics } = analyzeRustSourcePackageErrors(context, components);
   assertNoTargetDiagnostics(diagnostics);
   for (const name of ["left", "right", "leaf"]) {
     const physical = selectRustPhysicalProgramErrorOwner(context.sourceFiles.find(file => file.fileName === `/${name}/index.ts`),
@@ -103,7 +128,7 @@ test("error ownership mutations reject before any program-error AST is emitted",
   for (const owner of [undefined, "root", "missing"]) {
     const { context, components } = classify({ leaf: [], root: ["leaf"] }, ["leaf"]);
     const mutated = components.map(component => component.root ? { ...component, errorOwnerComponentId: owner } : component);
-    const result = planRustSourcePackageErrors({ program: context }, mutated);
+    const result = analyzeRustSourcePackageErrors(context, mutated);
     assert.equal(result.plan, undefined);
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT"));
   }
@@ -113,7 +138,7 @@ test("native Error-view declarations have one exact owner and reject absent or m
   const { context, components } = classify({ leaf: [], root: ["leaf"] }, [], ["leaf"]);
   assert.equal(components.every(component => component.errorOwnerComponentId === "leaf"), true);
   assert.equal(context.sourcePackageComponents.forComponent("leaf").closedErrorDemand.sourceView, true);
-  const accepted = planRustSourcePackageErrors({ program: context }, components);
+  const accepted = analyzeRustSourcePackageErrors(context, components);
   assertNoTargetDiagnostics(accepted.diagnostics);
   assert.equal(accepted.plan.domainsByComponentId.get("root").forwardModulePath, "leaf_crate::program");
   for (const replacement of [undefined, { retained: false, thrownCarriers: [] },
@@ -123,7 +148,7 @@ test("native Error-view declarations have one exact owner and reject absent or m
       forComponent: identity => identity !== "leaf" ? context.sourcePackageComponents.forComponent(identity)
         : replacement === undefined ? undefined : { closedErrorDemand: replacement },
     } };
-    const rejected = planRustSourcePackageErrors({ program: mutated }, components);
+    const rejected = analyzeRustSourcePackageErrors(mutated, components);
     assert.equal(rejected.plan === undefined, true);
     assert.equal(rejected.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT"), true);
   }
@@ -135,7 +160,7 @@ test("native Error-view declarations have one exact owner and reject absent or m
       forComponent: identity => identity !== "root" ? fixture.context.sourcePackageComponents.forComponent(identity)
         : { ...selected, closedErrorDemand: { ...selected.closedErrorDemand, sourceView: true } },
     } };
-    const rejected = planRustSourcePackageErrors({ program: mutated }, fixture.components);
+    const rejected = analyzeRustSourcePackageErrors(mutated, fixture.components);
     assert.equal(rejected.plan === undefined, true, domain);
     assert.equal(rejected.diagnostics.some(diagnostic => diagnostic.code === "RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT"), true, domain);
   }

@@ -3,7 +3,7 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
-import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
 import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission-requests.js";
@@ -105,6 +105,16 @@ const scalarReturnSource = `
 export function owner(value: boolean): boolean { return value; }
 `;
 
+const lexicalIndexSource = `
+export function accumulatedIndex(): boolean {
+  const values = [3n];
+  let indexReads = 0;
+  const index = (): number => { indexReads += 1; return 0; };
+  const accumulated = values[index()] += values[0];
+  return accumulated === 6n && values[0] === 6n && indexReads === 1;
+}
+`;
+
 const ownedCaptureSource = `
 export async function keep(value: number, pending: Promise<void>): Promise<number> {
   const read = () => value;
@@ -168,6 +178,115 @@ test("declaration bindings keep full formals and only free captured generic iden
     true, "an enclosing free environment is retained even when this declaration has no formals");
 });
 
+test("inline callback bodies retain the original finite enclosing use and concrete bindings", () => {
+  const source = `
+    import type { int32 } from "@tsonic/core/types.js";
+    class Base { identity<Value>(value: Value): Value { return value; } }
+    class Derived extends Base { override identity<Value>(value: Value): Value { return value; } }
+    function pass<Value>(value: Value): Value { return value; }
+    function relay<Value>(receiver: Base, value: Value): Value {
+      const mapped = [value].map(current => pass<Value>(current));
+      return receiver.identity<Value>(mapped[0]!);
+    }
+    export function numberValue(value: int32): int32 { return relay<int32>(new Derived(), value); }
+    export function stringValue(value: string): string { return relay<string>(new Derived(), value); }
+  `;
+  const compiled = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
+    files: { "index.ts": source } }).result;
+  assert.equal(compiled.diagnostics.length, 0,
+    compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+  const program = compiled.program;
+  const { ast } = program.source;
+  const callback = program.callableValues.nativeProducers.producers.find(producer => ast.is.IsArrowFunction(producer.declaration));
+  assert.equal(callback !== undefined, true, "the actual mapped callback has its original selected native producer");
+  const prepared = program.physicalEmissionContexts;
+  const parents = prepared.contexts.filter(context => context.role === "specialized-body" &&
+    ast.text(ast.name(context.declaration)) === "relay");
+  assert.equal(parents.length, 2, "the same callback is created in both actual finite source variants");
+  const children = parents.map(parent => {
+    const body = prepared.bodyContextFor(parent.use, callback.declaration);
+    assert.equal(body !== undefined && body.declaration === callback.declaration, true,
+      "the exact enclosing use selects its original callback body before publication");
+    assert.equal(body.use !== parent.use && body.use.subject.enclosingUse === parent.use, true,
+      "a nested body retains the original selected creation use, not a reconstructed owner key");
+    const freeTypes = callback.environment.filter(argument => argument.kind === "type");
+    assert.equal(freeTypes.length > 0, true, "the real callback captures its enclosing source type identity");
+    for (const argument of freeTypes) {
+      assert.equal(argument.type.kind, "type-parameter", "the actual captured type has its canonical source binder");
+      const expected = parent.bindings.types.get(argument.type.identity);
+      assert.equal(expected !== undefined && expected.kind !== "type-parameter", true,
+        "the actual finite enclosing body supplies its concrete replacement");
+      assert.equal(rustTargetTypeRefEquals(body.bindings.types.get(argument.type.identity), expected), true,
+        "the inner body retains exactly that replacement for the same source binder");
+    }
+    assert.equal(prepared.bodyContextFor({ ...parent.use }, callback.declaration) === undefined, true,
+      "a copied enclosing use never recovers the original selected callback body");
+    assert.equal(prepared.bodyContextFor(parent.use, { ...callback.declaration }) === undefined, true,
+      "a copied callable declaration cannot select a body by shape");
+    assert.equal(prepared.bodyContextFor(parent.use, parent.declaration) === undefined, true,
+      "the enclosing declaration is not a substitute for the actual inline creation");
+    assert.equal(prepared.contextFor(body.use) === body, true, "one canonical context index owns the selected body");
+    assert.equal(typeof body.bindings.types.set === "undefined", true, "the selected nested environment is immutable");
+    return body;
+  });
+  assert.equal(children[0] !== children[1] && children[0].use !== children[1].use, true,
+    "distinct actual finite enclosing uses never collapse into one declaration-only callback context");
+});
+
+for (const [name, surfaces, field] of [
+  ["native", [], "apply(1, value => value + 1)"],
+  ["js-source", ["js"], "apply(1, value => value + 1)"],
+  ["js-provider", ["js"], "[1, 2].map(value => value + 1)[0]!"],
+]) {
+  test(`field callbacks retain the exact selected explicit constructor layer (${name})`, () => {
+    const source = `
+      function apply(value: number, callback: (value: number) => number): number { return callback(value); }
+      class Box<Value> {
+        values: Value[] = [];
+        value = ${field};
+        constructor() {}
+      }
+      export function run(): number { return new Box<string>().value; }
+    `;
+    const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
+      files: { "index.ts": source } }).result;
+    assert.equal(compiled.diagnostics.length, 0,
+      compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+    const program = compiled.program;
+    const { ast } = program.source;
+    const callback = program.callableValues.nativeProducers.producers.find(producer => ast.is.IsArrowFunction(producer.declaration));
+    assert.equal(callback !== undefined, true, "the real field callback has its exact selected native producer");
+    const prepared = program.physicalEmissionContexts;
+    const layers = prepared.contexts.filter(context => context.role === "constructor-layer" && ast.is.IsConstructorDeclaration(context.declaration));
+    assert.equal(layers.length > 0, true, "an actual explicit constructor owns the selected class initialization layer");
+    let selectedBodies = 0;
+    for (const layer of layers) {
+      const body = prepared.bodyContextFor(layer.use, callback.declaration);
+      if (body === undefined) continue;
+      selectedBodies += 1;
+      assert.equal(layer.bindings.types.size > 0, true, "the class-selected binding vector includes its original declared type binder");
+      assert.equal(body.declaration === callback.declaration && body.use.subject.enclosingUse === layer.use, true,
+        "the field callback takes the actual inline route in its original selected constructor layer");
+      assert.equal(prepared.contextFor(body.use) === body, true, "the selected layer and body use the same canonical A context index");
+      for (const argument of callback.environment) if (argument.kind === "type" && argument.type.kind === "type-parameter") {
+        assert.equal(layer.bindings.types.has(argument.type.identity), true, "a free class type retains its exact original selected binder");
+        assert.equal(rustTargetTypeRefEquals(body.bindings.types.get(argument.type.identity),
+          layer.bindings.types.get(argument.type.identity)), true, "the inline field body uses its exact class-selected binding");
+      }
+      for (const identity of layer.bindings.types.keys()) if (!callback.environment.some(argument =>
+        argument.kind === "type" && argument.type.kind === "type-parameter" && argument.type.identity === identity))
+        assert.equal(body.bindings.types.has(identity), false, "unused enclosing binders are not copied into an unrelated inline environment");
+      assert.equal(prepared.bodyContextFor({ ...layer.use }, callback.declaration) === undefined, true,
+        "a copied selected constructor use cannot recover a field callback");
+      assert.equal(prepared.bodyContextFor(layer.use, { ...callback.declaration }) === undefined, true,
+        "a copied declaration cannot recover the actual field callback");
+      assert.equal(prepared.bodyContextFor(layer.use, layer.declaration) === undefined, true,
+        "the constructor itself is not a replacement for its actual field callback");
+    }
+    assert.equal(selectedBodies > 0, true, "the control exercises an actual inline field body, never only a frame/generic/helper early return");
+  });
+}
+
 test("declaration environment admission still rejects duplicate and incompatible binding inputs", () => {
   const parameter = Object.freeze({ kind: "type", type: { kind: "type-parameter", identity: "value", name: "Value" } });
   const lifetime = Object.freeze({ kind: "lifetime", lifetime: { kind: "parameter", identity: "region", name: "region" } });
@@ -208,6 +327,33 @@ export function make<Outer>(captured: Outer): <Value>(value: Value) => Outer {
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
     assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
       "actual checked native generic declarations and captured outer binders emit Rust");
+  }
+});
+
+test("module and non-callable metadata owners never enter callable TypeParameterList extraction", () => {
+  const result = compileRust({surfaces: [], files: {"index.ts": `
+export const seed: number = 1;
+export enum State { First = 1, Second = 2 }
+class Item { static value: number = 2; field: number = 3; }
+export function read(): number { return seed + Item.value + new Item().field; }
+export function state(): State { return State.First; }
+`}}).result;
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+  assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
+    "the actual module, enum, class and static/instance metadata requests emit without a non-callable AST panic");
+});
+
+test("annotated native parameter and return carriers stay selected at their declaration owners", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const result = compileRust({surfaces, files: {"index.ts": `
+import type {float32, int64} from "@tsonic/core/types.js";
+export function narrow(value: float32): float32 { return value; }
+export function wide(value: int64): int64 { return value; }
+`}}).result;
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+    const output = rustSourceText(result);
+    assert.equal(/\bf32\b/u.test(output), true, "the actual native f32 carrier is required and retained");
+    assert.equal(/\bi64\b/u.test(output), true, "the actual native i64 carrier is required and retained");
   }
 });
 
@@ -336,7 +482,7 @@ function observeNativeProducerSeal(producers, observations) {
 
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
   const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } },
-    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource } };
+    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource + lexicalIndexSource + frameSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
@@ -350,6 +496,7 @@ test("the planner phase label starts at publication, after the actual callable s
   const identityUrl = new URL("../../../dist/analysis/callables/generic-identities.js", import.meta.url).href;
   const dispatchUrl = new URL("../../../dist/analysis/callables/generic-dispatch.js", import.meta.url).href;
   const carriersUrl = new URL("../../../dist/target-model/types/carriers/generic-callables.js", import.meta.url).href;
+  const frameCarriersUrl = new URL("../../../dist/target-model/types/carriers/frame-callables.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-instrumented-callable-publication-proof";
   const registryObservation = `export function createRustCallableValuePlanRegistry() { return globalThis[Symbol.for(${JSON.stringify(key)})].registry(observedCreateRustCallableValuePlanRegistry()); }`;
@@ -475,6 +622,7 @@ registerHooks({ load(url, context, nextLoad) {
   return { ...loaded, source: observed + "\\n" + selection.extension };
 } });
 const carriers = await import(${JSON.stringify(carriersUrl)});
+const frameCarriers = await import(${JSON.stringify(frameCarriersUrl)});
 observations.registry = registry => (${observeCallablePublication.toString()})(registry, assert, carriers, observations);
 const { compileRust } = await import(${JSON.stringify(helperUrl)});
 const compiled = compileRust(${JSON.stringify(options)});
@@ -490,6 +638,17 @@ assert.equal(observations.seals, 1, "one actual late callable seal");
 assert.equal(observations.producerSeals, 1, "one actual terminal native producer seal remains inside the measured window");
 assert.equal(observations.publications, 1, "one actual planner publication");
 assert.equal(observations.requests.kind, "resolved", "only an admitted complete request inventory is published");
+const actualFrames = observations.requestInput.nativeProducers.producers.filter(producer => {
+  const operation = observations.requestInput.records.targetOperation.get(producer.declaration);
+  return operation?.kind === "closure" && frameCarriers.rustFrameCallableValue(operation.resultCarrier) !== undefined;
+});
+assert.equal(actualFrames.length > 0 && compiled.result.program.callableValues.frames.definitions.length > 0, true,
+  "the unchanged native frame source has its actual selected frame bodies and owning activation");
+assert.equal(observations.requests.value.some(request => request.kind === "producer" &&
+  frameCarriers.rustFrameCallableValue(request.carrier) !== undefined), false,
+  "an actual frame is not an ordinary native Callable producer just because it has a callable protocol");
+assert.equal(actualFrames.every(producer => observations.requests.value.some(request => request.kind === "return" &&
+  request.subject === producer.declaration)), true, "actual frame body return selection stays in the same canonical request vector");
 assert.equal(observations.requestSelections, 1, "the source-use owner is never replayed after sealing");
 assert.equal(observations.storageFactories, 1, "the single actual program constructs one canonical physical storage owner");
 assert.equal(observations.preparedConsumers, 2, "both actual early consumer owners use the canonical prepared view");
@@ -527,6 +686,24 @@ const lexicalContext = compiled.result.program.physicalEmissionContexts.contexts
   context.use.subject === lexicalDeclaration && context.use.role === "native-body");
 assert.equal(lexicalContext !== undefined && lexicalContext.bindings === lexicalReturn[0].bindings, true,
   "the complete published body consumes the original immutable selecting-owner binding object");
+const indexProducer = observations.requestInput.nativeProducers.producers.find(producer => {
+  const parent = sourceAst.parent(producer.declaration);
+  const name = parent === undefined ? undefined : sourceAst.name(parent);
+  return sourceAst.is.IsArrowFunction(producer.declaration) && name !== undefined && sourceAst.text(name) === "index";
+});
+assert.equal(indexProducer !== undefined, true, "the original compound index arrow has its selected native body producer");
+const indexDeclaration = indexProducer.declaration;
+const indexEnvironment = observations.requestInput.lexicalFunctions.forDeclaration(indexDeclaration);
+assert.equal(indexEnvironment?.kind === "resolved" && indexEnvironment.valueObserved === false, true,
+  "an actual call-only lexical body is not an observed stored callable value");
+const indexReturns = observations.requests.value.filter(request => request.kind === "return" && request.subject === indexDeclaration);
+assert.equal(indexReturns.length, 1, "the exact call-only index body has one canonical return preparation request");
+assert.equal(indexReturns[0].owner === indexDeclaration, true, "the index return remains owned by its original arrow body");
+assert.equal(observations.requests.value.some(request => request.kind === "value" && request.subject === indexDeclaration), false,
+  "preparing a lexical body never manufactures a stored callable value demand");
+for (const capture of indexEnvironment.captures) assert.equal(observations.requests.value.some(request =>
+  request.kind === "value" && request.subject === capture.reference && request.owner === indexDeclaration), true,
+  "the actual index mutation capture keeps its original native body-owned source request");
 const scalar = observations.published.nativeProducers.producers.find(producer => {
   const name = sourceAst.name(producer.declaration);
   return name !== undefined && sourceAst.text(name) === "owner";
@@ -595,9 +772,53 @@ process.stdout.write("R14_INSTRUMENTED_PHASE_PROOF " + JSON.stringify(compiled.r
 });
 
 for (const surfaces of [[], ["js"]]) {
+  test(`selected native module callables prepare bodies without inventing binding storage (${surfaces[0] ?? "native"})`, () => {
+    const program = actual(`
+const concise = (value: boolean): boolean => value;
+const expression = function(value: boolean): boolean { return value; };
+const observed = (value: boolean): boolean => value;
+export function retain(): typeof observed { return observed; }
+export function read(flag: boolean): boolean {
+  const ordinary = flag;
+  return concise(ordinary) && expression(ordinary);
+}
+`, surfaces);
+    const ast = program.source.ast;
+    const declarations = new Map();
+    const visit = node => {
+      if (ast.is.IsVariableDeclaration(node)) {
+        const name = ast.name(node);
+        if (name !== undefined && ast.is.IsIdentifier(name)) declarations.set(ast.text(name), node);
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    for (const name of ["concise", "expression", "observed"]) {
+      const declaration = declarations.get(name);
+      const binding = program.records.moduleBinding.get(declaration);
+      assert.equal(binding?.storage === "native-callable", true, name + ": the original source owner selects native item storage");
+      const body = program.physicalEmissionContexts.contextForOwner(binding.callableDeclaration, "native-body");
+      assert.equal(body !== undefined && body.declaration === binding.callableDeclaration, true,
+        name + ": the original selected callable owns its required emitted body");
+      assert.equal(body.use.subject === binding.callableDeclaration, true, name + ": no equal-looking binding subject replaces the body owner");
+    }
+    const observed = declarations.get("observed");
+    assert.equal(program.records.moduleBinding.get(observed)?.value !== undefined, true,
+      "an actual first-class module value retains its separately selected binding payload");
+    assert.equal(program.callableValues.nativeStorage.valueFor(observed).kind !== "unresolved", true,
+      "a selected first-class module value still requires its canonical binding storage");
+    const ordinary = declarations.get("ordinary");
+    assert.equal(ordinary !== undefined, true, "the ordinary value binding remains part of the same source control");
+    const storage = program.callableValues.nativeStorage.valueFor(ordinary);
+    assert.equal(storage.kind !== "unresolved" && storage.carrier.kind === "source-primitive" && storage.carrier.name === "bool", true,
+      "an ordinary value binding still requires its canonical physical storage");
+  });
   test(`finite specialized and concrete body contexts preserve original selecting identities (${surfaces[0] ?? "native"})`, () => {
+    const source = surfaces.length === 0
+      ? finiteEmissionSource.replace('this.text.includes("ready")', 'this.text === "ready"')
+      : finiteEmissionSource;
     const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
-      files: { "index.ts": finiteEmissionSource } }).result;
+      files: { "index.ts": source } }).result;
     assert.equal(compiled.diagnostics.length, 0, compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
     const program = compiled.program;
     const prepared = program.physicalEmissionContexts;
@@ -890,11 +1111,39 @@ function verifyRequiredMissingOperand(program, observations) {
   assert.equal(Object.hasOwn(result, "value"), false, "no incomplete context product is published");
 }
 
+function verifyInlineSelectingOwners(observations) {
+  const inline = demand => demand.kind === "type" && demand.context.role === "inline-body";
+  const original = observations.preparations.find(preparation => preparation.requests.filter(request =>
+    request.role === "constructor-layer" && request.demands.some(inline)).length >= 2);
+  assert.equal(original !== undefined, true, "the actual pipeline supplies two distinct class-field selecting owners");
+  const layers = original.requests.filter(request => request.role === "constructor-layer" && request.demands.some(inline));
+  const owner = layers[0];
+  const demand = owner.demands.find(inline);
+  assert.equal(demand.owner === owner.source.layer.definition.declaration && demand.owner !== owner.declaration, true,
+    "the actual field initializer retains class ownership within its explicit constructor layer");
+  const copied = { ...demand };
+  const copiedResult = prepareRustEmissionContextRequests(original.input, original.requests.map(request => request !== owner ? request
+    : { ...owner, demands: owner.demands.map(current => current === demand ? copied : current) }));
+  assert.equal(copiedResult.kind, "rejected", "a copied selecting row is not an admitted original occurrence");
+  assert.equal(copiedResult.diagnostics.some(issue => issue.sourceNode === demand.subject && issue.message ===
+    "An inline body requires its exact original selecting creation owner and occurrence."), true,
+  "the exact original source occurrence owns a copied-row rejection");
+  const foreign = layers[1].demands.find(inline);
+  assert.equal(original.input.emissionRequests.includes(foreign), true, "the other class field row is itself genuinely admitted");
+  const foreignResult = prepareRustEmissionContextRequests(original.input, original.requests.map(request => request !== owner ? request
+    : { ...owner, demands: [...owner.demands, foreign] }));
+  assert.equal(foreignResult.kind, "rejected", "one valid class field cannot be reassigned to a different selected constructor layer");
+  assert.equal(foreignResult.diagnostics.some(issue => issue.sourceNode === foreign.subject && issue.message ===
+    "An inline body requires its exact original selecting creation owner and occurrence."), true,
+  "equal native callback carriers never substitute for original layer ownership");
+}
+
 test("a required missing physical operand refuses at the preparation owner before publication", () => {
   const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
   assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
     "ordinary arithmetic retains its real body context without artificial callable-storage reads");
   const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
+  const programPreparationUrl = new URL("../../../dist/analysis/program/physical-emission-contexts.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-actual-missing-operand-preparation";
   const script = `
@@ -915,10 +1164,15 @@ registerHooks({ load(url, context, nextLoad) {
 } });
 const { analyzeRust } = await import(${JSON.stringify(helperUrl)});
 const { prepareRustEmissionContextRequests } = await import(${JSON.stringify(preparationUrl)});
+const { prepareRustPhysicalEmissionContexts } = await import(${JSON.stringify(programPreparationUrl)});
 const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } }, files: {
-  "index.ts": 'export function contains(input: string): boolean { return input.includes("value"); }',
+  "index.ts": 'export function contains(input: string): boolean { return input.includes("value"); }' +
+    'class FieldOwner { values = [1, 2].map(value => value + 1); constructor() {} }' +
+    'class OtherFieldOwner { values = [2, 3].map(value => value + 1); constructor() {} }' +
+    'export function readFields(): number { return new FieldOwner().values[0]! + new OtherFieldOwner().values[0]!; }',
 } });
 (${verifyRequiredMissingOperand.toString()})(program, observations);
+(${verifyInlineSelectingOwners.toString()})(observations);
 assert.equal(observations.anchors, 1, "one real observation without a production observer or invented late inputs");
 process.stdout.write("R14_INSTRUMENTED_MISSING_OPERAND_PROOF");
 `;
@@ -951,7 +1205,7 @@ export const seed: number = checked(1);`,
   const selected = analyzeRustInitializationErrors({ ast: source.ast, sourceFiles: program.sourceFiles,
     navigation: source.navigation, moduleInitialization: program.moduleInitialization,
     sourceModules: { ...program.sourceModuleConstructions, targets: () => [worker] },
-    components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: program.errorRegions,
+    components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: observations.preparationInput.errorRegions,
     binaryHooks: [], outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
   assert.equal(selected.kind, "resolved", "the existing initializer owner supplies the exact worker composition");
   assert.equal(observations.calls, 1, "the actual selecting owner ran exactly once");

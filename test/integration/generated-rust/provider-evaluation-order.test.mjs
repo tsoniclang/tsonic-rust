@@ -312,7 +312,20 @@ export function borrowingUnwind(): number {
   assert.equal(occurrence !== undefined, true, "the admitted native operation has its exact original evaluation-only source slots");
   const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts,
     sourceFor: (node, operation) => node === omitted && operation === fact ? occurrence : program.physicalEmissionContexts.sourceFor(node, operation) });
-  const context = { input: { program: { ...program, physicalEmissionContexts } }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
+  const declaration = ast.statements(ast.getSourceFile(omitted)).find(node => ast.text(ast.name(node)) === "omitted");
+  const emitted = program.physicalEmissionContexts.contextForOwner(declaration, "native-body");
+  assert.equal(emitted !== undefined, true, "the unit starts from its actual checked operation's native body context");
+  const originalOperation = program.records.targetOperation.get(omitted);
+  assert.equal(emitted.targetGenericArguments.has(originalOperation.abi), true,
+    "the real operation retains its exact preselected native argument row");
+  assert.equal(abi.targetGenericArguments.length, 0, "the handcrafted admitted unit ABI has genuinely zero generic arguments");
+  const unitArguments = Object.freeze([]);
+  const emissionContext = Object.freeze({ ...emitted,
+    targetGenericArguments: new Map([...emitted.targetGenericArguments, [abi, unitArguments]]) });
+  assert.equal(emissionContext.targetGenericArguments.get(abi) === unitArguments, true,
+    "the unit ABI reads only its explicit zero-argument admission, never inferred or first-context evidence");
+  const context = { input: { program: { ...program, physicalEmissionContexts } }, emissionContext,
+    sourceFile: ast.getSourceFile(omitted), diagnostics: [],
     expressionOverrides: new Map(argumentsList.map((node, index) => [node, {
       expression: { kind: "call", path: `crate::index::drop_probe::${index === 0 ? "receiver" : "value"}`, args: [] },
       carrier: index === 0 ? token : number, valueForm: "value",

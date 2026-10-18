@@ -2,7 +2,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustExpr, RustGenerics, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { planCheckedNativeProjectionImplementation } from "./checked-project-projections.js";
-import { rustProjectObjectStateField } from "./project-objects.js";
+import { rustProjectObjectStateField } from "../../../target-model/types/field-storage.js";
 
 export function rustProjectStateIdentityImplementation(target: RustType, generics: RustGenerics): RustItem {
   return rustProjectObjectIdentityImplementation(target, generics, {

@@ -8,10 +8,8 @@ import {
   sourceMethodPropertySelectedOperationMatches,
   sourceStaticFieldSelectedOperationMatches,
 } from "../expressions/index.js";
-import {
-  rustProjectObjectDispatchField,
-  writeRustProjectMethodOverride,
-} from "../objects/project-objects.js";
+import { rustProjectObjectDispatchField } from "../../../target-model/types/field-storage.js";
+import { writeRustProjectMethodOverride } from "../objects/project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";

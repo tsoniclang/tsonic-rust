@@ -11,9 +11,9 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const integer = { kind: "source-primitive", name: "int32" };
-const base = rustNamedTargetType("fixture.Base", "fixture::Base");
+const base = rustNamedTargetType("fixture.Base", "fixture::Base", [], [], undefined, [], undefined, []);
 const project = { target: base, path: "fixture::as_base" };
-const derived = rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined, [project]);
+const derived = rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined, [project], undefined, []);
 
 test("selected JavaScript API roots remain compile-time qualifiers without native receiver values", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
@@ -141,9 +141,9 @@ test("provider receiver carriers finalize once through the exact declared native
 test("missing, ambiguous and forged receiver owner evidence rejects before planning", () => {
   const original = options({ form: "receiver-method", name: "read" });
   for (const [label, mutation] of [
-    ["missing projection", { sourceReceiver: { ...original.sourceReceiver, carrier: rustNamedTargetType("fixture.Other", "fixture::Other") } }],
+    ["missing projection", { sourceReceiver: { ...original.sourceReceiver, carrier: rustNamedTargetType("fixture.Other", "fixture::Other", [], [], undefined, [], undefined, []) } }],
     ["ambiguous projection", { sourceReceiver: { ...original.sourceReceiver, carrier: rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined,
-      [project, { ...project, path: "fixture::other_base" }]) } }],
+      [project, { ...project, path: "fixture::other_base" }], undefined, []) } }],
     ["missing receiver", { sourceReceiver: undefined }],
     ["malformed owner", { sourceReceiver: { ...original.sourceReceiver, declaredCarrier: {} } }],
     ["wrong conversion source", { form: { ...original.form, receiverConversion: {
@@ -165,7 +165,7 @@ test("missing, ambiguous and forged receiver owner evidence rejects before plann
 test("declared receiver projection composes with its physical borrowed input without erasing either contract", () => {
   const string = rustStringTargetType();
   const source = rustNamedTargetType("fixture.Text", "fixture::Text", [], [], undefined,
-    [{ target: string, path: "fixture::as_string" }]);
+    [{ target: string, path: "fixture::as_string" }], undefined, []);
   const abi = finalizeRustProviderOperationAbi({ ...options({ form: "receiver-method", name: "len",
     receiverConversion: rustStringToBorrowedStrValueConversion }),
     sourceReceiver: { kind: "runtime", carrier: source, declaredCarrier: string } });

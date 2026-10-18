@@ -12,7 +12,7 @@ import { rustUnitTargetType } from "../../dist/target-model/types/index.js";
 
 const bytes = rustJsTypedArrayTargetType("Uint8Array");
 const path = "acme::ByteView::as_bytes";
-const view = rustNamedTargetType("acme.ByteView", "acme::ByteView", [], [], undefined, [{ target: bytes, path }]);
+const view = rustNamedTargetType("acme.ByteView", "acme::ByteView", [], [], undefined, [{ target: bytes, path }], undefined, []);
 
 test("native upcasts use one exact immutable carrier relationship", () => {
   const conversion = selectRustSourceValueConversion(view, bytes);
@@ -23,26 +23,26 @@ test("native upcasts use one exact immutable carrier relationship", () => {
   });
   assert.equal(selectRustSourceValueConversion(bytes, view), undefined);
   assert.equal(selectRustSourceValueConversion(
-    rustNamedTargetType("acme.Other", "acme::ByteView"), bytes), undefined);
+    rustNamedTargetType("acme.Other", "acme::ByteView", [], [], undefined, [], undefined, []), bytes), undefined);
 });
 
 test("native upcast facts reject missing, mismatched and ambiguous projections", () => {
   const conversion = selectRustSourceValueConversion(view, bytes);
   assert.equal(rustValueConversionContract({ ...conversion, path: "acme::copy_bytes" }), undefined);
   assert.equal(rustValueConversionContract({ ...conversion, target: rustJsTypedArrayTargetType("Uint32Array") }), undefined);
-  assert.equal(rustValueConversionContract({ ...conversion, source: rustNamedTargetType("acme.ByteView", "acme::ByteView") }), undefined);
+  assert.equal(rustValueConversionContract({ ...conversion, source: rustNamedTargetType("acme.ByteView", "acme::ByteView", [], [], undefined, [], undefined, []) }), undefined);
   assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType("acme.ByteView", "acme::ByteView", [], [], undefined, [
     { target: bytes, path }, { target: bytes, path: "acme::other_bytes" },
-  ])), undefined);
+  ], undefined, [])), undefined);
   assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType("acme.ByteView", "acme::ByteView", [], [], undefined, [
     { target: bytes, path: "acme::bytes()" },
-  ])), undefined);
+  ], undefined, [])), undefined);
 });
 
 test("native upcast generic substitution retains the projection and exact target", () => {
   const parameter = { kind: "type-parameter", identity: "Element", name: "Element" };
   const target = { kind: "array", element: parameter };
-  const generic = rustNamedTargetType("acme.View", "acme::View", [{ kind: "type", type: parameter }], [], undefined, [{ target, path: "acme::as_view" }]);
+  const generic = rustNamedTargetType("acme.View", "acme::View", [{ kind: "type", type: parameter }], [], undefined, [{ target, path: "acme::as_view" }], undefined, []);
   const selected = selectRustSourceValueConversion(generic, target);
   const concrete = { kind: "source-primitive", name: "uint8" };
   const substituted = substituteRustValueConversion(selected, new Map([["Element", concrete]]));

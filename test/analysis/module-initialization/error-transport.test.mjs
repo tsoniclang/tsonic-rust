@@ -27,6 +27,15 @@ const absentOwner = Object.freeze({ kind: "physical", domain: "project", compone
 const warning = Object.freeze({ code: "ANALYSIS_WARNING", category: "warning", message: "A prior analysis warning is retained." });
 const programs = new Map();
 
+function replaceModuleRegion(program, sourceFile, change) {
+  const original = program.physicalEmissionContexts.contextForOwner(sourceFile, "module-initializer");
+  assert.equal(original?.error.kind, "region", "the invariant starts from the identical real module context");
+  const selected = Object.freeze({ ...original, error: change(original.error) });
+  return { ...program, physicalEmissionContexts: { ...program.physicalEmissionContexts,
+    contextForOwner: (owner, role) => owner === sourceFile && role === "module-initializer" ? selected
+      : program.physicalEmissionContexts.contextForOwner(owner, role) } };
+}
+
 function initializerProgram(surfaces) {
   const key = surfaces[0] ?? "native";
   if (!programs.has(key)) {
@@ -42,14 +51,11 @@ function initializerProgram(surfaces) {
 
 for (const surfaces of [[], ["js"]]) {
   for (const [name, replace, message] of [
-    ["missing source error region", (program, sourceFile) => ({ ...program,
-      errorRegions: { ...program.errorRegions,
-        get: node => node === sourceFile ? undefined : program.errorRegions.get(node) },
-    }), "Module initializer has no exact finalized error region."],
-    ["unrenderable source error region", (program, sourceFile) => ({ ...program,
-      errorRegions: { ...program.errorRegions, get: node => node === sourceFile
-        ? { ...program.errorRegions.get(node), localOwner: absentOwner } : program.errorRegions.get(node) },
-    }), "Module initializer has no exact finalized error region."],
+    ["missing source error region", (program, sourceFile) => replaceModuleRegion(program, sourceFile,
+      () => Object.freeze({ kind: "none" })), "Module initializer has no exact finalized error region."],
+    ["unrenderable source error region", (program, sourceFile) => replaceModuleRegion(program, sourceFile,
+      error => Object.freeze({ ...error, region: Object.freeze({ ...error.region, localOwner: absentOwner }) })),
+    "Module initializer has no exact finalized error region."],
     ["missing completed module selection", program => ({ ...program,
       errorRegions: { ...program.errorRegions,
         initialization: { ...program.errorRegions.initialization, moduleFor: () => undefined } },

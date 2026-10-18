@@ -31,12 +31,13 @@ export function rustNativeCallableAbsenceWitness(
       return rustJsPromiseTargetType(future.output);
     }
     return rustNamedTargetType("rust.core.future.Ready", "core::future::Ready", rustTypeGenericArguments([
-      rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, infallible])),
-    ]));
+      rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, infallible]), [], undefined, [], undefined, []),
+    ]), [], undefined, [], undefined, []);
   }, definitions);
   if (result === undefined) return undefined;
   const witness = rustCallableSignatureAbsenceWitness(protocol.method.parameters,
-    rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, infallible])), protocol.method.binder);
+    rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, infallible]), [], undefined, [], undefined, []),
+    protocol.method.binder);
   return snapshotClosedMetadata(substituteRustTargetGenerics(witness, new Map(protocol.signature.environmentParameters.map((parameter, index) =>
     [parameter.identity, input.environment[index]!])), new Map()));
 }

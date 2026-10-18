@@ -6,6 +6,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import assert from "node:assert/strict";
+import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selection.mjs";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
@@ -260,6 +261,7 @@ test("sealed family implementations have completed contracts and missing contrac
     objectRepresentations: program.objectRepresentations,
     typeFamilies: program.typeFamilies,
     genericRequirements: { ...program.declarationGenericRequirements, contractForCarrier: () => undefined },
+    ...nativeDeclarationSelectionInput(program),
   }, new WeakMap(program.projectTypes.definitions.flatMap(definition => {
     const form = program.nativeDeclarations.get(definition.declaration);
     return form === undefined ? [] : [[definition.declaration, form]];

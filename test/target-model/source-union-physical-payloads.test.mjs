@@ -26,8 +26,8 @@ const alias = (name = "MixedCompletion", arguments_ = []) => rustSourceUnionTarg
 const definition = (carrier, types) => ({ carrier, variants: types.map((type, index) => ({ name: `Variant${index}`, carrier: type })) });
 const equals = (actual, expected, label) => assert.equal(rustTargetTypeRefEquals(actual, expected), true, label);
 const ready = error => rustNamedTargetType("native.Ready", "core::future::Ready", [argument(
-  rustNamedTargetType("native.Result", "Result", [argument(unit), argument(error)]),
-)]);
+  rustNamedTargetType("native.Result", "Result", [argument(unit), argument(error)], [], undefined, [], undefined, []),
+)], [], undefined, [], undefined, []);
 
 test("authored union payload instantiation reaches definition-owned futures without changing source identity", () => {
   const registry = createRustTypeDefinitionRegistry();

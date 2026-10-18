@@ -59,7 +59,8 @@ import type { RustInitializationErrorRecords } from "../../target-model/records/
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
 import { prepareRustProviderSourceOccurrences } from "../operations/provider-source-inputs.js";
-import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
+import { prepareRustPhysicalEmissionContexts, publishRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
+import type { RustNativeTypeInputContext, RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
 
 export interface RustCallableValuePlan {
@@ -86,13 +87,15 @@ export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | 
 };
 
 export interface RustCallableValueSealInput {
+  readonly nativeTypeInputFor: (fileName: string,
+    callables: RustNativeTypeInputContext["callableValues"]) => RustNativeTypeSelectionInput;
   readonly sourceCallableSpecializations: import("./specializations.js").RustSourceCallableSpecializationPlan;
   readonly projectMethodDispatch: import("../project-types/method-dispatch.js").RustProjectMethodDispatchPlan;
   readonly lexicalFunctions: import("./lexical-functions.js").RustLexicalFunctionQueries;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
-  readonly genericErrors: RustGenericCallableErrorIndex;
-  readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;
-  readonly initialization: RustInitializationErrorRecords;
+  readonly genericErrors: RustGenericCallableErrorIndex<import("../../target-model/types/native-error-joins.js").RustNativeErrorSource<TargetTypeRef>>;
+  readonly errorRegions: Pick<import("../errors/regions.js").RustAnalyzedErrorRegions, "get" | "sourceFor">;
+  readonly initialization: RustInitializationErrorRecords<import("../../target-model/types/native-error-joins.js").RustNativeErrorSource<TargetTypeRef>>;
   readonly constructions: readonly RustProjectConstructionPlan[];
 }
 
@@ -412,7 +415,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     },
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;
-      if (physicalLifecycle === undefined || selectedPlan === undefined || emissionRequests === undefined || sourceOccurrences === undefined)
+      const completedSelection = selectedPlan;
+      if (physicalLifecycle === undefined || completedSelection === undefined || emissionRequests === undefined || sourceOccurrences === undefined)
         throw new Error("Physical callable publication requires completed source-selected families and effects.");
       const publication = physicalLifecycle.complete(physical);
       if (publication.kind === "rejected") {
@@ -423,7 +427,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
         sourceStorage: input.sourceStorage, genericBindingsFor: nativeStorage.genericBindingsFor,
         projectTypes: input.projectTypes,
-        generic, frames: selectedPlan.frames, suspended: selectedPlan.suspended, native,
+        generic, frames: completedSelection.frames, suspended: completedSelection.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         genericCompletions: completions(), sourceOccurrences, emissionRequests });
       if (emission.kind === "rejected") {
@@ -436,8 +440,15 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
-      publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs,
-        emissionContexts: emission.value.contexts });
+      const nativeEmission = publishRustPhysicalEmissionContexts(emission.value, fileName => late.nativeTypeInputFor(fileName, {
+        generic, frames: completedSelection.frames,
+      }));
+      if (nativeEmission.kind === "rejected") {
+        sealResult = nativeEmission;
+        return sealResult;
+      }
+      publishedPlan = Object.freeze({ ...completedSelection, ...publication.value, native: nativeInputs,
+        emissionContexts: nativeEmission.value });
       sealResult = resolvedTargetStage(publishedPlan);
       return sealResult;
     },

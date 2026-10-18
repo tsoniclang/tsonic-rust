@@ -12,7 +12,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationBindingCompletion,
   RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionIndex,
@@ -34,7 +34,9 @@ export interface RustStatementCompletionInput {
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly typeDefinitions: RustTypeDefinitions;
-  readonly errorRegions: RustErrorRegionRecords;
+  readonly errorRegions: import("../errors/regions.js").RustAnalyzedErrorRegions & {
+    readonly initialization: import("../../target-model/records/error-regions.js").RustInitializationErrorRecords<
+      import("../../target-model/types/native-error-joins.js").RustNativeErrorSource<TargetTypeRef>> };
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
 }
 

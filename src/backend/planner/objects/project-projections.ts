@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "./project-objects.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../target-model/types/field-storage.js";
 import { rustProjectRepresentationGenerics } from "./polymorphism/names.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
 

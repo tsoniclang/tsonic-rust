@@ -13,6 +13,7 @@ import type {
   RustTargetGenericBindings,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustProviderTypeRequirementTrait } from "../../target-model/operations/type-requirements.js";
 
 export function rustProviderGenericRequirementsAreSatisfied(
   requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
@@ -74,16 +75,7 @@ function substituteProviderTraitRequirement(
   bindings: RustTargetGenericBindings,
 ) {
   const trait = substituteRustTargetGenerics(
-    {
-      kind: "trait-ref" as const,
-      id: `provider-requirement:${requirement.path}`,
-      path: requirement.path,
-      genericArguments: requirement.genericArguments,
-      associatedConstraints: requirement.associatedConstraints,
-      ...(requirement.lifetimeBinder === undefined
-        ? {}
-        : { lifetimeBinder: requirement.lifetimeBinder }),
-    },
+    rustProviderTypeRequirementTrait(requirement),
     bindings.types,
     bindings.lifetimes,
     bindings.consts,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustNativeCallableCompletion, instantiateRustNativeCompletion, rustNativeCompletionFutureType }
+import { rustNativeCallableCompletion, instantiateRustNativeCompletion, rustNativeCompletionFutureType, rustNativeFutureOutputType }
   from "../../dist/target-model/types/callable-completions.js";
 import { rustSourcePrimitiveTargetType, rustSourceOptionalTargetType, rustSourceUnionTargetType,
   rustUnitTargetType, rustFutureTargetType } from "../../dist/target-model/types/index.js";
@@ -14,6 +14,20 @@ const unit = rustUnitTargetType();
 const pending = rustFutureTargetType(unit);
 const implementation = { kind: "type-parameter", identity: "callback-input", name: "Callback" };
 const nativeError = { kind: "associated-type", owner: implementation, name: "AwaitError" };
+
+test("source native future factories still require explicit exact capture evidence", () => {
+  for (const ready of [false, true]) {
+    for (const captures of [undefined, null, new Array(1), [{ kind: "unknown" }]]) {
+      assert.throws(() => rustNativeFutureOutputType({ identity: "source:future", output: integer, ready, captures }),
+        /requires explicit exact capture evidence/u, `ready=${ready}: missing or malformed source capture evidence is refused`);
+    }
+    const selected = rustNativeFutureOutputType({ identity: "source:future", output: integer, ready, captures: [] });
+    assert.equal(selected.kind, ready ? "target-specific" : "impl-trait", `ready=${ready}: actual source capture proof is retained`);
+    if (!ready) assert.equal(Object.hasOwn(selected, "captures"), true, "a precise empty source clause remains explicit");
+  }
+  assert.throws(() => rustNativeCompletionFutureType({ identity: "source:completion", output: integer, error: nativeError }),
+    /requires explicit exact capture evidence/u, "the completion wrapper cannot manufacture missing source captures");
+});
 
 test("native completion contracts retain finite immediate, absent and pending branches", () => {
   const definitions = createRustTypeDefinitionRegistry();

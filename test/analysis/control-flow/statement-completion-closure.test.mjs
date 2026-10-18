@@ -511,7 +511,9 @@ main();
   const iteration = nodes.find(ast.is.IsForOfStatement);
   assert.equal(program.records.targetOperation.get(iteration)?.lowering.kind, "fallible-owned",
     "the real native RegExp iteration retains its fallible protocol");
-  assert.equal(program.errorRegions.get(callable)?.kind, "infallible", "the catch keeps the outward ABI infallible");
+  const context = program.physicalEmissionContexts.contextForOwner(callable, "native-body");
+  assert.equal(context?.error.kind === "region" && context.error.region.kind === "infallible", true,
+    "the catch keeps the outward ABI infallible");
   assert.equal(program.statementCompletions.iterationFor(iteration) !== undefined, true,
     "the actual protected iteration is admitted before publication");
   const { result } = compileRust({ surfaces: ["js"], packages,

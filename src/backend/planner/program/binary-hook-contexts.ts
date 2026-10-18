@@ -3,7 +3,7 @@ import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustBinaryHookPlan } from "../../../analysis/project/hooks.js";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 import { applyRustDispatchContextBindings, projectRustDispatchContext, rustDispatchContextRootName } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextBinding } from "../project/dispatch-contexts.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
@@ -109,7 +109,8 @@ export function planRustBinaryHookCallPlan(
     const errorPath = domain.errorDomain === "runtime" ? "tsonic_rust_runtime::TsonicError"
       : `${component.root ? input.program.configuration.crateName : component.crateName}::${component.programModuleName}::TsonicError`;
     const owner = rustTypeFromCarrier(mapRustTargetTypes(construction.owner,
-      carrier => isRustProgramErrorCarrier(carrier) ? rustNamedTargetType(domain.errorTypeIdentity, errorPath) : carrier));
+      carrier => isRustProgramErrorCarrier(carrier) ? rustNamedTargetType(domain.errorTypeIdentity, errorPath,
+        [], [], undefined, [], domain.errorTypeIdentity, []) : carrier));
     if (owner === undefined) return invalid("Binary context grouping has no exact renderable native empty constructor.");
     return { kind: "associated-call", owner, method: construction.method, args: [] };
   }

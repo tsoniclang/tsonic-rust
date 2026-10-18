@@ -4,7 +4,8 @@ import type { TargetTypeRef } from "../types/model.js";
 export const rustRuntimeErrorTypeIdentity = "tsonic-rust-runtime:TsonicError";
 
 export function rustRuntimeErrorTargetType(): TargetTypeRef {
-  return rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError");
+  return rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError",
+    [], [], undefined, [], rustRuntimeErrorTypeIdentity, []);
 }
 
 export type RustFallibleErrorBoundary =

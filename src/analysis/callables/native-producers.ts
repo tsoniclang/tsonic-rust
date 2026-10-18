@@ -209,10 +209,11 @@ export function createRustNativeCallableProducerPlan(input: {
     if (retained && signature.lifetime === undefined)
       return unresolved("A required retained native callable producer has no exact construction lifetime.");
     const arguments_: TargetTypeRef = { kind: "tuple", elements: producer.parameterCarriers };
-    const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([resultCarrier, error]));
+    const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([resultCarrier, error]),
+      [], undefined, [], undefined, []);
     const physical = retained
       ? rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [rustLifetimeGenericArgument(signature.lifetime!),
-        ...rustTypeGenericArguments([arguments_, result])])
+        ...rustTypeGenericArguments([arguments_, result])], [], undefined, [], undefined, [])
       : rustClosureTargetType([arguments_], result);
     return Object.freeze({ kind: "selected", carrier: physical });
   };

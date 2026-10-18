@@ -506,7 +506,9 @@ function matchingRustNamedTraitRequirements(namedType: RustNamedTypeCarrierValue
     (selected.path === "core::cmp::PartialEq" || selected.path === "core::cmp::PartialOrd") &&
       selected.genericArguments.length === 0
       ? { ...selected, genericArguments: [{ kind: "type", type: rustNamedTargetType(
-        namedType.id, namedType.path, namedType.genericArguments, namedType.genericDefaults) }] }
+        namedType.id, namedType.path, namedType.genericArguments, namedType.genericDefaults,
+        namedType.traits, namedType.upcasts, namedType.nativeErrorIdentity,
+        namedType.typeRequirements, namedType.nativeArgumentCount) }] }
       : selected;
   const required = nativeDefault(trait);
   return namedType.traits.implementations.filter(implementation =>

@@ -6,14 +6,14 @@ import { rustPackageFallibleBoundary } from "../../dist/backend/planner/program/
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { materializeRustSourcePackageFacades } from "../../dist/backend/planner/program/source-package-facades.js";
 import { planRustSourcePackageComponents } from "../../dist/backend/planner/program/source-package-components.js";
-import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/source-package-errors.js";
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 
 export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source, packages = [],
   selectRecords = records => records, selectProducers = value => value,
-  selectErrorRegions = regions => regions,
+  selectEmissionContexts = contexts => contexts,
   body = () => ({ kind: "int-literal", text: "3" }),
 } = {}) {
   const output = asynchronous ? "Promise<int32>" : "int32";
@@ -34,7 +34,7 @@ export function create(): () => ${output} {
   assert.equal(closures.length, 1, "one checked closure producer");
   const node = closures[0];
   const records = selectRecords(original.records, node);
-  const program = { ...original, records, errorRegions: selectErrorRegions(original.errorRegions, node),
+  const program = { ...original, records, physicalEmissionContexts: selectEmissionContexts(original.physicalEmissionContexts, node),
     callableValues: { ...original.callableValues,
     nativeProducers: selectProducers(original.callableValues.nativeProducers),
   } };
@@ -44,16 +44,20 @@ export function create(): () => ${output} {
   assert.equal(facades.plan !== undefined, true, "the actual producer facade plan is admitted");
   const components = planRustSourcePackageComponents(planning, program.sourceOutputIdentities, facades.plan);
   assert.equal(components.kind, "accepted", "the actual producer source-package components are admitted");
-  const sourcePackageErrors = planRustSourcePackageErrors(planning, components.components);
-  assert.equal(sourcePackageErrors.diagnostics.length, 0, "the actual producer error domains are complete");
-  assert.equal(sourcePackageErrors.plan !== undefined, true, "the actual producer error domains are admitted");
+  const sourcePackageErrors = program.errorTransport;
+  assert.equal(sourcePackageErrors !== undefined, true, "the actual producer error domains are admitted");
   const sourceFile = ast.getSourceFile(node);
   const fileName = ast.getFileName(sourceFile);
   const identity = program.sourceOutputIdentities.get(fileName);
   const component = components.components.find(value => value.componentId === identity?.componentId);
   assert.equal(identity !== undefined && component !== undefined, true, "the producer has its exact native source identity");
   const bodyContexts = [];
+  const owner = sourceEnclosingCallable(ast.parent(node), ast);
+  assert.equal(owner !== undefined, true, "the fixture closure has its original checked lexical owner");
+  const emissionContext = program.physicalEmissionContexts.contextForOwner(owner, "native-body");
+  assert.equal(emissionContext !== undefined, true, "the fixture uses its exact published enclosing native body");
   const context = {
+    emissionContext,
     input: planning,
     sourceFile, sourcePackageComponentId: component.componentId, moduleName: identity.moduleName,
     moduleNameByFileName: new Map([...program.sourceOutputIdentities].map(([file, identity]) => [file, identity.moduleName])),
@@ -65,7 +69,7 @@ export function create(): () => ${output} {
     publicImplementationItemIdentities: component.publicImplementationItemIdentities,
     publishesImplementationAbi: component.publishesImplementationAbi,
     usedAliases: new Set(), diagnostics: [], syntheticNames: createRustSyntheticNameState(ast, node, []),
-    sourcePackageErrors: sourcePackageErrors.plan,
+    sourcePackageErrors,
     fallibleBoundary: rustPackageFallibleBoundary({ componentId: "unrelated-consumer", errorDomain: "program",
       errorTypeIdentity: "unrelated:ConsumerFailure", errorTypePath: "ConsumerFailure",
     }),

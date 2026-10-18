@@ -23,6 +23,7 @@ import {
   sourceTypeFor,
   targetGenericParameterArguments,
   targetTraitFor,
+  targetTypeRequirementsFor,
   targetTypeFor,
 } from "./types.js";
 import {
@@ -398,7 +399,8 @@ function projectNominalExport(
   const genericDefaults = trailingProviderGenericDefaults(providerGenericBindings);
   const traitContext: ProjectionContext = { ...genericContext, currentType: {
     exportId, name: exported.name,
-    carrier: rustNamedTargetType(targetTypeId, selectedTargetPath.join("::"), targetArguments, genericDefaults),
+    carrier: rustNamedTargetType(targetTypeId, selectedTargetPath.join("::"), targetArguments, genericDefaults,
+      undefined, [], undefined, []),
     sourceType, genericParameters: sourceGenerics,
     canonicalPath: exported.canonicalPath, targetPath: selectedTargetPath,
   } };
@@ -406,6 +408,7 @@ function projectNominalExport(
     ? undefined
     : projectCompilerTraitContract(exported.traits, traitContext,
       trait => targetTraitFor(trait, traitContext, "parameter", "target-default"));
+  const required = targetTypeRequirementsFor(sourceGenerics, targetArguments, traitContext);
   const declaredCarrier: TargetTypeRef = exported.kind === "trait"
     ? targetTraitFor(
         traitDispatchFor(exported),
@@ -418,6 +421,9 @@ function projectNominalExport(
         targetArguments,
         genericDefaults,
         namedTraits!,
+        [],
+        undefined,
+        required.nativeRequirements,
       );
   if (namedTraits !== undefined) {
     recordCarrierTraits(
@@ -492,7 +498,6 @@ function projectNominalExport(
   members.push(...projectedConstants.members);
   operations.push(...projectedConstants.operations);
   const unambiguous = selectUnambiguousMembers(members, operations);
-  const typeIdentities = providerTypeParameterNames(sourceGenerics, genericContext);
   return {
     declaration: Object.freeze({
       id: exportId,
@@ -517,12 +522,7 @@ function projectNominalExport(
             genericParameters: providerGenericBindings,
           }),
       targetCarrier: declaredCarrier,
-      ...typeRequirements(
-        typeParametersOf(sourceGenerics),
-        typeIdentities,
-        genericContext,
-        (trait) => targetTraitFor(trait, genericContext, "parameter", "target-default"),
-      ),
+      ...(required.typeRequirements.length === 0 ? {} : { typeRequirements: required.typeRequirements }),
     }),
   };
 }

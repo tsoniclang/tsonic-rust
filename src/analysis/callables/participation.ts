@@ -10,7 +10,7 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 export function analyzeRustNativeParticipation(input: {
   readonly ast: AstReader;
   readonly storage: Pick<SourceStorageQueries, "nodes" | "failureReason">;
-  readonly navigation: Pick<SourceProgramNavigation, "declarationUseSummary" | "callableImplementation" | "expressionValueFlow" |
+  readonly navigation: Pick<SourceProgramNavigation, "sourceFiles" | "declarationUseSummary" | "callableImplementation" | "expressionValueFlow" |
     "declarationSymbol" | "referencesWithin" | "sourceReferenceFor">;
   readonly producer: RustNativeParticipationProducer;
   readonly requiredRecords: RustRequiredRecord[];

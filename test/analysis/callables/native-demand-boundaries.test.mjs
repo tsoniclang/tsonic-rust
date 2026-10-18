@@ -203,6 +203,62 @@ export function run<Caller extends Life>(value: Ref<int32, Caller>): Ref<int32, 
   }
 }
 
+for (const [surface, selected] of surfaces) {
+  for (const [use, sourceText] of [
+    ["exported binding", `export const observed = (key: string): number => { const value = { [key]: 7 }; return value[key]; };`],
+    ["returned binding", `export function run() {
+      const observed = (key: string): number => { const value = { [key]: 7 }; return value[key]; };
+      return observed;
+    }`],
+    ["passed binding", `function invoke(callback: (key: string) => number): number { return callback("value"); }
+    export function run(): number {
+      const observed = (key: string): number => { const value = { [key]: 7 }; return value[key]; };
+      return invoke(observed);
+    }`],
+  ]) {
+    test(`stored callable ${use} keeps its real native body obligation (${surface})`, () => {
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": sourceText } });
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN"), true,
+        "an observed callable retains the original precise nonconstant-key rejection");
+      assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+        "a real unsupported body never gains output through discarded-callable admission");
+    });
+  }
+  test(`discarded stored callable creation preserves the original effectful wrapper (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+function checked(value: number): number { if (value < 0) throw new Error("negative"); return value; }
+export function run(value: number): number {
+  const ignored = (checked(value), (key: string): number => { const object = { [key]: 7 }; return object[key]; });
+  void ignored;
+  return value;
+}` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined, true,
+      "the effectful wrapper remains admitted while its unused callable body is erased");
+    const program = result.program;
+    const ast = program.source.ast;
+    const pending = [...program.sourceFiles];
+    let definition;
+    let call;
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      if (ast.is.IsArrowFunction(node)) definition = node;
+      if (ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === "checked") call = node;
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    assert.equal(definition !== undefined && program.records.nativeParticipation.get(definition) === "erased", true,
+      "the actual original stored callable has one sealed erasure selection");
+    assert.equal(call !== undefined && program.records.targetOperation.get(call)?.kind === "source-call", true,
+      "the original effectful call keeps its finalized source operation");
+    const emitted = rustSourceText(result);
+    assert.equal([...emitted.matchAll(/\bchecked\(value\)/gu)].length, 1,
+      "the original possibly throwing call is evaluated exactly once");
+    assert.doesNotMatch(emitted, /Callable::new/u,
+      "erasing the unused callable does not manufacture a heap allocation");
+  });
+}
+
 test("erased callable rendering reads its sole sealed participation before native body and capture facts", () => {
   const declaration = {};
   const forbidden = new Proxy({}, { get() { assert.fail("an erased callable cannot inspect native body or source navigation"); } });

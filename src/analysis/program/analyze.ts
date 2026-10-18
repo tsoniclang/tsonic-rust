@@ -69,7 +69,9 @@ interface RustSourceStageOutput {
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
 }
 
-export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib"): RustSourceStageOutput | undefined {
+export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib",
+  sourceOutputIdentities: ReadonlyMap<string, import("../../target-model/names/source-output-identities.js").RustSourceFileOutputIdentity>,
+): RustSourceStageOutput | undefined {
   if (context.sourcePackageComponentIdentities.kind === "rejected") return;
   const sourcePackageIdentities = context.sourcePackageComponentIdentities.identities;
   const { ast } = context;
@@ -613,7 +615,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
   recordFutureValueFacts(walk, fallibility.sourceErrors);
-  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
+  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor, sourceOutputIdentities);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
     return;

@@ -11,6 +11,8 @@ import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await
 import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
+import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { selectRustAwaitSourceErrors } from "../../../dist/analysis/resources/await-source-effects.js";
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/resources/effects-work-budget.js";
@@ -19,7 +21,7 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
 import { asyncCallableInterfaceFiles } from "../../../../tsonic/test/fixtures/callable-interfaces.mjs";
 
 function fixture(text, options) {
-  const context = analyzeRustErrorEffects(text, options);
+  const context = analyzeRustErrorEffects(text, { surfaces: [], ...options });
   const ast = context.ast;
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
@@ -44,13 +46,15 @@ function fixture(text, options) {
   return { context, ast, nodes, declaration, awaited, fact };
 }
 
-test("await branches retain the exact original source edge instead of adding an ambient local channel", () => {
-  const current = fixture(`
+const storedSourceCallback = `
     export async function source(callback: () => Promise<number>) { return await callback(); }
     export async function consumer(callback: () => Promise<number>) {
       const pending = source(callback); const alias = pending; return await alias;
     }
-  `);
+  `;
+
+test("await branches retain the exact original source edge instead of adding an ambient local channel", () => {
+  const current = fixture(storedSourceCallback);
   const fact = current.fact("consumer");
   assert.equal(fact.branches.length, 1);
   const { carrier, edge } = fact.branches[0];
@@ -68,6 +72,31 @@ test("await branches retain the exact original source edge instead of adding an 
     .flatMap(fact => fact?.edges ?? []).find(candidate => candidate === edge);
   assert.equal(original === edge, true, "the await fact reuses the actual selected source edge");
   assert.equal(rustErrorEffectsEqual(current.context.records.errorEffects.get(current.awaited("consumer")), edge.effects), true);
+});
+
+test("the same stored async source on JS keeps its public Promise and one canonical rejection instead of native Future channels", () => {
+  const current = fixture(storedSourceCallback, { surfaces: ["js"] });
+  const original = current.declaration("source");
+  const asynchronous = current.context.records.asyncFunction.get(original);
+  assert.equal(asynchronous?.kind, "js-promise", "the selected JS surface retains its actual public object facet");
+  assert.equal(asynchronous.futureCarrier.id, "rust.js.JsPromise", "stored JS source results retain the native Promise object");
+  const call = current.nodes.find(node => current.ast.is.IsCallExpression(node) &&
+    current.ast.text(Node_Expression(current.ast, node)) === "source");
+  assert.equal(call !== undefined, true, "the unchanged stored source call is selected");
+  const operation = current.context.records.targetOperation.get(call);
+  assert.equal(rustTargetTypeRefEquals(operation.resultCarrier, asynchronous.futureCarrier), true,
+    "the actual call result is the public Promise, not a rewritten native Future");
+  assert.equal(operation.asyncBody === undefined, true, "a stored object demand is not an immediate native body invocation");
+  assert.equal(current.fact("consumer").branches.length, 0, "native Future producer correspondence is not invented for the JS object");
+  const effects = current.context.records.errorEffects.get(current.awaited("consumer"));
+  assert.equal(effects.localErrors, false, "no recipient package error is added");
+  assert.equal(effects.nativeErrors.length, 1, "one JS rejection channel remains authoritative");
+  assert.equal(effects.nativeErrors[0].identity, rustJsRejectionErrorIdentity, "the rejection has the shared JS identity");
+  assert.equal(rustTargetTypeRefEquals(effects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
+    "the single shared reason retains its exact native JsValue carrier");
+  const invocation = current.context.records.errorEffects.get(call);
+  assert.equal(invocation.localErrors === false && invocation.nativeErrors.length === 0, true,
+    "creating the public Promise never runs its deferred rejection as an invocation error");
 });
 
 test("stored async source results preserve original generic channels through synchronous return activations", () => {
@@ -128,8 +157,11 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
     return result;
   };
   assert.equal(select([channel.carrier])?.length, 1);
-  const unrelated = { ...channel.carrier, genericArguments: channel.carrier.genericArguments.map((argument, index) =>
-    index === 1 ? { kind: "type", type: rustSourcePrimitiveTargetType("bool") } : argument) };
+  assert.equal(channel.carrier.kind === "target-named" && channel.carrier.genericArguments.length === 1, true,
+    "the actual native Future has exactly its one physical output type argument");
+  const unrelated = { ...channel.carrier, genericArguments: [{ kind: "type", type: rustSourcePrimitiveTargetType("bool") }] };
+  assert.equal(rustTargetTypeRefEquals(unrelated, channel.carrier), false,
+    "the inverse changes the actual native Future output rather than a nonexistent old generic slot");
   assert.equal(select([unrelated]) === undefined, true, "source error correspondence cannot attach to a different carrier");
 });
 

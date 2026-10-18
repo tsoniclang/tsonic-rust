@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustErrorRegionCatalog } from "../../../dist/backend/planner/program/error-regions.js";
-import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
+import { rustProducerErrorReference, rustProducerErrorTargetType } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { selectRustNativeTypeCarrier } from "../../../dist/policy/types/model/native-type-selection.js";
+import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selection.mjs";
 
 function fixture() {
   const { program } = analyzeRust({ surfaces: ["js"],
@@ -46,11 +48,16 @@ test("producer rendering substitutes a sealed template without source, fact, nam
   const replacement = { kind: "type-parameter", identity: "caller:physical", name: "Physical" };
   const instantiated = { ...reference, genericArguments: [{ kind: "type", type: replacement }] };
   let rendered;
-  const result = catalog.producerErrorType(instantiated, carrier => {
-    rendered = carrier;
-    return { kind: "named", path: "ExactError" };
-  });
-  assert.equal(result.path, "ExactError");
+  assert.equal(Object.hasOwn(catalog, "producerErrorType"), false, "the superseded backend semantic service is absent");
+  assert.equal(Object.hasOwn(catalog, "nativeErrorJoinType"), false, "native join identity has only its canonical policy owner");
+  const selected = nativeDeclarationSelectionInput({ ...current.program, names: neverRead, callableValues: neverRead })
+    .nativeTypeInputFor(current.producer("invoke").fileName, undefined);
+  const result = selectRustNativeTypeCarrier(rustProducerErrorTargetType(instantiated), { ...selected,
+    producerErrorCarrier: reference => { rendered = current.program.errorRegions.producerError(reference); return rendered; },
+  }, "general");
+  assert.equal(result.kind, "resolved", "the canonical native selector consumes the same sealed producer template");
+  assert.equal(result.carrier.kind, "associated-type", "the exact native error projection is retained, not a backend placeholder");
+  assert.equal(result.carrier.owner.name, "Physical", "native syntax uses the caller's actual physical binder");
   assert.equal(rustTargetTypeRefEquals(rendered.owner, replacement), true, "only declared generic substitution occurs after publication");
 });
 

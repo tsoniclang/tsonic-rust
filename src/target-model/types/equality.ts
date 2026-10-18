@@ -229,7 +229,13 @@ function rustTargetTypeRefEqualsValidated(
         return leftNamed !== undefined && rightNamed !== undefined &&
           (lifetimeContext.nativeTraitIdentity === true || leftNamed.id === rightNamed.id) &&
           leftNamed.path === rightNamed.path &&
+          leftNamed.nativeErrorIdentity === rightNamed.nativeErrorIdentity &&
           genericArgumentListsEqual(leftNamed.genericArguments, rightNamed.genericArguments, lifetimeContext) &&
+          (lifetimeContext.nativeTraitIdentity === true ||
+          leftNamed.typeRequirements.length === rightNamed.typeRequirements.length &&
+          leftNamed.typeRequirements.every(requirement => rightNamed.typeRequirements.some(other =>
+            requirement.typeArgumentIndex === other.typeArgumentIndex &&
+            rustTargetTypeRefEqualsValidated(requirement.trait, other.trait, lifetimeContext)))) &&
           (lifetimeContext.nativeTraitIdentity === true ||
             closedMetadataEquals(leftNamed.traits, rightNamed.traits) &&
             leftNamed.upcasts.length === rightNamed.upcasts.length &&
@@ -349,12 +355,12 @@ function validateRustTargetTypeRef(
         return hasExactKeys(
           value,
           ["kind", "id", "bounds", "outlives", "captures"],
-          ["kind", "id", "bounds", "outlives", "captures"],
+          ["kind", "id", "bounds", "outlives"],
         ) && typeof value.id === "string" && value.id.length > 0 &&
           isDenseDataArray(value.bounds) && value.bounds.every((bound) =>
             isPlainRecord(bound) && bound.kind === "trait-ref" && validateChild(bound)) &&
           validateLifetimeList(value.outlives) &&
-          validateGenericArguments(value.captures, validateChild);
+          (value.captures === undefined || validateGenericArguments(value.captures, validateChild));
       case "associated-type":
         return hasExactKeys(
           value,

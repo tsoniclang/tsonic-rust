@@ -6,10 +6,10 @@ export interface RustGenericCallableEffectsFact {
   readonly awaiting: "not-applicable" | "infallible" | "fallible";
 }
 
-export interface RustGenericCallableInvocationFact {
+export interface RustGenericCallableInvocationFact<Source extends RustNativeErrorSource<TargetTypeRef> = RustNativeErrorSource<TargetTypeRef>> {
   readonly carrier: TargetTypeRef;
   readonly ownerFileName: string;
   readonly effects: RustGenericCallableEffectsFact;
-  readonly invocation: readonly RustNativeErrorSource<TargetTypeRef>[];
-  readonly awaiting: readonly RustNativeErrorSource<TargetTypeRef>[];
+  readonly invocation: readonly Source[];
+  readonly awaiting: readonly Source[];
 }

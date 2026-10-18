@@ -8,11 +8,11 @@ import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../../
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../../dist/target-model/conversions/callable.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
-import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
+import { nativeFallibleAdapterFixture, admitNativeCallableAdapter } from "../../../helpers/physical-callable-adapters.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { planRustNativeInputInvocation, planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
 
-const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
+const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
 const integer = rustSourcePrimitiveTargetType("int32");
 
 for (const retained of [false, true]) {
@@ -63,6 +63,7 @@ for (const throwing of [false, true]) {
       const target = retained ? rustCallableTargetType([integer], integer) : rustCallableInputTargetType([integer], integer);
       const conversion = selectRustCallableConversion(current.source, target, () => undefined, current.program.typeDefinitions);
       assert.equal(conversion !== undefined, true);
+      admitNativeCallableAdapter(current, conversion);
       const converted = planRustCallableConversion(conversion, current.expression, current.node, current.context);
       assert.equal(converted !== undefined, true, "physical adapter plans");
       const text = printRustExpr(converted);
@@ -109,6 +110,7 @@ test("adapter emission requires the exact source-node callable identity", () => 
   const conversion = selectRustCallableConversion(foreign, rustCallableTargetType([integer, integer], integer),
     () => undefined, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true);
+  admitNativeCallableAdapter(current, conversion, node);
   assert.equal(planRustCallableConversion(conversion, current.expression, current.node, current.context) === undefined, true);
 });
 

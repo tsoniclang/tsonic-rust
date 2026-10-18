@@ -237,6 +237,7 @@ test("native trait-object coercion requires exact target-path trait evidence", (
         requirements: [],
       }],
     },
+    [], undefined, [],
   );
   const target = {
     kind: "trait-object",
@@ -270,6 +271,7 @@ test("native trait-object coercion requires exact target-path trait evidence", (
           requirements: [],
         }],
       },
+      [], undefined, [],
     ),
     target,
   ), undefined);

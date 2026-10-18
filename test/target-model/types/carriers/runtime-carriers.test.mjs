@@ -4,12 +4,43 @@ import {
   rustRuntimeNativeArrayTargetType, rustRuntimeNativeLayoutTargetType,
   rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType,
 } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
-import { rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { substituteRustTargetTypeParameters } from "../../../../dist/target-model/types/carriers/substitution.js";
+import { closedMetadataKey } from "../../../../dist/target-model/metadata/closed-data.js";
 import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
 import { rustStructuralObjectTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustCallableTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { planRustStructuralShapeModule } from "../../../../dist/backend/planner/objects/structural-shapes.js";
 import { planRustNativeMemoryCall } from "../../../../dist/backend/planner/expressions/native-memory.js";
+import { selectedNativeErrorBoundaries } from "../../../helpers/native-type-selection.mjs";
+
+test("selected native error identity is semantic metadata, not an ordinary native name", () => {
+  const argument = { kind: "type-parameter", identity: "value", name: "Value" };
+  const plain = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }], [], undefined, [], undefined, []);
+  const first = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }],
+    [], undefined, [], "owner:first", []);
+  const second = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }],
+    [], undefined, [], "owner:second", []);
+  assert.equal(isRustTargetTypeRef(first), true, "an authoritative nonempty native error identity is closed metadata");
+  assert.equal(Object.hasOwn(rustNamedTypeCarrierValue(plain), "nativeErrorIdentity"), false,
+    "ordinary named carriers do not acquire an error identity");
+  assert.equal(rustTargetTypeRefEquals(first, second), false, "equal paths do not merge different native error owners");
+  assert.equal(rustTargetTypeRefEquals(first, plain), false, "an unidentified native name cannot impersonate an error owner");
+  assert.equal(closedMetadataKey(first) === closedMetadataKey(second), false, "semantic keying preserves distinct owners");
+  const selected = substituteRustTargetTypeParameters(first,
+    new Map([["value", { kind: "source-primitive", name: "int32" }]]));
+  assert.equal(rustNamedTypeCarrierValue(selected).nativeErrorIdentity, "owner:first",
+    "the canonical substitution factory retains the exact native error owner");
+  assert.equal(rustNamedTypeCarrierValue(selected).genericArguments[0].type.name, "int32",
+    "error provenance does not prevent the requested native type substitution");
+  for (const [label, value] of [["empty", { ...first.value, nativeErrorIdentity: "" }],
+    ["wrong type", { ...first.value, nativeErrorIdentity: 12 }],
+    ["foreign field", { ...first.value, foreignIdentity: "owner:first" }]]) {
+    assert.equal(rustNamedTypeCarrierValue({ ...first, value }) === undefined, true,
+      `${label}: the canonical named-type boundary refuses malformed native error metadata`);
+  }
+});
 
 test("native runtime type applications preserve exact Rust value/error identities and native AST", () => {
   const value = { kind: "source-primitive", name: "int64" };
@@ -102,9 +133,12 @@ test("structural storage renders combined native method and bound-field carriers
   const bound = type => ({ kind: "named", path: "rt::RecordField", genericArguments: [
     { kind: "type", type }, { kind: "type", type: errorType },
   ] });
-  const errors = { domainsByComponentId: new Map([["checked:component", {
-    componentId: "checked:component", errorDomain: "runtime", errorTypeIdentity: "runtime",
-  }]]) };
+  const boundary = { componentId: "checked:component", errorDomain: "runtime", errorTypeIdentity: "runtime",
+    errorTypePath: "rt::TsonicError" };
+  const errors = selectedNativeErrorBoundaries({
+    components: [["checked:component", "checked:component", boundary]],
+    native: [["checked:component", { kind: "logical" }, boundary]],
+  });
   for (const [name, extra, type] of [
     ["bound scalar", { carrier: scalar, storage: "bound" }, bound(valueType)],
     ["native method", { carrier: callable, storage: "stored", method: true, nativeMethod: true, methodStorageCarrier: callable }, methodType],
@@ -116,7 +150,7 @@ test("structural storage renders combined native method and bound-field carriers
         presence: "required", readonly: false, ...extra }] };
     const input = { program: { structuralShapes: { definitions: [definition], unionDefinitions: [] },
       declarationGenericRequirements: { contractForCarrier: () => ({ typeParameters: [], associatedTypes: [] }) },
-      typeDefinitions: { sourceUnionArms: () => undefined } } };
+      typeDefinitions: { sourceUnionArms: () => undefined }, errorTransport: errors } };
     const diagnostics = [];
     const module = planRustStructuralShapeModule(input, new Map(), new Map(), new Map(), new Map(), undefined,
       "shapes", "checked:component", errors, undefined, new Set(["Checked"]), diagnostics);

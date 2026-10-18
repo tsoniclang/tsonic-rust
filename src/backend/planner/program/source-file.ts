@@ -89,7 +89,7 @@ import { completeRustAuthoredStructScopes } from "../declarations/scoped-types.j
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -257,18 +257,21 @@ function planModuleItems(
     else items.push(...views);
   }
   const asynchronous = context.input.program.errorRegions.initialization.moduleFor(context.sourceFile)?.asynchronous === true;
-  const errorRegion = context.input.program.errorRegions.get(context.sourceFile);
-  const region = planRustErrorRegion(context.sourceFile, context);
-  if (errorRegion === undefined || region === undefined) {
+  const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
+  if (emissionContext === undefined || emissionContext.error.kind !== "region")
+    failRustPlannerInvariant("Module initializer requires its original sealed physical context and error region.", context.sourceFile);
+  const errorRegion = emissionContext.error.region;
+  const selectedContext = rustContextForEmission(context, emissionContext);
+  const region = planRustErrorRegion(context.sourceFile, selectedContext);
+  if (region === undefined) {
     failRustPlannerInvariant(
       "Module initializer has no exact finalized error region.",
       context.sourceFile);
   }
   const errorBoundary = region.boundary;
   const fallible = errorBoundary !== undefined;
-  const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
   const initializationContext: RustPlanContext = {
-    ...(emissionContext === undefined ? context : rustContextForEmission(context, emissionContext)),
+    ...selectedContext,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },

@@ -3,6 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { admitRustNativeValueDeclaration, admitRustNativeInterfaceFields } from "../../../dist/analysis/declarations/native-value-declarations.js";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selection.mjs";
 
 function interfaceFixture(sourceText) {
   const { source, program } = analyzeRust({ files: { "index.ts": sourceText } });
@@ -12,7 +13,7 @@ function interfaceFixture(sourceText) {
     semanticsFor: createTargetSourceProgram(source).semantics.forNode,
     names: program.names, projectTypes: program.projectTypes, typeDefinitions: program.typeDefinitions,
     sourceLifetimes: program.sourceLifetimes, objectRepresentations: program.objectRepresentations,
-    typeFamilies: program.typeFamilies } };
+    typeFamilies: program.typeFamilies, ...nativeDeclarationSelectionInput(program) } };
 }
 
 test("a native record admits its exact closed field correspondence", () => {

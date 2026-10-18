@@ -3,7 +3,8 @@ import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.j
 import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
-import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
+import { rustProjectObjectStateField } from "../../../../target-model/types/field-storage.js";
+import { createRustProjectObject, rustProjectObjectType } from "../../objects/project-objects.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,

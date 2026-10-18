@@ -10,9 +10,41 @@ import { rustCallableTargetType } from "../../dist/target-model/types/carriers/c
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
 import { planRustCallableConversion } from "../../dist/backend/planner/expressions/callable-conversions.js";
+import { rustCallableConversionPhysical } from "../../dist/target-model/conversions/callable-physical.js";
+import { rustNativeCallableOperand } from "../../dist/analysis/callables/native-conversions.js";
+import { publishRustCallablePhysicalConversion } from "../../dist/analysis/program/physical-emission-contexts.js";
+import { nativeDeclarationSelectionInput } from "./native-type-selection.mjs";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+
+export function admitNativeCallableAdapter(current, conversion, node = current.node) {
+  const program = current.program;
+  const ast = program.source.ast;
+  const owner = sourceEnclosingCallable(ast.parent(node), ast);
+  assert.equal(owner !== undefined, true, "adapter admission has its original checked lexical owner");
+  const context = program.physicalEmissionContexts.contextForOwner(owner, "native-body");
+  assert.equal(context !== undefined, true, "adapter admission uses its exact actual physical context");
+  const source = rustNativeCallableOperand(conversion.source, node, { records: program.records,
+    storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers,
+    definitions: program.typeDefinitions });
+  assert.equal(source !== undefined, true, "fixture starts from the actual pre-seal selected native source");
+  const file = ast.getFileName(ast.getSourceFile(node));
+  const prepared = rustCallableConversionPhysical(conversion, source.signature, file, program.typeDefinitions);
+  assert.equal(prepared !== undefined, true, "the existing physical producer admits the complete fixture adaptation");
+  const selected = publishRustCallablePhysicalConversion(prepared, node,
+    nativeDeclarationSelectionInput(program).nativeTypeInputFor(file, undefined));
+  assert.equal(selected.kind, "resolved", "the canonical late owner admits all native error payloads");
+  const adapter = Object.freeze({ node, sourceCarrier: source.carrier, sourceInput: source.input?.subject, conversion: selected.value });
+  const physicalEmissionContexts = { ...program.physicalEmissionContexts,
+    sourceErrorOperandFor: (use, subject) => use === context.use && subject === node
+      ? Object.freeze({ callableAdapters: Object.freeze([adapter]) })
+      : program.physicalEmissionContexts.sourceErrorOperandFor(use, subject) };
+  current.context.input = createRustPlanningContext({ ...program, physicalEmissionContexts });
+  current.context.emissionContext = context;
+  return selected.value;
+}
 
 export function nativeFallibleAdapterFixture() {
-  const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
+  const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
   const current = nativeClosureProducerFixture({
     packages: [nativeClosureProducerFailurePackage(failure, { path: "original", result: "int64",
       parameters: [{ name: "value", type: "int32" }] })],
@@ -39,10 +71,12 @@ export function create(): (value: int32) => int64 {
     promiseBodies: current.program.promiseBodies });
   assert.equal(regions.kind, "resolved", "the exact constructed adapter inputs publish their required native error joins");
   const program = { ...current.program, records: selectedRecords,
-    errorRegions: { ...regions.value, initialization: current.program.errorRegions.initialization } };
+    errorRegions: { declarationsFor: regions.value.declarationsFor, producerError: regions.value.producerError,
+      initialization: current.program.errorRegions.initialization } };
   current.context.input = createRustPlanningContext(program);
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "physical fallible producer plans");
-  return { ...current, program, source, target, conversion, expression,
-    adapt: () => planRustCallableConversion(conversion, expression, current.node, current.context) };
+  const result = { ...current, program, source, target, conversion, expression };
+  admitNativeCallableAdapter(result, conversion);
+  return { ...result, adapt: () => planRustCallableConversion(conversion, expression, current.node, current.context) };
 }

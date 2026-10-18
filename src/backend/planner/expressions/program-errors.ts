@@ -5,7 +5,8 @@ import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
-import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
+import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/error-regions.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustUnionFold } from "./union-folds.js";
 import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier,

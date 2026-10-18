@@ -10,11 +10,9 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import type { RustFrameOwner } from "./frame-owners.js";
-import {
-  resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorPlan,
-} from "./source-package-errors.js";
+import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/error-regions.js";
 import { rustSourceItemIdentity } from "./source-package-facades.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 export { rustErrorType } from "./fallible-boundaries.js";
@@ -160,6 +158,14 @@ export function requireRustEmissionContext(
 export function rustContextForEmission(context: RustPlanContext, emissionContext: RustPhysicalEmissionContext): RustPlanContext {
   return { ...context, emissionContext, typeParameterSubstitutions: emissionContext.bindings.types,
     lifetimeSubstitutions: emissionContext.bindings.lifetimes };
+}
+
+export function requireRustCallableBodyContext(context: RustPlanContext, declaration: Node): RustPhysicalEmissionContext {
+  const enclosing = context.emissionContext;
+  if (enclosing === undefined) failRustPlannerInvariant("A callable creation requires its original sealed enclosing use.", declaration);
+  const selected = context.input.program.physicalEmissionContexts.bodyContextFor(enclosing.use, declaration);
+  if (selected === undefined) failRustPlannerInvariant("A callable body requires its original selected creation context.", declaration);
+  return selected;
 }
 
 export function rustErrorBoundaryForDeclaration(

@@ -19,8 +19,8 @@ const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const workspace = dirname(realpathSync(resolve(repository, "../tsonic")));
 const runtime = resolve(workspace, "rust-runtime/crates/tsonic_rust_runtime");
 const javascript = resolve(workspace, "rust-js/crates/tsonic_rust_js");
-const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
-const promiseFailure = rustNamedTargetType("fixture:PromiseFailure", "PromiseFailure", []);
+const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
+const promiseFailure = rustNamedTargetType("fixture:PromiseFailure", "PromiseFailure", [], [], undefined, [], undefined, []);
 
 function fixtureSource() {
   const pureFixture = nativeClosureProducerFixture();
@@ -61,11 +61,11 @@ export function create(): () => Promise<int32> { return async (): Promise<int32>
     operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));
   const integer = rustSourcePrimitiveTargetType("int32");
-  const infallible = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []);
+  const infallible = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", [], [], undefined, [], undefined, []);
   const future = rustNativeCompletionFutureType({ identity: "fixture:future", output: integer, error: failure, captures: [] });
-  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, infallible]));
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, infallible]), [], undefined, [], undefined, []);
   const carrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable",
-    rustTypeGenericArguments([{ kind: "tuple", elements: [] }, result]));
+    rustTypeGenericArguments([{ kind: "tuple", elements: [] }, result]), [], undefined, [], undefined, []);
   const owner = rustCallableConstructionType(carrier, pureFixture.context);
   assert.equal(owner !== undefined, true, "anonymous constructor payload is representable");
   const constructor = printRustExpr({ kind: "associated-call", owner, method: "new", args: [{

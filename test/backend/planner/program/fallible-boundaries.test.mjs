@@ -10,6 +10,7 @@ import { applyRustFallibleResultExpression } from "../../../../dist/backend/plan
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { checkRustDataWrite } from "../../../../dist/backend/planner/objects/data-writes.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
+import { selectedNativeErrorBoundaries } from "../../../helpers/native-type-selection.mjs";
 
 const owner = Object.freeze({ componentId: "root", errorDomain: "project",
   errorTypePath: "rt::TsonicError", errorTypeIdentity: "root:error" });
@@ -36,7 +37,7 @@ test("active concrete regions preserve the genuine package owner and exact error
   assert.equal(rustInjectNativeError(region, callback, error) === undefined, true);
   assert.equal(rustPropagateNativeError(region, callback, path("result")) === undefined, true);
   const context = { fallibleBoundary: rustNativeFallibleBoundary(join([callback])), sourcePackageComponentId: "root",
-    sourcePackageErrors: { domainsByComponentId: new Map([["root", { errorDomain: "project", errorTypeIdentity: "root:error" }]]) } };
+    sourcePackageErrors: selectedNativeErrorBoundaries({ components: [["root", "root", owner]] }) };
   assert.equal(rustCurrentErrorBoundary(context).componentId, "root");
   assert.equal(rustActiveErrorType(context) === associated, true);
 });

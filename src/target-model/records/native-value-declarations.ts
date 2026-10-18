@@ -25,12 +25,15 @@ export interface RustNativeInterfaceField {
   readonly targetName: string;
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
+  readonly nativeCarrier: TargetTypeRef;
 }
 
 export interface RustNativeInterfaceDeclaration {
   readonly kind: "interface";
   readonly name: string;
   readonly definition: RustProjectTypeDefinition;
+  readonly nativeCarrier: TargetTypeRef;
+  readonly nativeStateCarrier: TargetTypeRef;
   readonly fields: readonly RustNativeInterfaceField[];
   readonly physical: RustNativeObjectPhysicalDeclaration;
   readonly index?: {
@@ -38,6 +41,8 @@ export interface RustNativeInterfaceDeclaration {
     readonly targetName: string;
     readonly keyCarrier: TargetTypeRef;
     readonly valueCarrier: TargetTypeRef;
+    readonly nativeKeyCarrier: TargetTypeRef;
+    readonly nativeValueCarrier: TargetTypeRef;
   };
 }
 
@@ -60,6 +65,8 @@ export type RustNativeObjectPhysicalField = RustSourceObjectPhysicalField & {
   | { readonly kind: "index" }
   | { readonly kind: "marker" }
   | { readonly kind: "state" }
+  | { readonly kind: "identity" }
+  | { readonly kind: "dispatch" }
 );
 
 export interface RustNativeObjectPhysicalDeclaration {
@@ -85,8 +92,9 @@ export interface RustNativeAliasDeclaration {
   readonly kind: "alias";
   readonly name: string;
   readonly carrier: TargetTypeRef;
+  readonly nativeCarrier: TargetTypeRef | null;
   readonly fact: RustTypeAliasDeclarationFact;
   readonly genericContract?: RustSourceGenericContract;
-  readonly payloadTemplate?: RustSourceUnionPayloadTemplate;
+  readonly payloadTemplate: RustSourceUnionPayloadTemplate | null;
   readonly family?: RustConditionalSourceTypeFamily;
 }

@@ -1,12 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustOptionalStorageRequirement } from "../../../analysis/declarations/type-projections.js";
+import {
+  selectRustOptionalStorageCallArguments,
+  selectRustOptionalStorageTypeArguments,
+} from "../../../analysis/declarations/type-projections.js";
 import type { RustGenericParameter, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
-import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";
-import { rustSourceTypeCarrierValue } from "../../../target-model/types/carriers/source-types.js";
-import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
 
 export function rustOptionalStorageParameters(
   requirements: readonly RustOptionalStorageRequirement[],
@@ -30,13 +31,13 @@ export function rustOptionalStorageCallArguments(
   context: RustTypeRenderingContext,
   typeParameterNames?: ReadonlySet<string>,
 ): readonly RustCallGenericArgument[] {
-  const contract = context.input.program.declarationGenericRequirements.contractFor(declaration);
-  if (contract === undefined) throw new Error("A source call lost its sealed generic requirements.");
-  return contract.optionalStorage.filter(entry => !entry.captured && (typeParameterNames === undefined ||
-    rustTargetTypeParameterIdentities(entry.carrier).every(name => typeParameterNames.has(name)))).map(entry => {
-    const carrier = substituteRustTargetGenerics(entry.carrier, substitutions, new Map(), new Map(),
-      context.input.program.typeFamilies.normalize);
-    const type = rustTypeFromCarrierInContext(carrier, context);
+  const selected = selectRustOptionalStorageCallArguments(declaration, substitutions, {
+    genericRequirements: context.input.program.declarationGenericRequirements,
+    projectTypes: context.input.program.projectTypes,
+    normalize: context.input.program.typeFamilies.normalize,
+  }, typeParameterNames);
+  return selected.map(argument => {
+    const type = argument.kind !== "type" ? undefined : rustTypeFromCarrierInContext(argument.type, context);
     if (type === undefined) throw new Error("An optional storage argument has no exact native type.");
     return { kind: "type", type };
   });
@@ -47,20 +48,14 @@ export function rustOptionalStorageTypeArguments(
   context: RustTypeRenderingContext,
   parameterIndexes?: readonly number[],
 ): readonly RustCallGenericArgument[] {
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  if (definition === undefined) return [];
-  const source = rustSourceTypeCarrierValue(carrier);
-  if (source === undefined) throw new Error("A source storage projection lost its native class arguments.");
-  const substitutions = new Map<string, TargetTypeRef>();
-  for (const [index, parameter] of definition.genericParameters.entries()) {
-    const argument = source.genericArguments[index];
-    if (argument?.kind !== parameter.kind) throw new Error("A source storage projection has inconsistent class arity.");
-    if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.identity, argument.type);
-  }
-  const typeParameterNames = parameterIndexes === undefined ? undefined : new Set(parameterIndexes.flatMap(index => {
-    const parameter = definition.genericParameters[index];
-    if (parameter === undefined) throw new Error("A source storage projection selects an undeclared type parameter.");
-    return parameter.kind === "type" ? [parameter.identity] : [];
-  }));
-  return rustOptionalStorageCallArguments(definition.declaration, substitutions, context, typeParameterNames);
+  const selected = selectRustOptionalStorageTypeArguments(carrier, {
+    genericRequirements: context.input.program.declarationGenericRequirements,
+    projectTypes: context.input.program.projectTypes,
+    normalize: context.input.program.typeFamilies.normalize,
+  }, parameterIndexes);
+  return selected.map(argument => {
+    const type = argument.kind !== "type" ? undefined : rustTypeFromCarrierInContext(argument.type, context);
+    if (type === undefined) throw new Error("An optional storage argument has no exact native type.");
+    return { kind: "type", type };
+  });
 }

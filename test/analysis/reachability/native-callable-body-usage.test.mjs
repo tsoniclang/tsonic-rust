@@ -66,6 +66,7 @@ for (const [name, body, retained] of [
   test(`native body reachability follows only the actual ${name} references`, () => {
     const { program } = analyzeRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+        export {};
         async function identity<Value>(value: Value): Promise<Value> { return value; }
         async function consume(value: number): Promise<number> { ${body} }
         console.log(await consume(7));` } });

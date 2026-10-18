@@ -19,7 +19,10 @@ export function planRustSourceErrorPropagation(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const selection = context.input.program.errorRegions.sourceFor(edge);
+  const activeContext = context.emissionContext;
+  const operandSelection = activeContext === undefined ? undefined
+    : context.input.program.physicalEmissionContexts.sourceErrorOperandFor(activeContext.use, node);
+  const selection = operandSelection?.sourceErrorRegions.find(source => source.edge === edge)?.selection;
   if (selection === undefined) return reject(node, context);
   const channels = new Map(selection.channels.map(channel => [channel.sourceIdentity, channel]));
   const planned = planRustSelectedErrorRegion(selection.operand, context);

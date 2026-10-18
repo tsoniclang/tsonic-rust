@@ -6,6 +6,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, computedMember: undefined, nativeInputs: [], argumentModes: [],
@@ -310,8 +311,12 @@ export function read(value: Value, key: "value"): number { return value[key]; }
   assert.equal(computed !== undefined, true, "the actual checked computed read exists");
   const fact = program.records.computedMember.get(computed);
   assert.equal(fact !== undefined && fact.evaluateKey, true, "the original evaluated-key obligation is retained");
-  const computedOnly = analyzeRustReadUses(ast, [computed, fact.key], { ...program.records,
-    targetOperation: { get: () => undefined } });
+  const computedOnly = analyzeRustReadUses(ast, [computed, fact.key], createRustRecordFixture({
+    computedMember: program.records.computedMember,
+    runtimeCarrier: program.records.runtimeCarrier,
+    argumentPassing: program.records.argumentPassing,
+    targetOperation: { get: () => undefined },
+  }));
   assert.equal(computedOnly.get(fact.key)?.mode, "shared", "computed-only evidence reaches the same policy with no operation fallback");
   const read = program.ownership.reads.get(fact.key);
   assert.equal(read?.source.kind, "borrow", "the producer selects a nonconsuming source read before rendering");

@@ -20,8 +20,8 @@ import { join } from "node:path";
 
 const string = rustStringTargetType();
 const integer = { kind: "source-primitive", name: "int32" };
-const owner = rustNamedTargetType("fixture.Owner", "fixture::Owner");
-const noClone = rustNamedTargetType("fixture.NoClone", "fixture::NoClone");
+const owner = rustNamedTargetType("fixture.Owner", "fixture::Owner", [], [], undefined, [], undefined, []);
+const noClone = rustNamedTargetType("fixture.NoClone", "fixture::NoClone", [], [], undefined, [], undefined, []);
 
 async function fixture({ form = "field", carrier = string, conversion, borrowed = false, union = false } = {}) {
   const source = createTargetSourceProgram(await checkedSource("provider-result-read", {
@@ -138,7 +138,7 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
     { path: "Cargo.toml", text: '[package]\nname = "raw_field_fixture"\nversion = "0.0.0"\nedition = "2021"\n' },
     { path: "src/lib.rs", text: "pub struct NativeText { pub text: &'static str }\npub fn count(value: &str) -> i32 { value.len() as i32 }\n" },
   ]);
-  const carrier = rustNamedTargetType("raw.fixture.NativeText", "raw_field_fixture::NativeText");
+  const carrier = rustNamedTargetType("raw.fixture.NativeText", "raw_field_fixture::NativeText", [], [], undefined, [], undefined, []);
   const provider = createRustProviderPackage({
     id: "raw-field", displayName: "Exact native field ownership", version: "1.0.0",
     modules: [{ moduleSpecifier: "@raw/native", providerModuleId: "raw.native", exports: [{

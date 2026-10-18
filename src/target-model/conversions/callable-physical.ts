@@ -11,6 +11,10 @@ import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { emptyRustTypeDefinitions } from "../types/source-union-definitions.js";
 import { rustCallableConversionMatches, type RustCallableConversion } from "./callable.js";
 import { rustValueConversionContract, type RustValueConversionContract } from "./contracts.js";
+import { substituteRustCallableConversion } from "./substitution.js";
+import { mapRustProgramErrorRoute } from "./program-error.js";
+import type { RustTargetGenericBindings } from "../types/carriers/generic-inference.js";
+import type { RustUnionPathStep } from "../types/union-relations.js";
 
 export interface RustCallablePhysicalSignature {
   readonly parameters: readonly TargetTypeRef[];
@@ -18,18 +22,80 @@ export interface RustCallablePhysicalSignature {
   readonly error: TargetTypeRef;
 }
 
-export type RustCallablePhysicalValueConversion =
+export type RustCallablePhysicalValueConversion<Source extends RustNativeErrorSource<TargetTypeRef> = RustNativeErrorSource<TargetTypeRef>> =
   | { readonly kind: "identity" | "borrow" | "absence" | "discard" }
   | { readonly kind: "value"; readonly contract: RustValueConversionContract; readonly errorIdentity?: string }
-  | { readonly kind: "callable"; readonly conversion: RustCallablePhysicalConversion };
+  | { readonly kind: "callable"; readonly conversion: RustCallablePhysicalConversion<Source> };
 
-export interface RustCallablePhysicalConversion extends RustCallablePhysicalSignature {
+export interface RustCallablePhysicalConversion<Source extends RustNativeErrorSource<TargetTypeRef> = RustNativeErrorSource<TargetTypeRef>> extends RustCallablePhysicalSignature {
+  readonly nativeErrorType: TargetTypeRef;
   readonly logical: RustCallableConversion;
   readonly source: RustCallablePhysicalSignature;
   readonly carrier: TargetTypeRef;
-  readonly arguments: readonly RustCallablePhysicalValueConversion[];
-  readonly resultPlan: RustCallablePhysicalValueConversion;
-  readonly errors: readonly RustNativeErrorSource<TargetTypeRef>[];
+  readonly arguments: readonly RustCallablePhysicalValueConversion<Source>[];
+  readonly resultPlan: RustCallablePhysicalValueConversion<Source>;
+  readonly errors: readonly Source[];
+}
+
+export type RustCallablePhysicalValueConversionPreparation =
+  | Exclude<RustCallablePhysicalValueConversion, { readonly kind: "callable" }>
+  | { readonly kind: "callable"; readonly conversion: RustCallablePhysicalConversionPreparation };
+
+export type RustCallablePhysicalConversionPreparation =
+  Omit<RustCallablePhysicalConversion, "nativeErrorType" | "arguments" | "resultPlan"> & {
+    readonly arguments: readonly RustCallablePhysicalValueConversionPreparation[];
+    readonly resultPlan: RustCallablePhysicalValueConversionPreparation;
+  };
+
+export function substituteRustCallablePhysicalConversion(
+  conversion: RustCallablePhysicalConversionPreparation,
+  bindings: RustTargetGenericBindings,
+  apply: (carrier: TargetTypeRef) => TargetTypeRef,
+): RustCallablePhysicalConversionPreparation {
+  const path = (steps: readonly RustUnionPathStep[]): readonly RustUnionPathStep[] =>
+    Object.freeze(steps.map(step => Object.freeze({ ...step, union: apply(step.union) })));
+  const contract = (selected: RustValueConversionContract): RustValueConversionContract => {
+    const base = { source: apply(selected.source), target: apply(selected.target),
+      ...(selected.fallible && selected.errorBoundary === "provider-native" ? { errorCarrier: apply(selected.errorCarrier) } : {}) };
+    switch (selected.lowering) {
+      case "program-error": return Object.freeze({ ...selected, ...base, route: mapRustProgramErrorRoute(selected.route, apply) });
+      case "js-array-backing": case "source-optional": return Object.freeze({ ...selected, ...base, element: apply(selected.element) });
+      case "union-project": return Object.freeze({ ...selected, ...base, path: path(selected.path) });
+      case "union-map": return Object.freeze({ ...selected, ...base, arms: Object.freeze(selected.arms.map(arm => Object.freeze({
+        ...arm, carrier: apply(arm.carrier), source: path(arm.source), target: path(arm.target) }))) });
+      case "rest-sequence": return Object.freeze({ ...selected, ...base,
+        elementConversions: Object.freeze(selected.elementConversions.map(element => element === null ? null : contract(element))),
+        cloneSources: Object.freeze(selected.cloneSources.map(apply)) });
+      case "source-union-variant": return Object.freeze({ ...selected, ...base, path: path(selected.path),
+        payloadCarrier: apply(selected.payloadCarrier), payloadConversion: selected.payloadConversion === null ? null : contract(selected.payloadConversion) });
+      case "option-map": return Object.freeze({ ...selected, ...base, element: contract(selected.element) });
+      case "option-some": return Object.freeze({ ...selected, ...base,
+        element: selected.element === null ? null : contract(selected.element) });
+      case "closed-value-from-option": case "js-value-from-array": return Object.freeze({ ...selected, ...base,
+        element: apply(selected.element), elementConversion: contract(selected.elementConversion) });
+      case "union-fold": return Object.freeze({ ...selected, ...base, arms: Object.freeze(selected.arms.map(arm => Object.freeze({
+        ...arm, carrier: apply(arm.carrier), path: path(arm.path), conversion: contract(arm.conversion) }))) });
+      case "js-value-from-structural-to-json": return Object.freeze({ ...selected, ...base,
+        resultCarrier: apply(selected.resultCarrier), resultConversion: contract(selected.resultConversion) });
+      case "js-value-from-properties": return Object.freeze({ ...selected, ...base,
+        fields: Object.freeze(selected.fields.map(field => Object.freeze({ ...field,
+          sourceCarrier: apply(field.sourceCarrier), conversion: contract(field.conversion) }))) });
+      case "js-value-from-structural-object": return Object.freeze({ ...selected, ...base,
+        fields: Object.freeze(selected.fields.map(field => Object.freeze({ ...field,
+          sourceCarrier: apply(field.sourceCarrier), conversion: contract(field.conversion) }))) });
+      default: return Object.freeze({ ...selected, ...base });
+    }
+  };
+  const part = (selected: RustCallablePhysicalValueConversionPreparation): RustCallablePhysicalValueConversionPreparation => selected.kind === "callable"
+    ? Object.freeze({ ...selected, conversion: substituteRustCallablePhysicalConversion(selected.conversion, bindings, apply) })
+    : selected.kind === "value" ? Object.freeze({ ...selected, contract: contract(selected.contract) }) : selected;
+  return Object.freeze({ ...conversion,
+    logical: substituteRustCallableConversion(conversion.logical, bindings.types, bindings.lifetimes, bindings.consts),
+    carrier: apply(conversion.carrier), parameters: Object.freeze(conversion.parameters.map(apply)), result: apply(conversion.result),
+    error: apply(conversion.error), source: Object.freeze({ parameters: Object.freeze(conversion.source.parameters.map(apply)),
+      result: apply(conversion.source.result), error: apply(conversion.source.error) }),
+    arguments: Object.freeze(conversion.arguments.map(part)), resultPlan: part(conversion.resultPlan),
+    errors: Object.freeze(conversion.errors.map(source => Object.freeze({ ...source, errorType: apply(source.errorType) }))) });
 }
 
 export function rustCallablePhysicalSignature(carrier: TargetTypeRef): RustCallablePhysicalSignature | undefined {
@@ -52,9 +118,9 @@ export function rustCallableConversionPhysical(
   source: RustCallablePhysicalSignature,
   fileName: string,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
-): RustCallablePhysicalConversion | undefined {
+): RustCallablePhysicalConversionPreparation | undefined {
   let remaining = 4096;
-  const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number): RustCallablePhysicalConversion | undefined => {
+  const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number): RustCallablePhysicalConversionPreparation | undefined => {
     if (remaining-- <= 0 || depth > 128 || logical === null || typeof logical !== "object" ||
       actual === null || typeof actual !== "object" || !isClosedMetadata(actual) ||
       !hasExactObjectKeys(actual, ["parameters", "result", "error"]) || !isDenseDataArray(actual.parameters) ||
@@ -65,7 +131,7 @@ export function rustCallableConversionPhysical(
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
     const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0", errorType: actual.error }];
     const parameters: TargetTypeRef[] = [...target.parameters];
-    const arguments_: RustCallablePhysicalValueConversion[] = [];
+    const arguments_: RustCallablePhysicalValueConversionPreparation[] = [];
     for (const [index, parameter] of logical.parameters.entries()) {
       if (remaining-- <= 0) return undefined;
       const expected = actual.parameters[index]!;
@@ -84,7 +150,7 @@ export function rustCallableConversionPhysical(
       } else return undefined;
     }
     let result: TargetTypeRef;
-    let resultPlan: RustCallablePhysicalValueConversion;
+    let resultPlan: RustCallablePhysicalValueConversionPreparation;
     if (logical.result.kind === "identity") {
       result = actual.result;
       resultPlan = { kind: "identity" };
@@ -110,7 +176,7 @@ export function rustCallableConversionPhysical(
     return carrier === undefined ? undefined : snapshotClosedMetadata({ logical, source: actual, carrier,
       ...signature, arguments: arguments_, resultPlan, errors });
 
-    function valuePlan(contract: RustValueConversionContract, identity: string): RustCallablePhysicalValueConversion {
+    function valuePlan(contract: RustValueConversionContract, identity: string): RustCallablePhysicalValueConversionPreparation {
       const errorType = conversionError(contract);
       if (errorType === undefined) return { kind: "value", contract };
       errors.push({ identity, variant: `Error${errors.length}`, errorType });
@@ -153,7 +219,8 @@ function conversionError(contract: RustValueConversionContract): TargetTypeRef |
 }
 
 function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalSignature): TargetTypeRef | undefined {
-  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, signature.error]));
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, signature.error]),
+    [], undefined, [], undefined, []);
   const tuple: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
   if (rustCallableInputProtocol(logical) !== undefined) return { kind: "closure", args: [tuple], result };
   if (logical.kind === "closure") return rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType())
@@ -161,5 +228,5 @@ function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalS
   const lifetime = rustCallableProtocol(logical)?.lifetime;
   return logical.kind !== "target-named" || logical.id !== rustCallableTargetId || lifetime === undefined ? undefined
     : rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(lifetime),
-      ...rustTypeGenericArguments([tuple, result])]);
+      ...rustTypeGenericArguments([tuple, result])], [], undefined, [], undefined, []);
 }

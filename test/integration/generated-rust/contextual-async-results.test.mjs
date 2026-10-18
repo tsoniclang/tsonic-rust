@@ -12,7 +12,8 @@ import { assertRejectedAsyncSource, assertSettledCopiedPromise, verifyNativeBorr
 test("native JS async bodies retain contextual union completion, captures, aliases and rejection", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": (contextualAsyncResultSource + "\nawait main();\n") } });
-  assert.equal(result.diagnostics.length, 0, "contextual async source has no diagnostics");
+  assert.equal(result.diagnostics.length, 0, "contextual async source has no diagnostics: " +
+    result.diagnostics.map(({ code, message }) => code + ": " + message).join("\n"));
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.then\(|\.then_async\(|transmute|unreachable_unchecked/u);
   assert.doesNotMatch(output, /JsPromise<\(\)>[\s\S]{0,100}\.map\(/u);
@@ -40,7 +41,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`ordinary async output stays native and lossless on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": (ordinaryAsyncResultSource + "\nawait main();\n") } });
-    assert.equal(result.diagnostics.length, 0, "ordinary async source has no diagnostics");
+    assert.equal(result.diagnostics.length, 0, "ordinary async source has no diagnostics: " +
+      result.diagnostics.map(({ code, message }) => code + ": " + message).join("\n"));
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /\bi64\b/u);
     assert.doesNotMatch(output, /\bBigInt\b|as f64|dyn Future/u);
@@ -128,6 +130,8 @@ export async function run(pending: Promise<void>): Promise<int32> {
     assert.equal(typeof output, "string", "the full native borrower/factory pair is emitted");
     assert.equal((output.match(/JsPromise::from_fallible_factory\(/gu) ?? []).length, 1,
       "only run's genuine public object facet constructs a task");
+    assert.equal(/JsPromise::from_fallible_factory\(move\s+\|\|\s+run_native\(pending\)\)/u.test(output), true,
+      "the exact same native rejection carrier passes its existing future directly without a redundant async-await state");
     assert.equal(/Box::pin|'Region: 'static/u.test(output), false, "the borrowed direct body adds no boxed/static adapter");
     const directory = writeGeneratedProject(`${alias ? "lexical-alias" : "direct-native"}-${name}-cost`, result.artifacts);
     appendFileSync(join(directory, "src/index.rs"), `

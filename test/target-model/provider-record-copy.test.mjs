@@ -8,7 +8,7 @@ const number = rustSourcePrimitiveTargetType("float64");
 const boolean = rustSourcePrimitiveTargetType("bool");
 const field = (sourceName, type = number) => ({ sourceName, type, presence: "required", readonly: false });
 const source = rustStructuralObjectTargetType("index.ts", [field("user"), field("system")]);
-const target = rustNamedTargetType("test.Cpu", "test::Cpu");
+const target = rustNamedTargetType("test.Cpu", "test::Cpu", [], [], undefined, [], undefined, []);
 const conversion = { kind: "provider-record-copy", source, target, completion: "complete", absentFields: [], fields: [
   { storageIndex: 0, sourceCarrier: number, carrier: number, targetName: "system_time" },
   { storageIndex: 1, sourceCarrier: number, carrier: number, targetName: "user_time" },
@@ -17,7 +17,7 @@ const conversion = { kind: "provider-record-copy", source, target, completion: "
 test("provider record copies retain exact source storage and target carriers", () => {
   assert.equal(rustProviderRecordCopyMatches(conversion, source, target), true);
   assert.equal(rustProviderRecordCopyMatches({ ...conversion, completion: "default" }, source, target), true);
-  assert.equal(rustProviderRecordCopyMatches(conversion, source, rustNamedTargetType("test.Other", "test::Other")), false);
+  assert.equal(rustProviderRecordCopyMatches(conversion, source, rustNamedTargetType("test.Other", "test::Other", [], [], undefined, [], undefined, [])), false);
   assert.equal(rustProviderRecordCopyMatches(conversion, target, source), false);
 });
 

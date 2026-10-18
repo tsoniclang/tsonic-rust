@@ -4,7 +4,7 @@ import type { RustExpr, RustStructField, RustVisibility } from "../../target-ast
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustProjectObjectStateField } from "./project-objects.js";
+import { rustProjectObjectStateField } from "../../../target-model/types/field-storage.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";

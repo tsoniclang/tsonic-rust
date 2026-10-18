@@ -7,7 +7,6 @@ import { createRustRecordFixture, rustNativeFixtureNodes } from "../../../helper
 import { createRustPlanningContext } from "../../../../dist/backend/planner/context.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
-import { planRustSourcePackageErrors } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { rustCurrentErrorBoundary } from "../../../../dist/backend/planner/program/plan-context.js";
 import { planThrowStatement, planTryStatement } from "../../../../dist/backend/planner/statements/errors.js";
 import { planForInStatement, planForOfStatement, planRuntimeSetStatement } from "../../../../dist/backend/planner/statements/iteration.js";
@@ -60,14 +59,11 @@ function nodeIn(program, owner, predicate) {
 function planContext(program, node, names = true) {
   const { ast } = program.source;
   const input = createRustPlanningContext(program);
-  const components = program.sourcePackageComponents.components.map(component => ({
-    ...component, sourceFileNames: new Set(component.sourceFileNames), programModuleName: "program",
-  }));
-  const errors = planRustSourcePackageErrors(input, components);
-  assert.equal(errors.diagnostics.length, 0, "the checked package has its actual error plan");
+  const errors = program.errorTransport;
+  assert.equal(errors !== undefined, true, "the checked package has its actual error plan");
   const context = {
     input, sourceFile: ast.getSourceFile(node), diagnostics: [], usedAliases: new Set(),
-    sourcePackageErrors: errors.plan,
+    sourcePackageErrors: errors,
     sourcePackageComponentId: program.sourcePackageComponents.rootComponentId,
     ...(names ? { syntheticNames: createRustSyntheticNameState(ast, node, []) } : {}),
     controlFlow: { nextLoopId: 0 }, functionReturnType: { kind: "unit" },

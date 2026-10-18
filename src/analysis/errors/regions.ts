@@ -27,12 +27,17 @@ import type { RustSourceErrorEffectEdge } from "../../target-model/records/sourc
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
+import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import { selectRustJsRejectionRegion } from "./js-rejection.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import { selectRustNativeTypeCarrier, type RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
 
-export type RustAnalyzedErrorRegions = Omit<RustErrorRegionRecords, "initialization">;
+export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "producerError" | "declarationsFor"> {
+  readonly get: (declaration: Node) => RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> | undefined;
+  readonly sourceFor: (edge: RustSourceErrorEffectEdge) => RustSourceErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> | undefined;
+}
 
 export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly ast: AstReader;
@@ -43,8 +48,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers">;
   readonly promiseBodies: RustPromiseBodies;
 }): TargetStageResult<RustAnalyzedErrorRegions> {
-  const regions = new Map<Node, RustErrorRegionSelection>();
-  const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection>();
+  const regions = new Map<Node, RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>>>();
+  const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>>>();
   const declarations = new Map<string, readonly RustErrorJoinDeclaration[]>();
   const demandedArities = new Map<string, Set<number>>();
   const producers = new Map<string, {
@@ -68,7 +73,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     }
     rustTargetTypeChildren(carrier).forEach(inspectCarrier);
   };
-  const regionFor = (node: Node, effects: RustErrorEffectsFact, body = false): RustErrorRegionSelection | undefined => {
+  const regionFor = (node: Node, effects: RustErrorEffectsFact, body = false):
+    RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> | undefined => {
     const file = input.ast.getSourceFile(node);
     const owner = effects.localErrors ? selectRustPhysicalProgramErrorOwner(node, input) : undefined;
     const sources = effects.nativeErrors.map((source, index) => {
@@ -172,6 +178,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         }
       }
       for (const edge of input.records.sourceErrorEffects.get(node)?.edges ?? []) sourceRegionFor(node, edge);
+      for (const branch of input.records.awaitSourceErrorEffects.get(node)?.branches ?? []) sourceRegionFor(node, branch.edge);
       const conversion = input.records.contextualValueConversion.get(node)?.conversion;
       if (conversion?.kind === "callable-adapter") registerConversion(node, conversion);
       for (const adapter of input.records.projectCallableAdapters.get(node) ?? []) {
@@ -223,5 +230,48 @@ export function completeRustErrorRegionRecords(
   regions: RustAnalyzedErrorRegions,
   initialization: RustInitializationErrorRecords,
 ): RustErrorRegionRecords {
-  return Object.freeze({ ...regions, initialization });
+  return Object.freeze({ declarationsFor: regions.declarationsFor, producerError: regions.producerError, initialization });
+}
+
+export function publishRustNativeErrorSources(
+  sources: readonly RustNativeErrorSource<TargetTypeRef>[],
+  node: Node,
+  input: RustNativeTypeSelectionInput,
+): TargetStageResult<RustErrorRegionSelection["sources"]> {
+  const selected: RustErrorRegionSelection["sources"][number][] = [];
+  const diagnostics: TargetDiagnostic[] = [];
+  for (const source of sources) {
+    const native = selectRustNativeTypeCarrier(source.errorType, input, "general");
+    if (native.kind === "rejected") diagnostics.push({ code: "RUST_NATIVE_ERROR_PAYLOAD_NOT_REPRESENTABLE",
+      category: "error", source: "tsonic-rust", sourceNode: node,
+      message: native.reason, evidence: ["target.capability=rust.native-error-payload"] });
+    else selected.push(Object.freeze({ ...source, nativeType: native.carrier }));
+  }
+  return diagnostics.length === 0 ? resolvedTargetStage(Object.freeze(selected)) : rejectedTargetStage(diagnostics);
+}
+
+export function prepareRustErrorRegion(
+  region: RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>>,
+  apply: (carrier: TargetTypeRef) => TargetTypeRef,
+): RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>> {
+  const conversion = (selected: import("../../target-model/records/error-regions.js").RustJsRejectionConversion):
+    import("../../target-model/records/error-regions.js").RustJsRejectionConversion => selected.kind === "native-join"
+      ? Object.freeze({ ...selected, carrier: apply(selected.carrier), arms: Object.freeze(selected.arms.map(conversion)) })
+      : Object.freeze({ ...selected, carrier: apply(selected.carrier) });
+  return Object.freeze({ ...region,
+    sources: Object.freeze(region.sources.map(source => Object.freeze({ ...source, errorType: apply(source.errorType) }))),
+    ...(region.jsRejection === undefined ? {} : { jsRejection: Object.freeze({
+      local: region.jsRejection.local === undefined ? undefined : conversion(region.jsRejection.local),
+      sources: Object.freeze(region.jsRejection.sources.map(source => Object.freeze({ ...source, conversion: conversion(source.conversion) }))),
+      requiredCarriers: Object.freeze(region.jsRejection.requiredCarriers.map(apply)),
+    }) }) });
+}
+
+export function publishRustErrorRegion(
+  region: RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>>,
+  node: Node,
+  input: RustNativeTypeSelectionInput,
+): TargetStageResult<RustErrorRegionSelection> {
+  const sources = publishRustNativeErrorSources(region.sources, node, input);
+  return sources.kind === "rejected" ? sources : resolvedTargetStage(Object.freeze({ ...region, sources: sources.value }));
 }
