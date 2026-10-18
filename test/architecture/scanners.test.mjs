@@ -1147,10 +1147,13 @@ test("Rust build and test entrypoints honor one explicit Tsonic checkout root", 
     buildScript,
     /TSONIC_ROOT="\$\(cd "\$REPO_ROOT\/\.\.\/tsonic"/u,
   );
-  assert.equal(testWorker.match(/--import "\$loader_registration"/gu)?.length, 2);
+  assert.equal(testWorker.match(/--import "\$loader_registration"/gu)?.length, 1);
+  assert.match(testWorker, /--repository-root "\$PWD"/u);
+  assert.match(testWorker, /--with-preruns/u);
   const suites = readFileSync(join(process.env.TSONIC_ROOT ?? resolve(repositoryRoot, "../tsonic"),
     "test/scripts/suite-definition.mjs"), "utf8");
   assert.match(suites, /nodeArguments: \["--import", resolve\(repos\.tsonicRust, "scripts\/register-tsonic-root-loader\.mjs"\)\]/u);
+  assert.match(suites, /args: \["--import", resolve\(repos\.tsonicRust, "scripts\/register-tsonic-root-loader\.mjs"\), "-e"/u);
   assert.match(rootRegistration, /registerHooks\(\{ resolve: resolveFromConfiguredTsonic \}\)/u);
   assert.match(rootRegistration, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
   assert.match(rootRegistration, /configuredEntrypoints\.get\(specifier\)/u);
