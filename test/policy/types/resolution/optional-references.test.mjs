@@ -74,6 +74,7 @@ test("optional non-Clone payloads may move or borrow but cannot acquire a clone 
     const uses = new Map(analyzeRustReadUses(source.ast, storage.nodes, records));
     if (borrowed) uses.set(node, { mode: "shared", later: [], laterStart: 0, stableAcrossEffects: true });
     const input = { storage, nativeNodes: storage.nodes, records,
+      operands: [{ node }],
       movingReads: new Set(canMove ? [node] : []),
       flow: { readTransfers: new Map(), captureRequirements: new Map(), captureTransfers: new Map(), graphs: new Map(), liveness: new Map() },
       captures: new Map(),

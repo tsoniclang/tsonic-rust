@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage,
+import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, sourceParameterIsProperty,
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
   sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -203,8 +203,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const flow = records.contextualValueConversion.get(node)?.conversion;
     if (input.sourceErrorOperandRequired(node) || flow?.kind === "callable-adapter")
       runtime(owner, node, "source-errors", node);
-    if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter")
-      runtime(owner, node, role, sourceOwner);
+    runtime(owner, node, role, sourceOwner);
     if (handler?.kind === "memory-binding") {
       const selected = handler.selection;
       if (selected.kind === "field") visitUse(selected.expression, owner, "native-memory:value", node);
@@ -349,6 +348,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "parameter-value", abi?.valueCarrier);
         type(node, parameter, "parameter-abi", abi?.parameterCarrier);
+        if (sourceParameterIsProperty(ast, parameter)) {
+          const name = ast.name(parameter);
+          if (name === undefined) diagnostics.push(emissionDiagnostic(parameter,
+            "A native parameter-property load requires its original checked input name."));
+          else runtime(node, name, "parameter-property", parameter);
+        }
         for (const child of sourceConstructValueInputs(ast, parameter)) visitUse(child.expression, node, inputRole(child), child.owner);
       }
       const lexical = input.lexicalFunctions.forDeclaration(node);

@@ -59,3 +59,19 @@ test("an unresolved trait Self stays unavailable rather than inventing an owned 
   assert.equal(selected.resultLoans.loans.length, 0, "no owner lifetime is guessed from spelling");
   assert.equal(selected.resultLoans.reasons.length > 0, true, "the actual missing instantiation is explicit");
 });
+
+test("the result-loan selector publishes the same actual typed elided binder without a second lifetime inference", () => {
+  const selected = normalized({ borrowed_ref: { lifetime: null, is_mutable: false, type: { generic: "Self" } } },
+    { borrowed_ref: { lifetime: null, is_mutable: false, type: { primitive: "u8" } } });
+  assert.equal(selected.resultLoans.kind, "complete", "the original receiver establishes native elision");
+  const relation = selected.resultLoans.loans.find(loan => loan.resultPath.join("/") === "reference");
+  assert.equal(relation !== undefined, true, "the result retains its actual reference position");
+  const lifetime = selected.resultLoanTypes.lifetimes.find(row => row.key === relation.lifetime)?.lifetime;
+  assert.equal(lifetime !== undefined, true, "the sole selector retains the exact typed binder as data");
+  assert.equal(selected.resultLoanTypes.result.kind, "reference", "typed result shape remains native");
+  assert.equal(selected.resultLoanTypes.result.lifetime === lifetime, true,
+    "query acquisition consumes the selector's identical binder, never reparses a lifetime name");
+  assert.equal(selected.result.kind, "reference", "the originally normalized declaration remains distinct");
+  assert.equal(selected.resultLoanTypes.result.target === selected.result.target, true,
+    "normalization does not replace unrelated native type identity");
+});

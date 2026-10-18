@@ -31,7 +31,8 @@ export function rustArrayEntryBinding(walk: RustFactWalk, expression: Node): Nod
     }
     if (ast.kindName(declaration) !== "KindBindingElement" || Node_Initializer(ast, declaration) !== undefined) return undefined;
     const projection = records.bindingProjection.get(declaration);
-    if (projection?.projection.kind !== "tuple-element" || projection.projection.index !== 1 ||
+    if (projection === undefined || !("bindingCarrier" in projection) ||
+      projection.projection.kind !== "tuple-element" || projection.projection.index !== 1 ||
       projection.normalization !== "identity") return undefined;
     const pattern = ast.parent(declaration);
     const binding = pattern === undefined ? undefined : ast.parent(pattern);

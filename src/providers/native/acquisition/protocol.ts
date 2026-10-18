@@ -2,11 +2,22 @@ import type {
   RustCompilerDependency,
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
+  RustCompilerNativeRetentionQuestion,
+  RustCompilerNativeRetentionBatch,
 } from "../model/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export type RustCompilerWorkerRequest =
+  | {
+      readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
+      readonly id: string;
+      readonly kind: "result-retention";
+      readonly snapshot: RustCompilerProjectSnapshot;
+      readonly questions: readonly RustCompilerNativeRetentionQuestion[];
+      readonly targetDirectory: string;
+      readonly foundation: RustFoundation;
+    }
   | {
       readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
       readonly id: string;
@@ -31,6 +42,12 @@ export type RustCompilerWorkerRequest =
     };
 
 export type RustCompilerWorkerResponse =
+  | {
+      readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
+      readonly id: string;
+      readonly kind: "result-retention";
+      readonly batch: RustCompilerNativeRetentionBatch;
+    }
   | {
       readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
       readonly id: string;

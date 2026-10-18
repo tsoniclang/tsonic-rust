@@ -14,6 +14,7 @@ export interface RustCompilerSubstitutions {
   readonly types: ReadonlyMap<string, RustCompilerType>;
   readonly lifetimes: ReadonlyMap<string, RustCompilerLifetime>;
   readonly consts: ReadonlyMap<string, RustCompilerConstArgument>;
+  readonly anonymousLifetimes?: ReadonlyMap<string, RustCompilerLifetime>;
 }
 
 export const emptyRustCompilerSubstitutions: RustCompilerSubstitutions = Object.freeze({
@@ -237,6 +238,8 @@ function substituteRustCompilerLifetime(
   lifetime: RustCompilerLifetime,
   substitutions: RustCompilerSubstitutions,
 ): RustCompilerLifetime {
+  if (lifetime.kind === "placeholder" || lifetime.kind === "elided")
+    return substitutions.anonymousLifetimes?.get(rustCompilerLifetimeSemanticKey(lifetime)) ?? lifetime;
   return lifetime.kind === "parameter"
     ? substitutions.lifetimes.get(lifetime.identity.itemId) ?? lifetime
     : lifetime;

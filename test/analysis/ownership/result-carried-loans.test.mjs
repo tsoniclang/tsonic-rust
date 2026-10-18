@@ -14,10 +14,12 @@ const guardCarrier = { kind: "target-named", id: "native.Guard", genericArgument
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
 
 function relation(kind = "borrow") {
+  const origin = { kind, input: { kind: "receiver" }, inputType: "native::Owner", inputPath: [],
+    lifetime: "declared:Owner::guard:owner", mutable: false };
   return { kind: "complete", declarationIdentity: "native::Owner::guard", resultTypeIdentity: "native::Guard<'declared>",
+    inputLoans: { kind: "complete", origins: [origin] },
     valueTypeIdentity: "native::Guard<'declared>", loans: [{ resultPath: ["argument:0"], lifetime: "declared:Owner::guard:owner",
-      origins: [{ kind, input: { kind: "receiver" }, inputType: "native::Owner", inputPath: [],
-        lifetime: "declared:Owner::guard:owner", mutable: false }] }] };
+      origins: [origin] }] };
 }
 
 function fixture(options = {}) {
@@ -32,11 +34,12 @@ function fixture(options = {}) {
     resultLoans: contract, ...(options.resultConversion === undefined ? {} : { resultConversion: options.resultConversion }),
     isAsync: options.isAsync ?? false, isFallible: false });
   assert.equal(abi !== undefined, true, "the unit's declared native ABI is valid before place selection");
+  const physicalResultCarrier = abi.result.kind === "async" ? abi.result.futureCarrier : resultCarrier;
   const node = {};
   const sourceNode = {};
   const declaration = {};
   const contextUse = Object.freeze({ subject: declaration, role: "body", enclosingContract: "fixture:body" });
-  const operation = Object.freeze({ kind: "provider-operation", operationId: "native::guard", abi, resultCarrier });
+  const operation = Object.freeze({ kind: "provider-operation", operationId: "native::guard", abi, resultCarrier: physicalResultCarrier });
   const selectedInput = rustFinalizedSourceInputs(abi)[0];
   const slot = Object.freeze({ key: "receiver", node: sourceNode, operationNode: node, operation,
     source: { kind: "receiver", row: abi.sourceReceiver } });
@@ -44,7 +47,7 @@ function fixture(options = {}) {
   const sourceOrigins = Object.freeze(options.originsForOccurrence?.(contextUse, occurrence, declaration) ?? []);
   const context = Object.freeze({ use: contextUse, declaration,
     bindings: { types: new Map(), lifetimes: new Map(), consts: new Map() },
-    returnDestination: { kind: "none" }, error: { kind: "none" }, operands: [sourceCarrier, resultCarrier], sourceOrigins });
+    returnDestination: { kind: "none" }, error: { kind: "none" }, operands: [sourceCarrier, physicalResultCarrier], sourceOrigins });
   const use = Object.freeze({ subject: selectedInput, role: "call-input:receiver:0", enclosingContract: "fixture:body" });
   const operand = Object.freeze({ use, node: sourceNode, context,
     origin: { kind: "call-input", operationNode: node, operation, input: selectedInput },
@@ -62,7 +65,7 @@ function fixture(options = {}) {
     sourceFor: (selectedNode, selectedOperation) => selectedNode === node && selectedOperation === operation ? occurrence : undefined,
     sourceOriginFor: (selected, selectedOccurrence) => selected === contextUse && selectedOccurrence === occurrence
       ? sourceOrigins.find(row => row.occurrence === occurrence) : undefined,
-    carrierFor: (selected, carrier) => selected === contextUse && carrier === abi.result.carrier ? resultCarrier : undefined };
+    carrierFor: (selected, carrier) => selected === contextUse && carrier === physicalResultCarrier ? physicalResultCarrier : undefined };
   const input = { physicalEmissionContexts, nativeInputs: new Map([[use, place]]), definitions: emptyRustTypeDefinitions };
   return { node, operation, contextUse, context, occurrence, input, place };
 }
@@ -189,10 +192,25 @@ test("unavailable generic native result evidence never becomes a known empty rel
 test("a known empty awaited result never certifies its pending native Future has no carried loan", () => {
   const selected = fixture({ isAsync: true, resultLoans: { ...relation(), loans: [] } });
   const result = selectRustNativeResultPlaces(selected.node, selected.operation, selected.contextUse, selected.input);
-  assert.equal(result.kind, "unavailable", "completion-value evidence is not native Future storage evidence");
-  assert.equal(result.reasons[0], "The awaited native result relation does not establish the Future value's carried input loans.",
-    "the missing physical native contract stays exact");
-  assert.equal("loans" in result, false, "no false known-empty physical result");
+  assert.equal(result.kind, "resolved", "the separately normalized original invocation input domain is present");
+  assert.equal(result.loans.length, 1, "the pending invocation retains its native input relation despite loan-free completion");
+  assert.equal(result.loans[0].kind, "pending", "no awaited-value loan or synthetic Future layout is manufactured");
+  assert.equal(result.loans[0].declaration === result.native.contract.inputLoans.origins[0], true,
+    "the original normalized input origin, not a newly selected borrowed result, owns the pending relation");
+  assert.equal(result.loans[0].origins[0].input === selected.place, true, "the exact actual native input is retained");
+  assert.equal(result.carrier === selected.operation.abi.result.futureCarrier, true,
+    "the pending value uses the actual published Future carrier");
+  assert.equal("dropProven" in result || "scopeLive" in result, false,
+    "signature input relations still do not certify native use or cleanup liveness");
+  const contract = relation();
+  const missing = fixture({ isAsync: true, resultLoans: { ...contract, loans: [],
+    inputLoans: { ...contract.inputLoans, kind: "unavailable",
+      reasons: ["The original native input lifetime domain has an unresolved application."] } } });
+  const unknown = selectRustNativeResultPlaces(missing.node, missing.operation, missing.contextUse, missing.input);
+  assert.equal(unknown.kind, "unavailable", "loan-free completion cannot fill an unavailable pending input domain");
+  assert.equal(unknown.reasons[0], "The original native input lifetime domain has an unresolved application.",
+    "the precise original missing premise is preserved");
+  assert.equal("loans" in unknown, false, "an unknown pending invocation never becomes a false known-empty result");
 });
 
 test("source provenance keeps original activation alternatives and never inverts target generic bindings", () => {

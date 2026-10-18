@@ -1,4 +1,4 @@
-export const rustCompilerProviderProtocolVersion = 7;
+export const rustCompilerProviderProtocolVersion = 8;
 
 export interface RustCompilerIdentity {
   readonly rustcVerboseVersion: string;
@@ -270,6 +270,12 @@ export interface RustCompilerFunction {
   readonly genericParameters: readonly RustCompilerGenericParameter[];
   readonly typeRequirements: readonly RustCompilerTypeParameter[];
   readonly resultLoans: import("../../../target-model/operations/result-loans.js").RustNativeResultLoanContract;
+  readonly resultLoanTypes: {
+    readonly result: RustCompilerType;
+    readonly lifetimes: readonly { readonly key: string; readonly lifetime: RustCompilerLifetime }[];
+    readonly inputs: readonly { readonly input: import("../../../target-model/operations/result-loans.js").RustNativeResultLoanOrigin["input"];
+      readonly type: RustCompilerType }[];
+  };
   readonly receiver?: RustCompilerReceiver;
   readonly traitDispatch?: RustCompilerTraitDispatch;
   readonly borrowedResult?: RustCompilerBorrowedResultProjection;
@@ -421,4 +427,72 @@ export interface RustCompilerModuleModel {
   readonly exports: readonly RustCompilerExport[];
   readonly unsupportedExports: readonly RustCompilerUnsupportedExport[];
   readonly standardTypeLocations: readonly RustCompilerStandardTypeLocation[];
+}
+
+export interface RustCompilerNativeRetentionQuestion {
+  readonly id: string;
+  readonly declaration: RustCompilerItemIdentity;
+  readonly dependency: RustCompilerDependency;
+  readonly applicationIdentity: string;
+  readonly resultType: RustCompilerType;
+  readonly phase: "value" | "pending" | "completion";
+  readonly invocation: {
+    readonly path: readonly string[];
+    readonly ownerArguments: readonly RustCompilerGenericArgument[];
+    readonly method: string | undefined;
+    readonly trait: RustCompilerTraitDispatch | undefined;
+    readonly inputs: readonly { readonly input: import("../../../target-model/operations/result-loans.js").RustNativeResultLoanOrigin["input"];
+      readonly type: RustCompilerType }[];
+    readonly genericArguments: readonly RustCompilerGenericArgument[];
+    readonly selectedInput: import("../../../target-model/operations/result-loans.js").RustNativeResultLoanOrigin["input"];
+    readonly selectedKind: "borrow" | "carried";
+    readonly asynchronous: boolean;
+    readonly unsafe: boolean;
+    readonly fallible: boolean;
+  };
+  readonly origin: {
+    readonly lifetime: Extract<RustCompilerLifetime, { readonly kind: "parameter" | "bound" | "elided" }>;
+    readonly referent: RustCompilerType;
+    readonly mutable: boolean;
+  };
+  readonly parameters: readonly (RustCompilerGenericParameter | { readonly kind: "lifetime";
+    readonly lifetime: Extract<RustCompilerLifetime, { readonly kind: "elided" }>;
+    readonly outlives: readonly RustCompilerLifetime[] })[];
+  readonly requirements: readonly RustCompilerTypeParameter[];
+}
+
+export interface RustCompilerNativeRetentionQuestionSpan {
+  readonly questionId: string;
+  readonly phase: "use" | "cleanup";
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+export interface RustCompilerNativeRetentionEvidence {
+  readonly sourceDigest: string;
+  readonly command: readonly string[];
+  readonly exitCode: number;
+  readonly diagnosticsDigest: string;
+  readonly diagnostics: readonly {
+    readonly code: string | null;
+    readonly message: string;
+    readonly spans: readonly { readonly startLine: number; readonly endLine: number; readonly primary: boolean }[];
+  }[];
+}
+
+export type RustCompilerNativeRetentionFact = {
+  readonly questionId: string;
+  readonly applicationIdentity: string;
+} & (
+  | { readonly kind: "resolved"; readonly use: "retained" | "released"; readonly cleanup: "retained" | "released" }
+  | { readonly kind: "unavailable"; readonly reasons: readonly string[] }
+);
+
+export interface RustCompilerNativeRetentionBatch {
+  readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
+  readonly snapshotDigest: string;
+  readonly compilerIdentity: string;
+  readonly questionDigest: string;
+  readonly facts: readonly RustCompilerNativeRetentionFact[];
+  readonly evidence: readonly RustCompilerNativeRetentionEvidence[];
 }

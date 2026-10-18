@@ -10,7 +10,7 @@ import {
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-import type { RustBindingProjectionFact } from "../../../target-model/records/value-projections.js";
+import type { RustBindingProjectionFact, RustBindingValueProjectionFact } from "../../../target-model/records/value-projections.js";
 import {
   isRustCopyCarrier,
   isRustJsArrayCarrier,
@@ -36,8 +36,6 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { planRustCheckedSourceOptional } from "../expressions/optional-storage.js";
-import { rustBindingNormalizationContract } from "../../../target-model/types/binding-normalization.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
 import { planRustLocalBindingStorage } from "./local-storage.js";
 
@@ -88,10 +86,12 @@ export function planRustBindingPattern(
       ));
       return undefined;
     }
-    const projected = planBindingProjection(source, fact, element, context);
+    if (!("bindingCarrier" in fact)) continue;
+    const projected = planRustBindingProjection(source, fact, element, context);
     const normalized = projected === undefined
       ? undefined
-      : normalizeBindingValue(projected, fact, element, context, planExpression);
+      : normalizeRustBindingValue(projected, fact, element,
+        Node_Initializer(context.input.program.source.ast, element), context, planExpression);
     if (normalized === undefined) {
       return undefined;
     }
@@ -169,9 +169,9 @@ export function planRustBindingPattern(
   return statements;
 }
 
-function planBindingProjection(
+export function planRustBindingProjection(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -238,7 +238,7 @@ function planBindingProjection(
 
 function planObjectRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -282,7 +282,7 @@ function planObjectRest(
 
 function planTupleRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -311,7 +311,7 @@ function planTupleRest(
 
 function planArrayRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -351,7 +351,7 @@ function planArrayRest(
 
 function planVecRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -381,25 +381,17 @@ function planVecRest(
   };
 }
 
-function normalizeBindingValue(
+export function normalizeRustBindingValue(
   value: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   element: Node,
+  initializer: Node | undefined,
   context: RustPlanContext,
   planExpression: RustBindingExpressionPlanner,
 ): RustExpr | undefined {
-  const initializer = Node_Initializer(context.input.program.source.ast, element);
   const checkedElement = fact.projection.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(fact.sourceCarrier) : undefined;
-  const defaultCarrier = initializer === undefined ? undefined : rustEffectiveValueCarrier(context.input.program.records, initializer);
-  if (initializer !== undefined && defaultCarrier === undefined) return rejectProjection(element, context, "Binding default has no finalized value carrier.");
-  const selected = rustBindingNormalizationContract(fact.projectedCarrier, defaultCarrier, checkedElement);
-  if (selected === undefined || selected.normalization !== fact.normalization ||
-    !rustTargetTypeRefEquals(selected.storageCarrier, fact.storageCarrier) ||
-    !rustTargetTypeRefEquals(selected.bindingCarrier, fact.bindingCarrier)) {
-    return rejectProjection(element, context, "Binding normalization conflicts with its exact native projection and default.");
-  }
   const stored = checkedElement === undefined ? value : planRustCheckedSourceOptional(value, checkedElement, context);
-  if (selected.normalization === "identity" || selected.normalization === "checked-array") return stored;
+  if (fact.normalization === "identity" || fact.normalization === "checked-array") return stored;
   const fallback = initializer === undefined ? undefined : planExpression(initializer, context);
   if (fallback === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -409,15 +401,15 @@ function normalizeBindingValue(
     ));
     return undefined;
   }
-  if (selected.normalization === "default-on-absence") return {
+  if (fact.normalization === "default-on-absence") return {
     kind: "evaluate-then", effect: stored, discard: "unit", value: fallback,
   };
-  return rustOptionDefaultValue(stored, fallback, selected.storageCarrier, context, selected.bindingCarrier);
+  return rustOptionDefaultValue(stored, fallback, fact.storageCarrier, context, fact.bindingCarrier);
 }
 
 function ownedProjection(
   value: RustExpr,
-  carrier: RustBindingProjectionFact["projectedCarrier"],
+  carrier: RustBindingValueProjectionFact["projectedCarrier"],
 ): RustExpr | undefined {
   if (isRustCopyCarrier(carrier)) {
     return value;

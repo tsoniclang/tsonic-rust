@@ -281,7 +281,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         target?.fields[field.destinationIndex]?.type);
     }
     const binding = input.records.bindingProjection.get(node);
-    if (binding?.projection.kind === "object-rest") {
+    if (binding !== undefined && "bindingCarrier" in binding && binding.projection.kind === "object-rest") {
       const source = rustStructuralObjectCarrierValue(binding.sourceCarrier);
       const target = rustStructuralObjectCarrierValue(binding.bindingCarrier);
       for (const field of binding.projection.fields) recordField(node,

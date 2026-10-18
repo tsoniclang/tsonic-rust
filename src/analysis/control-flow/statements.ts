@@ -102,11 +102,14 @@ export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, s
   }
 }
 
-export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
+export function recordVariableStatementFacts(
+  walk: RustFactWalk,
+  statement: Node,
+  sourceFile: SourceFile,
+): void {
   if (walk.context.records.typeOnlyDeclarations.statement(walk, statement) !== undefined) return;
-  const moduleLevel = walk.context.ast.kindName(walk.context.ast.parent(statement)) === "KindSourceFile";
   const declarationList = VariableStatement_DeclarationList(walk.context.ast, statement);
-  recordVariableDeclarationListFacts(walk, declarationList, statement, sourceFile, moduleLevel);
+  recordVariableDeclarationListFacts(walk, declarationList, statement, sourceFile);
 }
 
 function recordVariableDeclarationListFacts(
@@ -114,7 +117,6 @@ function recordVariableDeclarationListFacts(
   declarationList: Node | undefined,
   owner: Node,
   sourceFile: SourceFile,
-  moduleLevel: boolean,
 ): void {
   const declarationSlots = VariableDeclarationList_Declarations(
     walk.context.ast,
@@ -133,103 +135,147 @@ function recordVariableDeclarationListFacts(
     return;
   }
   for (const declaration of declarationSlots as readonly Node[]) {
-    if (walk.context.records.compileTimeSource.get(declaration)) continue;
-    const diagnosticsBefore = walk.context.diagnostics.length;
-    recordCallableValueSignatureForDeclaration(walk, declaration);
-    const nativeCallable = moduleLevel
-      ? walk.context.records.moduleBinding.get(declaration)
-      : undefined;
-    const initializer = Node_Initializer(walk.context.ast, declaration);
-    const lexical = initializer !== undefined && walk.context.sourceCallables.directLexicalBinding(initializer) === declaration;
-    if (nativeCallable?.storage === "native-callable" || lexical) {
-      recordFunctionBodyFacts(
-        walk,
-        nativeCallable?.storage === "native-callable" ? nativeCallable.callableDeclaration : initializer!,
-        sourceFile,
-      );
-      continue;
+    recordVariableDeclarationFacts(walk, declaration, sourceFile);
+  }
+}
+
+export function recordVariableDeclarationFacts(
+  walk: RustFactWalk,
+  declaration: Node,
+  sourceFile: SourceFile,
+): void {
+  const { ast } = walk.context;
+  const declarationList = ast.parent(declaration);
+  const owner = declarationList === undefined ? undefined : ast.parent(declarationList);
+  if (ast.kindName(declaration) !== KindVariableDeclaration || declarationList === undefined || owner === undefined ||
+    ast.kindName(declarationList) !== KindVariableDeclarationList) {
+    failTargetAnalysisInvariant("tsonic-rust", "Variable admission requires its exact checked declaration owner.", declaration);
+  }
+  const moduleLevel = ast.kindName(owner) === KindVariableStatement &&
+    ast.kindName(ast.parent(owner)) === "KindSourceFile";
+  if (!moduleLevel) {
+    recordVariableDeclarationValueFacts(walk, declaration, owner, sourceFile, false);
+    return;
+  }
+  if (walk.resolving.has(declaration) || walk.rejectedExpressions.has(declaration)) return;
+  const previousCallable = walk.currentCallableDeclaration;
+  const previousGenerator = walk.currentGeneratorDeclaration;
+  walk.resolving.add(declaration);
+  walk.currentCallableDeclaration = undefined;
+  walk.currentGeneratorDeclaration = undefined;
+  try {
+    recordVariableDeclarationValueFacts(walk, declaration, owner, sourceFile, true);
+  } finally {
+    walk.currentCallableDeclaration = previousCallable;
+    walk.currentGeneratorDeclaration = previousGenerator;
+    walk.resolving.delete(declaration);
+  }
+}
+
+function recordVariableDeclarationValueFacts(
+  walk: RustFactWalk,
+  declaration: Node,
+  owner: Node,
+  sourceFile: SourceFile,
+  moduleLevel: boolean,
+): void {
+  if (walk.context.records.compileTimeSource.get(declaration)) return;
+  const diagnosticsBefore = walk.context.diagnostics.length;
+  recordCallableValueSignatureForDeclaration(walk, declaration);
+  const nativeCallable = moduleLevel
+    ? walk.context.records.moduleBinding.get(declaration)
+    : undefined;
+  const initializer = Node_Initializer(walk.context.ast, declaration);
+  const lexical = initializer !== undefined && walk.context.sourceCallables.directLexicalBinding(initializer) === declaration;
+  if (nativeCallable?.storage === "native-callable" || lexical) {
+    recordFunctionBodyFacts(
+      walk,
+      nativeCallable?.storage === "native-callable" ? nativeCallable.callableDeclaration : initializer!,
+      sourceFile,
+    );
+    return;
+  }
+  const annotationDiagnosticStart = walk.context.diagnostics.length;
+  const authoredType = Node_Type(walk.context.ast, declaration);
+  const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
+    resolveRustDeclaredBindingStorage(walk, declaration));
+  if (authoredType !== undefined && annotated === undefined) {
+    if (walk.context.diagnostics.length === annotationDiagnosticStart &&
+      !walk.rejectedExpressions.has(declaration) && !walk.rejectedExpressions.has(authoredType)) {
+      appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
+        "A native binding requires its authored type and finalized Rust storage carrier before initializer admission.",
+        authoredType, ["target.capability=rust.native-binding-carrier"]);
     }
-    const annotationDiagnosticStart = walk.context.diagnostics.length;
-    const authoredType = Node_Type(walk.context.ast, declaration);
-    const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
-      resolveRustDeclaredBindingStorage(walk, declaration));
-    if (authoredType !== undefined && annotated === undefined) {
-      if (walk.context.diagnostics.length === annotationDiagnosticStart &&
-        !walk.rejectedExpressions.has(declaration) && !walk.rejectedExpressions.has(authoredType)) {
-        appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
-          "A native binding requires its authored type and finalized Rust storage carrier before initializer admission.",
-          authoredType, ["target.capability=rust.native-binding-carrier"]);
-      }
-      walk.rejectedExpressions.add(declaration);
-      continue;
-    }
-    const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier;
-    const induction = walk.context.ast.kindName(owner) === KindForStatement
-      ? sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
-          sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
-        })
-      : undefined;
-    if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
-    const selected = annotated ?? (induction === undefined ? undefined :
-      resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));
-    const inferredContext = initializer !== undefined && walk.context.ast.is.IsConditionalExpression(initializer) &&
-      predeclared?.kind === "source-primitive" && predeclared.name === "float64"
-      ? undefined : predeclared;
-    const initializerCarrier = initializer === undefined
-      ? undefined
-      : resolveExpressionCarrier(walk, initializer, sourceFile, selected ?? inferredContext);
-    if (initializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
-      !reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated)) {
-      appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
-        "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
-        ["target.capability=rust.initializer-carrier"]);
-      walk.rejectedExpressions.add(declaration);
-      continue;
-    }
-    if (initializer !== undefined && (initializerCarrier === undefined || walk.rejectedExpressions.has(initializer))) {
-      if (!walk.rejectedExpressions.has(initializer) && !walk.rejectedExpressions.has(declaration)) {
-        appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
-          "A native binding requires an admitted source type and one finalized Rust value carrier.", declaration,
-          ["target.capability=rust.native-binding-carrier"]);
-      }
-      walk.rejectedExpressions.add(declaration);
-      continue;
-    }
-    const effective = initializer === undefined ? selected ?? predeclared
-      : rustEffectiveValueCarrier(walk.context.records, initializer) ?? initializerCarrier ?? selected ?? predeclared;
-    if (effective === undefined && !walk.rejectedExpressions.has(declaration) &&
-      (initializer === undefined || !walk.rejectedExpressions.has(initializer))) {
+    return;
+  }
+  const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier;
+  const induction = walk.context.ast.kindName(owner) === KindForStatement
+    ? sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
+        sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
+      })
+    : undefined;
+  if (induction !== undefined) resolveExpressionCarrier(walk, induction.bound, sourceFile, undefined);
+  const selected = annotated ?? (induction === undefined ? undefined :
+    resolveRustTargetTypeRef(declaration, rustResolutionContext(walk, declaration), walk.operationOptions));
+  const inferredContext = initializer !== undefined && walk.context.ast.is.IsConditionalExpression(initializer) &&
+    predeclared?.kind === "source-primitive" && predeclared.name === "float64"
+    ? undefined : predeclared;
+  const initializerCarrier = initializer === undefined
+    ? undefined
+    : resolveExpressionCarrier(walk, initializer, sourceFile, selected ?? inferredContext);
+  if (initializer !== undefined && annotated !== undefined && initializerCarrier !== undefined &&
+    !reconcileRequiredCarrier(walk, initializer, initializerCarrier, annotated)) {
+    appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
+      "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
+      ["target.capability=rust.initializer-carrier"]);
+    walk.rejectedExpressions.add(declaration);
+    return;
+  }
+  if (initializer !== undefined && (initializerCarrier === undefined || walk.rejectedExpressions.has(initializer))) {
+    if (!walk.rejectedExpressions.has(initializer) && !walk.rejectedExpressions.has(declaration)) {
       appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
         "A native binding requires an admitted source type and one finalized Rust value carrier.", declaration,
         ["target.capability=rust.native-binding-carrier"]);
     }
-    if (effective !== undefined) {
-      setCarrierFact(walk, declaration, effective);
-      const name = Node_Name(walk.context.ast, declaration);
-      const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
-      if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
-        !recordBindingPatternFacts(walk, name, effective)) {
-        appendRustDiagnostic(
-          walk,
-          "RUST_BINDING_PATTERN_NOT_CLOSED",
-          "Binding pattern has no total Rust projection from its exact finalized source carrier.",
-          name,
-          ["target.capability=rust.binding-pattern"],
-        );
-      }
-      const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
-      if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
-        walk.context.records.moduleBindings.value(walk, declaration, declarationKind, effective);
-      }
-      if (moduleLevel && declarationKind === "const" && initializer !== undefined &&
-        initializerCarrier !== undefined && rustTargetTypeRefEquals(effective, initializerCarrier) &&
-        walk.context.diagnostics.length === diagnosticsBefore &&
-        sourceDeclarationHasOnlyTypeUses(walk.context.source.navigation.declarationUseSummary(declaration)) &&
-        rustMetadataInitializerIsHarmless(walk, initializer, effective)) {
-        requireRustRecord(walk.context.requiredRecords, "compileTimeSource", declaration,
-          "admitted metadata-only constant", "recordVariableDeclarationListFacts");
-        walk.context.records.compileTimeSources.erase(declaration);
-      }
+    walk.rejectedExpressions.add(declaration);
+    return;
+  }
+  const effective = initializer === undefined ? selected ?? predeclared
+    : rustEffectiveValueCarrier(walk.context.records, initializer) ?? initializerCarrier ?? selected ?? predeclared;
+  if (effective === undefined && !walk.rejectedExpressions.has(declaration) &&
+    (initializer === undefined || !walk.rejectedExpressions.has(initializer))) {
+    appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
+      "A native binding requires an admitted source type and one finalized Rust value carrier.", declaration,
+      ["target.capability=rust.native-binding-carrier"]);
+  }
+  if (effective !== undefined) {
+    setCarrierFact(walk, declaration, effective);
+    const name = Node_Name(walk.context.ast, declaration);
+    const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
+    if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+      (!moduleLevel || walk.context.records.moduleBinding.get(declaration)?.storage !== "module-pattern") &&
+      !recordBindingPatternFacts(walk, name, effective)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_BINDING_PATTERN_NOT_CLOSED",
+        "Binding pattern has no total Rust projection from its exact finalized source carrier.",
+        name,
+        ["target.capability=rust.binding-pattern"],
+      );
+      return;
+    }
+    const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
+    if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
+      walk.context.records.moduleBindings.value(walk, declaration, declarationKind, effective);
+    }
+    if (moduleLevel && declarationKind === "const" && initializer !== undefined &&
+      initializerCarrier !== undefined && rustTargetTypeRefEquals(effective, initializerCarrier) &&
+      walk.context.diagnostics.length === diagnosticsBefore &&
+      sourceDeclarationHasOnlyTypeUses(walk.context.source.navigation.declarationUseSummary(declaration)) &&
+      rustMetadataInitializerIsHarmless(walk, initializer, effective)) {
+      requireRustRecord(walk.context.requiredRecords, "compileTimeSource", declaration,
+        "admitted metadata-only constant", "recordVariableDeclarationListFacts");
+      walk.context.records.compileTimeSources.erase(declaration);
     }
   }
 }
@@ -445,7 +491,7 @@ export function recordStatementFacts(
     const initializer = ForStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
       if (walk.context.ast.kindName(initializer) === KindVariableDeclarationList) {
-        recordVariableDeclarationListFacts(walk, initializer, statement, sourceFile, false);
+        recordVariableDeclarationListFacts(walk, initializer, statement, sourceFile);
       } else resolveExpressionCarrier(walk, initializer, sourceFile, undefined);
     }
     const condition = ForStatement_Condition(walk.context.ast, statement);

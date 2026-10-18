@@ -24,6 +24,7 @@ import type {
 import {
   Node_Expression,
   Node_Type,
+  sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -523,12 +524,13 @@ function rustTypedLocationStorageRoot(
   const declaration = root?.declaration;
   if (expression === undefined || declaration === undefined ||
     (context.ast.kindName(declaration) !== "KindVariableDeclaration" &&
+      context.ast.kindName(declaration) !== "KindBindingElement" &&
       context.ast.kindName(declaration) !== "KindParameter")) {
     return undefined;
   }
   let owner = context.ast.parent(declaration);
   let functionLocal = false;
-  let moduleBinding = false;
+  const moduleBinding = sourceDeclarationIsModuleScoped(declaration, context.ast);
   while (owner !== undefined) {
     const kind = context.ast.kindName(owner);
     if (kind === "KindFunctionDeclaration" ||
@@ -540,7 +542,6 @@ function rustTypedLocationStorageRoot(
       break;
     }
     if (kind === "KindSourceFile") {
-      moduleBinding = context.ast.kindName(declaration) === "KindVariableDeclaration";
       break;
     }
     owner = context.ast.parent(owner);

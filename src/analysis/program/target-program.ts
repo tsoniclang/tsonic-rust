@@ -30,6 +30,7 @@ import { analyzeRustReadOwnership, prepareRustReadOwnership, prepareRustCaptureR
   completeRustCaptureReadOwnership } from "../ownership/reads.js";
 import { analyzeRustNativeInputs } from "../ownership/native-places.js";
 import { analyzeRustNativeResultLoans } from "../ownership/result-loans.js";
+import { analyzeRustCarriedLoanAdmission } from "../ownership/result-loan-flow.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
@@ -445,6 +446,7 @@ export function analyzeRustTargetProgram(
       nativeContextFor(fileName, undefined, callableValues.value)));
   if (nativeGenericErrors.kind === "rejected") return nativeGenericErrors;
   const ownership = analyzeRustReadOwnership({ requirements: readRequirements.requirements,
+    operands: callableValues.value.emissionContexts.operands,
     movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
     borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
@@ -457,9 +459,14 @@ export function analyzeRustTargetProgram(
     ownership: ownership.ownership,
     physicalEmissionContexts: callableValues.value.emissionContexts, statementCompletions: statementCompletions.plan });
   if (nativeInputs.kind === "rejected") return rejectedTargetStage(nativeInputs.diagnostics);
-  const nativeResultLoans = analyzeRustNativeResultLoans({ storage: context.sourceStorage,
+  const preparedNativeResultLoans = analyzeRustNativeResultLoans({ storage: context.sourceStorage,
     physicalEmissionContexts: callableValues.value.emissionContexts, nativeInputs: nativeInputs.inputs,
     definitions: typeDefinitions });
+  const nativeLoanAdmission = analyzeRustCarriedLoanAdmission({ source: context.source, storage: context.sourceStorage,
+    flow: ownershipFlow.flow, contexts: callableValues.value.emissionContexts, nativeInputs: nativeInputs.inputs,
+    nativeResults: preparedNativeResultLoans, ownership: ownership.ownership, records, query: request.nativeRetention });
+  if (nativeLoanAdmission.kind === "rejected") return rejectedTargetStage(nativeLoanAdmission.diagnostics);
+  const nativeResultLoans = nativeLoanAdmission.nativeResults;
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
     navigation: context.source.navigation, physicalEmissionContexts: callableValues.value.emissionContexts,
     nativeInputs: nativeInputs.inputs });

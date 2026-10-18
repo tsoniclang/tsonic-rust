@@ -219,20 +219,36 @@ function bindNativeResultLoans(
 ): RustFinalizedNativeResultLoans | undefined {
   const contract = snapshotClosedMetadata(declared);
   const inputs = rustFinalizedSourceInputs(abi);
+  const inputsByIdentity = new Map<string, typeof inputs>();
+  const bind = (origin: RustFinalizedNativeResultLoans["inputLoans"][number]["origin"]) => {
+    const identity = origin.input.kind === "receiver" ? "receiver" : `argument:${origin.input.sourceIndex}`;
+    let selected = inputsByIdentity.get(identity);
+    if (selected === undefined) {
+      selected = inputs.filter(input => input.source.kind === origin.input.kind &&
+        (input.source.kind === "receiver" || origin.input.kind === "argument" && input.source.sourceIndex === origin.input.sourceIndex));
+      inputsByIdentity.set(identity, selected);
+    }
+    if (selected.length === 0 || origin.kind === "borrow" && selected.some(input =>
+      origin.mutable ? input.mode !== "mut-ref" : input.mode !== "ref" && input.mode !== "mut-ref")) return undefined;
+    return Object.freeze(selected.map(input => Object.freeze({ origin, input })));
+  };
+  const inputLoans: RustFinalizedNativeResultLoans["inputLoans"][number][] = [];
+  for (const origin of contract.inputLoans.origins) {
+    const selected = bind(origin);
+    if (selected === undefined) return undefined;
+    inputLoans.push(...selected);
+  }
   const loans: RustFinalizedNativeResultLoans["loans"][number][] = [];
   for (const loan of contract.loans) {
     const origins: RustFinalizedNativeResultLoans["loans"][number]["origins"][number][] = [];
     for (const origin of loan.origins) {
-      const selected = inputs.filter(input => input.source.kind === origin.input.kind &&
-        (input.source.kind === "receiver" || origin.input.kind === "argument" &&
-          input.source.sourceIndex === origin.input.sourceIndex));
-      if (selected.length === 0 || origin.kind === "borrow" && selected.some(input =>
-        origin.mutable ? input.mode !== "mut-ref" : input.mode !== "ref" && input.mode !== "mut-ref")) return undefined;
-      for (const input of selected) origins.push(Object.freeze({ origin, input }));
+      const selected = bind(origin);
+      if (selected === undefined) return undefined;
+      origins.push(...selected);
     }
     loans.push(Object.freeze({ loan, origins: Object.freeze(origins) }));
   }
-  return Object.freeze({ contract, loans: Object.freeze(loans) });
+  return Object.freeze({ contract, inputLoans: Object.freeze(inputLoans), loans: Object.freeze(loans) });
 }
 
 function mappingUsesSourceReceiver(

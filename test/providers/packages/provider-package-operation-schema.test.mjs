@@ -16,7 +16,7 @@ const int32Carrier = { kind: "source-primitive", name: "int32" };
 
 test("declared native result provenance survives immutable provider materialization without invented drop evidence", () => {
   const contract = { kind: "complete", declarationIdentity: "native::run", resultTypeIdentity: "i32",
-    valueTypeIdentity: "i32", loans: [] };
+    valueTypeIdentity: "i32", loans: [], inputLoans: { kind: "complete", origins: [] } };
   const source = definition();
   source.operations[0].resultLoans = contract;
   const provider = createRustProviderPackage(source);
@@ -32,7 +32,7 @@ test("declared native result provenance survives immutable provider materializat
 
 test("native result provenance refuses unknown-as-empty, executable data and foreign input positions", () => {
   const complete = { kind: "complete", declarationIdentity: "native::run", resultTypeIdentity: "i32",
-    valueTypeIdentity: "i32", loans: [] };
+    valueTypeIdentity: "i32", loans: [], inputLoans: { kind: "complete", origins: [] } };
   const origin = { kind: "borrow", input: { kind: "receiver" }, inputType: "native::Owner", inputPath: [],
     lifetime: "native::owner", mutable: false };
   const loan = { resultPath: ["argument:0"], lifetime: "native::owner", origins: [origin] };
@@ -40,6 +40,7 @@ test("native result provenance refuses unknown-as-empty, executable data and for
   const accessor = Object.defineProperty({ ...complete }, "loans", { enumerable: true, get() { reads += 1; return []; } });
   const sparse = []; sparse.length = 1;
   for (const [label, resultLoans] of [
+    ["removed completion-only shape", { kind: "complete", declarationIdentity: "native::run", resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [] }],
     ["missing contract", undefined], ["accessor", accessor], ["unknown kind", { ...complete, kind: "assumed" }],
     ["native cleanup guess", { ...complete, dropProven: true }],
     ["unknown as empty", { ...complete, kind: "unavailable", reasons: [] }],

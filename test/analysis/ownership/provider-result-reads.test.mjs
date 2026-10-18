@@ -62,6 +62,7 @@ function read(holder: Holder): unknown { return observe(${form === "index" ? "ho
   const prepared = prepareRustReadOwnership(input);
   assert.equal(prepared.kind, "resolved", "the raw-result requirements are complete before generic closure");
   const selected = analyzeRustReadOwnership({ requirements: prepared.requirements, movingReads: new Set(), captures: new Map(),
+    operands: [{ node }],
     nativeStorage: { operandFor: () => ({ kind: "resolved", carrier }) }, borrowEffects: effects,
     definitions: emptyRustTypeDefinitions, typeFamilies: { implementation: () => undefined },
     genericRequirements: { contractFor: declaration => Object.freeze({ declaration,
@@ -155,13 +156,13 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
     operations: [{ exportId: "@raw/native::NativeText", memberId: "@raw/native::NativeText.text", operationKind: "property",
       target: { form: "field", name: "text" }, resultCarrier: string, resultConversion: rustBorrowedStrToStringValueConversion,
       resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::NativeText::text",
-        resultTypeIdentity: "&'static str", valueTypeIdentity: "&'static str", loans: [] },
+        resultTypeIdentity: "&'static str", valueTypeIdentity: "&'static str", loans: [], inputLoans: { kind: "complete", origins: [] } },
     }, { exportId: "@raw/native::count", operationKind: "method",
       target: { form: "call", path: "raw_field_fixture::count", argModes: ["value"],
         argConversions: [rustStringToBorrowedStrValueConversion] },
       parameterCarriers: [string], resultCarrier: integer,
       resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::count",
-        resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [] },
+        resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [], inputLoans: { kind: "complete", origins: [] } },
     }],
     crates: [{ crateName: "raw_field_fixture", cargoPath: fixtureRoot }],
   });

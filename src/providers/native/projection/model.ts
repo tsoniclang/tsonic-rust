@@ -4,12 +4,16 @@ import type {
   RustCompilerDependency,
   RustCompilerGenericParameter,
   RustCompilerStandardTypeLocation,
+  RustCompilerFunction,
+  RustCompilerType,
 } from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface RustCompilerProviderProjection {
+  readonly nativeDeclarations: ReadonlyMap<string, RustCompilerNativeDeclarationProjection>;
+  readonly nativeApplications: readonly RustCompilerNativeTypeProjection[];
   readonly completeExports: ReadonlySet<string>;
   readonly declarationModel: ProviderDeclarationModel;
   readonly module: RustProviderModuleDefinition;
@@ -17,6 +21,33 @@ export interface RustCompilerProviderProjection {
   readonly types: readonly RustProviderTypeDefinition[];
   readonly carrierPaths: ReadonlyMap<string, string>;
   readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
+}
+
+export interface RustCompilerNativeDeclarationProjection {
+  readonly declaration: RustCompilerFunction;
+  readonly dependency: RustCompilerDependency;
+  readonly publicPath: readonly string[];
+  readonly method: string | undefined;
+  readonly ownerParameters: readonly RustCompilerGenericParameter[];
+  readonly parameters: readonly {
+    readonly native: RustCompilerGenericParameter;
+    readonly projected: import("../../../target-model/operations/model.js").RustProviderGenericParameter;
+  }[];
+}
+
+export interface RustCompilerNativeTypeProjection {
+  readonly native: RustCompilerType;
+  readonly target: TargetTypeRef;
+}
+
+export interface RustNativeResultRetentionRequest {
+  readonly id: string;
+  readonly declarationIdentity: string;
+  readonly resultTypeIdentity: string;
+  readonly phase: "value" | "pending" | "completion";
+  readonly origin: import("../../../target-model/operations/result-loans.js").RustNativeResultLoanOrigin;
+  readonly application: import("../../../target-model/types/carriers/generic-inference.js").RustTargetGenericBindings;
+  readonly arguments: readonly import("../../../target-model/types/model.js").RustTargetGenericArgument[];
 }
 
 export interface ProjectionOwner {
@@ -33,6 +64,8 @@ export interface ProjectionContext {
   readonly imports: Map<string, Set<string>>;
   readonly carrierPaths: Map<string, string>;
   readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
+  readonly nativeDeclarations: Map<string, RustCompilerNativeDeclarationProjection>;
+  readonly nativeApplications: RustCompilerNativeTypeProjection[];
   readonly standardTypes: ReadonlyMap<string, RustCompilerStandardTypeLocation>;
   readonly localTypeLocations: ReadonlyMap<string, {
     readonly sourceExportName: string;
