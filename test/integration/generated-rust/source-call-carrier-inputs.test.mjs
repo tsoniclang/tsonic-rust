@@ -29,8 +29,8 @@ fn native_inputs_execute_without_allocation_or_floating_carriers() {
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);

@@ -35,7 +35,7 @@ mod invocation_input_cost {
     }
 }
 `);
-    runCargo(directory, ["fmt", "--all"]);
+    runCargo(directory, ["fmt"]);
     runCargo(directory, ["check", "--all-targets", "--offline"]);
     runCargo(directory, ["clippy", "--all-targets", "--offline", "--", "-D", "warnings"]);
     runCargo(directory, ["test", "--release", "--offline", "--", "--test-threads=1"]);

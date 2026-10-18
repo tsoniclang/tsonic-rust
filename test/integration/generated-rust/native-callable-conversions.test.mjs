@@ -156,7 +156,7 @@ fn forwarding_retains_only_the_actual_right_native_error() {
 `);
     execFileSync("rustfmt", ["--edition", "2024", path], { cwd: root, timeout: 30_000 });
     runCargo(root, ["generate-lockfile", "--offline"]);
-    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["fmt", "--check"]);
     runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const execution = runCargo(root, ["test", "--locked", "--offline", "--", "--nocapture"]);
@@ -248,7 +248,7 @@ fn an_actual_borrow_in_either_result_branch_keeps_its_region() {
   writeFileSync(path, controls);
   execFileSync("rustfmt", ["--edition", "2024", path], { cwd: root, timeout: 30_000 });
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--locked", "--offline"]);

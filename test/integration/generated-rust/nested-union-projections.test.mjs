@@ -60,7 +60,7 @@ mod union_inspection_cost {
 }
 `);
     runCargo(directory, ["generate-lockfile", "--offline"]);
-    runCargo(directory, ["fmt", "--all"]);
+    runCargo(directory, ["fmt"]);
     runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     runCargo(directory, ["test", "--locked", "--offline"]);
   });

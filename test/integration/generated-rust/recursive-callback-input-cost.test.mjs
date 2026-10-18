@@ -37,7 +37,7 @@ for (const profile of ["native", "js"]) {
     const index = result.artifacts.find(artifact => artifact.path === "src/index.rs");
     assert.equal(index !== undefined, true, "generated native module");
     runCargo(project, ["generate-lockfile", "--offline"]);
-    runCargo(project, ["fmt", "--all", "--check"]);
+    runCargo(project, ["fmt", "--check"]);
     appendFileSync(join(project, "src", "index.rs"), `
 #[cfg(test)]
 mod input_cost {
@@ -61,7 +61,7 @@ mod input_cost {
     }
 }
 `);
-    runCargo(project, ["fmt", "--all"]);
+    runCargo(project, ["fmt"]);
     runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     runCargo(project, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);

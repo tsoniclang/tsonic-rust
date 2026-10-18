@@ -145,7 +145,7 @@ fn physical_values_cross_arm_number_equality_and_native_cost() {
     appendFileSync(join(root, "src/index.rs"), proof);
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt"]);
-    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["fmt", "--check"]);
     runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const checked = runCargo(root, ["test", "--locked", "--offline", "--", "--nocapture"]);
@@ -465,7 +465,7 @@ fn exact_per_operation_native_cost() {
     appendFileSync(join(root, "src/index.rs"), proof);
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt"]);
-    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["fmt", "--check"]);
     runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const checked = runCargo(root, ["test", "--locked", "--offline", "--", "--nocapture"]);

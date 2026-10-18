@@ -28,8 +28,8 @@ test("generic JS future alternatives execute exact integer outputs and errors wi
   assert.doesNotMatch(generated, /transmute|Box::leak|9007199254740992/u);
   const root = writeGeneratedProject("generic_js_future_completions", result.artifacts);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["run", "--locked", "--offline"]);
 });

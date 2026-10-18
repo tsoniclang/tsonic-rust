@@ -316,7 +316,7 @@ fn main() {
   mkdirSync(joinPath(project, "src"), { recursive: true });
   writeFileSync(joinPath(project, "src/main.rs"), source);
   runCargo(project, ["generate-lockfile", "--offline"]);
-  runCargo(project, ["fmt", "--all"]);
+  runCargo(project, ["fmt"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(project, ["run", "--locked", "--offline"]);
 });

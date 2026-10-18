@@ -71,7 +71,7 @@ fn borrowed_native_operations_preserve_their_owned_results() {
   const format = spawnSync("rustfmt", ["--edition", "2021", nativePath], { encoding: "utf8" });
   assert.equal(format.status, 0, format.stderr);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--all-targets", "--locked", "--offline"]);

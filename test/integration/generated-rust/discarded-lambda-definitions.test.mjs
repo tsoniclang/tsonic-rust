@@ -16,7 +16,7 @@ for (const surfaces of [[], ["js"]]) {
     assertNoTargetDiagnostics(result.diagnostics);
     const directory = writeGeneratedProject(`discarded-lambda-definitions-${lane}`, result.artifacts);
     runCargo(directory, ["generate-lockfile", "--offline"]);
-    runCargo(directory, ["fmt", "--all", "--check"]);
+    runCargo(directory, ["fmt", "--check"]);
     appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod discarded_definition_cost {\nuse super::*;\n${nativeOwnershipCostSupport(directory)}
       #[test]
       fn uninvoked_definitions_do_not_allocate() {
@@ -25,7 +25,7 @@ for (const surfaces of [[], ["js"]]) {
           assert_eq!(cost, Cost::default());
       }
     }\n`);
-    runCargo(directory, ["fmt", "--all"]);
+    runCargo(directory, ["fmt"]);
     runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
@@ -41,7 +41,7 @@ for (const surfaces of [[], ["js"]]) {
     assertNoTargetDiagnostics(result.diagnostics);
     const directory = writeGeneratedProject(`retained-default-lambda-${lane}`, result.artifacts);
     runCargo(directory, ["generate-lockfile", "--offline"]);
-    runCargo(directory, ["fmt", "--all", "--check"]);
+    runCargo(directory, ["fmt", "--check"]);
     runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     runCargo(directory, ["run", "--release", "--locked", "--offline"]);
   });

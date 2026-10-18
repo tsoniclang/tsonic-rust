@@ -34,7 +34,11 @@ export function runCargo(projectRoot, args) {
 export function validateGeneratedProject(name, artifacts, { run = false } = {}) {
   const projectRoot = writeGeneratedProject(name, artifacts);
   runCargo(projectRoot, ["generate-lockfile", "--offline"]);
-  runCargo(projectRoot, ["fmt", "--all", "--check"]);
+  for (const artifact of artifacts) {
+    if (artifact.path === "Cargo.toml" || artifact.path.endsWith("/Cargo.toml")) {
+      runCargo(dirname(join(projectRoot, artifact.path)), ["fmt", "--check"]);
+    }
+  }
   runCargo(projectRoot, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(projectRoot, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(projectRoot, ["test", "--locked", "--offline"]);
