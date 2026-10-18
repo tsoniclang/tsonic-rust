@@ -476,7 +476,7 @@ export class Consumer extends EngineBase {
   ]);
   const consumerRoot = join(combined, "consumer");
   runCargo(consumerRoot, ["generate-lockfile", "--offline"]);
-  runCargo(consumerRoot, ["fmt", "--all", "--check"]);
+  runCargo(consumerRoot, ["fmt", "--check"]);
   runCargo(consumerRoot, ["check", "--all-targets", "--locked", "--offline"]);
 });
 

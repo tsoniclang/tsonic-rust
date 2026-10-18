@@ -101,7 +101,7 @@ mod native_lifetime_control {
     ? { ...artifact, text: source } : artifact.path === "src/lib.rs"
       ? { ...artifact, text: "pub mod index;\n" } : artifact));
   runCargo(project, ["generate-lockfile", "--offline"]);
-  runCargo(project, ["fmt", "--all"]);
+  runCargo(project, ["fmt"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(project, ["test", "--locked", "--offline"]);
   appendFileSync(join(project, "src/index.rs"), `

@@ -143,7 +143,7 @@ fn physical_values_cross_arm_number_equality_and_native_cost() {
       artifact.path === "src/index.rs" ? { ...artifact, text: artifact.text + proof } : artifact));
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt"]);
-    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["fmt", "--check"]);
     runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const checked = runCargo(root, ["test", "--locked", "--offline", "--", "--nocapture"]);
@@ -464,7 +464,7 @@ fn exact_per_operation_native_cost() {
     const root = writeGeneratedProject(`inferred-numeric-arrays-${lane}`, artifacts);
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt"]);
-    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["fmt", "--check"]);
     runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const checked = runCargo(root, ["test", "--locked", "--offline", "--", "--nocapture"]);

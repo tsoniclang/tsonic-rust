@@ -47,7 +47,7 @@ function verifyProviderSource(sourceText, records = false) {
     writeFileSync(file, artifact.text);
   }
   for (const args of [
-    ["generate-lockfile", "--offline"], ["fmt", "--all", "--check"],
+    ["generate-lockfile", "--offline"], ["fmt", "--check"],
     ["check", "--all-targets", "--locked", "--offline"],
     ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"],
     ["test", "--locked", "--offline"], ["run", "--locked", "--offline"],

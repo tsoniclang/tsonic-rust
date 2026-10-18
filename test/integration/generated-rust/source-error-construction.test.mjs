@@ -87,8 +87,8 @@ fn terminal_owned_inputs_have_no_copy_and_retained_inputs_have_one_native_copy()
 }
 `);
     runCargo(root, ["generate-lockfile", "--offline"]);
-    runCargo(root, ["fmt", "--all"]);
-    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["fmt"]);
+    runCargo(root, ["fmt", "--check"]);
     runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     runCargo(root, ["test", "--release", "--locked", "--offline"]);
   });
@@ -142,8 +142,8 @@ fn optional_and_required_inputs_match_native_costs() {
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);
 });
