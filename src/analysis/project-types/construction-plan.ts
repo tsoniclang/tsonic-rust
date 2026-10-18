@@ -9,7 +9,6 @@ import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, 
 import type { RustObjectRepresentationPlan } from "./object-representation.js";
 import type { RustFrameCallableDefinition, RustFrameCallablePlan } from "../callables/frame-values.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
-import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustConstructionReadiness, type RustConstructionExpression, type RustConstructionPoint,
   type RustConstructionPointQueries } from "./construction-readiness.js";
@@ -57,7 +56,7 @@ export interface RustConstructionEmissionPlan {
   readonly frame: RustFrameCallableDefinition | undefined;
   readonly counterDisposition: { readonly kind: "absent" | "construction-only" }
     | { readonly kind: "retained"; readonly name: string };
-  readonly exposure: { readonly declaration: Node; readonly expression: Node; readonly carrier: TargetTypeRef } | undefined;
+  readonly exposure: { readonly declaration: Node; readonly expression: Node } | undefined;
   readonly issues: readonly RustConstructionIssue[];
   preparationFor(node: Node): RustConstructionPreparationSelection | undefined;
 }
@@ -227,21 +226,15 @@ function prepareRustConstructionEmission(input: RustConstructionAnalysisInput, d
   const fieldsByDeclaration = new Map(fields.map(field => [field.declaration, field]));
   const capturedStorage = new Map(fields.map(field => [field.declaration,
     validatedRustCapturedFieldStorageFact(field.declaration, input)]));
-  const frameCarrier = frame?.entries[0]?.implementations[0]?.carrier;
-  const frameValue = rustFrameCallableValue(frameCarrier);
-  const frameEntry = frameCarrier === undefined ? undefined : input.frames.entryFor(frameCarrier);
   let selectedExposure: RustConstructionEmissionPlan["exposure"];
   if (exposure !== undefined && frame !== undefined) {
     const point = readiness.pointFor(exposure.expression);
-    const exactFrame = frameCarrier !== undefined && input.frames.definitionFor(frameCarrier) === frame &&
-      frameEntry !== undefined && frame.entries.includes(frameEntry) && frameValue !== undefined &&
-      frameValue.environment.length === frameEntry.environmentIndexes.length &&
-      frame.environmentParameters.every((_parameter, index) => frameEntry.environmentIndexes.includes(index));
-    if (!exactFrame || point === undefined || fieldsByDeclaration.get(exposure.declaration)?.initializer !== exposure.expression ||
+    if (frame.activation.ownerDeclaration !== definition.declaration || point === undefined ||
+      fieldsByDeclaration.get(exposure.declaration)?.initializer !== exposure.expression ||
       frame.bindings.some(binding => !fieldsByDeclaration.has(binding.declaration) ||
         binding.initialization !== "deferred" && !point.initializedFields.includes(binding.declaration))) {
       issue(exposure.expression, "A retained constructor callback requires initialized native frame storage.");
-    } else selectedExposure = Object.freeze({ ...exposure, carrier: frameCarrier! });
+    } else selectedExposure = Object.freeze({ ...exposure });
   }
   const root = input.projectTypes.openCarrier(definition);
   let retainedCounter = frame !== undefined &&

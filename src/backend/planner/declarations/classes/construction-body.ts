@@ -5,14 +5,14 @@ import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/no
 import { failRustPlannerInvariant, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { renderRustReceiverAlias } from "../../objects/polymorphism/receiver-aliases.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeFromCarrierInContext, rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
 import { diagnosticInput, requireRustEmissionContext, rustContextForEmission, type RustPlanContext, type RustConstructionPreparation } from "../../program/plan-context.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { rustConstructionFieldStorage } from "../../objects/construction-field-storage.js";
 import { planRustValueFieldInput } from "../../objects/value-fields.js";
 import { createRustClassFrameValue, rustClassFrameOwner } from "../../objects/frame-storage.js";
 import { rustFrameBindingLocation } from "../../bindings/frame-storage.js";
-import { rustFrameCallableTypes } from "../../types/frame-callables.js";
+import { requireRustNativeFrameStorage } from "../../expressions/binding-storage.js";
 import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 
 export interface RustConstructionStorageField {
@@ -84,8 +84,10 @@ export function planRustConstructionBody(
   const rootName = allocateRustSyntheticName(context.syntheticNames, "constructed");
   const root: RustExpr = { kind: "path", path: rootName };
   const exposure = plan.emission.exposure;
-  const frameCarrier = exposure?.carrier;
-  const frameType = frameCarrier === undefined ? undefined : rustFrameCallableTypes(frameCarrier, context)?.frameType;
+  const frameStorage = exposure === undefined || frame === undefined ? undefined
+    : requireRustNativeFrameStorage(frame, context.emissionContext);
+  const frameType = frameStorage === undefined ? undefined
+    : rustTypeFromSelectedNativeCarrierInContext(frameStorage.holderCarrier, context);
   const retainedFrame: RustExpr | undefined = exposure === undefined ? undefined
     : { kind: "path", path: allocateRustSyntheticName(context.syntheticNames, "construction_frame") };
   if (retainedFrame !== undefined && frameType === undefined) failRustPlannerInvariant(
@@ -166,7 +168,7 @@ export function planRustConstructionBody(
     return { context: { ...selectedContext, expressionOverrides: overrides, valueFieldLocations: locations, capturedFieldOwners, capturedFieldIdentities },
       before: [...(allocated === undefined || retainedFrame?.kind !== "path" || frameType === undefined ? [] : [{ kind: "let" as const,
         name: retainedFrame.path, mutable: false, init: allocated,
-        type: { kind: "named" as const, path: "alloc::rc::Rc", genericArguments: [{ kind: "type" as const, type: frameType }] } }]),
+        type: frameType }]),
         ...(point.publishBefore ? publication() : [])],
       finish(statements) {
         const planned = point.publishMissingElse ? statements.map(statement => statement.kind === "if"
