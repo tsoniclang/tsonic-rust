@@ -23,6 +23,7 @@ export interface RustNativeCallableProtocol {
   readonly identity: string;
   readonly ownerFileName: string;
   readonly targetName: string;
+  readonly implicitSelf: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
   readonly boundProducerName?: string;
   readonly signature: RustCallableSignature;
   readonly method: {
@@ -71,6 +72,7 @@ export function createRustNativeCallableProtocolRegistry(input: {
         const identity = `native-protocol:${createHash("sha256").update(key).digest("hex")}`;
         const targetName = allocateRustGeneratedName(input.usedNames, `NativeCallable_${identity.slice(-16)}`);
         protocol = snapshotClosedMetadata({ ...contract, identity, targetName,
+          implicitSelf: { kind: "type-parameter", identity: `${identity}:Self`, name: "Self" },
           ...(method.binder.parameters.length === 0 ? {} : {
             boundProducerName: allocateRustGeneratedName(input.usedNames, `${targetName}Bound`),
           }),
@@ -130,7 +132,7 @@ export function rustNativeCallableProtocolResult(
   protocol: RustNativeCallableProtocol,
   definitions: RustTypeDefinitions,
 ): TargetTypeRef | undefined {
-  const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
+  const self = protocol.implicitSelf;
   const arguments_ = rustNativeCallableMethodArguments(protocol);
   const captures = [...arguments_.filter(argument => argument.kind === "lifetime"),
     ...rustTypeGenericArguments([self, ...protocol.signature.environmentParameters,

@@ -14,6 +14,9 @@ import { admitRustNativeValueDeclaration, admitRustNativeInterfaceFields,
 import { rustRuntimeRecordFieldTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selection.mjs";
+import { createRustNativeCallableProtocolRegistry, rustNativeCallableProtocolResult }
+  from "../../../dist/analysis/callables/native-protocols.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustProducerErrorTargetType } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 import { selectRustNativeTypeItemNames } from "../../../dist/analysis/names/source-output-identities.js";
@@ -205,6 +208,25 @@ test("one native selector enforces position and retains the exact callable lifet
   assert.equal(selected.carrier.lifetimeBinder.identity, "callback", "the exact native binder identity survives selection");
   assert.equal(printRustType(rustTypeFromCarrier(selected.carrier)), "for<'value> fn(&'value i32) -> i32",
     "binder and argument lifetimes are preserved in native syntax");
+});
+
+test("only the original explicitly bound native Self identity admits contextual Rust Self", () => {
+  const registry = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set() });
+  const selected = registry.bind("/src/protocol.ts", rustCallableTargetType([integer], integer));
+  assert.equal(selected !== undefined, true, "a real native protocol owns its original implicit binder");
+  const protocol = selected.protocol;
+  const input = selectionInput({ typeParameterNames: new Map([[protocol.implicitSelf.identity, protocol.implicitSelf.name]]) });
+  const logical = rustNativeCallableProtocolResult(protocol, emptyRustTypeDefinitions);
+  const native = selectRustNativeTypeCarrier(logical, input, "return");
+  assert.equal(native.kind, "resolved", "the exact protocol's associated error is a legal native Rust type");
+  assert.equal(printRustType(rustTypeFromSelectedNativeCarrier(native.carrier)), "Result<i32, Self::InvocationError>",
+    "the one canonical selector preserves contextual Self syntax");
+  for (const [label, carrier, context] of [
+    ["unbound source Self", { kind: "type-parameter", identity: "source:Self", name: "Self" }, input],
+    ["another native binder", { ...protocol.implicitSelf, identity: "different:Self" }, input],
+    ["missing native binder", protocol.implicitSelf, selectionInput()],
+    ["other reserved identifier", { kind: "type-parameter", identity: "source:crate", name: "crate" }, input],
+  ]) assert.equal(selectRustNativeTypeCarrier(carrier, context, "general").kind, "rejected", label);
 });
 
 test("selected native error identity never infects ordinary native name equality", () => {

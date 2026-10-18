@@ -32,8 +32,11 @@ export function planRustNativeCallableProtocolItems(context: RustPlanContext): r
 
 export function planRustNativeCallableProtocol(
   protocol: RustNativeCallableProtocol,
-  context: RustPlanContext,
+  enclosingContext: RustPlanContext,
 ): RustItem | undefined {
+  const context: RustPlanContext = { ...enclosingContext, typeParameterNames: new Map([
+    ...enclosingContext.typeParameterNames ?? [], [protocol.implicitSelf.identity, protocol.implicitSelf.name],
+  ]) };
   const signature = protocol.signature;
   const parameters = protocol.method.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context, "parameter"));
   const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);

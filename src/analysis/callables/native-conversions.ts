@@ -97,8 +97,8 @@ export function rustNativeCallableInputPhysicalSignature(
   if (selectedResult === undefined) return undefined;
   const result = substituteRustTargetGenerics(selectedResult, bindings.types, bindings.lifetimes, bindings.consts, (carrier, original) => {
     if (carrier.kind === "associated-type" && original.kind === "associated-type" && original.owner.kind === "type-parameter" &&
-      original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: input.trait };
-    return carrier.kind === "type-parameter" && carrier.identity === `${protocol.identity}:Self` ? input.implementation : carrier;
+      original.owner.identity === protocol.implicitSelf.identity) return { ...carrier, owner: input.implementation, trait: input.trait };
+    return carrier.kind === "type-parameter" && carrier.identity === protocol.implicitSelf.identity ? input.implementation : carrier;
   });
   const resultArguments = rustOnlyTypeGenericArguments(rustNamedTypeCarrierValue(result)?.genericArguments);
   return resultArguments?.length !== 2 ? undefined : snapshotClosedMetadata({

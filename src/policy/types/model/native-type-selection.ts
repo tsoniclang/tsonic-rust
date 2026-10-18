@@ -240,8 +240,9 @@ export function selectRustNativeTypeCarrier(
         return genericArguments === undefined ? undefined : rustNamedTargetType(type.id, path, genericArguments, [], undefined, [], undefined, []);
       }
       if (type.kind === "type-parameter") {
-        const name = input.typeParameterNames?.get(type.identity) ?? type.name;
-        return isValidRustIdentifier(name) ? { ...type, name }
+        const selectedName = input.typeParameterNames?.get(type.identity);
+        const name = selectedName ?? type.name;
+        return isValidRustIdentifier(name) || name === "Self" && selectedName === "Self" ? { ...type, name }
           : reject(type, "Native type parameter requires its selected physical Rust identifier.");
       }
       if (type.kind === "reference") {
