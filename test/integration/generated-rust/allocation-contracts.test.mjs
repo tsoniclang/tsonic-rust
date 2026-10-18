@@ -270,8 +270,8 @@ fn owned_results_and_borrowed_observations_match_handwritten_costs() {
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);
@@ -317,8 +317,8 @@ fn owned_capture_and_repeated_reads_match_handwritten_costs() {
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);
 });
@@ -332,7 +332,7 @@ test("pure captured string append matches handwritten mutable storage costs", { 
   assert.match(output, /borrow_mut\(\)\.push\('!'\)/u);
   const root = writeGeneratedProject("captured-append-cost", result.artifacts);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all", "--", "--check"]);
+  runCargo(root, ["fmt", "--", "--check"]);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
 use captured_append_cost::index;

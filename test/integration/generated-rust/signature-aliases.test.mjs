@@ -39,8 +39,8 @@ fn opaque_identity_retains_its_exact_implementation() { let _value = read::<i32>
     { path: "src/lib.rs", text: source },
   ]);
   runCargo(directory, ["generate-lockfile", "--offline"]);
-  runCargo(directory, ["fmt", "--all"]);
-  runCargo(directory, ["fmt", "--all", "--check"]);
+  runCargo(directory, ["fmt"]);
+  runCargo(directory, ["fmt", "--check"]);
   runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(directory, ["test", "--locked", "--offline"]);
@@ -75,7 +75,7 @@ fn exact_projection_preserves_native_output() {
     { path: "src/lib.rs", text: source },
   ]);
   runCargo(directory, ["generate-lockfile", "--offline"]);
-  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["fmt"]);
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(directory, ["test", "--locked", "--offline"]);
 });

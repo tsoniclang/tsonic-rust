@@ -48,8 +48,8 @@ test("canonical native blocks retain early result returns and direct branch loop
     { path: "src/lib.rs", text: `${source}\nfn identity(value: i32) -> i32 { value }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn direct_flow() {\n        assert_eq!(super::choose(Some(7)), Ok(7));\n        assert_eq!(super::choose(None), Ok(99));\n        assert_eq!(super::sum(), 3);\n        super::discard(Some(7));\n        super::discard(None);\n    }\n}\n` },
   ]);
   runCargo(project, ["generate-lockfile", "--offline"]);
-  runCargo(project, ["fmt", "--all"]);
-  runCargo(project, ["fmt", "--all", "--check"]);
+  runCargo(project, ["fmt"]);
+  runCargo(project, ["fmt", "--check"]);
   runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(project, ["test", "--release", "--locked", "--offline"]);

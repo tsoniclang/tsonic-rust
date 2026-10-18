@@ -99,7 +99,7 @@ mod contextual_async_cost {
 }
 `);
   runCargo(directory, ["generate-lockfile", "--offline"]);
-  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["fmt"]);
   runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   const executed = runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
   assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
@@ -169,7 +169,7 @@ mod direct_native_cost {
 }
 `);
     runCargo(directory, ["generate-lockfile", "--offline"]);
-    runCargo(directory, ["fmt", "--all"]);
+    runCargo(directory, ["fmt"]);
     runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
     const executed = runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
     assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));

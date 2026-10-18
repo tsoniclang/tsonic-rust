@@ -120,7 +120,7 @@ main();
   assert.doesNotMatch(output, /retained\.clone\(/u, "discarding a stored receiver never clones it");
   const root = writeGeneratedProject("r14-receiver-evaluation", result.artifacts);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt", "--check"]);
   writeFileSync(join(root, "src/index.rs"), output + `
 #[cfg(test)]
 mod native_receiver_cost {
@@ -143,8 +143,8 @@ mod native_receiver_cost {
     }
 }
 `);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);
@@ -480,8 +480,8 @@ mod provider_drop_tests {
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);
@@ -526,7 +526,7 @@ test("provider conversions borrow disjoint fields and snapshot values before ove
   }
   const root = writeGeneratedProject("provider-evaluation-order", result.artifacts);
   runCargo(root, ["generate-lockfile", "--offline"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt", "--check"]);
   writeFileSync(join(root, "src/index.rs"), output + `
 #[cfg(test)]
 mod native_provider_cost {
@@ -591,8 +591,8 @@ mod native_provider_cost {
     }
 }
 `);
-  runCargo(root, ["fmt", "--all"]);
-  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["fmt"]);
+  runCargo(root, ["fmt", "--check"]);
   runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["test", "--release", "--locked", "--offline"]);

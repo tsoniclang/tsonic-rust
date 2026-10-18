@@ -118,8 +118,8 @@ fn public_settled_results_keep_copied_values_and_canonical_rejection_identity() 
       const path = join(root, "src", "index.rs");
       writeFileSync(path, `${generated}\n${tests}\n}\n`);
       runCargo(root, ["generate-lockfile", "--offline"]);
-      runCargo(root, ["fmt", "--all"]);
-      runCargo(root, ["fmt", "--all", "--check"]);
+      runCargo(root, ["fmt"]);
+      runCargo(root, ["fmt", "--check"]);
       runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
       runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
       runCargo(root, ["test", "--locked", "--offline"]);
