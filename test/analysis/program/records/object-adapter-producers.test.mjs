@@ -6,6 +6,7 @@ import { rustCallableTargetType, rustSourceTypeCarrier, rustStructuralObjectTarg
 import { rustClassConstructorTargetType } from "../../../../dist/target-model/types/carriers/class-constructors.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { rustObjectReferenceViewEquals } from "../../../../dist/analysis/expressions/object-reference-views.js";
+import { nativeCallableConstructionFixture } from "../../../helpers/physical-callable-adapters.mjs";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -36,10 +37,34 @@ test("object and adapter families have one frozen reader, no generic writer and 
   }
 });
 
-function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", children: [] }, carrier = callable, receiver = false, fieldName = "value" } = {}) {
-  const literal = {};
-  const read = {};
-  const root = { children: [literal, read] };
+const copiedMethodSources = new WeakMap();
+
+function copiedFixture(builder, { method, carrier = callable, receiver = false, fieldName = "value" } = {}) {
+  const checked = nativeCallableConstructionFixture({ surfaces: [], files: { "index.ts": `
+export class Source {
+  value = 1;
+  method(value: number): number { return ${receiver ? "this.value" : "value"}; }
+}
+export const literal = { value: 1 };
+export const read = literal.value;
+` } });
+  const { ast, nativeNodes } = checked.input;
+  const methods = nativeNodes.filter(node => ast.is.IsMethodDeclaration(node));
+  const literals = nativeNodes.filter(node => ast.is.IsObjectLiteralExpression(node));
+  const reads = nativeNodes.filter(node => ast.is.IsPropertyAccessExpression(node));
+  assert.equal(methods.length, 1, "one actual checked method supplies the receiver-use unit fixture");
+  assert.equal(literals.length, 1, "one actual checked object supplies the selected contribution occurrence");
+  assert.equal(reads.length, receiver ? 2 : 1, "all original actual property accesses are accounted for");
+  const literal = literals[0];
+  const read = reads.at(-1);
+  if (method === undefined) {
+    method = methods[0];
+    copiedMethodSources.set(method, checked.input);
+  }
+  const methodSource = copiedMethodSources.get(method);
+  assert.equal(methodSource !== undefined && methodSource.isNativeNode(method), true,
+    "every selected implementation is its original checked native declaration, including inherited records");
+  const domain = new Set([...nativeNodes, ...methodSource.nativeNodes]);
   const shape = rustStructuralObjectTargetType("/source.ts", [
     { sourceName: fieldName, type: callable, presence: "required", readonly: false, method: true },
   ]);
@@ -49,12 +74,11 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
   const records = createRustRecordFixture({ targetOperation: { get: node => node === literal ? operation : node === read
     ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, valueSemantics: { kind: "method" } }
     : undefined } }, builder);
-  if (receiver) method.children = [{ kind: "KindThisExpression" }];
-  const walk = { context: { requiredRecords: [], records, diagnostics: [], ast: {
-    forEachChild(node, visit) { for (const child of node.children ?? []) visit(child); },
-    kindName: node => node.kind ?? "KindIdentifier",
-  } }, rejectedExpressions: new WeakSet(), resolving: new Set() };
-  return { walk, method, files: [root], finalize: () => builder.receiverIndependentMethods.finalize(walk, [root], () => "source") };
+  const files = checked.input.sourceFiles;
+  const walk = { context: { ...checked.input, requiredRecords: [], records, diagnostics: [],
+    isNativeNode: node => domain.has(node) }, rejectedExpressions: new WeakSet(), resolving: new Set() };
+  return { walk, method, files, domain,
+    finalize: () => builder.receiverIndependentMethods.finalize(walk, files, () => "source") };
 }
 
 test("copied-method producer admits only proved implementations and preserves inherited source identity", () => {
@@ -97,6 +121,8 @@ test("copied-method admission preserves publication order before later rejected-
   const rejected = copiedFixture(child, { fieldName: "other", receiver: true });
   const first = conflicting.walk.context.records.targetOperation;
   const second = rejected.walk.context.records.targetOperation;
+  const domain = new Set([...conflicting.domain, ...rejected.domain]);
+  conflicting.walk.context.isNativeNode = node => domain.has(node);
   conflicting.walk.context.records = createRustRecordFixture({
     targetOperation: { get: subject => first.get(subject) ?? second.get(subject) },
   }, child);
@@ -108,7 +134,7 @@ test("copied-method admission preserves publication order before later rejected-
 });
 
 test("copied-method batches preflight and admit one exact implementation shared by three demands", () => {
-  const method = { kind: "KindMethodDeclaration", children: [] };
+  const method = copiedFixture(createRustProgramRecordBuilder()).method;
   const canonical = { carrier: callable };
   let reads = 0;
   const inherited = createRustRecordFixture({ receiverIndependentMethod: { get: node => {
@@ -120,6 +146,8 @@ test("copied-method batches preflight and admit one exact implementation shared 
   const selected = ["first", "second", "third"].map(fieldName => copiedFixture(builder,
     { method, carrier: { ...callable }, fieldName }));
   const walk = selected[0].walk;
+  const domain = new Set(selected.flatMap(candidate => [...candidate.domain]));
+  walk.context.isNativeNode = node => domain.has(node);
   const sources = selected.map(candidate => candidate.walk.context.records.targetOperation);
   walk.context.records = createRustRecordFixture({ targetOperation: { get: subject => sources
     .map(source => source.get(subject)).find(operation => operation !== undefined) } }, builder);
@@ -133,6 +161,8 @@ test("contradictory copied-method candidates reject before publishing any new ba
   const builder = createRustProgramRecordBuilder();
   const first = copiedFixture(builder, { fieldName: "first" });
   const second = copiedFixture(builder, { fieldName: "second", method: first.method, carrier: wideCallable });
+  const domain = new Set([...first.domain, ...second.domain]);
+  first.walk.context.isNativeNode = node => domain.has(node);
   const sourceRecords = [first.walk.context.records.targetOperation, second.walk.context.records.targetOperation];
   first.walk.context.records = createRustRecordFixture({ targetOperation: { get: subject => sourceRecords
     .map(source => source.get(subject)).find(operation => operation !== undefined) } }, builder);

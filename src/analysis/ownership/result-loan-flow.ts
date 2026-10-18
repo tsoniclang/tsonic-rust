@@ -3,7 +3,7 @@ import { solveSourceFlow, type SourceControlFlowGraph, type SourceFlowLimits,
   type SourceFlowWork, type SourceStorageQueries, type SourceStorageSubject,
   type SourceStorageBindings, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { sourceBindingScope, type TargetSourceProgram } from "@tsonic/target-api/source";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustNativeResultRetentionRequest } from "../../providers/native/projection/model.js";
 import type { RustCompilerNativeRetentionFact } from "../../providers/native/model/model.js";
 import type { RustCallableEmissionContexts, RustPhysicalEmissionContext } from "../../target-model/records/physical-emission-contexts.js";
@@ -16,9 +16,12 @@ import { rustNativeStoragePathsDisjoint, rustNativeStorageRoot, rustNativeStorag
   type RustNativeStoragePathInput } from "../storage/native-paths.js";
 
 type Retention = RustNativeResultOwnership["retention"][number];
+type PreparedRetention = Pick<Retention, "loan" | "origin"> & {
+  readonly request: RustNativeResultRetentionRequest;
+};
 interface Loan {
-  readonly row: RustNativeResultOwnership;
-  readonly retention: Retention;
+  readonly row: RustPreparedNativeResultOwnership;
+  readonly retention: PreparedRetention;
   readonly origin: Extract<RustNativeResultOwnership["source"], { readonly kind: "resolved" }>["alternatives"][number];
   readonly root: RustNativeInputPlace;
 }
@@ -48,10 +51,10 @@ export function analyzeRustCarriedLoanAdmission(input: {
       evidence: ["target.capability=rust.native-provider.result-carried-loans"] });
   };
   const requests: RustNativeResultRetentionRequest[] = [];
-  const requested = new Map<RustPreparedNativeResultOwnership, readonly {
-    readonly request: RustNativeResultRetentionRequest; readonly loan: Retention["loan"]; readonly origin: Retention["origin"];
-  }[]>();
+  const requested = new Map<RustPreparedNativeResultOwnership, readonly PreparedRetention[]>();
+  const rows: RustPreparedNativeResultOwnership[] = [];
   for (const operations of input.nativeResults.values()) for (const contexts of operations.values()) for (const row of contexts.values()) {
+    rows.push(row);
     if (row.place.kind === "unavailable") {
       if ((row.operation.abi.result.resultLoans?.loans.length ?? 0) > 0 || row.operation.abi.result.kind === "async" &&
         ((row.operation.abi.result.resultLoans?.inputLoans.length ?? 0) > 0 ||
@@ -60,7 +63,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
       continue;
     }
     if (row.place.loans.length > 0 && row.source.kind === "unavailable") reject(row.node, row.source.reasons.join(" "));
-    const rows: NonNullable<ReturnType<typeof requested.get>>[number][] = [];
+    const retentions: PreparedRetention[] = [];
     for (const loan of row.place.loans) for (const origin of loan.origins) {
       const request: RustNativeResultRetentionRequest = Object.freeze({ id: `native-result-retention:${requests.length}`,
         declarationIdentity: row.place.native.contract.declarationIdentity,
@@ -68,9 +71,26 @@ export function analyzeRustCarriedLoanAdmission(input: {
         phase: loan.kind === "pending" ? "pending" : row.operation.abi.result.kind === "async" ? "completion" : "value",
         application: row.context.bindings, arguments: row.operation.abi.targetGenericArguments });
       requests.push(request);
-      rows.push(Object.freeze({ request, loan, origin }));
+      retentions.push(Object.freeze({ request, loan, origin }));
     }
-    requested.set(row, rows);
+    requested.set(row, retentions);
+  }
+  if (diagnostics.length > 0) return { kind: "rejected", diagnostics };
+  const admissions: (() => void)[] = [];
+  const paths: RustNativeStoragePathInput = { ast: input.source.ast, records: input.records, navigation: input.source.navigation };
+  for (const context of input.contexts.contexts) {
+    const selectedRows = rows.filter(row => row.context === context && requested.get(row)!.length > 0);
+    if (selectedRows.length === 0) continue;
+    const graphs = [...input.flow.graphs.values()].filter(graph => selectedRows.some(row => graph.sourcePoints.has(row.node)));
+    if (graphs.length === 0) { reject(selectedRows[0]!.node, "The actual native result has no checked canonical flow execution."); continue; }
+    const executions: Extract<RustNativeResultOwnership["source"], { readonly kind: "resolved" }>["alternatives"][number][] = [];
+    for (const row of selectedRows) if (row.source.kind === "resolved") for (const alternative of row.source.alternatives) {
+      if (!executions.some(execution => sameExecution(execution.origin, alternative.origin))) executions.push(alternative);
+    }
+    for (const graph of graphs) for (const execution of executions) {
+      const admission = prepare(graph, context, selectedRows, execution);
+      if (admission !== undefined) admissions.push(admission);
+    }
   }
   if (diagnostics.length > 0) return { kind: "rejected", diagnostics };
   const facts = requests.length === 0 ? [] : input.query(Object.freeze(requests));
@@ -78,7 +98,6 @@ export function analyzeRustCarriedLoanAdmission(input: {
   if (factsById.size !== requests.length || facts.length !== requests.length || requests.some(request => !factsById.has(request.id)))
     throw new Error("Native carried-loan admission requires exactly one original compiler fact per requested application.");
   const completed = new Map<Node, Map<RustNativeResultOwnership["operation"], Map<TargetUseSiteRef, RustNativeResultOwnership>>>();
-  const rows: RustNativeResultOwnership[] = [];
   for (const [node, operations] of input.nativeResults) {
     const selectedOperations = new Map<RustNativeResultOwnership["operation"], Map<TargetUseSiteRef, RustNativeResultOwnership>>();
     for (const [operation, contexts] of operations) {
@@ -93,36 +112,31 @@ export function analyzeRustCarriedLoanAdmission(input: {
         }
         const completedRow = Object.freeze({ ...row, retention: Object.freeze(retention) });
         selectedContexts.set(use, completedRow);
-        rows.push(completedRow);
       }
       selectedOperations.set(operation, selectedContexts);
     }
     completed.set(node, selectedOperations);
   }
   if (diagnostics.length > 0) return { kind: "rejected", diagnostics };
-  const paths: RustNativeStoragePathInput = { ast: input.source.ast, records: input.records, navigation: input.source.navigation };
-  for (const context of input.contexts.contexts) {
-    const selectedRows = rows.filter(row => row.context === context && row.retention.length > 0);
-    if (selectedRows.length === 0) continue;
-    const graphs = [...input.flow.graphs.values()].filter(graph => selectedRows.some(row => graph.sourcePoints.has(row.node)));
-    if (graphs.length === 0) { reject(selectedRows[0]!.node, "The actual native result has no checked canonical flow execution."); continue; }
-    const executions: Extract<RustNativeResultOwnership["source"], { readonly kind: "resolved" }>["alternatives"][number][] = [];
-    for (const row of selectedRows) if (row.source.kind === "resolved") for (const alternative of row.source.alternatives) {
-      if (!executions.some(execution => sameExecution(execution.origin, alternative.origin))) executions.push(alternative);
-    }
-    for (const graph of graphs) for (const execution of executions) analyze(graph, context, selectedRows, execution);
-  }
+  for (const admission of admissions) admission();
   return diagnostics.length === 0 ? { kind: "resolved", nativeResults: completed } : { kind: "rejected", diagnostics };
 
-  function analyze(graph: SourceControlFlowGraph, context: RustPhysicalEmissionContext,
-    rows: readonly RustNativeResultOwnership[],
-    execution: Extract<RustNativeResultOwnership["source"], { readonly kind: "resolved" }>["alternatives"][number]): void {
+  function retentionFact(loan: Loan): Extract<RustCompilerNativeRetentionFact, { readonly kind: "resolved" }> {
+    const fact = factsById.get(loan.retention.request.id);
+    if (fact?.kind !== "resolved") failTargetAnalysisInvariant("tsonic-rust",
+      "Native loan admission requires its identical completed compiler retention fact.", loan.row.node);
+    return fact;
+  }
+
+  function prepare(graph: SourceControlFlowGraph, context: RustPhysicalEmissionContext,
+    rows: readonly RustPreparedNativeResultOwnership[],
+    execution: Extract<RustNativeResultOwnership["source"], { readonly kind: "resolved" }>["alternatives"][number]): (() => void) | undefined {
     const loans: Loan[] = [];
     for (const row of rows) {
       if (row.source.kind !== "resolved" || !graph.sourcePoints.has(row.node)) continue;
       for (const origin of row.source.alternatives) {
         if (!sameExecution(origin.origin, execution.origin)) continue;
-        for (const retention of row.retention) {
+        for (const retention of requested.get(row)!) {
           if (retention.origin.kind !== "borrow") continue;
           const root = retention.origin.input;
           if (root.kind !== "place" || root.place.sourcePath === undefined) {
@@ -138,7 +152,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
       if (row.source.kind !== "resolved" || !graph.sourcePoints.has(row.node)) continue;
       for (const origin of row.source.alternatives) {
         if (!sameExecution(origin.origin, execution.origin)) continue;
-        for (const retention of row.retention) if (retention.origin.kind === "carried") {
+        for (const retention of requested.get(row)!) if (retention.origin.kind === "carried") {
           for (const source of borrowed) loans.push(Object.freeze({ row, retention, origin, root: source.root }));
         }
       }
@@ -159,6 +173,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
     for (const loan of loans) needed.add(loan.retention.origin.input.node);
     for (const operand of input.contexts.operands) if (operand.context === context && operand.origin.kind !== "call-input" &&
       operand.origin.evaluation.kind === "provider-source") needed.add(operand.origin.evaluation.slot.node);
+    for (const native of input.nativeInputs.values()) if (native.operand.context === context) needed.add(native.node);
     for (const node of needed) {
       const selected = input.storage.subjectFor(node);
       if (selected.kind === "unresolved") { reject(node, selected.reason); return; }
@@ -309,11 +324,12 @@ export function analyzeRustCarriedLoanAdmission(input: {
     }, input.limits);
     if (forward.kind === "unresolved") { reject(graph.declaration, forward.reason); return; }
     if (unresolvedValue !== undefined) { reject(graph.declaration, unresolvedValue); return; }
-    const demands = new Map<number, { readonly subject: SourceStorageSubject; readonly cleanup: boolean }[]>();
-    const addDemand = (point: number, subject: SourceStorageSubject, cleanup: boolean): void => {
-      const selected = demands.get(point) ?? [];
-      selected.push({ subject, cleanup });
-      demands.set(point, selected);
+    return () => {
+      const demands = new Map<number, { readonly subject: SourceStorageSubject; readonly cleanup: boolean }[]>();
+      const addDemand = (point: number, subject: SourceStorageSubject, cleanup: boolean): void => {
+        const selected = demands.get(point) ?? [];
+        selected.push({ subject, cleanup });
+        demands.set(point, selected);
     };
     for (const point of graph.points) {
       if (!forward.reachable.has(point.id) || point.source === undefined) continue;
@@ -329,7 +345,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
         addDemand(point.id, subject(point.operation.value), false);
       else if (point.operation.kind === "scope-exit") {
         for (const [value, selected] of state.storage) if (sourceBindingScope(value.node, input.source.ast) === point.operation.owner) {
-          if (input.records.bindingStorage.get(value.node) !== undefined && [...selected].some(([loan, owned]) => owned && loan.retention.cleanup === "retained")) {
+          if (input.records.bindingStorage.get(value.node) !== undefined && [...selected].some(([loan, owned]) => owned && retentionFact(loan).cleanup === "retained")) {
             reject(value.node, "The carried-loan cleanup requires the completed promoted native storage destruction endpoint.");
           } else addDemand(point.id, value, true);
         }
@@ -339,6 +355,12 @@ export function analyzeRustCarriedLoanAdmission(input: {
         const slot = operand.origin.evaluation.slot;
         if (slot.operationNode !== point.source || point.operation.kind !== "evaluate" && point.operation.kind !== "write-location") continue;
         addDemand(point.id, subject(slot.node), slot.evaluationOnly !== undefined);
+      }
+      for (const native of input.nativeInputs.values()) {
+        const origin = native.operand.origin;
+        if (native.operand.context !== context || origin.kind !== "call-input" || origin.operationNode !== point.source ||
+          point.operation.kind !== "evaluate" && point.operation.kind !== "write-location") continue;
+        addDemand(point.id, subject(native.node), false);
       }
     }
     const backward = solveSourceFlow<ReadonlySet<Loan>>(graph, {
@@ -361,7 +383,8 @@ export function analyzeRustCarriedLoanAdmission(input: {
           const values = valueFor(demand.subject, state, pointBindings.get(point.id)!, work);
           for (const [loan, owned] of values) {
             work.step();
-            if (demand.cleanup ? owned && loan.retention.cleanup === "retained" : loan.retention.use === "retained") selected.add(loan);
+            const fact = retentionFact(loan);
+            if (demand.cleanup ? owned && fact.cleanup === "retained" : fact.use === "retained") selected.add(loan);
           }
         }
         return selected;
@@ -415,6 +438,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
             !use.read.readsStorage && !use.read.sharedReference && use.read.formation.kind !== "borrow");
       }
     }
+    };
 
     function valueFor(selected: SourceStorageSubject, state: State, bindings: SourceStorageBindings, work: SourceFlowWork,
       position: "value" | "input" = "value"): Values {

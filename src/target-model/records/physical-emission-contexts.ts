@@ -13,6 +13,7 @@ import type { RustSourceErrorRegionSelection } from "./error-regions.js";
 import type { RustCallablePhysicalAdapter } from "./callable-adapters.js";
 import type { RustGenericCallableInvocationFact } from "./generic-callable-effects.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
+import type { RustCallablePhysicalSignature } from "../conversions/callable-physical.js";
 import type { RustNativeClassField } from "./native-value-declarations.js";
 
 export type RustPhysicalCallableSourceActivations =
@@ -119,15 +120,24 @@ export interface RustNativeStorageBinding extends RustNativeStorageBindingReques
   readonly owner:
     | { readonly kind: "binding"; readonly declaration: Node }
     | { readonly kind: "module"; readonly sourceFile: SourceFile }
-    | { readonly kind: "frame"; readonly declaration: Node; readonly fieldName: string; readonly frameCarrier: TargetTypeRef }
+    | RustNativeFrameStorageOwner
     | { readonly kind: "field"; readonly declaration: Node; readonly definingOwner: Node;
         readonly storageIndex: number; readonly targetName: string };
+}
+
+export interface RustNativeFrameStorageOwner {
+  readonly kind: "frame";
+  readonly declaration: Node;
+  readonly fieldName: string;
+  readonly frameCarrier: TargetTypeRef;
+  readonly holderCarrier: TargetTypeRef;
+  readonly constructor: string | null;
 }
 
 export interface RustNativeFrameBindingStorageCompletion {
   readonly storage: RustNativeBindingStorage;
   readonly readCarrier: TargetTypeRef;
-  readonly frameCarrier: TargetTypeRef;
+  readonly owner: RustNativeFrameStorageOwner;
 }
 
 export type RustPhysicalEmissionRole =
@@ -202,6 +212,14 @@ export interface RustPhysicalEmissionOperand {
     readonly selection: RustSourceErrorRegionSelection;
   }[];
   readonly genericInvocation: RustGenericCallableInvocationFact<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> | undefined;
+  readonly nativeCallResult:
+    | { readonly kind: "none" }
+    | { readonly kind: "result"; readonly nativeCarrier: TargetTypeRef;
+        readonly signature: RustCallablePhysicalSignature;
+        readonly propagation:
+          | { readonly kind: "infallible" }
+          | { readonly kind: "local" }
+          | { readonly kind: "source"; readonly selection: RustSourceErrorRegionSelection } };
 }
 
 export interface RustCallableEmissionContexts {

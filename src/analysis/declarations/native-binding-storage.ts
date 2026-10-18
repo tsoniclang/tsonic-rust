@@ -9,11 +9,9 @@ import type { RustNativeBindingStorage, RustNativeStorageBinding, RustNativeStor
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { selectRustNativeBindingStorage } from "../../policy/ownership/binding-storage.js";
+import { selectRustNativeBindingStorage, selectRustNativeFrameStorageOwner } from "../../policy/ownership/binding-storage.js";
 import { rustNativeFrameCallableCarriers, rustNativeFrameDefinitionCarrier, rustNativeTypeSelectionInput,
   selectRustNativeTypeCarrier, type RustNativeTypeInputContext } from "../../policy/types/model/native-type-selection.js";
 import type { RustPreparedNativeDeclarationForms, RustNativeCallableFieldBinding } from "./native-forms.js";
@@ -43,7 +41,7 @@ export function completeRustNativeDeclarationStorage(input: {
   readonly fieldBindings: readonly RustNativeCallableFieldBinding[];
   readonly nativeBindings: readonly RustNativeStorageBinding[];
 }> {
-  const reject = (declaration: Node, message: string) => rejectedTargetStage([{
+  const reject = (declaration: Node, message: string): TargetStageResult<RustNativeFrameBindingStorageCompletion> => rejectedTargetStage([{
     code: "RUST_NATIVE_STORAGE_NOT_CLOSED", category: "error" as const, source: "tsonic-rust", sourceNode: declaration, message,
   }]);
   const declarations = input.declarations.complete({ ...input.declarationInput, nativeFrameBindingFor(request) {
@@ -125,8 +123,7 @@ export function publishRustNativeBindingStorage(
       if (completed.kind === "rejected") return completed;
       storage = completed.value.storage;
       readCarrier = completed.value.readCarrier;
-      owner = Object.freeze({ kind: "frame", declaration: definitions[0]!.activation.ownerDeclaration,
-        fieldName: frameBinding.fieldName, frameCarrier: completed.value.frameCarrier });
+      owner = completed.value.owner;
     } else {
       const payload = selectRustNativeTypeCarrier(physical, nativeInput, "general");
       if (payload.kind === "rejected") return reject(request.declaration, payload.reason);
@@ -179,8 +176,8 @@ export function publishRustNativeBindingStorage(
       const declaration = owner.declaration;
       const existing = selected.find(row => row.owner.kind === "frame" && row.owner.declaration === declaration);
       if (existing?.owner.kind === "frame" && (!rustTargetTypeRefEquals(existing.owner.frameCarrier, owner.frameCarrier) ||
-        !rustTargetTypeRefEquals(existing.storage.holderCarrier, storage.holderCarrier) ||
-        existing.storage.ownerConstructor !== storage.ownerConstructor)) return reject(request.declaration,
+        !rustTargetTypeRefEquals(existing.owner.holderCarrier, owner.holderCarrier) ||
+        existing.owner.constructor !== owner.constructor)) return reject(request.declaration,
         "Every field of one native frame must retain the identical completed whole owner and constructor.");
     }
     selected.push(Object.freeze({ ...request, contextUse: input.contextUse, storage, readCarrier, owner }));
@@ -230,11 +227,9 @@ export function completeRustNativeFrameBindingStorage(input: {
   if (read.kind === "rejected") return reject(read.reason);
   const nativeFrame = selectRustNativeTypeCarrier(frame, rustNativeTypeSelectionInput(input.nativeTypeContext), "general");
   if (nativeFrame.kind === "rejected") return reject(nativeFrame.reason);
-  const ownerCarrier = definition.storage.kind !== "standalone" ? nativeFrame.carrier
-    : Object.freeze(rustNamedTargetType("rust.alloc.rc.Rc", "alloc::rc::Rc",
-        Object.freeze([Object.freeze({ kind: "type" as const, type: nativeFrame.carrier })]), [], undefined, [], undefined, []));
   const storage = selectRustNativeBindingStorage({ kind: "frame", storage: binding.storage,
-    initialization: binding.initialization, payloadCarrier: payload.carrier, ownerCarrier,
-    ownerConstructor: definition.storage.kind === "standalone" ? "alloc::rc::Rc::new" : null });
-  return resolvedTargetStage(Object.freeze({ storage, readCarrier: read.carrier, frameCarrier: nativeFrame.carrier }));
+    initialization: binding.initialization, payloadCarrier: payload.carrier });
+  const owner = Object.freeze({ kind: "frame" as const, declaration: definition.activation.ownerDeclaration,
+    fieldName: binding.fieldName, ...selectRustNativeFrameStorageOwner(nativeFrame.carrier, definition.storage.kind) });
+  return resolvedTargetStage(Object.freeze({ storage, readCarrier: read.carrier, owner }));
 }

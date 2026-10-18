@@ -24,16 +24,21 @@ pub fn reset() { ORDER.set(0); }
 pub fn order() -> u32 { ORDER.get() }
 pub struct Owner { value: RefCell<f64> }
 pub struct Guard<'owner> { value: Ref<'owner, f64> }
+pub struct Plain<'owner> { value: &'owner Owner }
 impl Drop for Guard<'_> {
     fn drop(&mut self) { std::hint::black_box(*self.value); note(4); }
 }
 impl Owner {
     pub fn guard(&self) -> Guard<'_> { note(1); Guard { value: self.value.borrow() } }
+    pub fn plain(&self) -> Plain<'_> { Plain { value: self } }
     pub fn mutate(&mut self) -> f64 { note(2); *self.value.get_mut() = 7.0; 7.0 }
     pub fn write(&self) -> f64 { note(2); *self.value.borrow_mut() = 7.0; 7.0 }
 }
 impl Guard<'_> {
     pub fn consume(&self, value: f64) -> f64 { std::hint::black_box(*self.value); consume(value) }
+}
+impl Plain<'_> {
+    pub fn consume(&self, value: f64) -> f64 { std::hint::black_box(self.value); value }
 }
 pub fn owner() -> Owner { Owner { value: RefCell::new(1.0) } }
 pub fn take(owner: Owner) -> f64 { note(2); owner.value.into_inner() }
@@ -68,7 +73,7 @@ function fixture() {
   const dependency = snapshot.dependencies.find(value => value.alias === "native_alias");
   assert.equal(dependency !== undefined, true, "the actual external source belongs to the Cargo snapshot");
   const model = worker.module({ snapshot, dependency, modulePath: [],
-    requestedExports: ["Owner", "Guard", "owner", "take", "consume"], foundation: "std" });
+    requestedExports: ["Owner", "Guard", "Plain", "owner", "take", "consume"], foundation: "std" });
   const projected = projectRustCompilerModule(model, { moduleSpecifier: sourceModule, providerModuleId: "actual-native-loan-surface" });
   const nativeSession = createRustCompilerProviderSession({ configuration: { crateName: "actual-loan-client", edition: "2021",
     outputType: "lib", foundation: "std", project: { kind: "user-owned", manifestPath: project } }, cacheRoot: join(root, "session") }, worker);
@@ -142,7 +147,7 @@ function fixture() {
   const compile = body => {
     const compiled = compileRust({ surfaces: [], packages: [provider], target: { id: "rust", options: { projectFile: project } },
       compileTarget: request => compileRustTarget({ ...request, nativeRetention: requests => nativeSession.resultRetention(requests) }),
-      files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard } from ${JSON.stringify(nativeModule)};
+      files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard, Plain as AcquiredPlain } from ${JSON.stringify(nativeModule)};
         import { owner, take } from ${JSON.stringify(sourceModule)};
         export function observed(): number { ${body} }` } });
     const ast = compiled.source.ast;
@@ -219,5 +224,32 @@ test("all six carried-Guard controls use real native acquisition and preserve th
   const generated = positive.artifacts.filter(value => value.path.endsWith(".rs")).map(value => value.text).join("\n");
   assert.equal(generated.includes(".clone()"), false, "the disjoint non-Clone control needs no clone fallback");
   assert.equal(readFileSync(current.project, "utf8").includes("rustc_private"), false, "ordinary Cargo remains the only acquisition dependency");
+  });
+});
+
+test("an actual non-Drop carried result stays live for its native input use, not for an unused lexical scope", { timeout: 540_000 }, async context => {
+  const current = fixture();
+  context.after(current.close);
+  for (const action of ["take", "mutate"]) await context.test(`runtime/${action}`, () => {
+    const operand = action === "take" ? "take(stored)" : "stored.mutate()";
+    const result = current.compile(`const stored = owner(); const held = stored.plain(); return held.consume(${operand});`).result;
+    const expected = action === "take" ? "RUST_NATIVE_RESULT_LOAN_MOVE_CONFLICT" : "RUST_NATIVE_RESULT_LOAN_MUTABLE_CONFLICT";
+    assert.equal(result.diagnostics.length, 1, `${action}: one exact native non-Drop use conflict`);
+    assert.equal(result.diagnostics[0].code, expected, `${action}: actual native input use retains the original loan`);
+    assert.equal(result.artifacts.length, 0, `${action}: refused source has no planned or emitted artifacts`);
+  });
+  await context.test("unused non-Drop result releases the owner before lexical scope exit", () => {
+    const result = current.compile("const stored = owner(); const held = stored.plain(); return take(stored);").result;
+    assert.equal(result.diagnostics.length, 0, "an unused non-Drop owned result does not force scope-live borrowing");
+    assert.equal(result.artifacts.some(value => value.path.endsWith(".rs")), true, "the native-valid source remains emitted");
+    const generated = result.artifacts.filter(value => value.path.endsWith(".rs")).map(value => value.text).join("\n");
+    assert.equal(generated.includes(".clone()"), false, "the original non-Clone result and owner are not copied");
+    for (const artifact of result.artifacts) {
+      const path = join(current.root, "generated", artifact.path);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, artifact.text);
+    }
+    const checked = command(current.root, "plain-native-check", "cargo", ["check", "--offline", "--manifest-path", current.project, "--lib"]);
+    assert.equal(checked.status, 0, "rustc accepts the actual native non-Drop holder and original move without Clone or early drop");
   });
 });

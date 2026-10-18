@@ -9,7 +9,7 @@ import { requireRustNativeFrameStorage } from "../expressions/binding-storage.js
 import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
-import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
+import { createRustNativeFrameOwner, rustFrameBindingLocation } from "../bindings/frame-storage.js";
 
 export function rustClassFrameFieldLocation(
   declaration: Node, receiverCarrier: TargetTypeRef, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,
@@ -33,19 +33,11 @@ export interface RustClassFrameLayout {
 export function createRustClassFrameValue(
   definition: RustFrameCallableDefinition, values: ReadonlyMap<Node, RustExpr>, counter: RustExpr, context: RustPlanContext,
 ): RustExpr | undefined {
-  const nativeFrame = requireRustNativeFrameStorage(definition, context.emissionContext);
-  const frameType = rustTypeFromSelectedNativeCarrierInContext(nativeFrame.carrier, context);
   const selected = context.input.program.nativeDeclarations.get(definition.activation.ownerDeclaration);
-  if (definition.storage.kind !== "standalone" || frameType.kind !== "named" || nativeFrame.constructor === null ||
-    selected?.kind !== "class" || definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
+  if (selected?.kind !== "class") return undefined;
   const counterName = selected.frameCounterName;
-  return { kind: "call", path: nativeFrame.constructor, args: [{
-    kind: "struct-literal", path: frameType.path, fields: [
-      ...(counterName === undefined ? [] : [{ name: counterName, value: counter }]),
-      ...definition.bindings.map(binding => ({ name: binding.fieldName, value: values.get(binding.declaration)! })),
-      ...(definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }]),
-    ],
-  }] };
+  return createRustNativeFrameOwner(definition, values,
+    counterName === undefined ? undefined : { name: counterName, value: counter }, context);
 }
 
 export function rustClassFrameLayout(

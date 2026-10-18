@@ -28,8 +28,8 @@ export function requireRustNativeFrameStorage(definition: RustFrameCallableDefin
     row.owner.declaration === definition.activation.ownerDeclaration);
   if (selected?.owner.kind !== "frame") return failRustPlannerInvariant(
     "A native frame requires its completed original owner and constructor in the exact physical context.", definition.activation.ownerDeclaration);
-  return { carrier: selected.owner.frameCarrier, holderCarrier: selected.storage.holderCarrier,
-    constructor: selected.storage.ownerConstructor };
+  return { carrier: selected.owner.frameCarrier, holderCarrier: selected.owner.holderCarrier,
+    constructor: selected.owner.constructor };
 }
 
 export function rustNativeBindingSlotType(storage: RustNativeBindingStorage, context: RustPlanContext): RustType {
