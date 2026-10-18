@@ -36,7 +36,7 @@ async function fixture() {
     storage,
     nativeNodes: storage.nodes,
     records,
-    operands: runtimeSelected.map(node => ({ node })),
+    operands: runtimeSelected.map(node => ({ node, origin: { kind: "operand" } })),
     movingReads: new Set(),
     flow: { readTransfers: new Map(), captureRequirements: new Map(), captureTransfers: new Map(), graphs: new Map(), liveness: new Map() },
     captures: new Map(),
@@ -106,7 +106,8 @@ test("storage-read materialization respects finite node, work and row budgets be
 test("semantic declaration names never become runtime ownership reads", async () => {
   const { input, selected, semanticOnly } = await fixture();
   assert.equal(semanticOnly.length > 0, true, "the checked inventory contains the authored parameter definition");
-  const result = analyze(input);
+  const result = analyze({ ...input, operands: [...input.operands,
+    ...semanticOnly.map(node => ({ node, origin: { kind: "value" } }))] });
   assert.equal(result.kind, "resolved", "all actual runtime operands have complete native storage");
   for (const node of semanticOnly) {
     assert.equal(input.records.runtimeCarrier.get(node) !== undefined, true, "the semantic type remains available");
@@ -127,7 +128,7 @@ test("a demanded physical operand cannot fall back to its logical carrier", asyn
 
 test("a foreign physical operand cannot acquire ownership from unrelated source types", async () => {
   const { input } = await fixture();
-  const result = analyze({ ...input, operands: [...input.operands, { node: {} }] });
+  const result = analyze({ ...input, operands: [...input.operands, { node: {}, origin: { kind: "operand" } }] });
   assert.equal(result.kind, "rejected", "only original admitted storage occurrences are runtime operands");
   assert.equal(result.diagnostics[0].code, "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE", "the source occurrence correspondence is mandatory");
   assert.equal("ownership" in result, false, "a foreign operand never publishes a successful prefix");

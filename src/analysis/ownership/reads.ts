@@ -380,7 +380,10 @@ export function prepareRustReadOwnership(input: {
 
 export function analyzeRustReadOwnership(input: {
   readonly requirements: RustReadOwnershipRequirements;
-  readonly operands: readonly Pick<RustPhysicalEmissionOperand, "node">[];
+  readonly operands: readonly {
+    readonly node: RustPhysicalEmissionOperand["node"];
+    readonly origin: Pick<RustPhysicalEmissionOperand["origin"], "kind">;
+  }[];
   readonly movingReads: ReadonlySet<Node>;
   readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]>;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "operandFor">;
@@ -408,7 +411,7 @@ export function analyzeRustReadOwnership(input: {
       message: "A native operand read requires its original admitted source storage occurrence.",
       evidence: ["target.capability=rust.analysis.ownership"],
     }] };
-    emittedReads.add(operand.node);
+    if (operand.origin.kind !== "value") emittedReads.add(operand.node);
   }
   for (const node of requirements.nativeNodes) {
     if (!budget.step()) return { kind: "rejected", diagnostics: [{
