@@ -65,7 +65,9 @@ export interface RustPreparedNativeDeclarationForms {
     readonly layer: RustConstructionLayer | undefined;
     readonly sourceBindings: RustTargetGenericBindings;
     readonly nativeOwnerFileName: string;
-  }): TargetStageResult<RustNativeStorageBindingRequest>;
+  }): TargetStageResult<Omit<RustNativeStorageBindingRequest, "source"> & {
+    readonly source: Extract<RustNativeStorageBindingRequest["source"], { readonly kind: "field" }>;
+  }>;
   prepareCallableField(input: {
     readonly use: TargetUseSiteRef;
     readonly node: Node;
