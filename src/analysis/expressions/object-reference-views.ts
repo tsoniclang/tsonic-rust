@@ -93,7 +93,7 @@ export function selectRustObjectReferenceView(
       kind: "project", declaration: project.declaration, sourceCarrier, targetCarrier,
     });
   }
-  const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType);
+  const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType, "read");
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0) return undefined;
   const fields: Extract<RustObjectReferenceView, { readonly kind: "structural" }>["fields"][number][] = [];

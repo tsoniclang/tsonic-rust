@@ -131,7 +131,8 @@ function fixture() {
   };
   const context = { ast: { kindName: () => "KindPropertySignature", typeNode: () => undefined,
     is: { IsMethodDeclaration: () => false } },
-    currentSemantics: { types: { aliasApplication: () => undefined, structuralMembers(source, destination) {
+    currentSemantics: { types: { aliasApplication: () => undefined, structuralMembers(source, destination, purpose) {
+    assert.equal(purpose, "read");
     assert.equal(source, selectedType);
     assert.equal(destination, templateType);
     return correspondence;
@@ -225,7 +226,8 @@ test("structural proof reuse requires both exact source identity and target carr
   let queries = 0;
   const context = { ...input.context, currentSemantics: { types: {
     ...input.context.currentSemantics.types,
-    structuralMembers() {
+    structuralMembers(source, destination, purpose) {
+      assert.equal(purpose, "read");
       queries += 1;
       return { kind: "unavailable" };
     },

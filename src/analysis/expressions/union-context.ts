@@ -15,7 +15,7 @@ export function selectRustUnionVariantByCheckedType(
     const source = semantics.types.expressionType(expression);
     if (source === undefined) return undefined;
     const candidates = union.variants.flatMap(variant => {
-      const members = variant.sourceTypes.map(type => semantics.types.structuralMembers(source, type));
+      const members = variant.sourceTypes.map(type => semantics.types.structuralMembers(source, type, "read"));
       return members.length > 0 && members.every(member => member.kind === "available")
         ? [{ variant, members }] : [];
     });

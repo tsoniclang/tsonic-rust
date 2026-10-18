@@ -89,7 +89,7 @@ function projectedMemberCarrier(
   const queries = host.semantics(selected.sourceFile);
   const ownerType = queries.types.nonNullableType(selected.type);
   if (ownerType === undefined) return undefined;
-  const correspondence = queries.types.structuralMembers(ownerType, ownerType);
+  const correspondence = queries.types.structuralMembers(ownerType, ownerType, "read");
   if (correspondence.kind !== "available") return undefined;
   const members = correspondence.members.filter(member => member.kind === "present" &&
     member.source.read === "property" && member.source.declarations.includes(declaration));
