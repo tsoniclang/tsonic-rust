@@ -118,6 +118,7 @@ test("an unproved associated owned copy is rejected once at pre-seal read admiss
     if (mode === "borrow") uses.set(reference, { mode: "shared", later: [], laterStart: 0, stableAcrossEffects: true });
     const input = {
       storage, nativeNodes: nodes, records,
+      operands: [{ node: reference }],
       movingReads: new Set(mode === "move" ? [reference] : []),
       flow: { readTransfers: new Map(), captureRequirements: new Map(), captureTransfers: new Map(), graphs: new Map(), liveness: new Map() },
       captures: new Map(),

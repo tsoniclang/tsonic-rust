@@ -3,14 +3,11 @@ import assert from "node:assert/strict";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 function analyzed(source, surfaces) {
-  const result = analyzeRust({
+  return analyzeRust({
     surfaces,
     target: { id: "rust", options: { outputType: "lib" } },
     files: { "index.ts": source },
-  });
-  assert.equal(result.program !== undefined, true,
-    result.result.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
-  return result.program;
+  }).program;
 }
 
 function findNodes(program, predicate) {
