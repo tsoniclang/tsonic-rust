@@ -15,7 +15,6 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const nativeModule = "@tsonic/rust/crates/native_alias/index.js";
 const sourceModule = "@r04/actual-native-loans";
-const numberCarrier = { kind: "source-primitive", name: "float64" };
 const nativeSource = `
 use std::cell::{Cell, Ref, RefCell};
 thread_local! { static ORDER: Cell<u32> = const { Cell::new(0) }; }
@@ -69,7 +68,7 @@ function fixture() {
   assert.equal(dependency !== undefined, true, "the actual external source belongs to the Cargo snapshot");
   const model = worker.module({ snapshot, dependency, modulePath: [],
     requestedExports: ["Owner", "Guard", "owner", "take", "consume"], foundation: "std" });
-  const projected = projectRustCompilerModule(model, { moduleSpecifier: nativeModule, providerModuleId: "actual-native-loans" });
+  const projected = projectRustCompilerModule(model, { moduleSpecifier: sourceModule, providerModuleId: "actual-native-loan-surface" });
   const nativeSession = createRustCompilerProviderSession({ configuration: { crateName: "actual-loan-client", edition: "2021",
     outputType: "lib", foundation: "std", project: { kind: "user-owned", manifestPath: project } }, cacheRoot: join(root, "session") }, worker);
   const sourceProvider = nativeSession.sourceProviders.find(value => value.ownsModule(nativeModule).kind === "owned");
@@ -78,50 +77,64 @@ function fixture() {
   assert.equal(resolution.kind, "virtual", "the real source provider resolves the actual native module");
   const declarations = sourceProvider.getDeclarationModel(resolution, { context: {}, materialization: { kind: "complete" } });
   assert.equal(Array.isArray(declarations.exports), true, "actual complete materialization populates the sole native query owner");
-  const exportId = name => projected.module.exports.find(value => value.name === name)?.id;
-  const ownerType = projected.types.find(value => value.exportId === exportId("Owner"));
-  const guardType = projected.types.find(value => value.exportId === exportId("Guard"));
-  assert.equal(ownerType !== undefined && guardType !== undefined, true, "both carriers come from actual compiler normalization");
-  const nativeOwner = model.exports.find(value => value.name === "Owner");
-  const nativeGuard = nativeOwner.methods.find(value => value.name === "guard");
-  const guardOperation = projected.operations.find(value => value.exportId === exportId("Owner") &&
-    value.memberId?.endsWith(":guard"));
-  assert.equal(guardOperation !== undefined && guardOperation.resultLoans === nativeGuard.resultLoans, true,
+  const only = (values, label) => {
+    assert.equal(values.length, 1, `${label}: exactly one actual acquired declaration is selected`);
+    return values[0];
+  };
+  const exported = name => only(projected.module.exports.filter(value => value.name === name), name);
+  const owner = exported("Owner");
+  const guard = exported("Guard");
+  const consume = exported("consume");
+  const guardMember = only(owner.members.filter(value => value.name === "guard"), "Owner.guard");
+  const guardSignature = only(guardMember.signatures, "Owner.guard signature");
+  const runtimeMember = only(guard.members.filter(value => value.name === "consume"), "Guard.consume");
+  const nativeOwner = only(model.exports.filter(value => value.name === "Owner"), "native Owner");
+  const nativeGuard = only(nativeOwner.methods.filter(value => value.name === "guard"), "native Owner.guard");
+  const guardOperation = only(projected.operations.filter(value => value.exportId === owner.id &&
+    value.memberId === guardMember.id && value.signatureId === guardSignature.id), "Owner.guard operation");
+  assert.equal(guardOperation.resultLoans === nativeGuard.resultLoans, true,
     "the fixture exposes the actual acquired declaration relation, not manufactured cleanup metadata");
-  const ownerCarrier = ownerType.targetCarrier;
-  const guardCarrier = guardOperation.resultCarrier;
-  const reference = name => ({ kind: "provider-ref", moduleSpecifier: sourceModule, exportName: name });
-  const signature = (id, parameters, returnType = { kind: "number" }) => ({ id, parameters, returnType });
+  assert.equal(guardMember.kind, "method", "the property surface adapts the actual native method");
+  assert.equal(guardSignature.parameters.length, 0, "the actual native getter has no source arguments");
+  assert.equal(guardSignature.typeParameters?.length ?? 0, 0, "the actual native getter introduces no method generics");
+  assert.equal(guardSignature.returnType.kind, "provider-ref", "the actual acquired return retains its native type application");
+  assert.equal(guardSignature.returnType.moduleSpecifier, sourceModule, "the factory owns every facade self-reference");
+  const runtimeId = `${runtimeMember.id}::runtime-surface`;
+  const runtimeSignatures = runtimeMember.signatures.map(value => ({ ...value,
+    id: `${value.id}::runtime-surface`, name: "runtime" }));
+  const runtimeSignatureIds = new Map(runtimeMember.signatures.map((value, index) => [value.id, runtimeSignatures[index].id]));
+  const evaluationId = `${guard.id}::evaluation-only-consume`;
+  const evaluationSignatures = consume.signatures.map(value => ({ ...value, id: `${value.id}::evaluation-only` }));
+  const evaluationSignatureIds = new Map(consume.signatures.map((value, index) => [value.id, evaluationSignatures[index].id]));
+  const { signatureId: originalGuardSignatureId, ...guardReadOperation } = guardOperation;
+  assert.equal(originalGuardSignatureId, guardSignature.id, "only the actual zero-argument signature becomes a property");
+  const operations = projected.operations.map(value => {
+    if (value === guardOperation) return { ...guardReadOperation, operationKind: "property" };
+    if (value.exportId !== guard.id || value.memberId !== runtimeMember.id) return value;
+    const signatureId = runtimeSignatureIds.get(value.signatureId);
+    assert.equal(signatureId !== undefined, true, "every native receiver operation retains its exact source signature");
+    return { ...value, memberId: runtimeId, signatureId };
+  });
+  for (const operation of projected.operations.filter(value => value.exportId === consume.id)) {
+    const signatureId = evaluationSignatureIds.get(operation.signatureId);
+    assert.equal(signatureId !== undefined, true, "every evaluation-only operation retains the actual free-function signature");
+    operations.push({ ...operation, exportId: guard.id, memberId: evaluationId, signatureId });
+  }
+  const module = { ...projected.module, exports: projected.module.exports.map(value => {
+    if (value === owner) return { ...value, members: value.members.map(member => member !== guardMember ? member : {
+      id: member.id, name: member.name, kind: "property", readonly: true, type: guardSignature.returnType,
+    }) };
+    if (value !== guard) return value;
+    return { ...value, members: [...value.members.map(member => member !== runtimeMember ? member : {
+      ...member, id: runtimeId, name: "runtime", signatures: runtimeSignatures,
+    }), { id: evaluationId, name: "consume", kind: "method", signatures: evaluationSignatures }] };
+  }) };
+  assert.equal(module.exports.find(value => value.id === guard.id).typeParameters === guard.typeParameters, true,
+    "every actual Guard source generic and lifetime classification survives unchanged");
   const provider = createRustProviderPackage({ id: "actual-native-loan-surface", version: "1", displayName: "Actual native carried-loan controls",
-    modules: [{ moduleSpecifier: sourceModule, providerModuleId: "actual-native-loan-surface", exports: [
-      { id: "Owner", name: "Owner", kind: "interface", members: [
-        { id: "Owner.guard", name: "guard", kind: "property", readonly: true, type: reference("Guard") },
-        ...["mutate", "write"].map(name => ({ id: `Owner.${name}`, name, kind: "method",
-          signatures: [signature(`Owner.${name}`, [])] })),
-      ] },
-      { id: "Guard", name: "Guard", kind: "interface", members: ["consume", "runtime"].map(name => ({
-        id: `Guard.${name}`, name, kind: "method", signatures: [signature(`Guard.${name}`,
-          [{ name: "value", type: { kind: "number" } }])],
-      })) },
-      { id: "owner", name: "owner", kind: "function", signatures: [signature("owner", [], reference("Owner"))] },
-      { id: "take", name: "take", kind: "function", signatures: [signature("take", [{ name: "owner", type: reference("Owner") }])] },
-    ] }], types: [{ ...ownerType, exportId: "Owner" }, { ...guardType, exportId: "Guard" }],
+    modules: [module], types: projected.types,
     carrierPaths: Object.fromEntries(projected.carrierPaths), carrierTraits: Object.fromEntries(projected.carrierTraits), crates: [],
-    operations: [
-      { exportId: "owner", operationKind: "method", target: { form: "call", path: "native_alias::owner" }, resultCarrier: ownerCarrier },
-      { exportId: "take", operationKind: "method", target: { form: "call", path: "native_alias::take", argModes: ["value"] },
-        parameterCarriers: [ownerCarrier], resultCarrier: numberCarrier },
-      { ...guardOperation, exportId: "Owner", memberId: "Owner.guard", signatureId: undefined, operationKind: "property" },
-      ...["mutate", "write"].map(name => ({ exportId: "Owner", memberId: `Owner.${name}`, operationKind: "method",
-        target: { form: "receiver-method", name, ...(name === "mutate" ? { mutatesReceiver: true } : {}) },
-        receiverCarrier: ownerCarrier, resultCarrier: numberCarrier })),
-      { exportId: "Guard", memberId: "Guard.consume", operationKind: "method",
-        target: { form: "call", path: "native_alias::consume", argModes: ["value"] },
-        parameterCarriers: [numberCarrier], resultCarrier: numberCarrier },
-      { exportId: "Guard", memberId: "Guard.runtime", operationKind: "method",
-        target: { form: "receiver-method", name: "consume", argModes: ["value"] },
-        receiverCarrier: guardCarrier, parameterCarriers: [numberCarrier], resultCarrier: numberCarrier },
-    ] });
+    operations });
   const compile = body => compileRust({ surfaces: [], packages: [provider], target: { id: "rust", options: { projectFile: project } },
     compileTarget: request => compileRustTarget({ ...request, nativeRetention: requests => nativeSession.resultRetention(requests) }),
     files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard } from ${JSON.stringify(nativeModule)};
@@ -130,10 +143,11 @@ function fixture() {
   return { root: client, project, compile, close: () => nativeSession.close() };
 }
 
-test("all six carried-Guard controls use real native acquisition and preserve the native refusal boundary", { timeout: 540_000 }, context => {
+test("all six carried-Guard controls use real native acquisition and preserve the native refusal boundary", { timeout: 540_000 }, async context => {
   const current = fixture();
   context.after(current.close);
   for (const method of ["consume", "runtime"]) for (const action of ["take", "mutate", "write"]) {
+    await context.test(`${method}/${action}`, () => {
     const operand = action === "take" ? "take(stored)" : `stored.${action}()`;
     const result = current.compile(`const stored = owner(); return stored.guard.${method}(${operand});`).result;
     const expected = action === "take" ? "RUST_NATIVE_RESULT_LOAN_MOVE_CONFLICT" : "RUST_NATIVE_RESULT_LOAN_MUTABLE_CONFLICT";
@@ -161,20 +175,25 @@ test("all six carried-Guard controls use real native acquisition and preserve th
         "--test", "guard", "--", "--exact", "actual_unwind"]);
       assert.equal(checked.status, 0, `${method}/write: native unwind runs and observes guard cleanup at124`);
     }
+    });
   }
   for (const [name, body] of [
     ["ordinary-assignment", "const stored = owner(); const held = stored.guard; const moved = stored; return held.runtime(take(moved));"],
     ["captured-move", "const stored = owner(); const held = stored.guard; const finish = () => take(stored); return held.runtime(finish());"],
   ]) {
+    await context.test(name, () => {
     const result = current.compile(body).result;
     assert.equal(result.diagnostics.length, 1, `${name}: one actual source-formation conflict is rejected before sealing`);
     assert.equal(result.diagnostics[0].code, "RUST_NATIVE_RESULT_LOAN_MOVE_CONFLICT",
       `${name}: ordinary source moves use the same actual retained-loan admission as provider inputs`);
     assert.equal(result.artifacts.length, 0, `${name}: no rejected native source is planned or emitted`);
+    });
   }
+  await context.test("disjoint native owner has no clone or SDK fallback", () => {
   const positive = current.compile("const stored = owner(); const other = owner(); return stored.guard.runtime(take(other));").result;
   assert.equal(positive.diagnostics.length, 0, "a real disjoint owner remains valid");
   const generated = positive.artifacts.filter(value => value.path.endsWith(".rs")).map(value => value.text).join("\n");
   assert.equal(generated.includes(".clone()"), false, "the disjoint non-Clone control needs no clone fallback");
   assert.equal(readFileSync(current.project, "utf8").includes("rustc_private"), false, "ordinary Cargo remains the only acquisition dependency");
+  });
 });
