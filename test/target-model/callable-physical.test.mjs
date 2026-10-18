@@ -5,10 +5,10 @@ import { rustCallableConversionPhysical, rustCallableConversionErrorArities, rus
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../dist/target-model/types/carriers/callables.js";
-import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
-import { rustCallableTargetId, rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../dist/target-model/types/carriers/native.js";
+import { rustCallableTargetId, rustInfallibleTargetId, rustOptionTargetId } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../dist/target-model/types/carriers/primitives.js";
-import { rustOptionElementCarrier, rustOptionTargetType } from "../../dist/target-model/types/carriers/optional.js";
+import { rustOptionTargetType } from "../../dist/target-model/types/carriers/optional.js";
 import { rustNativeErrorJoinReference } from "../../dist/target-model/types/native-error-joins.js";
 import { rustRuntimeErrorTargetType } from "../../dist/target-model/operations/error-boundary.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
@@ -137,8 +137,11 @@ test("prepared field callable completion retains every original optional contain
     assert.equal(selected.kind, "resolved", `${label}: exact original field container is admitted`);
     let native = selected.carrier;
     for (let index = 0; index < depth; index += 1) {
-      native = rustOptionElementCarrier(native);
-      assert.equal(native !== undefined, true, `${label}: original wrapper ${index} survives publication`);
+      const wrapper = rustNamedTypeCarrierValue(native);
+      assert.equal(wrapper?.id, rustOptionTargetId, `${label}: original native wrapper ${index} survives publication`);
+      assert.equal(wrapper.genericArguments.length, 1, `${label}: wrapper ${index} has its exact one payload`);
+      assert.equal(wrapper.genericArguments[0].kind, "type", `${label}: wrapper ${index} retains its native type argument`);
+      native = wrapper.genericArguments[0].type;
     }
     assert.equal(rustTargetTypeRefEquals(native, selected.payloadCarrier), true,
       `${label}: published leaf is the same canonical callable ABI, not the entire optional slot`);
