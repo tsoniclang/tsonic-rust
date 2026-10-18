@@ -133,6 +133,8 @@ function fixture() {
     "every actual Guard source generic and lifetime classification survives unchanged");
   const provider = createRustProviderPackage({ id: "actual-native-loan-surface", version: "1", displayName: "Actual native carried-loan controls",
     modules: [module], types: projected.types,
+    sourceDependencies: (module.imports ?? []).map(value => ({ moduleSpecifier: value.moduleSpecifier,
+      exportedNames: value.namedImports.map(named => named.exportedName) })),
     carrierPaths: Object.fromEntries(projected.carrierPaths), carrierTraits: Object.fromEntries(projected.carrierTraits), crates: [],
     operations });
   const compile = body => compileRust({ surfaces: [], packages: [provider], target: { id: "rust", options: { projectFile: project } },

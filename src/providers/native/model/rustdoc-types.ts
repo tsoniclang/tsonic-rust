@@ -14,7 +14,7 @@ export {
   compilerTypeRequirementCanonicalPath,
   compilerTypeRequirementConditions,
   compilerTypeSupportsRequirement,
-  directImplementationGenericParameterPositions,
+  selectRustCompilerDirectImplementation,
   directImplementationTypeParameterPositions,
   normalizeTypeTraits,
   typeParameterGuaranteesRequirement,

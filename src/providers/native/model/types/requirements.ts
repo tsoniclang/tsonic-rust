@@ -113,22 +113,9 @@ export function normalizeTypeTraits(
 }
 
 export function directImplementationTypeParameterPositions(
-  document: RustdocDocument,
-  impl: Readonly<Record<string, unknown>>,
-  implementationContext: RustCompilerNormalizationContext,
+  genericPositions: ReadonlyMap<string, number>,
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
-  ownerIdentity: RustCompilerItemIdentity,
-  ownerPrimitive?: string,
 ): ReadonlyMap<string, number> | undefined {
-  const genericPositions = directImplementationGenericParameterPositions(
-    document,
-    impl,
-    implementationContext,
-    declaredGenericParameters,
-    ownerIdentity,
-    ownerPrimitive,
-  );
-  if (genericPositions === undefined) return undefined;
   const declaredTypeParameters = declaredGenericParameters.filter(
     (parameter): parameter is RustCompilerTypeParameter => parameter.kind === "type",
   );
@@ -146,18 +133,18 @@ export function directImplementationTypeParameterPositions(
   return positions;
 }
 
-export function directImplementationGenericParameterPositions(
+export function selectRustCompilerDirectImplementation(
   document: RustdocDocument,
   impl: Readonly<Record<string, unknown>>,
   implementationContext: RustCompilerNormalizationContext,
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   ownerIdentity: RustCompilerItemIdentity,
   ownerPrimitive?: string,
-): ReadonlyMap<string, number> | undefined {
+): { readonly positions: ReadonlyMap<string, number>; readonly selfType: RustCompilerType } | undefined {
   const target = normalizeType(document, impl.for, implementationContext);
   if (ownerPrimitive !== undefined) {
     return target.kind === "primitive" && target.name === ownerPrimitive && declaredGenericParameters.length === 0
-      ? new Map<string, number>()
+      ? Object.freeze({ positions: new Map<string, number>(), selfType: target })
       : undefined;
   }
   if (target.kind !== "path" || target.identity.itemId !== ownerIdentity.itemId ||
@@ -166,10 +153,16 @@ export function directImplementationGenericParameterPositions(
     return undefined;
   }
   const positions = new Map<string, number>();
+  const arguments_: RustCompilerGenericArgument[] = [];
   for (let index = 0; index < target.genericArguments.length; index += 1) {
     const argument = target.genericArguments[index]!;
     const declared = declaredGenericParameters[index]!;
     if (argument.kind !== declared.kind) return undefined;
+    if (argument.kind === "lifetime" && declared.kind === "lifetime" && argument.lifetime.kind === "placeholder") {
+      arguments_.push(Object.freeze({ kind: "lifetime", lifetime: declared.lifetime }));
+      continue;
+    }
+    arguments_.push(argument);
     const parameterIdentity = genericArgumentParameterIdentity(argument);
     if (parameterIdentity === undefined) {
       if (!argumentMatchesDefault(argument, declared)) return undefined;
@@ -178,7 +171,7 @@ export function directImplementationGenericParameterPositions(
     if (positions.has(parameterIdentity)) return undefined;
     positions.set(parameterIdentity, index);
   }
-  return positions;
+  return Object.freeze({ positions, selfType: Object.freeze({ ...target, genericArguments: Object.freeze(arguments_) }) });
 }
 
 export function typeParameterGuaranteesRequirement(
@@ -377,17 +370,17 @@ function sourceTraitImplementation(
   ownerIdentity: RustCompilerItemIdentity,
   resolveItem?: RustdocItemResolver,
 ): RustCompilerTraitImplementation | undefined {
-  const positions = directImplementationGenericParameterPositions(
+  const selected = selectRustCompilerDirectImplementation(
     document,
     impl,
     implementationContext,
     declaredGenericParameters,
     ownerIdentity,
   );
-  if (positions === undefined) return undefined;
+  if (selected === undefined) return undefined;
   const substitutions = implementationSubstitutions(
     implementationParameters,
-    positions,
+    selected.positions,
     declaredGenericParameters,
   );
   const rebind = (requirement: RustCompilerTypeRequirement): RustCompilerTypeRequirement =>
@@ -397,7 +390,7 @@ function sourceTraitImplementation(
   const requirements = new Map<string, RustCompilerTraitRequirement>();
   for (const parameter of implementationParameters) {
     if (parameter.kind !== "type") continue;
-    const genericIndex = positions.get(parameter.identity.itemId);
+    const genericIndex = selected.positions.get(parameter.identity.itemId);
     const declared = genericIndex === undefined ? undefined : declaredGenericParameters[genericIndex];
     if (declared === undefined) {
       if (parameter.requirements.length !== 0) return undefined;

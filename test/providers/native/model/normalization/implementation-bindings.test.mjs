@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { implementationSubstitutions } from "../../../../../dist/providers/native/model/normalization/implementation-bindings.js";
-import { directImplementationGenericParameterPositions, normalizeTypeTraits } from "../../../../../dist/providers/native/model/types/requirements.js";
+import { selectRustCompilerDirectImplementation, normalizeTypeTraits } from "../../../../../dist/providers/native/model/types/requirements.js";
+import * as compilerTypes from "../../../../../dist/providers/native/model/rustdoc-types.js";
+import { normalizeTypeMembers } from "../../../../../dist/providers/native/model/normalization/members.js";
 import { normalizeGenericParameters, rootNormalizationContext, rustCompilerItemIdentity } from "../../../../../dist/providers/native/model/rustdoc-types.js";
 
 const identity = itemId => ({ itemId, canonicalPath: ["example", itemId] });
@@ -12,10 +14,16 @@ const reference = parameter => ({ kind: "generic", identity: parameter.identity,
 test("primitive implementation ownership uses the compiler type, not the export spelling", () => {
   const owner = identity("renamed-primitive");
   const implementation = { for: { primitive: "u32" } };
-  assert.deepEqual(directImplementationGenericParameterPositions({}, implementation, {}, [], owner, "u32"), new Map());
-  assert.equal(directImplementationGenericParameterPositions({}, implementation, {}, [], owner, "f32"), undefined);
-  assert.equal(directImplementationGenericParameterPositions({}, implementation, {}, [], owner), undefined);
-  assert.equal(directImplementationGenericParameterPositions({}, implementation, {}, [parameter("wrong", "T")], owner, "u32"), undefined);
+  const selected = selectRustCompilerDirectImplementation({}, implementation, {}, [], owner, "u32");
+  assert.equal(selected !== undefined, true, "the exact primitive owner is selected");
+  assert.equal(selected.positions.size, 0, "the primitive implementation has no owner generic substitutions");
+  assert.equal(selected.selfType.kind, "primitive", "the selected Self remains the actual native primitive");
+  assert.equal(selected.selfType.name, "u32", "the native primitive identity is not an export spelling");
+  assert.equal(selectRustCompilerDirectImplementation({}, implementation, {}, [], owner, "f32"), undefined);
+  assert.equal(selectRustCompilerDirectImplementation({}, implementation, {}, [], owner), undefined);
+  assert.equal(selectRustCompilerDirectImplementation({}, implementation, {}, [parameter("wrong", "T")], owner, "u32"), undefined);
+  assert.equal(Object.hasOwn(compilerTypes, "directImplementationGenericParameterPositions"), false,
+    "the superseded position-only API is absent rather than a competing native Self route");
 });
 
 test("implementation generics use declaration identities and exact associated equalities", () => {
@@ -75,6 +83,105 @@ function rawImplementation(id, parameters, args, trait) {
     for: rawPath(90, args), items: [], is_negative: false, is_synthetic: false, blanket_impl: null,
   } } };
 }
+
+function implementationFixture(parameters, implementationParameters, arguments_) {
+  const implementation = rawImplementation(700, implementationParameters, arguments_, null);
+  const owner = { id: 90, name: "Holder", visibility: "public", inner: { struct: {
+    kind: { plain: { fields: [], has_stripped_fields: true } },
+    generics: { params: parameters, where_predicates: [] }, impls: [700],
+  } } };
+  const document = { index: { 90: owner, 700: implementation },
+    paths: { 90: { path: ["core", "Holder"], kind: "struct" } } };
+  const ownerIdentity = rustCompilerItemIdentity(document, dependency, owner);
+  const declared = normalizeGenericParameters(document, owner.inner.struct.generics,
+    rootNormalizationContext(document, dependency, owner)).parameters;
+  const context = normalizeGenericParameters(document, implementation.inner.impl.generics,
+    compilerTypes.derivedNormalizationContext(dependency, ownerIdentity, "impl:700", { selfOwner: ownerIdentity })).context;
+  const select = arguments_ => selectRustCompilerDirectImplementation(document,
+    { ...implementation.inner.impl, for: rawPath(90, arguments_) }, context, declared, ownerIdentity);
+  return { document, owner, implementation, ownerIdentity, declared, context, select };
+}
+
+const rawLifetimeParameter = name => ({ name, kind: { lifetime: { outlives: [] } } });
+
+test("impl-header anonymous lifetimes retain exact declared nominal slots without accepting static or foreign specializations", () => {
+  const current = implementationFixture([rawLifetimeParameter("'first"), rawLifetimeParameter("'second")], [],
+    [{ lifetime: "'_" }, { lifetime: "'_" }]);
+  const selected = current.select([{ lifetime: "'_" }, { lifetime: "'_" }]);
+  assert.equal(selected !== undefined, true, "the native universally elided implementation is selected");
+  assert.equal(selected.positions.size, 0, "no nonexistent implementation parameter identity is manufactured");
+  assert.equal(selected.selfType.kind, "path", "the actual nominal Self is retained");
+  assert.equal(selected.selfType.identity.itemId, current.ownerIdentity.itemId, "the nominal declaration identity is authoritative");
+  assert.equal(selected.selfType.genericArguments[0].lifetime === current.declared[0].lifetime, true,
+    "the first anonymous impl slot carries the identical first declaration binder");
+  assert.equal(selected.selfType.genericArguments[1].lifetime === current.declared[1].lifetime, true,
+    "the second anonymous impl slot carries the identical second declaration binder");
+  assert.equal(current.declared[0].lifetime.identity.itemId !== current.declared[1].lifetime.identity.itemId, true,
+    "anonymous slots never collapse distinct native lifetime identities");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.selfType) &&
+    Object.isFrozen(selected.selfType.genericArguments), true, "selected Self evidence is immutable");
+  assert.equal(current.select([{ lifetime: "'static" }, { lifetime: "'_" }]), undefined,
+    "a static specialization is not projected as a universal declaration");
+  assert.equal(current.select([{ lifetime: "'_" }]), undefined, "a missing required lifetime is not a default");
+  assert.equal(current.select([{ lifetime: "'_" }, { lifetime: "'_" }, { lifetime: "'_" }]), undefined,
+    "extra lifetime arguments are not silently dropped");
+  assert.equal(current.select([{ type: { primitive: "u8" } }, { lifetime: "'_" }]), undefined,
+    "an argument of another native generic kind cannot fill a lifetime slot");
+  assert.equal(selectRustCompilerDirectImplementation(current.document, current.implementation.inner.impl,
+    current.context, current.declared, { ...current.ownerIdentity, itemId: `${current.ownerIdentity.itemId}:foreign` }), undefined,
+    "equal displayed nominal names cannot replace exact native declaration identity");
+  const repeated = implementationFixture([rawLifetimeParameter("'first"), rawLifetimeParameter("'second")],
+    [rawLifetimeParameter("'actual")], [{ lifetime: "'actual" }, { lifetime: "'actual" }]);
+  assert.equal(repeated.select([{ lifetime: "'actual" }, { lifetime: "'actual" }]), undefined,
+    "a repeated named implementation argument does not prove two independent owner slots");
+});
+
+test("impl lifetime elision preserves actual type and const default boundaries", () => {
+  const current = implementationFixture([rawLifetimeParameter("'owner"),
+    { ...rawTypeParameter("Value"), kind: { type: { ...rawTypeParameter("Value").kind.type, default: { primitive: "u8" } } } },
+    { name: "SIZE", kind: { const: { type: { primitive: "usize" }, default: "4" } } }], [],
+    [{ lifetime: "'_" }, { type: { primitive: "u8" } }, { const: "4" }]);
+  const selected = current.select([{ lifetime: "'_" }, { type: { primitive: "u8" } }, { const: "4" }]);
+  assert.equal(selected !== undefined, true, "the exact declared type and const defaults remain admissible");
+  assert.equal(selected.selfType.genericArguments[0].lifetime === current.declared[0].lifetime, true,
+    "only the actual impl lifetime placeholder is materialized from its nominal slot");
+  assert.equal(selected.selfType.genericArguments[1].type.name, "u8", "the selected native default type is unchanged");
+  assert.equal(selected.selfType.genericArguments[2].value.value, "4", "the selected native const default is unchanged");
+  assert.equal(current.select([{ lifetime: "'_" }]) !== undefined, true, "only trailing declared defaults may be omitted");
+  assert.equal(current.select([{ lifetime: "'_" }, { type: { primitive: "u16" } }, { const: "4" }]), undefined,
+    "an arbitrary concrete type specialization is not admitted as the default");
+  assert.equal(current.select([{ lifetime: "'_" }, { type: { primitive: "u8" } }, { const: "5" }]), undefined,
+    "an arbitrary concrete const specialization is not admitted as the default");
+});
+
+test("actual impl Self and source-visible methods retain owner binders without replacing function signature elision", () => {
+  const current = implementationFixture([rawLifetimeParameter("'owner")], [], [{ lifetime: "'_" }]);
+  const method = (id, name, receiver, result, visibility = "public") => ({ id, name, visibility, inner: { function: {
+    sig: { inputs: [["self", receiver]], output: result, is_c_variadic: false },
+    generics: { params: [], where_predicates: [] },
+    header: { is_async: false, is_unsafe: false, abi: "Rust" }, has_body: true,
+  } } });
+  current.document.index[701] = method(701, "identity", { generic: "Self" }, { generic: "Self" });
+  current.document.index[702] = method(702, "borrow", { borrowed_ref: { lifetime: null, is_mutable: false, type: { generic: "Self" } } },
+    { borrowed_ref: { lifetime: "'_", is_mutable: false, type: { primitive: "u8" } } });
+  current.document.index[703] = method(703, "private", { generic: "Self" }, { generic: "Self" }, "default");
+  current.implementation.inner.impl.items = [701, 702, 703];
+  const selected = normalizeTypeMembers(current.document, current.owner.inner.struct, dependency, current.declared, current.ownerIdentity);
+  assert.equal(selected.unsupported.length, 0, "the real anonymous native impl no longer silently loses its methods");
+  assert.equal(selected.methods.length, 2, "native private method visibility is preserved");
+  const identity = selected.methods.find(value => value.name === "identity");
+  assert.equal(identity.receiver.type.genericArguments[0].lifetime === current.declared[0].lifetime, true,
+    "the admitted physical Self receiver carries its identical original owner binder");
+  assert.equal(identity.result.genericArguments[0].lifetime === current.declared[0].lifetime, true,
+    "an actual owned Self result preserves that same declared native binder");
+  assert.equal(identity.resultLoans.kind, "complete", "owned Self has a native result relation rather than a guessed empty one");
+  assert.equal(identity.resultLoans.loans[0].origins[0].kind, "carried", "owned Self carries its loan, not a new storage borrow");
+  const borrowed = selected.methods.find(value => value.name === "borrow");
+  assert.equal(borrowed.result.lifetime.kind, "placeholder", "function result placeholders are not globally rewritten");
+  assert.equal(borrowed.resultLoanTypes.result.lifetime.kind, "elided", "only the canonical native function selector resolves result elision");
+  assert.equal(borrowed.resultLoanTypes.result.lifetime.ownerIdentity, borrowed.identity.itemId,
+    "the function's actual receiver borrow does not become the owner's distinct inner lifetime");
+});
 
 test("closed trait implementations rebind renamed arguments and conditional PartialEq<Self> to declaration identities", () => {
   const self = rawPath(90, [rawGeneric("Value"), rawGeneric("Error")]);

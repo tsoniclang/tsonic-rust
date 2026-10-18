@@ -11,7 +11,7 @@ import {
 import {
   childNormalizationContext,
   derivedNormalizationContext,
-  directImplementationGenericParameterPositions,
+  selectRustCompilerDirectImplementation,
   emptyRustCompilerSubstitutions,
   normalizeGenericParameters,
   normalizeTraitDispatch,
@@ -24,6 +24,7 @@ import {
 import {
   associatedTypeKey,
   normalizeMemberType,
+  substituteMemberType,
   sourceImplementationRequirements,
 } from "./associated-types.js";
 import { canonicalItemId } from "../rustdoc-items.js";
@@ -497,7 +498,7 @@ function normalizeImplementation(
     requireRecord(impl.generics, "Rust impl generics"),
     context,
   );
-  const positions = directImplementationGenericParameterPositions(
+  const selected = selectRustCompilerDirectImplementation(
     document,
     impl,
     generics.context,
@@ -505,23 +506,20 @@ function normalizeImplementation(
     ownerIdentity,
     ownerPrimitive,
   );
-  if (positions === undefined) {
+  if (selected === undefined) {
     throw new Error("Rust impl does not project exactly onto the source-visible generic declaration.");
   }
-  const bindings = implementationSubstitutions(generics.parameters, positions, declaredGenericParameters);
+  const bindings = implementationSubstitutions(generics.parameters, selected.positions, declaredGenericParameters);
   const implementationTypeParameters = generics.parameters.filter(
     (parameter): parameter is RustCompilerTypeParameter => parameter.kind === "type",
   );
   const sourceRequirements = sourceImplementationRequirements(
     document,
     dependency,
-    impl,
+    selected.positions,
     implementationTypeParameters,
-    generics.context,
     declaredGenericParameters,
-    ownerIdentity,
     resolveItem,
-    ownerPrimitive,
   );
   if (sourceRequirements === undefined) {
     throw new Error("Rust impl requirements cannot be projected onto the source-visible type arguments.");
@@ -541,7 +539,7 @@ function normalizeImplementation(
         traitDispatch,
         bindings,
       );
-  const selfType = normalizeMemberType(document, impl.for, generics.context, bindings,
+  const selfType = substituteMemberType(selected.selfType, bindings,
     associatedTypeBindings, traitDispatch);
   return Object.freeze({
     kind: "selected",

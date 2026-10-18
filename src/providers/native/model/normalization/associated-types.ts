@@ -12,7 +12,6 @@ import { compareText } from "../rustdoc-schema.js";
 import type {
   RustCompilerDependency,
   RustCompilerGenericParameter,
-  RustCompilerItemIdentity,
   RustCompilerGenericArgument,
   RustCompilerTraitDispatch,
   RustCompilerType,
@@ -84,21 +83,14 @@ export function associatedTypeKey(
 export function sourceImplementationRequirements(
   document: RustdocDocument,
   dependency: RustCompilerDependency,
-  impl: Readonly<Record<string, unknown>>,
+  selectedPositions: ReadonlyMap<string, number>,
   implementationParameters: readonly RustCompilerTypeParameter[],
-  implementationContext: RustCompilerNormalizationContext,
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
-  ownerIdentity: RustCompilerItemIdentity,
   resolveItem?: RustdocItemResolver,
-  ownerPrimitive?: string,
 ): readonly RustCompilerTypeParameter[] | undefined {
   const positions = directImplementationTypeParameterPositions(
-    document,
-    impl,
-    implementationContext,
+    selectedPositions,
     declaredGenericParameters,
-    ownerIdentity,
-    ownerPrimitive,
   );
   if (positions === undefined) return undefined;
   const declaredTypeParameters = declaredGenericParameters.filter(
