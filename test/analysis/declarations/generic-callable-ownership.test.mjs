@@ -213,6 +213,11 @@ test("callable value plans seal only after adapter classification and cannot be 
           for (const field of ["sourceCallableSpecializations", "projectMethodDispatch", "lexicalFunctions",
             "declarationGenericRequirements", "genericErrors", "errorRegions", "initialization", "constructions"])
             assert.equal(input[field] !== undefined, true, field + ": supplied by the real late pipeline");
+          for (const field of ["frameErrorOwnerFor", "nativeTypeInputFor", "prepareCallableField",
+            "prepareStorageField", "completeNativeDeclarations"])
+            assert.equal(typeof input[field], "function", field + ": original canonical preparation and completion owner");
+          assert.equal(typeof input.errorRegions.get === "function" && typeof input.errorRegions.sourceFor === "function", true,
+            "resealing consumes the actual completed effect-region readers, not an empty synthetic region service");
           const stage = current.seal(input);
           assert.equal(stage.kind, "resolved", "the actual completed pipeline supplies the required late publication DTO");
           plan = stage.value;

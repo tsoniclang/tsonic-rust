@@ -63,7 +63,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
       continue;
     }
     if (row.place.loans.length > 0 && row.source.kind === "unavailable") reject(row.node, row.source.reasons.join(" "));
-    const rows: NonNullable<ReturnType<typeof requested.get>>[number][] = [];
+    const retentions: PreparedRetention[] = [];
     for (const loan of row.place.loans) for (const origin of loan.origins) {
       const request: RustNativeResultRetentionRequest = Object.freeze({ id: `native-result-retention:${requests.length}`,
         declarationIdentity: row.place.native.contract.declarationIdentity,
@@ -71,9 +71,9 @@ export function analyzeRustCarriedLoanAdmission(input: {
         phase: loan.kind === "pending" ? "pending" : row.operation.abi.result.kind === "async" ? "completion" : "value",
         application: row.context.bindings, arguments: row.operation.abi.targetGenericArguments });
       requests.push(request);
-      rows.push(Object.freeze({ request, loan, origin }));
+      retentions.push(Object.freeze({ request, loan, origin }));
     }
-    requested.set(row, rows);
+    requested.set(row, retentions);
   }
   if (diagnostics.length > 0) return { kind: "rejected", diagnostics };
   const admissions: (() => void)[] = [];

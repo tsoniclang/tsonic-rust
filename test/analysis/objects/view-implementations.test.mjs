@@ -4,13 +4,15 @@ import { selectRustProjectViewImplementations } from "../../../dist/analysis/obj
 import { createRustClassValueRegistry } from "../../../dist/analysis/objects/class-values.js";
 import { collectRustImplicitInterfaceContracts } from "../../../dist/analysis/project-types/implicit-interfaces.js";
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { nativeCallableConstructionFixture } from "../../helpers/physical-callable-adapters.mjs";
 
 const declaration = Object.freeze({ file: "/model.ts" });
 
 test("recursive constructor contracts terminate at the exact already visited type pair", () => {
   const type = {};
   const signature = {};
-  const node = {};
+  const checked = nativeCallableConstructionFixture({ surfaces: [], files: { "index.ts": "export const value = 1;" } });
+  assert.equal(checked.input.isNativeNode({}), false, "foreign objects are not admitted by a blanket native predicate");
   let reads = 0;
   const semantics = { types: {
     contextualValueSelection: () => ({ kind: "selected", type }),
@@ -22,8 +24,7 @@ test("recursive constructor contracts terminate at the exact already visited typ
     },
   } };
   const contracts = collectRustImplicitInterfaceContracts({ context: {
-    ast: { kindName: () => "KindIdentifier", forEachChild() {} },
-    sourceFiles: [node], semanticsFor: () => semantics,
+    ...checked.input, semanticsFor: () => semantics,
   } });
   assert.deepEqual(contracts, []);
   assert.equal(reads, 2);
