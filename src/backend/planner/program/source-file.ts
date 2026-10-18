@@ -247,29 +247,23 @@ function planModuleItems(
     if (views === undefined) ensureTopLevelPlanningDiagnostic(context, declaration, diagnosticCount, "constructor-view");
     else items.push(...views);
   }
-  const asynchronous = context.input.program.errorRegions.initialization.moduleFor(context.sourceFile)?.asynchronous === true;
-  const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
-  if (emissionContext === undefined || emissionContext.error.kind !== "region")
-    failRustPlannerInvariant("Module initializer requires its original sealed physical context and error region.", context.sourceFile);
-  const errorRegion = emissionContext.error.region;
-  const selectedContext = rustContextForEmission(context, emissionContext);
-  const region = planRustErrorRegion(context.sourceFile, selectedContext);
-  if (region === undefined) {
-    failRustPlannerInvariant(
-      "Module initializer has no exact finalized error region.",
-      context.sourceFile);
+  const requirement = context.input.program.moduleInitialization.requirementFor(context.sourceFile);
+  let initialization: PlannedRustModuleItems["initialization"];
+  let initializationContext: RustPlanContext = { ...context, syntheticNames };
+  if (requirement.kind === "required") {
+    const asynchronous = context.input.program.errorRegions.initialization.moduleFor(context.sourceFile)?.asynchronous === true;
+    const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
+    if (emissionContext === undefined || emissionContext.error.kind !== "region")
+      failRustPlannerInvariant("Module initializer requires its original sealed physical context and error region.", context.sourceFile);
+    const selectedContext = rustContextForEmission(context, emissionContext);
+    const region = planRustErrorRegion(context.sourceFile, selectedContext);
+    if (region === undefined) failRustPlannerInvariant("Module initializer has no exact finalized error region.", context.sourceFile);
+    initialization = { functionName: initializationFunctionName, asynchronous, errorRegion: emissionContext.error.region,
+      ...(region.boundary === undefined ? {} : { errorBoundary: region.boundary }) };
+    initializationContext = { ...selectedContext, syntheticNames, controlFlow: { nextLoopId: 0 },
+      functionReturnType: { kind: "unit" }, functionAbsenceReturnCarrier: undefined,
+      ...(asynchronous ? { asyncContext: true } : {}), fallibleBoundary: region.boundary };
   }
-  const errorBoundary = region.boundary;
-  const fallible = errorBoundary !== undefined;
-  const initializationContext: RustPlanContext = {
-    ...selectedContext,
-    syntheticNames,
-    controlFlow: { nextLoopId: 0 },
-    functionReturnType: { kind: "unit" },
-    functionAbsenceReturnCarrier: undefined,
-    ...(asynchronous ? { asyncContext: true } : {}),
-    fallibleBoundary: errorBoundary,
-  };
   for (const statement of ast.statements(context.sourceFile)) {
     if (statement === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -484,15 +478,13 @@ function planModuleItems(
   if (initializationStatements.length === 0) {
     return { items };
   }
+  if (initialization === undefined) failRustPlannerInvariant(
+    "Module initialization statements require their selected initializer context.", context.sourceFile);
+  const { asynchronous, errorBoundary } = initialization;
+  const fallible = errorBoundary !== undefined;
   if (fallible) {
     context.usedAliases?.add("rt");
   }
-  const initialization: NonNullable<PlannedRustModuleItems["initialization"]> = {
-    functionName: initializationFunctionName,
-    asynchronous,
-    errorRegion,
-    ...(errorBoundary === undefined ? {} : { errorBoundary }),
-  };
   items.push({
     kind: "function",
     name: initializationFunctionName,

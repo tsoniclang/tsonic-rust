@@ -98,6 +98,7 @@ export interface RustPhysicalEmissionContext {
   readonly error: RustEmissionErrorContext;
   readonly operands: readonly TargetTypeRef[];
   readonly sourceOrigins: readonly RustPhysicalEmissionSourceOrigins[];
+  readonly callableAdapters: readonly RustCallablePhysicalAdapter<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>[];
   readonly targetGenericArguments: ReadonlyMap<RustFinalizedOperationAbi, readonly RustPhysicalTargetGenericArgument[]>;
 }
 
@@ -147,7 +148,6 @@ export interface RustPhysicalEmissionOperand {
     readonly selection: RustSourceErrorRegionSelection;
   }[];
   readonly genericInvocation: RustGenericCallableInvocationFact<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> | undefined;
-  readonly callableAdapters: readonly RustCallablePhysicalAdapter<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>[];
 }
 
 export interface RustCallableEmissionContexts {

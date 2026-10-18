@@ -63,6 +63,18 @@ test("native runtime type applications preserve exact Rust value/error identitie
   }
 });
 
+test("recognized native named carriers cannot bypass strict selected argument-count validation", () => {
+  const carrier = rustNamedTargetType("fixture:selected", "Vec", [{ kind: "type", type: { kind: "source-primitive", name: "int32" } }],
+    [], undefined, [], undefined, []);
+  for (const [label, count] of [["negative", -1], ["fractional", 0.5], ["beyond semantic arguments", 2],
+    ["infinite", Infinity], ["missing", undefined], ["wrong type", "1"]]) {
+    const malformed = { ...carrier, value: { ...carrier.value, nativeArgumentCount: count } };
+    assert.equal(rustNamedTypeCarrierValue(malformed) === undefined, true, `${label}: named decoding rejects malformed native syntax data`);
+    assert.equal(isRustTargetTypeRef(malformed), false, `${label}: the generic closed validator cannot readmit a recognized native form`);
+  }
+  assert.equal(isRustTargetTypeRef(carrier), true, "the complete original native carrier remains admitted");
+});
+
 test("native method storage preserves parameter/result/error/lifetime identities and exact function-pointer AST", () => {
   const lifetime = { kind: "parameter", identity: "checked:scope", name: "scope" };
   const value = { kind: "source-primitive", name: "int64" };

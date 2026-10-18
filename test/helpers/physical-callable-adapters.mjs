@@ -10,11 +10,12 @@ import { rustCallableTargetType } from "../../dist/target-model/types/carriers/c
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
 import { planRustCallableConversion } from "../../dist/backend/planner/expressions/callable-conversions.js";
-import { rustCallableConversionPhysical } from "../../dist/target-model/conversions/callable-physical.js";
+import { rustCallableConversionPhysical, rustCallablePhysicalSignature } from "../../dist/target-model/conversions/callable-physical.js";
 import { rustNativeCallableOperand } from "../../dist/analysis/callables/native-conversions.js";
 import { publishRustCallablePhysicalConversion } from "../../dist/analysis/program/physical-emission-contexts.js";
 import { nativeDeclarationSelectionInput } from "./native-type-selection.mjs";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 
 export function admitNativeCallableAdapter(current, conversion, node = current.node) {
   const program = current.program;
@@ -28,18 +29,39 @@ export function admitNativeCallableAdapter(current, conversion, node = current.n
     definitions: program.typeDefinitions });
   assert.equal(source !== undefined, true, "fixture starts from the actual pre-seal selected native source");
   const file = ast.getFileName(ast.getSourceFile(node));
-  const prepared = rustCallableConversionPhysical(conversion, source.signature, file, program.typeDefinitions);
+  const prepared = rustCallableConversionPhysical(conversion, source.signature, file, program.typeDefinitions,
+    rustCallablePhysicalSignature);
   assert.equal(prepared !== undefined, true, "the existing physical producer admits the complete fixture adaptation");
   const selected = publishRustCallablePhysicalConversion(prepared, node,
     nativeDeclarationSelectionInput(program).nativeTypeInputFor(file, undefined));
   assert.equal(selected.kind, "resolved", "the canonical late owner admits all native error payloads");
-  const adapter = Object.freeze({ node, sourceCarrier: source.carrier, sourceInput: source.input?.subject, conversion: selected.value });
+  let origin;
+  if (source.input !== undefined) origin = Object.freeze({ kind: "expression", subject: source.input.subject });
+  else {
+    const returned = program.callableValues.nativeStorage.returnFor(owner);
+    assert.equal(returned.kind !== "unresolved" && rustTargetTypeRefEquals(returned.carrier, source.carrier), true,
+      "the manual unit adapter retains its actual checked native return slot");
+    origin = Object.freeze({ kind: "return", declaration: owner });
+  }
+  const adapter = Object.freeze({ node, selection: conversion, origin, joinOwnerFileName: file, sourceCarrier: source.carrier,
+    sourceInput: source.input?.subject, conversion: selected.value });
+  const selectedContext = Object.freeze({ ...context, callableAdapters: Object.freeze([...context.callableAdapters, adapter]) });
+  const operands = program.physicalEmissionContexts.operands.map(operand => operand.context === context
+    ? Object.freeze({ ...operand, context: selectedContext }) : operand);
+  const byOperand = new Map(operands.map(operand => [operand.use, operand]));
   const physicalEmissionContexts = { ...program.physicalEmissionContexts,
-    sourceErrorOperandFor: (use, subject) => use === context.use && subject === node
-      ? Object.freeze({ callableAdapters: Object.freeze([adapter]) })
-      : program.physicalEmissionContexts.sourceErrorOperandFor(use, subject) };
+    contexts: Object.freeze(program.physicalEmissionContexts.contexts.map(candidate => candidate === context ? selectedContext : candidate)),
+    operands: Object.freeze(operands),
+    contextFor: use => use === context.use ? selectedContext : program.physicalEmissionContexts.contextFor(use),
+    contextForOwner: (subject, role) => subject === owner && role === "native-body" ? selectedContext
+      : program.physicalEmissionContexts.contextForOwner(subject, role),
+    operandFor: use => byOperand.get(use),
+    sourceErrorOperandFor: (use, subject) => {
+      const original = program.physicalEmissionContexts.sourceErrorOperandFor(use, subject);
+      return original === undefined ? undefined : byOperand.get(original.use);
+    } };
   current.context.input = createRustPlanningContext({ ...program, physicalEmissionContexts });
-  current.context.emissionContext = context;
+  current.context.emissionContext = selectedContext;
   return selected.value;
 }
 
@@ -68,7 +90,7 @@ export function create(): (value: int32) => int64 {
     isNativeNode: node => nativeNodes.has(node), records: selectedRecords, names: current.program.names,
     components: current.program.sourcePackageComponents, producers: current.program.callableValues.nativeProducers,
     definitions: current.program.typeDefinitions, callables: current.program.callableValues,
-    promiseBodies: current.program.promiseBodies });
+    promiseBodies: current.program.promiseBodies, helperEmissionRequests: [] });
   assert.equal(regions.kind, "resolved", "the exact constructed adapter inputs publish their required native error joins");
   const program = { ...current.program, records: selectedRecords,
     errorRegions: { declarationsFor: regions.value.declarationsFor, producerError: regions.value.producerError,

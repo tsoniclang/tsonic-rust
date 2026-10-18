@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, writeGeneratedProject, validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
   from "../../../dist/backend/planner/expressions/callable-conversions.js";
 
@@ -14,7 +14,7 @@ import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dis
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { nativeFallibleAdapterFixture } from "../../helpers/physical-callable-adapters.mjs";
+import { nativeFallibleAdapterFixture, admitNativeCallableAdapter } from "../../helpers/physical-callable-adapters.mjs";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -355,6 +355,7 @@ export function create(): () => int32 { return (): int32 => fail(); }
   const adapt = target => {
     const conversion = selectRustCallableConversion(source, target, () => undefined, fixture.program.typeDefinitions);
     assert.equal(conversion !== undefined, true);
+    admitNativeCallableAdapter(fixture, conversion);
     const converted = planRustCallableConversion(conversion, expression, fixture.node, fixture.context);
     assert.equal(converted !== undefined, true);
     return printRustExpr(converted);
@@ -362,6 +363,40 @@ export function create(): () => int32 { return (): int32 => fail(); }
   return { input: printRustExpr(input), borrowed: adapt(rustCallableInputTargetType([integer], integer)),
     owned: adapt(rustCallableTargetType([integer], integer)) };
 }
+
+test("generated dispatch, class-value, object and field helpers retain their selected callable ABI", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "contract.ts": `export interface Wide { get(): () => number | undefined; }
+export interface Receiver { use(callback: () => number): number; }
+export interface Factory { create(): () => number | undefined; }
+export interface Holder { readonly callback: () => number | undefined; }
+export interface Optional { get(): (() => number | undefined) | undefined; }`,
+    "model.ts": `import type { Wide, Receiver, Factory, Holder, Optional } from "./contract.js";
+export class Concrete implements Wide, Receiver, Optional {
+  get(): () => number { return () => 7; }
+  use(callback: (unused: number) => number): number { return callback(0); }
+  static create(): () => number { return () => 13; }
+}
+export class Stored { readonly callback: () => number = () => 17; }
+export function factory(): Factory { return Concrete; }
+export function holder(): Holder { return new Stored(); }`,
+    "index.ts": `import type { Wide, Receiver, Optional } from "./contract.js";
+import { Concrete, factory, holder } from "./model.js";
+const selected: Wide = new Concrete();
+if (selected.get()() !== 7) throw new Error("project result adapter");
+const receiver: Receiver = new Concrete();
+if (receiver.use(() => 19) !== 19) throw new Error("project parameter adapter");
+const object: Wide = { get() { return () => 11; } };
+if (object.get()() !== 11) throw new Error("object dispatch adapter");
+if (factory().create()() !== 13) throw new Error("class-value adapter");
+if (holder().callback() !== 17) throw new Error("field ABI adapter");
+const optional: Optional = new Concrete();
+const callback = optional.get();
+if (callback === undefined || callback() !== 7) throw new Error("optional helper adapter");`,
+  } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
+  validateGeneratedProject("selected-callable-helper-abi", result.artifacts, { run: true });
+});
 
 test("physical callable adaptation retains exact E with one owning frame or zero borrowed allocations", { timeout: 300_000 }, () => {
   const pure = fixtureExpressions(false);

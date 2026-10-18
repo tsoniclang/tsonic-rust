@@ -58,6 +58,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 
 export interface RustSourceFallibilityConstruction {
   readonly sourceErrors: RustSourceErrorEffectSelection;
+  sourceErrorOperandRequired(node: Node): boolean;
   effectsFor(subject: Node): RustErrorEffectsFact | undefined;
   complete(): void;
 }
@@ -732,6 +733,8 @@ function collectFallibilityFacts(
   }
   let published = false;
   return Object.freeze({ sourceErrors: selectSourceErrors, effectsFor: (subject: Node) => intrinsicEffects.get(subject),
+    sourceErrorOperandRequired: (node: Node): boolean => (sourceErrorEdges.get(node)?.length ?? 0) !== 0 ||
+      (awaitSourceEdges.get(node)?.length ?? 0) !== 0 || genericInvocations.has(node),
     complete() {
       if (published) throw new Error("Rust intrinsic error applications publish exactly once after physical binding.");
       const failure = budget.run(() => {

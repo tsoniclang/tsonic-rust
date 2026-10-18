@@ -382,8 +382,8 @@ function observeCallablePublication(registry, assertions, carriers, observations
   const descriptors = Object.getOwnPropertyDescriptors(registry);
   return Object.freeze(Object.create(Object.getPrototypeOf(registry), {
     ...descriptors,
-    finalizeSelected: { value() {
-      try { return registry.finalizeSelected(); }
+    finalizeSelected: { value(sourceErrorOperandRequired) {
+      try { return registry.finalizeSelected(sourceErrorOperandRequired); }
       finally { observations.earlyStoragePhase = "consumers"; }
     } },
     seal: { value(input) {
@@ -1099,7 +1099,7 @@ function verifyRequiredMissingOperand(program, observations) {
   const result = prepareRustEmissionContextRequests({ ...original.input, sourceOccurrences: [],
     nativeStorage: { ...original.input.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
   [{ use: targetUseSiteRef(operand.node, "native-body", "actual-native-owner"), role: "native-body", specialization: owner.specialization,
-    declaration: operand.context.declaration,
+    declaration: operand.context.declaration, nativeOwnerFileName: owner.nativeOwnerFileName, callableAdapterInputs: [],
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
     source: owner.source,
     demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,

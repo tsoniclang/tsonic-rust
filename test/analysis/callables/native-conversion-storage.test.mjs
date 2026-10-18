@@ -91,7 +91,7 @@ test("source-produced physical formal signatures retain exact selected input and
     assert.equal(rustTargetTypeRefEquals(value.signature.error.trait, inputs[index].trait), true);
     const wrong = inputs[1 - index];
     assert.equal(rustNativeCallablePhysicalSource(inputs[index].carrier,
-      { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }, current.program.typeDefinitions) === undefined,
+      { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }, current.program.typeDefinitions, carrier => carrier) === undefined,
     true, "an equal logical signature cannot replace exact physical input identity");
   }
 });
@@ -169,7 +169,7 @@ test("physical callable operand queries reject unrelated values, missing owners 
   const selected = current.input.storage.valueFor(current.declaration("callback"));
   assert.equal(selected.kind, "selected");
   assert.equal(rustNativeCallablePhysicalSource(source,
-    { kind: "identity", carrier: source }, current.program.typeDefinitions) === undefined, true,
+    { kind: "identity", carrier: source }, current.program.typeDefinitions, carrier => carrier) === undefined, true,
     "logical callable storage cannot masquerade as exact native Result storage");
 });
 
@@ -186,7 +186,8 @@ test("source-produced stored and returned adapters select the canonical physical
   assert.equal(fact?.conversion.kind, "callable-adapter");
   const source = current.operand(node);
   const fileName = current.ast.getFileName(current.ast.getSourceFile(node));
-  const expected = rustCallableConversionPhysical(fact.conversion, source.signature, fileName, current.program.typeDefinitions);
+  const expected = rustCallableConversionPhysical(fact.conversion, source.signature, fileName, current.program.typeDefinitions,
+    rustCallablePhysicalSignature);
   assert.equal(expected !== undefined, true, "one physical conversion owner");
   for (const [label, selected] of [
     ["stored", current.input.storage.valueFor(current.declaration("adapted"))],
@@ -196,7 +197,7 @@ test("source-produced stored and returned adapters select the canonical physical
     const destination = label === "returned"
       ? current.program.records.sourceCallableReturn.get(current.declaration("create"))?.returnCarrier : fact.targetCarrier;
     const retained = rustCallableConversionPhysical({ ...fact.conversion, target: destination }, source.signature,
-      fileName, current.program.typeDefinitions);
+      fileName, current.program.typeDefinitions, rustCallablePhysicalSignature);
     assert.equal(retained !== undefined, true, `${label}: exact native destination contract`);
     assert.equal(rustTargetTypeRefEquals(selected.carrier, retained.carrier), true, label);
     assert.equal(selected.inputs.length, 0, "a concrete adapter is not a formal implementation");
@@ -209,7 +210,8 @@ function adaptation(current, name) {
   assert.equal(fact?.conversion.kind, "callable-adapter", `${name}: finalized conversion`);
   const source = current.operand(node);
   const fileName = current.ast.getFileName(current.ast.getSourceFile(node));
-  const expected = rustCallableConversionPhysical(fact.conversion, source.signature, fileName, current.program.typeDefinitions);
+  const expected = rustCallableConversionPhysical(fact.conversion, source.signature, fileName, current.program.typeDefinitions,
+    rustCallablePhysicalSignature);
   assert.equal(expected !== undefined, true, `${name}: canonical physical contract`);
   for (const [label, selected] of [
     ["expression", current.input.storage.valueFor(node)],
@@ -226,7 +228,8 @@ function returnedAdaptation(current, owner, adaptation) {
   const protocol = rustCallableProtocol(destination);
   assert.equal(protocol?.lifetime !== undefined, true, "the actual retained return has a selected environment lifetime");
   const result = rustCallableConversionPhysical({ ...adaptation.expected.logical, target: destination },
-    adaptation.source.signature, current.ast.getFileName(current.ast.getSourceFile(owner)), current.program.typeDefinitions);
+    adaptation.source.signature, current.ast.getFileName(current.ast.getSourceFile(owner)), current.program.typeDefinitions,
+    rustCallablePhysicalSignature);
   assert.equal(result !== undefined, true, "the same physical conversion owner closes the actual retained destination");
   assert.equal(rustTargetTypeRefEquals(result.error, adaptation.expected.error), true,
     "retention preserves the exact native input error identity");

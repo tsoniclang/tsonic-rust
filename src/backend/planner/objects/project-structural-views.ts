@@ -4,7 +4,8 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType } from "../program/plan-context.js";
+import { requireRustEmissionContext, rustContextForEmission, rustCurrentErrorBoundary,
+  rustErrorBoundaryForProjectMember, rustErrorType } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectDispatchTraitType } from "./polymorphism/names.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
@@ -63,8 +64,10 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
       const field = shape.fields[member.storageIndex];
       if (field === undefined) return undefined;
       const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, member.declaration, []);
-      const local = { ...context, syntheticNames, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
       const callable = member.callable;
+      const emission = requireRustEmissionContext(context, callable ?? member, "helper", member.declaration);
+      const local = { ...rustContextForEmission(context, emission), syntheticNames,
+        fallibleBoundary: rustPackageFallibleBoundary(boundary) };
       if (callable !== undefined) {
         const protocol = rustCallableProtocol(callable.carrier);
         const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, local);

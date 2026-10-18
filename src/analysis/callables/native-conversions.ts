@@ -54,19 +54,24 @@ export function rustNativeCallablePhysicalSource(
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "identity" }>, "kind" | "carrier">
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs">,
   definitions: RustTypeDefinitions,
+  applyInputBindings: (carrier: TargetTypeRef) => TargetTypeRef,
 ): RustNativeCallablePhysicalSource | undefined {
+  if (typeof applyInputBindings !== "function")
+    throw new Error("Native callable source selection requires its actual input binding projection.");
   if (storage.kind === "unresolved") return undefined;
   const signature = rustCallablePhysicalSignature(storage.carrier);
   if (signature !== undefined) return Object.freeze({ carrier: storage.carrier, signature });
   const inputs = storage.kind === "selected" ? storage.inputs.filter(input =>
-    rustTargetTypeRefEquals(input.implementation, storage.carrier)) : [];
+    rustTargetTypeRefEquals(applyInputBindings(input.implementation), storage.carrier)) : [];
   if (inputs.length !== 1) return undefined;
   const input = inputs[0]!;
   const protocol = input.protocol;
-  if (!rustTargetTypeRefEquals(input.carrier, source) || protocol.signature.typeParameters.length !== 0 ||
+  if (!rustTargetTypeRefEquals(applyInputBindings(input.carrier), source) || protocol.signature.typeParameters.length !== 0 ||
     protocol.method.binder.parameters.length !== 0) return undefined;
   const selected = rustNativeCallableInputPhysicalSignature(input, [], definitions);
-  return selected === undefined ? undefined : Object.freeze({ carrier: storage.carrier, input, signature: selected });
+  return selected === undefined ? undefined : Object.freeze({ carrier: storage.carrier, input,
+    signature: snapshotClosedMetadata({ parameters: selected.parameters.map(applyInputBindings),
+      result: applyInputBindings(selected.result), error: applyInputBindings(selected.error) }) });
 }
 
 export function rustNativeCallableInputPhysicalSignature(
@@ -118,8 +123,8 @@ export function rustNativeCallableOperand(
     if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
     const carrier = input.producers.physicalFor(reference.sourceDeclaration, source);
     return carrier === undefined ? undefined
-      : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier }, input.definitions);
+      : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier }, input.definitions, carrier => carrier);
   }
   if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.records, node), source)) return undefined;
-  return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.definitions);
+  return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.definitions, carrier => carrier);
 }

@@ -8,7 +8,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 import { rustCallableConversionErrorArities } from "../../target-model/conversions/callable-physical.js";
-import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustHelperCallableEmissionRequest } from "../callables/emission-adapters.js";
 import type { RustNativeCallableProducer } from "../callables/native-producers.js";
 import type { RustCallableValuePlan } from "../callables/value-plan.js";
 import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
@@ -47,6 +47,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly names: RustNamePlan;
   readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers">;
   readonly promiseBodies: RustPromiseBodies;
+  readonly helperEmissionRequests: readonly RustHelperCallableEmissionRequest[];
 }): TargetStageResult<RustAnalyzedErrorRegions> {
   const regions = new Map<Node, RustErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>>>();
   const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection<RustNativeErrorSource<TargetTypeRef>>>();
@@ -148,21 +149,21 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   }
   const fileDemands: { readonly fileName: string; readonly usedNames: Set<string>;
     readonly arities: Set<number>; readonly clonedArities: Set<number> }[] = [];
+  const registerConversion = (node: Node, conversion: RustCallableConversion, arities: Set<number>): void => {
+    const selected = rustCallableConversionErrorArities(conversion, input.definitions);
+    if (selected === undefined) reject(node, "Callable conversion error joins have no exact physical channels.");
+    else for (const arity of selected) arities.add(arity);
+  };
+  for (const helper of input.helperEmissionRequests) {
+    const arities = demandedArities.get(helper.nativeOwnerFileName) ?? new Set<number>();
+    for (const adapter of helper.callableAdapterInputs) registerConversion(adapter.node, adapter.selection, arities);
+    demandedArities.set(helper.nativeOwnerFileName, arities);
+  }
   for (const file of input.sourceFiles) {
     const fileName = input.ast.getFileName(file);
     const usedNames = new Set<string>();
     const arities = new Set<number>();
     const clonedArities = new Set<number>();
-    const registerConversion = (node: Node, conversion: RustCallableConversion): void => {
-      const selected = rustCallableConversionErrorArities(conversion, input.definitions);
-      if (selected === undefined) reject(node, "Callable conversion error joins have no exact physical channels.");
-      else for (const arity of selected) arities.add(arity);
-    };
-    const registerAdapter = (node: Node, adapter: RustCallableValueAdapter, depth = 0): void => {
-      if (depth > 128) { reject(node, "Callable error joins exceed their bounded adapter depth."); return; }
-      if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter") registerConversion(node, adapter.conversion);
-      else if (adapter.kind === "option-map" || adapter.kind === "option-some") registerAdapter(node, adapter.element, depth + 1);
-    };
     const visit = (node: Node): void => {
       if (!input.isNativeNode(node)) return;
       for (const name of [input.names.nameForDeclaration(node), input.names.functionNameForDeclaration(node),
@@ -180,15 +181,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       for (const edge of input.records.sourceErrorEffects.get(node)?.edges ?? []) sourceRegionFor(node, edge);
       for (const branch of input.records.awaitSourceErrorEffects.get(node)?.branches ?? []) sourceRegionFor(node, branch.edge);
       const conversion = input.records.contextualValueConversion.get(node)?.conversion;
-      if (conversion?.kind === "callable-adapter") registerConversion(node, conversion);
-      for (const adapter of input.records.projectCallableAdapters.get(node) ?? []) {
-        registerAdapter(node, adapter.resultAdapter);
-        for (const parameter of adapter.parameterAdapters) {
-          if (parameter.kind === "runtime-value" || parameter.kind === "logical-value" || parameter.kind === "rest-element")
-            registerAdapter(node, parameter.adapter);
-          else if (parameter.kind === "rest") for (const segment of parameter.segments) registerAdapter(node, segment.adapter);
-        }
-      }
+      if (conversion?.kind === "callable-adapter") registerConversion(node, conversion, arities);
       input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     visit(file);

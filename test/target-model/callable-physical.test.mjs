@@ -13,6 +13,8 @@ import { rustRuntimeErrorTargetType } from "../../dist/target-model/operations/e
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
 import { substituteRustTargetGenerics } from "../../dist/target-model/types/carriers/substitution.js";
+import { emptyRustTypeDefinitions } from "../../dist/target-model/types/source-union-definitions.js";
+import { rustNativeCallableAbi, selectRustNativeTypeCarrier } from "../../dist/policy/types/model/native-type-selection.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -28,12 +30,45 @@ const physicalCarrier = ({ parameters, result, error }) => rustNamedTargetType(r
   ], [], undefined, [], undefined, []) },
 ], [], undefined, [], undefined, []);
 
+test("the canonical native callable ABI preserves runtime aliases and producer-specific errors separately", () => {
+  const logical = rustCallableTargetType([integer], wide);
+  const signature = rustNativeCallableAbi(logical);
+  assert.equal(signature?.kind, "stored", "the original stored ABI is selected once");
+  assert.equal(signature.runtimeResult, true, "the authored callable uses the existing TsonicResult contract");
+  assert.equal(rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType()), true, "the runtime result has its exact error ABI");
+  const physical = physicalCarrier({ parameters: [integer], result: wide, error: failure });
+  assert.equal(rustNativeCallableAbi(physical) === undefined, true, "physical metadata is not reinterpreted as a logical stored signature");
+  assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical).error, failure), true,
+    "producer-specific error identity is never replaced by the runtime alias");
+  const nested = select(rustCallableTargetType([], logical),
+    rustCallableTargetType([], rustCallableTargetType([integer, integer], wide)));
+  const selected = rustCallableConversionPhysical(nested, { parameters: [], result: logical, error: failure }, file,
+    emptyRustTypeDefinitions, carrier => {
+      const inner = rustNativeCallableAbi(carrier);
+      return inner === undefined ? undefined : { parameters: inner.parameters, result: inner.result, error: inner.error };
+    });
+  assert.equal(selected?.resultPlan.kind, "callable", "the original ABI decoder owns nested logical results");
+  assert.equal(rustTargetTypeRefEquals(selected.source.error, failure), true, "the outer producer retains its original native error");
+  assert.equal(rustTargetTypeRefEquals(selected.resultPlan.conversion.source.error, rustRuntimeErrorTargetType()), true,
+    "the nested stored contract retains its own runtime error");
+  const input = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: undefined,
+    pathFor: () => undefined, additionalArgumentsFor: () => undefined, programErrorCarrier: () => undefined,
+    producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
+  const native = selectRustNativeTypeCarrier(logical, input, "general");
+  assert.equal(native.kind, "resolved", "the same selector renders the admitted stored ABI");
+  assert.equal(native.carrier.value.genericArguments[2].type.value.path, "rt::TsonicResult", "native syntax keeps its original result alias");
+  const borrowed = rustNativeCallableAbi(rustCallableInputTargetType([integer], wide));
+  assert.equal(borrowed?.kind, "input", "native input and storage use the same owner with distinct native contracts");
+  assert.equal(borrowed.binder.parameters.length, 0, "a non-borrowing input never invents a higher-ranked binder");
+});
+
 test("physical adapters preserve source error and native Future payload without ambient substitution", () => {
   const future = rustFutureTargetType(integer);
   const selected = select(rustCallableTargetType([], future), rustCallableTargetType([integer], future));
   const native = rustNativeCompletionFutureType({ identity: "fixture:Future", output: integer, error: failure, captures: [] });
   for (const error of [infallible, failure]) {
-    const physical = rustCallableConversionPhysical(selected, { parameters: [], result: native, error }, file);
+    const physical = rustCallableConversionPhysical(selected, { parameters: [], result: native, error }, file,
+      emptyRustTypeDefinitions, rustCallablePhysicalSignature);
     assert.equal(physical !== undefined, true);
     assert.equal(Object.hasOwn(physical, "nativeErrorType"), false, "private physical preparation is not a fabricated native admission");
     assert.equal(rustTargetTypeRefEquals(physical.result, native), true);
@@ -52,7 +87,8 @@ test("physical adapter substitution preserves selected nested contracts and ever
   const nativeError = rustNamedTargetType("fixture:GenericError", "GenericError", [{ kind: "type", type: parameter }],
     [], undefined, [], undefined, []);
   const selected = select(rustCallableTargetType([], parameter), rustCallableTargetType([integer], parameter));
-  const prepared = rustCallableConversionPhysical(selected, { parameters: [], result: parameter, error: nativeError }, file);
+  const prepared = rustCallableConversionPhysical(selected, { parameters: [], result: parameter, error: nativeError }, file,
+    emptyRustTypeDefinitions, rustCallablePhysicalSignature);
   assert.equal(prepared !== undefined, true, "the exact generic physical adapter is selected once");
   const bindings = { types: new Map([[parameter.identity, wide]]), lifetimes: new Map(), consts: new Map() };
   const apply = carrier => carrier === parameter ? wide : substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
@@ -67,7 +103,8 @@ test("physical adapter substitution preserves selected nested contracts and ever
 
 test("fallible argument and result adapters expose canonical distinct exact error channels", () => {
   const selected = select(rustCallableTargetType([integer], wide), rustCallableTargetType([wide], integer));
-  const physical = rustCallableConversionPhysical(selected, { parameters: [integer], result: wide, error: failure }, file);
+  const physical = rustCallableConversionPhysical(selected, { parameters: [integer], result: wide, error: failure }, file,
+    emptyRustTypeDefinitions, rustCallablePhysicalSignature);
   assert.equal(physical !== undefined, true);
   assert.deepEqual(physical.errors.map(error => error.identity), ["invoke", "parameter:0", "result"]);
   assert.deepEqual(rustCallableConversionErrorArities(selected), [3]);
@@ -86,7 +123,8 @@ test("nested result adaptation reuses its own exact physical payload not the out
   const selected = select(rustCallableTargetType([], original), rustCallableTargetType([], target));
   const nested = { parameters: [], result: wide, error: failure };
   const physical = rustCallableConversionPhysical(selected,
-    { parameters: [], result: physicalCarrier(nested), error: infallible }, file);
+    { parameters: [], result: physicalCarrier(nested), error: infallible }, file,
+    emptyRustTypeDefinitions, rustCallablePhysicalSignature);
   assert.equal(physical !== undefined, true);
   assert.equal(physical.resultPlan.kind, "callable");
   assert.equal(rustTargetTypeRefEquals(physical.error, infallible), true, "constructing the nested adapter is infallible");
@@ -97,7 +135,8 @@ test("nested result adaptation reuses its own exact physical payload not the out
 
 test("borrowed input adapters expose native tuple closure and exact Result without owning storage", () => {
   const selected = select(rustCallableTargetType([], integer), rustCallableInputTargetType([integer], integer));
-  const physical = rustCallableConversionPhysical(selected, { parameters: [], result: integer, error: failure }, file);
+  const physical = rustCallableConversionPhysical(selected, { parameters: [], result: integer, error: failure }, file,
+    emptyRustTypeDefinitions, rustCallablePhysicalSignature);
   assert.equal(physical !== undefined, true);
   assert.equal(physical.carrier.kind, "closure");
   assert.equal(rustTargetTypeRefEquals(rustCallablePhysicalSignature(physical.carrier).error, failure), true);
@@ -106,13 +145,15 @@ test("borrowed input adapters expose native tuple closure and exact Result witho
 test("physical adapter validation rejects malformed selections and inconsistent exact inputs", () => {
   const selected = select(rustCallableTargetType([integer], wide), rustCallableTargetType([wide], integer));
   const actual = { parameters: [integer], result: wide, error: failure };
+  assert.throws(() => rustCallableConversionPhysical(selected, actual, file), /explicit type definitions/u);
+  assert.throws(() => rustCallableConversionPhysical(selected, actual, file, emptyRustTypeDefinitions), /selected source signature decoder/u);
   for (const [label, source] of [["arity", { ...actual, parameters: [] }], ["sparse", { ...actual, parameters: new Array(1) }],
     ["input", { ...actual, parameters: [wide] }], ["result", { ...actual, result: integer }],
     ["missing error", { ...actual, error: undefined }], ["extra", { ...actual, extra: true }]])
-    assert.equal(rustCallableConversionPhysical(selected, source, file) === undefined, true, label);
+    assert.equal(rustCallableConversionPhysical(selected, source, file, emptyRustTypeDefinitions, rustCallablePhysicalSignature) === undefined, true, label);
   for (const changed of [null, undefined, { ...selected, extra: true }, { ...selected, result: { kind: "borrow" } },
     { ...selected, parameters: [] }]) {
-    assert.equal(rustCallableConversionPhysical(changed, actual, file) === undefined, true);
+    assert.equal(rustCallableConversionPhysical(changed, actual, file, emptyRustTypeDefinitions, rustCallablePhysicalSignature) === undefined, true);
     assert.equal(rustCallableConversionErrorArities(changed) === undefined, true);
   }
   assert.equal(rustCallablePhysicalSignature(selected.source) === undefined, true, "logical source cannot masquerade as physical");

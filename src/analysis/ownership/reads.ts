@@ -30,6 +30,7 @@ import type { RustReadUse } from "../../policy/ownership/read-use.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
 
 export interface RustCaptureReadRequirement {
   readonly owner: Node;
@@ -379,6 +380,10 @@ export function prepareRustReadOwnership(input: {
 
 export function analyzeRustReadOwnership(input: {
   readonly requirements: RustReadOwnershipRequirements;
+  readonly operands: readonly {
+    readonly node: RustPhysicalEmissionOperand["node"];
+    readonly origin: Pick<RustPhysicalEmissionOperand["origin"], "kind">;
+  }[];
   readonly movingReads: ReadonlySet<Node>;
   readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]>;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "operandFor">;
@@ -395,6 +400,19 @@ export function analyzeRustReadOwnership(input: {
   const reads = new Map<Node, RustReadOwnershipFact>();
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
   const { budget } = requirements;
+  const emittedReads = new Set<Node>();
+  for (const operand of input.operands) {
+    if (!budget.step() || !budget.row()) return { kind: "rejected", diagnostics: [{
+      code: "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED", category: "error", source: "tsonic-rust",
+      message: budget.failure()!, evidence: ["target.capability=rust.analysis.ownership"],
+    }] };
+    if (!storageReads.has(operand.node)) return { kind: "rejected", diagnostics: [{
+      code: "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust", sourceNode: operand.node,
+      message: "A native operand read requires its original admitted source storage occurrence.",
+      evidence: ["target.capability=rust.analysis.ownership"],
+    }] };
+    if (operand.origin.kind !== "value") emittedReads.add(operand.node);
+  }
   for (const node of requirements.nativeNodes) {
     if (!budget.step()) return { kind: "rejected", diagnostics: [{
       code: "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED", category: "error", source: "tsonic-rust",
@@ -403,7 +421,7 @@ export function analyzeRustReadOwnership(input: {
     const parent = ast.parent(node);
     const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
     const carrier = implicitProperty ? records.sourceParameterAbi.get(parent)?.valueCarrier : records.runtimeCarrier.get(node)?.carrier;
-    if (carrier !== undefined) {
+    if (carrier !== undefined && emittedReads.has(node)) {
       const declaration = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
       const sourceStorageRead = storageReads.get(node)!;
       const captured = declaration === undefined || sourceStorageRead.binding === undefined ? undefined

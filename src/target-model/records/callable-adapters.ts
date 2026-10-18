@@ -6,9 +6,18 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { RustCallablePhysicalConversion } from "../conversions/callable-physical.js";
 import type { RustNativeErrorSource } from "../types/native-error-joins.js";
+import type { RustCallableConversion } from "../conversions/callable.js";
+import type { RustProjectFieldSelection } from "./project-fields.js";
 
 export interface RustCallablePhysicalAdapter<Source extends RustNativeErrorSource<TargetTypeRef> = RustNativeErrorSource<TargetTypeRef>> {
   readonly node: Node;
+  readonly selection: RustCallableConversion;
+  readonly joinOwnerFileName: string;
+  readonly origin:
+    | { readonly kind: "expression"; readonly subject: SourceStorageSubject }
+    | { readonly kind: "parameter"; readonly abi: RustCallableParameterAbi }
+    | { readonly kind: "return"; readonly declaration: Node }
+    | { readonly kind: "field"; readonly selection: RustProjectFieldSelection };
   readonly sourceCarrier: TargetTypeRef;
   readonly sourceInput: SourceStorageSubject | undefined;
   readonly conversion: RustCallablePhysicalConversion<Source>;

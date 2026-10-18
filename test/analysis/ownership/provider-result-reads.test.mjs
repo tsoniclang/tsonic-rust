@@ -62,6 +62,7 @@ function read(holder: Holder): unknown { return observe(${form === "index" ? "ho
   const prepared = prepareRustReadOwnership(input);
   assert.equal(prepared.kind, "resolved", "the raw-result requirements are complete before generic closure");
   const selected = analyzeRustReadOwnership({ requirements: prepared.requirements, movingReads: new Set(), captures: new Map(),
+    operands: [{ node, origin: { kind: "operand" } }],
     nativeStorage: { operandFor: () => ({ kind: "resolved", carrier }) }, borrowEffects: effects,
     definitions: emptyRustTypeDefinitions, typeFamilies: { implementation: () => undefined },
     genericRequirements: { contractFor: declaration => Object.freeze({ declaration,

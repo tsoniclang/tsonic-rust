@@ -7,7 +7,8 @@ import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-da
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
-import { rustProgramErrorTargetType, rustProgramErrorOwner } from "../../../dist/target-model/types/carriers/program-errors.js";
+import { rustProgramErrorOwner } from "../../../dist/target-model/types/carriers/program-errors.js";
+import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { analyzeRust, artifactText, compileRust, nodejsCapability, stringCarrier, unitCarrier } from "../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -41,7 +42,7 @@ function preparedContext(identity, abi, arguments_, nativeOwnerFileName = "/src/
     role: "native-body", specialization: Object.freeze({ kind: "ordinary" }),
     bindings: Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() }),
     returnDestination: Object.freeze({ kind: "none" }), error: Object.freeze({ kind: "none" }),
-    operands: Object.freeze([]), sourceOrigins: Object.freeze([]), nativeOwnerFileName,
+    operands: Object.freeze([]), sourceOrigins: Object.freeze([]), callableAdapters: Object.freeze([]), nativeOwnerFileName,
     nativeOperations: new Map([[abi, Object.freeze({ node: declaration, arguments: Object.freeze(arguments_) })]]),
   });
 }
@@ -55,6 +56,7 @@ function preparation(contexts, operands = []) {
       contexts, operands, sourceOccurrences: [],
       contextFor: use => byUse.get(use), operandFor: use => byOperand.get(use),
       contextForOwner: (subject, role) => contexts.find(context => context.use.subject === subject && context.role === role),
+      bodyContextFor: () => undefined, sourceErrorOperandFor: () => undefined,
       carrierFor: () => undefined, sourceFor: () => undefined, sourceOriginFor: () => undefined,
     },
   };
@@ -70,7 +72,7 @@ test("one immutable source ABI publishes separate required native arguments in a
   const operandUse = targetUseSiteRef(first.declaration, "operand", "first");
   const operand = Object.freeze({ use: operandUse, node: first.declaration, context: first,
     origin: { kind: "operand", evaluation: { kind: "ordinary", site: first.use } },
-    carrier: integer, destination: undefined });
+    carrier: integer, destination: undefined, sourceErrorRegions: [], genericInvocation: undefined });
   const published = publishRustPhysicalEmissionContexts(preparation([first, second], [operand]), () => nativeInput());
   assert.equal(published.kind, "resolved", "both actual native environments publish");
   const firstNative = published.value.contextFor(first.use);

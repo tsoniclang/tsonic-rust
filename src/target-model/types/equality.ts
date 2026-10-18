@@ -15,7 +15,7 @@ import {
 } from "../lifetimes/index.js";
 import { rustNamedTypeCarrierValue } from "./carriers/native.js";
 import { isRustProgramErrorOwner } from "./carriers/program-errors.js";
-import { rustProgramErrorTargetId } from "./carriers/source-types.js";
+import { rustNamedTypeCarrierName, rustProgramErrorTargetId } from "./carriers/source-types.js";
 import type {
   RustLifetimeBinder,
   RustLifetimeRef,
@@ -376,7 +376,10 @@ function validateRustTargetTypeRef(
       case "target-specific":
         return hasExactKeys(value, ["kind", "target", "name", "value"], ["kind", "target", "name"]) &&
           value.target === "rust" && typeof value.name === "string" && value.name.length > 0 &&
-          (!Object.prototype.hasOwnProperty.call(value, "value") || isClosedMetadata(value.value));
+          (!Object.prototype.hasOwnProperty.call(value, "value") || isClosedMetadata(value.value)) &&
+          (value.name !== rustNamedTypeCarrierName || rustNamedTypeCarrierValue({
+            kind: "target-specific", target: "rust", name: value.name, value: value.value,
+          }) !== undefined);
       default:
         return false;
     }

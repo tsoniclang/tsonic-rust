@@ -51,20 +51,15 @@ export function planRustCallableConversion(
   const reference = context.input.program.records.directCallableReference.get(node);
   if (reference !== undefined && !rustTargetTypeRefEquals(reference.carrier, conversion.source)) return undefined;
   const selected = reference === undefined ? expression : planRustSourceCallableValue(reference, context);
-  const operand = context.emissionContext === undefined ? undefined
-    : context.input.program.physicalEmissionContexts.sourceErrorOperandFor(context.emissionContext.use, node);
-  const adapters = operand?.callableAdapters;
-  const adapter = adapters?.length === 1 ? adapters[0] : undefined;
+  const adapter = context.emissionContext?.callableAdapters.find(row => row.node === node && row.selection === conversion);
   const input = adapter?.sourceInput === undefined ? undefined
     : context.input.program.callableValues.native.inputs.find(input => input.subject === adapter.sourceInput);
   if (adapter?.sourceInput !== undefined && input === undefined) return undefined;
   const source: RustNativeCallablePhysicalSource | undefined = adapter === undefined ? undefined : {
     carrier: adapter.sourceCarrier, signature: adapter.conversion.source, ...(input === undefined ? {} : { input }) };
-  const file = context.input.program.source.ast.getSourceFile(node);
-  const fileName = file === undefined ? undefined : context.input.program.source.ast.getFileName(file);
   const physical = adapter?.conversion;
-  return selected === undefined || source === undefined || physical === undefined || fileName === undefined ? undefined
-    : planSelectedRustCallableConversion(physical, source, selected, fileName, node, context);
+  return selected === undefined || source === undefined || physical === undefined || adapter === undefined ? undefined
+    : planSelectedRustCallableConversion(physical, source, selected, adapter.joinOwnerFileName, node, context);
 }
 
 function planSelectedRustCallableConversion(

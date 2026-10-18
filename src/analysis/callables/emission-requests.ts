@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage,
+import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, sourceParameterIsProperty,
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
   sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -32,6 +32,7 @@ export interface RustPhysicalCallableEmissionRequestInput {
   readonly sourceFiles: readonly SourceFile[];
   readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
+  readonly sourceErrorOperandRequired: (node: Node) => boolean;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly generic: RustGenericCallablePlan;
   readonly frames: RustFrameCallablePlan;
@@ -81,6 +82,8 @@ export function rustEmissionDeclarationBindings(
 export function prepareRustPhysicalCallableEmissionRequests(
   input: RustPhysicalCallableEmissionRequestInput,
 ): TargetStageResult<readonly RustPhysicalCallableEmissionRequest[]> {
+  if (typeof input.sourceErrorOperandRequired !== "function")
+    throw new Error("Physical emission requires the completed logical source-error demand owner.");
   const { ast, records } = input;
   const requests: RustPhysicalCallableEmissionRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
@@ -198,11 +201,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const operation = records.targetOperation.get(node);
     const handler = records.nativeHandler.get(node);
     const flow = records.contextualValueConversion.get(node)?.conversion;
-    if (records.sourceErrorEffects.get(node)?.edges.length || records.awaitSourceErrorEffects.get(node)?.branches.length ||
-      records.genericCallableInvocation.get(node) !== undefined || flow?.kind === "callable-adapter")
+    if (input.sourceErrorOperandRequired(node) || flow?.kind === "callable-adapter")
       runtime(owner, node, "source-errors", node);
-    if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter")
-      runtime(owner, node, role, sourceOwner);
+    runtime(owner, node, role, sourceOwner);
     if (handler?.kind === "memory-binding") {
       const selected = handler.selection;
       if (selected.kind === "field") visitUse(selected.expression, owner, "native-memory:value", node);
@@ -347,6 +348,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "parameter-value", abi?.valueCarrier);
         type(node, parameter, "parameter-abi", abi?.parameterCarrier);
+        if (sourceParameterIsProperty(ast, parameter)) {
+          const name = ast.name(parameter);
+          if (name === undefined) diagnostics.push(emissionDiagnostic(parameter,
+            "A native parameter-property load requires its original checked input name."));
+          else runtime(node, name, "parameter-property", parameter);
+        }
         for (const child of sourceConstructValueInputs(ast, parameter)) visitUse(child.expression, node, inputRole(child), child.owner);
       }
       const lexical = input.lexicalFunctions.forDeclaration(node);

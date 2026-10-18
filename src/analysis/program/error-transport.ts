@@ -94,6 +94,11 @@ export function analyzeRustErrorTransport(input: {
     if (component === undefined) reject("A retained Error boundary has no exact source-package identity.");
     else retainedOwners.add(component.componentId);
   }
+  if (diagnostics.length > 0) return rejectedTargetStage(diagnostics);
+  const components = sourcePackageErrorComponents(input);
+  if (components.kind === "rejected") return components;
+  const native = analyzeRustSourcePackageErrors(input, components.value);
+  if (native.plan === undefined) return rejectedTargetStage(native.diagnostics);
   for (const component of input.sourcePackageComponents.components) {
     const variants = byComponent.get(component.componentId);
     if (variants === undefined) continue;
@@ -117,10 +122,6 @@ export function analyzeRustErrorTransport(input: {
     Object.freeze(variants);
   }
   if (diagnostics.length > 0) return rejectedTargetStage(diagnostics);
-  const components = sourcePackageErrorComponents(input);
-  if (components.kind === "rejected") return components;
-  const native = analyzeRustSourcePackageErrors(input, components.value);
-  if (native.plan === undefined) return rejectedTargetStage(native.diagnostics);
   const dependencyIds = new Map(components.value.map(component => [component.componentId, component.dependencyComponentIds]));
   return resolvedTargetStage(Object.freeze({ ...native.plan,
     dependencyComponentIdsFor: (componentId: string) => dependencyIds.get(componentId),
@@ -152,6 +153,11 @@ function sourcePackageErrorComponents(
   input: Parameters<typeof analyzeRustErrorTransport>[0],
 ): TargetStageResult<readonly RustSourcePackageErrorComponent[]> {
   const components = input.sourcePackageComponents.components;
+  for (const component of components) {
+    if (new Set(component.dependencyComponentIds).size !== component.dependencyComponentIds.length)
+      return rejectedTargetStage([errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_BOUNDARY_CONFLICT",
+        `Source-package component '${component.componentId}' requires unique selected dependency identities.`)]);
+  }
   const ids = new Map(components.flatMap(component => component.sourceFileNames.map(file => [file, component.componentId] as const)));
   const dependencies = new Map(components.map(component => [component.componentId, new Set(component.dependencyComponentIds)]));
   for (const construction of input.sourceModuleConstructions.entries()) {

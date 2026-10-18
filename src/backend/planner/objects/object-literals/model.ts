@@ -6,6 +6,7 @@ import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallab
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
+import type { RustObjectLiteralMethodAdapterFact } from "../../../../target-model/records/object-methods.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";
 
@@ -43,6 +44,7 @@ export interface RustObjectLiteralMethodDispatchPlan {
   readonly implementation: RustObjectLiteralMethodImplementationPlan;
   readonly parameters: readonly RustFunctionParam[];
   readonly adapter?: {
+    readonly selection: RustObjectLiteralMethodAdapterFact["dispatches"][number];
     readonly parameterAbis: readonly RustCallableParameterAbi[];
     readonly parameterAdapters: readonly RustCallableParameterAdapter[];
     readonly resultAdapter: RustCallableValueAdapter;

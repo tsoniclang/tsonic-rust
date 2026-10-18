@@ -286,10 +286,14 @@ export function analyzeRustTargetProgram(
   if (readRequirements.kind === "rejected") return rejectedTargetStage(readRequirements.diagnostics);
   const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
+  const projectMethodDispatch = context.projectMethodDispatch.seal();
+  const helperEmissionRequests = context.callableValues.prepareHelperEmissionRequests(classValues, projectMethodDispatch);
+  if (helperEmissionRequests.kind === "rejected") return helperEmissionRequests;
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
     promiseBodies: context.promiseBodies.plan,
-    names: context.names, callables: context.callableValues.selected });
+    names: context.names, callables: context.callableValues.selected,
+    helperEmissionRequests: helperEmissionRequests.value });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const preparedNativeDeclarations = prepareRustNativeDeclarationForms({ ast: context.ast, semanticsFor: context.semanticsFor,
@@ -424,7 +428,6 @@ export function analyzeRustTargetProgram(
     };
   };
   const sourceCallableSpecializations = context.sourceCallableSpecializations.seal();
-  const projectMethodDispatch = context.projectMethodDispatch.seal();
   const callableValues = context.callableValues.seal({
     nativeTypeInputFor: (fileName, callables) => rustNativeTypeSelectionInput(nativeContextFor(fileName, undefined, callables)),
     sourceCallableSpecializations, projectMethodDispatch, lexicalFunctions,
@@ -443,6 +446,7 @@ export function analyzeRustTargetProgram(
       nativeContextFor(fileName, undefined, callableValues.value)));
   if (nativeGenericErrors.kind === "rejected") return nativeGenericErrors;
   const ownership = analyzeRustReadOwnership({ requirements: readRequirements.requirements,
+    operands: callableValues.value.emissionContexts.operands,
     movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
     borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
