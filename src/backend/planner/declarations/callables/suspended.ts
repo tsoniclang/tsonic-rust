@@ -1,7 +1,5 @@
 import type { RustSuspendedCallableImplementation } from "../../../../analysis/callables/suspended-values.js";
-import { rustCallableProtocol, rustLocationTargetType } from "../../../../target-model/types/index.js";
-import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustCallableProtocol } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -9,13 +7,12 @@ import { diagnosticInput, requireRustEmissionContext, rustContextForEmission } f
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../expressions/callable.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeFromCarrierInContext, rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
 import { rustSuspendedCallableStateType } from "../../types/suspended-callables.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { planRustCallableGenerics } from "./generics.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../../../target-model/types/carriers/lifetime-elision.js";
-import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
-import { rustCapturedReceiverFieldType } from "../../expressions/receiver-captures.js";
+import { requireRustNativeCaptureEnvironment, requireRustNativeCaptureStorage } from "../../expressions/binding-storage.js";
 
 export function planRustSuspendedCallableItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
@@ -33,19 +30,9 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
-  context = rustContextForEmission(context, requireRustEmissionContext(context, declaration, "native-body", declaration));
-  const captures = context.input.program.callableValues.nativeCaptures.forDeclaration(declaration);
-  if (captures.kind !== "resolved" ||
-    implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length ||
-    !implementation.captures.every((capture, index) => {
-      const carrier = substituteElidedLifetime(captures.captures[index]!, rustStaticLifetime);
-      return rustTargetTypeRefEquals(implementation.storage[index],
-        capture.storage === "location" ? rustLocationTargetType(carrier) : carrier);
-    }) || !implementation.receiverFields.every((_capture, index) => rustTargetTypeRefEquals(
-      implementation.storage[implementation.captures.length + index], substituteElidedLifetime(captures.receiverFields[index]!, rustStaticLifetime))) ||
-    !implementation.receivers.every((_capture, index) => rustTargetTypeRefEquals(
-      implementation.storage[implementation.captures.length + implementation.receiverFields.length + index],
-      substituteElidedLifetime(captures.receivers[index]!, rustStaticLifetime)))) return undefined;
+  const emission = requireRustEmissionContext(context, declaration, "native-body", declaration);
+  context = rustContextForEmission(context, emission);
+  const nativeEnvironment = requireRustNativeCaptureEnvironment(emission, { kind: "suspended", implementation }, context);
   const genericPlan = planRustCallableGenerics(declaration, context, implementation.parameters);
   if (genericPlan === undefined) return undefined;
   const scoped: RustPlanContext = { ...genericPlan.context,
@@ -68,13 +55,10 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     implementation.elision === undefined ? physical : substituteElidedLifetime(physical, implementation.elision.lifetime), scoped);
   const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[2] : undefined;
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
-  const target = rustSuspendedCallableStateType(implementation, scoped);
-  const storage = [...implementation.captures.map(capture => rustCallableCaptureStorageType(capture, scoped)),
-    ...implementation.receiverFields.map(capture => rustCapturedReceiverFieldType(capture, scoped)),
-    ...implementation.receivers.map((_capture, index) => rustTypeFromCarrierInContext(
-      implementation.storage[implementation.captures.length + implementation.receiverFields.length + index]!, scoped))];
-  if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||
-      storage.some(type => type === undefined)) return undefined;
+  const target = rustSuspendedCallableStateType(nativeEnvironment, scoped);
+  const storage = nativeEnvironment.slots.map((_slot, index) => rustTypeFromSelectedNativeCarrierInContext(
+    requireRustNativeCaptureStorage(nativeEnvironment, index, emission, scoped).storage.slotCarrier, scoped));
+  if (protocol === undefined || argumentsType === undefined || resultType === undefined) return undefined;
   const generics = genericPlan.finalizeGenerics();
   const parameters: RustGenericParameter[] = [...generics.parameters];
   const environment = [
@@ -92,7 +76,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   });
   const body: RustBlock = expression.kind === "closure" ? { statements: [{ kind: "tail", expr: expression.body }] } : expression.body;
   const selfType: RustType = { kind: "named", path: "Self" };
-  const state: RustType = { kind: "tuple", elements: storage as RustType[] };
+  const state: RustType = { kind: "tuple", elements: storage };
   context.usedAliases?.add("rt");
   return [{ kind: "struct", name: implementation.stateName, visibility: "crate",
     generics: { parameters: environment as RustGenericParameter[], wherePredicates: [] }, fields: [{ name: "state", type: state, visibility: "crate" }, {

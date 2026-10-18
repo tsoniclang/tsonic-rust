@@ -104,6 +104,7 @@ export interface RustCallableValueSealInput {
       readonly forms: RustNativeDeclarationForms;
       readonly fieldBindings: readonly RustNativeCallableFieldBinding[];
       readonly nativeBindings: readonly RustNativeStorageBinding[];
+      readonly nativeEnvironments: readonly import("../../target-model/records/physical-emission-contexts.js").RustNativeCaptureEnvironmentStorage[];
     }>;
   readonly nativeTypeInputFor: (fileName: string,
     callables: RustNativeTypeInputContext["callableValues"]) => RustNativeTypeSelectionInput;

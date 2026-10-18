@@ -71,7 +71,8 @@ export function publishRustPhysicalEmissionContexts(
   preparation: RustCallableEmissionPreparation,
   nativeTypeInputFor: (fileName: string) => RustNativeTypeSelectionInput,
   completion: { readonly fieldBindings: readonly RustNativeCallableFieldBinding[];
-    readonly nativeBindings: readonly RustNativeStorageBinding[] },
+    readonly nativeBindings: readonly RustNativeStorageBinding[];
+    readonly nativeEnvironments: readonly import("../../target-model/records/physical-emission-contexts.js").RustNativeCaptureEnvironmentStorage[] },
 ): TargetStageResult<RustCallableEmissionContexts> {
   const contexts = new Map<TargetUseSiteRef, RustPhysicalEmissionContext>();
   const diagnostics: import("@tsonic/target-api/artifacts").TargetDiagnostic[] = [];
@@ -125,9 +126,10 @@ export function publishRustPhysicalEmissionContexts(
       argumentsByAbi.set(abi, Object.freeze(arguments_));
     }
     const { nativeOwnerFileName: _nativeOwnerFileName, nativeOperations: _nativeOperations,
-      nativeBindingRequests: _nativeBindingRequests, ...context } = prepared;
+      nativeBindingRequests: _nativeBindingRequests, nativeCaptureInputs: _nativeCaptureInputs, ...context } = prepared;
     contexts.set(prepared.use, Object.freeze({ ...context, error, callableAdapters: Object.freeze(callableAdapters),
       nativeBindings: Object.freeze(completion.nativeBindings.filter(binding => binding.contextUse === prepared.use)),
+      nativeEnvironments: Object.freeze(completion.nativeEnvironments.filter(environment => environment.use === prepared.use)),
       frameEntries: Object.freeze(frameEntries),
       targetGenericArguments: Object.freeze(argumentsByAbi) }));
   }

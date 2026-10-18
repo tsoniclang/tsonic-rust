@@ -40,7 +40,7 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { collectRustCallableInvocationRequirements,
   type RustCallableInvocationRequirementContext } from "./generic-callable-invocation-requirements.js";
 
-import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
