@@ -220,11 +220,11 @@ export function run(): string {
       }` }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 1);
     const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
-    const subject = requiredStorageSubject(storage, receiver);
-    const selected = demand.storageFor(subject);
+    const selected = storage.subjectFor(receiver);
     assert.equal(selected.kind, "unresolved");
-    assert.equal(selected.reason, "Source storage writes require their exact checked original value producer, iteration element and component projection.");
-    assert.equal(demand.receivesWritableNative(subject), false, "an opaque projection cannot invent a native constructor");
+    assert.equal(selected.reason, "A demanded source storage relation has no completed correlated producer or absence proof.");
+    assert.equal(storage.failureReason(), selected.reason, "the canonical producer refusal is preserved unchanged");
+    assert.equal(demand.nativeConstructors.length, 0, "an opaque projection cannot invent a native constructor");
   });
 
   test(`native Error write demand reaches direct and selected-call throw recovery in ${profile}`, () => {
