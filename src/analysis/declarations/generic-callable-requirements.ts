@@ -384,7 +384,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     for (const signatureCarrier of [
       records.sourceCallableReturn.get(node)?.returnCarrier,
       records.sourceParameterAbi.get(node)?.parameterCarrier,
-      records.bindingProjection.get(node)?.storageCarrier,
+      bindingProjection !== undefined && "storageCarrier" in bindingProjection ? bindingProjection.storageCarrier : undefined,
     ]) {
       if (signatureCarrier === undefined) continue;
       const error = collectType(signatureCarrier);

@@ -109,12 +109,6 @@ function classifyModuleInitialization(
       }
       for (const declaration of variables) {
         if (input.records.compileTimeSource.get(declaration)) continue;
-        const name = input.ast.name(declaration);
-        const nameKind = name === undefined ? undefined : input.ast.kindName(name);
-        if (nameKind === "KindObjectBindingPattern" || nameKind === "KindArrayBindingPattern") {
-          return unresolved(declaration,
-            "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.");
-        }
         const binding = input.records.moduleBinding.get(declaration);
         if (binding === undefined) {
           return unresolved(
@@ -122,13 +116,20 @@ function classifyModuleInitialization(
             "Top-level variable declaration has no finalized Rust module-binding fact.",
           );
         }
+        const name = input.ast.name(declaration);
+        const nameKind = name === undefined ? undefined : input.ast.kindName(name);
+        const pattern = nameKind === "KindObjectBindingPattern" || nameKind === "KindArrayBindingPattern";
+        if (pattern !== (binding.storage === "module-pattern")) {
+          return unresolved(declaration,
+            "Top-level binding pattern requires its finalized ordered root and leaf module-binding evidence.");
+        }
         if (binding.storage === "native-callable" && binding.value !== undefined) {
           const storage = input.records.moduleCallableStorage.get(declaration);
           if (storage === undefined) return unresolved(declaration,
             "Module callable values require their finalized native storage selection.");
           if (storage.kind === "stored") required = true;
         }
-        if (binding.storage === "module-cell") {
+        if (binding.storage === "module-cell" || binding.storage === "module-pattern") {
           required = true;
         }
       }
