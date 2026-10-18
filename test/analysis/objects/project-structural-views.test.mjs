@@ -2,6 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
 import { generalizeRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "../../../dist/analysis/objects/project-structural-views-members.js";
@@ -24,6 +25,58 @@ const source = (type, name = "Box") => rustSourceTypeCarrier("/model.ts", name, 
 const target = (type, options = {}) => rustStructuralObjectTargetType(options.file ?? "/view.ts", [
   { sourceName: "value", type, presence: options.presence ?? "required", readonly: options.readonly ?? true },
 ]);
+
+test("class values publish their complete canonical views once before callable construction", () => {
+  const writes = [];
+  let registry;
+  let selected;
+  let sealCount = 0;
+  let initializeCount = 0;
+  const program = analyzeRustErrorEffects(`
+    type View<Value> = { readonly value?: Value };
+    class Box<Value> { constructor(public value: Value) {} }
+    export function open<Value>(value: Box<Value>): View<Value> { return value; }
+    export function closed(): View<number> { return new Box(7); }
+  `, { surfaces: [] }, original => {
+    registry = original.classValues;
+    const properties = Object.fromEntries(["record", "recordInstanceView", "recordConstructorValue", "recordEnvironment"]
+      .map(method => [method, { value(...arguments_) {
+        assert.equal(selected === undefined, true, `${method}: no producer writes after publication`);
+        writes.push({ method, arguments_ });
+        return registry[method](...arguments_);
+      } }]));
+    properties.seal = { value(context) {
+      sealCount += 1;
+      selected = registry.seal(context);
+      return selected;
+    } };
+    return { ...original, classValues: Object.create(registry, properties),
+      callableValues: Object.create(original.callableValues, {
+        initialize: { value(input) {
+          initializeCount += 1;
+          assert.equal(input.classValues === selected && selected !== undefined, true,
+            "callable construction receives the same complete sealed class plan");
+          return original.callableValues.initialize(input);
+        } },
+      }) };
+  });
+  assert.equal(sealCount, 1, "one source-stage publication");
+  assert.equal(initializeCount, 1, "one callable construction after publication");
+  assert.equal(program.sourceStage.classValues === selected, true, "the final source stage keeps that exact plan");
+  assert.equal(writes.some(write => write.method === "recordInstanceView"), true, "real checked view producers ran before sealing");
+  assert.equal(selected.instanceViewImplementations.length > 0, true, "the actual native implementation inventory is complete");
+  for (const request of registry.instanceViewRequests()) {
+    const view = selected.instanceViewFor(request.sourceCarrier, request.targetCarrier);
+    assert.equal(view !== undefined && selected.instanceViewImplementations.includes(view), true,
+      "lookups return the already-selected canonical implementation, not a raw request");
+    assert.equal(typeof view.ownerFileName, "string", "the same selected implementation owns its native file");
+    assert.equal(selected.instanceViewFor(source(number, "Foreign"), request.targetCarrier) === undefined, true,
+      "an unrelated nominal source cannot acquire a structural implementation");
+  }
+  for (const { method, arguments_ } of writes)
+    assert.throws(() => registry[method](...arguments_), /after sealing/u, `${method}: the original admitted write cannot recur after publication`);
+  assert.throws(() => registry.seal(program), /only once/u, "there is no second publication route");
+});
 
 test("native structural view selection instantiates the same exact source and destination binder", () => {
   const view = { sourceCarrier: source(parameter), targetCarrier: target(parameter) };

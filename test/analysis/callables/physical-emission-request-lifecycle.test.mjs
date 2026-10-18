@@ -59,6 +59,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
   const generic = context.callableValues.generic;
   let queries;
   let physical;
+  let parameterStorage;
   const producers = createRustNativeCallableProducerPlan({ ast, nodes: input.nativeNodes, records, native,
     structuralShapes: context.structuralShapes,
     definitions: context.typeDefinitions, returnCarrierFor(node) {
@@ -81,6 +82,9 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
     producers.selectConstructionErrors(errors);
   }
   queries = createRustNativeStorageQueries({ ast, nativeNodes: input.nativeNodes, storage: sourceStorage, records,
+    projectTypes: input.projectTypes, projectMethodDispatch: input.projectMethodDispatch,
+    classValues: input.classValues,
+    parameterFor: parameter => parameterStorage.parameterFor(parameter),
     definitions: context.typeDefinitions, native, producers, generic,
     physicalCarrierFor: (carrier, fileName, subject, bindings, selected) =>
       physical.carrierFor(carrier, fileName, subject, bindings, selected),
@@ -92,6 +96,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
     genericBindingsFor: queries.genericBindingsFor,
   });
   const storage = finalizeRustNativeParameterStorage({ ast, storage: sourceStorage, nativeNodes: input.nativeNodes, records }, queries);
+  parameterStorage = storage;
   const occurrences = prepareRustProviderSourceOccurrences({ ast, records, nodes: input.nativeNodes,
     isNativeNode: input.isNativeNode, semantics: sourceStorage.source.semantics });
   assert.equal(occurrences.kind, "resolved", "the canonical source owner selects the entire original occurrence vector");

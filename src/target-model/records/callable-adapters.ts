@@ -15,7 +15,9 @@ export interface RustCallablePhysicalAdapter<Source extends RustNativeErrorSourc
   readonly joinOwnerFileName: string;
   readonly origin:
     | { readonly kind: "expression"; readonly subject: SourceStorageSubject }
-    | { readonly kind: "parameter"; readonly abi: RustCallableParameterAbi }
+    | { readonly kind: "parameter"; readonly abi: RustCallableParameterAbi;
+        readonly source: { readonly kind: "original-formal"; readonly parameter: Node }
+          | { readonly kind: "generated-abi" } }
     | { readonly kind: "return"; readonly declaration: Node }
     | { readonly kind: "field"; readonly selection: RustProjectFieldSelection };
   readonly sourceCarrier: TargetTypeRef;

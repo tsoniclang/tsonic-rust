@@ -12,6 +12,8 @@ import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callab
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
+import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
+import { nativeCallableConstructionFixture } from "../../helpers/physical-callable-adapters.mjs";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeChildren } from "../../../dist/target-model/types/carriers/children.js";
@@ -80,7 +82,7 @@ function compileObserved(options) {
 }
 
 function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records, wrapStorage = storage => storage) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  const { program, source: checked, input: constructionInput } = nativeCallableConstructionFixture({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
   const storage = wrapStorage(createSourceStorageQuery(source, program.sourceFiles));
   const records = wrapRecords(program.records);
@@ -92,7 +94,11 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   const registry = createRustGenericCallablePlan(source.ast, program.sourceFiles, records, program.names, source.navigation,
     node => nativeNodeSet.has(node));
   let physical;
+  let parameterStorage;
   const input = { ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
+    carrierHost: { ...constructionInput.carrierHost, sourceStorage: storage }, classValues: constructionInput.classValues,
+    projectTypes: program.projectTypes, projectMethodDispatch: program.projectMethodDispatch,
+    parameterFor: parameter => parameterStorage.parameterFor(parameter),
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
@@ -116,6 +122,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   physical = registry.initializePhysical({ ...input, native, captures,
     genericBindingsFor: (declaration, bindings) => queries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
+  parameterStorage = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   const implementations = registry.plan.definitions.flatMap(definition => definition.implementations);

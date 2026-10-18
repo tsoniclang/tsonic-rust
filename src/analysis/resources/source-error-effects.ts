@@ -30,12 +30,14 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../callables/native-producers.js";
+import { selectRustSourceMethodInvocation } from "../callables/native-storage-generics.js";
 
-type RustSourceErrorContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage" | "typeDefinitions"> & {
+type RustSourceErrorContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage" | "typeDefinitions" |
+  "projectTypes" | "projectMethodDispatch"> & {
   readonly callableValues: {
     readonly native: RustNativeCallableInputPlan;
     readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;
-    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor" | "invocationOriginsFor">;
+    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor" | "invocationOriginsFor" | "logicalCarrierFor" | "genericBindingsFor">;
   };
 };
 
@@ -114,10 +116,32 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     const signature = walk.context.records.selectedCall.get(node);
     const operation = walk.context.records.targetOperation.get(node);
     const storageBindings = activation?.storageBindings;
-    const generics = activation === undefined ? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
+    let generics = activation === undefined ? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
       operation?.kind === "source-call" ? operation.targetGenericArguments ?? [] : []) : activation.genericBindings;
     if (generics === undefined) return undefined;
     const caller = sourceEnclosingCallable(node, walk.context.ast);
+    if (activation === undefined && operation?.kind === "source-call" && operation.target.form === "method") {
+      const callerBindings = caller === undefined ? walk.context.sourceStorage.emptyBindings : native.bindingsFor(caller);
+      if (callerBindings === undefined) return undefined;
+      const callerGenerics = caller === undefined ? { kind: "resolved" as const,
+        bindings: { types: new Map<string, TargetTypeRef>(), lifetimes: new Map<string, RustLifetimeRef>(),
+          consts: new Map<string, RustTargetConstArgument>() } }
+        : walk.context.callableValues.nativeStorage.genericBindingsFor(caller, callerBindings);
+      if (callerGenerics.kind === "unresolved") return undefined;
+      const selected = selectRustSourceMethodInvocation({ ast: walk.context.ast, records: walk.context.records,
+        storage: walk.context.sourceStorage, projectTypes: walk.context.projectTypes, projectMethodDispatch: walk.context.projectMethodDispatch,
+        logicalCarrierFor: walk.context.callableValues.nativeStorage.logicalCarrierFor }, node, callerBindings, callerGenerics.bindings);
+      if (selected?.kind !== "resolved") return undefined;
+      if (selected.value.length !== 0) {
+        const matching = selected.value.filter(row => row.body.declaration === declaration);
+        const selectedBindings = matching[0]?.implementationBindings;
+        if (selectedBindings === undefined || matching.some(row => closedMetadataKey({ types: [...row.implementationBindings.types],
+          lifetimes: [...row.implementationBindings.lifetimes], consts: [...row.implementationBindings.consts] }) !==
+          closedMetadataKey({ types: [...selectedBindings.types], lifetimes: [...selectedBindings.lifetimes], consts: [...selectedBindings.consts] })))
+          return undefined;
+        generics = selectedBindings;
+      }
+    }
     const available = new Set(caller === undefined ? [] : [...native.inputsFor(caller), ...native.capturesFor(caller)]);
     const types = new Map(generics.types);
     const lifetimes = new Map<string, RustLifetimeRef>(activation === undefined ? [...generics.lifetimes,
@@ -191,10 +215,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         deferredInputs.add(identity);
         continue;
       }
-      if (storageBindings === undefined && input.owner !== declaration) {
-        if (!available.has(input)) return undefined;
-        continue;
-      }
+      if (storageBindings === undefined && input.owner !== declaration && available.has(input)) continue;
       const absenceWitness = walk.context.callableValues.nativeStorage.invocationWitnessFor(input, node);
       if (absenceWitness !== undefined) {
         absentInputs.add(identity);

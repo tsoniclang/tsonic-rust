@@ -17,6 +17,7 @@ import { rustSourceUnionPayloadArguments } from "../../../target-model/types/sou
 import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
+import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
 import { rustProducerErrorReference, type RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinIdentity, rustNativeErrorJoinReference, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
@@ -66,12 +67,20 @@ export type RustNativeTypeSelectionResult =
   | { readonly kind: "resolved"; readonly carrier: TargetTypeRef }
   | { readonly kind: "rejected"; readonly subject: TargetTypeRef; readonly reason: string };
 
-export function rustNativeCallableAbi(carrier: TargetTypeRef):
+type RustLogicalNativeCallableAbi =
   | { readonly kind: "stored"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
       readonly error: TargetTypeRef; readonly lifetime: RustLifetimeRef; readonly runtimeResult: boolean }
   | { readonly kind: "input"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
-      readonly error: TargetTypeRef; readonly binder: RustLifetimeBinder }
-  | undefined {
+      readonly error: TargetTypeRef; readonly binder: RustLifetimeBinder };
+
+export function rustNativeCallableAbi(input: { readonly kind: "logical"; readonly carrier: TargetTypeRef }): RustLogicalNativeCallableAbi | undefined;
+export function rustNativeCallableAbi(input: { readonly kind: "physical"; readonly carrier: TargetTypeRef }): RustCallablePhysicalSignature | undefined;
+export function rustNativeCallableAbi(input: { readonly kind: "logical" | "physical"; readonly carrier: TargetTypeRef }):
+  RustLogicalNativeCallableAbi | RustCallablePhysicalSignature | undefined {
+  if (input === null || typeof input !== "object") return undefined;
+  if (input.kind === "physical") return rustCallablePhysicalSignature(input.carrier);
+  if (input.kind !== "logical") return undefined;
+  const carrier = input.carrier;
   const type = carrier.kind === "reference" && !carrier.mutable && carrier.referent.kind === "target-named" &&
     carrier.referent.id === rustCallableInputTargetId ? carrier.referent : carrier;
   if (type.kind !== "target-named" || type.id !== rustCallableTargetId && type.id !== rustCallableInputTargetId) return undefined;
@@ -372,7 +381,7 @@ export function selectRustNativeTypeCarrier(
   };
   const callableFor = (type: Extract<TargetTypeRef, { readonly kind: "target-named" }>,
     nativePosition: RustNativeTypePosition): TargetTypeRef | undefined => {
-    const signature = rustNativeCallableAbi(type);
+    const signature = rustNativeCallableAbi({ kind: "logical", carrier: type });
     if (signature === undefined) return reject(type, "Native callable requires its exact argument, result, error and lifetime contract.");
     const selectedParameters = select({ kind: "tuple", elements: signature.parameters }, "general");
     const selectedResult = select(signature.result, "general");

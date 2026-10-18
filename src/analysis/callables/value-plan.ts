@@ -23,7 +23,8 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
-import { createRustNativeStorageQueries, type RustNativeStorageConstruction, type RustNativeStoragePlan } from "./native-storage.js";
+import { createRustNativeStorageQueries, type RustNativeStorageConstruction, type RustNativeStoragePlan,
+  type RustNativeStorageSelection } from "./native-storage.js";
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests,
@@ -115,11 +116,13 @@ export interface RustCallableValuePlanInput {
   readonly navigation: SourceProgramNavigation;
   readonly lifetimes: RustLifetimeIndex;
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
+  readonly classValues: RustClassValuePlan;
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly ownership: RustCallableOwnershipPlan;
   readonly sourceStorage: SourceStorageQueries;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
@@ -316,9 +319,15 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
+  let parameterStorage: RustNativeStoragePlan | undefined;
+  const parameterFor = (parameter: Node): RustNativeStorageSelection => {
+    if (parameterStorage === undefined) throw new Error("Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
+    return parameterStorage.parameterFor(parameter);
+  };
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
-    carrierHost: input.carrierHost,
+    carrierHost: input.carrierHost, projectTypes: input.projectTypes, projectMethodDispatch: input.projectMethodDispatch,
+    classValues: input.classValues, parameterFor,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) => {
       if (physicalCarrierFor === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
       return physicalCarrierFor(carrier, ownerFileName, subject, bindings, producers);
@@ -331,13 +340,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     genericBindingsFor: (declaration, bindings) => nativeStorageQueries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
-  let parameterStorage: RustNativeStoragePlan | undefined;
-  const nativeStorage: RustNativeStorageConstruction = Object.freeze({ ...nativeStorageQueries,
-    parameterFor(parameter: Node) {
-      if (parameterStorage === undefined) throw new Error("Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
-      return parameterStorage.parameterFor(parameter);
-    },
-  });
+  const nativeStorage: RustNativeStorageConstruction = Object.freeze({ ...nativeStorageQueries, parameterFor });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
   const issues = Object.freeze([...generic.issues, ...nativeStorage.issues]);
   const construction: RustCallableValueConstruction = Object.freeze({ generic, native, nativeStorage, nativeProducers, issues });

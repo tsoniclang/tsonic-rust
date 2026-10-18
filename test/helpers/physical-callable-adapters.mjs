@@ -16,6 +16,35 @@ import { publishRustCallablePhysicalConversion } from "../../dist/analysis/progr
 import { nativeDeclarationSelectionInput } from "./native-type-selection.mjs";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
+import { compileRust } from "./rust-session.mjs";
+import { analyzeRustCheckedContext } from "./rust-session/analysis-context.mjs";
+
+export function nativeCallableConstructionFixture(options) {
+  let program;
+  let input;
+  let sourcePackageComponents;
+  let host;
+  const compiled = compileRust({ ...options, compileTarget(request) {
+    host = request.input;
+    program = analyzeRustCheckedContext(request, context => {
+      const original = context.callableValues;
+      return { ...context, callableValues: Object.create(original, {
+        initialize: { value(selected) { input = selected; return original.initialize(selected); } },
+        preparePhysicalStorage: { value(components, effectsFor) {
+          sourcePackageComponents = components;
+          return original.preparePhysicalStorage(components, effectsFor);
+        } },
+      }) };
+    });
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: program.diagnostics };
+  } });
+  assert.equal(compiled.result.diagnostics.length, 0, compiled.result.diagnostics.map(diagnostic =>
+    `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+  assert.equal(input !== undefined && sourcePackageComponents !== undefined && host !== undefined, true,
+    "the complete checked source lifecycle supplies the original private construction and component inputs");
+  return { source: compiled.source, input, context: program,
+    program: { ...program, host, sourcePackageComponents, lexicalFunctions: input.lexicalFunctions, classValues: input.classValues } };
+}
 
 export function admitNativeCallableAdapter(current, conversion, node = current.node) {
   const program = current.program;

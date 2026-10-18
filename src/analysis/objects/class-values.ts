@@ -52,7 +52,7 @@ export interface RustClassValuePlan {
   readonly constructorViewImplementations: readonly (RustClassValueView & { readonly ownerFileName: string })[];
   readonly instanceViews: readonly RustProjectStructuralView[];
   readonly instanceViewImplementations: readonly RustProjectStructuralViewImplementation[];
-  instanceViewFor(sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef): RustProjectStructuralView | undefined;
+  instanceViewFor(sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef): RustProjectStructuralViewImplementation | undefined;
   forDeclaration(declaration: Node): RustClassValueDefinition | undefined;
   forCarrier(carrier: TargetTypeRef): RustClassValueDefinition | undefined;
   viewFor(declaration: Node, sourceCarrier: TargetTypeRef, carrier: TargetTypeRef): RustClassValueDefinition["views"][number] | undefined;
@@ -228,12 +228,14 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
           }) }),
         }));
       }
+      const constructorViewImplementations = selectRustProjectViewImplementations([...byDeclaration.values()].flatMap(definition => definition.views), context);
+      const instanceViewImplementations = selectRustProjectViewImplementations(instanceViews, context);
       return Object.freeze({
-        constructorViewImplementations: selectRustProjectViewImplementations([...byDeclaration.values()].flatMap(definition => definition.views), context),
+        constructorViewImplementations,
         instanceViews: Object.freeze([...instanceViews]),
-        instanceViewImplementations: selectRustProjectViewImplementations(instanceViews, context),
+        instanceViewImplementations,
         instanceViewFor: (sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef) =>
-          instanceViews.find(view => rustProjectViewMatches(view, sourceCarrier, targetCarrier)),
+          instanceViewImplementations.find(view => rustProjectViewMatches(view, sourceCarrier, targetCarrier)),
         forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
         forCarrier(carrier: TargetTypeRef) {
           const definition = context.projectTypes.definitionForCarrier(carrier);
