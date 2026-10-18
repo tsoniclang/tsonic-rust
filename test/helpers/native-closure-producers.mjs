@@ -10,6 +10,10 @@ import { createRustSyntheticNameState } from "../../dist/backend/planner/names/s
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { createRustNativeCallableProducerPlan } from "../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../dist/analysis/errors/error-types.js";
+import { rustCallableProtocol } from "../../dist/target-model/types/carriers/callables.js";
+import { rustNativeFixtureNodes } from "./records.mjs";
 
 export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source, packages = [],
   selectRecords = records => records, selectProducers = value => value,
@@ -34,9 +38,36 @@ export function create(): () => ${output} {
   assert.equal(closures.length, 1, "one checked closure producer");
   const node = closures[0];
   const records = selectRecords(original.records, node);
+  const owner = sourceEnclosingCallable(ast.parent(node), ast);
+  assert.equal(owner !== undefined, true, "the fixture closure has its original checked lexical owner");
+  let nativeProducers = original.callableValues.nativeProducers;
+  if (records !== original.records) {
+    const construction = createRustNativeCallableProducerPlan({ ast, records, nodes: rustNativeFixtureNodes(original),
+      native: original.callableValues.native, definitions: original.typeDefinitions, structuralShapes: original.structuralShapes,
+      returnCarrierFor(declaration) {
+        const selected = original.callableValues.nativeStorage.returnFor(declaration);
+        return selected.kind === "unresolved" ? undefined : selected.carrier;
+      } });
+    const errors = new Map();
+    for (const producer of construction.producers) {
+      const intrinsic = construction.errorFor(producer.declaration, "invoke");
+      const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, { ast, records,
+        components: original.sourcePackageComponents, producers: construction, definitions: original.typeDefinitions }, producer.declaration);
+      if (selected !== undefined) errors.set(producer.declaration, selected);
+    }
+    construction.selectConstructionErrors(errors);
+    const context = original.physicalEmissionContexts.contextForOwner(owner, "native-body");
+    assert.equal(context !== undefined, true, "the producer fixture retains its original emitted use context");
+    const carrier = records.targetOperation.get(node)?.resultCarrier;
+    const requests = rustCallableProtocol(carrier) === undefined ? [] : [Object.freeze({ kind: "producer", subject: node,
+      declaration: node, owner, carrier, context: context.use, bindings: context.bindings })];
+    const completed = construction.seal(Object.freeze(requests));
+    assert.equal(completed.kind, "resolved", "the actual producer owner seals the selected fixture carrier before planning");
+    nativeProducers = completed.value;
+  }
   const program = { ...original, records, physicalEmissionContexts: selectEmissionContexts(original.physicalEmissionContexts, node),
     callableValues: { ...original.callableValues,
-    nativeProducers: selectProducers(original.callableValues.nativeProducers),
+    nativeProducers: selectProducers(nativeProducers),
   } };
   const planning = createRustPlanningContext(program);
   const facades = materializeRustSourcePackageFacades(planning, program.sourceOutputIdentities);
@@ -52,8 +83,6 @@ export function create(): () => ${output} {
   const component = components.components.find(value => value.componentId === identity?.componentId);
   assert.equal(identity !== undefined && component !== undefined, true, "the producer has its exact native source identity");
   const bodyContexts = [];
-  const owner = sourceEnclosingCallable(ast.parent(node), ast);
-  assert.equal(owner !== undefined, true, "the fixture closure has its original checked lexical owner");
   const emissionContext = program.physicalEmissionContexts.contextForOwner(owner, "native-body");
   assert.equal(emissionContext !== undefined, true, "the fixture uses its exact published enclosing native body");
   const context = {

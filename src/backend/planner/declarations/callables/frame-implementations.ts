@@ -3,10 +3,11 @@ import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, Rus
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { diagnosticInput, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
+import { requireRustNativeFrameStorage } from "../../expressions/binding-storage.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
-import { rustFrameCallableTypes } from "../../types/frame-callables.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 import { rustFrameBindingContext, rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { planNativeModuleFunction } from "./functions.js";
@@ -119,16 +120,26 @@ function entryEquality(entry: RustFrameCallableEntryDefinition, target: RustType
 function planFrameEntry(
   definition: RustFrameCallableDefinition, entry: RustFrameCallableEntryDefinition, context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const carrier = entry.implementations[0]?.carrier;
-  const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
-  const boundary = rustCurrentErrorBoundary(context);
-  if (types === undefined || boundary === undefined) return undefined;
+  const nativeFrame = requireRustNativeFrameStorage(definition, context.emissionContext);
+  const frameType = rustTypeFromSelectedNativeCarrierInContext(nativeFrame.carrier, context);
+  const emission = requireRustEmissionContext(context, definition, "frame", definition.activation.ownerDeclaration);
+  const signatures = emission.frameEntries.filter(selected => selected.entry === entry);
+  if (signatures.length !== 1) return failRustPlannerInvariant(
+    "A sealed native frame entry lost its exact selected invocation ABI.", definition.activation.ownerDeclaration);
+  const signature = signatures[0]!;
+  const argumentTypes = signature.parameters.map(carrier => rustTypeFromSelectedNativeCarrierInContext(carrier, context));
+  const returned = rustTypeFromSelectedNativeCarrierInContext(signature.result, context);
+  const error = rustTypeFromSelectedNativeCarrierInContext(signature.error, context);
+  const resultType: RustType = { kind: "named", path: "Result", genericArguments: [
+    { kind: "type", type: returned }, { kind: "type", type: error },
+  ] };
   const generics = definitionGenerics(definition, context);
+  const entryType: RustType = { kind: "named", path: entry.targetName, genericArguments: generics.parameters
+    .filter(parameter => parameter.kind === "type").map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })) };
+  const types = { frameType, entryType };
   const items: RustItem[] = [];
   const variants: Extract<RustItem, { readonly kind: "enum" }>["variants"][number][] = [];
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
-  let argumentTypes: readonly RustType[] | undefined;
-  let resultType: RustType | undefined;
   for (const implementation of entry.implementations) {
     if (implementation.independent) continue;
     const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
@@ -156,13 +167,7 @@ function planFrameEntry(
       requireRustEmissionContext(context, implementation.declaration, "native-body", implementation.declaration));
     if (helper?.kind !== "function" || helper.isAsync === true) return undefined;
     const parameters = helper.params;
-    argumentTypes ??= parameters.map(parameter => parameter.type);
     const fallible = helper.errorType !== undefined;
-    const output: RustType = { kind: "named", path: "Result", genericArguments: [
-      { kind: "type" as const, type: helper.returnType ?? { kind: "unit" as const } },
-      { kind: "type" as const, type: rustErrorType(boundary) },
-    ] };
-    resultType ??= output;
     items.push({ ...helper, generics, params: [
       { name: frameName, type: suspended ? shared(types.frameType)
         : { kind: "reference", referent: shared(types.frameType), mutable: false } },
@@ -186,7 +191,6 @@ function planFrameEntry(
         ? { kind: "wildcard" as const } : { kind: "binding" as const, name: "state" }]),
     ] }, expression: fallible ? call : { kind: "call", path: "Ok", args: [call] } });
   }
-  if (argumentTypes === undefined || resultType === undefined) return undefined;
   const independentType: RustType = { kind: "named", path: "rt::Callable", genericArguments: [
     { kind: "lifetime", lifetime: { kind: "static" } },
     { kind: "type", type: { kind: "tuple", elements: argumentTypes } }, { kind: "type", type: resultType },

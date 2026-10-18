@@ -3,6 +3,7 @@ import type { RustExpr, RustItem, RustStmt } from "../../target-ast/syntax/nodes
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
 import { planRustModuleCell } from "../project/module-storage.js";
+import { requireRustNativeBindingStorage } from "../expressions/binding-storage.js";
 
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -39,7 +40,7 @@ export function planRustClassValues(declaration: Node, context: RustPlanContext)
   const type = rustClassEnvironmentHandleType(definition.environment.carrier, context);
   const value = planRustClassEnvironmentValue(declaration, context);
   if (type === undefined || value === undefined) return undefined;
-  const storage = planRustModuleCell(definition.environment.bindingName, type, value,
-    rustSourceItemIsPubliclyReachable(context, definition.environment.bindingName) ? "public" : "crate", context.syntheticNames);
+  const storage = planRustModuleCell(definition.environment.bindingName, requireRustNativeBindingStorage(declaration, context), value,
+    rustSourceItemIsPubliclyReachable(context, definition.environment.bindingName) ? "public" : "crate", context.syntheticNames, context);
   return { items: storage.items, initialization: [storage.initialization] };
 }

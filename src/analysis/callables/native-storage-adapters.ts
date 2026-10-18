@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageSubject, TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -26,7 +26,8 @@ import { rustCallableInvocationResult } from "./results.js";
 import { selectRustSourceMethodInvocation, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { rustStructuralMethodConstructionFor } from "./structural-method-storage.js";
 import type { RustNativeCallableInput } from "./native-inputs.js";
-import type { RustCallablePhysicalAdapterPreparation, RustNativeStorageQueryInput, RustNativeStorageSelection } from "./native-storage.js";
+import type { RustCallablePhysicalAdapterPreparation, RustNativeCallableFieldContext, RustNativeStorageQueryInput, RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeCallableFieldBinding } from "../declarations/native-forms.js";
 
 type RustNativeCallableStorageVisitor = (current: TargetTypeRef, selectedSubject: SourceStorageSubject,
   bindings: SourceStorageBindings, depth: number, permitsAbsence: boolean, position?: "value" | "input") => TargetTypeRef | undefined;
@@ -54,13 +55,14 @@ export function createRustNativeCallableStorageSelection(input: RustNativeStorag
       input.definitions, rustCallablePhysicalSignature);
     if (physical === undefined) return fail("Native callable conversion storage has no exact physical adaptation contract.");
     const previous = callableAdapters.find(adapter => adapter.node === node && adapter.selection === selection);
-    if (previous !== undefined && (previous.sourceInput !== source.input?.subject ||
+    if (previous !== undefined && (previous.source.kind !== "selected" || previous.source.input !== source.input?.subject ||
       !(previous.origin.kind === "expression" && origin.kind === "expression" && previous.origin.subject === origin.subject ||
-        previous.origin.kind === "return" && origin.kind === "return" && previous.origin.declaration === origin.declaration) || !rustTargetTypeRefEquals(previous.sourceCarrier, source.carrier) ||
+        previous.origin.kind === "return" && origin.kind === "return" && previous.origin.declaration === origin.declaration) || !rustTargetTypeRefEquals(previous.source.carrier, source.carrier) ||
       !closedMetadataEquals(previous.conversion, physical)))
       return fail("One native callable adapter requires its exact single selected physical source and conversion.");
     if (previous === undefined) callableAdapters.push(Object.freeze({ node, selection, origin,
-      joinOwnerFileName: nativeOwnerFileName, sourceCarrier: source.carrier, sourceInput: source.input?.subject, conversion: physical }));
+      joinOwnerFileName: nativeOwnerFileName, source: Object.freeze({ kind: "selected", carrier: source.carrier,
+        input: source.input?.subject }), conversion: physical }));
     return physical.carrier;
   };
   const helperValue = (node: Node, adapter: RustCallableValueAdapter, physical: TargetTypeRef,
@@ -207,13 +209,17 @@ export function prepareRustNativeCallableStorageAdapter(input: Pick<RustNativeSt
     readonly returnFor: (declaration: Node) => RustNativeStorageSelection;
   }, node: Node, conversion: RustCallableConversion,
   origin: Exclude<RustCallablePhysicalAdapter["origin"], { readonly kind: "expression" }>,
-  bindings: RustTargetGenericBindings, nativeOwnerFileName: string): TargetStageResult<RustCallablePhysicalAdapterPreparation> {
+  bindings: RustTargetGenericBindings, nativeOwnerFileName: string,
+  fieldContext: RustNativeCallableFieldContext): TargetStageResult<RustCallablePhysicalAdapterPreparation> {
   const reject = (message: string): TargetStageResult<RustCallablePhysicalAdapterPreparation> => rejectedTargetStage([{
     code: "RUST_NATIVE_CALLABLE_ADAPTER_NOT_PROVEN", category: "error", source: "tsonic-rust", sourceNode: node,
     message, evidence: ["target.capability=rust.callable-value.exact-implementation"],
   }]);
   if (!input.nodes.has(node) || origin.kind === "return" && !input.nodes.has(origin.declaration))
     return reject("A generated callable adaptation requires its original checked helper and selected ABI slot.");
+  if (fieldContext === undefined || typeof fieldContext.prepareCallableField !== "function" ||
+    typeof fieldContext.frameSignatureFor !== "function")
+    return reject("A generated callable adaptation requires its exact emission context and declared-field preparation owner.");
   const sourceFile = input.ast.getSourceFile(node);
   if (sourceFile === undefined || nativeOwnerFileName.length === 0)
     return reject("A generated callable adaptation requires its exact source join owner and native emission owner.");
@@ -250,16 +256,45 @@ export function prepareRustNativeCallableStorageAdapter(input: Pick<RustNativeSt
       input.definitions, apply);
     sourceSignatureFor = rustCallablePhysicalSignature;
   } else if (origin.kind === "field") {
-    return reject("A generated field adaptation requires its original selected final native field ABI and exact emission context.");
+    const prepared = fieldContext.prepareCallableField({ use: fieldContext.use, node, selection: origin.selection,
+      conversion, sourceBindings: bindings, nativeOwnerFileName });
+    if (prepared.kind === "rejected") return prepared;
+    const field = prepared.value;
+    let signature: TargetStageResult<RustCallablePhysicalSignature>;
+    let nestedSignatureFor: (carrier: TargetTypeRef) => RustCallablePhysicalSignature | undefined;
+    if (field.kind === "declared") {
+      signature = resolvedTargetStage(field.signature);
+      nestedSignatureFor = carrier => {
+        const nested = rustNativeCallableAbi({ kind: "logical", carrier });
+        return nested === undefined ? undefined : Object.freeze({
+          parameters: nested.parameters, result: nested.result, error: nested.error });
+      };
+    } else if (field.binding.entry !== undefined) {
+      signature = fieldContext.frameSignatureFor(field.binding, field.boundFrameCarrier, field.sourceBindings);
+      nestedSignatureFor = rustCallablePhysicalSignature;
+    } else {
+      const storage = field.physical.kind === "identity" ? { kind: "identity" as const, carrier: field.boundFrameCarrier }
+        : { kind: "selected" as const, carrier: field.boundFrameCarrier, inputs: field.physical.inputs };
+      const actual = rustNativeCallablePhysicalSource(selected.source, storage, input.definitions, apply);
+      if (actual === undefined) return reject("A captured field adaptation requires its original completed native input protocol and physical payload.");
+      signature = resolvedTargetStage(actual.signature);
+      nestedSignatureFor = rustCallablePhysicalSignature;
+    }
+    if (signature.kind === "rejected") return signature;
+    const physical = rustCallableConversionPhysical(selected, signature.value, nativeOwnerFileName,
+      input.definitions, nestedSignatureFor);
+    return physical === undefined ? reject("A declared field adaptation has no complete selected source ABI and native conversion.")
+      : resolvedTargetStage(Object.freeze({ node, selection: conversion, origin, joinOwnerFileName: nativeOwnerFileName,
+        source: Object.freeze({ kind: "field", preparation: prepared.value }), conversion: physical }));
   } else {
     if (origin.kind !== "parameter" || origin.source.kind !== "generated-abi")
       return reject("A generated callable input requires its explicitly selected generated ABI role.");
-      const signature = rustNativeCallableAbi({ kind: "logical", carrier: selected.source });
+    const signature = rustNativeCallableAbi({ kind: "logical", carrier: selected.source });
     if (signature === undefined) return reject("A generated input or field adaptation requires its selected native callable ABI contract.");
     source = { carrier: selected.source,
       signature: Object.freeze({ parameters: signature.parameters, result: signature.result, error: signature.error }) };
     sourceSignatureFor = carrier => {
-        const nested = rustNativeCallableAbi({ kind: "logical", carrier });
+      const nested = rustNativeCallableAbi({ kind: "logical", carrier });
       return nested === undefined ? undefined : Object.freeze({
         parameters: nested.parameters, result: nested.result, error: nested.error });
     };
@@ -269,7 +304,27 @@ export function prepareRustNativeCallableStorageAdapter(input: Pick<RustNativeSt
     input.definitions, sourceSignatureFor);
   return physical === undefined ? reject("A generated callable adaptation has no complete bound physical conversion.")
     : resolvedTargetStage(Object.freeze({ node, selection: conversion, origin, joinOwnerFileName: nativeOwnerFileName,
-      sourceCarrier: source.carrier, sourceInput: source.input?.subject, conversion: physical }));
+      source: Object.freeze({ kind: "selected", carrier: source.carrier, input: source.input?.subject }), conversion: physical }));
+}
+
+export function completeRustNativeCallableStorageAdapter(
+  preparation: RustCallablePhysicalAdapterPreparation,
+  fields: readonly RustNativeCallableFieldBinding[],
+  use: TargetUseSiteRef,
+): TargetStageResult<Omit<RustCallablePhysicalAdapter, "conversion"> & {
+  readonly conversion: RustCallablePhysicalAdapterPreparation["conversion"];
+}> {
+  const { source, ...adapter } = preparation;
+  if (source.kind === "selected") return resolvedTargetStage(Object.freeze({ ...adapter,
+    sourceCarrier: source.carrier, sourceInput: source.input }));
+  const matches = fields.filter(field => field.preparation === source.preparation && field.contextUse === use);
+  const field = matches.length === 1 ? matches[0] : undefined;
+  if (field === undefined || field.declaration !== source.preparation.declaration ||
+    field.owner.kind !== "field" || field.owner.storageIndex !== source.preparation.storageIndex ||
+    field.owner.targetName !== source.preparation.targetName || field.sourceBindings !== source.preparation.sourceBindings)
+    return rejectedTargetStage([{ code: "RUST_NATIVE_CALLABLE_FIELD_ABI_NOT_PREPARED", category: "error", source: "tsonic-rust",
+      sourceNode: preparation.node, message: "A generated field adaptation requires its one original completed native field in the exact helper context." }]);
+  return resolvedTargetStage(Object.freeze({ ...adapter, sourceCarrier: field.callablePayloadCarrier, sourceInput: undefined }));
 }
 
 function callableValueCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {

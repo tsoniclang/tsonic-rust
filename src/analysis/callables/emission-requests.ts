@@ -24,6 +24,8 @@ import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import type { RustGenericCallableIdentitySources } from "./generic-identities.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
+import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
 import { emissionDiagnostic, rustEmissionIdentityBindings, rustEmissionSourceIdentity,
   rustPhysicalEmissionOperationCarriers, rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 
@@ -42,6 +44,7 @@ export interface RustPhysicalCallableEmissionRequestInput {
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly classValues: Pick<RustClassValuePlan, "forDeclaration">;
   readonly carrierHost: RustValueDomainCarrierHost;
   readonly adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[];
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
@@ -358,7 +361,11 @@ export function prepareRustPhysicalCallableEmissionRequests(
       }
       const lexical = input.lexicalFunctions.forDeclaration(node);
       if (lexical?.kind === "unresolved") diagnostics.push(emissionDiagnostic(node, lexical.reason));
-      else if (lexical?.kind === "resolved") for (const capture of lexical.captures) request(node, capture.reference, "capture", { kind: "value" }, capture.reference);
+      else if (lexical?.kind === "resolved") for (const capture of lexical.captures) {
+        request(node, capture.reference, "capture", { kind: "value" }, capture.reference);
+      }
+      for (const capture of records.closureCapture.get(node)?.captures ?? [])
+        request(node, capture.reference, "capture", { kind: "value" }, capture.reference);
       const body = ast.body(node);
       if (body !== undefined) {
         if (sourceExpressionValueInputs(ast, body) !== undefined) visitUse(body, node, "return", node);
@@ -369,12 +376,20 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const definition = input.projectTypes.definitionForDeclaration(node);
     if (definition !== undefined) {
       type(node, node, "declaration-type", input.projectTypes.openCarrier(definition));
+      const environment = input.classValues.forDeclaration(node)?.environment;
+      const sourceFile = checkedSourceFile(node);
+      const moduleClass = sourceFile !== undefined && ast.parent(node) === sourceFile;
+      if (environment?.evaluatedConstructorValue === true && moduleClass) {
+        type(sourceFile, node, "class-environment",
+          rustClassConstructorTargetType(environment.carrier));
+      }
       for (const member of ast.members(node)) {
         if (member === undefined) continue;
         if (sourceClassFieldHasStorage(ast, member)) {
           const storageOwner = ast.hasModifierKind(member, "static") ? checkedSourceFile(member) : node;
           if (storageOwner === undefined) continue;
           type(storageOwner, member, "member-type", records.runtimeCarrier.get(member)?.carrier);
+          if (storageOwner !== node && moduleClass) request(storageOwner, member, "module-binding", { kind: "value" }, member);
           const initializer = Node_Initializer(ast, member);
           if (initializer !== undefined) visitUse(initializer, storageOwner, "initializer", member);
         } else visitConstruct(member, member);
@@ -398,6 +413,10 @@ export function prepareRustPhysicalCallableEmissionRequests(
       return;
     }
     if (IsTypeSyntaxNode(ast, node) || ast.is.IsTypeLiteralNode(node)) return;
+    if (ast.is.IsBindingElement(node)) {
+      const name = ast.name(node);
+      if (name !== undefined && ast.is.IsIdentifier(name)) request(owner, node, "binding", { kind: "value" }, node);
+    }
     const declarationList = VariableStatement_DeclarationList(ast, node) ?? ForStatement_Initializer(ast, node);
     for (const declaration of VariableDeclarationList_Declarations(ast, declarationList) ?? []) {
       if (declaration === undefined || records.compileTimeSource.get(declaration) === true ||
@@ -426,6 +445,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
     });
   };
   for (const file of input.sourceFiles) visitConstruct(file, file);
+  for (const frame of input.frames.definitions) for (const binding of frame.bindings)
+    if (binding.entry === undefined && records.sourceParameterAbi.get(binding.declaration) === undefined)
+      request(frame.activation.ownerDeclaration, binding.declaration, "frame-binding", { kind: "value" }, binding.declaration);
   for (const definition of input.generic.definitions) for (const implementation of definition.implementations) {
     const owner = owners.get(implementation.declaration);
     if (owner === undefined) diagnostics.push(emissionDiagnostic(implementation.declaration, "A selected generic implementation requires its exact emitted creation owner."));
