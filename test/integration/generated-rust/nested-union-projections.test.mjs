@@ -38,7 +38,7 @@ for (const { surfaces, parenthesized } of cases) {
 #[cfg(test)]
 mod union_inspection_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
     #[test]
     fn narrowed_category_inspection_has_the_handwritten_native_cost() {
         for _ in 0..128 {

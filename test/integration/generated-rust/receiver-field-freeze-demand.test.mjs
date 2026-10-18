@@ -105,8 +105,8 @@ export function createShallow(): Shallow { return new Shallow(); }
 mod capture_costs {
     use super::*;
     use std::rc::Rc;
-    use std::cell::RefCell;
-    ${nativeOwnershipCostSupport}
+    use std::cell::{Cell, RefCell};
+    ${nativeOwnershipCostSupport(root)}
 
     struct NativeReadOnlyState {
         value: Rc<Cell<f64>>,

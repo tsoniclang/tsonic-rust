@@ -39,7 +39,7 @@ export function finalized(value: unknown): unknown {
     const string = profile === "native" ? "ClosedValue::from(text)" : "ClosedValue::String(text)";
     const directory = writeGeneratedProject(`closed-unknown-throws-${profile}`, result.artifacts);
     mkdirSync(join(directory, "tests"), { recursive: true });
-    writeFileSync(join(directory, "tests/closed.rs"), `${nativeOwnershipCostSupport}
+    writeFileSync(join(directory, "tests/closed.rs"), `${nativeOwnershipCostSupport(directory)}
 use closed_unknown_throws::{index, program::{ErrorTransport, SourceError, TsonicError}};
 use ${type} as ClosedValue;
 use tsonic_rust_runtime::{ErrorObject, JsError, MutableJsError, WritableErrorObject, WritableRetainedError};
@@ -114,7 +114,7 @@ export function retain(value: unknown): Error | undefined {
     const type = profile === "native" ? "tsonic_rust_runtime::TsValue" : "tsonic_rust_js::value::JsValue";
     const directory = writeGeneratedProject(`closed-error-return-${profile}`, result.artifacts);
     mkdirSync(join(directory, "tests"), { recursive: true });
-    writeFileSync(join(directory, "tests/closed.rs"), `${nativeOwnershipCostSupport}
+    writeFileSync(join(directory, "tests/closed.rs"), `${nativeOwnershipCostSupport(directory)}
 use closed_error_return::index;
 use ${type} as ClosedValue;
 use tsonic_rust_runtime::{ErrorObject, MutableJsError, WritableErrorObject};

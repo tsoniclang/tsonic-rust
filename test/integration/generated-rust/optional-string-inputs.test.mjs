@@ -28,7 +28,7 @@ test("optional and refined native string inputs preserve exact borrowed ABI with
 #[cfg(test)]
 mod string_input_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn borrowed_native_string_inputs_match_handwritten_cost() {

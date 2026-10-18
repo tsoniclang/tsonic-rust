@@ -20,7 +20,7 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod creation_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn completed_creations_release_every_native_owner() {
@@ -60,7 +60,7 @@ mod creation_cost {
 #[cfg(test)]
 mod iteration_owner_drop {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn every_completed_activation_releases_all_native_owners() {

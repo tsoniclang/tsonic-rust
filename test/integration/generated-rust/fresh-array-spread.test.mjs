@@ -32,7 +32,7 @@ test("fresh numeric spread allocates only its destination, matching handwritten 
   assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("fresh-array-spread-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/cost.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/cost.rs"), nativeOwnershipCostSupport(root) + `
 use fresh_spread_cost::index;
 fn handwritten(values: &mut [u8]) -> Vec<f64> {
     let mut result = Vec::new();

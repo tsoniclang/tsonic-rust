@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -50,34 +51,18 @@ test("retained generic method reads and invocation add no per-operation allocati
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), []);
   const root = writeGeneratedProject("retained-generic-method-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/cost.rs"), `use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
-struct Counting;
-thread_local! {
-    static ACTIVE: Cell<bool> = const { Cell::new(false) };
-    static CALLS: Cell<usize> = const { Cell::new(0) };
-    static BYTES: Cell<usize> = const { Cell::new(0) };
-}
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if ACTIVE.get() { CALLS.set(CALLS.get() + 1); BYTES.set(BYTES.get() + layout.size()); }
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) { unsafe { System.dealloc(pointer, layout) } }
-}
-#[global_allocator]
-static ALLOCATOR: Counting = Counting;
-fn measure(count: f64) -> (usize, usize) {
-    CALLS.set(0); BYTES.set(0); ACTIVE.set(true);
-    let result = std::hint::black_box(retained_methods::index::retainedReads(std::hint::black_box(count))).unwrap();
-    ACTIVE.set(false);
+  writeFileSync(join(root, "tests/cost.rs"), `${nativeAllocationSupport(root)}
+fn retained_read_cost(count: f64) -> (usize, usize) {
+    let (result, observed) = allocation_counts::measure(|| {
+        std::hint::black_box(retained_methods::index::retainedReads(std::hint::black_box(count))).unwrap()
+    });
     assert_eq!(result, count - 1.0);
-    (CALLS.get(), BYTES.get())
+    (observed.allocation_requests(), observed.requested_bytes())
 }
 #[test]
 fn reads_reuse_the_original_environment() {
-    let first = measure(1.0);
-    assert_eq!(measure(10000.0), first);
+    let first = retained_read_cost(1.0);
+    assert_eq!(retained_read_cost(10000.0), first);
     assert!(first.0 > 0);
 }
 `);

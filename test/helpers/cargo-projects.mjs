@@ -17,10 +17,12 @@ export function writeGeneratedProject(name, artifacts) {
 }
 
 export function runCargo(projectRoot, args) {
+  const environment = { ...process.env, CARGO_TERM_COLOR: "never" };
+  delete environment.CARGO_TARGET_DIR;
   const result = spawnSync("cargo", args, {
     cwd: projectRoot,
     encoding: "utf8",
-    env: { ...process.env, CARGO_TERM_COLOR: "never" },
+    env: environment,
     timeout: 300_000,
   });
   if (result.status !== 0) {

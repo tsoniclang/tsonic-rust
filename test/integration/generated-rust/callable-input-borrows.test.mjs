@@ -22,7 +22,7 @@ test("invocation-only callback inputs consume exact inferred borrowed producer s
 #[cfg(test)]
 mod invocation_input_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn inline_readonly_callback_does_not_allocate_or_copy_its_input() {

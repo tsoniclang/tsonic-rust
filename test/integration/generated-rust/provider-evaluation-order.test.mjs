@@ -125,7 +125,7 @@ main();
 #[cfg(test)]
 mod native_receiver_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(root)}
 
     #[test]
     fn discarded_non_copy_receiver_matches_native_allocation_cost() {
@@ -387,7 +387,7 @@ pub(crate) mod drop_probe {
 #[cfg(test)]
 mod provider_drop_tests {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(root)}
 
     fn omitted_contract() -> f64 { ${omittedExpression} }
 
@@ -531,7 +531,7 @@ test("provider conversions borrow disjoint fields and snapshot values before ove
 #[cfg(test)]
 mod native_provider_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(root)}
 
     #[test]
     fn existing_parameter_borrows_add_no_snapshot_allocation() {

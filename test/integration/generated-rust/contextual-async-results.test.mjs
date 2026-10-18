@@ -64,7 +64,7 @@ test("contextual async output construction costs exactly one native promise with
 #[cfg(test)]
 mod contextual_async_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     type CompletionPromise = js_abi::JsPromise<Option<i32>>;
     type CompletionHandler = rt::Callable<'static, (), Result<CompletionPromise, core::convert::Infallible>>;
@@ -138,7 +138,7 @@ export async function run(pending: Promise<void>): Promise<int32> {
 #[cfg(test)]
 mod direct_native_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     fn handwritten(pending: js_abi::JsPromise<()>) -> js_abi::JsPromise<i32> {
         js_abi::JsPromise::from_fallible_factory(move || async move {

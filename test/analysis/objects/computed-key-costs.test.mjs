@@ -77,7 +77,7 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod computed_key_costs {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(root)}
 
     struct NativeHolder {
         value: f64,

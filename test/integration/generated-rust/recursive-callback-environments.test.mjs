@@ -22,7 +22,8 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod native_environment {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    use std::cell::Cell;
+    ${nativeOwnershipCostSupport(directory)}
 
     struct Payload<'a>(&'a Cell<usize>);
     impl Drop for Payload<'_> {

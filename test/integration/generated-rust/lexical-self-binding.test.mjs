@@ -28,7 +28,7 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod lexical_owner_drop {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn fixed_self_and_replaced_live_binding_release_all_native_owners() {

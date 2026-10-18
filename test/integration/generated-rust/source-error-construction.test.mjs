@@ -61,7 +61,7 @@ for (const surfaces of [[], ["js"]]) {
     assertNoTargetDiagnostics(result.diagnostics);
     const root = writeGeneratedProject(`explicit-error-cost-${surfaces[0] ?? "native"}`, result.artifacts);
     mkdirSync(join(root, "tests"), { recursive: true });
-    writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+    writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use explicit_error_cost::index;
 
 #[test]
@@ -112,7 +112,7 @@ test("native optional error messages retain handwritten construction costs", { t
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(({ code, message }) => `${code}: ${message}`).join("\n"));
   const root = writeGeneratedProject("source-error-constructor-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use error_constructor_cost::index;
 use tsonic_rust_runtime::JsError;
 
