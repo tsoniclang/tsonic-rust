@@ -79,6 +79,20 @@ export type RustPhysicalTargetGenericArgument =
   | { readonly kind: "type"; readonly nativeCarrier: TargetTypeRef }
   | { readonly kind: "infer" };
 
+export interface RustNativeBindingStorage {
+  readonly kind: "value" | "cell" | "borrow-cell" | "location" | "module-cell";
+  readonly initialization: "ready" | "deferred";
+  readonly payloadCarrier: TargetTypeRef;
+  readonly valueCarrier: TargetTypeRef;
+  readonly slotCarrier: TargetTypeRef;
+  readonly holderCarrier: TargetTypeRef;
+  readonly valueConstructor: string | null;
+  readonly slotConstructor: string | null;
+  readonly deferredConstructor: string | null;
+  readonly ownerConstructor: string | null;
+  readonly requirements: readonly ("copy" | "clone" | "static")[];
+}
+
 export type RustPhysicalEmissionRole =
   | "native-body" | "specialized-body" | "project-body"
   | "helper" | "body" | "member" | "native-input" | "native-backing" | "frame"
