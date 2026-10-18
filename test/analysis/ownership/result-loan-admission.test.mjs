@@ -58,9 +58,10 @@ function fixture() {
   mkdirSync(join(native, "src"), { recursive: true });
   writeFileSync(join(native, "Cargo.toml"), '[package]\nname="actual-native-loans"\nversion="0.0.0"\nedition="2021"\n[workspace]\n');
   writeFileSync(join(native, "src", "lib.rs"), nativeSource);
-  const project = join(root, "Cargo.toml");
-  mkdirSync(join(root, "generated", "src"), { recursive: true });
-  writeFileSync(join(root, "generated", "src", "lib.rs"), "");
+  const client = join(root, "client");
+  const project = join(client, "Cargo.toml");
+  mkdirSync(join(client, "generated", "src"), { recursive: true });
+  writeFileSync(join(client, "generated", "src", "lib.rs"), "");
   writeFileSync(project, `[package]\nname="actual-loan-client"\nversion="0.0.0"\nedition="2021"\n[workspace]\n[lib]\npath="generated/src/lib.rs"\n[dependencies]\nnative_alias={package="actual-native-loans",path=${JSON.stringify(native)}}\ntsonic_rust_runtime={path=${JSON.stringify(resolve(repository, "../rust-runtime/crates/tsonic_rust_runtime"))}}\n`);
   const worker = createRustCompilerWorkerClient(join(root, "worker"));
   const snapshot = worker.snapshot(project);
@@ -126,11 +127,12 @@ function fixture() {
     files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard } from ${JSON.stringify(nativeModule)};
       import { owner, take } from ${JSON.stringify(sourceModule)};
       export function observed(): number { ${body} }` } });
-  return { root, project, compile, close: () => nativeSession.close() };
+  return { root: client, project, compile, close: () => nativeSession.close() };
 }
 
-test("all six carried-Guard controls use real native acquisition and preserve the native refusal boundary", { timeout: 540_000 }, () => {
+test("all six carried-Guard controls use real native acquisition and preserve the native refusal boundary", { timeout: 540_000 }, context => {
   const current = fixture();
+  context.after(current.close);
   for (const method of ["consume", "runtime"]) for (const action of ["take", "mutate", "write"]) {
     const operand = action === "take" ? "take(stored)" : `stored.${action}()`;
     const result = current.compile(`const stored = owner(); return stored.guard.${method}(${operand});`).result;
@@ -175,5 +177,4 @@ test("all six carried-Guard controls use real native acquisition and preserve th
   const generated = positive.artifacts.filter(value => value.path.endsWith(".rs")).map(value => value.text).join("\n");
   assert.equal(generated.includes(".clone()"), false, "the disjoint non-Clone control needs no clone fallback");
   assert.equal(readFileSync(current.project, "utf8").includes("rustc_private"), false, "ordinary Cargo remains the only acquisition dependency");
-  current.close();
 });
