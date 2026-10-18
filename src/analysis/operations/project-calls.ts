@@ -594,14 +594,14 @@ export function applySelectedProjectSourceCall(
       if (resolveExpressionCarrier(walk, argument, sourceFile, expected) === undefined) return undefined;
     }
   }
-  const retainedLifetimes = rustRetainedCallLifetimes(walk, expression, selectedDeclaration,
+  const retainedSelection = rustRetainedCallLifetimes(walk, expression, selectedDeclaration,
     parameters.map(parameter => parameter.parameterCarrier), genericResultCarrier);
-  if (retainedLifetimes === undefined) {
-    appendRustDiagnostic(walk, "RUST_RETAINED_ENVIRONMENT_NOT_EXACT",
-      "The selected source call has no exact retained native environment lifetime.", expression,
+  if (retainedSelection.kind === "unresolved") {
+    appendRustDiagnostic(walk, "RUST_RETAINED_ENVIRONMENT_NOT_EXACT", retainedSelection.reason, expression,
       ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
+  const retainedLifetimes = retainedSelection.lifetimes;
   if (retainedLifetimes.size !== 0) parameters = parameters.map(parameter => ({ ...parameter,
     valueCarrier: rustRetainedCallResult(parameter.valueCarrier, retainedLifetimes),
     parameterCarrier: rustRetainedCallResult(parameter.parameterCarrier, retainedLifetimes),

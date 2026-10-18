@@ -69,6 +69,7 @@ import { analyzeRustErrorTransport } from "./error-transport.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 import { prepareRustNativeDeclarationForms } from "../declarations/native-forms.js";
+import { completeRustNativeDeclarationStorage } from "../declarations/native-binding-storage.js";
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
@@ -299,6 +300,7 @@ export function analyzeRustTargetProgram(
     names: context.names, records, projectTypes: context.projectTypes, typeDefinitions: context.typeDefinitions,
     sourceLifetimes: context.sourceLifetimes, objectRepresentations,
     frames: context.callableValues.selected.frames,
+    nativeStorage: context.callableValues.nativeStorage,
     classValues, projectMethodProperties: context.projectMethodProperties, projectConstructions,
     isNativeNode: context.isNativeNode });
   if (preparedNativeDeclarations.kind === "rejected") return rejectedTargetStage(preparedNativeDeclarations.diagnostics);
@@ -427,8 +429,27 @@ export function analyzeRustTargetProgram(
     };
   };
   const sourceCallableSpecializations = context.sourceCallableSpecializations.seal();
+  const typeFamilies = context.typeFamilies.seal();
   const callableValues = context.callableValues.seal({
+    frameErrorOwnerFor: fileName => {
+      const identity = identities.get(fileName);
+      return identity === undefined ? undefined : Object.freeze({
+        kind: "physical" as const, domain: "project" as const, componentId: identity.componentId,
+      });
+    },
     nativeTypeInputFor: (fileName, callables) => rustNativeTypeSelectionInput(nativeContextFor(fileName, undefined, callables)),
+    prepareCallableField: preparedNativeDeclarations.forms.prepareCallableField,
+    prepareStorageField: preparedNativeDeclarations.forms.prepareStorageField,
+    completeNativeDeclarations: (callables, emission) => completeRustNativeDeclarationStorage({
+      declarations: preparedNativeDeclarations.forms, emission, frames: callables.frames,
+      nativeTypeContextFor: fileName => nativeContextFor(fileName, undefined, callables),
+      declarationInput: { ast: context.ast, sourceFiles: context.sourceFiles, semanticsFor: context.semanticsFor,
+        names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
+        objectRepresentations, typeFamilies, genericRequirements: declarationGenericRequirements.index,
+        nativeTypeInputFor: (fileName, typeParameterNames) => rustNativeTypeSelectionInput(nativeContextFor(fileName, typeParameterNames, callables)),
+        nativeStateCarrierFor: definition => rustNativeProjectGeneratedCarrier(projectTypes.openCarrier(definition),
+          definition.stateName, nativeContextFor(definition.fileName, undefined, callables)) },
+    }),
     sourceCallableSpecializations, projectMethodDispatch, lexicalFunctions,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     errorRegions: errorRegions.value, initialization: initializationErrors.value,
@@ -504,7 +525,7 @@ export function analyzeRustTargetProgram(
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
     records: finalRecords,
-    typeFamilies: context.typeFamilies.seal(),
+    typeFamilies,
     typeDefinitions,
     projectTypes,
     errorTransport: errorTransport.value,
@@ -554,19 +575,10 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  const nativeDeclarations = preparedNativeDeclarations.forms.complete({ ast: context.ast, sourceFiles: context.sourceFiles,
-    semanticsFor: context.semanticsFor,
-    names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
-    objectRepresentations, typeFamilies: program.typeFamilies,
-    genericRequirements: declarationGenericRequirements.index,
-    nativeTypeInputFor: (fileName, typeParameterNames) => rustNativeTypeSelectionInput(nativeContextFor(fileName, typeParameterNames, callableValues.value)),
-    nativeStateCarrierFor: definition => rustNativeProjectGeneratedCarrier(projectTypes.openCarrier(definition),
-      definition.stateName, nativeContextFor(definition.fileName, undefined, callableValues.value)) });
-  if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   context.callableValues.publish();
   return resolvedTargetStage(Object.freeze({ ...program,
-    nativeDeclarations: nativeDeclarations.forms,
+    nativeDeclarations: callableValues.value.nativeDeclarations,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
     reachability }));
 }

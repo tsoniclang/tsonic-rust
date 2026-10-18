@@ -152,6 +152,8 @@ export interface RustPhysicalEmissionContext {
   readonly sourceOrigins: readonly RustPhysicalEmissionSourceOrigins[];
   readonly callableAdapters: readonly RustCallablePhysicalAdapter<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>[];
   readonly targetGenericArguments: ReadonlyMap<RustFinalizedOperationAbi, readonly RustPhysicalTargetGenericArgument[]>;
+  readonly frameEntries: readonly { readonly entry: object; readonly parameters: readonly TargetTypeRef[];
+    readonly result: TargetTypeRef; readonly error: TargetTypeRef }[];
 }
 
 export type RustEmissionProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;
