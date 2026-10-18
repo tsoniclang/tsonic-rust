@@ -48,7 +48,7 @@ function selectDirectLexicalCallableBinding(
   if (navigation.declarationUseSummary(binding).captured ||
     sourceMayReadBeforeInitialization(binding, ast, navigation) ||
     callsFor(binding, declaration) === undefined) return undefined;
-  const captures = sourceLexicalCaptures(declaration, [declaration], ast, navigation);
+  const captures = sourceLexicalCaptures(declaration, [declaration], ast, navigation, "source");
   return captures.receivers.length === 0 ? binding : undefined;
 }
 

@@ -61,7 +61,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
         : sourceLexicalEnvironment(node, [...input.ast.parameters(node).flatMap(parameter => {
           const initializer = parameter === undefined ? undefined : Node_Initializer(input.ast, parameter);
           return initializer === undefined ? [] : [initializer];
-        }), body], input.ast, input.navigation);
+        }), body], input.ast, input.navigation, "source");
       if (selected?.kind === "unresolved") {
         issues.push({ node, reason: selected.reason });
         continue;

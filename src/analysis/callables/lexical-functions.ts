@@ -84,7 +84,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
         const initializer = Node_Initializer(ast, parameter);
         return initializer === undefined ? [] : [initializer];
       })] : [declaration];
-    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation,
+    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, "source",
       (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (selected.kind === "unresolved") return exhausted(selected.reason);
@@ -182,7 +182,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
   const empty: readonly Node[] = Object.freeze([]);
   const scheduled = new Map<Node, readonly Node[]>();
   for (const [statement, values] of valueDeclarations) {
-    const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation,
+    const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation, "source",
       (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (ordered.kind === "resolved") scheduled.set(statement, ordered.declarations);

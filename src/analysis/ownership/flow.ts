@@ -34,7 +34,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
-    const selected = createSourceControlFlow(source, declaration, { limits: input.limits });
+    const selected = createSourceControlFlow(source, declaration, { domain: { kind: "source" }, limits: input.limits });
     const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
     if (liveness.kind === "unresolved") return { kind: "rejected", diagnostics: [{
       code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",

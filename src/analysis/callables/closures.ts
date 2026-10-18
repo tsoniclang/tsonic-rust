@@ -388,7 +388,7 @@ export function collectRustLexicalCaptures(
   let recursiveDeclaration: Node | undefined;
   let recursiveField: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["recursiveField"];
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
-  const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation,
+  const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation, "source",
     (use, declaration) => walk.context.records.compileTimeSource.get(use.reference) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(declaration, use.reference));
   if (selected.kind === "unresolved") return undefined;

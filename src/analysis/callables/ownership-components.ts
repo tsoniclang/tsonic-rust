@@ -293,7 +293,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
       environment = sourceLexicalEnvironment(declaration, [...ast.parameters(declaration).flatMap(parameter => {
         const initializer = Node_Initializer(ast, parameter);
         return initializer === undefined ? [] : [initializer];
-      }), body], boundedAst, navigation, input.isRuntimeUse);
+      }), body], boundedAst, navigation, "source", input.isRuntimeUse);
     } catch (error) {
       if (failure !== undefined) return result();
       throw error;

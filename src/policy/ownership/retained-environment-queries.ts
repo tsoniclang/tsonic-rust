@@ -57,7 +57,7 @@ export function createRustRetainedEnvironmentQueries(
       const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
       return initializer === undefined ? [] : [initializer];
     }), body];
-    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation);
+    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, "source");
     lexical.set(declaration, selected);
     return selected;
   };
