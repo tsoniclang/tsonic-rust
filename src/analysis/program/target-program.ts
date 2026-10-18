@@ -445,6 +445,7 @@ export function analyzeRustTargetProgram(
     prepareCallableField: preparedNativeDeclarations.forms.prepareCallableField,
     prepareStorageField: preparedNativeDeclarations.forms.prepareStorageField,
     completeNativeDeclarations: (callables, emission) => completeRustNativeDeclarationStorage({
+      frozenDataWrites: context.frozenDataWrites,
       declarations: preparedNativeDeclarations.forms, emission, frames: callables.frames,
       nativeTypeContextFor: fileName => nativeContextFor(fileName, undefined, callables),
       declarationInput: { ast: context.ast, sourceFiles: context.sourceFiles, semanticsFor: context.semanticsFor,
