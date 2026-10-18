@@ -217,7 +217,7 @@ ${accepted.map(([, bits], index) => `    assert_eq!(index::value${index}().to_bi
       { path: "tests/float32_values.rs", text: nativeTest },
     ]);
     runCargo(projectRoot, ["generate-lockfile", "--offline"]);
-    runCargo(projectRoot, ["fmt", "--all", "--check"]);
+    runCargo(projectRoot, ["fmt", "--check"]);
     runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
     runCargo(projectRoot, ["test", "--locked", "--offline", "--test", "float32_values"]);
   });
@@ -245,7 +245,7 @@ fn synthetic_value() {
 ` },
     ]);
     runCargo(projectRoot, ["generate-lockfile", "--offline"]);
-    runCargo(projectRoot, ["fmt", "--all", "--check"]);
+    runCargo(projectRoot, ["fmt", "--check"]);
     runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
     runCargo(projectRoot, ["test", "--locked", "--offline", "--test", "synthetic_value"]);
   });

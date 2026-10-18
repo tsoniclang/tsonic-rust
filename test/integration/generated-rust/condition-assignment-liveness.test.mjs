@@ -202,7 +202,7 @@ function validateControl(surface, text, name) {
     `${surface}: source diagnostics: ${JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message })))}`);
   const project = writeGeneratedProject(name, result.artifacts);
   runCargo(project, ["generate-lockfile", "--offline"]);
-  runCargo(project, ["fmt", "--all", "--check"]);
+  runCargo(project, ["fmt", "--check"]);
   runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
   runCargo(project, ["build", "--all-targets", "--locked", "--offline"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
