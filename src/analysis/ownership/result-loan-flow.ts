@@ -159,6 +159,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
     for (const loan of loans) needed.add(loan.retention.origin.input.node);
     for (const operand of input.contexts.operands) if (operand.context === context && operand.origin.kind !== "call-input" &&
       operand.origin.evaluation.kind === "provider-source") needed.add(operand.origin.evaluation.slot.node);
+    for (const native of input.nativeInputs.values()) if (native.operand.context === context) needed.add(native.node);
     for (const node of needed) {
       const selected = input.storage.subjectFor(node);
       if (selected.kind === "unresolved") { reject(node, selected.reason); return; }
@@ -339,6 +340,12 @@ export function analyzeRustCarriedLoanAdmission(input: {
         const slot = operand.origin.evaluation.slot;
         if (slot.operationNode !== point.source || point.operation.kind !== "evaluate" && point.operation.kind !== "write-location") continue;
         addDemand(point.id, subject(slot.node), slot.evaluationOnly !== undefined);
+      }
+      for (const native of input.nativeInputs.values()) {
+        const origin = native.operand.origin;
+        if (native.operand.context !== context || origin.kind !== "call-input" || origin.operationNode !== point.source ||
+          point.operation.kind !== "evaluate" && point.operation.kind !== "write-location") continue;
+        addDemand(point.id, subject(native.node), false);
       }
     }
     const backward = solveSourceFlow<ReadonlySet<Loan>>(graph, {

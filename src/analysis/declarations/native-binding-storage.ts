@@ -12,7 +12,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { selectRustNativeBindingStorage } from "../../policy/ownership/binding-storage.js";
 import { rustNativeFrameCallableCarriers, rustNativeFrameDefinitionCarrier, rustNativeTypeSelectionInput,
   selectRustNativeTypeCarrier, type RustNativeTypeInputContext } from "../../policy/types/model/native-type-selection.js";
@@ -43,7 +42,7 @@ export function completeRustNativeDeclarationStorage(input: {
   readonly fieldBindings: readonly RustNativeCallableFieldBinding[];
   readonly nativeBindings: readonly RustNativeStorageBinding[];
 }> {
-  const reject = (declaration: Node, message: string) => rejectedTargetStage([{
+  const reject = (declaration: Node, message: string): TargetStageResult<RustNativeFrameBindingStorageCompletion> => rejectedTargetStage([{
     code: "RUST_NATIVE_STORAGE_NOT_CLOSED", category: "error" as const, source: "tsonic-rust", sourceNode: declaration, message,
   }]);
   const declarations = input.declarations.complete({ ...input.declarationInput, nativeFrameBindingFor(request) {

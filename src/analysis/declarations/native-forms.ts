@@ -14,7 +14,7 @@ import { rustGeneratedTypeParameterNames } from "../../target-model/names/type-p
 import { rustNativeCallableAbi, selectRustNativeCallableTypeCarrier, selectRustNativeTypeCarrier,
   type RustLogicalNativeCallableAbi } from "../../policy/types/model/native-type-selection.js";
 import { selectRustNativeBindingStorage } from "../../policy/ownership/binding-storage.js";
-import type { RustNativeBindingStorage, RustNativeStorageBinding, RustNativeStorageBindingRequest,
+import type { RustNativeStorageBinding, RustNativeStorageBindingRequest,
   RustNativeFrameBindingStorageCompletion }
   from "../../target-model/records/physical-emission-contexts.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -286,8 +286,11 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
     const definition = declaration === undefined ? undefined : projectTypes.definitionContainingDeclaration(declaration);
     const prepared = definition === undefined ? undefined : forms.get(definition.declaration);
     const externalFields = definition === undefined ? 0 : projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0;
-    const field = prepared?.fields.find(field => field.declaration === declaration &&
-      field.storageIndex + externalFields === selection.storageIndex);
+    const matchesField = (field: { readonly declaration: Node; readonly storageIndex: number }): boolean =>
+      field.declaration === declaration && field.storageIndex + externalFields === selection.storageIndex;
+    const classField = prepared?.kind === "class" ? prepared.fields.find(matchesField) : undefined;
+    const field = prepared?.kind === "interface" ? prepared.fields.find(matchesField) : classField;
+    const storage = classField?.storage;
     const relationship = definition === undefined ? undefined : projectTypes.relationship(selection.receiverCarrier, definition);
     if (declaration === undefined || definition === undefined || prepared === undefined || field === undefined ||
       selection.storage !== "project-object" || selection.valueSemantics.kind !== "stored" || relationship?.kind !== "related")
@@ -310,10 +313,10 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
     }
     const slot = { declaration, storageIndex: selection.storageIndex, targetName: field.targetName,
       logicalCarrier, logicalPayloadCarrier: payload, sourceBindings: request.sourceBindings };
-    if ("storage" in field && field.storage.kind === "frame") {
-      const binding = input.frames.bindingFor(field.storage.declaration);
-      const selected = input.records.sourceParameterAbi.get(field.storage.declaration) === undefined
-        ? input.nativeStorage.valueFor(field.storage.declaration) : input.nativeStorage.parameterFor(field.storage.declaration);
+    if (storage?.kind === "frame") {
+      const binding = input.frames.bindingFor(storage.declaration);
+      const selected = input.records.sourceParameterAbi.get(storage.declaration) === undefined
+        ? input.nativeStorage.valueFor(storage.declaration) : input.nativeStorage.parameterFor(storage.declaration);
       if (binding === undefined || selected.kind === "unresolved") return reject(selected.kind === "unresolved" ? selected.reason
         : "A callable frame field requires its original admitted binding and actual selected physical read carrier.");
       const preparation: Extract<RustPreparedNativeCallableField, { readonly kind: "frame" }> = Object.freeze({ ...slot,
