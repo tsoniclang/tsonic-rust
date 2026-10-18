@@ -40,7 +40,7 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
     const sourceTemplate = semantics.declarations.declaredType(sourceDeclaration);
     const targetTemplate = semantics.declarations.declaredType(targetDeclaration);
     if (sourceTemplate === undefined || targetTemplate === undefined) return;
-    const pairs = semantics.types.structuralMembers(sourceTemplate, targetTemplate);
+    const pairs = semantics.types.structuralMembers(sourceTemplate, targetTemplate, "read");
     if (pairs.kind !== "available" || pairs.destination.calls.length !== 0 || pairs.destination.constructs.length !== 0 ||
       pairs.destination.indexes.length !== 0 || pairs.members.some(pair => pair.kind !== "present")) return;
     const context = { ...rustResolutionContext(walk, subject), callableRepresentation: "signature" as const };

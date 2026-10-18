@@ -313,7 +313,7 @@ function viewFixture(builder, { expression = {}, sourceCarrier = rustStructuralO
     registerStructuralFieldImplementation: () => true,
   }, context: { requiredRecords: [],
     projectTypes: { definitionForCarrier: () => undefined },
-    semanticsFor: () => ({ types: { expressionType: () => sourceType, structuralMembers: () => ({
+    semanticsFor: () => ({ types: { expressionType: () => sourceType, structuralMembers: (source, destination, purpose) => (assert.equal(purpose, "read"), {
       kind: "available", destination: { calls: [], constructs: [], indexes: [] }, members: [{ kind: "present",
         source: { property: { symbol: sourceSymbol }, declarations: [sourceDeclaration] },
         destination: { property: { symbol: targetSymbol }, declarations: [targetDeclaration] },

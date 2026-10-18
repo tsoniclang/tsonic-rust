@@ -119,7 +119,7 @@ export function createRustRetainedEnvironmentQueries(
             }
           } else if (types.isArrayLike(type)) projections.push({ kind: "array-element" });
           else {
-            const members = types.structuralMembers(type, type);
+            const members = types.structuralMembers(type, type, "read");
             if (members.kind !== "available") return false;
             for (const member of members.members) {
               if (!step()) return false;

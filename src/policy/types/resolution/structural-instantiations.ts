@@ -81,7 +81,7 @@ export function retainRustStructuralInstantiation(
   const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving, authoredTypeNode);
   if (selectedContext === undefined) return false;
   context = selectedContext;
-  const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType);
+  const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType, "read");
   if (correspondence.kind !== "available" ||
     correspondence.members.filter(member => !isRustErasedNominalMember(member.destination.declarations, context.ast)).length !== template.fields.length ||
     structural.fields.length !== template.fields.length ||

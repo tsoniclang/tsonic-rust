@@ -317,7 +317,7 @@ export function selectRustClassValueView(
   const declarationFile = ast.getSourceFile(declaration);
   if (shape.storage !== "structural-object" || owner === undefined ||
     component(owner) === undefined || component(ast.getFileName(declarationFile)) === undefined) { reject(); return false; }
-  const correspondence = semantics.types.structuralMembers(sourceType, destinationType);
+  const correspondence = semantics.types.structuralMembers(sourceType, destinationType, "read");
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== (shape.construction === undefined ? 0 : 1) || correspondence.destination.indexes.length !== 0 ||
     correspondence.members.length !== shape.fields.length) { reject(); return false; }

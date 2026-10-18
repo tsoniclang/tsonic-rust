@@ -26,7 +26,7 @@ export function selectProviderRecordArgument(
   if (sourceType === undefined || destinationType === undefined ||
     rustStructuralObjectCarrierValue(source) === undefined ||
     rustNamedTypeCarrierValue(target) === undefined) return undefined;
-  const correspondence = context.currentSemantics.types.structuralMembers(sourceType, destinationType);
+  const correspondence = context.currentSemantics.types.structuralMembers(sourceType, destinationType, "read");
   if (correspondence.kind !== "available" ||
     correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 ||
