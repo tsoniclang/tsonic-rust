@@ -31,7 +31,7 @@ export function create(count: int64): unknown { return { count }; }
     .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
   const root = writeGeneratedProject("closed-record-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use closed_record_cost::index;
 use tsonic_rust_js::{JsObject, JsValue, json};
 

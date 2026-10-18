@@ -40,7 +40,7 @@ test("unannotated read-only String parameters keep native borrowed ABI across su
   const root = writeGeneratedProject("native-string-inputs", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   const nativePath = join(root, "tests", "native_inputs.rs");
-  writeFileSync(nativePath, `${nativeOwnershipCostSupport}
+  writeFileSync(nativePath, `${nativeOwnershipCostSupport(root)}
 use native_string_inputs::index;
 
 #[test]

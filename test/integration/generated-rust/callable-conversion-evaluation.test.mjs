@@ -41,8 +41,9 @@ test("native callable adapters retain one construction frame and no per-call all
   assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("native-callable-adapter-allocation", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use native_callable_cost::index;
+use std::cell::Cell;
 use tsonic_rust_runtime::{Callable, TsonicResult};
 
 #[test]

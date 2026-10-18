@@ -73,7 +73,7 @@ test("repeated broad freeze has exactly the handwritten native allocation and by
 mod freeze_costs {
     use super::*;
     use tsonic_rust_runtime as rt;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(root)}
     fn handwritten() -> bool {
         let value = rt::EmptyObject::new();
         let mut frozen = false;

@@ -18,7 +18,7 @@ for (const surfaces of [[], ["js"]]) test(`public type-query frame inputs preser
 #[cfg(test)]
 mod public_frame_input_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn public_type_query_does_not_add_adapter_allocations_or_strong_cycles() {

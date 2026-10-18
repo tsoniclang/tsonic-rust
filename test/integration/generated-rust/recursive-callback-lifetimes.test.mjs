@@ -225,12 +225,13 @@ export function main(): void { if (!run()) throw new Error("mutual callback esca
   },
 ];
 
-function nativeProof(caseInput) {
+function nativeProof(caseInput, projectRoot) {
   return `
 #[cfg(test)]
 mod recursive_callback_lifetime_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    use std::cell::Cell;
+    ${nativeOwnershipCostSupport(projectRoot)}
     ${frameRootReference}
     ${caseInput.reference}
 
@@ -342,7 +343,7 @@ for (const caseInput of cases) {
         const directory = writeGeneratedProject(`recursive-callback-${caseInput.name}-${profile}`, result.artifacts);
         runCargo(directory, ["generate-lockfile", "--offline"]);
         runCargo(directory, ["fmt", "--check"]);
-        appendFileSync(join(directory, "src/index.rs"), nativeProof(caseInput));
+        appendFileSync(join(directory, "src/index.rs"), nativeProof(caseInput, directory));
         runCargo(directory, ["fmt"]);
         runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
         runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeAllocationSupport } from "../../../helpers/native-ownership-cost.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactText, compileRustThroughTargetPack } from "../../../helpers/rust-session.mjs";
@@ -36,44 +37,23 @@ export function snapshots(count: nativeUint, seed: string): Vec<string> {
   const root = writeGeneratedProject("native-capture-ownership", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/captures.rs"), `
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
-struct Counting;
-thread_local! {
-    static ACTIVE: Cell<bool> = const { Cell::new(false) };
-    static CALLS: Cell<usize> = const { Cell::new(0) };
-    static BYTES: Cell<usize> = const { Cell::new(0) };
-}
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if ACTIVE.get() { CALLS.set(CALLS.get() + 1); BYTES.set(BYTES.get() + layout.size()); }
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) { unsafe { System.dealloc(pointer, layout) } }
-}
-#[global_allocator]
-static ALLOCATOR: Counting = Counting;
-fn measure<Value>(operation: impl FnOnce() -> Value) -> (Value, usize, usize) {
-    CALLS.set(0); BYTES.set(0); ACTIVE.set(true);
-    let result = std::hint::black_box(operation());
-    ACTIVE.set(false);
-    (result, CALLS.get(), BYTES.get())
-}
+${nativeAllocationSupport(root)}
+
 fn handwritten(count: usize, mut seed: usize) -> Vec<usize> {
     (0..count).map(move |value| { seed += value; seed }).collect()
 }
 #[test]
 fn native_mutation_and_allocation_match_handwritten_captures() {
     for count in [0, 1, 10, 10000] {
-        let actual = measure(|| native_capture::index::prefixSums(std::hint::black_box(count), 7));
-        let expected = measure(|| handwritten(std::hint::black_box(count), 7));
+        let actual = allocation_counts::measure_value_requests(|| native_capture::index::prefixSums(std::hint::black_box(count), 7));
+        let expected = allocation_counts::measure_value_requests(|| handwritten(std::hint::black_box(count), 7));
         assert_eq!(actual, expected);
     }
     assert_eq!(native_capture::index::once(Ok(3), 4), Ok(7));
     assert_eq!(native_capture::index::once(Err(5), 4), Err(5));
     let seed = String::from("retained");
     let pointer = seed.as_ptr();
-    let (result, calls, bytes) = measure(|| native_capture::index::owned(Ok(0), seed));
+    let (result, calls, bytes) = allocation_counts::measure_value_requests(|| native_capture::index::owned(Ok(0), seed));
     let result = result.unwrap();
     assert_eq!(result.as_ptr(), pointer);
     assert_eq!(result, "retained");

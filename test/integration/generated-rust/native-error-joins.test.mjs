@@ -1,5 +1,8 @@
+import { join as joinPath } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
 import { planRustNativeErrorJoin } from "../../../dist/backend/planner/types/native-error-joins.js";
 import { rustErrorType, rustNativeFallibleBoundary, rustInjectLocalError,
   rustInjectNativeError, rustPropagateLocalError, rustPropagateNativeError } from "../../../dist/backend/planner/program/fallible-boundaries.js";
@@ -172,27 +175,13 @@ test("native joined errors preserve associated borrows, moves, distinct sources 
     items: packageRegionFunctions() }));
   assert.match(packageEmitted, /local\s*\.map_err\(LocalFailure::from\)\s*\.map_err\(\s*PackageErrors::<\s*LocalFailure,\s*<LeftCallback as Invocation>::Error,\s*<RightCallback as Invocation>::Error,?\s*>::Local,?\s*\)\?/u);
   assert.doesNotMatch(packageEmitted, /TsonicError|TsonicResult|PackageErrors[^\n]*::from|\.clone\(|Default|Box|dyn |'static/u);
+  const project = writeGeneratedProject("native-error-joins", [
+    { path: "Cargo.toml", text: `[package]\nname = "native_error_joins"\nversion = "0.0.0"\nedition = "2024"\n
+[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)}, default-features = false }\n` },
+  ]);
   const source = `use tsonic_rust_runtime as rt;
 use core::cell::Cell;
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering};
-static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
-struct CountingAllocator;
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOCATIONS.fetch_add(1, Ordering::SeqCst);
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(pointer, layout) }
-    }
-    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        ALLOCATIONS.fetch_add(1, Ordering::SeqCst);
-        unsafe { System.realloc(pointer, layout, size) }
-    }
-}
-#[global_allocator]
-static ALLOCATOR: CountingAllocator = CountingAllocator;
+${nativeAllocationSupport(project)}
 trait Invocation {
     type Error;
     fn invoke(&mut self) -> Result<u32, Self::Error>;
@@ -226,12 +215,12 @@ impl From<OperationFailure> for LocalFailure {
 ${emitted}
 ${packageEmitted}
 fn main() {
-    let control = ALLOCATIONS.load(Ordering::SeqCst);
+    let control = allocation_counts::allocation_requests_all_threads();
     let allocated = Box::new(std::hint::black_box(7_u32));
     std::hint::black_box(&allocated);
     drop(allocated);
-    assert!(ALLOCATIONS.load(Ordering::SeqCst) > control);
-    let before = ALLOCATIONS.load(Ordering::SeqCst);
+    assert!(allocation_counts::allocation_requests_all_threads() > control);
+    let before = allocation_counts::allocation_requests_all_threads();
     for branch in 0..4 {
         let (mut local_value, mut left_value, mut right_value) = (10, 20, 30);
         let pointers = [std::ptr::from_ref(&local_value), std::ptr::from_ref(&left_value), std::ptr::from_ref(&right_value)];
@@ -321,14 +310,11 @@ fn main() {
         _ => panic!("const error lost"),
     }
     assert_eq!(array, [1, 7, 3]);
-    assert_eq!(ALLOCATIONS.load(Ordering::SeqCst), before);
+    assert_eq!(allocation_counts::allocation_requests_all_threads(), before);
 }
 `;
-  const project = writeGeneratedProject("native-error-joins", [
-    { path: "Cargo.toml", text: `[package]\nname = "native_error_joins"\nversion = "0.0.0"\nedition = "2024"\n
-[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)}, default-features = false }\n` },
-    { path: "src/main.rs", text: source },
-  ]);
+  mkdirSync(joinPath(project, "src"), { recursive: true });
+  writeFileSync(joinPath(project, "src/main.rs"), source);
   runCargo(project, ["generate-lockfile", "--offline"]);
   runCargo(project, ["fmt"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);

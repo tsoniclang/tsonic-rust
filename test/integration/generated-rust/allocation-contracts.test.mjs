@@ -235,7 +235,7 @@ export function equal<Region extends Life>(left: Ref<string, Region>, right: Ref
   assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("shared-string-load-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport(root)}
 use shared_string_load_cost::index;
 
 #[test]
@@ -289,7 +289,7 @@ export function retained(value: string): () => string { return () => value; }
   assert.doesNotMatch(output, /let capture_value = value\.clone\(\)/u);
   const root = writeGeneratedProject("terminal-capture-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport(root)}
 use terminal_capture_cost::index;
 use tsonic_rust_runtime as rt;
 
@@ -334,7 +334,7 @@ test("pure captured string append matches handwritten mutable storage costs", { 
   runCargo(root, ["generate-lockfile", "--offline"]);
   runCargo(root, ["fmt", "--", "--check"]);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(root, "tests/ownership.rs"), `${nativeOwnershipCostSupport(root)}
 use captured_append_cost::index;
 use std::cell::RefCell;
 use tsonic_rust_runtime as rt;

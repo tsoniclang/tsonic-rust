@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactText, compileRust, analyzeRust } from "../../helpers/rust-session.mjs";
@@ -231,52 +232,28 @@ export function projectionCount(count: number): number {
 `, { outputType: "lib", crateName: "bounded_allocations" });
   const root = writeGeneratedProject("bounded-native-allocations", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/allocations.rs"), `use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
+  writeFileSync(join(root, "tests/allocations.rs"), `${nativeAllocationSupport(root)}
 use bounded_allocations::index;
 use tsonic_rust_js::JsArray;
 use std::rc::Rc;
-struct Counting;
-std::thread_local! {
-    static ACTIVE: Cell<bool> = const { Cell::new(false) };
-    static BYTES: Cell<usize> = const { Cell::new(0) };
-    static CALLS: Cell<usize> = const { Cell::new(0) };
-}
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if ACTIVE.get() { BYTES.set(BYTES.get() + layout.size()); CALLS.set(CALLS.get() + 1); }
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) { unsafe { System.dealloc(pointer, layout) } }
-}
-#[global_allocator]
-static ALLOCATOR: Counting = Counting;
-fn measure<Value>(operation: impl FnOnce() -> Value) -> (usize, usize) {
-    BYTES.set(0);
-    CALLS.set(0);
-    ACTIVE.set(true);
-    let result = std::hint::black_box(operation());
-    ACTIVE.set(false);
-    drop(result);
-    (CALLS.get(), BYTES.get())
-}
+
 #[test]
 fn allocation_parity() {
     let actual_text = "x".repeat(65536);
     let native_text = "x".repeat(65536);
-    let actual = measure(|| index::retainLength(actual_text));
-    let native = measure(|| { let callback: Rc<dyn Fn() -> usize> = Rc::new(move || native_text.len()); callback });
+    let actual = allocation_counts::measure_requests(|| index::retainLength(actual_text));
+    let native = allocation_counts::measure_requests(|| { let callback: Rc<dyn Fn() -> usize> = Rc::new(move || native_text.len()); callback });
     assert_eq!(actual, native);
     assert_eq!(actual.0, 1);
     let values = JsArray::from_dense(vec![String::from("123456")]);
-    let reads = measure(|| { for _iteration in 0..10000 { let _value = std::hint::black_box(index::fieldValue(values.clone())); } });
+    let reads = allocation_counts::measure_requests(|| { for _iteration in 0..10000 { let _value = std::hint::black_box(index::fieldValue(values.clone())); } });
     assert_eq!(reads, (0, 0));
-    let direct_reads = measure(|| {
+    let direct_reads = allocation_counts::measure_requests(|| {
         for _iteration in 0..10000 {
             assert_eq!(std::hint::black_box(index::directFieldValue(values.clone())), 123456.0);
         }
     });
-    let native_reads = measure(|| {
+    let native_reads = allocation_counts::measure_requests(|| {
         for _iteration in 0..10000 {
             let field = values.borrow_number_element(0.0).unwrap();
             assert_eq!(std::hint::black_box(tsonic_rust_js::abi::number_parse_int_radix(&field, 10.0)), 123456.0);
@@ -285,7 +262,7 @@ fn allocation_parity() {
     assert_eq!(direct_reads, native_reads);
     assert_eq!(direct_reads, (0, 0));
     let pair = JsArray::from_dense(vec!["x".repeat(65536), "y".repeat(65536)]);
-    let paired_reads = measure(|| {
+    let paired_reads = allocation_counts::measure_requests(|| {
         for _iteration in 0..10000 {
             assert_eq!(std::hint::black_box(index::pairLengths(pair.clone())), 131072.0);
             assert_eq!(std::hint::black_box(index::nestedLengths(pair.clone())), 131072.0);
@@ -293,21 +270,21 @@ fn allocation_parity() {
     });
     assert_eq!(paired_reads, (0, 0));
     let counter = index::counter();
-    let views = measure(|| {
+    let views = allocation_counts::measure_requests(|| {
         for _iteration in 0..10000 {
             std::hint::black_box(index::counterView(counter.clone()));
         }
     });
     assert_eq!(views, (0, 0));
-    let quantified = measure(|| {
+    let quantified = allocation_counts::measure_requests(|| {
         for iteration in 0..10000 {
             assert_eq!(std::hint::black_box(index::quantifiedIdentity(iteration as f64)), iteration as f64);
         }
     });
     assert_eq!(quantified, (0, 0));
     index::projectionCount(0.0).expect("projection initialization");
-    let one_projection = measure(|| assert_eq!(index::projectionCount(1.0).unwrap(), 1.0));
-    let many_projections = measure(|| assert_eq!(index::projectionCount(10000.0).unwrap(), 10000.0));
+    let one_projection = allocation_counts::measure_requests(|| assert_eq!(index::projectionCount(1.0).unwrap(), 1.0));
+    let many_projections = allocation_counts::measure_requests(|| assert_eq!(index::projectionCount(10000.0).unwrap(), 10000.0));
     assert_eq!(many_projections, one_projection);
 }
 `);

@@ -18,7 +18,7 @@ test("checked closed Error inputs retain native identity without per-read alloca
   assert.doesNotMatch(source, /JsError::new\([^\n]*\.message\(/u);
   const directory = writeGeneratedProject("closed-error-inputs", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport(directory)}
 use closed_error_inputs::index;
 #[test]
 fn closed_error_input_cost() {

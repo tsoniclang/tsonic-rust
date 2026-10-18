@@ -23,7 +23,7 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod constrained_field_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
     #[test]
     fn generic_named_field_read_is_a_zero_allocation_native_observation() {
         for _ in 0..128 {
