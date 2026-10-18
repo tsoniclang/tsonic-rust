@@ -13,6 +13,7 @@ import type { RustSourceErrorRegionSelection } from "./error-regions.js";
 import type { RustCallablePhysicalAdapter } from "./callable-adapters.js";
 import type { RustGenericCallableInvocationFact } from "./generic-callable-effects.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
+import type { RustCallablePhysicalSignature } from "../conversions/callable-physical.js";
 import type { RustNativeClassField } from "./native-value-declarations.js";
 
 export type RustPhysicalCallableSourceActivations =
@@ -211,6 +212,14 @@ export interface RustPhysicalEmissionOperand {
     readonly selection: RustSourceErrorRegionSelection;
   }[];
   readonly genericInvocation: RustGenericCallableInvocationFact<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }> | undefined;
+  readonly nativeCallResult:
+    | { readonly kind: "none" }
+    | { readonly kind: "result"; readonly nativeCarrier: TargetTypeRef;
+        readonly signature: RustCallablePhysicalSignature;
+        readonly propagation:
+          | { readonly kind: "infallible" }
+          | { readonly kind: "local" }
+          | { readonly kind: "source"; readonly selection: RustSourceErrorRegionSelection } };
 }
 
 export interface RustCallableEmissionContexts {

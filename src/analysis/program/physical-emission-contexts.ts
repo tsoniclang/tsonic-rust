@@ -5,7 +5,9 @@ import type { RustInitializationErrorRecords, RustInitializerSelection, RustModu
 import type { RustCallableEmissionContexts, RustPhysicalEmissionContext, RustPhysicalEmissionOperand,
   RustPhysicalTargetGenericArgument, RustPhysicalEmissionRole } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
-import { selectRustNativeTypeCarrier, selectRustNativeCallTypeCarrier, type RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
+import { selectRustNativeTypeCarrier, selectRustNativeCallTypeCarrier, rustNativeCallableAbi, type RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
+import type { RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { prepareRustCallableEmissionRequests } from "../callables/emission-context-requests.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings,
   type RustCallableEmissionPreparation, type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "../callables/emission-contexts.js";
@@ -16,7 +18,7 @@ import type { RustCallablePhysicalConversion, RustCallablePhysicalValueConversio
 import type { RustEmissionErrorContext, RustNativeStorageBinding } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustNativeCallableFieldBinding } from "../declarations/native-forms.js";
 import { completeRustNativeCallableStorageAdapter } from "../callables/native-storage-adapters.js";
-import { publishRustErrorRegion, publishRustNativeErrorSources } from "../errors/regions.js";
+import { publishRustErrorRegion, publishRustNativeErrorSources, selectRustNativeInvocationErrorPropagation } from "../errors/regions.js";
 import { publishRustInitializerSelection } from "../errors/initialization.js";
 
 export interface RustPhysicalEmissionPreparationInput extends RustCallableEmissionPreparationInput {
@@ -87,21 +89,9 @@ export function publishRustPhysicalEmissionContexts(
     let error: RustEmissionErrorContext;
     const frameEntries: RustPhysicalEmissionContext["frameEntries"][number][] = [];
     for (const entry of prepared.frameEntries) {
-      const parameters = entry.parameters.map(carrier => selectRustNativeTypeCarrier(carrier, input, "general"));
-      const result = selectRustNativeTypeCarrier(entry.result, input, "general");
-      const failure = selectRustNativeTypeCarrier(entry.error, input, "general");
-      let valid = true;
-      for (const selected of [...parameters, result, failure]) if (selected.kind === "rejected") {
-        valid = false;
-        diagnostics.push({ code: "RUST_FRAME_CALLABLE_ABI_NOT_PROVEN", category: "error", source: "tsonic-rust",
-          sourceNode: prepared.declaration, message: selected.reason,
-          evidence: ["target.capability=rust.callable-value.exact-implementation"] });
-      }
-      if (valid && result.kind === "resolved" && failure.kind === "resolved") frameEntries.push(Object.freeze({
-        entry: entry.entry,
-        parameters: Object.freeze(parameters.flatMap(selected => selected.kind === "resolved" ? [selected.carrier] : [])),
-        result: result.carrier, error: failure.carrier,
-      }));
+      const signature = publishRustCallableNativeSignature(entry, prepared.declaration, input);
+      if (signature.kind === "rejected") diagnostics.push(...signature.diagnostics);
+      else frameEntries.push(Object.freeze({ entry: entry.entry, ...signature.value }));
     }
     if (prepared.error.kind === "region") {
       const region = publishRustErrorRegion(prepared.error.region, prepared.error.owner, input);
@@ -166,8 +156,39 @@ export function publishRustPhysicalEmissionContexts(
       if (invocation.kind === "resolved" && awaiting.kind === "resolved") genericInvocation = Object.freeze({
         ...prepared.genericInvocation, invocation: invocation.value, awaiting: awaiting.value });
     }
+    let nativeCallResult: RustPhysicalEmissionOperand["nativeCallResult"] = Object.freeze({ kind: "none" });
+    if (prepared.nativeCallResult.kind !== "none") {
+      const carrier = selectRustNativeTypeCarrier(prepared.nativeCallResult.carrier, input, "general");
+      if (carrier.kind === "rejected") {
+        diagnostics.push({ code: "RUST_NATIVE_CALL_RESULT_NOT_PROVEN", category: "error", source: "tsonic-rust",
+          sourceNode: prepared.node, message: carrier.reason });
+        continue;
+      }
+      let signature: RustCallablePhysicalSignature | undefined;
+      if (prepared.nativeCallResult.kind === "frame") {
+        const selected = publishRustCallableNativeSignature(prepared.nativeCallResult.signature, prepared.node, input);
+        if (selected.kind === "rejected") { diagnostics.push(...selected.diagnostics); continue; }
+        signature = selected.value;
+      } else signature = rustNativeCallableAbi({ kind: "physical", carrier: carrier.carrier });
+      if (signature === undefined) {
+        diagnostics.push({ code: "RUST_NATIVE_CALL_RESULT_NOT_PROVEN", category: "error", source: "tsonic-rust",
+          sourceNode: prepared.node, message: "A retained invocation requires its exact selected native argument tuple, result and error ABI." });
+        continue;
+      }
+      const frameOwner = prepared.nativeCallResult.kind === "frame"
+        ? rustProgramErrorOwner(prepared.nativeCallResult.signature.error) : undefined;
+      if (frameOwner?.kind === "logical") {
+        diagnostics.push({ code: "RUST_NATIVE_CALL_RESULT_NOT_PROVEN", category: "error", source: "tsonic-rust",
+          sourceNode: prepared.node, message: "A native frame invocation requires its actual defining physical error owner." });
+        continue;
+      }
+      const propagation = selectRustNativeInvocationErrorPropagation(prepared.node, signature.error,
+        context.error, sourceErrorRegions, frameOwner, input);
+      if (propagation.kind === "rejected") { diagnostics.push(...propagation.diagnostics); continue; }
+      nativeCallResult = Object.freeze({ kind: "result", nativeCarrier: carrier.carrier, signature, propagation: propagation.value });
+    }
     operands.set(prepared.use, Object.freeze({ ...prepared, context, sourceErrorRegions: Object.freeze(sourceErrorRegions),
-      genericInvocation }));
+      genericInvocation, nativeCallResult }));
   }
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   return resolvedTargetStage(Object.freeze({ ...preparation.contexts,
@@ -187,6 +208,30 @@ export function publishRustPhysicalEmissionContexts(
       return prepared === undefined ? undefined : operands.get(prepared.use);
     },
   }));
+}
+
+function publishRustCallableNativeSignature(
+  signature: RustCallablePhysicalSignature,
+  node: import("@tsonic/tsts").Node,
+  input: RustNativeTypeSelectionInput,
+): TargetStageResult<RustCallablePhysicalSignature> {
+  const diagnostics: import("@tsonic/target-api/artifacts").TargetDiagnostic[] = [];
+  const parameters: TargetTypeRef[] = [];
+  const reject = (reason: string): void => {
+    diagnostics.push({ code: "RUST_FRAME_CALLABLE_ABI_NOT_PROVEN", category: "error", source: "tsonic-rust",
+      sourceNode: node, message: reason, evidence: ["target.capability=rust.callable-value.exact-implementation"] });
+  };
+  for (const parameter of signature.parameters) {
+    const selected = selectRustNativeTypeCarrier(parameter, input, "general");
+    if (selected.kind === "rejected") reject(selected.reason);
+    else parameters.push(selected.carrier);
+  }
+  const result = selectRustNativeTypeCarrier(signature.result, input, "general");
+  const error = selectRustNativeTypeCarrier(signature.error, input, "general");
+  if (result.kind === "rejected") reject(result.reason);
+  if (error.kind === "rejected") reject(error.reason);
+  if (diagnostics.length !== 0 || result.kind === "rejected" || error.kind === "rejected") return rejectedTargetStage(diagnostics);
+  return resolvedTargetStage(Object.freeze({ parameters: Object.freeze(parameters), result: result.carrier, error: error.carrier }));
 }
 
 export function publishRustCallablePhysicalConversion(
