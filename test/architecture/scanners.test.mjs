@@ -277,7 +277,11 @@ test("bounded tests cap and report nested Cargo parallelism", () => {
   assert.match(guard, /test-resource-budget\.mjs" "\$profile"/u);
   assert.match(guard, /export CARGO_BUILD_JOBS="\$\{cargo_build_jobs\}"/u);
   assert.match(guard, /nested Cargo jobs: %s per Cargo invocation/u);
-  assert.match(worker, /--test-concurrency="\$\{TSONIC_TEST_WORKERS\}"/u);
+  assert.match(worker, /test\/scripts\/run-parallel\.mjs/u);
+  assert.match(worker, /--scope tsonic-rust/u);
+  const queue = readFileSync(join(hostRoot, "test/scripts/parallel-scheduler.mjs"), "utf8");
+  assert.match(queue, /running\.size >= options\.workers/u);
+  assert.match(queue, /memoryMiB \+ memory > options\.memoryMiB/u);
 });
 
 test("no product dependency on analysis files", () => {
@@ -1143,10 +1147,10 @@ test("Rust build and test entrypoints honor one explicit Tsonic checkout root", 
     buildScript,
     /TSONIC_ROOT="\$\(cd "\$REPO_ROOT\/\.\.\/tsonic"/u,
   );
-  assert.equal(
-    testWorker.match(/--import "\$loader_registration"/gu)?.length,
-    2,
-  );
+  assert.equal(testWorker.match(/--import "\$loader_registration"/gu)?.length, 2);
+  const suites = readFileSync(join(process.env.TSONIC_ROOT ?? resolve(repositoryRoot, "../tsonic"),
+    "test/scripts/suite-definition.mjs"), "utf8");
+  assert.match(suites, /nodeArguments: \["--import", resolve\(repos\.tsonicRust, "scripts\/register-tsonic-root-loader\.mjs"\)\]/u);
   assert.match(rootRegistration, /registerHooks\(\{ resolve: resolveFromConfiguredTsonic \}\)/u);
   assert.match(rootRegistration, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
   assert.match(rootRegistration, /configuredEntrypoints\.get\(specifier\)/u);
