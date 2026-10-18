@@ -8,6 +8,7 @@ import {
   isRustAbsenceCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
+  rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
 
 import { rustPostCheckBinaryOperationId, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../target-model/operations/model.js";
@@ -206,7 +207,8 @@ function mapSelectedUnaryOperator(
   if (request.operator === "!" && isRustBoolCarrier(operand)) {
     targetOperator = "!";
     resultCarrier = operand;
-  } else if (request.operator === "~" && operand !== undefined && isRustIntegerCarrier(operand)) {
+  } else if (request.operator === "~" && operand !== undefined &&
+    (isRustIntegerCarrier(operand) || rustSourceTypeCarrierValue(operand)?.shape === "enum")) {
     targetOperator = "!";
     resultCarrier = operand;
   } else if (request.operator === "~" && isRustBigIntCarrier(operand)) {

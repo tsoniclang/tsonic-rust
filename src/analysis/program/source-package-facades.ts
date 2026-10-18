@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
 import type {
   TargetSourcePackage,
@@ -212,13 +213,6 @@ export function analyzeRustSourcePackageFacades(
 const emptyExports: readonly RustSourcePackageFacadeExportContract[] =
   Object.freeze([]);
 const emptyNames: readonly string[] = Object.freeze([]);
-
-export function rustSourceItemIdentity(
-  fileName: string,
-  itemName: string,
-): string {
-  return `${fileName.length}:${fileName}${itemName.length}:${itemName}`;
-}
 
 function rustDeclarationItemNames(
   context: RustAnalysisContext,

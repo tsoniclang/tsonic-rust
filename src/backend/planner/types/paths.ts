@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustTypeRenderingContext } from "./render.js";
 
 export function rustSourceTypePathInContext(

@@ -145,17 +145,6 @@ export function rustAuthoredVariantDeadCodeDisposition(
     ? "authored-unread-field" : undefined;
 }
 
-export function rustGeneratedEnumDiscriminantDeadCodeDisposition(
-  context: RustLivenessPlanningContext,
-  declaration: Node,
-): RustDeadCodeDisposition | undefined {
-  const liveness = context.input.program.reachability;
-  return liveness.externallyReachable.has(declaration) ||
-      liveness.suppressedDeclarations.has(declaration)
-    ? undefined
-    : "generated-enum-discriminant";
-}
-
 export function rustGeneratedUnionVariantDeadCodeDisposition(
   context: RustLivenessPlanningContext,
   carriers: readonly TargetTypeRef[],

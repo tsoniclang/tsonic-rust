@@ -14,8 +14,6 @@ export const rustLintAttributes = Object.freeze({
     rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unread authored field" })]),
   authoredUnusedVariant:
     rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused authored variant" })]),
-  generatedEnumDiscriminant:
-    rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "stores an authored enum discriminant" })]),
   generatedRetainedConstructor:
     rustListAttribute("allow", [rustWordAttribute("dead_code"), rustValueAttribute("reason", { kind: "string", value: "retains an unused generated constructor" })]),
   generatedUnconstructedInstance:

@@ -8,6 +8,8 @@ import {
 import {
   analyzeRustSourceOutputIdentities,
 } from "../../../dist/analysis/names/source-output-identities.js";
+import { selectRustSourcePackageComponentIdentities } from "../../../dist/analysis/program/source-package-components.js";
+import { rustSourceArtifactPath } from "../../../dist/backend/planner/names/source-output-identities.js";
 import {
   rustModuleNameForSourcePath,
 } from "../../../dist/target-model/names/source-output-identities.js";
@@ -20,6 +22,78 @@ import {
   fakeSourceFile,
 } from "../../helpers/fake-compile-input.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+
+function analyzeIdentityFixture(input) {
+  const selected = selectRustSourcePackageComponentIdentities(input.sourcePackages, input.ast, input.sourceFiles);
+  assert.equal(selected.kind, "resolved", "the fixture supplies the canonical admitted component order");
+  return analyzeRustSourceOutputIdentities({ ...input, componentOrder: selected.identities.componentOrder });
+}
+
+function nativeCrateIdentityFixture(dependencies) {
+  const root = fakeSourceFile({ fileName: "/project/root/index.ts" });
+  const dependencyFiles = dependencies.map((dependency, index) =>
+    fakeSourceFile({ fileName: `/project/dependency${index}/index.ts` }));
+  const sourceFiles = [root, ...dependencyFiles];
+  const packages = [{ id: "package:root", name: "root", packageRoot: "/project/root", sourceRoot: "/project/root",
+    sourceFiles: [root.fileName], dependencies: dependencies.map((dependency, index) => `package:${index}`),
+    exports: [], componentId: "component:root" }, ...dependencies.map((dependency, index) => ({
+      id: `package:${index}`, name: dependency.name, packageRoot: `/project/dependency${index}`,
+      sourceRoot: `/project/dependency${index}`, sourceFiles: [dependencyFiles[index].fileName],
+      dependencies: [], exports: [], componentId: dependency.componentId,
+    }))];
+  const sourcePackages = { fingerprint: "fixture-native-crate-identities", rootPackageId: "package:root", packages,
+    components: [{ id: "component:root", packages: ["package:root"], dependencies: dependencies.map(dependency => dependency.componentId) },
+      ...dependencies.map((dependency, index) => ({ id: dependency.componentId, packages: [`package:${index}`], dependencies: [] }))] };
+  return { ast: fakeAstReader(sourceFiles), sourceFiles, sourcePackages,
+    configuration: { crateName: "application", project: { kind: "generated" } }, runtimeDependencies: [] };
+}
+
+test("generated Cargo crate collisions are rejected by the exact source identity owner before publication", () => {
+  for (const conflict of ["root", "runtime"]) {
+    const input = nativeCrateIdentityFixture([{ name: "native_dependency", componentId: "component:dependency" }]);
+    if (conflict === "root") input.configuration.crateName = "native_dependency";
+    else input.runtimeDependencies = [{ name: "native_dependency", path: "/actual/runtime-dependency" }];
+    const result = analyzeIdentityFixture(input);
+    assert.equal(result.kind, "rejected", `${conflict}: the native collision never reaches publication`);
+    assert.deepEqual(result.diagnostics.map(diagnostic => [diagnostic.code, diagnostic.message, diagnostic.evidence]), [[
+      "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
+      "Generated source-package component 'component:dependency' has conflicting Rust crate identity 'native_dependency'.",
+      ["target.capability=rust.backend.source-package-crates"],
+    ]], `${conflict}: the existing diagnostic and native predicate are preserved`);
+    assert.equal(Object.hasOwn(result, "identities"), false, `${conflict}: no partial identity plan is published`);
+  }
+});
+
+test("a generated crate-name suffix collision is rejected instead of sharing two native component identities", () => {
+  const input = nativeCrateIdentityFixture([
+    { name: "shared", componentId: "component:11111111aaaa" },
+    { name: "shared", componentId: "component:11111111bbbb" },
+  ]);
+  const result = analyzeIdentityFixture(input);
+  assert.equal(result.kind, "rejected", "the two exact component identities remain distinct");
+  assert.deepEqual(result.diagnostics.map(diagnostic => [diagnostic.code, diagnostic.message]), [[
+    "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
+    "Source-package components 'component:11111111aaaa' and 'component:11111111bbbb' share Rust crate identity 'shared_11111111'.",
+  ]], "the existing duplicate-name diagnostic retains both original component identities");
+});
+
+test("native crate admission uses active selected aliases and preserves user-owned project semantics", () => {
+  const input = nativeCrateIdentityFixture([{ name: "native_dependency", componentId: "component:dependency" }]);
+  input.runtimeDependencies = [{ name: "selected_alias", path: "/native_dependency" }];
+  const valid = analyzeIdentityFixture(input);
+  assert.equal(valid.kind, "accepted", "a different actual native alias does not conflict by path spelling");
+  assert.equal(valid.identities.get("/project/dependency0/index.ts").externalCrateName, "native_dependency",
+    "the exact selected generated crate identity is retained");
+  input.configuration.crateName = "native_dependency";
+  input.sourceFiles = input.sourceFiles.slice(0, 1);
+  input.ast = fakeAstReader(input.sourceFiles);
+  const inactive = analyzeIdentityFixture(input);
+  assert.equal(inactive.kind, "accepted", "an inactive package never becomes a generated Cargo dependency");
+  const userOwned = nativeCrateIdentityFixture([{ name: "native_dependency", componentId: "component:dependency" }]);
+  userOwned.configuration = { crateName: "native_dependency", project: { kind: "user-owned", manifestPath: "/native/Cargo.toml" } };
+  assert.equal(analyzeIdentityFixture(userOwned).kind, "accepted",
+    "this generated-Cargo validation does not invent policy for a user-owned native project");
+});
 
 test("source module identities encode the complete project-relative path", () => {
   assert.equal(rustModuleNameForSourcePath("models.ts"), "models");
@@ -100,27 +174,27 @@ export function value(): int32 { return 22; }
 test("source path collisions receive local readable suffixes without hash names", () => {
   const first = fakeSourceFile({ fileName: "/project/source_name.ts" });
   const second = fakeSourceFile({ fileName: "/project/source-name.ts" });
-  const plan = analyzeRustSourceOutputIdentities({
+  const plan = analyzeIdentityFixture({
     ast: fakeAstReader([first, second]),
     sourceFiles: [first, second],
     sourcePackages: fakeSourcePackageGraph([first, second], {
       packageRoot: "/project",
       sourceRoot: "/project",
     }),
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
+    configuration: { crateName: "fixture_root", project: { kind: "generated" } },
+    runtimeDependencies: [],
   });
 
   assert.equal(plan.kind, "accepted");
   assert.equal(plan.identities.get("/project/source_name.ts")?.moduleName, "source_name");
   assert.equal(plan.identities.get("/project/source-name.ts")?.moduleName, "source_name_2");
+  for (const identity of plan.identities.values()) {
+    assert.equal(Object.hasOwn(identity, "artifactPath"), false, "analysis publishes semantic module identity only");
+    assert.equal(rustSourceArtifactPath(identity), `src/${identity.moduleSegments.join("/")}.rs`,
+      "physical path rendering consumes the identical selected module segments");
+  }
   assert.doesNotMatch(
-    [...plan.identities.values()].map((identity) => identity.artifactPath).join("\n"),
+    [...plan.identities.values()].map(rustSourceArtifactPath).join("\n"),
     /[0-9a-f]{64}/u,
   );
 });
@@ -131,20 +205,15 @@ test("source path allocation reserves sibling bases before assigning collision s
     fakeSourceFile({ fileName: "/project/foo_bar.ts" }),
     fakeSourceFile({ fileName: "/project/foo_bar_2.ts" }),
   ];
-  const plan = analyzeRustSourceOutputIdentities({
+  const plan = analyzeIdentityFixture({
     ast: fakeAstReader(files),
     sourceFiles: files,
     sourcePackages: fakeSourcePackageGraph(files, {
       packageRoot: "/project",
       sourceRoot: "/project",
     }),
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
+    configuration: { crateName: "fixture_root", project: { kind: "generated" } },
+    runtimeDependencies: [],
   });
 
   assert.equal(plan.kind, "accepted");
@@ -190,17 +259,12 @@ test("identical source paths in distinct package components remain distinct", ()
       { id: dependencyComponentId, packages: [dependencyPackageId], dependencies: [] },
     ],
   };
-  const plan = analyzeRustSourceOutputIdentities({
+  const plan = analyzeIdentityFixture({
     ast: fakeAstReader([root, dependency]),
     sourceFiles: [root, dependency],
     sourcePackages,
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project/src",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
+    configuration: { crateName: "fixture_root", project: { kind: "generated" } },
+    runtimeDependencies: [],
   });
 
   assert.equal(plan.kind, "accepted");
@@ -319,20 +383,15 @@ test("an authored parent module owns its child declaration", () => {
 
 test("source output identity rejects files outside the checked project root", () => {
   const sourceFile = fakeSourceFile({ fileName: "/outside/index.ts" });
-  const plan = analyzeRustSourceOutputIdentities({
+  const plan = analyzeIdentityFixture({
     ast: fakeAstReader([sourceFile]),
     sourceFiles: [sourceFile],
     sourcePackages: fakeSourcePackageGraph([sourceFile], {
       packageRoot: "/project",
       sourceRoot: "/project",
     }),
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
+    configuration: { crateName: "fixture_root", project: { kind: "generated" } },
+    runtimeDependencies: [],
   });
 
   assert.equal(plan.kind, "rejected");
