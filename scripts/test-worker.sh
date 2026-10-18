@@ -11,13 +11,15 @@ if (( ${#test_arguments[@]} == 0 )); then
   exit 2
 fi
 
-npm run build
 loader_registration="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/register-tsonic-root-loader.mjs"
-node --import "$loader_registration" \
-  -e "import('./test/helpers/rust-session.mjs').then(m => m.buildInstalledLayout())"
-exec node "${TSONIC_ROOT:-../tsonic}/scripts/certification/capture-tests.mjs" node node \
+selection=()
+for file in "${test_arguments[@]}"; do
+  selection+=(--file "$file")
+done
+exec node \
   --import "$loader_registration" \
-  --test \
-  --test-reporter=tap \
-  --test-concurrency="${TSONIC_TEST_WORKERS}" \
-  "${test_arguments[@]}"
+  "${TSONIC_ROOT:-../tsonic}/test/scripts/run-parallel.mjs" \
+  --scope tsonic-rust \
+  --repository-root "$PWD" \
+  --with-preruns \
+  "${selection[@]}"
