@@ -3,6 +3,7 @@ import type { RustBindingProjectionFact } from "../../../target-model/records/va
 import { rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
 
 export function rustBindingProjectionCloneCarriers(fact: RustBindingProjectionFact): readonly TargetTypeRef[] {
+  if (!("projectedCarrier" in fact)) return [];
   switch (fact.projection.kind) {
     case "js-array-element":
     case "js-array-rest": {

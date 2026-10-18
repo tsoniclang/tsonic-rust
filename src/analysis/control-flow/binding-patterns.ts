@@ -104,7 +104,13 @@ export function recordRustBindingPatternFacts(
     }
     const name = Node_Name(context.ast, element);
     if (name === undefined) {
-      return unresolvedBindingPattern;
+      if (kind !== KindArrayBindingPattern || BindingElement_IsRest(context.ast, element) ||
+        Node_Initializer(context.ast, element) !== undefined ||
+        BindingElement_PropertyName(context.ast, element) !== undefined ||
+        !(sourceCarrier.kind === "tuple" || rustFixedArrayCarrierValue(sourceCarrier) !== undefined ||
+          isRustVecCarrier(sourceCarrier) || isRustJsArrayCarrier(sourceCarrier))) return unresolvedBindingPattern;
+      context.records.bindingProjections.omitted(context.requiredRecords, element, sourceCarrier);
+      continue;
     }
     const initializer = Node_Initializer(context.ast, element);
     const selected = kind === KindArrayBindingPattern
@@ -142,7 +148,7 @@ export function recordRustBindingPatternFacts(
 
 interface SelectedBindingProjection {
   readonly projectedCarrier: TargetTypeRef;
-  readonly projection: RustBindingProjection;
+  readonly projection: Exclude<RustBindingProjection, { readonly kind: "omitted" }>;
   readonly checkedArrayElement?: TargetTypeRef;
 }
 
@@ -156,7 +162,7 @@ function selectArrayProjection(
     if (hasDefault) {
       return undefined;
     }
-    const projection: RustBindingProjection | undefined = sourceCarrier.kind === "tuple"
+    const projection: SelectedBindingProjection["projection"] | undefined = sourceCarrier.kind === "tuple"
       ? { kind: "tuple-rest", start: index }
       : rustFixedArrayCarrierValue(sourceCarrier) !== undefined
         ? { kind: "fixed-array-rest", start: index }
@@ -172,7 +178,7 @@ function selectArrayProjection(
   }
 
   let projectedCarrier: TargetTypeRef | undefined;
-  let projection: RustBindingProjection | undefined;
+  let projection: SelectedBindingProjection["projection"] | undefined;
   if (sourceCarrier.kind === "tuple") {
     projectedCarrier = sourceCarrier.elements[index];
     projection = { kind: "tuple-element", index };

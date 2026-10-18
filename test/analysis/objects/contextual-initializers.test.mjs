@@ -94,22 +94,21 @@ if (!run()) throw new Error("metadata key counterpart");` } });
       [...compiled.result.artifacts, { path: "tests/native_contextual_counterpart.rs", text: nativeCounterpart.trimStart() }],
       { run: true });
   });
-  test(`Rust ${surfaces[0] ?? "native"} top-level exact-key pattern remains a precise open module obligation`, () => {
-    const compiled = compileRust({ surfaces, files: { "index.ts": `
+  test(`Rust ${surfaces[0] ?? "native"} top-level exact-key pattern uses native module initialization`, { timeout: 300_000 }, () => {
+    const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
 const { key } = { key: "value" } as const;
 interface Holder { [key]: number; }
 export function make(): number {
   const value: Holder = { [key]: 7 };
   return value[key];
 }
+if (make() !== 7) throw new Error("module exact key counterpart");
 ` } });
-    assert.equal(compiled.result.diagnostics.length, 1, "C122 keeps one actual module initializer owner, not a key refusal");
-    assert.equal(compiled.result.diagnostics[0]?.code, "RUST_SOURCE_PACKAGE_INITIALIZER_FACT_MISSING",
-      "the unchanged K01 capability is mapped to R02, not reported accepted with P01");
-    assert.equal(compiled.result.diagnostics[0]?.message, "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.",
-      "the precise current module-root/leaf boundary is retained");
-    assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true,
-      "the unsupported module shape stops before sealing and planning");
-    assert.equal(compiled.result.artifacts.length, 0, "no incomplete module output is emitted");
+    assert.equal(compiled.result.diagnostics.length, 0,
+      compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
+    assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true,
+      "the original pattern now has completed root, leaf and module-initialization evidence");
+    assert.equal(compiled.result.artifacts.length > 0, true, "actual native module output is emitted");
+    validateGeneratedProject(`contextual-module-key-${surfaces[0] ?? "native"}`, compiled.result.artifacts, { run: true });
   });
 }
