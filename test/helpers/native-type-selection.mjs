@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { rustNativeProjectGeneratedCarrier, rustNativeTypeSelectionInput } from "../../dist/policy/types/model/native-type-selection.js";
 import { selectRustOptionalStorageTypeArguments } from "../../dist/analysis/declarations/type-projections.js";
-import { rustSourceItemIdentity } from "../../dist/analysis/program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../dist/target-model/names/source-output-identities.js";
 import { closedMetadataKey } from "../../dist/target-model/metadata/closed-data.js";
 
 export function selectedNativeErrorBoundaries({ components = [], native = [] }) {
