@@ -160,7 +160,7 @@ function planVariableDeclaration(
       (ownedBinding && referentMutationRequiresMutableBinding &&
         context.input.program.records.mutatedReferent.get(declaration) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
-  const storage = planRustLocalBindingStorage(declaration, name, declarationCarrier, rustType, planned, locationStorage, context);
+  const storage = planRustLocalBindingStorage(declaration, name, declarationCarrier, planned, locationStorage, context);
   if (storage === undefined) return undefined;
   if (storage.kind === "store") return [...initializerPlan?.statements ?? [], storage.statement];
   rustType = storage.type;

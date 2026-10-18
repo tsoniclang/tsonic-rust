@@ -7,15 +7,12 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustLocationTargetType } from "../../../target-model/types/index.js";
-
-import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
-import { planRustNativeAllocation } from "../expressions/native-memory.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { createRustNativeBindingValue, requireRustNativeBindingStorage, rustNativeBindingSlotType }
+  from "../expressions/binding-storage.js";
 import { planRustValueFieldInput } from "../objects/value-fields.js";
 
 export function planRustLocalBindingStorage(
-  declaration: Node, name: string, carrier: TargetTypeRef, type: RustType | undefined,
+  declaration: Node, name: string, carrier: TargetTypeRef,
   value: RustExpr | undefined, storage: RustBindingStorageFact | undefined, context: RustPlanContext,
 ): { readonly kind: "binding"; readonly type: RustType | undefined; readonly value: RustExpr | undefined }
   | { readonly kind: "store"; readonly statement: RustStmt } | undefined {
@@ -27,25 +24,17 @@ export function planRustLocalBindingStorage(
     const initialization = input === undefined ? undefined : prepared.initialize?.(input, context);
     return initialization === undefined ? undefined : { kind: "store", statement: { kind: "expr", expr: initialization } };
   }
-  if (storage === undefined) return { kind: "binding", type, value };
+  const native = requireRustNativeBindingStorage(declaration, context);
+  if (storage === undefined) return { kind: "binding", type: rustNativeBindingSlotType(native, context), value };
   if (!rustTargetTypeRefEquals(carrier, storage.valueCarrier) || value === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
       "rust.backend.binding-storage-carrier", "Native binding storage requires its exact carrier and initializer."));
     return undefined;
   }
-  if (storage.storage !== "location") {
-    if (type === undefined || storage.initialization !== undefined) return undefined;
-    return { kind: "binding", type: rustInlineBindingStorageType(storage.storage, type),
-      value: { kind: "call", path: `${rustInlineBindingStoragePath(storage.storage)}::new`, args: [value] } };
-  }
-  context.usedAliases?.add("rt");
-  if (storage.initialization === "deferred") return { kind: "store", statement: {
+  if (storage.storage === "location" && storage.initialization === "deferred") return { kind: "store", statement: {
     kind: "expr", expr: { kind: "method-call", receiver: { kind: "path", path: name }, method: "store", args: [value] },
   } };
-  const nativeType = rustTypeFromCarrierInContext(rustLocationTargetType(storage.valueCarrier), context);
-  const nativeValue = context.input.program.records.nativeBacking.get(declaration) === undefined
-    ? { kind: "call" as const, path: "rt::Location::allocate", args: [value] }
-    : planRustNativeAllocation(declaration, value, context);
-  return nativeType === undefined || nativeValue === undefined ? undefined
-    : { kind: "binding", type: nativeType, value: nativeValue };
+  const nativeValue = createRustNativeBindingValue(native, value, context, false);
+  return nativeValue === undefined ? undefined
+    : { kind: "binding", type: rustNativeBindingSlotType(native, context), value: nativeValue };
 }

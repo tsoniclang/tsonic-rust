@@ -1,14 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
+import type { RustNativeBindingStorage } from "../../../target-model/records/physical-emission-contexts.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 
 import { validatedRustCapturedFieldStorageFact } from "../../../analysis/storage/receiver-captures.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../expressions/binding-storage.js";
+import { rustBindingStorageOperations, createRustNativeBindingPayload, createRustNativeBindingValue }
+  from "../expressions/binding-storage.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic, failRustPlannerInvariant } from "../diagnostics.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "../bindings/deferred-storage.js";
 
@@ -26,42 +29,40 @@ export function rustCapturedFieldStorage(declaration: Node, context: RustPlanCon
   return validated.storage;
 }
 
-export function rustCapturedFieldType(storage: RustCapturedFieldStorage | undefined, type: RustType): RustType {
-  if (storage === undefined || storage.kind === "copy") return type;
-  const payload = storage.kind === "shared" ? type : rustInlineBindingStorageType(storage.kind, type);
-  const owner = storage.initialization === "ready" ? payload : { kind: "named" as const, path: "core::cell::OnceCell",
-    genericArguments: [{ kind: "type" as const, type: payload }] };
-  return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: owner }] };
+export function rustCapturedFieldType(storage: RustNativeBindingStorage, context: RustPlanContext): RustType {
+  return rustTypeFromSelectedNativeCarrierInContext(storage.holderCarrier, context);
 }
 
-export function createRustCapturedField(storage: RustCapturedFieldStorage | undefined, value: RustExpr): RustExpr {
-  if (storage === undefined || storage.kind === "copy") return value;
-  const payload = createRustCapturedFieldPayload(storage, value);
-  return { kind: "call", path: "alloc::rc::Rc::new", args: [storage.initialization === "ready" ? payload
-    : { kind: "call", path: "core::cell::OnceCell::from", args: [payload] }] };
+export function createRustCapturedField(storage: RustNativeBindingStorage, value: RustExpr, context: RustPlanContext): RustExpr {
+  return createRustNativeBindingValue(storage, value, context, true)
+    ?? failRustPlannerInvariant("A completed native captured field requires its original renderable construction.");
 }
 
-export function createRustDeferredFieldOwner(): RustExpr {
-  return { kind: "call", path: "alloc::rc::Rc::new", args: [{ kind: "call", path: "core::cell::OnceCell::new", args: [] }] };
+export function createRustDeferredFieldOwner(storage: RustNativeBindingStorage): RustExpr {
+  if (storage.ownerConstructor === null || storage.deferredConstructor === null)
+    return failRustPlannerInvariant("A completed deferred captured field requires its exact owner and slot constructors.");
+  return { kind: "call", path: storage.ownerConstructor,
+    args: [{ kind: "call", path: storage.deferredConstructor, args: [] }] };
 }
 
-export function initializeRustCapturedField(storage: RustCapturedFieldStorage | undefined, owner: RustExpr, value: RustExpr): RustExpr {
-  if (storage?.initialization !== "deferred") return { kind: "assignment", operator: "=", target: owner,
-    value: createRustCapturedField(storage, value) };
-  return initializeRustDeferredStorage(owner, createRustCapturedFieldPayload(storage, value), "captured field initialized twice");
+export function initializeRustCapturedField(storage: RustNativeBindingStorage, owner: RustExpr, value: RustExpr,
+  context: RustPlanContext): RustExpr {
+  if (storage.initialization !== "deferred") return { kind: "assignment", operator: "=", target: owner,
+    value: createRustCapturedField(storage, value, context) };
+  return initializeRustDeferredStorage(owner, createRustCapturedFieldPayload(storage, value, context), "captured field initialized twice");
 }
 
-export function initializeOrWriteRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, value: RustExpr,
+export function initializeOrWriteRustCapturedField(storage: RustNativeBindingStorage, owner: RustExpr, value: RustExpr,
   context: RustPlanContext): RustExpr | undefined {
-  if (storage.initialization !== "deferred" || storage.kind === "shared" || storage.kind === "copy") return undefined;
+  if (storage.initialization !== "deferred" || storage.kind !== "cell" && storage.kind !== "borrow-cell") return undefined;
   return initializeOrWriteRustDeferredStorage(owner, value, context,
-    selected => createRustCapturedFieldPayload(storage, selected), rustBindingStorageOperations(storage.kind).write,
+    selected => createRustCapturedFieldPayload(storage, selected, context), rustBindingStorageOperations(storage.kind).write,
     "captured field initialized twice", false);
 }
 
-function createRustCapturedFieldPayload(storage: RustCapturedFieldStorage, value: RustExpr): RustExpr {
-  return storage.kind === "shared" || storage.kind === "copy" ? value : { kind: "associated-call", owner: { kind: "named",
-    path: storage.kind === "cell" ? "core::cell::Cell" : "core::cell::RefCell" }, method: "new", args: [value] };
+function createRustCapturedFieldPayload(storage: RustNativeBindingStorage, value: RustExpr, context: RustPlanContext): RustExpr {
+  return createRustNativeBindingPayload(storage, value, context)
+    ?? failRustPlannerInvariant("A completed native captured field requires its original payload constructor.");
 }
 
 function rustCapturedFieldPayload(storage: RustCapturedFieldStorage, owner: RustExpr): RustExpr {

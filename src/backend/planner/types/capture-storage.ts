@@ -1,14 +1,11 @@
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustLocationTargetType } from "../../../target-model/types/index.js";
 import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
-import { rustInlineBindingStorageType } from "../expressions/binding-storage.js";
-import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
+import { requireRustNativeBindingStorage } from "../expressions/binding-storage.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "./render.js";
 
 export function rustCallableCaptureStorageType(
-  capture: Pick<RustClosureCaptureFact["captures"][number], "storage">, carrier: TargetTypeRef, context: RustTypeRenderingContext,
-): RustType | undefined {
-  const type = rustTypeFromCarrierInContext(capture.storage === "location" ? rustLocationTargetType(carrier) : carrier, context);
-  return type === undefined ? undefined : capture.storage === "cell" || capture.storage === "borrow-cell"
-    ? rustInlineBindingStorageType(capture.storage, type) : type;
+  capture: Pick<RustClosureCaptureFact["captures"][number], "declaration">, context: RustPlanContext,
+): RustType {
+  return rustTypeFromSelectedNativeCarrierInContext(requireRustNativeBindingStorage(capture.declaration, context).slotCarrier, context);
 }

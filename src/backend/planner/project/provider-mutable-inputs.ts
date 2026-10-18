@@ -9,6 +9,14 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustLocationStorage, type RustExpressionPlanner } from "../expressions/typed-locations.js";
+import type { RustNativeInputOwnership } from "../../../target-model/records/ownership.js";
+
+export function rustNativeInputFor(operationNode: Node, input: RustFinalizedSourceInput,
+  context: RustPlanContext): RustNativeInputOwnership | undefined {
+  return [...context.input.program.ownership.nativeInputs.values()].find(selected => selected.input === input &&
+    selected.operand.context === context.emissionContext && selected.operand.origin.kind === "call-input" &&
+    selected.operand.origin.operationNode === operationNode);
+}
 
 export type MutableProviderInput =
   | {

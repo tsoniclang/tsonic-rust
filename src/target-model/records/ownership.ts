@@ -4,7 +4,8 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustTargetOperationFact } from "./operations.js";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand,
   RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins,
-  RustPhysicalEmissionSourceSlot, RustPhysicalCallableSourceSelection } from "./physical-emission-contexts.js";
+  RustPhysicalEmissionSourceSlot, RustPhysicalEmissionSourceOccurrence,
+  RustPhysicalCallableSourceSelection, RustNativeStorageBinding } from "./physical-emission-contexts.js";
 import type { RustFinalizedNativeResultLoans, RustFinalizedOperationAbi, RustFinalizedSourceInput } from "./finalized-operation.js";
 import type { RustNativeResultLoan, RustNativeResultLoanOrigin } from "../operations/result-loans.js";
 
@@ -69,6 +70,7 @@ export interface RustNativePlace {
   readonly operand: RustPhysicalEmissionOperand;
   readonly carrier: TargetTypeRef;
   readonly sourcePath: { readonly declaration: Node; readonly projections: readonly (Node | string)[] } | undefined;
+  readonly nativeBinding: RustNativeStorageBinding | undefined;
   readonly storage:
     | { readonly kind: "promoted"; readonly expression: Node; readonly declaration: Node;
         readonly storage: "location" | "module-cell" | "cell" | "borrow-cell" | "native-array" }
@@ -89,6 +91,10 @@ interface RustNativeInputBase {
 export interface RustNativeInputPlace extends RustNativeInputBase {
   readonly kind: "place";
   readonly place: RustNativePlace;
+  readonly nativeResultView: {
+    readonly occurrence: RustPhysicalEmissionSourceOccurrence;
+    readonly read: RustReadOwnershipFact["nativeResults"][number];
+  } | undefined;
 }
 
 export interface RustNativeInputValue extends RustNativeInputBase {

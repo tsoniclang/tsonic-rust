@@ -11,16 +11,20 @@ import { selectRustCapturedFieldStorage } from "../../../../dist/policy/ownershi
 import { createRustCapturedFieldStorageProducer } from "../../../../dist/analysis/program/records/captured-field-storage.js";
 import { assertRustRequiredRecords, requireRustRecord } from "../../../../dist/analysis/program/records/required-records.js";
 import { fieldFactKey } from "@tsonic/tsts";
+import { selectRustNativeBindingStorage } from "../../../../dist/policy/ownership/binding-storage.js";
 
 const owner = { kind: "path", path: "payload" };
 const next = { kind: "path", path: "next" };
 
 test("proven immutable scalar captures have no native heap owner or clone", () => {
   const storage = selectRustCapturedFieldStorage(int32Carrier, true, false, true);
-  const type = { kind: "named", path: "i32" };
+  const native = selectRustNativeBindingStorage({ kind: "captured-field", storage: "copy",
+    initialization: "ready", payloadCarrier: int32Carrier });
+  const context = { usedAliases: new Set() };
   assert.equal(storage.kind, "copy");
-  assert.equal(rustCapturedFieldType(storage, type) === type, true);
-  assert.equal(createRustCapturedField(storage, next) === next, true);
+  assert.equal(native.holderCarrier === int32Carrier, true, "the proven scalar field is its exact unchanged native payload");
+  assert.equal(rustCapturedFieldType(native, context).name, "i32", "the exact admitted scalar type needs no storage wrapper");
+  assert.equal(createRustCapturedField(native, next, context) === next, true);
   assert.equal(readRustCapturedField(storage, owner, int32Carrier) === owner, true);
   assert.equal(writeRustCapturedField(storage, owner, next), undefined);
   const retained = readRustProjectObjectFieldOwner(owner, "value", { kind: "shared-immutable" }, storage);

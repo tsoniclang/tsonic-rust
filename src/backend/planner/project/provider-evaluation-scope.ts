@@ -42,7 +42,7 @@ import {
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldHasGuardedBorrow } from "../expressions/error-field-borrows.js";
 import { rustProviderInputBorrowMode } from "../../../analysis/storage/provider-borrows.js";
 import { collectMutableInputs, noSourceExpressionEffects,
-  providerMutableStorageEffects, type MutableProviderInput } from "./provider-mutable-inputs.js";
+  providerMutableStorageEffects, rustNativeInputFor, type MutableProviderInput } from "./provider-mutable-inputs.js";
 
 export interface RustFinalizedInputPlanOverrides {
   readonly sourceValues: ReadonlyMap<Node, RustExpr>;
@@ -79,7 +79,7 @@ export function planRustProviderEvaluationScope(
   planExpression: RustExpressionPlanner,
   planProviderOperation: RustProviderOperationExpressionPlanner,
   preplannedInputs?: ReadonlyMap<RustFinalizedSourceInput, RustExpr>,
-  planSequenceInput?: (input: RustFinalizedSourceInput) => RustExpr | undefined,
+  planSourceInput?: (input: RustFinalizedSourceInput) => RustExpr | undefined,
 ): RustProviderEvaluationScopeSelection {
   const mutableInputs = collectMutableInputs(
     context,
@@ -129,8 +129,8 @@ export function planRustProviderEvaluationScope(
   for (const [index, slot] of sourceSlots.entries()) {
     const input = sequenceInputs.get(slot.key);
     if (input !== undefined) {
-      if (planSequenceInput === undefined) return { kind: "failed" };
-      const value = planSequenceInput(input);
+      if (planSourceInput === undefined) return { kind: "failed" };
+      const value = planSourceInput(input);
       if (value === undefined) return { kind: "failed" };
       const name = allocateRustSyntheticName(syntheticNames, `operation_sequence_${index}`);
       steps.push({ kind: "binding", name, value });
@@ -225,6 +225,18 @@ export function planRustProviderEvaluationScope(
       continue;
     }
     if (!stabilizationKeys.has(slot.key)) {
+      continue;
+    }
+    const nativeInput = rustFinalizedSourceInputs(fact.abi).find(input => providerSourceInputKey(input) === slot.key);
+    const native = nativeInput === undefined ? undefined : rustNativeInputFor(operationNode, nativeInput, context);
+    if (native?.kind === "place" && native.nativeResultView !== undefined) {
+      if (planSourceInput === undefined) return failRustPlannerInvariant(
+        "An admitted native result view requires its original finalized input renderer.", slot.node);
+      const value = planSourceInput(native.input);
+      if (value === undefined) return { kind: "failed" };
+      const name = allocateRustSyntheticName(syntheticNames, `operation_input_${index}`);
+      steps.push({ kind: "binding", name, value });
+      inputOverrides.set(native.input, { kind: "path", path: name });
       continue;
     }
     const contextual = context.input.program.records.contextualValueConversion.get(slot.node);

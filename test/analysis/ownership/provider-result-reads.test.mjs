@@ -141,7 +141,7 @@ test("provider union arms retain each original finalized operation in the same r
 test("native borrowed-string fields copy their raw reference with exactly the handwritten allocation cost", { timeout: 300_000 }, () => {
   const fixtureRoot = writeGeneratedProject("raw-provider-field-fixture", [
     { path: "Cargo.toml", text: '[package]\nname = "raw_field_fixture"\nversion = "0.0.0"\nedition = "2021"\n' },
-    { path: "src/lib.rs", text: "pub struct NativeText { pub text: &'static str }\npub fn count(value: &str) -> i32 { value.len() as i32 }\n" },
+    { path: "src/lib.rs", text: "pub struct NativeText { pub text: &'static str }\npub fn count(value: &str) -> i32 { value.len() as i32 }\npub fn count_with(value: &str, extra: i32) -> i32 { value.len() as i32 + extra }\npub fn replace(value: &mut NativeText) -> i32 { value.text = \"short\"; 1 }\n" },
   ]);
   const carrier = rustNamedTargetType("raw.fixture.NativeText", "raw_field_fixture::NativeText", [], [], undefined, [], undefined, []);
   const provider = createRustProviderPackage({
@@ -153,6 +153,14 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
     }, { id: "@raw/native::count", name: "count", kind: "function", signatures: [{
       id: "@raw/native::count(value)", name: "count", parameters: [{ name: "value", type: { kind: "string" } }],
       returnType: { kind: "source-primitive", name: "int32" },
+    }] }, { id: "@raw/native::countWith", name: "countWith", kind: "function", signatures: [{
+      id: "@raw/native::countWith(value, extra)", name: "countWith", parameters: [
+        { name: "value", type: { kind: "string" } }, { name: "extra", type: { kind: "source-primitive", name: "int32" } },
+      ], returnType: { kind: "source-primitive", name: "int32" },
+    }] }, { id: "@raw/native::replace", name: "replace", kind: "function", signatures: [{
+      id: "@raw/native::replace(value)", name: "replace", parameters: [{ name: "value", type: {
+        kind: "provider-ref", moduleSpecifier: "@raw/native", exportName: "NativeText",
+      } }], returnType: { kind: "source-primitive", name: "int32" },
     }] }] }],
     types: [{ exportId: "@raw/native::NativeText", targetCarrier: carrier }],
     carrierPaths: { "raw.fixture.NativeText": "raw_field_fixture::NativeText" },
@@ -167,27 +175,40 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
       parameterCarriers: [string], resultCarrier: integer,
       resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::count",
         resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [], inputLoans: { kind: "complete", origins: [] } },
+    }, { exportId: "@raw/native::countWith", operationKind: "method",
+      target: { form: "call", path: "raw_field_fixture::count_with", argModes: ["value", "value"],
+        argConversions: [rustStringToBorrowedStrValueConversion, undefined] },
+      parameterCarriers: [string, integer], resultCarrier: integer,
+      resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::count_with",
+        resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [], inputLoans: { kind: "complete", origins: [] } },
+    }, { exportId: "@raw/native::replace", operationKind: "method",
+      target: { form: "call", path: "raw_field_fixture::replace", argModes: ["mut-ref"] },
+      parameterCarriers: [carrier], resultCarrier: integer,
+      resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::replace",
+        resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [], inputLoans: { kind: "complete", origins: [] } },
     }],
     crates: [{ crateName: "raw_field_fixture", cargoPath: fixtureRoot }],
   });
   const { result } = compileRust({ packages: [provider],
     target: { id: "rust", options: { outputType: "lib", crateName: "raw_field_control" } },
-    files: { "index.ts": 'import { NativeText, count } from "@raw/native";\nexport function read(value: NativeText): string { return value.text; }\nexport function length(value: NativeText): number { return count(value.text); }\n' },
+    files: { "index.ts": 'import { NativeText, count, countWith, replace } from "@raw/native";\nexport function read(value: NativeText): string { return value.text; }\nexport function length(value: NativeText): number { return count(value.text); }\nexport function lengthAfter(value: NativeText): number { return countWith(value.text, replace(value)); }\n' },
   });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
   const program = result.program;
   assert.equal(program !== undefined, true, "the real target pipeline publishes its completed native input proofs");
   assert.equal(nativeMethods(nativeFunction(result, "read"), "clone").length, 0, "the native &str field is Copy, not the converted String");
-  assert.equal(nativeMethods(nativeFunction(result, "length"), "clone").length, 0, "borrowing the already-owned converted result needs no new snapshot");
+  assert.equal(nativeMethods(nativeFunction(result, "length"), "clone").length, 0, "the directly consumed native reference needs no owned snapshot");
   const converted = [...program.ownership.nativeInputs.values()].find(input => input.kind === "place" &&
     program.source.ast.is.IsPropertyAccessExpression(input.node));
   assert.equal(converted !== undefined, true, "the outer borrowed call uses the original authored field-result input");
-  assert.equal(converted.place.storage.kind, "owned", "the actual conversion forms a new native String, not the source field place");
-  assert.equal(converted.place.sourcePath, undefined, "the new value does not forge the native receiver's storage provenance");
+  assert.equal(converted.nativeResultView?.occurrence.operation.abi === program.records.targetOperation.get(converted.node).abi, true,
+    "the consumed reference retains the exact original finalized native result");
+  assert.equal(converted.nativeResultView?.read.read.kind, "copy", "the exact raw native reference is Copy");
+  assert.equal(converted.place.sourcePath, undefined, "a native result does not forge the native receiver's storage provenance");
   assert.equal(program.ownership.reads.get(converted.node).readsStorage, false, "raw field storage does not become converted result storage");
   const directory = writeGeneratedProject("raw-provider-field-native", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/field.rs"), `use raw_field_control::index::{length, read};
+  writeFileSync(join(directory, "tests/field.rs"), `use raw_field_control::index::{length, lengthAfter, read};
 use raw_field_fixture::NativeText;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -210,7 +231,12 @@ unsafe impl GlobalAlloc for Counting {
 }
 
 fn handwritten(value: NativeText) -> String { value.text.to_owned() }
-fn handwritten_length(value: NativeText) -> f64 { raw_field_fixture::count(&value.text.to_owned()) as f64 }
+fn handwritten_length(value: NativeText) -> f64 { raw_field_fixture::count(value.text) as f64 }
+fn handwritten_length_after(mut value: NativeText) -> f64 {
+    let text = value.text;
+    let extra = raw_field_fixture::replace(&mut value);
+    raw_field_fixture::count_with(text, extra) as f64
+}
 
 #[test]
 fn identical_native_field_cost() {
@@ -242,7 +268,22 @@ fn identical_native_field_cost() {
     assert_eq!(actual_length, expected_length);
     assert_eq!(actual_allocations, expected_allocations);
     assert_eq!(actual_bytes, expected_bytes);
-    assert_eq!((actual_allocations, actual_bytes), (1, 12));
+    assert_eq!((actual_allocations, actual_bytes), (0, 0));
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    BYTES.store(0, Ordering::Relaxed);
+    let actual_after = lengthAfter(NativeText { text: "native-value" });
+    let actual_allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    let actual_bytes = BYTES.load(Ordering::Relaxed);
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    BYTES.store(0, Ordering::Relaxed);
+    let expected_after = handwritten_length_after(NativeText { text: "native-value" });
+    let expected_allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    let expected_bytes = BYTES.load(Ordering::Relaxed);
+    assert_eq!(actual_after, expected_after);
+    assert_eq!(actual_after, 13.0);
+    assert_eq!(actual_allocations, expected_allocations);
+    assert_eq!(actual_bytes, expected_bytes);
+    assert_eq!((actual_allocations, actual_bytes), (0, 0));
 }
 `);
   runCargo(directory, ["generate-lockfile", "--offline"]);

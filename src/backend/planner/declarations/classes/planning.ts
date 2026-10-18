@@ -61,7 +61,7 @@ import { rustProjectCloneImplementation, rustProjectWrapperTraits } from "../../
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
 import { rustClassFrameLayout } from "../../objects/frame-storage.js";
-import { rustFrameCallableTypes } from "../../types/frame-callables.js";
+import { requireRustNativeFrameStorage } from "../../expressions/binding-storage.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -374,10 +374,12 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     if (selected.kind === "frame-counter") return { name: selected.name,
       type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility: storageVisibility };
     if (selected.kind === "frame") {
-      const types = rustFrameCallableTypes(selected.carrier, context);
-      if (types === undefined) return failRustPlannerInvariant("An admitted native frame has no materialized type.", node);
-      return { name: selected.name, type: { kind: "named", path: "alloc::rc::Rc",
-        genericArguments: [{ kind: "type", type: types.frameType }] }, visibility: storageVisibility };
+      const definition = context.input.program.callableValues.frames.definitionForOwner(selected.declaration);
+      if (definition === undefined) return failRustPlannerInvariant("An admitted native frame lost its original complete owner.", node);
+      const frame = requireRustNativeFrameStorage(definition,
+        context.input.program.physicalEmissionContexts.contextForOwner(definition, "frame"));
+      return { name: selected.name, type: rustTypeFromSelectedNativeCarrierInContext(frame.holderCarrier, context),
+        visibility: storageVisibility };
     }
     return failRustPlannerInvariant("An ordinary class has an incompatible native physical field kind.", node);
   });

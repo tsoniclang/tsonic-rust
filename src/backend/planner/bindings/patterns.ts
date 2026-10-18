@@ -120,7 +120,7 @@ export function planRustBindingPattern(
         return undefined;
       }
       const location = rustBindingStorageForDeclaration(element, context);
-      const storage = planRustLocalBindingStorage(element, bindingName, fact.bindingCarrier, bindingType, normalized, location, context);
+      const storage = planRustLocalBindingStorage(element, bindingName, fact.bindingCarrier, normalized, location, context);
       if (storage === undefined) return undefined;
       if (storage.kind === "store") {
         statements.push(storage.statement);

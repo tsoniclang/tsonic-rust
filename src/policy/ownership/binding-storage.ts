@@ -3,6 +3,7 @@ import { rustNamedTargetType } from "../../target-model/types/carriers/native.js
 import type { RustNativeBindingStorage } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustNativeMemoryLayout } from "../../target-model/operations/native-memory.js";
 import { rustNativeMemoryPaths } from "../../target-model/names/native-memory.js";
+import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export type RustNativeBindingStorageInput = {
   readonly payloadCarrier: TargetTypeRef;
@@ -27,7 +28,7 @@ export function selectRustNativeBindingStorage(input: RustNativeBindingStorageIn
   const valueCarrier = kind === "cell" ? named("rust.core.cell.Cell", "core::cell::Cell", [payloadCarrier])
     : kind === "borrow-cell" ? named("rust.core.cell.RefCell", "core::cell::RefCell", [payloadCarrier])
     : kind === "location" ? named("rust.runtime.Location", "rt::Location", [payloadCarrier,
-      named("rust.core.convert.Infallible", "core::convert::Infallible", [])])
+      named(rustInfallibleTargetId, "core::convert::Infallible", [])])
     : kind === "module-cell" ? named("rust.runtime.ModuleCell", "rt::ModuleCell", [payloadCarrier]) : payloadCarrier;
   const deferred = input.initialization === "deferred" && input.kind !== "module" &&
     (input.kind === "frame" || kind !== "location");
@@ -45,7 +46,7 @@ export function selectRustNativeBindingStorage(input: RustNativeBindingStorageIn
     slotConstructor: deferred ? "core::cell::OnceCell::from" : null,
     deferredConstructor: deferred ? "core::cell::OnceCell::new"
       : input.initialization === "deferred" && kind === "location" ? "rt::Location::uninitialized"
-      : input.initialization === "deferred" && kind === "module-cell" ? "rt::ModuleCell::new" : null,
+      : kind === "module-cell" ? "rt::ModuleCell::new" : null,
     ownerConstructor: input.kind === "frame" ? input.ownerConstructor : shared ? "alloc::rc::Rc::new" : null,
     nativeAllocation, requirements,
   });

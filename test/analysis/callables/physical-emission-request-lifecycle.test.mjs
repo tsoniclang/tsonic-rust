@@ -60,6 +60,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
   let queries;
   let physical;
   let parameterStorage;
+  const constructionErrors = new Map();
   const producers = createRustNativeCallableProducerPlan({ ast, nodes: input.nativeNodes, records, native,
     structuralShapes: context.structuralShapes,
     definitions: context.typeDefinitions, returnCarrierFor(node) {
@@ -68,7 +69,6 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   if (constructionErrorsReady) {
-    const errors = new Map();
     const { components, effectsFor } = checked.errorInputs;
     for (const producer of producers.producers) {
       if (unavailableErrors.has(producer.declaration)) continue;
@@ -77,9 +77,9 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
         ast, components, producers, definitions: context.typeDefinitions,
         records: { ...records, errorEffects: { get: effectsFor } },
       }, producer.declaration);
-      if (selected !== undefined) errors.set(producer.declaration, selected);
+      if (selected !== undefined) constructionErrors.set(producer.declaration, selected);
     }
-    producers.selectConstructionErrors(errors);
+    producers.selectConstructionErrors(constructionErrors);
   }
   queries = createRustNativeStorageQueries({ ast, nativeNodes: input.nativeNodes, storage: sourceStorage, records,
     projectTypes: input.projectTypes, projectMethodDispatch: input.projectMethodDispatch,
@@ -100,7 +100,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), unavail
   const occurrences = prepareRustProviderSourceOccurrences({ ast, records, nodes: input.nativeNodes,
     isNativeNode: input.isNativeNode, semantics: sourceStorage.source.semantics });
   assert.equal(occurrences.kind, "resolved", "the canonical source owner selects the entire original occurrence vector");
-  return { physical, producers, storage, sourceOccurrences: occurrences.value };
+  return { physical, producers, storage, constructionErrors, sourceOccurrences: occurrences.value };
 }
 
 function completeLifecycle(input, physical) {
@@ -193,7 +193,8 @@ export function inspect(value: string, word: string): boolean { return value.inc
     typeDefinitions: context.typeDefinitions, lexicalFunctions: constructionInput.lexicalFunctions,
     structuralShapes: context.structuralShapes, adapterFlows: Object.freeze([]), nativeStorage, nativeProducers });
   return { ast, records, sourceStorage, declaration, owner, metadata, invocation, directInvocation, operand, calls, outcomes,
-    physical, request, input, sealedRequests: () => sealedRequests, close: () => { open = false; } };
+    physical, request, input, constructionErrors: construction.constructionErrors,
+    sealedRequests: () => sealedRequests, close: () => { open = false; } };
 }
 
 test("required metadata elaboration does not invent a runtime value or operand request", () => {
@@ -404,7 +405,8 @@ test("explicit producer requests retain every actual checked source corresponden
     assert.equal(rustTargetTypeRefEquals(signature.result,
       result.value.nativeProducers.invocationResultFor(request.declaration)), true, "the actual completed result is retained");
     assert.equal(rustTargetTypeRefEquals(signature.error,
-      result.value.nativeProducers.errorFor(request.declaration, "invoke")), true, "the exact native invocation error identity is retained");
+      current.constructionErrors.get(request.declaration)), true,
+      "the exact normalized error selected by the original native construction is retained");
     const lifetime = rustNamedTypeCarrierValue(physical)?.genericArguments?.[0];
     assert.equal(lifetime?.kind === "lifetime" && rustLifetimesEqual(lifetime.lifetime, logical.lifetime), true,
     "the selected native construction lifetime is retained, never defaulted");

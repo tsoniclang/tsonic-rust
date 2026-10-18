@@ -16,6 +16,7 @@ import { checkRustDataWrite } from "../objects/data-writes.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { requireRustNativeBindingStorage } from "./binding-storage.js";
 
 export function validateRustCapturedReceivers(
   node: Node, receivers: RustClosureCaptureFact["receivers"], context: RustPlanContext,
@@ -120,9 +121,9 @@ export function rustCapturedReceiverContext(
 }
 
 export function rustCapturedReceiverFieldType(
-  capture: RustClosureCaptureFact["receiverFields"][number], type: RustType, context: RustPlanContext,
+  capture: RustClosureCaptureFact["receiverFields"][number], context: RustPlanContext,
 ): RustType {
-  const owner = rustCapturedFieldType(capture.storage, type);
+  const owner = rustCapturedFieldType(requireRustNativeBindingStorage(capture.declaration, context), context);
   return context.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference)
     ? { kind: "tuple", elements: [{ kind: "named", path: "rt::ObjectIdentity" }, owner] } : owner;
 }

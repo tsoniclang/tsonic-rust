@@ -35,6 +35,7 @@ import { planRustDispatchContextInputScope } from "../project/dispatch-contexts.
 import type { RustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { planRustFinalizedOperationForm } from "./finalized-operation-form.js";
+import { rustNativeInputFor } from "../project/provider-mutable-inputs.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr | undefined {
   switch (argument.kind) {
@@ -393,6 +394,17 @@ export function planFinalizedSourceInput(
     return inputOverride;
   }
   const sourceValueOverride = overrides?.sourceValues.get(sourceNode);
+  const native = rustNativeInputFor(operationNode, input, context);
+  if (native?.kind === "place" && native.nativeResultView !== undefined &&
+    sourceValueOverride === undefined && expressionOverride === undefined) {
+    const view = native.nativeResultView;
+    const occurrence = view.occurrence;
+    const receiver = occurrence.slots.find(slot => slot.source.kind === "receiver")?.node;
+    const arguments_: (Node | undefined)[] = [];
+    for (const slot of occurrence.slots) if (slot.source.kind === "argument")
+      arguments_[slot.source.row.sourceIndex] = slot.node;
+    return planProviderOperationExpression(context, occurrence.operation, receiver, arguments_, sourceNode, { resultUse: "value" });
+  }
   const firstConversion = input.conversion.kind === "sequence" ? input.conversion.steps[0]! : input.conversion;
   const sharedConversion = firstConversion.kind === "semantic" &&
     rustValueConversionContract(firstConversion.conversion, context.input.program.typeDefinitions)?.sourceMode === "ref";

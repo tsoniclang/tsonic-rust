@@ -14,7 +14,9 @@ import { rustGeneratedTypeParameterNames } from "../../target-model/names/type-p
 import { rustNativeCallableAbi, selectRustNativeCallableTypeCarrier, selectRustNativeTypeCarrier,
   type RustLogicalNativeCallableAbi } from "../../policy/types/model/native-type-selection.js";
 import { selectRustNativeBindingStorage } from "../../policy/ownership/binding-storage.js";
-import type { RustNativeBindingStorage, RustNativeStorageBinding } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustNativeBindingStorage, RustNativeStorageBinding, RustNativeStorageBindingRequest,
+  RustNativeFrameBindingStorageCompletion }
+  from "../../target-model/records/physical-emission-contexts.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
@@ -30,9 +32,12 @@ import type { RustNativeClassDeclaration, RustNativeClassField,
 import type { RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import type { RustSourceObjectPhysicalDefinition } from "../../target-model/types/source-union-definitions.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
+import type { RustFrameCallableBinding } from "../callables/frame-values.js";
+import type { RustNativeStoragePlan, RustNativeStorageSelection } from "../callables/native-storage.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
-import type { RustProjectConstructionQueries } from "../project-types/construction-plan.js";
+import type { RustProjectConstructionQueries, RustConstructionField, RustProjectConstructionPlan,
+  RustConstructionLayer } from "../project-types/construction-plan.js";
 import { rustRetainedFrameCounterName } from "../callables/frame-counter-storage.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
@@ -47,10 +52,20 @@ interface RustNativeObjectDeclarationInput extends Omit<RustNativeValueDeclarati
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectConstructions: RustProjectConstructionQueries;
   readonly isNativeNode: (node: Node) => boolean;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "parameterFor" | "valueFor">;
 }
 
 export interface RustPreparedNativeDeclarationForms {
   get(declaration: Node): RustPreparedNativeClassDeclaration | RustPreparedNativeInterfaceDeclaration | undefined;
+  prepareStorageField(input: {
+    readonly use: TargetUseSiteRef;
+    readonly node: Node;
+    readonly field: RustConstructionField;
+    readonly construction: RustProjectConstructionPlan;
+    readonly layer: RustConstructionLayer | undefined;
+    readonly sourceBindings: RustTargetGenericBindings;
+    readonly nativeOwnerFileName: string;
+  }): TargetStageResult<RustNativeStorageBindingRequest>;
   prepareCallableField(input: {
     readonly use: TargetUseSiteRef;
     readonly node: Node;
@@ -64,21 +79,26 @@ export interface RustPreparedNativeDeclarationForms {
     readonly nativeFrameBindingFor: (input: {
       readonly declaration: Node; readonly sourceBindings: RustTargetGenericBindings;
       readonly nativeOwnerFileName: string;
-    }) => RustNativeBindingStorage | undefined }):
+    }) => TargetStageResult<RustNativeFrameBindingStorageCompletion> }):
     | Extract<AnalyzeRustNativeDeclarationFormsResult, { readonly kind: "rejected" }>
     | { readonly kind: "resolved"; readonly forms: RustNativeDeclarationForms;
         readonly fieldBindings: readonly RustNativeCallableFieldBinding[] };
 }
 
-export interface RustPreparedNativeCallableField {
+interface RustPreparedNativeCallableFieldSlot {
   readonly declaration: Node;
   readonly storageIndex: number;
   readonly targetName: string;
   readonly logicalCarrier: TargetTypeRef;
   readonly logicalPayloadCarrier: TargetTypeRef;
   readonly sourceBindings: RustTargetGenericBindings;
-  readonly signature: RustCallablePhysicalSignature;
 }
+
+export type RustPreparedNativeCallableField = RustPreparedNativeCallableFieldSlot & (
+  | { readonly kind: "declared"; readonly signature: RustCallablePhysicalSignature }
+  | { readonly kind: "frame"; readonly binding: RustFrameCallableBinding; readonly boundFrameCarrier: TargetTypeRef;
+      readonly physical: Exclude<RustNativeStorageSelection, { readonly kind: "unresolved" }> }
+);
 
 export interface RustNativeCallableFieldBinding extends RustNativeStorageBinding {
   readonly preparation: RustPreparedNativeCallableField;
@@ -135,12 +155,11 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
       const storageFields: RustNativeObjectPhysicalField[] = [];
       if (frame !== undefined) {
         if (frame.storage.kind === "standalone") {
-          const carrier = frame.entries[0]?.implementations[0]?.carrier;
-          if (frame.storage.instanceFieldName === undefined || carrier === undefined) {
-            diagnostics.push(objectIssue(declaration, "A native class frame requires its actual retained field name and callable carrier."));
+          if (frame.storage.instanceFieldName === undefined) {
+            diagnostics.push(objectIssue(declaration, "A native class frame requires its actual retained field name."));
             continue;
           }
-          storageFields.push(Object.freeze({ kind: "frame", name: frame.storage.instanceFieldName, carrier,
+          storageFields.push(Object.freeze({ kind: "frame", name: frame.storage.instanceFieldName, declaration,
             copy: false, clone: Object.freeze({ kind: "unconditional" }) }));
         } else {
           if (frameCounterName !== undefined) storageFields.push(Object.freeze({ kind: "frame-counter", name: frameCounterName,
@@ -207,23 +226,68 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
   }
   const get = (declaration: Node) => forms.get(declaration);
   let completed = false;
-  const callableFields: {
+  const prepareStorageField: RustPreparedNativeDeclarationForms["prepareStorageField"] = request => {
+    if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native field storage preparation must precede its one completion.", request.node);
+    const original = request.field;
+    const construction = input.projectConstructions.forDefinition(request.construction.definition);
+    const originalFields = request.layer === undefined ? request.construction.fields
+      : request.construction.layers.includes(request.layer) ? request.layer.fields : undefined;
+    const declaration = input.objectRepresentations.receiverCaptures.storageDeclaration(original.declaration);
+    const physical = request.construction.fields.find(field => field.declaration === declaration);
+    const prepared = physical === undefined ? undefined : forms.get(physical.owner.declaration);
+    const field = prepared?.kind !== "class" ? undefined
+      : prepared.fields.find(field => field.declaration === declaration);
+    if (original.externallyInitialized || field === undefined || physical === undefined ||
+      construction !== request.construction || originalFields?.includes(original) !== true ||
+      !rustTargetTypeRefEquals(field.carrier, physical.carrier)) return rejectedTargetStage([{
+        code: "RUST_NATIVE_FIELD_STORAGE_NOT_PREPARED", category: "error", source: "tsonic-rust", sourceNode: request.node,
+        message: "A native field requires its original compiler-emitted construction row and exact prepared declared storage.",
+      }]);
+    const logicalCarrier = substituteRustTargetGenerics(field.carrier, request.sourceBindings.types,
+      request.sourceBindings.lifetimes, request.sourceBindings.consts);
+    let physicalCarrier = logicalCarrier;
+    if (field.storage.kind === "frame") {
+      const selected = input.records.sourceParameterAbi.get(field.storage.declaration) === undefined
+        ? input.nativeStorage.valueFor(field.storage.declaration) : input.nativeStorage.parameterFor(field.storage.declaration);
+      if (selected.kind === "unresolved") return rejectedTargetStage([{
+        code: "RUST_NATIVE_FIELD_STORAGE_NOT_PREPARED", category: "error", source: "tsonic-rust",
+        sourceNode: request.node, message: selected.reason,
+      }]);
+      physicalCarrier = substituteRustTargetGenerics(selected.carrier, request.sourceBindings.types,
+        request.sourceBindings.lifetimes, request.sourceBindings.consts);
+    }
+    return resolvedTargetStage(Object.freeze({ use: request.use, declaration: field.declaration,
+      logicalCarrier, physicalCarrier, sourceBindings: request.sourceBindings,
+      source: Object.freeze({ kind: "field", definingOwner: physical.owner.declaration,
+        storageIndex: field.storageIndex + (projectTypes.externalBaseForDefinition(physical.owner)?.fields.length ?? 0),
+        targetName: field.targetName, storage: field.storage }) }));
+  };
+  const callableFields: ({
     readonly request: Parameters<RustPreparedNativeDeclarationForms["prepareCallableField"]>[0];
     readonly field: RustPreparedNativeClassDeclaration["fields"][number] | RustPreparedNativeInterfaceDeclaration["fields"][number];
     readonly owner: RustNativeClassDeclaration["definition"];
-    readonly abi: Extract<RustLogicalNativeCallableAbi, { readonly kind: "stored" }>;
-    readonly preparation: RustPreparedNativeCallableField;
-  }[] = [];
+  } & (
+    | { readonly kind: "declared"; readonly abi: Extract<RustLogicalNativeCallableAbi, { readonly kind: "stored" }>;
+        readonly preparation: Extract<RustPreparedNativeCallableField, { readonly kind: "declared" }> }
+    | { readonly kind: "frame"; readonly preparation: Extract<RustPreparedNativeCallableField, { readonly kind: "frame" }> }
+  ))[] = [];
   const prepareCallableField: RustPreparedNativeDeclarationForms["prepareCallableField"] = request => {
     if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native field preparation must precede the single native declaration completion.", request.node);
     const reject = (message: string): TargetStageResult<RustPreparedNativeCallableField> => rejectedTargetStage([{
       code: "RUST_NATIVE_CALLABLE_FIELD_ABI_NOT_PREPARED", category: "error", source: "tsonic-rust", sourceNode: request.node, message,
     }]);
+    const existing = callableFields.find(selected => selected.request.use === request.use &&
+      selected.request.node === request.node && selected.request.selection === request.selection &&
+      selected.request.conversion === request.conversion && selected.request.sourceBindings === request.sourceBindings &&
+      selected.request.nativeOwnerFileName === request.nativeOwnerFileName);
+    if (existing !== undefined) return resolvedTargetStage(existing.preparation);
     const selection = request.selection;
     const declaration = selection.declaration;
     const definition = declaration === undefined ? undefined : projectTypes.definitionContainingDeclaration(declaration);
     const prepared = definition === undefined ? undefined : forms.get(definition.declaration);
-    const field = prepared?.fields.find(field => field.declaration === declaration && field.storageIndex === selection.storageIndex);
+    const externalFields = definition === undefined ? 0 : projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0;
+    const field = prepared?.fields.find(field => field.declaration === declaration &&
+      field.storageIndex + externalFields === selection.storageIndex);
     const relationship = definition === undefined ? undefined : projectTypes.relationship(selection.receiverCarrier, definition);
     if (declaration === undefined || definition === undefined || prepared === undefined || field === undefined ||
       selection.storage !== "project-object" || selection.valueSemantics.kind !== "stored" || relationship?.kind !== "related")
@@ -244,15 +308,27 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
       if (element === undefined) return reject("The original callable field conversion does not consume its selected declared payload.");
       payload = element;
     }
+    const slot = { declaration, storageIndex: selection.storageIndex, targetName: field.targetName,
+      logicalCarrier, logicalPayloadCarrier: payload, sourceBindings: request.sourceBindings };
+    if ("storage" in field && field.storage.kind === "frame") {
+      const binding = input.frames.bindingFor(field.storage.declaration);
+      const selected = input.records.sourceParameterAbi.get(field.storage.declaration) === undefined
+        ? input.nativeStorage.valueFor(field.storage.declaration) : input.nativeStorage.parameterFor(field.storage.declaration);
+      if (binding === undefined || selected.kind === "unresolved") return reject(selected.kind === "unresolved" ? selected.reason
+        : "A callable frame field requires its original admitted binding and actual selected physical read carrier.");
+      const preparation: Extract<RustPreparedNativeCallableField, { readonly kind: "frame" }> = Object.freeze({ ...slot,
+        kind: "frame", binding, boundFrameCarrier: apply(selected.carrier), physical: selected });
+      callableFields.push(Object.freeze({ kind: "frame", request, field, owner: definition, preparation }));
+      return resolvedTargetStage(preparation);
+    }
     const abi = rustNativeCallableAbi({ kind: "logical", carrier: payload });
     if (abi?.kind !== "stored") return reject("A stored callable field requires its canonical declared storage ABI, not an invocation-input protocol.");
-    const preparation: RustPreparedNativeCallableField = Object.freeze({ declaration, storageIndex: field.storageIndex,
-      targetName: field.targetName, logicalCarrier, logicalPayloadCarrier: payload, sourceBindings: request.sourceBindings,
+    const preparation: Extract<RustPreparedNativeCallableField, { readonly kind: "declared" }> = Object.freeze({ ...slot, kind: "declared",
       signature: Object.freeze({ parameters: abi.parameters, result: abi.result, error: abi.error }) });
-    callableFields.push(Object.freeze({ request, field, owner: definition, abi, preparation }));
+    callableFields.push(Object.freeze({ kind: "declared", request, field, owner: definition, abi, preparation }));
     return resolvedTargetStage(preparation);
   };
-  return { kind: "resolved", forms: Object.freeze({ get, prepareCallableField,
+  return { kind: "resolved", forms: Object.freeze({ get, prepareCallableField, prepareStorageField,
     complete(finalInput: Parameters<RustPreparedNativeDeclarationForms["complete"]>[0]): ReturnType<RustPreparedNativeDeclarationForms["complete"]> {
     if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native declaration forms may be completed only once.");
     completed = true;
@@ -284,11 +360,9 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
         if (field.storage.kind === "frame") {
           const nativeStorage = finalInput.nativeFrameBindingFor({ declaration: field.storage.declaration,
             sourceBindings: declarationBindings, nativeOwnerFileName: prepared.definition.fileName });
-          if (nativeStorage === undefined) diagnostics.push({ code: "RUST_CLASS_FIELD_TYPE_NOT_REPRESENTABLE", category: "error",
-            source: "tsonic-rust", sourceNode: field.declaration,
-            message: "A native frame field requires its original completed slot, payload and retained owner." });
-          else fields.push(Object.freeze({ ...field, nativePayloadCarrier: nativeStorage.payloadCarrier,
-            nativeCarrier: nativeStorage.slotCarrier, nativeStorage }));
+          if (nativeStorage.kind === "rejected") diagnostics.push(...nativeStorage.diagnostics);
+          else fields.push(Object.freeze({ ...field, nativePayloadCarrier: nativeStorage.value.storage.payloadCarrier,
+            nativeCarrier: nativeStorage.value.storage.slotCarrier, nativeStorage: nativeStorage.value.storage }));
           continue;
         }
         const native = selectRustNativeTypeCarrier(field.carrier, nativeInput, "general");
@@ -311,29 +385,35 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
     }
     const fieldBindings: RustNativeCallableFieldBinding[] = [];
     for (const selected of callableFields) {
-      const native = selectRustNativeCallableTypeCarrier(selected.preparation.logicalCarrier,
+      const native = selected.kind === "frame" ? undefined : selectRustNativeCallableTypeCarrier(selected.preparation.logicalCarrier,
         selected.preparation.logicalPayloadCarrier, selected.abi,
         finalInput.nativeTypeInputFor(selected.request.nativeOwnerFileName, undefined), "general");
-      if (native.kind === "rejected") { diagnostics.push(objectIssue(selected.request.node, native.reason)); continue; }
+      if (native?.kind === "rejected") { diagnostics.push(objectIssue(selected.request.node, native.reason)); continue; }
       const field = selected.field;
       const capture = "storage" in field && field.storage.kind === "capture" ? field.storage.selection : undefined;
       const frame = "storage" in field && field.storage.kind === "frame"
         ? finalInput.nativeFrameBindingFor({ declaration: field.storage.declaration,
             sourceBindings: selected.preparation.sourceBindings, nativeOwnerFileName: selected.request.nativeOwnerFileName }) : undefined;
-      if ("storage" in field && field.storage.kind === "frame" && frame === undefined) {
-        diagnostics.push(objectIssue(selected.request.node, "A callable frame field requires its original complete contextual native slot and owner."));
-        continue;
-      }
-      const storage = frame ?? (capture?.kind === "copy" ? selectRustNativeBindingStorage({ kind: "captured-field",
-        storage: "copy", initialization: "ready", payloadCarrier: native.carrier })
+      if (frame?.kind === "rejected") { diagnostics.push(...frame.diagnostics); continue; }
+      if (frame === undefined && native === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "A prepared callable frame field lost its original frame storage.", field.declaration);
+      const nativeCarrier = native?.carrier ?? frame!.value.storage.payloadCarrier;
+      const storage = frame?.value.storage ?? (capture?.kind === "copy" ? selectRustNativeBindingStorage({ kind: "captured-field",
+        storage: "copy", initialization: "ready", payloadCarrier: nativeCarrier })
         : capture !== undefined ? selectRustNativeBindingStorage({ kind: "captured-field", storage: capture.kind,
-          initialization: capture.initialization, payloadCarrier: native.carrier })
+          initialization: capture.initialization, payloadCarrier: nativeCarrier })
           : selectRustNativeBindingStorage({ kind: "binding", storage: "value", initialization: "ready",
-            payloadCarrier: native.carrier, nativeAllocation: null }));
-      fieldBindings.push(Object.freeze({ declaration: selected.preparation.declaration,
-        logicalCarrier: selected.preparation.logicalCarrier, sourceBindings: selected.preparation.sourceBindings,
+            payloadCarrier: nativeCarrier, nativeAllocation: null }));
+      const readCarrier = frame?.value.readCarrier ?? nativeCarrier;
+      fieldBindings.push(Object.freeze({ use: selected.request.use, declaration: selected.preparation.declaration,
+        logicalCarrier: selected.preparation.logicalCarrier,
+        physicalCarrier: selected.kind === "frame" ? selected.preparation.boundFrameCarrier : selected.preparation.logicalCarrier,
+        sourceBindings: selected.preparation.sourceBindings,
+        source: Object.freeze({ kind: "field", definingOwner: selected.owner.declaration,
+          storageIndex: selected.preparation.storageIndex, targetName: selected.preparation.targetName,
+          storage: "storage" in field ? field.storage : Object.freeze({ kind: "value" }) }),
         contextUse: selected.request.use, preparation: selected.preparation,
-        callablePayloadCarrier: native.payloadCarrier, storage,
+        callablePayloadCarrier: frame?.value.readCarrier ?? native!.payloadCarrier, readCarrier, storage,
         owner: Object.freeze({ kind: "field", declaration: selected.preparation.declaration,
           definingOwner: selected.owner.declaration, storageIndex: selected.preparation.storageIndex,
           targetName: selected.preparation.targetName }) }));

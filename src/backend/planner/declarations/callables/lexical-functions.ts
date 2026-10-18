@@ -3,13 +3,13 @@ import type { Node } from "@tsonic/tsts";
 
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
-import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
+import { requireRustNativeBindingStorage } from "../../expressions/binding-storage.js";
 import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
 import { planRustCaptureValue } from "../../expressions/typed-locations.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeFromCarrierInContext, rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
 
 export function planRustLexicalFunctionEnvironment(declaration: Node, context: RustPlanContext) {
   const selection = context.input.program.lexicalFunctions.forDeclaration(declaration);
@@ -25,14 +25,11 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
   for (const capture of selection.captures) {
     const carrier = context.input.program.records.runtimeCarrier.get(capture.declaration)?.carrier ??
       context.input.program.records.runtimeCarrier.get(capture.reference)?.carrier;
-    const physical = context.input.program.callableValues.nativeStorage.valueFor(capture.reference);
-    const physicalCarrier = physical.kind === "unresolved" ? undefined : physical.carrier;
-    const valueType = physicalCarrier === undefined ? undefined : rustTypeFromCarrierInContext(physicalCarrier, context);
+    const selected = requireRustNativeBindingStorage(capture.declaration, context);
+    const physicalCarrier = selected.payloadCarrier;
     const storage = context.input.program.records.bindingStorage.get(capture.declaration);
-    if (valueType === undefined || carrier === undefined) return undefined;
-    const physicalType: RustType = storage?.storage === "location"
-      ? { kind: "named", path: "rt::Location", genericArguments: [{ kind: "type", type: valueType }] }
-      : storage === undefined ? valueType : rustInlineBindingStorageType(storage.storage, valueType);
+    if (carrier === undefined) return undefined;
+    const physicalType = rustTypeFromSelectedNativeCarrierInContext(selected.slotCarrier, context);
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
     const read = requireRustCaptureOwnership(declaration, capture.declaration, context).read;
     const owned = read.kind !== "borrow";

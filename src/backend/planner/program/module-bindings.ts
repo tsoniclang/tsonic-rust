@@ -15,6 +15,7 @@ import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDi
 import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustSourceItemIsPubliclyReachable, requireRustEmissionContext } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "./reachability-directives.js";
+import { requireRustNativeBindingStorage } from "../expressions/binding-storage.js";
 
 interface PlannedTopLevelVariableStatement {
   readonly items: readonly RustItem[];
@@ -119,10 +120,11 @@ export function planTopLevelVariableStatement(
       context.usedAliases?.add("rt");
       const planned = planRustModuleCell(
         binding.value.name,
-        rustType,
+        requireRustNativeBindingStorage(declaration, context),
         value,
         visibility,
         context.syntheticNames!,
+        context,
         [
           ...(isUpperSnakeName(binding.value.name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
         ],
@@ -168,10 +170,11 @@ export function planTopLevelVariableStatement(
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(
       name,
-      rustType,
+      requireRustNativeBindingStorage(declaration, context),
       value,
       visibility,
       context.syntheticNames!,
+      context,
       [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
       ],
@@ -219,7 +222,8 @@ function planModuleBindingPattern(
     const visibility = context.input.program.source.ast.hasModifierKind(statement, "export") ||
       rustSourceItemIsPubliclyReachable(context, name) ? "public" : "crate";
     context.usedAliases?.add("rt");
-    const planned = planRustModuleCell(name, type, normalized, visibility, context.syntheticNames,
+    const planned = planRustModuleCell(name, requireRustNativeBindingStorage(step.declaration, context), normalized,
+      visibility, context.syntheticNames, context,
       isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]);
     items.push(...planned.items);
     initialization.push(planned.initialization);

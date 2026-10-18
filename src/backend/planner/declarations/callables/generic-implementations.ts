@@ -37,9 +37,9 @@ export function rustGenericCallableImplementationPath(
 }
 
 export function rustGenericCallableCaptureType(
-  capture: RustGenericCallableImplementation["captures"][number], context: RustTypeRenderingContext,
+  capture: RustGenericCallableImplementation["captures"][number], context: RustPlanContext,
 ): RustType | undefined {
-  return rustCallableCaptureStorageType(capture, capture.storageCarrier, context);
+  return rustCallableCaptureStorageType(capture, context);
 }
 
 export function rustGenericCallableMarker(arguments_: readonly RustTargetGenericArgument[], context: RustTypeRenderingContext): RustType | undefined {

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";
+import { createRustNativeBindingPayload, requireRustNativeBindingStorage } from "../../expressions/binding-storage.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
@@ -23,7 +23,6 @@ import {
 } from "../../names/synthetic.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import { rustBindingStorageForDeclaration } from "../../expressions/typed-locations.js";
-import { planRustNativeAllocation } from "../../expressions/native-memory.js";
 
 import type { RustBindingExpressionPlanner } from "../../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../../expressions/option-default.js";
@@ -166,18 +165,9 @@ export function planRustCallableParameters(
     if (locationStorage === undefined) {
       continue;
     }
-    if (locationStorage.storage !== "location") {
-      prelude.push({ kind: "statement", statement: {
-        kind: "let", name: parameterName, mutable: false,
-        init: { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [{ kind: "path", path: parameterName }] },
-      } });
-      continue;
-    }
-    context.usedAliases?.add("rt");
+    const storage = requireRustNativeBindingStorage(parameter, context);
     const initial: RustExpr = { kind: "path", path: parameterName };
-    const allocation: RustExpr | undefined = context.input.program.records.nativeBacking.get(parameter) === undefined
-      ? { kind: "call", path: "rt::Location::allocate", args: [initial] }
-      : planRustNativeAllocation(parameter, initial, context);
+    const allocation = createRustNativeBindingPayload(storage, initial, context);
     if (allocation === undefined) return undefined;
     prelude.push({
       kind: "statement",

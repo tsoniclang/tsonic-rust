@@ -15,11 +15,9 @@ export interface RustCallableCapturePayload {
 export function rustCallablePayloadTypes(
   payload: RustCallableCapturePayload, context: RustPlanContext,
 ): readonly RustType[] | undefined {
-  const types = [...payload.captures.map(capture => rustCallableCaptureStorageType(capture, capture.storageCarrier ?? capture.carrier, context)),
-    ...payload.receiverFields.map(capture => {
-      const type = rustTypeFromCarrierInContext(capture.storageCarrier ?? capture.carrier, context);
-      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, context);
-    }), ...payload.receivers.map(capture => rustTypeFromCarrierInContext(capture.storageCarrier ?? capture.carrier, context))];
+  const types = [...payload.captures.map(capture => rustCallableCaptureStorageType(capture, context)),
+    ...payload.receiverFields.map(capture => rustCapturedReceiverFieldType(capture, context)),
+    ...payload.receivers.map(capture => rustTypeFromCarrierInContext(capture.storageCarrier ?? capture.carrier, context))];
   return types.some(type => type === undefined) ? undefined : types as readonly RustType[];
 }
 

@@ -16,6 +16,7 @@ import { providerSourceInputKey } from "../operations/provider-source-inputs.js"
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 
 export interface RustNativePlaceInput extends RustNativeStoragePathInput {
   readonly definitions: RustTypeDefinitions;
@@ -109,8 +110,36 @@ export function analyzeRustNativeInputs(input: RustNativePlaceInput & {
     } else {
       const selection = selectRustNativePlace(node, operand, input);
       if (selection.kind === "unresolved") reject(selection.node, selection.reason);
-      else inputs.set(operand.use, Object.freeze({ kind: "place", input: value, key, node, slot, operand, place: selection.place }));
+      else inputs.set(operand.use, Object.freeze({ kind: "place", input: value, key, node, slot, operand,
+        place: selection.place, nativeResultView: undefined }));
     }
+  }
+  for (const [use, selected] of inputs) {
+    if (selected.kind !== "place" || selected.input.mode !== "value" || selected.input.conversion.kind !== "semantic") continue;
+    const operation = input.records.targetOperation.get(selected.node);
+    const origin = selected.operand.origin;
+    if (operation?.kind !== "provider-operation" || operation.abi.result.kind !== "sync" ||
+      operation.abi.effects.invocation !== "infallible" || origin.kind !== "call-input") continue;
+    const outer = input.physicalEmissionContexts.sourceFor(origin.operationNode, origin.operation);
+    const occurrence = input.physicalEmissionContexts.sourceFor(selected.node, operation);
+    const consumers = outer?.inputs.filter(row => row.slot === selected.slot);
+    if (consumers?.length !== 1 || consumers[0]?.input !== selected.input ||
+      occurrence === undefined || occurrence.operation !== operation || occurrence.node !== selected.node) continue;
+    const native = operation.abi.result.resultLoans?.contract;
+    if (native?.kind !== "complete" || native.loans.length !== 0 || native.inputLoans.kind !== "complete" ||
+      native.inputLoans.origins.length !== 0 || input.records.flowReadProjection.get(selected.node) !== undefined ||
+      input.records.contextualValueConversion.get(selected.node) !== undefined) continue;
+    const incoming = operation.abi.result.conversion;
+    const result = incoming.kind !== "semantic" ? undefined : rustValueConversionContract(incoming.conversion, input.definitions);
+    const consumed = rustValueConversionContract(selected.input.conversion.conversion, input.definitions);
+    const read = input.ownership.reads.get(selected.node)?.nativeResults.find(read => read.abi === operation.abi);
+    if (result?.lowering !== "owned-string-from-borrowed-str" || consumed?.lowering !== "borrowed-str-from-owned-string" ||
+      result.fallible || consumed.fallible || incoming.fallible || selected.input.conversion.fallible ||
+      read?.read.kind !== "copy" || !rustTargetTypeRefEquals(result.target, consumed.source) ||
+      !rustTargetTypeRefEquals(result.source, consumed.target) || !rustTargetTypeRefEquals(read.carrier, result.source) ||
+      !rustTargetTypeRefEquals(operation.abi.result.rawCarrier, result.source) ||
+      !rustTargetTypeRefEquals(selected.input.parameterCarrier, consumed.target)) continue;
+    inputs.set(use, Object.freeze({ ...selected, nativeResultView: Object.freeze({ occurrence, read }) }));
   }
   return diagnostics.length > 0 ? { kind: "rejected", diagnostics }
     : { kind: "resolved", inputs };
@@ -137,14 +166,21 @@ export function selectRustNativePlace(
     return unresolved("A native place requires the original physical formation read in its exact selected input context.");
   if (!read.readsStorage && !read.sharedReference && read.formation.kind !== "borrow") return Object.freeze({
     kind: "resolved", place: Object.freeze({ node, operand, carrier: operand.carrier, sourcePath: undefined,
+      nativeBinding: undefined,
       storage: Object.freeze({ kind: "owned", read: read.formation }) }),
   });
   const root = rustNativeStorageRoot(node, input);
   const projections = root === undefined ? undefined : rustNativeStorageProjections(node, root, input);
   const sourcePath = root === undefined || projections === undefined ? undefined
     : Object.freeze({ declaration: root, projections });
+  const bindings = root === undefined ? [] : operand.context.nativeBindings.filter(binding => binding.declaration === root);
+  const nativeBinding = bindings[0];
+  if (nativeBinding !== undefined && bindings.some(binding => binding.contextUse !== operand.context.use ||
+    !closedMetadataEquals(binding.storage, nativeBinding.storage)))
+    return unresolved("A native source place requires one exact completed physical holder in its original context.");
   const resolved = (storage: RustNativePlace["storage"]): RustNativePlaceSelection => Object.freeze({
     kind: "resolved", place: Object.freeze({ node, operand, carrier: operand.carrier, sourcePath,
+      nativeBinding,
       storage: Object.freeze(storage) }),
   });
   let current = node;

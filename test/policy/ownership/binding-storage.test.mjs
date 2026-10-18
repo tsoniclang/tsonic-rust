@@ -89,7 +89,7 @@ test("module holders keep their actual construction bounds and never become init
     const selected = selectRustNativeBindingStorage({ kind: "module", initialization, payloadCarrier: payload });
     assert.equal(typeArgument(selected.holderCarrier, "rt::ModuleCell") === payload, true, "native module slot uses the original payload");
     assert.equal(selected.valueConstructor, "rt::ModuleCell::initialized");
-    assert.equal(selected.deferredConstructor, initialization === "deferred" ? "rt::ModuleCell::new" : null);
+    assert.equal(selected.deferredConstructor, "rt::ModuleCell::new", "the actual TLS declaration is empty before module initialization");
     assert.deepEqual(selected.requirements, ["clone", "static"], "construction and load use the real native runtime contract");
     assert.equal(selected.ownerConstructor, null, "no additional synthetic shared owner is invented");
   }

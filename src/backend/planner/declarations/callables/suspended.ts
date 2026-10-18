@@ -69,12 +69,9 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const resultArgument = callableType?.kind === "named" ? callableType.genericArguments?.[2] : undefined;
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(implementation, scoped);
-  const storage = [...implementation.captures.map((capture, index) => rustCallableCaptureStorageType(capture,
-    substituteElidedLifetime(captures.captures[index]!, rustStaticLifetime), scoped)),
-    ...implementation.receiverFields.map((capture, index) => {
-      const type = rustTypeFromCarrierInContext(implementation.storage[implementation.captures.length + index]!, scoped);
-      return type === undefined ? undefined : rustCapturedReceiverFieldType(capture, type, scoped);
-    }), ...implementation.receivers.map((_capture, index) => rustTypeFromCarrierInContext(
+  const storage = [...implementation.captures.map(capture => rustCallableCaptureStorageType(capture, scoped)),
+    ...implementation.receiverFields.map(capture => rustCapturedReceiverFieldType(capture, scoped)),
+    ...implementation.receivers.map((_capture, index) => rustTypeFromCarrierInContext(
       implementation.storage[implementation.captures.length + implementation.receiverFields.length + index]!, scoped))];
   if (protocol === undefined || argumentsType === undefined || resultType === undefined || target === undefined ||
       storage.some(type => type === undefined)) return undefined;

@@ -16,6 +16,7 @@ import { diagnosticInput } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustClassValues } from "../../objects/class-values.js";
+import { requireRustNativeBindingStorage } from "../../expressions/binding-storage.js";
 
 export interface PlannedRustClassInitialization {
   readonly items: readonly RustItem[];
@@ -88,10 +89,11 @@ export function planRustClassInitialization(
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(
       storage.targetName,
-      type,
+      requireRustNativeBindingStorage(member, context),
       value,
       "crate",
       context.syntheticNames,
+      context,
       [],
     );
     items.push(...planned.items);

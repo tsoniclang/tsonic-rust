@@ -13,6 +13,7 @@ import type { RustSourceErrorRegionSelection } from "./error-regions.js";
 import type { RustCallablePhysicalAdapter } from "./callable-adapters.js";
 import type { RustGenericCallableInvocationFact } from "./generic-callable-effects.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
+import type { RustNativeClassField } from "./native-value-declarations.js";
 
 export type RustPhysicalCallableSourceActivations =
   | { readonly kind: "resolved"; readonly rows: readonly {
@@ -96,20 +97,37 @@ export interface RustNativeBindingStorage {
 }
 
 export interface RustNativeStorageBindingRequest {
+  readonly use: TargetUseSiteRef;
   readonly declaration: Node;
   readonly logicalCarrier: TargetTypeRef;
+  readonly physicalCarrier: TargetTypeRef;
   readonly sourceBindings: RustTargetGenericBindings;
+  readonly source:
+    | { readonly kind: "binding" }
+    | { readonly kind: "capture"; readonly reference: Node;
+        readonly storage: "value" | "location" | "cell" | "borrow-cell";
+        readonly initialization: "ready" | "deferred" }
+    | { readonly kind: "module"; readonly sourceFile: SourceFile; readonly initialization: "ready" | "deferred" }
+    | { readonly kind: "field"; readonly definingOwner: Node; readonly storageIndex: number;
+        readonly targetName: string; readonly storage: RustNativeClassField["storage"] };
 }
 
 export interface RustNativeStorageBinding extends RustNativeStorageBindingRequest {
   readonly contextUse: TargetUseSiteRef;
   readonly storage: RustNativeBindingStorage;
+  readonly readCarrier: TargetTypeRef;
   readonly owner:
     | { readonly kind: "binding"; readonly declaration: Node }
     | { readonly kind: "module"; readonly sourceFile: SourceFile }
-    | { readonly kind: "frame"; readonly declaration: Node; readonly fieldName: string }
+    | { readonly kind: "frame"; readonly declaration: Node; readonly fieldName: string; readonly frameCarrier: TargetTypeRef }
     | { readonly kind: "field"; readonly declaration: Node; readonly definingOwner: Node;
         readonly storageIndex: number; readonly targetName: string };
+}
+
+export interface RustNativeFrameBindingStorageCompletion {
+  readonly storage: RustNativeBindingStorage;
+  readonly readCarrier: TargetTypeRef;
+  readonly frameCarrier: TargetTypeRef;
 }
 
 export type RustPhysicalEmissionRole =
@@ -130,6 +148,7 @@ export interface RustPhysicalEmissionContext {
   readonly returnDestination: RustEmissionReturnDestination;
   readonly error: RustEmissionErrorContext;
   readonly operands: readonly TargetTypeRef[];
+  readonly nativeBindings: readonly RustNativeStorageBinding[];
   readonly sourceOrigins: readonly RustPhysicalEmissionSourceOrigins[];
   readonly callableAdapters: readonly RustCallablePhysicalAdapter<RustNativeErrorSource<TargetTypeRef> & { readonly nativeType: TargetTypeRef }>[];
   readonly targetGenericArguments: ReadonlyMap<RustFinalizedOperationAbi, readonly RustPhysicalTargetGenericArgument[]>;

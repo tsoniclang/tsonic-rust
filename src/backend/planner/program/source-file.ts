@@ -71,6 +71,7 @@ import {
   type PlannedRustModuleCell,
 } from "../project/module-storage.js";
 import { planRustClassInitialization } from "../declarations/classes/static-fields.js";
+import { requireRustNativeBindingStorage } from "../expressions/binding-storage.js";
 import { planProjectStaticFunctionItems } from "../declarations/classes/methods.js";
 import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
 import { planRustGenericCallableItems } from "../declarations/callables/generic-implementations.js";
@@ -316,10 +317,11 @@ function planModuleItems(
             initializationContext.usedAliases?.add("rt");
             items.push(...planRustHoistedModuleCell(
               binding.value.name,
-              type,
+              requireRustNativeBindingStorage(statement, initializationContext),
               value,
               ast.hasModifierKind(statement, "export") ? "public" : "crate",
               syntheticNames,
+              initializationContext,
               [],
             ));
           }
@@ -553,9 +555,10 @@ function planDefaultExportAssignment(
   context.usedAliases?.add("rt");
   return planRustModuleCell(
     name,
-    rustType,
+    requireRustNativeBindingStorage(declaration, context),
     value,
     "public",
     context.syntheticNames,
+    context,
   );
 }

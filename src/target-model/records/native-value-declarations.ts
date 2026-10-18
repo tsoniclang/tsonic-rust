@@ -61,7 +61,7 @@ export type RustNativeObjectPhysicalField = RustSourceObjectPhysicalField & {
   readonly copy: boolean;
 } & (
   | { readonly kind: "field"; readonly declaration: Node }
-  | { readonly kind: "frame"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "frame"; readonly declaration: Node }
   | { readonly kind: "frame-counter" }
   | { readonly kind: "environment"; readonly carrier: TargetTypeRef }
   | { readonly kind: "method"; readonly declaration: Node }

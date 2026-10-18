@@ -23,6 +23,7 @@ import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js"
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
+  failRustPlannerInvariant,
 } from "../../diagnostics.js";
 import {
   diagnosticInput,
@@ -30,13 +31,13 @@ import {
   rustErrorType,
 } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext,
+  rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustCallableInvocationResult } from "../../../../analysis/callables/results.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";
-import { rustCapturedFieldStorage, rustCapturedFieldType } from "../captured-fields.js";
 
 export interface ProjectFieldPlan {
   readonly storage: "stored" | "receiver-alias";
@@ -146,6 +147,7 @@ export function projectOwnFields(
     });
   }
   const externalFieldCount = fields.length;
+  const native = context.input.program.nativeDeclarations.get(definition.declaration);
   for (const layoutField of layout.fields) {
     const declared = context.input.program.records.runtimeCarrier.get(layoutField.declaration)?.carrier ??
       context.input.program.records.runtimeCarrier.get(Node_Type(context.input.program.source.ast, layoutField.declaration))?.carrier;
@@ -173,6 +175,11 @@ export function projectOwnFields(
     const initializer = sourceParameterIsProperty(context.input.program.source.ast, layoutField.declaration)
       ? context.input.program.source.ast.name(layoutField.declaration)
       : Node_Initializer(context.input.program.source.ast, layoutField.declaration);
+    const nativeField = native?.kind === "class" ? native.fields.find(field => field.declaration === layoutField.declaration) : undefined;
+    const nativeCarrier = definition.kind === "interface" ? undefined : nativeField === undefined ? undefined
+      : context.input.program.projectTypes.instantiateMemberCarrier(layoutField.declaration, receiverCarrier, nativeField.nativeCarrier);
+    if (definition.kind === "class" && nativeCarrier === undefined)
+      return failRustPlannerInvariant("An emitted class field requires its completed declared native storage application.", layoutField.declaration);
     fields.push({
       storage: context.input.program.objectRepresentations.aliasFor(layoutField.declaration) === undefined
         ? "stored" : "receiver-alias",
@@ -183,7 +190,7 @@ export function projectOwnFields(
       carrier,
       type,
       origin: "project",
-      storageType: rustCapturedFieldType(rustCapturedFieldStorage(layoutField.declaration, context), type),
+      storageType: nativeCarrier === undefined ? type : rustTypeFromSelectedNativeCarrierInContext(nativeCarrier, context),
       readonly: context.input.program.source.ast.hasModifierKind(layoutField.declaration, "readonly"),
       ...(initializer === undefined ? {} : { initializer }),
     });

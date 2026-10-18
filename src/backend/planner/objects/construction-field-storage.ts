@@ -7,6 +7,7 @@ import type { RustValueFieldLocation } from "./value-fields.js";
 import { createRustFrameBindingValue, initializeOrWriteRustFrameBindingValue, initializeRustFrameBindingValue, rustFrameBindingLocalLocation } from "../bindings/frame-storage.js";
 import { createRustCapturedField, createRustDeferredFieldOwner, initializeRustCapturedField,
   initializeOrWriteRustCapturedField, rustCapturedFieldLocation, rustCapturedFieldStorage } from "./captured-fields.js";
+import { requireRustNativeBindingStorage } from "../expressions/binding-storage.js";
 
 export interface RustConstructionFieldStorage {
   readonly deferred: boolean;
@@ -23,22 +24,24 @@ export function rustConstructionFieldStorage(
   declaration: Node, carrier: TargetTypeRef, context: RustPlanContext, plan: RustProjectConstructionPlan,
 ): RustConstructionFieldStorage {
   const binding = context.input.program.callableValues.frames.bindingFor(declaration);
+  const native = requireRustNativeBindingStorage(declaration, context);
   if (binding !== undefined) return {
     deferred: binding.initialization === "deferred", mutable: binding.storage === "value" &&
       plan.mutatesUnpublishedField(declaration), retainedFieldOwner: false,
-    create: value => createRustFrameBindingValue(binding, value),
-    createDeferred: () => ({ kind: "call", path: "core::cell::OnceCell::new", args: [] }),
-    initialize: (owner, value) => initializeRustFrameBindingValue(binding, owner, value),
+    create: value => createRustFrameBindingValue(binding, value, context),
+    createDeferred: () => native.deferredConstructor === null ? undefined
+      : { kind: "call", path: native.deferredConstructor, args: [] },
+    initialize: (owner, value) => initializeRustFrameBindingValue(binding, owner, value, context),
     initializeOrWrite: (owner, value) => initializeOrWriteRustFrameBindingValue(binding, owner, value, context),
     location: owner => rustFrameBindingLocalLocation(binding, owner, context),
   };
   const storage = rustCapturedFieldStorage(declaration, context);
   return {
     deferred: storage?.initialization === "deferred", mutable: storage === undefined, retainedFieldOwner: storage !== undefined,
-    create: value => createRustCapturedField(storage, value),
-    createDeferred: () => storage?.initialization === "deferred" ? createRustDeferredFieldOwner() : undefined,
-    initialize: (owner, value) => initializeRustCapturedField(storage, owner, value),
-    initializeOrWrite: (owner, value) => storage === undefined ? undefined : initializeOrWriteRustCapturedField(storage, owner, value, context),
+    create: value => createRustCapturedField(native, value, context),
+    createDeferred: () => storage?.initialization === "deferred" ? createRustDeferredFieldOwner(native) : undefined,
+    initialize: (owner, value) => initializeRustCapturedField(native, owner, value, context),
+    initializeOrWrite: (owner, value) => storage === undefined ? undefined : initializeOrWriteRustCapturedField(native, owner, value, context),
     location: owner => storage === undefined ? undefined : rustCapturedFieldLocation(storage, owner, carrier),
   };
 }

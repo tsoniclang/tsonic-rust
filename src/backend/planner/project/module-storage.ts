@@ -8,6 +8,10 @@ import type {
   RustVisibility,
 } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
+import type { RustNativeBindingStorage } from "../../../target-model/records/physical-emission-contexts.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import {
   allocateRustSyntheticName,
   allocateRustSyntheticTypeName,
@@ -21,12 +25,17 @@ export interface PlannedRustModuleCell {
 
 export function planRustHoistedModuleCell(
   name: string,
-  type: RustType,
+  storage: RustNativeBindingStorage,
   value: RustExpr,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
+  context: RustPlanContext,
   attrs: readonly RustAttribute[] = [],
 ): readonly RustItem[] {
+  if (storage.kind !== "module-cell" || storage.valueConstructor === null)
+    return failRustPlannerInvariant("A hoisted native module cell requires its completed initialized storage constructor.");
+  const type = rustTypeFromSelectedNativeCarrierInContext(storage.payloadCarrier, context);
+  const slot = rustTypeFromSelectedNativeCarrierInContext(storage.slotCarrier, context);
   const callableAlias = type.kind === "named" && type.path === "rt::Callable"
     ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
     : undefined;
@@ -48,14 +57,10 @@ export function planRustHoistedModuleCell(
       name,
       visibility,
       ...(attrs.length === 0 ? {} : { attrs }),
-      type: {
-        kind: "named" as const,
-        path: "rt::ModuleCell",
-        genericArguments: [{ kind: "type" as const, type: storedType }],
-      },
+      type: moduleSlotType(slot, storedType, callableAlias !== undefined),
       value: {
         kind: "call" as const,
-        path: "rt::ModuleCell::initialized",
+        path: storage.valueConstructor,
         args: [value],
       },
       constInitializer: false,
@@ -65,12 +70,17 @@ export function planRustHoistedModuleCell(
 
 export function planRustModuleCell(
   name: string,
-  type: RustType,
+  storage: RustNativeBindingStorage,
   value: RustExpr | undefined,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
+  context: RustPlanContext,
   attrs: readonly RustAttribute[] = [],
 ): PlannedRustModuleCell {
+  if (storage.kind !== "module-cell" || storage.deferredConstructor === null)
+    return failRustPlannerInvariant("A native module cell requires its completed TLS declaration storage constructor.");
+  const type = rustTypeFromSelectedNativeCarrierInContext(storage.payloadCarrier, context);
+  const slot = rustTypeFromSelectedNativeCarrierInContext(storage.slotCarrier, context);
   const cellName = allocateRustSyntheticName(syntheticNames, "module_binding");
   const valueName = allocateRustSyntheticName(syntheticNames, "module_value");
   const callableAlias = type.kind === "named" && type.path === "rt::Callable"
@@ -95,12 +105,8 @@ export function planRustModuleCell(
         name,
         visibility,
         ...(attrs.length === 0 ? {} : { attrs }),
-        type: {
-          kind: "named",
-          path: "rt::ModuleCell",
-          genericArguments: [{ kind: "type", type: storedType }],
-        },
-        value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
+        type: moduleSlotType(slot, storedType, callableAlias !== undefined),
+        value: { kind: "call", path: storage.deferredConstructor, args: [] },
         constInitializer: true,
       },
     ],
@@ -116,6 +122,13 @@ export function planRustModuleCell(
         )),
     },
   };
+}
+
+function moduleSlotType(slot: RustType, payload: RustType, aliased: boolean): RustType {
+  if (!aliased) return slot;
+  if (slot.kind !== "named" || slot.genericArguments?.length !== 1 || slot.genericArguments[0]?.kind !== "type")
+    return failRustPlannerInvariant("A native module payload alias requires its exact completed one-payload slot syntax.");
+  return { ...slot, genericArguments: [{ kind: "type", type: payload }] };
 }
 
 export function rustModuleCellAccess(

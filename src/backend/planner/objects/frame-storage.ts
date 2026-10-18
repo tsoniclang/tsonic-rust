@@ -5,7 +5,8 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustProjectObjectStateField } from "../../../target-model/types/field-storage.js";
-import { rustFrameCallableTypes } from "../types/frame-callables.js";
+import { requireRustNativeFrameStorage } from "../expressions/binding-storage.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
@@ -32,14 +33,14 @@ export interface RustClassFrameLayout {
 export function createRustClassFrameValue(
   definition: RustFrameCallableDefinition, values: ReadonlyMap<Node, RustExpr>, counter: RustExpr, context: RustPlanContext,
 ): RustExpr | undefined {
-  const carrier = definition.entries[0]?.implementations[0]?.carrier;
-  const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
+  const nativeFrame = requireRustNativeFrameStorage(definition, context.emissionContext);
+  const frameType = rustTypeFromSelectedNativeCarrierInContext(nativeFrame.carrier, context);
   const selected = context.input.program.nativeDeclarations.get(definition.activation.ownerDeclaration);
-  if (definition.storage.kind !== "standalone" || types?.frameType.kind !== "named" ||
+  if (definition.storage.kind !== "standalone" || frameType.kind !== "named" || nativeFrame.constructor === null ||
     selected?.kind !== "class" || definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
   const counterName = selected.frameCounterName;
-  return { kind: "call", path: "alloc::rc::Rc::new", args: [{
-    kind: "struct-literal", path: types.frameType.path, fields: [
+  return { kind: "call", path: nativeFrame.constructor, args: [{
+    kind: "struct-literal", path: frameType.path, fields: [
       ...(counterName === undefined ? [] : [{ name: counterName, value: counter }]),
       ...definition.bindings.map(binding => ({ name: binding.fieldName, value: values.get(binding.declaration)! })),
       ...(definition.environmentParameters.length === 0 ? [] : [{ name: "marker", value: { kind: "path" as const, path: "core::marker::PhantomData" } }]),
@@ -50,10 +51,8 @@ export function createRustClassFrameValue(
 export function rustClassFrameLayout(
   definition: RustFrameCallableDefinition, context: RustPlanContext, visibility: RustVisibility,
 ): RustClassFrameLayout | undefined {
-  const carrier = definition.entries[0]?.implementations[0]?.carrier;
-  const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
   const selected = context.input.program.nativeDeclarations.get(definition.activation.ownerDeclaration);
-  if (definition.activation.kind !== "class" || types === undefined || selected?.kind !== "class") return undefined;
+  if (definition.activation.kind !== "class" || selected?.kind !== "class") return undefined;
   const counter = selected.physical.storageFields.find(field => field.kind === "frame-counter");
   if (definition.storage.kind === "object") return {
     fields: counter === undefined ? [] : [{ name: counter.name, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility }],
@@ -61,10 +60,11 @@ export function rustClassFrameLayout(
     materialize: (_values, value) => counter === undefined ? [] : [{ name: counter.name, value }],
   };
   const retained = selected.physical.storageFields.find(field => field.kind === "frame");
-  if (retained === undefined || types.frameType.kind !== "named") return undefined;
+  if (retained === undefined) return undefined;
+  const nativeFrame = requireRustNativeFrameStorage(definition,
+    context.input.program.physicalEmissionContexts.contextForOwner(definition, "frame"));
   return {
-    fields: [{ name: retained.name, type: { kind: "named", path: "alloc::rc::Rc",
-      genericArguments: [{ kind: "type", type: types.frameType }] }, visibility }],
+    fields: [{ name: retained.name, type: rustTypeFromSelectedNativeCarrierInContext(nativeFrame.holderCarrier, context), visibility }],
     ownsField: declaration => definition.bindings.some(binding => binding.declaration === declaration),
     materialize: (values, counter, value) => [{ name: retained.name,
       value: value ?? createRustClassFrameValue(definition, values, counter, context)! }],
