@@ -443,6 +443,7 @@ export function analyzeRustTargetProgram(
       nativeContextFor(fileName, undefined, callableValues.value)));
   if (nativeGenericErrors.kind === "rejected") return nativeGenericErrors;
   const ownership = analyzeRustReadOwnership({ requirements: readRequirements.requirements,
+    operands: callableValues.value.emissionContexts.operands,
     movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
     borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
