@@ -154,7 +154,7 @@ function planFrameEntry(
     const holder = payload.kind === "none" ? undefined : rustTypeFromSelectedNativeCarrierInContext(payload.holderCarrier, context);
     const frameHolder = rustTypeFromSelectedNativeCarrierInContext(nativeEnvironment.frame.holderCarrier, context);
     const captures = nativeEnvironment.slots.map((_slot, index) => rustTypeFromSelectedNativeCarrierInContext(
-      requireRustNativeCaptureStorage(nativeEnvironment, index, emission, context).storage.slotCarrier, context));
+      requireRustNativeCaptureStorage(nativeEnvironment, index, emission, context).owner.fieldCarrier, context));
     if (captures.length !== 0 && (state === undefined || holder === undefined)) return failRustPlannerInvariant(
       "A sealed captured frame entry requires its completed native state and holder.", implementation.declaration);
     const marker = definitionMarker(generics);

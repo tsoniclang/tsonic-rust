@@ -38,7 +38,7 @@ import { rustTypeParameterFromSourceContract } from "../../../target-model/names
 import { rustCallableOrigin } from "../callables/callable-origins.js";
 import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
-import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
+import { bindRustCallableEnvironment, resolveRustCallableEnvironment, resolveRustGenericCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
@@ -244,7 +244,7 @@ function resolveRustCallableSignatureCarrier(
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {
     const origin = rustCallableOrigin(context.ast, declaration);
-    const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
+    const environment = resolveRustGenericCallableEnvironment(declaration, context, options, resolving);
     const carrier = origin === undefined || environment === undefined ? undefined : bindRustCallableEnvironment(rustGenericCallableTargetType(
       genericContract.parameters.map(rustTypeParameterFromSourceContract), parameters as readonly TargetTypeRef[], result, origin, environment), context);
     return carrier !== undefined && retainRustCallableStructuralStorage(callable,
@@ -262,7 +262,7 @@ function resolveRustCallableSignatureCarrier(
   }
   if (rustNativeFutureCallableResult(result) !== undefined) {
     const origin = rustCallableOrigin(context.ast, declaration);
-    const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
+    const environment = resolveRustGenericCallableEnvironment(declaration, context, options, resolving);
     return origin === undefined || environment === undefined ? undefined : bindRustCallableEnvironment(rustGenericCallableTargetType(
       [], parameters as readonly TargetTypeRef[], result, origin, environment), context);
   }

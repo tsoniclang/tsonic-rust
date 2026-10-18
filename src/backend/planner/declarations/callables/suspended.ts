@@ -57,7 +57,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
   const resultType = resultArgument?.kind === "type" ? resultArgument.type : undefined;
   const target = rustSuspendedCallableStateType(nativeEnvironment, scoped);
   const storage = nativeEnvironment.slots.map((_slot, index) => rustTypeFromSelectedNativeCarrierInContext(
-    requireRustNativeCaptureStorage(nativeEnvironment, index, emission, scoped).storage.slotCarrier, scoped));
+    requireRustNativeCaptureStorage(nativeEnvironment, index, emission, scoped).owner.fieldCarrier, scoped));
   if (protocol === undefined || argumentsType === undefined || resultType === undefined) return undefined;
   const generics = genericPlan.finalizeGenerics();
   const parameters: RustGenericParameter[] = [...generics.parameters];
