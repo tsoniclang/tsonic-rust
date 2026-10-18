@@ -137,11 +137,18 @@ function fixture() {
       exportedNames: value.namedImports.map(named => named.exportedName) })),
     carrierPaths: Object.fromEntries(projected.carrierPaths), carrierTraits: Object.fromEntries(projected.carrierTraits), crates: [],
     operations });
-  const compile = body => compileRust({ surfaces: [], packages: [provider], target: { id: "rust", options: { projectFile: project } },
-    compileTarget: request => compileRustTarget({ ...request, nativeRetention: requests => nativeSession.resultRetention(requests) }),
-    files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard } from ${JSON.stringify(nativeModule)};
-      import { owner, take } from ${JSON.stringify(sourceModule)};
-      export function observed(): number { ${body} }` } });
+  let compilation = 0;
+  const compile = body => {
+    const compiled = compileRust({ surfaces: [], packages: [provider], target: { id: "rust", options: { projectFile: project } },
+      compileTarget: request => compileRustTarget({ ...request, nativeRetention: requests => nativeSession.resultRetention(requests) }),
+      files: { "index.ts": `import type { Owner as AcquiredOwner, Guard as AcquiredGuard } from ${JSON.stringify(nativeModule)};
+        import { owner, take } from ${JSON.stringify(sourceModule)};
+        export function observed(): number { ${body} }` } });
+    writeFileSync(join(client, `source-control-${compilation++}.json`), JSON.stringify({ source: body,
+      diagnostics: compiled.result.diagnostics.map(value => ({ code: value.code, message: value.message })),
+      artifactPaths: compiled.result.artifacts.map(value => value.path) }));
+    return compiled;
+  };
   return { root: client, project, compile, close: () => nativeSession.close() };
 }
 
