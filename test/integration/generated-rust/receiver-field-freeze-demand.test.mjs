@@ -8,6 +8,36 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 import { retainedFieldFreezeOrigins, retainedFieldFreezeOriginSource, retainedFieldGenericFreezeSource } from "../../../../tsonic/test/fixtures/retained-field-freeze-origins.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
 
+test("quantified receiver-field writers retain the actual shared owner and freeze identity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+type Identity = <Value>(value: Value) => Value;
+class Counter {
+  count = 0;
+  make(): Identity {
+    return <Value>(value: Value): Value => {
+      this.count += 1;
+      return value;
+    };
+  }
+}
+export function main(): void {
+  const counter = new Counter();
+  const callback = counter.make();
+  if (callback<number>(7) !== 7 || counter.count !== 1) throw new Error("shared receiver field");
+  Object.freeze(counter);
+  let failed = false;
+  try { callback<string>("unchanged"); } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    failed = true;
+  }
+  if (!failed || counter.count !== 1) throw new Error("frozen receiver field");
+}
+main();
+` } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
+  validateGeneratedProject("quantified-receiver-field-freeze", result.artifacts, { run: true });
+});
 
 for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
   test(`retained direct writes observe ${name} freeze without guarding reads`, { timeout: 300_000 }, () => {

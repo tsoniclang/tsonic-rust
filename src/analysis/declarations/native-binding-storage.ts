@@ -22,6 +22,9 @@ import type { RustNativeCaptureEnvironment, RustPreparedNativeCaptureInput, Rust
   from "../callables/emission-capture-environments.js";
 import { completeRustNativeNamedCaptureEnvironment } from "../callables/emission-capture-environments.js";
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
+import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
+import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
+import { rustObjectIdentityTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export interface RustNativeBindingStoragePublicationInput {
   readonly ast: AstReader;
@@ -37,6 +40,7 @@ export interface RustNativeBindingStoragePublicationInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly nativeTypeContext: RustNativeTypeInputContext;
   readonly physicalCarrierFor: (request: RustPreparedNativeStorageBindingRequest) => TargetTypeRef | undefined;
+  readonly frozenDataWrites: Pick<RustFrozenDataWritePlan, "capturesFieldIdentity">;
 }
 
 export function completeRustNativeDeclarationStorage(input: {
@@ -45,6 +49,7 @@ export function completeRustNativeDeclarationStorage(input: {
   readonly emission: RustCallableEmissionPreparation;
   readonly frames: RustFrameCallablePlan;
   readonly nativeTypeContextFor: (fileName: string) => RustNativeTypeInputContext;
+  readonly frozenDataWrites: Pick<RustFrozenDataWritePlan, "capturesFieldIdentity">;
 }): TargetStageResult<{
   readonly forms: RustNativeDeclarationForms;
   readonly fieldBindings: readonly RustNativeCallableFieldBinding[];
@@ -90,6 +95,7 @@ export function completeRustNativeDeclarationStorage(input: {
       records: input.declarationInput.records, frames: input.frames,
       projectTypes: input.declarationInput.projectTypes,
       nativeTypeContext: input.nativeTypeContextFor(context.nativeOwnerFileName),
+      frozenDataWrites: input.frozenDataWrites,
       physicalCarrierFor: request => input.emission.contexts.carrierFor(request.use, request.physicalCarrier) });
     if (selected.kind === "rejected") return selected;
     nativeBindings.push(...selected.value);
@@ -171,7 +177,15 @@ export function publishRustNativeBindingStorage(
                 initialization: "ready", payloadCarrier: payload.carrier })
               : selectRustNativeBindingStorage({ kind: "captured-field", storage: slot.capture.storage.kind,
                   initialization: slot.capture.storage.initialization, payloadCarrier: payload.carrier });
-        owner = Object.freeze({ kind: "capture", slotIndex: request.source.slotIndex, environment: capture.environment });
+        const fieldCarrier = slot.kind !== "receiver-field" ? storage.slotCarrier
+          : !input.frozenDataWrites.capturesFieldIdentity(slot.capture.declaration, slot.capture.reference)
+            ? storage.holderCarrier : Object.freeze({ kind: "tuple" as const, elements: Object.freeze([
+                Object.freeze(rustNamedTargetType(rustObjectIdentityTargetId, "rt::ObjectIdentity",
+                  Object.freeze([]), Object.freeze([]), undefined, Object.freeze([]), undefined, Object.freeze([]))),
+                storage.holderCarrier,
+              ]) });
+        owner = Object.freeze({ kind: "capture", slotIndex: request.source.slotIndex, environment: capture.environment,
+          fieldCarrier });
       } else if (request.source.kind === "field") {
         const source = request.source;
         if (source.storage.kind === "frame") return reject(request.declaration,
