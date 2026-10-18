@@ -79,7 +79,7 @@ export function createRustTypeDefinitionRegistry(
       if (source?.shape !== "enum" || source.genericArguments.length !== 0 ||
         definition.kind !== "enum" || !Object.isFrozen(definition) || !Object.isFrozen(definition.variants) ||
         definition.integerWidth !== 32 && definition.integerWidth !== 64 ||
-        Object.hasOwn(definition, "representation") ||
+        Object.prototype.hasOwnProperty.call(definition, "representation") ||
         definition.variants.some(variant => !Object.isFrozen(variant))) return false;
       const identity = closedMetadataKey(carrier);
       if (enums.has(identity)) return false;
