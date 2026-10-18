@@ -1100,6 +1100,7 @@ function verifyRequiredMissingOperand(program, observations) {
     nativeStorage: { ...original.input.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
   [{ use: targetUseSiteRef(operand.node, "native-body", "actual-native-owner"), role: "native-body", specialization: owner.specialization,
     declaration: operand.context.declaration, nativeOwnerFileName: owner.nativeOwnerFileName, callableAdapterInputs: [],
+    nativeCaptureInputs: [],
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
     source: owner.source,
     demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,

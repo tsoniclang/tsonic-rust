@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { Node_Expression, Node_Initializer, sourceBindingScope, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -18,6 +19,12 @@ import type { RustSourceCallableSpecializationIssue } from "./specializations.js
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
+import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import type { RustProgramErrorOwner } from "../../target-model/types/model.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 
 export interface RustFrameCallableImplementation {
   readonly declaration: Node;
@@ -75,6 +82,55 @@ export interface RustFrameCallablePlan {
   implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
   bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
   isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
+}
+
+export function prepareRustFrameCallableEntrySignatures(input: {
+  readonly frames: RustFrameCallablePlan;
+  readonly nativeProducers: RustNativeCallableProducerPlan;
+  readonly bodyBindingsFor: (declaration: Node) => RustTargetGenericBindings | undefined;
+  readonly errorOwnerFor: (fileName: string) => Extract<RustProgramErrorOwner, { readonly kind: "physical" }> | undefined;
+}): TargetStageResult<readonly { readonly frame: RustFrameCallableDefinition;
+  readonly entry: RustFrameCallableEntryDefinition; readonly signature: RustCallablePhysicalSignature }[]> {
+  const rows: { readonly frame: RustFrameCallableDefinition;
+    readonly entry: RustFrameCallableEntryDefinition; readonly signature: RustCallablePhysicalSignature }[] = [];
+  const diagnostics: TargetDiagnostic[] = [];
+  const reject = (node: Node, message: string): void => {
+    diagnostics.push({ code: "RUST_FRAME_CALLABLE_ABI_NOT_PROVEN", category: "error", source: "tsonic-rust", sourceNode: node,
+      message, evidence: ["target.capability=rust.callable-value.exact-implementation"] });
+  };
+  for (const frame of input.frames.definitions) {
+    const errorOwner = input.errorOwnerFor(frame.ownerFileName);
+    if (errorOwner?.domain !== "project") {
+      reject(frame.activation.ownerDeclaration, "A native frame entry requires its original defining package error owner.");
+      continue;
+    }
+    const error = rustProgramErrorTargetType(errorOwner);
+    for (const entry of frame.entries) {
+      let signature: RustCallablePhysicalSignature | undefined;
+      for (const implementation of entry.implementations) {
+        const producer = input.nativeProducers.forDeclaration(implementation.declaration);
+        const bindings = input.bodyBindingsFor(implementation.declaration);
+        const result = input.nativeProducers.outwardReturnFor(implementation.declaration);
+        if (producer?.parameterCarriers === undefined || bindings === undefined || result === undefined) {
+          reject(implementation.declaration,
+            "A native frame entry requires every original implementation's completed physical parameters, outward result and body bindings.");
+          continue;
+        }
+        const apply = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(carrier,
+          bindings.types, bindings.lifetimes, bindings.consts);
+        const selected = Object.freeze({ parameters: Object.freeze(producer.parameterCarriers.map(apply)), result: apply(result), error });
+        if (signature === undefined) signature = selected;
+        else if (signature.parameters.length !== selected.parameters.length ||
+          signature.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, selected.parameters[index])) ||
+          !rustTargetTypeRefEquals(signature.result, selected.result) || !rustTargetTypeRefEquals(signature.error, selected.error))
+          reject(implementation.declaration,
+            "Every native frame entry alternative requires the same exact physical invocation ABI in its original full environment.");
+      }
+      if (signature === undefined) reject(frame.activation.ownerDeclaration, "A native frame entry requires at least one complete original implementation.");
+      else rows.push(Object.freeze({ frame, entry, signature }));
+    }
+  }
+  return diagnostics.length === 0 ? resolvedTargetStage(Object.freeze(rows)) : rejectedTargetStage(diagnostics);
 }
 
 export function createRustFrameCallablePlan(input: {

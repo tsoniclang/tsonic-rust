@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection, TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -13,7 +13,7 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
-import type { RustCallablePhysicalConversionPreparation } from "../../target-model/conversions/callable-physical.js";
+import type { RustCallablePhysicalConversionPreparation, RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
@@ -56,9 +56,21 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import { createRustNativeCallableStorageSelection, prepareRustNativeCallableStorageAdapter } from "./native-storage-adapters.js";
+import type { RustPreparedNativeCallableField, RustPreparedNativeDeclarationForms } from "../declarations/native-forms.js";
+import type { RustFrameCallableBinding } from "./frame-values.js";
 
-export type RustCallablePhysicalAdapterPreparation = Omit<RustCallablePhysicalAdapter, "conversion"> & {
+export interface RustNativeCallableFieldContext {
+  readonly use: TargetUseSiteRef;
+  readonly prepareCallableField: RustPreparedNativeDeclarationForms["prepareCallableField"];
+  frameSignatureFor(binding: RustFrameCallableBinding, boundFrameCarrier: TargetTypeRef,
+    bindings: RustTargetGenericBindings): TargetStageResult<RustCallablePhysicalSignature>;
+}
+
+export type RustCallablePhysicalAdapterPreparation = Omit<RustCallablePhysicalAdapter, "conversion" | "sourceCarrier" | "sourceInput"> & {
   readonly conversion: RustCallablePhysicalConversionPreparation;
+  readonly source:
+    | { readonly kind: "selected"; readonly carrier: TargetTypeRef; readonly input: SourceStorageSubject | undefined }
+    | { readonly kind: "field"; readonly preparation: RustPreparedNativeCallableField };
 };
 
 export type RustNativeStorageSelection =
@@ -91,7 +103,8 @@ export interface RustNativeStoragePlan {
 export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
   prepareCallableAdapter(node: Node, conversion: RustCallableConversion,
     origin: Exclude<RustCallablePhysicalAdapter["origin"], { readonly kind: "expression" }>,
-    bindings: RustTargetGenericBindings, nativeOwnerFileName: string): TargetStageResult<RustCallablePhysicalAdapterPreparation>;
+    bindings: RustTargetGenericBindings, nativeOwnerFileName: string,
+    fieldContext: RustNativeCallableFieldContext): TargetStageResult<RustCallablePhysicalAdapterPreparation>;
   prepareValue(node: Node): RustNativeStorageSelection;
   prepareOperand(node: Node): RustNativeStorageSelection;
   prepareInvocation(node: Node): RustNativeStorageSelection;
@@ -527,10 +540,10 @@ export function createRustNativeStorageQueries(input: RustNativeStorageQueryInpu
   } });
   return Object.freeze({
     logicalCarrierFor,
-    prepareCallableAdapter: (node, conversion, origin, bindings, nativeOwnerFileName) =>
+    prepareCallableAdapter: (node, conversion, origin, bindings, nativeOwnerFileName, fieldContext) =>
       prepareRustNativeCallableStorageAdapter({ ...input, nodes,
         returnFor: declaration => returns.get(declaration) ?? unpreparedReturn },
-      node, conversion, origin, bindings, nativeOwnerFileName),
+      node, conversion, origin, bindings, nativeOwnerFileName, fieldContext),
     issues: Object.freeze(witnessFailure === undefined || witnessSubject === undefined ? [] : [{
       subject: witnessSubject, message: witnessFailure.message,
     }]),

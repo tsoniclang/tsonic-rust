@@ -15,6 +15,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const integer = Object.freeze({ kind: "source-primitive", name: "int32" });
 const wide = Object.freeze({ kind: "source-primitive", name: "int64" });
+const noNativeBindings = Object.freeze({ fieldBindings: Object.freeze([]), nativeBindings: Object.freeze([]) });
 
 function nativeInput(programErrorCarrier = () => undefined) {
   return {
@@ -43,6 +44,8 @@ function preparedContext(identity, abi, arguments_, nativeOwnerFileName = "/src/
     bindings: Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() }),
     returnDestination: Object.freeze({ kind: "none" }), error: Object.freeze({ kind: "none" }),
     operands: Object.freeze([]), sourceOrigins: Object.freeze([]), callableAdapters: Object.freeze([]), nativeOwnerFileName,
+    nativeBindingRequests: Object.freeze([]),
+    frameEntries: Object.freeze([]),
     nativeOperations: new Map([[abi, Object.freeze({ node: declaration, arguments: Object.freeze(arguments_) })]]),
   });
 }
@@ -73,7 +76,7 @@ test("one immutable source ABI publishes separate required native arguments in a
   const operand = Object.freeze({ use: operandUse, node: first.declaration, context: first,
     origin: { kind: "operand", evaluation: { kind: "ordinary", site: first.use } },
     carrier: integer, destination: undefined, sourceErrorRegions: [], genericInvocation: undefined });
-  const published = publishRustPhysicalEmissionContexts(preparation([first, second], [operand]), () => nativeInput());
+  const published = publishRustPhysicalEmissionContexts(preparation([first, second], [operand]), () => nativeInput(), noNativeBindings);
   assert.equal(published.kind, "resolved", "both actual native environments publish");
   const firstNative = published.value.contextFor(first.use);
   const secondNative = published.value.contextFor(second.use);
@@ -112,7 +115,7 @@ test("late native argument publication keeps genuine inference, exact consts and
   const published = publishRustPhysicalEmissionContexts(preparation([first, second]), fileName => {
     reads.push(fileName);
     return nativeInput(owner => owner.kind === "logical" ? owners.get(fileName) : undefined);
-  });
+  }, noNativeBindings);
   assert.equal(published.kind, "resolved", "the actual physical native owners are available");
   for (const prepared of [first, second]) {
     const selected = published.value.contextFor(prepared.use).targetGenericArguments.get(abi);
@@ -131,7 +134,7 @@ test("unavailable native generic evidence rejects the actual source subject befo
   const missing = { kind: "opaque", id: "fixture:missing-native-argument" };
   const abi = operation([{ kind: "type", type: missing }]);
   const prepared = preparedContext("missing", abi, abi.targetGenericArguments);
-  const published = publishRustPhysicalEmissionContexts(preparation([prepared]), () => nativeInput());
+  const published = publishRustPhysicalEmissionContexts(preparation([prepared]), () => nativeInput(), noNativeBindings);
   assert.equal(published.kind, "rejected", "missing evidence is a source admission failure, never inference");
   assert.equal(published.value === undefined, true, "no final native context is published");
   assert.equal(published.diagnostics.length, 1, "one native selection owner produces the diagnostic");

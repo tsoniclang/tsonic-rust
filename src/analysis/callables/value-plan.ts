@@ -55,7 +55,7 @@ import type { RustDeclarationGenericRequirementIndex } from "../declarations/gen
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
-import type { RustCallableEmissionContexts, RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustCallableEmissionContexts, RustPhysicalEmissionSourceOccurrence, RustNativeStorageBinding } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
@@ -64,13 +64,16 @@ import { prepareRustPhysicalEmissionContexts, publishRustPhysicalEmissionContext
 import type { RustNativeTypeInputContext, RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
 import { prepareRustHelperCallableEmissionRequests, type RustHelperCallableEmissionRequest } from "./emission-adapters.js";
-import { rustEmissionIdentityBindings } from "./emission-contexts.js";
+import { rustEmissionIdentityBindings, type RustCallableEmissionPreparation } from "./emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import type { RustTargetGenericArgument } from "../../target-model/types/model.js";
+import type { RustProgramErrorOwner, RustTargetGenericArgument } from "../../target-model/types/model.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
+import type { RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
+import type { RustNativeCallableFieldBinding, RustPreparedNativeDeclarationForms } from "../declarations/native-forms.js";
 
 export interface RustCallableValuePlan {
   readonly emissionContexts: RustCallableEmissionContexts;
+  readonly nativeDeclarations: RustNativeDeclarationForms;
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
@@ -87,12 +90,21 @@ export interface RustCallableValuePlan {
   readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
 
-export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts"> & {
+export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts" | "nativeDeclarations"> & {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStorageConstruction;
 };
 
 export interface RustCallableValueSealInput {
+  readonly frameErrorOwnerFor: (fileName: string) => Extract<RustProgramErrorOwner, { readonly kind: "physical" }> | undefined;
+  readonly prepareCallableField: RustPreparedNativeDeclarationForms["prepareCallableField"];
+  readonly prepareStorageField: RustPreparedNativeDeclarationForms["prepareStorageField"];
+  readonly completeNativeDeclarations: (callables: RustNativeTypeInputContext["callableValues"],
+    emission: RustCallableEmissionPreparation) => TargetStageResult<{
+      readonly forms: RustNativeDeclarationForms;
+      readonly fieldBindings: readonly RustNativeCallableFieldBinding[];
+      readonly nativeBindings: readonly RustNativeStorageBinding[];
+    }>;
   readonly nativeTypeInputFor: (fileName: string,
     callables: RustNativeTypeInputContext["callableValues"]) => RustNativeTypeSelectionInput;
   readonly sourceCallableSpecializations: import("./specializations.js").RustSourceCallableSpecializationPlan;
@@ -494,6 +506,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         generic, frames: completedSelection.frames, suspended: completedSelection.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         prepareCallableAdapter: nativeStorage.prepareCallableAdapter,
+        prepareCallableField: late.prepareCallableField, prepareStorageField: late.prepareStorageField,
         genericCompletions: completions(), sourceOccurrences, emissionRequests });
       if (emission.kind === "rejected") {
         sealResult = rejectedTargetStage(emission.diagnostics);
@@ -502,18 +515,23 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       for (const carrier of emission.value.physicalOperands) physical.prepare(carrier);
       const finalPhysical = physical.closeKeys();
       genericRegistry.publishPhysical(finalPhysical);
+      const nativeDeclarations = late.completeNativeDeclarations({ generic, frames: completedSelection.frames }, emission.value);
+      if (nativeDeclarations.kind === "rejected") {
+        sealResult = nativeDeclarations;
+        return sealResult;
+      }
       const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
       const nativeEmission = publishRustPhysicalEmissionContexts(emission.value, fileName => late.nativeTypeInputFor(fileName, {
         generic, frames: completedSelection.frames,
-      }));
+      }), nativeDeclarations.value);
       if (nativeEmission.kind === "rejected") {
         sealResult = nativeEmission;
         return sealResult;
       }
       publishedPlan = Object.freeze({ ...completedSelection, ...publication.value, native: nativeInputs,
-        emissionContexts: nativeEmission.value });
+        emissionContexts: nativeEmission.value, nativeDeclarations: nativeDeclarations.value.forms });
       sealResult = resolvedTargetStage(publishedPlan);
       return sealResult;
     },

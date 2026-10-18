@@ -148,6 +148,8 @@ test("nonretaining closure inputs keep their borrowed native representation and 
   const fixture = nativeClosureProducerFixture({ selectRecords: producerCarrierRecords(carrier) });
   const operation = fixture.program.records.targetOperation.get(fixture.node);
   assert.equal(rustCallableInputProtocol(operation.resultCarrier) !== undefined, true, "borrowed callable input selected");
+  assert.equal(fixture.program.callableValues.nativeProducers.physicalFor(fixture.node, carrier) !== undefined, true,
+    "the borrowed fixture carrier has its own exact pre-seal producer correspondence");
   const text = printNativeClosureProducer(fixture);
   assert.match(text, /move \|_callable_arguments: \(\)\| Ok::<_, core::convert::Infallible>\(3\)/u);
   assert.doesNotMatch(text, /Callable::|::new|Rc::|Box|clone/u);

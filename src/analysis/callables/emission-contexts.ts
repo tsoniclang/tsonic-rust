@@ -9,19 +9,18 @@ import type { RustInitializationErrorRecords } from "../../target-model/records/
 import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination,
   RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin,
   RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins, RustPhysicalEmissionRole,
-  RustEmissionCallableSpecialization } from "../../target-model/records/physical-emission-contexts.js";
+  RustEmissionCallableSpecialization, RustNativeStorageBindingRequest } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProgramErrorOwner, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { substituteRustTargetGenericArgument, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { closedMetadataEquals, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 import { providerSourceInputKey } from "../operations/provider-source-inputs.js";
 import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
-import type { RustFrameCallablePlan } from "./frame-values.js";
+import { prepareRustFrameCallableEntrySignatures, type RustFrameCallablePlan } from "./frame-values.js";
 import type { RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";
@@ -32,8 +31,6 @@ import type { RustNativeStorageConstruction, RustNativeStoragePlan } from "./nat
 import type { RustSourceCallableSpecializationPlan } from "./specializations.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustLexicalFunctionQueries } from "./lexical-functions.js";
-import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
-import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner,
   type RustEmissionSourceRequest } from "./emission-source-origins.js";
 import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
@@ -46,6 +43,8 @@ import { substituteRustCallablePhysicalConversion } from "../../target-model/con
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustCallablePhysicalAdapter } from "../../target-model/records/callable-adapters.js";
 import type { RustHelperCallableEmissionRequest } from "./emission-adapters.js";
+import type { RustPreparedNativeDeclarationForms } from "../declarations/native-forms.js";
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 
 
 export interface RustCallableEmissionPreparationInput {
@@ -62,6 +61,9 @@ export interface RustCallableEmissionPreparationInput {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustPhysicalCallableStorage;
   readonly prepareCallableAdapter: RustNativeStorageConstruction["prepareCallableAdapter"];
+  readonly prepareCallableField: RustPreparedNativeDeclarationForms["prepareCallableField"];
+  readonly prepareStorageField: RustPreparedNativeDeclarationForms["prepareStorageField"];
+  readonly frameErrorOwnerFor: (fileName: string) => Extract<RustProgramErrorOwner, { readonly kind: "physical" }> | undefined;
   readonly helperEmissionRequests: readonly RustHelperCallableEmissionRequest[];
   readonly declaredBindings: (declaration: Node) => RustTargetGenericBindings | undefined;
   readonly nativeProducers: RustNativeCallableProducerPlan;
@@ -84,10 +86,13 @@ export interface RustCallableEmissionPreparation {
   readonly physicalOperands: readonly TargetTypeRef[];
 }
 
-export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysicalEmissionContext, "targetGenericArguments" | "error" | "callableAdapters"> {
+export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysicalEmissionContext, "targetGenericArguments" | "error" | "callableAdapters" | "nativeBindings"> {
   readonly error: RustEmissionErrorContext<RustNativeErrorSource<TargetTypeRef>>;
   readonly nativeOwnerFileName: string;
   readonly callableAdapters: readonly RustCallablePhysicalAdapterPreparation[];
+  readonly nativeBindingRequests: readonly RustNativeStorageBindingRequest[];
+  readonly frameEntries: readonly { readonly entry: object;
+    readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly error: TargetTypeRef }[];
   readonly nativeOperations: ReadonlyMap<RustFinalizedOperationAbi, {
     readonly node: Node;
     readonly arguments: readonly RustTargetGenericArgument[];
@@ -119,6 +124,7 @@ export interface RustEmissionContextRequest extends RustEmissionSourceRequest {
     readonly origin: Exclude<RustCallablePhysicalAdapter["origin"], { readonly kind: "expression" }>;
     readonly sourceBindings: RustTargetGenericBindings;
   })[];
+  readonly nativeCaptureInputs: readonly RustClosureCaptureFact["captures"][number][];
   readonly nativeOwnerFileName: string;
   readonly role: RustPhysicalEmissionRole;
   readonly specialization: RustEmissionCallableSpecialization;
@@ -168,278 +174,9 @@ export function rustEmissionSourceIdentity(ast: AstReader, declaration: Node): s
   return file === undefined || identity === undefined ? undefined : `${ast.getFileName(file)}:${identity}`;
 }
 
-export function prepareRustCallableEmissionRequests(
-  input: RustCallableEmissionPreparationInput,
-): TargetStageResult<readonly RustEmissionContextRequest[]> {
-  if (!Array.isArray(input.emissionRequests)) throw new Error("Physical emission requires its complete selecting-owner request vector.");
-  if (!Array.isArray(input.helperEmissionRequests) || typeof input.declaredBindings !== "function")
-    throw new Error("Physical emission requires its original pre-error-catalog helper requests and canonical binding inputs.");
-  const requests: RustEmissionContextRequest[] = [];
-  const diagnostics: TargetDiagnostic[] = [];
-  for (const issue of input.projectMethodDispatch.bodyIssues) if (input.isNativeNode(issue.node))
-    diagnostics.push(emissionDiagnostic(issue.node, issue.reason));
-  const byOwner = new Map<Node, RustPhysicalCallableEmissionRequest[]>();
-  for (const demand of input.emissionRequests) {
-    const demands = byOwner.get(demand.owner) ?? [];
-    demands.push(demand);
-    byOwner.set(demand.owner, demands);
-  }
-  const declaredBindings = input.declaredBindings;
-  const suspendedParameters = new Map(input.suspended.implementations.map(implementation =>
-    [implementation.declaration, implementation.parameters] as const));
-  const bodyBindings = (declaration: Node, bindings: RustTargetGenericBindings): RustTargetGenericBindings | undefined => {
-    const lexical = input.lexicalFunctions.forDeclaration(declaration);
-    if (lexical?.kind === "unresolved") {
-      diagnostics.push(emissionDiagnostic(declaration, lexical.reason));
-      return undefined;
-    }
-    const captured = [...suspendedParameters.get(declaration) ?? (lexical?.genericParameters ?? []),
-      ...rustCallableImplicitLifetimeParameters(declaration, input.ast, input.records)];
-    const contract = input.sourceLifetimes.contractFor(declaration);
-    const formal = contract?.parameters ?? [];
-    const usedNames = new Set(formal.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime.name] : []));
-    const lifetimes = new Map(bindings.lifetimes);
-    let changed = false;
-    const select = (lifetime: import("../../target-model/lifetimes/model.js").RustLifetimeRef): void => {
-      const key = rustLifetimeKey(lifetime);
-      const existing = lifetimes.get(key);
-      if (existing?.kind === lifetime.kind && "name" in existing && "name" in lifetime && existing.name === lifetime.name) return;
-      lifetimes.set(key, lifetime);
-      changed = true;
-    };
-    for (const parameter of formal) if (parameter.kind === "lifetime") select(parameter.lifetime);
-    for (const parameter of captured) if (parameter.kind === "lifetime") select({
-      ...parameter.lifetime, name: allocateRustGeneratedName(usedNames, parameter.lifetime.name),
-    });
-    return changed ? snapshotRustCallableBindings({ types: bindings.types, lifetimes, consts: bindings.consts }) : bindings;
-  };
-  const request = (subject: object, role: RustPhysicalEmissionRole, declaration: Node, identity: string, nativeOwnerFileName: string,
-    bindings: RustTargetGenericBindings | undefined, demands: readonly RustPhysicalCallableEmissionRequest[], source: RustEmissionSourceOwner,
-    sourceCarriers: readonly TargetTypeRef[],
-    callableAdapterInputs: RustEmissionContextRequest["callableAdapterInputs"],
-    physicalCarriers: readonly TargetTypeRef[] = [], physicalReturn: TargetTypeRef | undefined = undefined,
-    specialization: RustEmissionCallableSpecialization = Object.freeze({ kind: "ordinary" })): void => {
-    if (bindings !== undefined && (role === "native-body" || role === "specialized-body" || role === "project-body" || role === "body")) {
-      const selected = bodyBindings(declaration, bindings);
-      if (selected === undefined) return;
-      bindings = selected;
-    }
-    if (bindings === undefined) {
-      diagnostics.push(emissionDiagnostic(declaration, "An emitted native context has no exact canonical type, lifetime and const bindings."));
-      return;
-    }
-    if (specialization.kind === "finite") {
-      const parameters = input.sourceLifetimes.contractFor(declaration)?.parameters.filter(parameter => parameter.kind === "type") ?? [];
-      if (parameters.length !== specialization.typeParameterIdentities.length ||
-        parameters.some((parameter, index) => parameter.identity !== specialization.typeParameterIdentities[index]) ||
-        new Set(specialization.typeParameterIdentities).size !== parameters.length ||
-        specialization.typeParameterIdentities.some(identity => !bindings.types.has(identity))) {
-        diagnostics.push(emissionDiagnostic(declaration, "A finite emitted body requires its exact original source-binder vector and selected replacements."));
-        return;
-      }
-    }
-    const returned = input.records.sourceCallableReturn.get(declaration);
-    const generator = input.records.generator.get(declaration);
-    const selected = returned === undefined || physicalReturn !== undefined || generator !== undefined
-      ? undefined : input.nativeStorage.returnFor(declaration);
-    if (selected?.kind === "unresolved") {
-      diagnostics.push(emissionDiagnostic(declaration, selected.reason));
-      return;
-    }
-    const region = input.errorRegions.get(declaration);
-    if (region === undefined && input.records.errorEffects.get(declaration) !== undefined) {
-      diagnostics.push(emissionDiagnostic(declaration, "An emitted callable has no selected native error region."));
-      return;
-    }
-    const returnDestination: RustEmissionReturnDestination = physicalReturn !== undefined
-      ? Object.freeze({ kind: "value", carrier: physicalReturn, borrowedParameter: returned?.borrowedParameter })
-      : generator !== undefined ? Object.freeze({ kind: "value", carrier: generator.returnType, borrowedParameter: undefined })
-      : selected === undefined ? Object.freeze({ kind: "none" })
-      : Object.freeze({ kind: "value", carrier: selected.carrier, borrowedParameter: returned?.borrowedParameter });
-    const error: RustEmissionErrorContext<RustNativeErrorSource<TargetTypeRef>> = region === undefined ? Object.freeze({ kind: "none" })
-      : Object.freeze({ kind: "region", owner: declaration, region });
-    const requirements = input.declarationGenericRequirements.contractFor(declaration,
-      role === "body" || role === "native-body" || role === "specialized-body" || role === "project-body" ? true : undefined);
-    const required = requirements === undefined ? [] : [
-      ...requirements.associatedTypes.flatMap(value => [value.carrier, ...value.output === undefined ? [] : [value.output]]),
-      ...requirements.projectProjections.flatMap(value => [value.sourceCarrier, value.targetCarrier]),
-      ...requirements.optionalStorage.map(value => value.carrier),
-    ];
-    requests.push({ use: targetUseSiteRef(subject, role, identity), role, specialization, declaration, nativeOwnerFileName, bindings, demands, source,
-      callableAdapterInputs,
-      returnDestination, error, sourceCarriers: [...sourceCarriers, ...required,
-        ...generator === undefined ? [] : [generator.yieldType, generator.returnType, generator.nextType, generator.resultCarrier]], physicalCarriers });
-  };
-  for (const producer of input.nativeProducers.producers) {
-    const implementation = input.generic.implementationFor(producer.declaration);
-    const bindings = declaredBindings(producer.declaration);
-    if (implementation?.creation === "activation") continue;
-    request(producer.declaration, "native-body", producer.declaration, producer.identity, producer.fileName, bindings,
-      byOwner.get(producer.declaration) ?? [], { kind: "declaration" },
-      producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []), [],
-      [input.nativeProducers.outwardReturnFor(producer.declaration), input.nativeProducers.invocationResultFor(producer.declaration),
-        input.nativeProducers.bodyResultFor(producer.declaration)].filter((carrier): carrier is TargetTypeRef => carrier !== undefined));
-    for (const variant of input.sourceCallableSpecializations.variantsForCallable(producer.declaration)) {
-      if (bindings === undefined || variant.sourceTypeParameterIdentities.length !== variant.targetTypeArguments.length ||
-        new Set(variant.sourceTypeParameterIdentities).size !== variant.sourceTypeParameterIdentities.length ||
-        variant.sourceTypeParameterIdentities.some(identity => !bindings.types.has(identity))) {
-        diagnostics.push(emissionDiagnostic(producer.declaration, "An emitted callable specialization requires every original declared binder exactly once."));
-        continue;
-      }
-      const types = new Map(bindings.types);
-      for (const [index, identity] of variant.sourceTypeParameterIdentities.entries()) types.set(identity, variant.targetTypeArguments[index]!);
-      request(variant, "specialized-body", producer.declaration, `${producer.identity}:${variant.targetName}`,
-        producer.fileName, snapshotRustCallableBindings({ types, lifetimes: bindings.lifetimes, consts: bindings.consts }),
-        byOwner.get(producer.declaration) ?? [], { kind: "declaration" },
-        producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []), [], [], undefined,
-        Object.freeze({ kind: "finite", typeParameterIdentities: variant.sourceTypeParameterIdentities }));
-    }
-  }
-  for (const body of input.projectMethodDispatch.bodies) {
-    if (!input.isNativeNode(body.declaration)) continue;
-    const lexical = declaredBindings(body.declaration);
-    if (lexical === undefined) {
-      diagnostics.push(emissionDiagnostic(body.declaration, "A concrete project body requires its original callable binding input."));
-      continue;
-    }
-    const bindings = snapshotRustCallableBindings({
-      types: new Map([...lexical.types, ...body.bindings.types]),
-      lifetimes: new Map([...lexical.lifetimes, ...body.bindings.lifetimes]),
-      consts: new Map([...lexical.consts, ...body.bindings.consts]),
-    });
-    const identity = rustEmissionSourceIdentity(input.ast, body.declaration);
-    if (identity === undefined) {
-      diagnostics.push(emissionDiagnostic(body.declaration, "A concrete project body has no original source identity."));
-      continue;
-    }
-    request(body, "project-body", body.declaration, `${body.concrete.targetPath}:${identity}:${body.targetName}`,
-      body.concrete.fileName, bindings, byOwner.get(body.declaration) ?? [], { kind: "declaration" }, [body.ownerCarrier, ...body.targetTypeArguments], [], [], undefined,
-      body.variant === undefined ? Object.freeze({ kind: "ordinary" })
-        : Object.freeze({ kind: "finite", typeParameterIdentities: body.variant.sourceTypeParameterIdentities }));
-  }
-  for (const definition of input.generic.definitions) for (const implementation of definition.implementations) {
-    const environment = input.generic.physical.environmentFor(implementation);
-    if (environment === undefined) {
-      diagnostics.push(emissionDiagnostic(implementation.declaration, "An emitted generic callable has no completed canonical physical environment."));
-      continue;
-    }
-    const payloads = [...environment.captures.map(value => value.storageCarrier),
-      ...environment.receiverFields.map(value => value.storageCarrier), ...environment.receivers.map(value => value.storageCarrier),
-      ...environment.inputs.flatMap(value => [value.implementation, value.trait]),
-      ...definition.signature.parameters, definition.signature.result];
-    const identity = `${definition.identity}:${implementation.sourceFileName}:${sourceNodeIdentity(input.ast, implementation.declaration)}`;
-    const source = { kind: "callable" as const, implementation: implementation.declaration, member: undefined };
-    request(implementation, "helper", implementation.declaration, identity, definition.ownerFileName, environment.substitutions, [], source, payloads, []);
-    if (implementation.creation === "activation") {
-      request(implementation, "body", implementation.declaration, identity, definition.ownerFileName, environment.substitutions,
-        byOwner.get(implementation.declaration) ?? [], source, payloads, []);
-    }
-  }
-  for (const definition of input.generic.physical.definitions()) {
-    const completion = input.genericCompletions.forDefinition(definition);
-    const errors = input.genericErrors.forDefinition(definition);
-    if (completion.kind === "unresolved") {
-      diagnostics.push(emissionDiagnostic(definition.implementations[0]!.declaration, completion.reason));
-      continue;
-    }
-    for (const member of definition.members) {
-      const environment = input.generic.physical.environmentFor(member.implementation);
-      const selectedCompletion = completion.kind === "direct" ? completion.result : completion.forMember(member)?.result;
-      const selectedErrors = errors?.forMember(member);
-      if (environment === undefined || selectedCompletion === undefined || selectedErrors === undefined) {
-        diagnostics.push(emissionDiagnostic(member.implementation.declaration,
-          "An emitted physical member has no selected environment or completion payload."));
-        continue;
-      }
-      request(member, "member", member.implementation.declaration, definition.identity, definition.ownerFileName, member.bindings, [],
-        { kind: "callable", implementation: member.implementation.declaration, member },
-        [...environment.captures.map(value => value.storageCarrier), ...environment.receiverFields.map(value => value.storageCarrier),
-          ...environment.receivers.map(value => value.storageCarrier), ...environment.inputs.flatMap(value => [value.implementation, value.trait]),
-          ...definition.signature.parameters], [],
-        [selectedCompletion, selectedErrors?.invocation?.errorType, selectedErrors?.awaiting?.errorType]
-          .filter((carrier): carrier is TargetTypeRef => carrier !== undefined), selectedCompletion);
-    }
-  }
-  for (const selected of input.native.inputs) {
-    const identity = rustEmissionSourceIdentity(input.ast, selected.owner);
-    if (identity === undefined) {
-      diagnostics.push(emissionDiagnostic(selected.owner, "A native callable input has no canonical declaration identity."));
-      continue;
-    }
-    request(selected, "native-input", selected.owner, identity, selected.protocol.ownerFileName, declaredBindings(selected.owner), [],
-      { kind: "declaration" },
-      [selected.carrier, selected.implementation, selected.trait, ...selected.environment,
-        ...selected.protocol.method.parameters, selected.protocol.method.result], []);
-  }
-  for (const implementation of input.suspended.implementations) {
-    const identity = rustEmissionSourceIdentity(input.ast, implementation.declaration);
-    if (identity === undefined) {
-      diagnostics.push(emissionDiagnostic(implementation.declaration, "A suspended native implementation has no canonical declaration identity."));
-      continue;
-    }
-    request(implementation, "native-backing", implementation.declaration, identity, implementation.sourceFileName,
-      declaredBindings(implementation.declaration), [], { kind: "declaration" }, [implementation.carrier, ...implementation.storage], []);
-  }
-  for (const frame of input.frames.definitions) {
-    const declaration = frame.activation.ownerDeclaration;
-    const identity = rustEmissionSourceIdentity(input.ast, declaration);
-    if (identity === undefined) {
-      diagnostics.push(emissionDiagnostic(declaration, "A selected native frame has no canonical source owner identity."));
-      continue;
-    }
-    const bindings = declaredBindings(declaration);
-    request(frame, "frame", declaration, identity, frame.ownerFileName, bindings, [], { kind: "declaration" }, [...frame.bindings.map(value => value.carrier),
-      ...frame.entries.flatMap(entry => [...entry.signature.parameters, entry.signature.result])], []);
-  }
-  for (const plan of input.constructions) {
-    if (!input.isNativeNode(plan.definition.declaration) || input.ast.hasModifierKind(plan.definition.declaration, "abstract")) continue;
-    for (const issue of plan.emission.issues) diagnostics.push(emissionDiagnostic(issue.node, issue.reason));
-    const declaration = plan.definition.declaration;
-    const identity = rustEmissionSourceIdentity(input.ast, declaration);
-    if (identity === undefined) {
-      diagnostics.push(emissionDiagnostic(declaration, "A selected constructor has no canonical declaration identity."));
-      continue;
-    }
-    request(plan, "constructor", declaration, identity, plan.definition.fileName, declaredBindings(declaration),
-      [], { kind: "construction", plan, layer: undefined }, plan.fields.map(field => field.carrier), []);
-    const root = input.projectTypes.openCarrier(plan.definition);
-    for (const layer of plan.layers) {
-      const source = layer.constructor ?? layer.definition.declaration;
-      const selected = input.projectTypes.relationship(root, layer.definition);
-      const carrier = selected.kind === "related" ? rustSourceTypeCarrierValue(selected.targetType) : undefined;
-      const parameters: RustTargetGenericArgument[] = layer.definition.genericParameters.map(parameter => parameter.kind === "lifetime"
-        ? { kind: "lifetime", lifetime: parameter.lifetime }
-        : { kind: "type", type: { kind: "type-parameter", identity: parameter.identity, name: parameter.targetName } });
-      const inherited = carrier === undefined ? undefined : rustGenericCallablePhysicalBindings(parameters, carrier.genericArguments);
-      const lexical = declaredBindings(source);
-      const bindings = inherited === undefined || lexical === undefined ? undefined : snapshotRustCallableBindings({
-        types: new Map([...lexical.types, ...inherited.types]), lifetimes: new Map([...lexical.lifetimes, ...inherited.lifetimes]),
-        consts: new Map([...lexical.consts, ...inherited.consts]) });
-      const points = plan.points.filter(point => plan.emission.preparationFor(point.node)?.layer === layer);
-      const demands = [...byOwner.get(layer.definition.declaration) ?? [],
-        ...layer.constructor === undefined ? [] : byOwner.get(layer.constructor) ?? []];
-      request(layer, "constructor-layer", source, identity, plan.definition.fileName, bindings, demands,
-        { kind: "construction", plan, layer },
-        layer.fields.map(field => field.carrier), [], points.flatMap(point =>
-          plan.emission.preparationFor(point.node)?.projections.flatMap(projection => projection.kind === "receiver" ? [projection.carrier] : []) ?? []));
-    }
-  }
-  for (const selected of input.helperEmissionRequests) {
-    request(selected.subject, "helper", selected.declaration, selected.identity, selected.nativeOwnerFileName,
-      selected.bindings, [], { kind: "declaration" }, selected.sourceCarriers, selected.callableAdapterInputs, [], selected.returnCarrier);
-  }
-  const coveredBodies = new Set(requests.flatMap(request => request.demands.map(demand => demand.owner)));
-  for (const [owner, demands] of byOwner) {
-    if (!input.records.sourceCallableReturn.get(owner) || input.ast.body(owner) === undefined || coveredBodies.has(owner)) continue;
-    diagnostics.push(emissionDiagnostic(demands[0]!.subject,
-      "An emitted callable demand requires its original selected body context before publication."));
-  }
-  return diagnostics.length === 0 ? resolvedTargetStage(Object.freeze(requests)) : rejectedTargetStage(diagnostics);
-}
-
 export function prepareRustEmissionContextRequests(
   input: Pick<RustCallableEmissionPreparationInput, "ast" | "records" | "nativeStorage" | "sourceOccurrences" | "errorRegions" |
-    "sourceStorage" | "genericBindingsFor" | "generic" | "emissionRequests" | "initialization" | "sourceLifetimes" | "prepareCallableAdapter">,
+    "sourceStorage" | "genericBindingsFor" | "generic" | "emissionRequests" | "initialization" | "sourceLifetimes" | "prepareCallableAdapter" | "prepareCallableField" | "prepareStorageField" | "frameErrorOwnerFor" | "frames" | "nativeProducers">,
   selectedRequests: readonly RustEmissionContextRequest[],
 ): TargetStageResult<RustCallableEmissionPreparation> {
   const contexts: RustPhysicalEmissionContextPreparation[] = [];
@@ -473,6 +210,10 @@ export function prepareRustEmissionContextRequests(
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   const nativeBodies = new Map(requests.filter(request => request.role === "native-body")
     .map(request => [request.declaration, request] as const));
+  const frameSignatures = prepareRustFrameCallableEntrySignatures({ frames: input.frames,
+    nativeProducers: input.nativeProducers, bodyBindingsFor: declaration => nativeBodies.get(declaration)?.bindings,
+    errorOwnerFor: input.frameErrorOwnerFor });
+  if (frameSignatures.kind === "rejected") return frameSignatures;
   const selectedDemands = new Set(input.emissionRequests);
   const creationOwners = new Map<TargetUseSiteRef, ReadonlySet<Node>>();
   for (let index = 0; index < requests.length; index += 1) {
@@ -551,11 +292,15 @@ export function prepareRustEmissionContextRequests(
     const contextCarriers: TargetTypeRef[] = [];
     const contextOrigins: RustPhysicalEmissionSourceOrigins[] = [];
     const contextAdapters: RustCallablePhysicalAdapterPreparation[] = [];
+    const nativeBindingRequests: RustNativeStorageBindingRequest[] = [];
+    const frameEntries = request.role !== "frame" ? [] : frameSignatures.value.filter(row => row.frame === request.use.subject)
+      .map(row => Object.freeze({ entry: row.entry, parameters: Object.freeze(row.signature.parameters.map(apply)),
+        result: apply(row.signature.result), error: apply(row.signature.error) }));
     const retainAdapter = (selected: RustCallablePhysicalAdapterPreparation): void => {
       const existing = contextAdapters.find(row => row.node === selected.node && row.selection === selected.selection);
       if (existing !== undefined && (existing.joinOwnerFileName !== selected.joinOwnerFileName ||
-        !sameAdapterOrigin(existing.origin, selected.origin) || existing.sourceInput !== selected.sourceInput ||
-        !rustTargetTypeRefEquals(existing.sourceCarrier, selected.sourceCarrier) || !closedMetadataEquals(existing.conversion, selected.conversion)))
+        !sameAdapterOrigin(existing.origin, selected.origin) || !samePreparedAdapterSource(existing.source, selected.source) ||
+        !closedMetadataEquals(existing.conversion, selected.conversion)))
         diagnostics.push(emissionDiagnostic(selected.node,
           "One physical helper boundary requires its exact original source slot and complete selected conversion."));
       else if (existing === undefined) contextAdapters.push(selected);
@@ -574,10 +319,23 @@ export function prepareRustEmissionContextRequests(
       specialization: request.specialization, declaration: request.declaration,
       nativeOwnerFileName: request.nativeOwnerFileName, nativeOperations,
       bindings: request.bindings, returnDestination, error, operands: contextCarriers, sourceOrigins: contextOrigins,
-      callableAdapters: contextAdapters };
+      callableAdapters: contextAdapters, nativeBindingRequests, frameEntries: Object.freeze(frameEntries) };
     for (const adapter of request.callableAdapterInputs) {
       const prepared = input.prepareCallableAdapter(adapter.node, adapter.selection, adapter.origin,
-        adapter.sourceBindings, request.nativeOwnerFileName);
+        adapter.sourceBindings, request.nativeOwnerFileName,
+        { use: request.use, prepareCallableField: input.prepareCallableField,
+          frameSignatureFor: (binding, boundFrameCarrier, bindings) => {
+            const expected = substituteRustTargetGenerics(binding.carrier, bindings.types, bindings.lifetimes, bindings.consts);
+            const rows = frameSignatures.value.filter(row => row.entry === binding.entry && row.frame.bindings.includes(binding));
+            if (!rustTargetTypeRefEquals(expected, boundFrameCarrier) || rows.length !== 1)
+              return rejectedTargetStage([emissionDiagnostic(binding.declaration,
+                "A generated field adaptation requires its exact original frame entry and correlated bound carrier.")]);
+            const signature = rows[0]!.signature;
+            const selected = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(carrier,
+              bindings.types, bindings.lifetimes, bindings.consts);
+            return resolvedTargetStage(Object.freeze({ parameters: Object.freeze(signature.parameters.map(selected)),
+              result: selected(signature.result), error: selected(signature.error) }));
+          } });
       if (prepared.kind === "rejected") { diagnostics.push(...prepared.diagnostics); continue; }
       retainAdapter(prepared.value);
       const retain = (selected: RustCallablePhysicalAdapterPreparation["conversion"]): void => {
@@ -589,12 +347,16 @@ export function prepareRustEmissionContextRequests(
         for (const part of [...selected.arguments, selected.resultPlan]) if (part.kind === "callable") retain(part.conversion);
       };
       retain(prepared.value.conversion);
-      physicalOperands.add(prepared.value.sourceCarrier);
-      carriers.add(prepared.value.sourceCarrier);
+      if (prepared.value.source.kind === "selected") {
+        physicalOperands.add(prepared.value.source.carrier);
+        carriers.add(prepared.value.source.carrier);
+      }
     }
     const add = (node: Node, origin: RustPhysicalEmissionOperandOrigin, source: TargetTypeRef,
       destination: TargetTypeRef | undefined, endpoints: readonly TargetTypeRef[],
-      storage: Exclude<RustNativeStorageSelection, { readonly kind: "unresolved" }>, inputOrdinal?: number): void => {
+      storage: Exclude<RustNativeStorageSelection, { readonly kind: "unresolved" }>, inputOrdinal?: number,
+      binding?: { readonly declaration: Node; readonly logicalCarrier: TargetTypeRef;
+        readonly source: RustNativeStorageBindingRequest["source"] }): void => {
       const sourceError = origin.kind === "operand" && origin.evaluation.kind === "ordinary" && origin.evaluation.site.role === "source-errors";
       const role = sourceError ? "source-error"
         : origin.kind === "call-input" ? `call-input:${providerSourceInputKey(origin.input)}:${inputOrdinal}`
@@ -613,7 +375,8 @@ export function prepareRustEmissionContextRequests(
       let genericInvocation: RustGenericCallableInvocationFact | undefined;
       for (const adapter of storage.callableAdapters) {
         if (adapter.node !== node) continue;
-        retainAdapter(Object.freeze({ ...adapter, sourceCarrier: apply(adapter.sourceCarrier),
+        retainAdapter(Object.freeze({ ...adapter, source: adapter.source.kind === "selected"
+          ? Object.freeze({ ...adapter.source, carrier: apply(adapter.source.carrier) }) : adapter.source,
           conversion: substituteRustCallablePhysicalConversion(adapter.conversion, request.bindings, apply) }));
       }
       if (sourceError) {
@@ -638,6 +401,9 @@ export function prepareRustEmissionContextRequests(
       indexed.set(targetUseSiteIdentity(use), operand);
       operandIndex.set(use.subject, indexed);
       applications.set(use, values);
+      if (binding !== undefined) nativeBindingRequests.push(Object.freeze({ use, declaration: binding.declaration,
+        logicalCarrier: binding.logicalCarrier, physicalCarrier: operand.carrier, sourceBindings: request.bindings,
+        source: binding.source }));
     };
     const nodes = [...new Set(request.demands.map(demand => demand.subject))];
     const occurrences = nodes.flatMap(node => [...sourceIndex.get(node)?.values() ?? []]);
@@ -661,7 +427,16 @@ export function prepareRustEmissionContextRequests(
     }
     for (const demand of request.demands) {
       if (demand.kind === "type") {
-        apply(demand.carrier);
+        const physicalCarrier = apply(demand.carrier);
+        if (demand.context.role === "class-environment") {
+          const sourceFile = input.ast.getSourceFile(demand.subject);
+          if (sourceFile === undefined || request.role !== "module-initializer" || request.declaration !== sourceFile)
+            diagnostics.push(emissionDiagnostic(demand.subject,
+              "A generated class environment requires its exact selected module initializer context."));
+          else nativeBindingRequests.push(Object.freeze({ use: request.use, declaration: demand.subject,
+            logicalCarrier: demand.carrier, physicalCarrier, sourceBindings: request.bindings,
+            source: Object.freeze({ kind: "module", sourceFile, initialization: "ready" }) }));
+        }
         continue;
       }
       if (demand.kind === "producer") continue;
@@ -686,7 +461,26 @@ export function prepareRustEmissionContextRequests(
         const value = input.nativeStorage.valueFor(node);
         if (value.kind === "unresolved") diagnostics.push(emissionDiagnostic(node, value.reason));
         else add(node, Object.freeze({ kind: "operand", evaluation }), selected.carrier, destination, endpoints, value);
-      } else add(node, Object.freeze({ kind: demand.kind, evaluation }), selected.carrier, destination, endpoints, selected);
+      } else {
+        let binding: { readonly declaration: Node; readonly logicalCarrier: TargetTypeRef;
+          readonly source: RustNativeStorageBindingRequest["source"] } | undefined;
+        if (demand.kind === "value" && (demand.context.role === "binding" || demand.context.role === "module-binding")) {
+          const projection = input.records.bindingProjection.get(node);
+          const logicalCarrier = projection === undefined ? input.records.runtimeCarrier.get(node)?.carrier
+            : "bindingCarrier" in projection ? projection.bindingCarrier : undefined;
+          if (logicalCarrier === undefined) diagnostics.push(emissionDiagnostic(node,
+            "An emitted binding requires its original declared logical carrier before native storage publication."));
+          else if (demand.context.role === "module-binding") {
+            const sourceFile = input.ast.getSourceFile(node);
+            if (sourceFile === undefined || request.role !== "module-initializer" || request.declaration !== sourceFile)
+              diagnostics.push(emissionDiagnostic(node,
+                "A static native field requires its exact selected module initializer context."));
+            else binding = { declaration: node, logicalCarrier,
+              source: Object.freeze({ kind: "module", sourceFile, initialization: "ready" }) };
+          } else binding = { declaration: node, logicalCarrier, source: Object.freeze({ kind: "binding" }) };
+        }
+        add(node, Object.freeze({ kind: demand.kind, evaluation }), selected.carrier, destination, endpoints, selected, undefined, binding);
+      }
     }
     for (const occurrence of occurrences) for (const slot of occurrence.slots) {
       const value = input.nativeStorage.valueFor(slot.node);
@@ -717,10 +511,59 @@ export function prepareRustEmissionContextRequests(
       for (const source of request.error.region.sources) apply(source.errorType);
       for (const carrier of request.error.region.jsRejection?.requiredCarriers ?? []) apply(carrier);
     }
+    for (const capture of request.nativeCaptureInputs) {
+      const selected = input.nativeStorage.valueFor(capture.reference);
+      if (selected.kind === "unresolved") { diagnostics.push(emissionDiagnostic(capture.reference, selected.reason)); continue; }
+      const physicalCarrier = apply(selected.carrier);
+      const previous = nativeBindingRequests.find(row => row.declaration === capture.declaration);
+      if (previous !== undefined) {
+        if (previous.source.kind !== "capture" || previous.source.storage !== capture.storage ||
+          !rustTargetTypeRefEquals(previous.logicalCarrier, capture.carrier) ||
+          !rustTargetTypeRefEquals(previous.physicalCarrier, physicalCarrier))
+          diagnostics.push(emissionDiagnostic(capture.reference,
+            "One native capture payload requires its exact correlated source declaration, read carrier and storage mode."));
+        continue;
+      }
+      nativeBindingRequests.push(Object.freeze({ use: request.use, declaration: capture.declaration,
+        logicalCarrier: capture.carrier, physicalCarrier, sourceBindings: request.bindings,
+        source: Object.freeze({ kind: "capture", reference: capture.reference, storage: capture.storage,
+          initialization: input.records.bindingStorage.get(capture.declaration)?.initialization ?? "ready" }) }));
+    }
+    if (request.role === "frame") {
+      const frame = input.frames.definitionForOwner(request.declaration);
+      if (frame === undefined || request.use.subject !== frame) diagnostics.push(emissionDiagnostic(request.declaration,
+        "Native frame binding publication requires its exact original complete frame owner."));
+      else for (const binding of frame.bindings) {
+        let physicalCarrier: TargetTypeRef;
+        if (binding.entry !== undefined) physicalCarrier = apply(binding.carrier);
+        else {
+          const selected = input.records.sourceParameterAbi.get(binding.declaration) === undefined
+            ? input.nativeStorage.valueFor(binding.declaration) : input.nativeStorage.parameterFor(binding.declaration);
+          if (selected.kind === "unresolved") { diagnostics.push(emissionDiagnostic(binding.declaration, selected.reason)); continue; }
+          physicalCarrier = apply(selected.carrier);
+        }
+        nativeBindingRequests.push(Object.freeze({ use: request.use, declaration: binding.declaration,
+          logicalCarrier: binding.carrier, physicalCarrier, sourceBindings: request.bindings,
+          source: Object.freeze({ kind: "binding" }) }));
+      }
+    }
+    if (request.source.kind === "construction")
+      for (const field of request.source.layer === undefined ? request.source.plan.fields : request.source.layer.fields) {
+        if (field.externallyInitialized) continue;
+        const selected = input.prepareStorageField({ use: request.use, node: field.declaration, field,
+          construction: request.source.plan, layer: request.source.layer,
+          sourceBindings: request.bindings, nativeOwnerFileName: request.nativeOwnerFileName });
+        if (selected.kind === "rejected") diagnostics.push(...selected.diagnostics);
+        else {
+          apply(selected.value.physicalCarrier);
+          nativeBindingRequests.push(selected.value);
+        }
+      }
     contextCarriers.push(...carriers);
     Object.freeze(contextCarriers);
     Object.freeze(contextOrigins);
     Object.freeze(contextAdapters);
+    Object.freeze(nativeBindingRequests);
     Object.freeze(nativeOperations);
     Object.freeze(context);
     contexts.push(context);
@@ -760,4 +603,10 @@ function sameAdapterOrigin(left: RustCallablePhysicalAdapter["origin"], right: R
     case "return": return right.kind === "return" && left.declaration === right.declaration;
     case "field": return right.kind === "field" && left.selection === right.selection;
   }
+}
+
+function samePreparedAdapterSource(left: RustCallablePhysicalAdapterPreparation["source"],
+  right: RustCallablePhysicalAdapterPreparation["source"]): boolean {
+  return left.kind === "field" ? right.kind === "field" && left.preparation === right.preparation
+    : right.kind === "selected" && left.input === right.input && rustTargetTypeRefEquals(left.carrier, right.carrier);
 }

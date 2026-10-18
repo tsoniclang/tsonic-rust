@@ -3,7 +3,7 @@ import type { RustGenerics, RustItem, RustType } from "../../../target-ast/synta
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 
 export function planRustFrameCallableFamilyItems(
-  types: RustFrameCallableTypes, independentType: RustType, generics: RustGenerics,
+  types: Pick<RustFrameCallableTypes, "frameType" | "entryType">, independentType: RustType, generics: RustGenerics,
 ): readonly RustItem[] {
   return [{ kind: "impl", generics, trait: { kind: "named", path: "rt::FrameCallableFamilyEntry",
     genericArguments: [{ kind: "type", type: types.frameType }] }, target: types.entryType, members: [
