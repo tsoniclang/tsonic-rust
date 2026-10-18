@@ -2,6 +2,8 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { Node_Initializer, Node_Type, sourceClassFieldIsTypeOnly, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import type { TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
 import { admitRustNativeValueDeclaration, admitRustNativeInterfaceFields,
   publishRustNativeInterfaceDeclaration, type RustPreparedNativeInterfaceDeclaration,
@@ -9,7 +11,19 @@ import { admitRustNativeValueDeclaration, admitRustNativeInterfaceFields,
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustGeneratedTypeParameterNames } from "../../target-model/names/type-parameters.js";
-import { selectRustNativeTypeCarrier } from "../../policy/types/model/native-type-selection.js";
+import { rustNativeCallableAbi, selectRustNativeCallableTypeCarrier, selectRustNativeTypeCarrier,
+  type RustLogicalNativeCallableAbi } from "../../policy/types/model/native-type-selection.js";
+import { selectRustNativeBindingStorage } from "../../policy/ownership/binding-storage.js";
+import type { RustNativeBindingStorage, RustNativeStorageBinding } from "../../target-model/records/physical-emission-contexts.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
+import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
+import type { RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustEmissionIdentityBindings } from "../callables/emission-contexts.js";
 import { isRustCopyCarrier, selectRustCloneRequirements } from "../../target-model/types/index.js";
 import type { RustNativeClassDeclaration, RustNativeClassField,
   RustNativeObjectPhysicalDeclaration, RustNativeObjectPhysicalField } from "../../target-model/records/native-value-declarations.js";
@@ -37,12 +51,42 @@ interface RustNativeObjectDeclarationInput extends Omit<RustNativeValueDeclarati
 
 export interface RustPreparedNativeDeclarationForms {
   get(declaration: Node): RustPreparedNativeClassDeclaration | RustPreparedNativeInterfaceDeclaration | undefined;
+  prepareCallableField(input: {
+    readonly use: TargetUseSiteRef;
+    readonly node: Node;
+    readonly selection: RustProjectFieldSelection;
+    readonly conversion: RustCallableConversion;
+    readonly sourceBindings: RustTargetGenericBindings;
+    readonly nativeOwnerFileName: string;
+  }): TargetStageResult<RustPreparedNativeCallableField>;
   complete(input: RustNativeValueDeclarationInput & { readonly sourceFiles: readonly SourceFile[];
-    readonly genericRequirements: RustDeclarationGenericRequirementIndex }): AnalyzeRustNativeDeclarationFormsResult;
+    readonly genericRequirements: RustDeclarationGenericRequirementIndex;
+    readonly nativeFrameBindingFor: (input: {
+      readonly declaration: Node; readonly sourceBindings: RustTargetGenericBindings;
+      readonly nativeOwnerFileName: string;
+    }) => RustNativeBindingStorage | undefined }):
+    | Extract<AnalyzeRustNativeDeclarationFormsResult, { readonly kind: "rejected" }>
+    | { readonly kind: "resolved"; readonly forms: RustNativeDeclarationForms;
+        readonly fieldBindings: readonly RustNativeCallableFieldBinding[] };
+}
+
+export interface RustPreparedNativeCallableField {
+  readonly declaration: Node;
+  readonly storageIndex: number;
+  readonly targetName: string;
+  readonly logicalCarrier: TargetTypeRef;
+  readonly logicalPayloadCarrier: TargetTypeRef;
+  readonly sourceBindings: RustTargetGenericBindings;
+  readonly signature: RustCallablePhysicalSignature;
+}
+
+export interface RustNativeCallableFieldBinding extends RustNativeStorageBinding {
+  readonly preparation: RustPreparedNativeCallableField;
+  readonly callablePayloadCarrier: TargetTypeRef;
 }
 
 type RustPreparedNativeClassDeclaration = Omit<RustNativeClassDeclaration, "fields"> & {
-  readonly fields: readonly Omit<RustNativeClassField, "nativeCarrier">[];
+  readonly fields: readonly Omit<RustNativeClassField, "nativeCarrier" | "nativePayloadCarrier" | "nativeStorage">[];
 };
 
 export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclarationInput):
@@ -84,7 +128,7 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
         diagnostics.push(objectIssue(declaration, "Class declaration requires its exact native name and physical field layout."));
         continue;
       }
-      const fields: Omit<RustNativeClassField, "nativeCarrier">[] = [];
+      const fields: Omit<RustNativeClassField, "nativeCarrier" | "nativePayloadCarrier" | "nativeStorage">[] = [];
       const frame = input.frames.definitionForOwner(declaration);
       const frameCounterName = frame === undefined ? undefined : rustRetainedFrameCounterName(frame,
         { callableValues: { frames: input.frames }, projectTypes, projectConstructions: input.projectConstructions });
@@ -163,7 +207,53 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
   }
   const get = (declaration: Node) => forms.get(declaration);
   let completed = false;
-  return { kind: "resolved", forms: Object.freeze({ get, complete(finalInput: Parameters<RustPreparedNativeDeclarationForms["complete"]>[0]): AnalyzeRustNativeDeclarationFormsResult {
+  const callableFields: {
+    readonly request: Parameters<RustPreparedNativeDeclarationForms["prepareCallableField"]>[0];
+    readonly field: RustPreparedNativeClassDeclaration["fields"][number] | RustPreparedNativeInterfaceDeclaration["fields"][number];
+    readonly owner: RustNativeClassDeclaration["definition"];
+    readonly abi: Extract<RustLogicalNativeCallableAbi, { readonly kind: "stored" }>;
+    readonly preparation: RustPreparedNativeCallableField;
+  }[] = [];
+  const prepareCallableField: RustPreparedNativeDeclarationForms["prepareCallableField"] = request => {
+    if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native field preparation must precede the single native declaration completion.", request.node);
+    const reject = (message: string): TargetStageResult<RustPreparedNativeCallableField> => rejectedTargetStage([{
+      code: "RUST_NATIVE_CALLABLE_FIELD_ABI_NOT_PREPARED", category: "error", source: "tsonic-rust", sourceNode: request.node, message,
+    }]);
+    const selection = request.selection;
+    const declaration = selection.declaration;
+    const definition = declaration === undefined ? undefined : projectTypes.definitionContainingDeclaration(declaration);
+    const prepared = definition === undefined ? undefined : forms.get(definition.declaration);
+    const field = prepared?.fields.find(field => field.declaration === declaration && field.storageIndex === selection.storageIndex);
+    const relationship = definition === undefined ? undefined : projectTypes.relationship(selection.receiverCarrier, definition);
+    if (declaration === undefined || definition === undefined || prepared === undefined || field === undefined ||
+      selection.storage !== "project-object" || selection.valueSemantics.kind !== "stored" || relationship?.kind !== "related")
+      return reject("A callable field requires its original selected declared storage slot and defining receiver correspondence.");
+    const carrier = projectTypes.instantiateMemberCarrier(declaration, selection.receiverCarrier, field.carrier);
+    const apply = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(carrier,
+      request.sourceBindings.types, request.sourceBindings.lifetimes, request.sourceBindings.consts);
+    if (carrier === undefined || !rustTargetTypeRefEquals(apply(carrier), apply(selection.resultCarrier)))
+      return reject("A callable field requires the declared slot's exact source-bound carrier, not an adapter target or initializer ABI.");
+    const logicalCarrier = apply(carrier);
+    const source = apply(request.conversion.source);
+    const visited = new Set<TargetTypeRef>();
+    let payload = logicalCarrier;
+    while (!rustTargetTypeRefEquals(payload, source)) {
+      if (visited.has(payload)) return reject("A callable field payload requires finite original optional storage correspondence.");
+      visited.add(payload);
+      const element = rustOptionElementCarrier(payload);
+      if (element === undefined) return reject("The original callable field conversion does not consume its selected declared payload.");
+      payload = element;
+    }
+    const abi = rustNativeCallableAbi({ kind: "logical", carrier: payload });
+    if (abi?.kind !== "stored") return reject("A stored callable field requires its canonical declared storage ABI, not an invocation-input protocol.");
+    const preparation: RustPreparedNativeCallableField = Object.freeze({ declaration, storageIndex: field.storageIndex,
+      targetName: field.targetName, logicalCarrier, logicalPayloadCarrier: payload, sourceBindings: request.sourceBindings,
+      signature: Object.freeze({ parameters: abi.parameters, result: abi.result, error: abi.error }) });
+    callableFields.push(Object.freeze({ request, field, owner: definition, abi, preparation }));
+    return resolvedTargetStage(preparation);
+  };
+  return { kind: "resolved", forms: Object.freeze({ get, prepareCallableField,
+    complete(finalInput: Parameters<RustPreparedNativeDeclarationForms["complete"]>[0]): ReturnType<RustPreparedNativeDeclarationForms["complete"]> {
     if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native declaration forms may be completed only once.");
     completed = true;
     const published = new WeakMap<Node, RustNativeDeclarationForm>();
@@ -178,17 +268,79 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
         continue;
       }
       const nativeInput = finalInput.nativeTypeInputFor(prepared.definition.fileName, undefined);
+      const frame = input.frames.definitionForOwner(prepared.definition.declaration);
+      const references = rustTargetGenericReferences({ kind: "tuple", elements: [
+        projectTypes.openCarrier(prepared.definition), ...frame?.environmentParameters ?? [],
+      ] });
+      const declarationBindings = rustEmissionIdentityBindings([
+        ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
+        ...references.typeParameters.map(type => ({ kind: "type" as const, type })),
+        ...references.constParameters.map(value => ({ kind: "const" as const, value })),
+      ]);
+      if (declarationBindings === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A native declaration template requires its complete original generic environment.", declaration);
       const fields: RustNativeClassField[] = [];
       for (const field of prepared.fields) {
+        if (field.storage.kind === "frame") {
+          const nativeStorage = finalInput.nativeFrameBindingFor({ declaration: field.storage.declaration,
+            sourceBindings: declarationBindings, nativeOwnerFileName: prepared.definition.fileName });
+          if (nativeStorage === undefined) diagnostics.push({ code: "RUST_CLASS_FIELD_TYPE_NOT_REPRESENTABLE", category: "error",
+            source: "tsonic-rust", sourceNode: field.declaration,
+            message: "A native frame field requires its original completed slot, payload and retained owner." });
+          else fields.push(Object.freeze({ ...field, nativePayloadCarrier: nativeStorage.payloadCarrier,
+            nativeCarrier: nativeStorage.slotCarrier, nativeStorage }));
+          continue;
+        }
         const native = selectRustNativeTypeCarrier(field.carrier, nativeInput, "general");
         if (native.kind === "rejected") diagnostics.push({ code: "RUST_CLASS_FIELD_TYPE_NOT_REPRESENTABLE", category: "error",
           source: "tsonic-rust", sourceNode: field.declaration, message: native.reason });
-        else fields.push(Object.freeze({ ...field, nativeCarrier: native.carrier }));
+        else {
+          const nativeStorage = field.storage.kind === "capture"
+            ? field.storage.selection.kind === "copy"
+              ? selectRustNativeBindingStorage({ kind: "captured-field", storage: "copy",
+                  initialization: "ready", payloadCarrier: native.carrier })
+              : selectRustNativeBindingStorage({ kind: "captured-field", storage: field.storage.selection.kind,
+                  initialization: field.storage.selection.initialization, payloadCarrier: native.carrier })
+            : selectRustNativeBindingStorage({ kind: "binding", storage: "value", initialization: "ready",
+                payloadCarrier: native.carrier, nativeAllocation: null });
+          fields.push(Object.freeze({ ...field, nativePayloadCarrier: native.carrier,
+            nativeCarrier: nativeStorage.holderCarrier, nativeStorage }));
+        }
       }
       published.set(declaration, Object.freeze({ ...prepared, fields: Object.freeze(fields) }));
     }
-    return diagnostics.length === 0 ? analyzeRustNativeDeclarationForms(finalInput, published)
-      : { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+    const fieldBindings: RustNativeCallableFieldBinding[] = [];
+    for (const selected of callableFields) {
+      const native = selectRustNativeCallableTypeCarrier(selected.preparation.logicalCarrier,
+        selected.preparation.logicalPayloadCarrier, selected.abi,
+        finalInput.nativeTypeInputFor(selected.request.nativeOwnerFileName, undefined), "general");
+      if (native.kind === "rejected") { diagnostics.push(objectIssue(selected.request.node, native.reason)); continue; }
+      const field = selected.field;
+      const capture = "storage" in field && field.storage.kind === "capture" ? field.storage.selection : undefined;
+      const frame = "storage" in field && field.storage.kind === "frame"
+        ? finalInput.nativeFrameBindingFor({ declaration: field.storage.declaration,
+            sourceBindings: selected.preparation.sourceBindings, nativeOwnerFileName: selected.request.nativeOwnerFileName }) : undefined;
+      if ("storage" in field && field.storage.kind === "frame" && frame === undefined) {
+        diagnostics.push(objectIssue(selected.request.node, "A callable frame field requires its original complete contextual native slot and owner."));
+        continue;
+      }
+      const storage = frame ?? (capture?.kind === "copy" ? selectRustNativeBindingStorage({ kind: "captured-field",
+        storage: "copy", initialization: "ready", payloadCarrier: native.carrier })
+        : capture !== undefined ? selectRustNativeBindingStorage({ kind: "captured-field", storage: capture.kind,
+          initialization: capture.initialization, payloadCarrier: native.carrier })
+          : selectRustNativeBindingStorage({ kind: "binding", storage: "value", initialization: "ready",
+            payloadCarrier: native.carrier, nativeAllocation: null }));
+      fieldBindings.push(Object.freeze({ declaration: selected.preparation.declaration,
+        logicalCarrier: selected.preparation.logicalCarrier, sourceBindings: selected.preparation.sourceBindings,
+        contextUse: selected.request.use, preparation: selected.preparation,
+        callablePayloadCarrier: native.payloadCarrier, storage,
+        owner: Object.freeze({ kind: "field", declaration: selected.preparation.declaration,
+          definingOwner: selected.owner.declaration, storageIndex: selected.preparation.storageIndex,
+          targetName: selected.preparation.targetName }) }));
+    }
+    if (diagnostics.length !== 0) return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+    const result = analyzeRustNativeDeclarationForms(finalInput, published);
+    return result.kind === "rejected" ? result : { ...result, fieldBindings: Object.freeze(fieldBindings) };
   } }) };
 
   function marker(definition: RustNativeClassDeclaration["definition"]): RustNativeObjectPhysicalField {

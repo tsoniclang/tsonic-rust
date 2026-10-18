@@ -12,6 +12,7 @@ import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
 import type { RustSourceErrorRegionSelection } from "./error-regions.js";
 import type { RustCallablePhysicalAdapter } from "./callable-adapters.js";
 import type { RustGenericCallableInvocationFact } from "./generic-callable-effects.js";
+import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 
 export type RustPhysicalCallableSourceActivations =
   | { readonly kind: "resolved"; readonly rows: readonly {
@@ -90,7 +91,25 @@ export interface RustNativeBindingStorage {
   readonly slotConstructor: string | null;
   readonly deferredConstructor: string | null;
   readonly ownerConstructor: string | null;
+  readonly nativeAllocation: RustNativeMemoryLayout | null;
   readonly requirements: readonly ("copy" | "clone" | "static")[];
+}
+
+export interface RustNativeStorageBindingRequest {
+  readonly declaration: Node;
+  readonly logicalCarrier: TargetTypeRef;
+  readonly sourceBindings: RustTargetGenericBindings;
+}
+
+export interface RustNativeStorageBinding extends RustNativeStorageBindingRequest {
+  readonly contextUse: TargetUseSiteRef;
+  readonly storage: RustNativeBindingStorage;
+  readonly owner:
+    | { readonly kind: "binding"; readonly declaration: Node }
+    | { readonly kind: "module"; readonly sourceFile: SourceFile }
+    | { readonly kind: "frame"; readonly declaration: Node; readonly fieldName: string }
+    | { readonly kind: "field"; readonly declaration: Node; readonly definingOwner: Node;
+        readonly storageIndex: number; readonly targetName: string };
 }
 
 export type RustPhysicalEmissionRole =

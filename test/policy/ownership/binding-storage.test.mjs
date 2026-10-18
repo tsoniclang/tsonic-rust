@@ -21,7 +21,8 @@ test("one native storage policy preserves the exact payload and every existing i
     ["borrow-cell", "core::cell::RefCell", "core::cell::RefCell::new", []],
     ["location", "rt::Location", "rt::Location::allocate", ["clone", "static"]],
   ]) {
-    const selected = selectRustNativeBindingStorage({ kind: "binding", storage, initialization: "ready", payloadCarrier: payload });
+    const selected = selectRustNativeBindingStorage({ kind: "binding", storage, initialization: "ready", payloadCarrier: payload,
+      nativeAllocation: null });
     assert.equal(selected.payloadCarrier === payload, true, "no logical substitute or clone is the native payload");
     assert.equal(selected.valueConstructor, constructor, storage);
     assert.deepEqual(selected.requirements, requirements, storage);
@@ -30,6 +31,20 @@ test("one native storage policy preserves the exact payload and every existing i
       true, storage);
     assert.equal(Object.isFrozen(selected), true, "the published choice is immutable data");
     assert.equal(Object.isFrozen(selected.requirements), true, "native requirements cannot change after publication");
+  }
+});
+
+test("native-backed locations retain the selected layout and the real allocation requirements", () => {
+  const layout = Object.freeze({ kind: "scalar", pointeeCarrier: payload, size: 8, alignment: 8,
+    width: 64, littleEndian: true, fields: Object.freeze([]) });
+  for (const initialization of ["ready", "deferred"]) {
+    const selected = selectRustNativeBindingStorage({ kind: "binding", storage: "location", initialization,
+      payloadCarrier: payload, nativeAllocation: layout });
+    assert.equal(selected.nativeAllocation === layout, true, "the actual native layout is retained without reconstruction");
+    assert.equal(selected.valueConstructor, "rt::raw_memory::allocate_native_location", "the allocation is not an invented Clone-requiring constructor");
+    assert.deepEqual(selected.requirements, initialization === "ready" ? ["static"] : ["clone", "static"],
+      "deferred runtime initialization retains its actual additional constructor constraint");
+    assert.equal(selected.deferredConstructor, initialization === "ready" ? null : "rt::Location::uninitialized");
   }
 });
 

@@ -48,7 +48,10 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(parameter !== undefined, true, "the constructor owns the original parameter property");
     const name = program.source.ast.name(parameter);
     assert.equal(program.physicalEmissionContexts.operands.some(operand =>
-      operand.node === name && operand.use.role === "parameter-property"), true,
+      operand.node === name && operand.origin.kind === "operand" &&
+      operand.origin.evaluation.kind === "ordinary" &&
+      operand.origin.evaluation.site.role === "parameter-property" &&
+      operand.origin.evaluation.site.subject === parameter), true,
     "the implicit field initialization is an actual input use, not a fabricated expression");
     assert.equal(program.ownership.reads.has(name), true, "the original input read has complete physical ownership evidence");
   });

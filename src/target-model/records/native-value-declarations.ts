@@ -7,6 +7,7 @@ import type { RustSourceUnionPayloadTemplate } from "../types/source-union-defin
 import type { RustSourceObjectPhysicalDefinition, RustSourceObjectPhysicalField } from "../types/source-union-definitions.js";
 import type { RustCapturedFieldStorage } from "../types/field-storage.js";
 import type { RustConditionalSourceTypeFamily } from "../types/type-families.js";
+import type { RustNativeBindingStorage } from "./physical-emission-contexts.js";
 
 export interface RustNativeEnumDeclaration {
   readonly kind: "enum";
@@ -25,7 +26,9 @@ export interface RustNativeInterfaceField {
   readonly targetName: string;
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
+  readonly nativePayloadCarrier: TargetTypeRef;
   readonly nativeCarrier: TargetTypeRef;
+  readonly nativeStorage: RustNativeBindingStorage;
 }
 
 export interface RustNativeInterfaceDeclaration {

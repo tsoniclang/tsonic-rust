@@ -37,7 +37,7 @@ import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } fro
 import { rustDefaultImplementation } from "../default-implementation.js";
 
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeFromCarrierInContext, rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
 import { structAttributes } from "../struct-attributes.js";
 import type {
   RustType,
@@ -60,8 +60,6 @@ import { rustProjectTypeParameterContext } from "../../names/type-parameters.js"
 import { rustProjectCloneImplementation, rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
-import { rustCapturedFieldType } from "../../objects/captured-fields.js";
-import { rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { rustClassFrameLayout } from "../../objects/frame-storage.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
 
@@ -169,10 +167,8 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   }
   const fields: PlannedProjectObjectField[] = [];
   for (const selected of admitted.fields) {
-    const type = rustTypeFromCarrierInContext(selected.carrier, context);
-    const storageType = type === undefined ? undefined : selected.storage.kind === "frame"
-      ? rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(selected.storage.declaration)!, context)
-      : selected.storage.kind === "capture" ? rustCapturedFieldType(selected.storage.selection, type) : type;
+    const type = rustTypeFromSelectedNativeCarrierInContext(selected.nativePayloadCarrier, context);
+    const storageType = rustTypeFromSelectedNativeCarrierInContext(selected.nativeCarrier, context);
     if (type === undefined || storageType === undefined) return failRustPlannerInvariant(
       "An admitted class field requires its exact renderable physical storage.", selected.declaration);
     fields.push({ ...selected, type, storageType,
@@ -268,12 +264,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
   const implementationGenerics = rustProjectGenerics(definition, implementationContext);
   const implementationFields = fields.map(field => {
-    const type = rustTypeFromCarrierInContext(field.carrier, implementationContext);
     const selected = admitted.fields.find(candidate => candidate.declaration === field.declaration)!;
-    return { ...field, type, storageType: type === undefined ? undefined
-      : selected.storage.kind === "frame"
-        ? rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(selected.storage.declaration)!, implementationContext)
-        : selected.storage.kind === "capture" ? rustCapturedFieldType(selected.storage.selection, type) : type };
+    const type = rustTypeFromSelectedNativeCarrierInContext(selected.nativePayloadCarrier, implementationContext);
+    return { ...field, type, storageType: rustTypeFromSelectedNativeCarrierInContext(selected.nativeCarrier, implementationContext) };
   });
   if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) return undefined;
   const constructorFn = planConstructor(

@@ -18,6 +18,7 @@ import { selectRustNativeTypeCarrier } from "../../policy/types/model/native-typ
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { selectRustNativeBindingStorage } from "../../policy/ownership/binding-storage.js";
 import {
   isRustIntegerCarrier,
   isRustStringCarrier,
@@ -46,7 +47,7 @@ export type RustNativeDeclarationAdmission =
 
 export type RustPreparedNativeInterfaceDeclaration = Omit<RustNativeInterfaceDeclaration,
   "nativeCarrier" | "nativeStateCarrier" | "fields" | "index"> & {
-    readonly fields: readonly Omit<RustNativeInterfaceField, "nativeCarrier">[];
+    readonly fields: readonly Omit<RustNativeInterfaceField, "nativeCarrier" | "nativePayloadCarrier" | "nativeStorage">[];
     readonly index?: Omit<NonNullable<RustNativeInterfaceDeclaration["index"]>, "nativeKeyCarrier" | "nativeValueCarrier">;
   };
 
@@ -129,7 +130,7 @@ export function admitRustNativeInterfaceFields(
   if (!isDenseDataArray(members) || members.some(member => member === undefined)) {
     return reject(declaration, "RUST_SOURCE_AST_INCOMPLETE", "Interface declaration contains an undefined member slot.");
   }
-  const fields: Omit<RustNativeInterfaceField, "nativeCarrier">[] = [];
+  const fields: Omit<RustNativeInterfaceField, "nativeCarrier" | "nativePayloadCarrier" | "nativeStorage">[] = [];
   let index: RustPreparedNativeInterfaceDeclaration["index"];
   for (const member of members as readonly Node[]) {
     const targetName = projectTypes.fieldStorageName(definition, member);
@@ -176,7 +177,10 @@ export function publishRustNativeInterfaceDeclaration(
   for (const field of prepared.fields) {
     const native = selectRustNativeTypeCarrier(field.carrier, nativeTypes, "general");
     if (native.kind === "rejected") return reject(field.declaration, "RUST_INTERFACE_FIELD_TYPE_NOT_REPRESENTABLE", native.reason);
-    fields.push(Object.freeze({ ...field, nativeCarrier: native.carrier }));
+    const nativeStorage = selectRustNativeBindingStorage({ kind: "binding", storage: "value",
+      initialization: "ready", payloadCarrier: native.carrier, nativeAllocation: null });
+    fields.push(Object.freeze({ ...field, nativePayloadCarrier: native.carrier,
+      nativeCarrier: nativeStorage.slotCarrier, nativeStorage }));
   }
   let index: RustNativeInterfaceDeclaration["index"];
   if (preparedIndex !== undefined) {

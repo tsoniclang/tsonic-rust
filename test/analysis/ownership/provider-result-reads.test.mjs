@@ -84,12 +84,16 @@ test("provider field and index ownership uses the native raw carrier before conv
     assert.equal(selected.read.kind, "borrow", `${form}: the conversion borrows the raw place`);
     assert.equal(selected.carrier === input.abi.result.rawCarrier, true, `${form}: publication retains exact native carrier identity`);
     const diagnostics = [];
-    const context = { input: { program: { ownership: input.selected.ownership } }, diagnostics };
+    assert.equal(input.abi.targetGenericArguments.length, 0, "this direct renderer witness has no native generic arguments to select");
+    const targetGenericArguments = new Map([[input.abi, Object.freeze([])]]);
+    const context = { input: { program: { ownership: input.selected.ownership } }, diagnostics,
+      emissionContext: { targetGenericArguments } };
     const place = planRustFinalizedOperationForm(context, input.abi, { kind: "path", path: "holder" },
       form === "index" ? [{ kind: "integer", value: 0n }] : [], input.node, { resultUse: "value", assignment: false });
     assert.equal(place.kind, form, `${form}: rendering consumes the admitted native read without cloning`);
     assert.equal(diagnostics.length, 0, `${form}: the backend performs no source rejection`);
     const forged = Object.freeze({ ...input.abi });
+    targetGenericArguments.set(forged, Object.freeze([]));
     assert.throws(() => planRustFinalizedOperationForm(context, forged, { kind: "path", path: "holder" },
       form === "index" ? [{ kind: "integer", value: 0n }] : [], input.node, { resultUse: "value", assignment: false }),
     /Admitted provider storage read requires its exact raw-result ownership/u, `${form}: equal-looking foreign ABI is not admitted`);
