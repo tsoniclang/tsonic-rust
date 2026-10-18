@@ -91,11 +91,12 @@ export interface RustCallableEmissionPreparation {
   readonly physicalOperands: readonly TargetTypeRef[];
 }
 
-export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysicalEmissionContext, "targetGenericArguments" | "error" | "callableAdapters" | "nativeBindings"> {
+export interface RustPhysicalEmissionContextPreparation extends Omit<RustPhysicalEmissionContext, "targetGenericArguments" | "error" | "callableAdapters" | "nativeBindings" | "nativeEnvironments"> {
   readonly error: RustEmissionErrorContext<RustNativeErrorSource<TargetTypeRef>>;
   readonly nativeOwnerFileName: string;
   readonly callableAdapters: readonly RustCallablePhysicalAdapterPreparation[];
   readonly nativeBindingRequests: readonly RustPreparedNativeStorageBindingRequest[];
+  readonly nativeCaptureInputs: readonly RustPreparedNativeCaptureInput[];
   readonly frameEntries: readonly { readonly entry: object;
     readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly error: TargetTypeRef }[];
   readonly nativeOperations: ReadonlyMap<RustFinalizedOperationAbi, {
@@ -360,7 +361,8 @@ export function prepareRustEmissionContextRequests(
       specialization: request.specialization, declaration: request.declaration,
       nativeOwnerFileName: request.nativeOwnerFileName, nativeOperations,
       bindings: request.bindings, returnDestination, error, operands: contextCarriers, sourceOrigins: contextOrigins,
-      callableAdapters: contextAdapters, nativeBindingRequests, frameEntries: Object.freeze(frameEntries) };
+      callableAdapters: contextAdapters, nativeBindingRequests, nativeCaptureInputs: request.nativeCaptureInputs,
+      frameEntries: Object.freeze(frameEntries) };
     for (const adapter of request.callableAdapterInputs) {
       const prepared = input.prepareCallableAdapter(adapter.node, adapter.selection, adapter.origin,
         adapter.sourceBindings, request.nativeOwnerFileName,
@@ -552,17 +554,16 @@ export function prepareRustEmissionContextRequests(
       for (const source of request.error.region.sources) apply(source.errorType);
       for (const carrier of request.error.region.jsRejection?.requiredCarriers ?? []) apply(carrier);
     }
-    for (const captureInput of request.nativeCaptureInputs) {
-      const capture = captureInput.slot.capture;
-      const declaration = captureInput.slot.kind === "receiver" ? captureInput.slot.capture.owner
-        : captureInput.slot.capture.declaration;
+    for (const captureInput of request.nativeCaptureInputs) for (const { slot, slotIndex } of captureInput.slots) {
+      const capture = slot.capture;
+      const declaration = slot.kind === "receiver" ? slot.capture.owner : slot.capture.declaration;
       const selected = input.nativeStorage.valueFor(capture.reference);
       if (selected.kind === "unresolved") { diagnostics.push(emissionDiagnostic(capture.reference, selected.reason)); continue; }
       const physicalCarrier = apply(selected.carrier);
       nativeBindingRequests.push(Object.freeze({ use: request.use, declaration,
         logicalCarrier: capture.carrier, physicalCarrier, sourceBindings: request.bindings,
-        source: Object.freeze({ kind: "capture", input: captureInput,
-          initialization: captureInput.slot.kind === "binding"
+        source: Object.freeze({ kind: "capture", input: captureInput, slot, slotIndex,
+          initialization: slot.kind === "binding"
             ? input.records.bindingStorage.get(declaration)?.initialization ?? "ready" : "ready" }) }));
     }
     if (request.role === "frame") {

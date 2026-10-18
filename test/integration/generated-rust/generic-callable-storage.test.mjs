@@ -77,6 +77,31 @@ main();
   assert.doesNotMatch(generated, /fn call<[^}]*?-> Result/u);
 });
 
+test("observed empty generic activations keep original expression identity and native value storage", { timeout: 300_000 }, () => {
+  const generated = compileAndRun("static_quantified_identity", `
+type Identity = <Value>(value: Value) => Value;
+function make(): Identity { return <Value>(value: Value): Value => value; }
+function other(): Identity { return <Value>(value: Value): Value => value; }
+export function main(): void {
+  const first = make();
+  const alias = first;
+  const second = make();
+  const different = other();
+  let order: int32 = 0;
+  check((order = order * 10 + 1, first) === (order = order * 10 + 2, second));
+  check(order === 12 && first === alias && first === second && first !== different);
+  check(first<int32>(7) === 7 && alias<string>("native") === "native");
+  check(different<int32>(9) === 9);
+}
+main();
+`);
+  assert.match(generated, /fn call_generic_/u);
+  assert.match(generated, /impl Copy for GenericCallable/u);
+  assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
+  assert.doesNotMatch(generated, /GenericCallable[^\n]*::[^\n]*Rc::new/u);
+  assert.doesNotMatch(generated, /core::ptr::addr_eq/u);
+});
+
 test("quantified async callbacks retain one environment while pending work outlives the callable", { timeout: 300_000 }, () => {
   const generated = compileAndRun("suspended_quantified_values", `
 async function resolved<Value>(value: Value): Promise<Value> { return value; }

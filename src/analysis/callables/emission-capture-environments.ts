@@ -38,15 +38,15 @@ export type RustNativeCaptureSlot =
   | { readonly kind: "receiver"; readonly capture: RustClosureCaptureFact["receivers"][number] };
 
 export interface RustPreparedNativeCaptureInput {
-  readonly slot: RustNativeCaptureSlot;
-  readonly slotIndex: number;
   readonly environment: RustNativeCaptureEnvironment;
+  readonly slots: readonly { readonly slot: RustNativeCaptureSlot; readonly slotIndex: number }[];
 }
 
 export type RustPreparedNativeStorageBindingRequest = Omit<RustNativeStorageBindingRequest, "source"> & {
   readonly source:
     | Exclude<RustNativeStorageBindingRequest["source"], { readonly kind: "capture" }>
     | { readonly kind: "capture"; readonly input: RustPreparedNativeCaptureInput;
+        readonly slot: RustNativeCaptureSlot; readonly slotIndex: number;
         readonly initialization: "ready" | "deferred" };
 };
 
@@ -59,7 +59,8 @@ export function rustNativeCaptureInputs(
     ...capture.receiverFields.map(value => Object.freeze({ kind: "receiver-field" as const, capture: value })),
     ...capture.receivers.map(value => Object.freeze({ kind: "receiver" as const, capture: value })),
   ];
-  return Object.freeze(slots.map((slot, slotIndex) => Object.freeze({ slot, slotIndex, environment })));
+  return Object.freeze([Object.freeze({ environment,
+    slots: Object.freeze(slots.map((slot, slotIndex) => Object.freeze({ slot, slotIndex }))) })]);
 }
 
 export function rustNativeCaptureInputsForCreation(

@@ -36,7 +36,7 @@ test("native identity closes only observed comparisons over exact declaration pr
   assert.equal(same.left === same.right, true);
   assert.equal(same.pairs.length, 1);
   assert.equal(same.pairs[0].left.implementation === same.pairs[0].right.implementation, true);
-  assert.equal(same.pairs[0].kind, "declaration");
+  assert.equal(same.pairs[0].kind, "static");
   assert.equal(same.exhaustive, true);
   const stored = current.program.callableValues.genericIdentities.forDefinition(same.left);
   assert.equal(stored !== undefined && stored.pairs.length === 1, true);
@@ -51,6 +51,51 @@ test("native identity closes only observed comparisons over exact declaration pr
   }
   assert.equal(current.program.callableValues.genericIdentities.forComparison({}) === undefined, true,
     "foreign syntax has no identity proof");
+});
+
+test("proven empty generic environments retain static identity without changing activation body placement", () => {
+  const current = fixture(`
+    type Identity = <Value>(value: Value) => Value;
+    function make(): Identity { return <Value>(value: Value): Value => value; }
+    function other(): Identity { return <Value>(value: Value): Value => value; }
+    export function compare(): boolean {
+      const first = make();
+      const alias = first;
+      const second = make();
+      const different = other();
+      return first === alias && first === second && first !== different;
+    }
+  `);
+  assert.equal(current.program.callableValues.genericIdentities.issues.length, 0);
+  assert.equal(current.comparisons.length, 3);
+  const implementations = current.program.callableValues.generic.definitions.flatMap(definition => definition.implementations);
+  assert.equal(implementations.length, 2);
+  for (const implementation of implementations) {
+    assert.equal(implementation.creation, "activation", "the original local body remains emitted");
+    assert.equal(implementation.identity, "static", "the original expression owns proven-empty identity");
+    assert.equal(implementation.storage, "value", "observing identity introduces no Rc environment");
+    assert.equal(implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length, 0);
+  }
+  assert.equal(current.comparisons.every(({ selected }) => selected.pairs.every(pair => pair.kind === "static")), true);
+  assert.equal(current.comparisons[0].selected.pairs.length, 1);
+  assert.equal(current.comparisons[1].selected.pairs.length, 1);
+  assert.equal(current.comparisons[2].selected.pairs.length, 0, "distinct original expressions have no shared identity pair");
+});
+
+test("identity admission rejects an implementation row missing its required identity", () => {
+  const current = fixture(declarations);
+  const selected = current.comparisons[0].selected;
+  const physical = current.program.callableValues.generic.physical;
+  const original = selected.left.members[0].implementation;
+  const { identity: _identity, ...withoutIdentity } = original;
+  const malformed = { ...selected.left, members: selected.left.members.map(member => ({ ...member,
+    implementation: withoutIdentity })) };
+  const incomplete = { ...physical,
+    definitionFor: carrier => physical.definitionFor(carrier) === selected.left ? malformed : physical.definitionFor(carrier),
+    environmentFor: implementation => physical.environmentFor(implementation === withoutIdentity ? original : implementation),
+  };
+  assert.equal(selectRustGenericCallableIdentity(selected.leftCarrier, selected.rightCarrier, incomplete) === undefined, true,
+    "body placement cannot substitute for missing identity evidence");
 });
 
 test("native identity rejects invented producer identity and hidden physical arguments", () => {

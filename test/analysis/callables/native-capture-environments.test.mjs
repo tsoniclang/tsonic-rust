@@ -22,17 +22,39 @@ test("capture inventories retain all original slot kinds and emitted field order
     parameterCarriers: [], inputLifetimeParameters: [] };
   const environment = Object.freeze({ kind: "native", producer, capture, creation: Object.freeze({ kind: "definition" }) });
   const rows = rustNativeCaptureInputs(environment, capture);
-  assert.equal(rows.length, 3, "lexical binding, receiver field and whole receiver are all retained");
+  assert.equal(rows.length, 1, "the complete original environment is retained once");
+  const slots = rows[0].slots;
+  assert.equal(slots.length, 3, "lexical binding, receiver field and whole receiver are all retained");
   for (const [index, kind] of ["binding", "receiver-field", "receiver"].entries()) {
-    assert.equal(rows[index].slot.kind, kind, `${kind}: its original semantic slot is retained`);
-    assert.equal(rows[index].slotIndex, index, `${kind}: the actual combined field index is unchanged`);
-    assert.equal(rows[index].environment === environment, true, `${kind}: original producer/environment identity is retained`);
-    assert.equal(Object.isFrozen(rows[index]) && Object.isFrozen(rows[index].slot), true, `${kind}: preparation is immutable`);
+    assert.equal(slots[index].slot.kind, kind, `${kind}: its original semantic slot is retained`);
+    assert.equal(slots[index].slotIndex, index, `${kind}: the actual combined field index is unchanged`);
+    assert.equal(rows[0].environment === environment, true, `${kind}: original producer/environment identity is retained`);
+    assert.equal(Object.isFrozen(slots[index]) && Object.isFrozen(slots[index].slot), true, `${kind}: preparation is immutable`);
   }
-  assert.equal(rows[0].slot.capture === capture.captures[0], true, "original capture identity is not reconstructed");
-  assert.equal(rows[1].slot.capture === capture.receiverFields[0], true, "the full field receiver and reference vector survive");
-  assert.equal(rows[2].slot.capture === capture.receivers[0], true, "the full original receiver vector survives");
-  assert.equal(Object.isFrozen(rows), true, "the complete input vector is immutable");
+  assert.equal(slots[0].slot.capture === capture.captures[0], true, "original capture identity is not reconstructed");
+  assert.equal(slots[1].slot.capture === capture.receiverFields[0], true, "the full field receiver and reference vector survive");
+  assert.equal(slots[2].slot.capture === capture.receivers[0], true, "the full original receiver vector survives");
+  assert.equal(Object.isFrozen(rows) && Object.isFrozen(rows[0]) && Object.isFrozen(slots), true, "the complete input vector is immutable");
+});
+
+test("a real empty capture environment survives preparation without a fabricated slot", () => {
+  const capture = { captures: [], receiverFields: [], receivers: [] };
+  const implementation = { ...capture, declaration: {} };
+  const environment = { kind: "generic", definition: {}, implementation, member: undefined,
+    environment: { ...capture, parameters: [], arguments: [], inputs: [], substitutions: {
+      types: new Map(), lifetimes: new Map(), consts: new Map() } }, arguments: [] };
+  const rows = rustNativeCaptureInputs(environment, capture);
+  assert.equal(rows.length, 1, "empty slots do not erase the actual original environment owner");
+  assert.equal(rows[0].environment === environment, true, "the exact original generic environment survives");
+  assert.equal(rows[0].slots.length, 0, "no dummy binding, receiver or capture is invented");
+  assert.equal(Object.isFrozen(rows[0]) && Object.isFrozen(rows[0].slots), true);
+  const native = { kind: "native", producer: {}, capture, creation: { kind: "definition" } };
+  const nativeRows = rustNativeCaptureInputs(native, capture);
+  const use = targetUseSiteRef({}, "native-body", "empty-creation");
+  const created = rustNativeCaptureInputsForCreation(nativeRows, use);
+  assert.equal(created.length === 1 && created[0].slots.length === 0, true, "native zero-slot owners survive creation transport");
+  assert.equal(created[0].environment.creation.use === use, true, "the actual empty environment retains its creation site");
+  assert.equal(nativeRows[0].environment === native, true, "the original definition row is not mutated");
 });
 
 test("two environments capturing one declaration remain distinct original owners", () => {
@@ -43,9 +65,10 @@ test("two environments capturing one declaration remain distinct original owners
   const secondCapture = { ...capture, captures: [{ ...capture.captures[0], reference: {} }] };
   const second = rustNativeCaptureInputs({ kind: "native", producer: secondProducer, capture: secondCapture,
     creation: { kind: "definition" } }, secondCapture);
-  assert.equal(first.length + second.length, 6, "no declaration-only deduplication removes either complete environment");
-  assert.equal(first[0].slot.capture.declaration === second[0].slot.capture.declaration, true, "the source binding really is shared");
-  assert.equal(first[0].slot.capture.reference === second[0].slot.capture.reference, false, "each original capture reference remains distinct");
+  assert.equal(first.length + second.length, 2, "no declaration-only deduplication removes either complete environment");
+  assert.equal(first[0].slots.length + second[0].slots.length, 6, "both complete original slot vectors survive");
+  assert.equal(first[0].slots[0].slot.capture.declaration === second[0].slots[0].slot.capture.declaration, true, "the source binding really is shared");
+  assert.equal(first[0].slots[0].slot.capture.reference === second[0].slots[0].slot.capture.reference, false, "each original capture reference remains distinct");
   assert.equal(first[0].environment.producer === firstProducer, true, "first cleanup owner retains its producer");
   assert.equal(second[0].environment.producer === secondProducer, true, "second cleanup owner retains its producer");
 });
@@ -59,7 +82,7 @@ test("inferred native captures retain the original creation use, never a fabrica
   const first = rustNativeCaptureInputsForCreation(inputs, firstUse);
   const second = rustNativeCaptureInputsForCreation(inputs, secondUse);
   for (const [index, row] of first.entries()) {
-    assert.equal(row.slot === inputs[index].slot, true, "original binding/receiver slot provenance is unchanged");
+    assert.equal(row.slots === inputs[index].slots, true, "all original binding/receiver slot provenance is unchanged");
     assert.equal(row.environment.producer === producer, true, "the actual original callable producer is retained");
     assert.equal(row.environment.creation.kind, "expression", "an actual creation is distinct from its source body template");
     assert.equal(row.environment.creation.use === firstUse, true, "the precise enclosing physical creation use is retained");
@@ -82,7 +105,8 @@ test("frame entry alternatives retain their exact entry and implementation prove
     implementation: firstImplementation }, firstImplementation);
   const second = rustNativeCaptureInputs({ kind: "frame", definition, entry: secondEntry,
     implementation: secondImplementation }, secondImplementation);
-  assert.equal(first.length + second.length, 6, "every entry/implementation retains its full capture vector");
+  assert.equal(first.length + second.length, 2, "every entry/implementation retains its own complete environment");
+  assert.equal(first[0].slots.length + second[0].slots.length, 6, "every entry/implementation retains its full capture vector");
   assert.equal(first[0].environment.entry === firstEntry && second[0].environment.entry === secondEntry, true,
     "equal capture fields do not collapse distinct original frame entries");
   assert.equal(first[0].environment.implementation === firstImplementation && second[0].environment.implementation === secondImplementation, true,
@@ -99,7 +123,8 @@ test("generic member capture preparation keeps the complete original argument an
   const environment = { kind: "generic", definition: {}, implementation, member,
     environment: { ...capture, parameters: [], arguments: arguments_, inputs: [], substitutions: bindings }, arguments: arguments_ };
   const rows = rustNativeCaptureInputs(environment, capture);
-  assert.equal(rows.length, 3, "the generic environment contains all original capture sections");
+  assert.equal(rows.length, 1, "the original generic environment is retained once");
+  assert.equal(rows[0].slots.length, 3, "the generic environment contains all original capture sections");
   assert.equal(rows.every(row => row.environment.member === member), true, "the actual physical member is shared by its own slots");
   assert.equal(rows.every(row => row.environment.arguments === arguments_), true, "lifetimes, types and consts retain the complete argument vector");
   assert.equal(rows[0].environment.member.bindings === bindings, true, "bindings are not reconstructed from names or substituted concrete types");

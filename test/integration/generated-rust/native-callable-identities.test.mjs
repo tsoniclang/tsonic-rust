@@ -77,8 +77,11 @@ impl<'owner> tsonic_rust_runtime::CallableImplementation<()> for BorrowedError<'
 }
 #[test]
 fn native_identity_retains_typed_errors_and_existing_storage_cost() {
+    assert_eq!(std::mem::size_of::<OwnedError>(), 0);
     let original = NoCloneError;
     let first = native_callable_identity::index::make(OwnedError);
+    let fresh = native_callable_identity::index::make(OwnedError);
+    assert!(first != fresh);
     let borrowed = native_callable_identity::index::make(BorrowedError(&original));
     let actual: Result<i64, &NoCloneError> = borrowed.call(9007199254740993_i64);
     assert!(std::ptr::eq(actual.unwrap_err(), &original));
@@ -162,6 +165,52 @@ fn same_allocation_across_native_variants_keeps_identity() {
             assert!(left == alias);
             assert!(left != other);
             assert!(left == left.clone());
+        }
+    });
+    assert_eq!(cost, Cost::default());
+}
+`);
+  runCargo(directory, ["generate-lockfile", "--offline"]);
+  runCargo(directory, ["fmt"]);
+  runCargo(directory, ["fmt", "--check"]);
+  runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(directory, ["test", "--locked", "--offline", "--test", "identity"]);
+});
+
+test("capture-free generic identity preserves native Copy layout and zero allocation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [],
+    target: { id: "rust", options: { outputType: "lib", crateName: "native_static_generic_identity" } },
+    files: { "index.ts": `
+      type Identity = <Value>(value: Value) => Value;
+      export function make(): Identity { return <Value>(value: Value): Value => value; }
+      function other(): Identity { return <Value>(value: Value): Value => value; }
+      export function compare(): boolean {
+        const first = make();
+        const alias = first;
+        return first === alias && first === make() && first !== other();
+      }
+    ` },
+  });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
+  const generated = artifactText(result, "src/index.rs");
+  assert.match(generated, /fn call_generic_/u, "static identity does not remove the original local implementation body");
+  assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
+  const directory = writeGeneratedProject("native-static-generic-identity-cost", result.artifacts);
+  mkdirSync(join(directory, "tests"), { recursive: true });
+  writeFileSync(join(directory, "tests/identity.rs"), `${nativeOwnershipCostSupport}
+fn copied<Value: Copy>(value: Value) -> Value { value }
+#[test]
+fn static_generic_expression_identity_has_no_environment_allocation() {
+    let original = native_static_generic_identity::index::make();
+    let alias = copied(original);
+    assert_eq!(std::mem::size_of_val(&original), std::mem::size_of::<()>());
+    let (_, cost) = measure(|| {
+        for _ in 0..10000 {
+            let fresh = native_static_generic_identity::index::make();
+            assert!(original == alias && original == fresh);
+            assert!(native_static_generic_identity::index::compare());
+            assert_eq!(fresh.call(9007199254740993_i64), 9007199254740993_i64);
         }
     });
     assert_eq!(cost, Cost::default());
