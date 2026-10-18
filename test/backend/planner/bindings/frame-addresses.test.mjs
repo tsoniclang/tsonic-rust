@@ -50,7 +50,9 @@ for (const name of ["addressed-lexical-frame", "captured-class-field"]) {
     }
     const selected = createRustNativeFrameOwner(definition, values, counter, context);
     assert.equal(selected?.kind, "call", "the exact native holder constructor is emitted once");
-    assert.equal(selected.path, native.storage.ownerConstructor, "the canonical native policy owns the constructor");
+    assert.equal(selected.path, native.owner.constructor, "the canonical native policy owns the whole-frame constructor");
+    assert.equal(native.storage.holderCarrier === native.storage.slotCarrier, true,
+      "the captured slot cannot masquerade as its enclosing frame allocation");
     assert.equal(selected.args.length, 1, "the actual frame is its sole owner-constructor argument");
     const fields = selected.args[0].fields;
     assert.equal(fields.length, definition.bindings.length + (counter === undefined ? 0 : 1) +

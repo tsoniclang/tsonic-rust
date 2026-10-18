@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import type { RustNativeBindingStorage } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustNativeBindingStorage, RustNativeFrameStorageOwner } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustNativeMemoryLayout } from "../../target-model/operations/native-memory.js";
 import { rustNativeMemoryPaths } from "../../target-model/names/native-memory.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
@@ -11,8 +11,7 @@ export type RustNativeBindingStorageInput = {
   | { readonly kind: "binding"; readonly storage: "value" | "cell" | "borrow-cell" | "location";
       readonly initialization: "ready" | "deferred"; readonly nativeAllocation: RustNativeMemoryLayout | null }
   | { readonly kind: "frame"; readonly storage: "value" | "cell" | "borrow-cell" | "location";
-      readonly initialization: "ready" | "deferred"; readonly ownerCarrier: TargetTypeRef;
-      readonly ownerConstructor: string | null }
+      readonly initialization: "ready" | "deferred" }
   | { readonly kind: "captured-field"; readonly storage: "shared" | "cell" | "borrow-cell";
       readonly initialization: "ready" | "deferred" }
   | { readonly kind: "captured-field"; readonly storage: "copy"; readonly initialization: "ready" }
@@ -33,8 +32,7 @@ export function selectRustNativeBindingStorage(input: RustNativeBindingStorageIn
   const deferred = input.initialization === "deferred" && input.kind !== "module" &&
     (input.kind === "frame" || kind !== "location");
   const slotCarrier = deferred ? named("rust.core.cell.OnceCell", "core::cell::OnceCell", [valueCarrier]) : valueCarrier;
-  const holderCarrier = input.kind === "frame" ? input.ownerCarrier
-    : shared ? named("rust.alloc.rc.Rc", "alloc::rc::Rc", [slotCarrier]) : slotCarrier;
+  const holderCarrier = shared ? named("rust.alloc.rc.Rc", "alloc::rc::Rc", [slotCarrier]) : slotCarrier;
   const requirements: RustNativeBindingStorage["requirements"] = Object.freeze(kind === "location"
     ? nativeAllocation !== null && input.initialization === "ready" ? ["static"] : ["clone", "static"]
     : kind === "module-cell" ? ["clone", "static"] : kind === "cell" ? ["copy"] : []);
@@ -47,9 +45,17 @@ export function selectRustNativeBindingStorage(input: RustNativeBindingStorageIn
     deferredConstructor: deferred ? "core::cell::OnceCell::new"
       : input.initialization === "deferred" && kind === "location" ? "rt::Location::uninitialized"
       : kind === "module-cell" ? "rt::ModuleCell::new" : null,
-    ownerConstructor: input.kind === "frame" ? input.ownerConstructor : shared ? "alloc::rc::Rc::new" : null,
+    ownerConstructor: shared ? "alloc::rc::Rc::new" : null,
     nativeAllocation, requirements,
   });
+}
+
+export function selectRustNativeFrameStorageOwner(
+  frameCarrier: TargetTypeRef, storage: "standalone" | "object",
+): Pick<RustNativeFrameStorageOwner, "frameCarrier" | "holderCarrier" | "constructor"> {
+  return Object.freeze({ frameCarrier,
+    holderCarrier: storage === "standalone" ? named("rust.alloc.rc.Rc", "alloc::rc::Rc", [frameCarrier]) : frameCarrier,
+    constructor: storage === "standalone" ? "alloc::rc::Rc::new" : null });
 }
 
 function named(id: string, path: string, arguments_: readonly TargetTypeRef[]): TargetTypeRef {

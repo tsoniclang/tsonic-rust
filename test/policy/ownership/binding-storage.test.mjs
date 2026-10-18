@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustNativeBindingStorage } from "../../../dist/policy/ownership/binding-storage.js";
+import { selectRustNativeBindingStorage, selectRustNativeFrameStorageOwner } from "../../../dist/policy/ownership/binding-storage.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 
 const payload = rustNamedTargetType("native.actual.Guard", "native_alias::Guard",
@@ -68,20 +68,27 @@ test("captured fields retain the complete ready or deferred shared slot and cons
   assert.equal(copied.ownerConstructor, null, "no Rc allocation is added to an inline field");
 });
 
-test("frame slots preserve their actual supplied whole owner rather than substituting the binding payload", () => {
+test("frame slots retain a separate exact enclosing owner rather than substituting the binding payload", () => {
   const frame = rustNamedTargetType("generated.actual.Frame", "crate::actual::Frame", [], [], undefined, [], undefined, []);
-  const owner = rustNamedTargetType("rust.alloc.rc.Rc", "alloc::rc::Rc", [{ kind: "type", type: frame }],
-    [], undefined, [], undefined, []);
+  const owner = selectRustNativeFrameStorageOwner(frame, "standalone");
+  assert.equal(owner.frameCarrier === frame, true, "the original complete frame declaration is retained by identity");
+  assert.equal(typeArgument(owner.holderCarrier, "alloc::rc::Rc") === frame, true,
+    "the enclosing allocation owns the actual frame, never a slot/payload lookalike");
+  assert.equal(owner.constructor, "alloc::rc::Rc::new", "one canonical frame allocation policy");
   for (const storage of ["value", "cell", "borrow-cell", "location"]) {
     const selected = selectRustNativeBindingStorage({ kind: "frame", storage, initialization: "deferred",
-      payloadCarrier: payload, ownerCarrier: owner, ownerConstructor: "alloc::rc::Rc::new" });
-    assert.equal(selected.holderCarrier === owner, true, "the original complete frame owner is retained by identity");
-    assert.equal(selected.holderCarrier === selected.slotCarrier, false, "a frame field is never its own destruction owner");
+      payloadCarrier: payload });
+    assert.equal(owner.holderCarrier === selected.slotCarrier, false, "a frame field is never its own destruction owner");
+    assert.equal(selected.holderCarrier === selected.slotCarrier, true, "the slot descriptor has no competing enclosing allocation");
+    assert.equal(selected.ownerConstructor, null, "a frame field cannot accidentally construct Rc<Slot> as its whole frame");
     assert.equal(selected.deferredConstructor, "core::cell::OnceCell::new", "every deferred frame slot keeps its actual OnceCell");
     assert.equal(typeArgument(selected.slotCarrier, "core::cell::OnceCell") === selected.valueCarrier, true,
       "a deferred Location payload is still wrapped by the existing frame initialization protocol");
     assert.equal(selected.payloadCarrier === payload, true, "entry or payload selection is supplied before storage application");
   }
+  const object = selectRustNativeFrameStorageOwner(frame, "object");
+  assert.equal(object.holderCarrier === frame, true, "the actual object-backed owner is retained without another wrapper");
+  assert.equal(object.constructor, null, "an object frame does not allocate a separate standalone frame");
 });
 
 test("module holders keep their actual construction bounds and never become initializer-local storage", () => {

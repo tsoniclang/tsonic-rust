@@ -119,15 +119,24 @@ export interface RustNativeStorageBinding extends RustNativeStorageBindingReques
   readonly owner:
     | { readonly kind: "binding"; readonly declaration: Node }
     | { readonly kind: "module"; readonly sourceFile: SourceFile }
-    | { readonly kind: "frame"; readonly declaration: Node; readonly fieldName: string; readonly frameCarrier: TargetTypeRef }
+    | RustNativeFrameStorageOwner
     | { readonly kind: "field"; readonly declaration: Node; readonly definingOwner: Node;
         readonly storageIndex: number; readonly targetName: string };
+}
+
+export interface RustNativeFrameStorageOwner {
+  readonly kind: "frame";
+  readonly declaration: Node;
+  readonly fieldName: string;
+  readonly frameCarrier: TargetTypeRef;
+  readonly holderCarrier: TargetTypeRef;
+  readonly constructor: string | null;
 }
 
 export interface RustNativeFrameBindingStorageCompletion {
   readonly storage: RustNativeBindingStorage;
   readonly readCarrier: TargetTypeRef;
-  readonly frameCarrier: TargetTypeRef;
+  readonly owner: RustNativeFrameStorageOwner;
 }
 
 export type RustPhysicalEmissionRole =
