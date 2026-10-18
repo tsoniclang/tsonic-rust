@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../model.js";
 import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustTargetGenericReferences } from "./generic-references.js";
 import {
   isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol,
@@ -34,6 +34,24 @@ export function rustGenericCallableTargetType(
   const retainedEnvironment = rustTargetGenericReferences({ kind: "tuple", elements: environmentInputs })
     .typeParameters.filter(parameter => !invocation.has(parameter.identity));
   return rustGenericCallableCarrier({ origin, ...binding, retainedEnvironment });
+}
+
+export function rebindRustGenericCallableCarrier(
+  carrier: TargetTypeRef,
+  typeParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[],
+  parameters: readonly TargetTypeRef[],
+  result: TargetTypeRef,
+  environmentInputs: readonly TargetTypeRef[],
+): TargetTypeRef | undefined {
+  const generic = rustGenericCallableValue(carrier);
+  if (generic === undefined) return undefined;
+  const rebound = rustGenericCallableTargetType(typeParameters, parameters, result, generic.origin, environmentInputs);
+  const selected = rustGenericCallableValue(rebound);
+  if (selected === undefined) return undefined;
+  const retainedEnvironment = [...generic.retainedEnvironment];
+  for (const type of selected.retainedEnvironment)
+    if (!retainedEnvironment.some(retained => rustTargetTypeRefEquals(retained, type))) retainedEnvironment.push(type);
+  return rustGenericCallableCarrier({ ...selected, retainedEnvironment });
 }
 
 export function rustGenericCallableCarrier(value: RustGenericCallableValue): TargetTypeRef {

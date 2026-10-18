@@ -20,7 +20,7 @@ import {
   rustTypeGenericArguments,
 } from "../generic-arguments.js";
 import { rustPlaceholderLifetime, type RustLifetimeRef } from "../../lifetimes/index.js";
-import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
+import { rustGenericCallableProtocol, rebindRustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableProtocol, rustFrameCallableValue } from "./frame-callables.js";
 
 export function rustLocationTargetType(
@@ -132,8 +132,8 @@ export function rustStructuralMethodStorageCarrier(
   const generic = rustGenericCallableValue(callableCarrier);
   if (generic !== undefined) {
     const protocol = rustGenericCallableProtocol(callableCarrier);
-    const storage = protocol === undefined ? undefined : rustGenericCallableTargetType(
-      generic.signature.typeParameters, [receiverCarrier, ...protocol.parameters], protocol.result, generic.origin,
+    const storage = protocol === undefined || callableCarrier === undefined ? undefined : rebindRustGenericCallableCarrier(
+      callableCarrier, generic.signature.typeParameters, [receiverCarrier, ...protocol.parameters], protocol.result,
       [...generic.environment, ...generic.retainedEnvironment],
     );
     return storage === undefined ? undefined : presence === "optional" ? rustOptionTargetType(storage) : storage;

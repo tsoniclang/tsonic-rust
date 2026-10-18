@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rebindRustCallableCarrier } from "../../../dist/target-model/types/carriers/callable-rebinding.js";
-import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableTargetType, rustCallableProtocol, rustStructuralMethodStorageCarrier } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -76,6 +76,11 @@ test("generic signature finalization preserves already closed retained native bi
     { typeParameters: [parameter] }));
   assert.equal(unbound.retainedEnvironment.length === 1 &&
     unbound.retainedEnvironment[0].identity === captured.identity, true, "the original open binder is also retained exactly once");
+  const method = rustStructuralMethodStorageCarrier(int32, instantiated, "required");
+  const methodValue = rustGenericCallableValue(method);
+  assert.equal(methodValue !== undefined && methodValue.retainedEnvironment.length === 1 &&
+    rustTargetTypeRefEquals(methodValue.retainedEnvironment[0], int64), true,
+  "the structural receiver adapter uses the same canonical rebind without dropping a closed original binding");
 });
 
 test("an unchanged instantiated class-frame protocol retains its exact canonical environment binders", () => {
