@@ -79,7 +79,7 @@ export function carrierOf(context: RustPlanContext, node: Node | undefined) {
   return node === undefined ? undefined : context.input.program.records.runtimeCarrier.get(node)?.carrier;
 }
 
-export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+export function prepareRustClassStorageDeclaration(node: Node, context: RustPlanContext) {
   const { ast } = context.input.program.source;
   const admitted = context.input.program.nativeDeclarations.get(node);
   if (admitted?.kind !== "class") return failRustPlannerInvariant(
@@ -175,78 +175,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       visibility: rustProjectMemberStorageVisibility(ast, selected.declaration, publiclyReachable),
       ...(selected.initializer === undefined ? {} : { initializer: selected.initializer }) });
   }
-  const constructorMembers: Node[] = [];
-  const methods: Node[] = [];
-  const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
-  let failed = false;
-  for (const member of sourceObjectMemberDeclarations(ast, node)) {
-    if (member === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.class-member",
-        "Class declaration contains an undefined member slot.",
-      ));
-      failed = true;
-      continue;
-    }
-    const memberKind = ast.kindName(member);
-    if (sourceClassFieldIsTypeOnly(ast, member)) continue;
-    if (memberKind === KindClassStaticBlockDeclaration) {
-      continue;
-    }
-    if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
-      continue;
-    }
-    if (memberKind === "KindConstructor") {
-      constructorMembers.push(member);
-      continue;
-    }
-    if (memberKind === "KindMethodDeclaration") {
-      if (ast.body(member) === undefined) {
-        const implementation = context.input.program.sourceNavigation
-          .callableImplementation(member);
-        if (implementation.kind !== "resolved" ||
-          implementation.implementation.declaration === member) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, member),
-            "rust.backend.method-implementation",
-            implementation.kind === "unresolved"
-              ? implementation.reason
-              : "Method overload declaration has no distinct concrete implementation.",
-          ));
-          failed = true;
-        }
-        continue;
-      }
-      methods.push(member);
-      continue;
-    }
-    if (memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
-      accessors.push({
-        declaration: member,
-        role: memberKind === "KindGetAccessor" ? "read" : "write",
-      });
-      continue;
-    }
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member),
-      "rust.backend.class",
-      "This class member is not supported by the Rust target.",
-    ));
-    failed = true;
-  }
-  const constructorImplementations = constructorMembers.filter((member) =>
-    ast.body(member) !== undefined);
-  if (constructorImplementations.length > 1 ||
-    (constructorMembers.length > 0 && constructorImplementations.length !== 1)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.constructor-implementation",
-      "Class constructor signatures must resolve to one concrete implementation body.",
-    ));
-    failed = true;
-  }
-  const constructorMember = constructorImplementations[0];
   const methodProperties = projectOwnMethodProperties(
     definition,
     context.input.program.projectTypes.openCarrier(definition),
@@ -260,63 +188,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
-  const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
-  const implementationGenerics = rustProjectGenerics(definition, implementationContext);
-  const implementationFields = fields.map(field => {
-    const selected = admitted.fields.find(candidate => candidate.declaration === field.declaration)!;
-    const type = rustTypeFromSelectedNativeCarrierInContext(selected.nativePayloadCarrier, implementationContext);
-    return { ...field, type, storageType: rustTypeFromSelectedNativeCarrierInContext(selected.nativeCarrier, implementationContext) };
-  });
-  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) return undefined;
-  const constructorFn = planConstructor(
-    node,
-    constructorMember,
-    definition.targetPath,
-    implementationType,
-    definition.stateName,
-    rustProjectStateMarker(definition, implementationContext),
-    implementationFields as readonly PlannedProjectObjectField[],
-    methodProperties,
-    representation,
-    publiclyReachable,
-    implementationContext,
-  );
-  if (failed || constructorFn === undefined) {
-    return undefined;
-  }
-  const implFunctions: RustImplFunction[] = [constructorFn];
-  for (const method of methods) {
-    if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
-    const planned = planProjectMethodVariants(method, implementationContext);
-    if (planned === undefined) {
-      return undefined;
-    }
-    implFunctions.push(...planned);
-  }
-  for (const accessor of accessors) {
-    const targetName = context.input.program.projectTypes.memberSlotName(
-      accessor.declaration,
-      accessor.role,
-    );
-    if (targetName === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, accessor.declaration),
-        "rust.backend.accessor-slot",
-        "Class accessor has no deterministic Rust declaration slot.",
-      ));
-      return undefined;
-    }
-    const planned = planProjectMethod(accessor.declaration, implementationContext, {
-      targetName,
-      safetyPlacement: accessor.role === "read" ? "getter" : "setter",
-    });
-    if (planned === undefined) {
-      return undefined;
-    }
-    implFunctions.push(planned);
-  }
-
   if (representation.kind !== "value") {
     context.usedAliases?.add("rt");
   }
@@ -420,14 +291,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     generics,
     fields: structFields,
   };
-  const defaultImplementation = rustDefaultImplementation(implementationType, implementationGenerics, constructorFn);
-  const implementation: RustItem = {
-    kind: "impl",
-    generics: implementationGenerics,
-    target: implementationType,
-    members: implFunctions,
-  };
-  return [
+  return { context, definition, admitted, fields, methodProperties, representation, publiclyReachable, items: [
     ...(representation.kind === "value" ? [] : [stateItem]),
     planRustAuthoredStructScope(node, structItem, context),
     ...(representation.kind === "value" && admitted.physical.clone.kind === "conditional"
@@ -441,9 +305,153 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...(representation.kind === "value"
       ? []
       : [rustProjectStateIdentityImplementation(openType, generics)]),
-    implementation,
-    ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
-  ];
+  ] };
+}
+
+export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const prepared = prepareRustClassStorageDeclaration(node, context);
+  if (prepared === undefined) return undefined;
+  context = prepared.context;
+  const { definition, admitted, fields, methodProperties, representation, publiclyReachable } = prepared;
+  const { ast } = context.input.program.source;
+  const constructorMembers: Node[] = [];
+  const methods: Node[] = [];
+  const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
+  let failed = false;
+  for (const member of sourceObjectMemberDeclarations(ast, node)) {
+    if (member === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.class-member",
+        "Class declaration contains an undefined member slot.",
+      ));
+      failed = true;
+      continue;
+    }
+    const memberKind = ast.kindName(member);
+    if (sourceClassFieldIsTypeOnly(ast, member)) continue;
+    if (memberKind === KindClassStaticBlockDeclaration) {
+      continue;
+    }
+    if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
+      continue;
+    }
+    if (memberKind === "KindConstructor") {
+      constructorMembers.push(member);
+      continue;
+    }
+    if (memberKind === "KindMethodDeclaration") {
+      if (ast.body(member) === undefined) {
+        const implementation = context.input.program.sourceNavigation
+          .callableImplementation(member);
+        if (implementation.kind !== "resolved" ||
+          implementation.implementation.declaration === member) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, member),
+            "rust.backend.method-implementation",
+            implementation.kind === "unresolved"
+              ? implementation.reason
+              : "Method overload declaration has no distinct concrete implementation.",
+          ));
+          failed = true;
+        }
+        continue;
+      }
+      methods.push(member);
+      continue;
+    }
+    if (memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
+      accessors.push({
+        declaration: member,
+        role: memberKind === "KindGetAccessor" ? "read" : "write",
+      });
+      continue;
+    }
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.class",
+      "This class member is not supported by the Rust target.",
+    ));
+    failed = true;
+  }
+  const constructorImplementations = constructorMembers.filter((member) =>
+    ast.body(member) !== undefined);
+  if (constructorImplementations.length > 1 ||
+    (constructorMembers.length > 0 && constructorImplementations.length !== 1)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.constructor-implementation",
+      "Class constructor signatures must resolve to one concrete implementation body.",
+    ));
+    failed = true;
+  }
+  const constructorMember = constructorImplementations[0];
+  const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
+  const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
+  const implementationGenerics = rustProjectGenerics(definition, implementationContext);
+  const implementationFields = fields.map(field => {
+    const selected = admitted.fields.find(candidate => candidate.declaration === field.declaration)!;
+    const type = rustTypeFromSelectedNativeCarrierInContext(selected.nativePayloadCarrier, implementationContext);
+    return { ...field, type, storageType: rustTypeFromSelectedNativeCarrierInContext(selected.nativeCarrier, implementationContext) };
+  });
+  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) return undefined;
+  const constructorFn = planConstructor(
+    node,
+    constructorMember,
+    definition.targetPath,
+    implementationType,
+    definition.stateName,
+    rustProjectStateMarker(definition, implementationContext),
+    implementationFields as readonly PlannedProjectObjectField[],
+    methodProperties,
+    representation,
+    publiclyReachable,
+    implementationContext,
+  );
+  if (failed || constructorFn === undefined) {
+    return undefined;
+  }
+  const implFunctions: RustImplFunction[] = [constructorFn];
+  for (const method of methods) {
+    if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
+    const planned = planProjectMethodVariants(method, implementationContext);
+    if (planned === undefined) {
+      return undefined;
+    }
+    implFunctions.push(...planned);
+  }
+  for (const accessor of accessors) {
+    const targetName = context.input.program.projectTypes.memberSlotName(
+      accessor.declaration,
+      accessor.role,
+    );
+    if (targetName === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, accessor.declaration),
+        "rust.backend.accessor-slot",
+        "Class accessor has no deterministic Rust declaration slot.",
+      ));
+      return undefined;
+    }
+    const planned = planProjectMethod(accessor.declaration, implementationContext, {
+      targetName,
+      safetyPlacement: accessor.role === "read" ? "getter" : "setter",
+    });
+    if (planned === undefined) {
+      return undefined;
+    }
+    implFunctions.push(planned);
+  }
+
+  const defaultImplementation = rustDefaultImplementation(implementationType, implementationGenerics, constructorFn);
+  const implementation: RustItem = {
+    kind: "impl",
+    generics: implementationGenerics,
+    target: implementationType,
+    members: implFunctions,
+  };
+  return [...prepared.items, implementation,
+    ...(defaultImplementation === undefined ? [] : [defaultImplementation])];
 }
 
 function planConstructor(
