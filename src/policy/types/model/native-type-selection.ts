@@ -146,27 +146,35 @@ export function selectRustNativeTypeCarrier(
   input: RustNativeTypeSelectionInput,
   position: RustNativeTypePosition,
 ): RustNativeTypeSelectionResult {
-  return selectRustNativeTypeRoot({ kind: "type", carrier }, input, position);
+  const selected = selectRustNativeTypeRoot({ kind: "type", carrier }, input, position);
+  return selected.kind === "rejected" ? selected : { kind: "resolved", carrier: selected.carrier };
 }
 
 export function selectRustNativeCallableTypeCarrier(
-  subject: TargetTypeRef,
+  container: TargetTypeRef,
+  payload: TargetTypeRef,
   abi: Extract<RustLogicalNativeCallableAbi, { readonly kind: "stored" }>,
   input: RustNativeTypeSelectionInput,
   position: RustNativeTypePosition,
-): RustNativeTypeSelectionResult {
-  if (abi.kind !== "stored") return { kind: "rejected", subject,
+): Extract<RustNativeTypeSelectionResult, { readonly kind: "rejected" }>
+  | { readonly kind: "resolved"; readonly carrier: TargetTypeRef; readonly payloadCarrier: TargetTypeRef } {
+  if (abi.kind !== "stored") return { kind: "rejected", subject: container,
     reason: "A declared native field callable requires its selected stored invocation ABI." };
-  return selectRustNativeTypeRoot({ kind: "callable", carrier: subject, abi }, input, position);
+  const selected = selectRustNativeTypeRoot({ kind: "callable", carrier: container, payload, abi }, input, position);
+  return selected.kind === "rejected" ? selected : selected.payloadCarrier === undefined
+    ? { kind: "rejected", subject: container, reason: "A declared native field requires its exact prepared callable payload in the original container." }
+    : { kind: "resolved", carrier: selected.carrier, payloadCarrier: selected.payloadCarrier };
 }
 
 function selectRustNativeTypeRoot(
   root: { readonly kind: "type"; readonly carrier: TargetTypeRef }
-    | { readonly kind: "callable"; readonly carrier: TargetTypeRef; readonly abi: RustLogicalNativeCallableAbi },
+    | { readonly kind: "callable"; readonly carrier: TargetTypeRef; readonly payload: TargetTypeRef; readonly abi: RustLogicalNativeCallableAbi },
   input: RustNativeTypeSelectionInput,
   position: RustNativeTypePosition,
-): RustNativeTypeSelectionResult {
+): Extract<RustNativeTypeSelectionResult, { readonly kind: "rejected" }>
+  | { readonly kind: "resolved"; readonly carrier: TargetTypeRef; readonly payloadCarrier: TargetTypeRef | undefined } {
   const carrier = root.carrier;
+  let payloadCarrier: TargetTypeRef | undefined;
   let rejection: Extract<RustNativeTypeSelectionResult, { readonly kind: "rejected" }> | undefined;
   const active = new Set<TargetTypeRef>();
   const resolvingProducerErrors = new Set<string>();
@@ -228,6 +236,14 @@ function selectRustNativeTypeRoot(
     if (active.has(type)) return reject(type, "Native type representation contains an unresolved recursive selection.");
     active.add(type);
     try {
+      if (root.kind === "callable" && type === root.payload) {
+        const selected = callableFor(type, root.abi, nativePosition);
+        if (selected !== undefined && payloadCarrier !== undefined && !rustTargetGenericArgumentEquals(
+          { kind: "type", type: selected }, { kind: "type", type: payloadCarrier })) return reject(type,
+          "One declared native callable payload requires one exact selected representation throughout its container.");
+        payloadCarrier = selected;
+        return selected;
+      }
       const producer = rustProducerErrorReference(type);
       if (producer !== undefined) {
         const key = closedMetadataKey(producer);
@@ -426,18 +442,13 @@ function selectRustNativeTypeRoot(
     return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [{ kind: "lifetime", lifetime: signature.lifetime },
       { kind: "type", type: selectedParameters }, { kind: "type", type: resultType }], [], undefined, [], undefined, []);
   };
-  let selected: TargetTypeRef | undefined;
-  if (root.kind === "type") selected = select(carrier, position);
-  else {
-    active.add(carrier);
-    try { selected = callableFor(carrier, root.abi, position); }
-    finally { active.delete(carrier); }
-  }
+  const selected = select(carrier, position);
   if (selected === undefined) return rejection ?? { kind: "rejected", subject: carrier,
     reason: "Native type requires completed physical metadata." };
   if (!nativeTypeLegalInPosition(selected, position)) return { kind: "rejected", subject: carrier,
     reason: "Native opaque callable or impl Trait is not legal in this type position." };
-  return { kind: "resolved", carrier: snapshotClosedMetadata(selected) };
+  return { kind: "resolved", carrier: snapshotClosedMetadata(selected),
+    payloadCarrier: payloadCarrier === undefined ? undefined : snapshotClosedMetadata(payloadCarrier) };
 }
 
 function nativeTypeLegalInPosition(type: TargetTypeRef, position: RustNativeTypePosition): boolean {
