@@ -281,7 +281,8 @@ export function selectRustNativeInvocationErrorPropagation(
   sourceProgramOwner: RustPhysicalErrorOwner | undefined,
   input: RustNativeTypeSelectionInput,
 ): TargetStageResult<Extract<RustPhysicalEmissionOperand["nativeCallResult"], { readonly kind: "result" }>["propagation"]> {
-  const reject = (message: string) => rejectedTargetStage([{
+  const reject = (message: string) => rejectedTargetStage<
+    Extract<RustPhysicalEmissionOperand["nativeCallResult"], { readonly kind: "result" }>["propagation"]>([{
     code: "RUST_NATIVE_CALL_RESULT_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
     sourceNode: node, message,
   }]);
