@@ -8,8 +8,8 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 import type { RustExpr, RustFunctionParam, RustItem, RustPattern, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
-import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext, rustTargetCallGenericArgumentToAstInContext } from "../../types/render.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
+import { rustTypeFromCarrierInContext, rustTypeFromSelectedNativeCarrierInContext, rustTargetGenericArgumentToAstInContext, rustTargetCallGenericArgumentToAstInContext } from "../../types/render.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
@@ -21,12 +21,12 @@ import { rustAuthoredTypeParameterNames } from "../../../../target-model/names/t
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvocation } from "./generic-native-futures.js";
-import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
 import { validateRustCapturedReceiverFields, validateRustCapturedReceivers } from "../../expressions/receiver-captures.js";
-import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
+import { rustCallablePayloadContext } from "../../expressions/capture-payloads.js";
 import { rustGenericCallableEnvironmentGenerics, rustGenericCallableCapturePredicates } from "./generic-signatures.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import { planRustGenericCallableErrors } from "./generic-errors.js";
+import { requireRustNativeCaptureStorage, requireRustNativeCaptureEnvironment } from "../../expressions/binding-storage.js";
 
 export function rustGenericCallableImplementationPath(
   implementation: RustGenericCallableImplementation, name: string, context: RustTypeRenderingContext,
@@ -34,12 +34,6 @@ export function rustGenericCallableImplementationPath(
   const module = context.moduleNameByFileName.get(implementation.sourceFileName);
   const external = context.externalCrateNameByFileName.get(implementation.sourceFileName);
   return module === undefined ? undefined : `${external !== undefined && external !== context.crateName ? external : "crate"}::${module}::${name}`;
-}
-
-export function rustGenericCallableCaptureType(
-  capture: RustGenericCallableImplementation["captures"][number], context: RustPlanContext,
-): RustType | undefined {
-  return rustCallableCaptureStorageType(capture, context);
 }
 
 export function rustGenericCallableMarker(arguments_: readonly RustTargetGenericArgument[], context: RustTypeRenderingContext): RustType | undefined {
@@ -76,12 +70,15 @@ function planImplementation(
   const selected = context.input.program.callableValues.generic.physical.environmentFor(implementation);
   if (selected === undefined) return undefined;
   const arguments_ = rustGenericCallableStorageArguments(definition.signature.environmentParameters, selected.parameters);
+  const emission = requireRustEmissionContext(context, implementation, "helper", implementation.declaration);
   const helperContext = rustGeneratedTypeParameterContext(arguments_.flatMap(argument =>
     argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type] : []),
     rustAuthoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
-    rustContextForEmission(context, requireRustEmissionContext(context, implementation, "helper", implementation.declaration)));
-  const captures = rustCallablePayloadTypes(selected, helperContext);
-  if (captures === undefined) return undefined;
+    rustContextForEmission(context, emission));
+  const nativeEnvironment = requireRustNativeCaptureEnvironment(emission,
+    { kind: "generic", definition, implementation, member: undefined }, helperContext);
+  const captures = nativeEnvironment.slots.map((_slot, index) => rustTypeFromSelectedNativeCarrierInContext(
+    requireRustNativeCaptureStorage(nativeEnvironment, index, emission, helperContext).storage.slotCarrier, helperContext));
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
   const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
@@ -109,19 +106,21 @@ function planImplementation(
     return { ...parameter, bounds: rustGenericRequirementBounds(requirements) };
   });
   const fields = captures.map((_capture, index) => ({
-    name: `capture_${index}`, type: captures[index]!, visibility: "public" as const,
+    name: captureFieldName(index), type: captures[index]!, visibility: "public" as const,
   }));
+  function captureFieldName(index: number): string {
+    const path = nativeEnvironment.slotPaths[index];
+    if (path?.length !== 1 || path[0] === undefined) return failRustPlannerInvariant(
+      "A named generic environment requires its exact selected native capture field.", implementation.declaration);
+    return path[0];
+  }
   const marker = rustGenericCallableMarker(arguments_, helperContext);
   if (marker === undefined) return undefined;
   if (environment.length > 0) fields.push({ name: "marker", type: marker, visibility: "public" });
-  const stateArguments = arguments_.map(argument => rustTargetGenericArgumentToAstInContext(argument, helperContext));
-  if (stateArguments.some(argument => argument === undefined)) return undefined;
-  const state: RustType = { kind: "named", path: implementation.stateName,
-    genericArguments: stateArguments as NonNullable<typeof stateArguments[number]>[],
-  };
+  const state = rustTypeFromSelectedNativeCarrierInContext(nativeEnvironment.stateCarrier, helperContext);
+  const holder = rustTypeFromSelectedNativeCarrierInContext(nativeEnvironment.holderCarrier, helperContext);
   const ownerParams: readonly RustFunctionParam[] = captures.length === 0 ? [] : [{ name: owner,
-    type: suspended ? implementation.storage === "shared" ? shared(state) : state
-      : { kind: "reference", referent: state, mutable: false },
+    type: suspended ? holder : { kind: "reference", referent: state, mutable: false },
   }];
   return [{ kind: "struct", name: implementation.stateName, visibility: "public",
     generics, fields,
@@ -139,17 +138,14 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
   if (environment === undefined || arguments_.some(argument => argument === undefined)) return undefined;
   const variants = definition.members.map(member => {
     const implementation = member.implementation;
-    const path = rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
-    const selected = rustGenericCallableStorageArguments(definition.signature.environmentParameters, member.arguments)
-      .map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
-    const state: RustType = { kind: "named", path: path ?? "", genericArguments: selected as NonNullable<typeof selected[number]>[] };
-    return path === undefined || selected.some(argument => argument === undefined) ? undefined : { name: member.variantName,
-      fields: [implementation.storage === "shared" ? shared(state) : state],
-    };
+    const emission = requireRustEmissionContext(context, member, "member", implementation.declaration);
+    const environment = requireRustNativeCaptureEnvironment(emission,
+      { kind: "generic", definition, implementation, member }, context);
+    return { name: member.variantName,
+      fields: [rustTypeFromSelectedNativeCarrierInContext(environment.holderCarrier, context)] };
   });
-  if (variants.some(variant => variant === undefined)) return undefined;
   const target: RustType = { kind: "named", path: definition.targetName, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
-  const storage = genericCallableStorageItems(definition, environment, target, variants as NonNullable<typeof variants[number]>[],
+  const storage = genericCallableStorageItems(definition, environment, target, variants,
     context.input.program.callableValues.genericIdentities.forDefinition(definition));
   if (storage === undefined) return undefined;
   if (!context.input.program.callableValues.genericDispatch.requiredFor(definition)) return storage;
@@ -262,10 +258,6 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     returnType: native?.returnType ?? methodOutput,
     body: native?.body ?? { statements: [{ kind: "tail", expr: dispatch }] },
   }] }];
-}
-
-function shared(type: RustType): RustType {
-  return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
 }
 
 function reject(node: Node, context: RustPlanContext): void {

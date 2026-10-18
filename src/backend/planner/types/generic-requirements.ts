@@ -2,8 +2,6 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
-export type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
-
 export function rustCarrierHasCopyContract(
   carrier: TargetTypeRef | undefined,
   context: RustPlanContext,

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustOptionalStorageProjection } from "../../target-model/types/projections.js";

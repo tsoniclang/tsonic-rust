@@ -27,6 +27,7 @@ import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 
 import { classifyRustCallableRequirements } from "./generic-callable-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
@@ -42,8 +43,6 @@ import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 import type { RustReadOwnershipRequirements } from "../ownership/reads.js";
-
-export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
 export interface RustDeclarationTypeParameterRequirements {
   readonly identity: string;

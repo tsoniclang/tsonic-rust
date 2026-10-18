@@ -6,9 +6,9 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
 import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
 import { rustTypeFromSelectedNativeCarrierInContext } from "../../types/render.js";
-import { requireRustNativeFrameStorage } from "../../expressions/binding-storage.js";
+import { requireRustNativeCaptureEnvironment, requireRustNativeCaptureStorage, requireRustNativeFrameStorage } from "../../expressions/binding-storage.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
-import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
+import { rustCallablePayloadContext } from "../../expressions/capture-payloads.js";
 import { rustFrameBindingContext, rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { planNativeModuleFunction } from "./functions.js";
 import { genericCallableCopyStateItems } from "./generic-storage.js";
@@ -50,18 +50,18 @@ function definitionMarker(generics: RustGenerics): RustType | undefined {
   return parameters.length === 0 ? undefined : rustInvariantTypeMarker(parameters);
 }
 
-function entryHasPayload(implementation: RustFrameCallableImplementation, generics: RustGenerics): boolean {
-  return implementation.captures.length !== 0 || implementation.receiverFields.length !== 0 ||
-    implementation.receivers.length !== 0 || definitionMarker(generics) !== undefined;
-}
-
-function stateType(implementation: RustFrameCallableImplementation, generics: RustGenerics): RustType {
-  return { kind: "named", path: implementation.stateName, genericArguments: generics.parameters
-    .filter(parameter => parameter.kind === "type").map(parameter => ({ kind: "type", type: { kind: "named", path: parameter.name } })) };
+function entryHasPayload(
+  definition: RustFrameCallableDefinition, entry: RustFrameCallableEntryDefinition,
+  implementation: RustFrameCallableImplementation, context: RustPlanContext,
+): boolean {
+  const emission = requireRustEmissionContext(context, definition, "frame", definition.activation.ownerDeclaration);
+  return requireRustNativeCaptureEnvironment(emission,
+    { kind: "frame", definition, entry, implementation }, context).payload.kind === "named";
 }
 
 function entryClone(
-  entry: RustFrameCallableEntryDefinition, target: RustType, generics: RustGenerics,
+  definition: RustFrameCallableDefinition, entry: RustFrameCallableEntryDefinition,
+  target: RustType, generics: RustGenerics, context: RustPlanContext,
 ): readonly RustItem[] {
   if (entry.copy) return genericCallableCopyStateItems(target, generics);
   return [{ kind: "impl", trait: { kind: "named", path: "Clone" }, target, generics, members: [{
@@ -71,11 +71,11 @@ function entryClone(
         ...entry.implementations.filter(implementation => !implementation.independent).map((implementation):
           Extract<RustExpr, { readonly kind: "match" }>["arms"][number] => ({
         pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
-          { kind: "binding", name: "identity" }, ...(!entryHasPayload(implementation, generics) ? [] : [{ kind: "binding" as const, name: "state" }]),
+          { kind: "binding", name: "identity" }, ...(!entryHasPayload(definition, entry, implementation, context) ? [] : [{ kind: "binding" as const, name: "state" }]),
         ] },
         expression: { kind: "call", path: `Self::${implementation.variantName}`, args: [
           { kind: "dereference", pointer: { kind: "path", path: "identity" } },
-          ...(!entryHasPayload(implementation, generics) ? [] : [implementation.copy
+          ...(!entryHasPayload(definition, entry, implementation, context) ? [] : [implementation.copy
             ? { kind: "dereference" as const, pointer: { kind: "path" as const, path: "state" } }
             : { kind: "method-call" as const, receiver: { kind: "path" as const, path: "state" }, method: "clone", args: [] }]),
         ] },
@@ -89,10 +89,13 @@ function entryClone(
   }] }];
 }
 
-function entryEquality(entry: RustFrameCallableEntryDefinition, target: RustType, generics: RustGenerics): readonly RustItem[] {
+function entryEquality(
+  definition: RustFrameCallableDefinition, entry: RustFrameCallableEntryDefinition,
+  target: RustType, generics: RustGenerics, context: RustPlanContext,
+): readonly RustItem[] {
   const pattern = (implementation: RustFrameCallableImplementation, name: string): RustPattern => ({
     kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
-      { kind: "binding", name }, ...(!entryHasPayload(implementation, generics) ? [] : [{ kind: "wildcard" as const }]),
+      { kind: "binding", name }, ...(!entryHasPayload(definition, entry, implementation, context) ? [] : [{ kind: "wildcard" as const }]),
     ],
   });
   return [{ kind: "impl", trait: { kind: "named", path: "PartialEq" }, target, generics, members: [{
@@ -144,14 +147,27 @@ function planFrameEntry(
     if (implementation.independent) continue;
     const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
       context.input.program.records.generator.get(implementation.declaration) !== undefined;
-    const state = stateType(implementation, generics);
-    const captures = rustCallablePayloadTypes(implementation, context);
-    if (captures === undefined) return undefined;
+    const nativeEnvironment = requireRustNativeCaptureEnvironment(emission,
+      { kind: "frame", definition, entry, implementation }, context);
+    const payload = nativeEnvironment.payload;
+    const state = payload.kind === "none" ? undefined : rustTypeFromSelectedNativeCarrierInContext(payload.stateCarrier, context);
+    const holder = payload.kind === "none" ? undefined : rustTypeFromSelectedNativeCarrierInContext(payload.holderCarrier, context);
+    const frameHolder = rustTypeFromSelectedNativeCarrierInContext(nativeEnvironment.frame.holderCarrier, context);
+    const captures = nativeEnvironment.slots.map((_slot, index) => rustTypeFromSelectedNativeCarrierInContext(
+      requireRustNativeCaptureStorage(nativeEnvironment, index, emission, context).storage.slotCarrier, context));
+    if (captures.length !== 0 && (state === undefined || holder === undefined)) return failRustPlannerInvariant(
+      "A sealed captured frame entry requires its completed native state and holder.", implementation.declaration);
     const marker = definitionMarker(generics);
-    if (captures.length !== 0 || marker !== undefined) {
+    if (payload.kind === "named") {
       items.push({ kind: "struct", name: implementation.stateName, visibility: "public", generics,
-        fields: [...(captures as RustType[]).map((type, index) => ({ name: `capture_${index}`, type, visibility: "public" as const })),
+        fields: [...captures.map((type, index) => {
+          const path = payload.slotPaths[index];
+          if (path?.length !== 1 || path[0] === undefined) return failRustPlannerInvariant(
+            "A named frame environment requires its exact selected native capture field.", implementation.declaration);
+          return { name: path[0], type, visibility: "public" as const };
+        }),
           ...(marker === undefined ? [] : [{ name: "marker", type: marker, visibility: "public" as const }])] });
+      if (state === undefined) return failRustPlannerInvariant("A named frame environment lost its native state carrier.", implementation.declaration);
       if (implementation.copy) items.push(...genericCallableCopyStateItems(state, generics));
     }
     const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
@@ -169,14 +185,16 @@ function planFrameEntry(
     const parameters = helper.params;
     const fallible = helper.errorType !== undefined;
     items.push({ ...helper, generics, params: [
-      { name: frameName, type: suspended ? shared(types.frameType)
-        : { kind: "reference", referent: shared(types.frameType), mutable: false } },
-      ...(captures.length === 0 ? [] : [{ name: stateName, type: suspended ? implementation.copy ? state : shared(state)
-        : { kind: "reference" as const, referent: state, mutable: false } }]),
+      { name: frameName, type: suspended ? frameHolder
+        : { kind: "reference", referent: frameHolder, mutable: false } },
+      ...(captures.length === 0 ? [] : [{ name: stateName, type: state === undefined || holder === undefined
+        ? failRustPlannerInvariant("A frame helper lost its selected native capture parameter.", implementation.declaration)
+        : suspended ? holder : { kind: "reference" as const, referent: state, mutable: false } }]),
       ...parameters,
     ] });
     variants.push({ name: implementation.variantName, fields: [{ kind: "primitive", name: "usize" },
-      ...(!entryHasPayload(implementation, generics) ? [] : [implementation.copy ? state : shared(state)])] });
+      ...(payload.kind === "none" ? [] : [holder === undefined
+        ? failRustPlannerInvariant("A named frame variant lost its exact native holder.", implementation.declaration) : holder])] });
     const call: RustExpr = { kind: "call", path: implementation.functionName, args: [
       suspended ? { kind: "call", path: "alloc::rc::Rc::clone", args: [{ kind: "path", path: "frame" }] }
         : { kind: "path", path: "frame" },
@@ -187,7 +205,7 @@ function planFrameEntry(
         receiver: { kind: "path" as const, path: "arguments" }, name: String(index) })),
     ] };
     arms.push({ pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
-      { kind: "wildcard" }, ...(!entryHasPayload(implementation, generics) ? [] : [captures.length === 0
+      { kind: "wildcard" }, ...(payload.kind === "none" ? [] : [captures.length === 0
         ? { kind: "wildcard" as const } : { kind: "binding" as const, name: "state" }]),
     ] }, expression: fallible ? call : { kind: "call", path: "Ok", args: [call] } });
   }
@@ -202,7 +220,8 @@ function planFrameEntry(
         args: [{ kind: "path", path: "arguments" }] } });
   }
   items.push({ kind: "enum", name: entry.targetName, visibility: "public", generics, variants },
-    ...entryClone(entry, types.entryType, generics), ...entryEquality(entry, types.entryType, generics),
+    ...entryClone(definition, entry, types.entryType, generics, context),
+    ...entryEquality(definition, entry, types.entryType, generics, context),
     { kind: "impl", generics, trait: { kind: "named", path: "rt::FrameCallableEntry",
       genericArguments: [{ kind: "type", type: types.frameType }] }, target: types.entryType, members: [
       { kind: "type", name: "Arguments", generics: emptyRustGenerics, type: { kind: "tuple", elements: argumentTypes } },

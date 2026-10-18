@@ -6,7 +6,7 @@ import type { RustSourceTypeFamilyRegistry } from "../../../target-model/types/t
 import { createRustOptionalStorageCollector } from "../../declarations/type-projections.js";
 import { createRustAssociatedRequirementCollector } from "../../declarations/associated-requirements.js";
 import { classifyCarrierRequirements } from "../../declarations/generic-carrier-requirements.js";
-import type { RustGenericRequirement } from "../../declarations/generic-requirements.js";
+import type { RustGenericRequirement } from "../../../target-model/lifetimes/model.js";
 import { selectRustCloneRequirements, type RustCloneRequirementSelection } from "../../../target-model/types/index.js";
 
 export function sourceCloneRequirements(

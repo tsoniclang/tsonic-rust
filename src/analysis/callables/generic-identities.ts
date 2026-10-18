@@ -12,12 +12,13 @@ import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysical
   RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+import type { RustGenericCallableImplementation } from "./generic-values.js";
 import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../resources/effects-work-budget.js";
 
 export interface RustGenericCallableIdentityPair {
   readonly left: RustGenericCallablePhysicalMember;
   readonly right: RustGenericCallablePhysicalMember;
-  readonly kind: "declaration" | "activation";
+  readonly kind: RustGenericCallableImplementation["identity"];
 }
 
 export interface RustGenericCallableIdentitySelection {
@@ -66,10 +67,10 @@ function selectIdentity(
     definition.members.every(member => {
       budget.step();
       const implementation = member.implementation;
-      return physical.environmentFor(implementation) !== undefined && (implementation.creation === "declaration"
+      return physical.environmentFor(implementation) !== undefined && (implementation.identity === "static"
         ? implementation.storage === "value" && implementation.captures.length === 0 &&
           implementation.receivers.length === 0 && implementation.receiverFields.length === 0
-        : implementation.creation === "activation" && implementation.storage === "shared");
+        : implementation.identity === "activation" && implementation.storage === "shared");
     });
   if (!valid(left) || !valid(right)) return undefined;
   if (correspondence?.left === left && correspondence.right === right) return Object.freeze({
@@ -91,7 +92,7 @@ function selectIdentity(
     for (const candidate of matches) {
       budget.step();
       if (candidate.implementation !== member.implementation) return undefined;
-      pairs.push(Object.freeze({ left: member, right: candidate, kind: member.implementation.creation }));
+      pairs.push(Object.freeze({ left: member, right: candidate, kind: member.implementation.identity }));
     }
   }
   return Object.freeze({ leftCarrier, rightCarrier, left, right, pairs: Object.freeze(pairs), exhaustive });

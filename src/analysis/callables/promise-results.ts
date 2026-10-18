@@ -16,7 +16,8 @@ import { rustLifetimesEqual, type RustLifetimeIndex } from "../../target-model/l
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { classifyCarrierRequirements, rustFinalContractSupportsRequirements,
   type RustStaticRequirementEvidence } from "../declarations/generic-carrier-requirements.js";
-import type { AnalyzeRustDeclarationGenericRequirementsResult, RustGenericRequirement } from "../declarations/generic-requirements.js";
+import type { AnalyzeRustDeclarationGenericRequirementsResult } from "../declarations/generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";

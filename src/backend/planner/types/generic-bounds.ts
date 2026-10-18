@@ -1,9 +1,13 @@
-import type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
+import { rustGenericRequirementBound, type RustGenericRequirement } from "../../../target-model/lifetimes/model.js";
 import type { RustLifetimeRef, RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimesEqual } from "../../../target-model/lifetimes/index.js";
 import type { RustGenericParameter, RustGenerics, RustTypeBound, RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { rustBuiltInCarrierDefinitions } from "../../../target-model/types/carriers/built-ins.js";
+import { rustRetainedErrorTargetId } from "../../../target-model/types/carriers/source-error.js";
+import { rustTypeFromSelectedNativeCarrier } from "./render.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustGenericsWithAssociatedBounds(
   parameters: readonly RustGenericParameter[],
@@ -25,11 +29,14 @@ export function rustGenericsWithAssociatedBounds(
 }
 
 export function rustGenericRequirementBounds(requirements: readonly RustGenericRequirement[]): readonly RustTypeBound[] {
-  return Object.freeze(requirements.map((requirement): RustTypeBound => requirement === "static"
-    ? { kind: "lifetime", lifetime: { kind: "static" } }
-    : { kind: "trait", path: requirement === "clone" ? "Clone" : requirement === "default" ? "Default"
-      : requirement === "number-predicate" ? "js_abi::NativeNumberPredicate"
-      : requirement === "js-rejection" ? "Into<tsonic_rust_runtime::RetainedError>" : "js_abi::SourceNumeric" }));
+  return Object.freeze(requirements.map((requirement): RustTypeBound => {
+    const bound = rustGenericRequirementBound(requirement, { identity: rustRetainedErrorTargetId,
+      path: rustBuiltInCarrierDefinitions[rustRetainedErrorTargetId]?.renderPath });
+    if (bound === undefined) return failRustPlannerInvariant("A selected native generic requirement lost its exact bound data.");
+    return bound.kind === "trait-ref"
+      ? { kind: "trait-type", reference: { trait: rustTypeFromSelectedNativeCarrier(bound) } }
+      : { kind: "lifetime", lifetime: rustLifetimeToAst(bound) };
+  }));
 }
 
 export function rustTypeParameterBounds(

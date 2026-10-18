@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
+import type { RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/lifetimes/model.js";
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 

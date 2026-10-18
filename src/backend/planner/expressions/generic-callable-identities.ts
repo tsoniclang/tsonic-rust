@@ -33,14 +33,14 @@ export function planRustGenericCallableIdentity(
     stableLeft ? rustReferenceToPlace(left) : { kind: "reference", expr: left },
     stableRight ? rustReferenceToPlace(right) : { kind: "reference", expr: right },
   ] };
-  if (selected.pairs.length === 0 || selected.exhaustive && selected.pairs.every(pair => pair.kind === "declaration")) {
+  if (selected.pairs.length === 0 || selected.exhaustive && selected.pairs.every(pair => pair.kind === "static")) {
     return { kind: "evaluate-then", effect: expression, discard: "value", value: {
       kind: "bool-literal", value: (selected.pairs.length !== 0) === (selected.operation.operator === "=="),
     } };
   }
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = selected.pairs.map(pair => {
     const pattern = (path: string, name: string): RustPattern => ({ kind: "tuple-variant", path,
-      elements: [pair.kind === "declaration" ? { kind: "wildcard" } : { kind: "binding", name }],
+      elements: [pair.kind === "static" ? { kind: "wildcard" } : { kind: "binding", name }],
     });
     const equality = rustCallableIdentityPredicate(pair.kind, { kind: "path", path: "left" }, { kind: "path", path: "right" });
     return { pattern: { kind: "tuple", elements: [

@@ -77,6 +77,55 @@ main();
   assert.doesNotMatch(generated, /fn call<[^}]*?-> Result/u);
 });
 
+test("observed empty generic activations keep original expression identity and native value storage", { timeout: 300_000 }, () => {
+  const generated = compileAndRun("static_quantified_identity", `
+type Identity = <Value>(value: Value) => Value;
+function make(): Identity { return <Value>(value: Value): Value => value; }
+function other(): Identity { return <Value>(value: Value): Value => value; }
+export function main(): void {
+  const first = make();
+  const alias = first;
+  const second = make();
+  const different = other();
+  let order: int32 = 0;
+  check((order = order * 10 + 1, first) === (order = order * 10 + 2, second));
+  check(order === 12 && first === alias && first === second && first !== different);
+  check(first<int32>(7) === 7 && alias<string>("native") === "native");
+  check(different<int32>(9) === 9);
+}
+main();
+`);
+  assert.match(generated, /fn call_generic_/u);
+  assert.match(generated, /impl Copy for GenericCallable/u);
+  assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
+  assert.doesNotMatch(generated, /GenericCallable[^\n]*::[^\n]*Rc::new/u);
+  assert.doesNotMatch(generated, /core::ptr::addr_eq/u);
+});
+
+test("static generic factory identities preserve different closed bindings with one native call signature", { timeout: 300_000 }, () => {
+  const generated = compileAndRun("static_quantified_closed_bindings", `
+import type { uint8, uint64 } from "@tsonic/core/types.js";
+type Identity = <Value>(value: Value) => Value;
+function make<Bound>(): Identity {
+  return <Value>(value: Value): Value => {
+    const marker: Bound | undefined = undefined;
+    return value;
+  };
+}
+export function main(): void {
+  const first = make<uint8>();
+  const same = make<uint8>();
+  const other = make<uint64>();
+  check(first === same && first !== other);
+  check(first<int32>(7) === 7 && other<string>("native") === "native");
+}
+main();
+`);
+  assert.match(generated, /impl Copy for GenericCallable/u);
+  assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
+  assert.doesNotMatch(generated, /core::ptr::addr_eq/u);
+});
+
 test("quantified async callbacks retain one environment while pending work outlives the callable", { timeout: 300_000 }, () => {
   const generated = compileAndRun("suspended_quantified_values", `
 async function resolved<Value>(value: Value): Promise<Value> { return value; }

@@ -32,6 +32,7 @@ export interface RustGenericCallableImplementation {
   readonly functionName: string;
   readonly storage: "value" | "shared";
   readonly creation: "declaration" | "activation";
+  readonly identity: "static" | "activation";
   readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly receivers: readonly (RustClosureCaptureFact["receivers"][number] & { readonly storageCarrier: TargetTypeRef })[];
@@ -165,6 +166,7 @@ export function createRustGenericCallablePlan(
       } else {
         const creation = ast.is.IsFunctionDeclaration(node) && sourceDeclarationIsModuleScoped(node, ast)
           ? "declaration" as const : "activation" as const;
+        const captureFree = captures.length === 0 && receiverFields.length === 0 && receivers.length === 0;
         const functionName = creation === "declaration" ? names.functionNameForDeclaration(node)
           : allocateRustGeneratedName(usedNames, `call_generic_${implementationIdentity.slice(0, 12)}`);
         if (functionName === undefined) {
@@ -176,9 +178,9 @@ export function createRustGenericCallablePlan(
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName,
           creation,
-          storage: (!identityFamilies.has(identity) || creation === "declaration") &&
-            (records.asyncFunction.get(node) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined ||
-              captures.length === 0 && receiverFields.length === 0 && receivers.length === 0) &&
+          identity: captureFree ? "static" as const : "activation" as const,
+          storage: captureFree || (!identityFamilies.has(identity) || creation === "declaration") &&
+            (records.asyncFunction.get(node) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined) &&
             records.generator.get(node) === undefined &&
             receiverFields.length === 0 && receivers.length === 0 && captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
               ? "value" as const : "shared" as const,

@@ -1,20 +1,13 @@
-import type { RustSuspendedCallableImplementation } from "../../../analysis/callables/suspended-values.js";
+import type { RustNativeCaptureEnvironmentStorage } from "../../../target-model/records/physical-emission-contexts.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "./render.js";
-import { rustTypeFromCarrierInContext } from "./render.js";
-import { rustLifetimeToAst } from "./lifetime-syntax.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "./render.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustSuspendedCallableStateType(
-  implementation: RustSuspendedCallableImplementation, context: RustTypeRenderingContext,
-): Extract<RustType, { kind: "named" }> | undefined {
-  const module = context.moduleNameByFileName.get(implementation.sourceFileName);
-  if (module === undefined) return undefined;
-  const external = context.externalCrateNameByFileName.get(implementation.sourceFileName);
-  const crate = external !== undefined && external !== context.crateName ? external : "crate";
-  const types = implementation.environment.typeParameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
-  if (types.some(type => type === undefined)) return undefined;
-  return { kind: "named", path: `${crate}::${module}::${implementation.stateName}`, genericArguments: [
-    ...implementation.environment.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime: rustLifetimeToAst(lifetime) })),
-    ...types.map(type => ({ kind: "type" as const, type: type! })),
-  ] };
+  environment: Extract<RustNativeCaptureEnvironmentStorage, { readonly kind: "suspended" }>, context: RustTypeRenderingContext,
+): Extract<RustType, { kind: "named" }> {
+  const selected = rustTypeFromSelectedNativeCarrierInContext(environment.stateCarrier, context);
+  return selected.kind === "named" ? selected : failRustPlannerInvariant(
+    "A sealed suspended environment requires its actual selected native named state.");
 }

@@ -16,6 +16,7 @@ import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.j
 import { emissionDiagnostic, rustEmissionSourceIdentity,
   type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "./emission-contexts.js";
 import type { RustEmissionSourceOwner } from "./emission-source-origins.js";
+import { rustNativeCaptureInputs, type RustPreparedNativeCaptureInput } from "./emission-capture-environments.js";
 
 export function prepareRustCallableEmissionRequests(
   input: RustCallableEmissionPreparationInput,
@@ -62,10 +63,66 @@ export function prepareRustCallableEmissionRequests(
     });
     return changed ? snapshotRustCallableBindings({ types: bindings.types, lifetimes, consts: bindings.consts }) : bindings;
   };
+  const nativeCaptures = (declaration: Node, capture: RustClosureCaptureFact): readonly RustPreparedNativeCaptureInput[] => {
+    const producer = input.nativeProducers.forDeclaration(declaration);
+    if (producer === undefined) {
+      diagnostics.push(emissionDiagnostic(declaration,
+        "A native inferred capture environment requires its exact original callable producer."));
+      return [];
+    }
+    return rustNativeCaptureInputs(Object.freeze({ kind: "native", producer, capture,
+      creation: Object.freeze({ kind: "definition" }) }), capture);
+  };
+  const bodyCaptures = (declaration: Node): readonly RustPreparedNativeCaptureInput[] => {
+    const frameImplementation = input.frames.implementationFor(declaration);
+    if (frameImplementation !== undefined) {
+      const definition = input.frames.definitionFor(frameImplementation.carrier);
+      const entry = input.frames.entryFor(frameImplementation.carrier);
+      if (definition === undefined || entry === undefined || !definition.entries.includes(entry) ||
+        !entry.implementations.includes(frameImplementation)) {
+        diagnostics.push(emissionDiagnostic(declaration,
+          "A frame body capture requires its exact original definition, entry and implementation."));
+        return [];
+      }
+      if (frameImplementation.independent) return nativeCaptures(declaration, frameImplementation.capture);
+      return rustNativeCaptureInputs(Object.freeze({ kind: "frame", definition, entry,
+        implementation: frameImplementation }), frameImplementation);
+    }
+    const suspended = input.suspended.implementationFor(declaration);
+    if (suspended !== undefined) return rustNativeCaptureInputs(Object.freeze({ kind: "suspended", implementation: suspended }), suspended);
+    const lexical = input.lexicalFunctions.forDeclaration(declaration);
+    if (lexical?.kind === "unresolved") {
+      diagnostics.push(emissionDiagnostic(declaration, lexical.reason));
+      return [];
+    }
+    if (lexical !== undefined) {
+      const producer = input.nativeProducers.forDeclaration(declaration);
+      if (producer?.parameterCarriers === undefined) {
+        diagnostics.push(emissionDiagnostic(declaration,
+          "A lexical capture environment requires its exact completed native parameter inventory."));
+        return [];
+      }
+      const captureFact = input.records.closureCapture.get(declaration);
+      const captures: RustClosureCaptureFact["captures"][number][] = [];
+      for (const capture of lexical.captures) {
+        const carrier = input.records.runtimeCarrier.get(capture.declaration)?.carrier;
+        if (carrier === undefined) diagnostics.push(emissionDiagnostic(capture.reference,
+          "A lexical capture requires its original declared logical carrier before native storage publication."));
+        else captures.push(Object.freeze({ declaration: capture.declaration, reference: capture.reference, carrier,
+          ...(capture.mutable ? { mutable: true as const } : {}),
+          storage: input.records.bindingStorage.get(capture.declaration)?.storage ?? "value" }));
+      }
+      return rustNativeCaptureInputs(Object.freeze({ kind: "lexical", declaration, producer, lexical }),
+        { captures, receiverFields: captureFact?.receiverFields ?? [], receivers: captureFact?.receivers ?? [] });
+    }
+    const capture = input.records.closureCapture.get(declaration);
+    return capture === undefined ? [] : nativeCaptures(declaration, capture);
+  };
   const request = (subject: object, role: RustPhysicalEmissionRole, declaration: Node, identity: string, nativeOwnerFileName: string,
     bindings: RustTargetGenericBindings | undefined, demands: readonly RustPhysicalCallableEmissionRequest[], source: RustEmissionSourceOwner,
     sourceCarriers: readonly TargetTypeRef[],
     callableAdapterInputs: RustEmissionContextRequest["callableAdapterInputs"],
+    nativeCaptureInputs: readonly RustPreparedNativeCaptureInput[],
     physicalCarriers: readonly TargetTypeRef[] = [], physicalReturn: TargetTypeRef | undefined = undefined,
     specialization: RustEmissionCallableSpecialization = Object.freeze({ kind: "ordinary" })): void => {
     if (bindings !== undefined && (role === "native-body" || role === "specialized-body" || role === "project-body" || role === "body")) {
@@ -114,40 +171,6 @@ export function prepareRustCallableEmissionRequests(
       ...requirements.projectProjections.flatMap(value => [value.sourceCarrier, value.targetCarrier]),
       ...requirements.optionalStorage.map(value => value.carrier),
     ];
-    let nativeCaptureInputs: readonly RustClosureCaptureFact["captures"][number][] = [];
-    if (role === "frame") {
-      const frame = input.frames.definitionForOwner(declaration);
-      if (frame === undefined || subject !== frame) {
-        diagnostics.push(emissionDiagnostic(declaration, "A native frame capture inventory requires its original complete frame owner."));
-        return;
-      }
-      nativeCaptureInputs = frame.entries.flatMap(entry => entry.implementations.flatMap(implementation => implementation.captures));
-    } else if (role === "native-backing") {
-      const implementation = input.suspended.implementationFor(declaration);
-      if (implementation === undefined || subject !== implementation) {
-        diagnostics.push(emissionDiagnostic(declaration, "A suspended capture inventory requires its original selected implementation."));
-        return;
-      }
-      nativeCaptureInputs = implementation.captures;
-    } else if (source.kind === "callable" || role === "native-body" || role === "specialized-body" || role === "project-body" || role === "body") {
-      const lexical = input.lexicalFunctions.forDeclaration(declaration);
-      if (source.kind === "callable" || lexical === undefined) nativeCaptureInputs = input.records.closureCapture.get(declaration)?.captures ?? [];
-      else if (lexical.kind === "unresolved") {
-        diagnostics.push(emissionDiagnostic(declaration, lexical.reason));
-        return;
-      } else {
-        const captures: RustClosureCaptureFact["captures"][number][] = [];
-        for (const capture of lexical.captures) {
-          const carrier = input.records.runtimeCarrier.get(capture.declaration)?.carrier;
-          if (carrier === undefined) diagnostics.push(emissionDiagnostic(capture.reference,
-            "A lexical capture requires its original declared logical carrier before native storage publication."));
-          else captures.push(Object.freeze({ declaration: capture.declaration, reference: capture.reference, carrier,
-            ...(capture.mutable ? { mutable: true as const } : {}),
-            storage: input.records.bindingStorage.get(capture.declaration)?.storage ?? "value" }));
-        }
-        nativeCaptureInputs = Object.freeze(captures);
-      }
-    }
     requests.push({ use: targetUseSiteRef(subject, role, identity), role, specialization, declaration, nativeOwnerFileName, bindings, demands, source,
       callableAdapterInputs, nativeCaptureInputs: Object.freeze([...nativeCaptureInputs]),
       returnDestination, error, sourceCarriers: [...sourceCarriers, ...required,
@@ -157,9 +180,10 @@ export function prepareRustCallableEmissionRequests(
     const implementation = input.generic.implementationFor(producer.declaration);
     const bindings = declaredBindings(producer.declaration);
     if (implementation?.creation === "activation") continue;
+    const captures = bodyCaptures(producer.declaration);
     request(producer.declaration, "native-body", producer.declaration, producer.identity, producer.fileName, bindings,
       byOwner.get(producer.declaration) ?? [], { kind: "declaration" },
-      producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []), [],
+      producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []), [], captures,
       [input.nativeProducers.outwardReturnFor(producer.declaration), input.nativeProducers.invocationResultFor(producer.declaration),
         input.nativeProducers.bodyResultFor(producer.declaration)].filter((carrier): carrier is TargetTypeRef => carrier !== undefined));
     for (const variant of input.sourceCallableSpecializations.variantsForCallable(producer.declaration)) {
@@ -174,7 +198,7 @@ export function prepareRustCallableEmissionRequests(
       request(variant, "specialized-body", producer.declaration, `${producer.identity}:${variant.targetName}`,
         producer.fileName, snapshotRustCallableBindings({ types, lifetimes: bindings.lifetimes, consts: bindings.consts }),
         byOwner.get(producer.declaration) ?? [], { kind: "declaration" },
-        producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []), [], [], undefined,
+        producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []), [], captures, [], undefined,
         Object.freeze({ kind: "finite", typeParameterIdentities: variant.sourceTypeParameterIdentities }));
     }
   }
@@ -196,7 +220,7 @@ export function prepareRustCallableEmissionRequests(
       continue;
     }
     request(body, "project-body", body.declaration, `${body.concrete.targetPath}:${identity}:${body.targetName}`,
-      body.concrete.fileName, bindings, byOwner.get(body.declaration) ?? [], { kind: "declaration" }, [body.ownerCarrier, ...body.targetTypeArguments], [], [], undefined,
+      body.concrete.fileName, bindings, byOwner.get(body.declaration) ?? [], { kind: "declaration" }, [body.ownerCarrier, ...body.targetTypeArguments], [], bodyCaptures(body.declaration), [], undefined,
       body.variant === undefined ? Object.freeze({ kind: "ordinary" })
         : Object.freeze({ kind: "finite", typeParameterIdentities: body.variant.sourceTypeParameterIdentities }));
   }
@@ -212,10 +236,12 @@ export function prepareRustCallableEmissionRequests(
       ...definition.signature.parameters, definition.signature.result];
     const identity = `${definition.identity}:${implementation.sourceFileName}:${sourceNodeIdentity(input.ast, implementation.declaration)}`;
     const source = { kind: "callable" as const, implementation: implementation.declaration, member: undefined };
-    request(implementation, "helper", implementation.declaration, identity, definition.ownerFileName, environment.substitutions, [], source, payloads, []);
+    const captures = rustNativeCaptureInputs(Object.freeze({ kind: "generic", definition, implementation,
+      member: undefined, environment, arguments: environment.parameters }), environment);
+    request(implementation, "helper", implementation.declaration, identity, definition.ownerFileName, environment.substitutions, [], source, payloads, [], captures);
     if (implementation.creation === "activation") {
       request(implementation, "body", implementation.declaration, identity, definition.ownerFileName, environment.substitutions,
-        byOwner.get(implementation.declaration) ?? [], source, payloads, []);
+        byOwner.get(implementation.declaration) ?? [], source, payloads, [], captures);
     }
   }
   for (const definition of input.generic.physical.definitions()) {
@@ -238,7 +264,8 @@ export function prepareRustCallableEmissionRequests(
         { kind: "callable", implementation: member.implementation.declaration, member },
         [...environment.captures.map(value => value.storageCarrier), ...environment.receiverFields.map(value => value.storageCarrier),
           ...environment.receivers.map(value => value.storageCarrier), ...environment.inputs.flatMap(value => [value.implementation, value.trait]),
-          ...definition.signature.parameters], [],
+          ...definition.signature.parameters], [], rustNativeCaptureInputs(Object.freeze({ kind: "generic", definition,
+            implementation: member.implementation, member, environment, arguments: member.arguments }), environment),
         [selectedCompletion, selectedErrors?.invocation?.errorType, selectedErrors?.awaiting?.errorType]
           .filter((carrier): carrier is TargetTypeRef => carrier !== undefined), selectedCompletion);
     }
@@ -252,7 +279,7 @@ export function prepareRustCallableEmissionRequests(
     request(selected, "native-input", selected.owner, identity, selected.protocol.ownerFileName, declaredBindings(selected.owner), [],
       { kind: "declaration" },
       [selected.carrier, selected.implementation, selected.trait, ...selected.environment,
-        ...selected.protocol.method.parameters, selected.protocol.method.result], []);
+        ...selected.protocol.method.parameters, selected.protocol.method.result], [], []);
   }
   for (const implementation of input.suspended.implementations) {
     const identity = rustEmissionSourceIdentity(input.ast, implementation.declaration);
@@ -261,7 +288,8 @@ export function prepareRustCallableEmissionRequests(
       continue;
     }
     request(implementation, "native-backing", implementation.declaration, identity, implementation.sourceFileName,
-      declaredBindings(implementation.declaration), [], { kind: "declaration" }, [implementation.carrier, ...implementation.storage], []);
+      declaredBindings(implementation.declaration), [], { kind: "declaration" }, [implementation.carrier, ...implementation.storage], [],
+      rustNativeCaptureInputs(Object.freeze({ kind: "suspended", implementation }), implementation));
   }
   for (const frame of input.frames.definitions) {
     const declaration = frame.activation.ownerDeclaration;
@@ -272,7 +300,10 @@ export function prepareRustCallableEmissionRequests(
     }
     const bindings = declaredBindings(declaration);
     request(frame, "frame", declaration, identity, frame.ownerFileName, bindings, [], { kind: "declaration" }, [...frame.bindings.map(value => value.carrier),
-      ...frame.entries.flatMap(entry => [...entry.signature.parameters, entry.signature.result])], []);
+      ...frame.entries.flatMap(entry => [...entry.signature.parameters, entry.signature.result])], [],
+      frame.entries.flatMap(entry => entry.implementations.flatMap(implementation =>
+        implementation.independent ? nativeCaptures(implementation.declaration, implementation.capture)
+          : rustNativeCaptureInputs(Object.freeze({ kind: "frame", definition: frame, entry, implementation }), implementation))));
   }
   for (const plan of input.constructions) {
     if (!input.isNativeNode(plan.definition.declaration) || input.ast.hasModifierKind(plan.definition.declaration, "abstract")) continue;
@@ -284,7 +315,7 @@ export function prepareRustCallableEmissionRequests(
       continue;
     }
     request(plan, "constructor", declaration, identity, plan.definition.fileName, declaredBindings(declaration),
-      [], { kind: "construction", plan, layer: undefined }, plan.fields.map(field => field.carrier), []);
+      [], { kind: "construction", plan, layer: undefined }, plan.fields.map(field => field.carrier), [], []);
     const root = input.projectTypes.openCarrier(plan.definition);
     for (const layer of plan.layers) {
       const source = layer.constructor ?? layer.definition.declaration;
@@ -303,13 +334,13 @@ export function prepareRustCallableEmissionRequests(
         ...layer.constructor === undefined ? [] : byOwner.get(layer.constructor) ?? []];
       request(layer, "constructor-layer", source, identity, plan.definition.fileName, bindings, demands,
         { kind: "construction", plan, layer },
-        layer.fields.map(field => field.carrier), [], points.flatMap(point =>
+        layer.fields.map(field => field.carrier), [], [], points.flatMap(point =>
           plan.emission.preparationFor(point.node)?.projections.flatMap(projection => projection.kind === "receiver" ? [projection.carrier] : []) ?? []));
     }
   }
   for (const selected of input.helperEmissionRequests) {
     request(selected.subject, "helper", selected.declaration, selected.identity, selected.nativeOwnerFileName,
-      selected.bindings, [], { kind: "declaration" }, selected.sourceCarriers, selected.callableAdapterInputs, [], selected.returnCarrier);
+      selected.bindings, [], { kind: "declaration" }, selected.sourceCarriers, selected.callableAdapterInputs, [], [], selected.returnCarrier);
   }
   const coveredBodies = new Set(requests.flatMap(request => request.demands.map(demand => demand.owner)));
   for (const [owner, demands] of byOwner) {
