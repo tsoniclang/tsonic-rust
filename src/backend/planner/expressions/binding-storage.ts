@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustNativeBindingStorage, RustNativeStorageBinding, RustPhysicalEmissionContext }
+import type { RustNativeBindingStorage, RustNativeStorageBinding, RustPhysicalEmissionContext, RustNativeCaptureEnvironmentStorage }
   from "../../../target-model/records/physical-emission-contexts.js";
 import type { RustFrameCallableDefinition } from "../../../analysis/callables/frame-values.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -11,6 +11,63 @@ import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import { planRustNativeMemoryCall } from "./native-memory.js";
 
 export type RustInlineBindingStorage = "cell" | "borrow-cell";
+
+type NativeDeclaredEnvironment = Extract<RustNativeCaptureEnvironmentStorage,
+  { readonly kind: "generic" | "frame" | "suspended" }>;
+type NativeEnvironmentIdentity =
+  | Pick<Extract<NativeDeclaredEnvironment, { readonly kind: "generic" }>, "kind" | "definition" | "implementation" | "member">
+  | Pick<Extract<NativeDeclaredEnvironment, { readonly kind: "frame" }>, "kind" | "definition" | "entry" | "implementation">
+  | Pick<Extract<NativeDeclaredEnvironment, { readonly kind: "suspended" }>, "kind" | "implementation">;
+
+export function requireRustNativeCaptureEnvironment(
+  emission: RustPhysicalEmissionContext,
+  identity: Extract<NativeEnvironmentIdentity, { readonly kind: "generic" }>,
+  context: RustPlanContext,
+): Extract<NativeDeclaredEnvironment, { readonly kind: "generic" }>;
+export function requireRustNativeCaptureEnvironment(
+  emission: RustPhysicalEmissionContext,
+  identity: Extract<NativeEnvironmentIdentity, { readonly kind: "frame" }>,
+  context: RustPlanContext,
+): Extract<NativeDeclaredEnvironment, { readonly kind: "frame" }>;
+export function requireRustNativeCaptureEnvironment(
+  emission: RustPhysicalEmissionContext,
+  identity: Extract<NativeEnvironmentIdentity, { readonly kind: "suspended" }>,
+  context: RustPlanContext,
+): Extract<NativeDeclaredEnvironment, { readonly kind: "suspended" }>;
+export function requireRustNativeCaptureEnvironment(
+  emission: RustPhysicalEmissionContext, identity: NativeEnvironmentIdentity, context: RustPlanContext,
+): NativeDeclaredEnvironment {
+  if (context.input.program.physicalEmissionContexts.contextFor(emission.use) !== emission)
+    return failRustPlannerInvariant("A native capture environment requires its actual original physical emission context.");
+  const selected = emission.nativeEnvironments.filter((candidate): candidate is NativeDeclaredEnvironment =>
+    identity.kind === "generic" && candidate.kind === "generic" &&
+      candidate.definition === identity.definition && candidate.implementation === identity.implementation &&
+      candidate.member === identity.member ||
+    identity.kind === "frame" && candidate.kind === "frame" &&
+      candidate.definition === identity.definition && candidate.entry === identity.entry &&
+      candidate.implementation === identity.implementation ||
+    identity.kind === "suspended" && candidate.kind === "suspended" &&
+      candidate.implementation === identity.implementation);
+  const environment = selected[0];
+  if (selected.length !== 1 || environment === undefined)
+    return failRustPlannerInvariant("A native capture environment requires one completed original owner, member and physical context.");
+  return environment;
+}
+
+export function requireRustNativeCaptureStorage(
+  environment: RustNativeCaptureEnvironmentStorage, slotIndex: number,
+  emission: RustPhysicalEmissionContext, context: RustPlanContext,
+): RustNativeStorageBinding {
+  if (context.input.program.physicalEmissionContexts.contextFor(emission.use) !== emission ||
+    !emission.nativeEnvironments.includes(environment) || environment.slots[slotIndex] === undefined)
+    return failRustPlannerInvariant("A native capture slot requires its original completed environment and physical context.");
+  const selected = emission.nativeBindings.filter(binding => binding.owner.kind === "capture" &&
+    binding.owner.environment === environment && binding.owner.slotIndex === slotIndex);
+  const binding = selected[0];
+  if (selected.length !== 1 || binding === undefined)
+    return failRustPlannerInvariant("A native capture slot requires one completed original payload and storage representation.");
+  return binding;
+}
 
 export function requireRustNativeStorageBinding(declaration: Node, context: RustPlanContext): RustNativeStorageBinding {
   const selected = context.emissionContext?.nativeBindings.find(row => row.declaration === declaration);

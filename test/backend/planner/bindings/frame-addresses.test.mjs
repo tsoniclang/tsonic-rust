@@ -8,10 +8,54 @@ import { writeRustProjectDispatchedField } from "../../../../dist/backend/planne
 import { createRustNativeFrameOwner } from "../../../../dist/backend/planner/bindings/frame-storage.js";
 import { planRustNativeFrameStorageItems } from "../../../../dist/backend/planner/declarations/callables/frame-implementations.js";
 import { rustTypeFromSelectedNativeCarrier } from "../../../../dist/backend/planner/types/render.js";
+import { requireRustNativeCaptureEnvironment, requireRustNativeCaptureStorage }
+  from "../../../../dist/backend/planner/expressions/binding-storage.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { recursiveCallbackProtocolCases } from "../../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+
+test("completed native capture readers use exact context, owner and slot identities without recomputing policy", () => {
+  const use = {};
+  const definition = {};
+  const implementation = {};
+  const member = {};
+  const declaration = {};
+  const slots = Object.freeze([{ kind: "binding", capture: { declaration, reference: {}, storage: "value", carrier: {} } }]);
+  const generic = Object.freeze({ kind: "generic", use, definition, implementation, member, slots });
+  const frame = Object.freeze({ kind: "frame", use, definition, implementation, entry: {}, slots: Object.freeze([]),
+    payload: Object.freeze({ kind: "none" }) });
+  const suspended = Object.freeze({ kind: "suspended", use, implementation, slots });
+  const bindings = [generic, suspended].map(environment => Object.freeze({ declaration,
+    owner: Object.freeze({ kind: "capture", environment, slotIndex: 0 }), storage: {}, readCarrier: {} }));
+  const emission = Object.freeze({ use, nativeEnvironments: Object.freeze([generic, frame, suspended]),
+    nativeBindings: Object.freeze(bindings) });
+  const context = { input: { program: {
+    physicalEmissionContexts: { contextFor: selected => selected === use ? emission : undefined },
+    get callableValues() { throw new Error("a sealed lookup cannot run a callable producer"); },
+    get source() { throw new Error("a sealed lookup cannot inspect or classify source"); },
+  } } };
+  assert.equal(requireRustNativeCaptureEnvironment(emission,
+    { kind: "generic", definition, implementation, member }, context) === generic, true,
+  "the exact physical member selects its identical completed environment");
+  assert.equal(requireRustNativeCaptureEnvironment(emission,
+    { kind: "frame", definition, entry: frame.entry, implementation }, context) === frame, true,
+  "an exact frame alternative keeps actual absence of a state payload");
+  assert.equal(requireRustNativeCaptureEnvironment(emission,
+    { kind: "suspended", implementation }, context) === suspended, true,
+  "the original suspended implementation selects its identical owner");
+  for (const [index, environment] of [generic, suspended].entries())
+    assert.equal(requireRustNativeCaptureStorage(environment, 0, emission, context) === bindings[index], true,
+      "identical source declarations in distinct environments never select the first unrelated slot");
+  assert.throws(() => requireRustNativeCaptureEnvironment(emission,
+    { kind: "generic", definition, implementation, member: {} }, context), /one completed original owner/,
+  "an equal-shaped foreign member cannot replace the admitted identity");
+  assert.throws(() => requireRustNativeCaptureStorage({ ...generic }, 0, emission, context), /original completed environment/,
+    "an equal-shaped foreign environment cannot impersonate the sealed owner");
+  assert.throws(() => requireRustNativeCaptureEnvironment({ ...emission },
+    { kind: "suspended", implementation }, context), /original physical emission context/,
+  "a reconstructed context is not the original admitted physical use");
+});
 
 for (const name of ["addressed-lexical-frame", "captured-class-field"]) {
   test(`${name} constructs its one actual native frame owner with exact original slots`, () => {
