@@ -5,11 +5,14 @@ export interface RustSourceFileOutputIdentity {
   readonly relativeSourcePath: string;
   readonly moduleSegments: readonly string[];
   readonly moduleName: string;
-  readonly artifactPath: string;
   readonly childModuleNames: readonly string[];
   readonly packageId: string;
   readonly componentId: string;
   readonly externalCrateName?: string;
+}
+
+export function rustSourceItemIdentity(fileName: string, itemName: string): string {
+  return `${fileName.length}:${fileName}${itemName.length}:${itemName}`;
 }
 
 export function rustModuleNameForSourcePath(
