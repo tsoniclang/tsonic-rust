@@ -33,7 +33,7 @@ export function rustGenericCallableEnvironment(
   const consts = new Map<string, RustTargetConstArgument>();
   const references = rustTargetGenericReferences({ kind: "tuple", elements: [
     ...capture.captures, ...capture.receiverFields, ...capture.receivers,
-    ...capture.inputs.map(input => input.trait), ...value.retainedEnvironment,
+    ...capture.inputs.map(input => input.trait),
   ] });
   const retained = new Set([...value.environment, ...value.retainedEnvironment]
     .flatMap(type => rustTargetGenericReferences(type).typeIdentities));

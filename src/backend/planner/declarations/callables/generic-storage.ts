@@ -39,7 +39,7 @@ export function genericCallableStorageItems(
     ...identity.pairs.map(pair => ({
       pattern: { kind: "tuple" as const, elements: ([["left", pair.left], ["right", pair.right]] as const).map(([name, member]) => ({
         kind: "tuple-variant" as const, path: `Self::${member.variantName}`,
-        elements: [pair.kind === "static"
+        elements: [pair.kind === "declaration"
           ? { kind: "wildcard" as const } : { kind: "binding" as const, name }],
       })) },
       expression: rustCallableIdentityPredicate(pair.kind,

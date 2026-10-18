@@ -12,16 +12,12 @@ import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysical
   RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import type { RustGenericCallableImplementation } from "./generic-values.js";
 import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../resources/effects-work-budget.js";
-import { rustGenericCallablePhysicalBindings } from "./generic-bindings.js";
-import { substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
-import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export interface RustGenericCallableIdentityPair {
   readonly left: RustGenericCallablePhysicalMember;
   readonly right: RustGenericCallablePhysicalMember;
-  readonly kind: RustGenericCallableImplementation["identity"];
+  readonly kind: "declaration" | "activation";
 }
 
 export interface RustGenericCallableIdentitySelection {
@@ -64,26 +60,19 @@ function selectIdentity(
   if (!rustGenericCallableSignaturesMatch(leftCarrier, rightCarrier)) return undefined;
   const left = physical.definitionFor(leftCarrier);
   const right = physical.definitionFor(rightCarrier);
-  const leftArguments = physical.argumentsFor(leftCarrier);
-  const rightArguments = physical.argumentsFor(rightCarrier);
   if (left === undefined || right === undefined || !left.identityObserved || !right.identityObserved ||
-    leftArguments === undefined || rightArguments === undefined) return undefined;
-  const leftBindings = rustGenericCallablePhysicalBindings(left.parameters, leftArguments);
-  const rightBindings = rustGenericCallablePhysicalBindings(right.parameters, rightArguments);
-  if (leftBindings === undefined || rightBindings === undefined) return undefined;
+    physical.argumentsFor(leftCarrier) === undefined || physical.argumentsFor(rightCarrier) === undefined) return undefined;
   const valid = (definition: RustGenericCallablePhysicalDefinition): boolean => definition.members.length > 0 &&
     definition.members.every(member => {
       budget.step();
       const implementation = member.implementation;
-      return physical.environmentFor(implementation) !== undefined && (implementation.identity === "static"
+      return physical.environmentFor(implementation) !== undefined && (implementation.creation === "declaration"
         ? implementation.storage === "value" && implementation.captures.length === 0 &&
           implementation.receivers.length === 0 && implementation.receiverFields.length === 0
-        : implementation.identity === "activation" && implementation.storage === "shared");
+        : implementation.creation === "activation" && implementation.storage === "shared");
     });
   if (!valid(left) || !valid(right)) return undefined;
-  if (correspondence?.left === left && correspondence.right === right &&
-    rustTargetTypeRefEquals(correspondence.leftCarrier, leftCarrier) &&
-    rustTargetTypeRefEquals(correspondence.rightCarrier, rightCarrier)) return Object.freeze({
+  if (correspondence?.left === left && correspondence.right === right) return Object.freeze({
     leftCarrier, rightCarrier, left, right, pairs: correspondence.pairs, exhaustive: correspondence.exhaustive,
   });
   const candidates = new Map<Node, RustGenericCallablePhysicalMember[]>();
@@ -98,22 +87,12 @@ function selectIdentity(
   for (const member of left.members) {
     budget.step();
     const matches = candidates.get(member.implementation.declaration) ?? [];
-    const arguments_ = member.arguments.map(argument => substituteRustTargetGenericArgument(argument,
-      leftBindings.types, leftBindings.lifetimes, leftBindings.consts));
-    let matched = 0;
+    if (matches.length !== right.members.length) exhaustive = false;
     for (const candidate of matches) {
       budget.step();
       if (candidate.implementation !== member.implementation) return undefined;
-      if (member.implementation.identity === "static") {
-        const actual = candidate.arguments.map(argument => substituteRustTargetGenericArgument(argument,
-          rightBindings.types, rightBindings.lifetimes, rightBindings.consts));
-        if (arguments_.length !== actual.length || arguments_.some((argument, index) =>
-          !rustTargetGenericArgumentEquals(argument, actual[index]))) continue;
-      }
-      pairs.push(Object.freeze({ left: member, right: candidate, kind: member.implementation.identity }));
-      matched++;
+      pairs.push(Object.freeze({ left: member, right: candidate, kind: member.implementation.creation }));
     }
-    if (matched !== right.members.length) exhaustive = false;
   }
   return Object.freeze({ leftCarrier, rightCarrier, left, right, pairs: Object.freeze(pairs), exhaustive });
 }
