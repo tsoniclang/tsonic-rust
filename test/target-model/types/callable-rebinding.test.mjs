@@ -61,6 +61,23 @@ test("generic and frame signature finalization retain body-only captured type bi
   assert.equal(rustFrameCallableValue(rebound).environment.some(type => type.identity === captured.identity), true);
 });
 
+test("generic signature finalization preserves already closed retained native bindings", () => {
+  const parameter = { kind: "type-parameter", name: "Value", identity: "source:Value" };
+  const captured = { kind: "type-parameter", name: "Captured", identity: "source:Captured" };
+  const template = rustGenericCallableTargetType([parameter], [parameter], parameter, owner.origin, [captured]);
+  const instantiated = substituteRustTargetTypeParameters(template, new Map([[captured.identity, int64]]));
+  const selected = rebindRustCallableCarrier(instantiated, [parameter, bool], bool, { typeParameters: [parameter] });
+  assert.equal(selected !== undefined, true, "an admitted closed native binding survives genuine signature completion");
+  const value = rustGenericCallableValue(selected);
+  assert.equal(value.retainedEnvironment.length === 1 && rustTargetTypeRefEquals(value.retainedEnvironment[0], int64), true,
+    "the original actual binding is not re-extracted from free type references and lost after substitution");
+  assert.equal(value.environment.length, 0, "identity-only metadata is not a fake runtime invocation parameter");
+  const unbound = rustGenericCallableValue(rebindRustCallableCarrier(template, [parameter, bool], bool,
+    { typeParameters: [parameter] }));
+  assert.equal(unbound.retainedEnvironment.length === 1 &&
+    unbound.retainedEnvironment[0].identity === captured.identity, true, "the original open binder is also retained exactly once");
+});
+
 test("an unchanged instantiated class-frame protocol retains its exact canonical environment binders", () => {
   const element = { kind: "type-parameter", name: "Element", identity: "source:Element" };
   const captured = { kind: "type-parameter", name: "Captured", identity: "source:Captured" };

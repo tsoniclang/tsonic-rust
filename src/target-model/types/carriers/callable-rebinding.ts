@@ -3,7 +3,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { rustCallableProtocol, rustCallableTargetType, rustCallableInputProtocol, rustCallableInputTargetType } from "./callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "./frame-callables.js";
-import { rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
+import { rustGenericCallableTargetType, rustGenericCallableValue, rustGenericCallableCarrier } from "./generic-callables.js";
 
 export function rebindRustCallableCarrier(
   carrier: TargetTypeRef,
@@ -30,8 +30,16 @@ export function rebindRustCallableCarrier(
     return snapshotClosedMetadata({ ...carrier, args: parameters, result });
   }
   const generic = rustGenericCallableValue(carrier);
-  if (generic !== undefined) return rustGenericCallableTargetType(options.typeParameters ?? generic.signature.typeParameters,
-    parameters, result, generic.origin, options.environment ?? [...generic.environment, ...generic.retainedEnvironment]);
+  if (generic !== undefined) {
+    const rebound = rustGenericCallableTargetType(options.typeParameters ?? generic.signature.typeParameters,
+      parameters, result, generic.origin, options.environment ?? [...generic.environment, ...generic.retainedEnvironment]);
+    const selected = rustGenericCallableValue(rebound);
+    if (selected === undefined) return undefined;
+    const retainedEnvironment = [...generic.retainedEnvironment];
+    for (const type of selected.retainedEnvironment)
+      if (!retainedEnvironment.some(retained => rustTargetTypeRefEquals(retained, type))) retainedEnvironment.push(type);
+    return rustGenericCallableCarrier({ ...selected, retainedEnvironment });
+  }
   const frame = rustFrameCallableValue(carrier);
   if (frame !== undefined) {
     if (options.environment !== undefined || options.typeParameters !== undefined && options.typeParameters.length !== 0)

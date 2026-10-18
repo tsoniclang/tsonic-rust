@@ -15,12 +15,21 @@ export function resolveRustGenericCallableEnvironment(
   resolving: Set<object>,
 ): readonly TargetTypeRef[] | undefined {
   if (declaration === undefined) return undefined;
-  const enclosing = sourceEnclosingGenericParameters(declaration, context.ast);
+  const enclosing = resolveRustEnclosingGenericCallableEnvironment(declaration, context);
   const captured = resolveRustCallableEnvironment(declaration, context, options, resolving);
   if (enclosing === undefined || captured === undefined) return undefined;
-  const environment: TargetTypeRef[] = [...captured];
-  for (const declaration of enclosing) {
-    const parameter = context.sourceLifetimes.parameterFor(declaration);
+  return Object.freeze([...captured, ...enclosing]);
+}
+
+export function resolveRustEnclosingGenericCallableEnvironment(
+  declaration: Node,
+  context: Pick<RustTargetTypeResolutionContext, "ast" | "sourceLifetimes">,
+): readonly TargetTypeRef[] | undefined {
+  const enclosing = sourceEnclosingGenericParameters(declaration, context.ast);
+  if (enclosing === undefined) return undefined;
+  const environment: TargetTypeRef[] = [];
+  for (const sourceParameter of enclosing) {
+    const parameter = context.sourceLifetimes.parameterFor(sourceParameter);
     if (parameter === undefined) return undefined;
     if (parameter.kind === "type") environment.push(rustTypeParameterFromSourceContract(parameter));
   }
