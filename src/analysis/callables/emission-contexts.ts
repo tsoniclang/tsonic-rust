@@ -611,6 +611,7 @@ export function prepareRustEmissionContextRequests(
       const sourceErrorRegions: RustPhysicalEmissionOperandPreparation["sourceErrorRegions"][number][] = [];
       let genericInvocation: RustGenericCallableInvocationFact | undefined;
       for (const adapter of storage.callableAdapters) {
+        if (adapter.node !== node) continue;
         retainAdapter(Object.freeze({ ...adapter, sourceCarrier: apply(adapter.sourceCarrier),
           conversion: substituteRustCallablePhysicalConversion(adapter.conversion, request.bindings, apply) }));
       }

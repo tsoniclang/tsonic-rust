@@ -339,6 +339,13 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
   const adaptedInput = current.initializer("widened");
   const conversion = current.program.records.contextualValueConversion.get(adaptedInput);
   assert.equal(conversion?.conversion.kind, "callable-adapter", "the required argument adapter is retained");
+  const adaptedContext = current.program.physicalEmissionContexts.contextForOwner(current.declaration("adapt"), "native-body");
+  const callerContext = current.program.physicalEmissionContexts.contextForOwner(current.declaration("forward"), "native-body");
+  assert.equal(adaptedContext !== undefined && callerContext !== undefined, true, "both actual emitted owners retain their own contexts");
+  assert.equal(adaptedContext.callableAdapters.some(row => row.node === adaptedInput && row.selection === conversion.conversion), true,
+    "the original conversion is rendered in its actual selecting body");
+  assert.equal(callerContext.callableAdapters.some(row => row.node === adaptedInput), false,
+    "callee storage provenance does not re-emit that conversion in either caller environment");
   assert.equal(rustTargetTypeRefEquals(adapted, conversion.targetCarrier), true,
     "binding storage publishes the selected exact destination, not its annotation's placeholder");
   const returns = [];

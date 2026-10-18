@@ -3,13 +3,6 @@ import type { TargetTypeRef } from "../model.js";
 
 export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTypeRef["kind"]>[] = Object.freeze([
   {
-    id: "src/target-model/types/carriers/native.ts#rustNativeTraitRef",
-    kinds: ["trait-ref"],
-    declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustNativeTraitRef" },
-    counterpart: { module: "src/target-model/types/factories.ts", symbol: "csharpTargetNamedType" },
-    frozen: false,
-  },
-  {
     id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeRecordFieldTargetType",
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeRecordFieldTargetType" },

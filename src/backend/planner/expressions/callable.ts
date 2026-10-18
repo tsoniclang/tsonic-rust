@@ -259,7 +259,9 @@ export function planRustCallableExpressionBody(
   if (bodyNode === undefined) {
     return undefined;
   }
-  const errorRegion = planRustErrorRegion(node, { ...context, callableDeclaration: node, fallibleBoundary: undefined });
+  const bodyEmissionContext = requireRustCallableBodyContext(context, node);
+  const errorRegion = planRustErrorRegion(node, { ...rustContextForEmission(context, bodyEmissionContext),
+    callableDeclaration: node, fallibleBoundary: undefined });
   if (errorRegion === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.closure-error-boundary", "Callable expression has no exact finalized native error region."));
@@ -408,7 +410,7 @@ export function planRustCallableExpressionBody(
       : rustRecursiveReceiverFieldContext(captureFact.recursiveField, { kind: "path", path: recursiveName }, wholeEnvironment.context);
   if (recursiveContext === undefined) return undefined;
   const callableClosureContext: RustPlanContext = {
-    ...rustContextForEmission(recursiveContext, requireRustCallableBodyContext(context, node)),
+    ...rustContextForEmission(recursiveContext, bodyEmissionContext),
     functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };
