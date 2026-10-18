@@ -24,8 +24,7 @@ export function rustRetainedCallLifetimes(
   const environment = selected.environment;
   if (!references.lifetimeIdentities.includes(rustLifetimeKey(environment.lifetime))) return new Map();
   const caller = sourceEnclosingCallable(invocation, ast);
-  const callerBindings = caller === undefined ? { kind: "resolved" as const, bindings: storage.emptyBindings }
-    : storage.bindingsForDeclaration(caller);
+  const callerBindings = storage.bindingsForLexicalOwner(invocation);
   if (callerBindings.kind !== "resolved") return undefined;
   const activation = storage.bindingsForInvocation(declaration, invocation, callerBindings.bindings);
   if (activation.kind !== "resolved") return undefined;
@@ -48,6 +47,7 @@ export function rustRetainedCallLifetimes(
     }
     const root = subject.kind === "input"
       ? records.sourceParameterAbi.get(subject.node)?.parameterCarrier
+      : subject.kind === "return" ? records.sourceCallableReturn.get(subject.node)?.returnCarrier
       : records.runtimeCarrier.get(subject.node)?.carrier;
     if (subject.projection.length === 0) return root;
     if (projected.has(subject)) return projected.get(subject);
@@ -83,7 +83,8 @@ export function rustRetainedCallLifetimes(
         } else carriers.push(carrier);
         continue;
       }
-      if (source.kind !== "value") return undefined;
+      if (source.kind !== "value" && source.kind !== "return") return undefined;
+      if (source.kind === "return" && rustHasOpenOwnedStorage(carrier)) return undefined;
       carriers.push(carrier);
     }
   }
