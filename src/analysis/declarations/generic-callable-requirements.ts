@@ -381,6 +381,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     const carrier = records.runtimeCarrier.get(node)?.carrier;
     const bindingError = cloneRequirements.binding(node, carrier);
     if (bindingError !== undefined) return bindingError;
+    const bindingProjection = records.bindingProjection.get(node);
     for (const signatureCarrier of [
       records.sourceCallableReturn.get(node)?.returnCarrier,
       records.sourceParameterAbi.get(node)?.parameterCarrier,
