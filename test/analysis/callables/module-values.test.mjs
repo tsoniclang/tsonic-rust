@@ -143,10 +143,10 @@ for (const kind of ["KindObjectBindingPattern", "KindArrayBindingPattern"]) {
       test(`module admission refuses ${kind} ${prefixFirst ? "after" : "before"} ${prefix} initialization`, () => {
         const selected = modulePatternPlan(kind, { prefix, prefixFirst });
         assert.equal(selected.requirement.kind, "unresolved", "a present binding fact does not prove module-pattern storage");
-        assert.equal(selected.requirement.node === selected.declaration, true, "the exact unsupported declaration owns the refusal");
+        assert.equal(selected.requirement.node === selected.declaration, true, "the exact invalid root evidence owns the refusal");
         assert.equal(selected.requirement.reason,
-          "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.",
-          "the existing error owner receives a truthful capability reason, not a fabricated missing fact");
+          "Top-level binding pattern requires its finalized ordered root and leaf module-binding evidence.",
+          "the existing error owner receives the exact missing root-evidence reason");
         assert.equal(selected.bindings.has(selected.declaration), true, "the actual module-binding evidence remains present");
         assert.equal(selected.name.kind, kind, "classification does not replace the original checked pattern");
       });

@@ -83,7 +83,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
     if (parent !== undefined && input.ast.is.IsTypeOfExpression(parent) &&
       Node_Expression(input.ast, parent) === operand) return;
     const binding = input.records.bindingProjection.get(node);
-    if (binding?.projection.kind === "object-rest") {
+    if (binding !== undefined && "bindingCarrier" in binding && binding.projection.kind === "object-rest") {
       markStructuralShapeConstructed(binding.bindingCarrier);
     }
     const upcast = input.records.projectUpcast.get(node);

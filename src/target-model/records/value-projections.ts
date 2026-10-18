@@ -107,6 +107,7 @@ export type RustSourceBindingFact =
     };
 
 export type RustBindingProjection =
+  | { readonly kind: "omitted" }
   | {
       readonly kind: "object-field";
       readonly storage: "project-object" | "structural-object";
@@ -138,11 +139,16 @@ export type RustBindingProjection =
   | { readonly kind: "vec-rest"; readonly start: number }
   | { readonly kind: "js-array-rest"; readonly start: number };
 
-export interface RustBindingProjectionFact {
+export interface RustBindingValueProjectionFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly projectedCarrier: TargetTypeRef;
   readonly storageCarrier: TargetTypeRef;
   readonly bindingCarrier: TargetTypeRef;
-  readonly projection: RustBindingProjection;
+  readonly projection: Exclude<RustBindingProjection, { readonly kind: "omitted" }>;
   readonly normalization: RustBindingNormalization;
 }
+
+export type RustBindingProjectionFact = RustBindingValueProjectionFact | {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly projection: { readonly kind: "omitted" };
+};
