@@ -227,7 +227,7 @@ export function analyzeRustCarriedLoanAdmission(input: {
             return undefined;
           }
           expressions.set(point.source, withOwnership(selected, read?.value.kind !== "borrow", work));
-          if (read?.value.kind === "move") for (const key of subjectsByNode.get(operation.binding) ?? []) {
+          if (read?.source.kind === "move") for (const key of subjectsByNode.get(operation.binding) ?? []) {
             storage.set(key, withOwnership(incoming.storage.get(key) ?? new Map(), false, work));
           }
         } else if (operation.kind === "write" || operation.kind === "write-location") {
@@ -376,32 +376,43 @@ export function analyzeRustCarriedLoanAdmission(input: {
       const state = forward.before.get(point.id)!;
       for (const values of [state.expressions, state.storage]) for (const value of values.values())
         for (const loan of value.keys()) active.add(loan);
-      for (const use of input.nativeInputs.values()) {
-        if (use.operand.context !== context) continue;
-        const origin = use.operand.origin;
-        if (origin.kind !== "call-input") continue;
-        const moving = use.kind === "value" && use.input.mode === "value" && use.read.value.kind === "move";
-        const exclusive = use.kind === "place" && use.input.mode === "mut-ref";
-        if (!moving && !exclusive || (exclusive ? origin.operationNode !== point.source ||
-          point.operation.kind !== "evaluate" && point.operation.kind !== "write-location" : use.node !== point.source)) continue;
+      const conflict = (node: Node, moving: boolean, actual: RustNativeInputPlace["place"]["sourcePath"], fresh: boolean): void => {
         for (const loan of active) {
           if (!backward.after.get(point.id)!.has(loan) || loan.row.node === point.source) continue;
           const original = loan.root.place.sourcePath!;
-          const actual = use.kind === "place" ? use.place.sourcePath : sourcePath(use.node);
           if (actual === undefined) {
-            const fresh = use.kind === "place" ? use.place.storage.kind === "owned" :
-              !use.read.readsStorage && !use.read.sharedReference && use.read.formation.kind !== "borrow";
-            if (!fresh) reject(use.node, "The conflicting native value use has no original physical storage path.");
+            if (!fresh) reject(node, "The conflicting native value use has no original physical storage path.");
             continue;
           }
           if (actual.declaration !== original.declaration || rustNativeStoragePathsDisjoint(actual.projections, original.projections)) continue;
           const key = `${point.id}:${loans.indexOf(loan)}:${moving ? "move" : "exclusive"}`;
           if (reported.has(key)) continue;
           reported.add(key);
-          reject(use.node, moving ? "The native source cannot move while its returned owned value retains a live loan."
+          reject(node, moving ? "The native source cannot move while its returned owned value retains a live loan."
             : "The native source cannot be mutably borrowed while its returned owned value retains a live loan.",
           moving ? "RUST_NATIVE_RESULT_LOAN_MOVE_CONFLICT" : "RUST_NATIVE_RESULT_LOAN_MUTABLE_CONFLICT");
         }
+      };
+      if (point.operation.kind === "read") {
+        const read = input.ownership.reads.get(point.source);
+        if (read?.source.kind === "move") conflict(point.source, true, sourcePath(point.source),
+          !read.readsStorage && !read.sharedReference && read.formation.kind !== "borrow");
+      } else if (point.operation.kind === "capture") {
+        const capture = input.ownership.captures.get(point.source)?.find(capture =>
+          point.operation.kind === "capture" && capture.declaration === point.operation.binding);
+        if (capture?.read.kind === "move") conflict(capture.reference, true, sourcePath(capture.reference), false);
+      }
+      for (const use of input.nativeInputs.values()) {
+        if (use.operand.context !== context) continue;
+        const origin = use.operand.origin;
+        if (origin.kind !== "call-input") continue;
+        const moving = use.kind === "value" && use.input.mode === "value" && use.read.source.kind === "move";
+        const exclusive = use.kind === "place" && use.input.mode === "mut-ref";
+        if (!moving && !exclusive || (exclusive ? origin.operationNode !== point.source ||
+          point.operation.kind !== "evaluate" && point.operation.kind !== "write-location" : use.node !== point.source)) continue;
+        conflict(use.node, moving, use.kind === "place" ? use.place.sourcePath : sourcePath(use.node),
+          use.kind === "place" ? use.place.storage.kind === "owned" :
+            !use.read.readsStorage && !use.read.sharedReference && use.read.formation.kind !== "borrow");
       }
     }
 

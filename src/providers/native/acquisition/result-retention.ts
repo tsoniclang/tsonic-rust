@@ -226,7 +226,8 @@ function isBatch(value: unknown, identity: { readonly snapshotDigest: string; re
   if (!record(value) || value.protocolVersion !== rustCompilerProviderProtocolVersion ||
     value.snapshotDigest !== identity.snapshotDigest || value.compilerIdentity !== identity.compilerIdentity || value.questionDigest !== identity.questionDigest ||
     !Array.isArray(value.facts) || value.facts.length !== questions.length || !Array.isArray(value.evidence)) return false;
-  if (!value.evidence.every((evidence: unknown) => record(evidence) && typeof evidence.sourceDigest === "string" &&
+  const evidence = value.evidence;
+  if (!evidence.every((evidence: unknown) => record(evidence) && typeof evidence.sourceDigest === "string" &&
     /^[a-f0-9]{64}$/u.test(evidence.sourceDigest) && Array.isArray(evidence.command) &&
     evidence.command.length > 0 && evidence.command.every(part => typeof part === "string") &&
     Number.isSafeInteger(evidence.exitCode) && typeof evidence.diagnosticsDigest === "string" &&
@@ -238,8 +239,8 @@ function isBatch(value: unknown, identity: { readonly snapshotDigest: string; re
         typeof span.endLine === "number" && Number.isSafeInteger(span.endLine) && span.endLine >= span.startLine &&
         typeof span.primary === "boolean")))) return false;
   if (value.facts.some((fact: unknown) => record(fact) && fact.kind === "resolved") &&
-    (value.evidence.length !== 3 || [0, 2].some(index => !record(value.evidence[index]) || value.evidence[index].exitCode !== 0 ||
-      !Array.isArray(value.evidence[index].diagnostics) || value.evidence[index].diagnostics.length !== 0))) return false;
+    (evidence.length !== 3 || [0, 2].some(index => !record(evidence[index]) || evidence[index].exitCode !== 0 ||
+      !Array.isArray(evidence[index].diagnostics) || evidence[index].diagnostics.length !== 0))) return false;
   return value.facts.every((fact: unknown, index: number) => record(fact) && fact.questionId === questions[index]!.id &&
     fact.applicationIdentity === questions[index]!.applicationIdentity && (fact.kind === "resolved" &&
       (fact.use === "retained" || fact.use === "released") && (fact.cleanup === "retained" || fact.cleanup === "released") ||

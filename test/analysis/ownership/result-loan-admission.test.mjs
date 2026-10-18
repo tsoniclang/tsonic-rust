@@ -160,6 +160,16 @@ test("all six carried-Guard controls use real native acquisition and preserve th
       assert.equal(checked.status, 0, `${method}/write: native unwind runs and observes guard cleanup at124`);
     }
   }
+  for (const [name, body] of [
+    ["ordinary-assignment", "const stored = owner(); const held = stored.guard; const moved = stored; return held.runtime(take(moved));"],
+    ["captured-move", "const stored = owner(); const held = stored.guard; const finish = () => take(stored); return held.runtime(finish());"],
+  ]) {
+    const result = current.compile(body).result;
+    assert.equal(result.diagnostics.length, 1, `${name}: one actual source-formation conflict is rejected before sealing`);
+    assert.equal(result.diagnostics[0].code, "RUST_NATIVE_RESULT_LOAN_MOVE_CONFLICT",
+      `${name}: ordinary source moves use the same actual retained-loan admission as provider inputs`);
+    assert.equal(result.artifacts.length, 0, `${name}: no rejected native source is planned or emitted`);
+  }
   const positive = current.compile("const stored = owner(); const other = owner(); return stored.guard.runtime(take(other));").result;
   assert.equal(positive.diagnostics.length, 0, "a real disjoint owner remains valid");
   const generated = positive.artifacts.filter(value => value.path.endsWith(".rs")).map(value => value.text).join("\n");
