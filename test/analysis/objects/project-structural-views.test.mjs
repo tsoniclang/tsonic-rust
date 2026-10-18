@@ -75,15 +75,26 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
     },
     definitionForDeclaration: node => node === declaration ? definition : undefined,
     definitionContainingDeclaration: node => node === member ? definition : undefined,
+    objectLayoutForDefinition: owner => owner === definition ? {
+      declaration, kind: "class", fields: [{ declaration: member, sourceName: "value", storageIndex: 0, presence: "required" }],
+      indexSignatures: [],
+    } : undefined,
     isPolymorphic: () => true, openCarrier: () => source(parameter), externalBaseForDefinition: () => undefined,
     relationship: receiver => ({ kind: "related", targetType: receiver }), memberSlotName: (_, access) => `slot_${access}`,
     instantiateMemberCarrier: (_, receiver, declared) => substituteRustTargetTypeParameters(declared,
       new Map([[parameter.identity, receiver.value.genericArguments[0].type]])),
   };
   const semantics = { declarations: { declaredType: node => node === declaration ? sourceType : undefined },
-    types: { typeArgumentBindings: () => [], structuralMembers: (source, destination, purpose) => (assert.equal(purpose, "read"), { kind: "available", destination: { calls: [], constructs: [], indexes: [] },
-      members: [{ kind: "present", destination: { declarations: [destination], property: { symbol } },
-        source: { read: "field", declarations: [member], getters: [], setters: [], property: { readonly: false } } }] }) } };
+    types: { typeArgumentBindings: () => [], structuralMembers: (actualType, requiredType, purpose) => {
+      assert.equal(purpose, "read");
+      assert.equal(actualType === sourceType && requiredType === destinationType, true,
+        "the exact checked source and required types remain distinct from declaration nodes");
+      assert.equal(shape.fields[0].declarations[0] === destination && ast.kindName(destination) === "KindPropertySignature", true,
+        "the selected destination is the original authored property declaration");
+      return { kind: "available", destination: { calls: [], constructs: [], indexes: [] },
+        members: [{ kind: "present", destination: { declarations: [destination], property: { symbol } },
+          source: { read: "property", declarations: [member], getters: [], setters: [], property: { readonly: false } } }] };
+    } } };
   const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined } };
   const walk = { sourceTypes, operationOptions: { projectTypes, sourceTypes, receiverFieldAliases: { aliasFor: () => undefined } },
     context: { ast, projectTypes, typeDefinitions: emptyRustTypeDefinitions, semanticsFor: () => semantics,
