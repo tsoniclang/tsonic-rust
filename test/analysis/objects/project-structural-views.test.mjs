@@ -14,7 +14,7 @@ import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/p
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { selectRustCallableValueAdapter } from "../../../dist/analysis/callables/adapters.js";
+import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
 const otherParameter = { kind: "type-parameter", identity: "destination:Value", name: "Value" };

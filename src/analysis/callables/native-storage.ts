@@ -9,6 +9,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { instantiateRustSourceUnionPayloads } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
 import { rustCallableConversionPhysical } from "../../target-model/conversions/callable-physical.js";
@@ -243,7 +244,7 @@ export function createRustNativeStorageQueries(input: {
         const selected = nativeCall.input;
         const arguments_ = rustNativeCallableInvocationArguments(selected, operation);
         const signature = arguments_ === undefined ? undefined
-          : rustNativeCallableInputPhysicalSignature(selected, arguments_, input.definitions);
+          : rustNativeCallableInputPhysicalSignature(selected, arguments_);
         if (signature === undefined) return undefined;
         const carrier = substituteRustTargetGenerics(selected.carrier, caller.bindings.types,
           caller.bindings.lifetimes, caller.bindings.consts);
@@ -347,7 +348,7 @@ export function createRustNativeStorageQueries(input: {
               rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
               ? physicalInputs[0]!.carrier : undefined;
             const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
-              { kind: "selected", carrier: operand, inputs: [...selectedInputs] }, input.definitions);
+              { kind: "selected", carrier: operand, inputs: [...selectedInputs] });
             const file = input.ast.getSourceFile(origin.node);
             candidatePhysical = source === undefined || file === undefined ? undefined
               : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions)?.carrier;
@@ -367,7 +368,8 @@ export function createRustNativeStorageQueries(input: {
               const boundCarrier = originCarrier === undefined ? undefined
                 : callableValueCarrier(substituteRustTargetGenerics(originCarrier, types, lifetimes, consts));
               const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
-                ? undefined : input.producers.physicalFor(origin.node, originCarrier);
+                ? undefined : rustFrameCallableValue(originCarrier) !== undefined
+                  ? originCarrier : input.producers.physicalFor(origin.node, originCarrier);
               candidatePhysical = produced === undefined ? undefined : substituteRustTargetGenerics(produced, types, lifetimes, consts);
             }
             if (candidatePhysical === undefined)

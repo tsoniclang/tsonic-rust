@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef, RustTargetTraitRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
 import type { RustCallableSignature } from "../../target-model/types/carriers/callable-signatures.js";
 import { rustCallableSignatureBinding } from "../../target-model/types/carriers/callable-signatures.js";
@@ -31,6 +32,7 @@ export interface RustNativeCallableProtocol {
     readonly binder: RustLifetimeBinder;
   };
   readonly completion?: RustNativeCallableCompletion;
+  readonly result: TargetTypeRef;
   readonly trait: RustTargetTraitRef;
 }
 
@@ -69,8 +71,10 @@ export function createRustNativeCallableProtocolRegistry(input: {
       let protocol = protocols.get(key);
       if (protocol === undefined) {
         const identity = `native-protocol:${createHash("sha256").update(key).digest("hex")}`;
+        const result = nativeCallableProtocolResult({ ...contract, identity }, input.definitions);
+        if (result === undefined) return undefined;
         const targetName = allocateRustGeneratedName(input.usedNames, `NativeCallable_${identity.slice(-16)}`);
-        protocol = snapshotClosedMetadata({ ...contract, identity, targetName,
+        protocol = snapshotClosedMetadata({ ...contract, identity, targetName, result,
           ...(method.binder.parameters.length === 0 ? {} : {
             boundProducerName: allocateRustGeneratedName(input.usedNames, `${targetName}Bound`),
           }),
@@ -108,7 +112,9 @@ export function rustNativeCallableErrorType(
     name: channel === "invocation" ? "InvocationError" : `AwaitError${channel}`, genericArguments: arguments_ });
 }
 
-export function rustNativeCallableMethodArguments(protocol: RustNativeCallableProtocol): readonly RustTargetGenericArgument[] {
+type RustNativeCallableProtocolResultInput = Pick<RustNativeCallableProtocol, "identity" | "signature" | "method" | "completion">;
+
+function nativeCallableMethodArguments(protocol: RustNativeCallableProtocolResultInput): readonly RustTargetGenericArgument[] {
   return Object.freeze([...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const,
     lifetime: parameter.lifetime })), ...rustTypeGenericArguments(protocol.signature.typeParameters)]);
 }
@@ -126,12 +132,12 @@ export function rustNativeCallableErrorChannel(
   });
 }
 
-export function rustNativeCallableProtocolResult(
-  protocol: RustNativeCallableProtocol,
+function nativeCallableProtocolResult(
+  protocol: RustNativeCallableProtocolResultInput,
   definitions: RustTypeDefinitions,
 ): TargetTypeRef | undefined {
   const self: TargetTypeRef = { kind: "type-parameter", identity: `${protocol.identity}:Self`, name: "Self" };
-  const arguments_ = rustNativeCallableMethodArguments(protocol);
+  const arguments_ = nativeCallableMethodArguments(protocol);
   const captures = [...arguments_.filter(argument => argument.kind === "lifetime"),
     ...rustTypeGenericArguments([self, ...protocol.signature.environmentParameters,
       ...protocol.signature.typeParameters])];
@@ -144,4 +150,16 @@ export function rustNativeCallableProtocolResult(
           output: future.output, error: error(`AwaitError${future.ordinal}`), captures }), definitions);
   return completion === undefined ? undefined : rustNamedTargetType(`${protocol.identity}:result`, "Result",
     rustTypeGenericArguments([completion, error("InvocationError")]));
+}
+
+export function assertRustNativeCallableProtocolResults(
+  protocols: readonly RustNativeCallableProtocol[],
+  definitions: RustTypeDefinitions,
+): void {
+  for (const protocol of protocols) {
+    const result = nativeCallableProtocolResult(protocol, definitions);
+    if (result === undefined || !rustTargetTypeRefEquals(result, protocol.result))
+      failTargetAnalysisInvariant("tsonic-rust",
+        "A sealed native callable protocol result differs from its exact admitted result.");
+  }
 }

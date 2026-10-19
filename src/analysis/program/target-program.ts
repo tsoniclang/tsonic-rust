@@ -368,6 +368,7 @@ export function analyzeRustTargetProgram(
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const callableValues = context.callableValues.seal({
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
+    retainedCallableInputs: retainedCallableInputs.value,
     errorRegions: completedErrorRegions, initialization: initializationErrors.value,
     constructions: context.projectTypes.definitions.flatMap(definition => {
       const plan = projectConstructions.forDefinition(definition);

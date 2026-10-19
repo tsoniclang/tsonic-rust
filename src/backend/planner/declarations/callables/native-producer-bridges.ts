@@ -1,5 +1,4 @@
 import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
-import { rustNativeCallableProtocolResult } from "../../../../analysis/callables/native-protocols.js";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../../../target-model/types/callable-completions.js";
 import { rustFutureTargetId } from "../../../../target-model/types/carriers/primitives.js";
@@ -130,9 +129,8 @@ export function planRustNativeProducerBridge(
   const helperResult = result(associated("InvocationError"), ordinal => associated(`AwaitError${ordinal}`), [
     ...targetLifetimes, ...rustTypeGenericArguments([self, ...boundTypes]),
   ]);
-  const publicResult = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
-  const renderedPublicResult = publicResult === undefined ? undefined : rustTypeFromCarrierInContext(
-    mapRustTargetTypes(publicResult, type => type.kind !== "impl-trait" ? type : { ...type,
+  const renderedPublicResult = rustTypeFromCarrierInContext(
+    mapRustTargetTypes(protocol.result, type => type.kind !== "impl-trait" ? type : { ...type,
       captures: type.captures?.map(argument => argument.kind === "type" && argument.type.kind === "type-parameter" &&
         argument.type.identity === self.identity ? { kind: "type", type: implementation } : argument),
     }), context, "return");

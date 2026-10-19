@@ -8,7 +8,8 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
-import { projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, substituteRustCallableParameterAbi } from "../callables/adapters.js";
+import { projectOwnerTypeSubstitutions, substituteRustCallableParameterAbi } from "../callables/adapters.js";
+import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 
 export interface RustClassValueCallable {

@@ -404,7 +404,7 @@ for (const [name, sourceText] of nativeEntryInverses) {
   test("Rust native callback non-adoption inverse: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
-      files: { "index.ts": sourceText } });
+      files: { "index.ts": "export {};\n" + sourceText } });
     assert.equal(result.diagnostics.length, 0,
       JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     const output = validateGeneratedProject("native-callback-inverse-" + name, result.artifacts, { run: true }).stdout;
@@ -499,7 +499,7 @@ for (const [name, declarations, expression] of nativeOpaquePayloadCases) {
   });
   test("Rust ordinary opaque callable input keeps its native value: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
-      crateName: "ordinary_native_opaque_payload" } }, files: { "index.ts": declarations + "\nconsole.log(await wrap(7));" } });
+      crateName: "ordinary_native_opaque_payload" } }, files: { "index.ts": "export {};\n" + declarations + "\nconsole.log(await wrap(7));" } });
     assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(validateGeneratedProject("ordinary-native-opaque-" + name, result.artifacts, { run: true }).stdout.trim(), "7",
       "ordinary Awaited identity does not add a refusal or alter the native callback result");
@@ -540,7 +540,7 @@ for (const [name, declarations] of nativeConstructorCases) {
   test("Rust official native constructor preserves its ordinary native value: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: [],
       target: { id: "rust", options: { outputType: "bin", crateName: "official_constructor" } },
-      files: { "index.ts": declarations + "\nif ((await wrap(7)) !== 7) throw new Error(\"ordinary constructor payload\");" } });
+      files: { "index.ts": "export {};\n" + declarations + "\nif ((await wrap(7)) !== 7) throw new Error(\"ordinary constructor payload\");" } });
     assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(validateGeneratedProject("official-constructor-" + name, result.artifacts, { run: true }).status, 0,
       "the exact officially selected native constructor preserves the ordinary payload");
@@ -550,7 +550,7 @@ for (const [name, sourceText] of nativeConstructorInverses) {
   test("Rust official native constructor inverse: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: [],
       target: { id: "rust", options: { outputType: "bin", crateName: "official_constructor_inverse" } },
-      files: { "index.ts": sourceText } });
+      files: { "index.ts": "export {};\n" + sourceText } });
     assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(validateGeneratedProject("official-constructor-inverse-" + name, result.artifacts, { run: true }).status, 0,
       "foreign identity and nonresolving callbacks never manufacture adoption");
@@ -692,7 +692,8 @@ for (const [name, extra, receiver] of [
 test("Rust ordinary class receiver retains an executable native payload", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "generic_receiver_payload" } },
-    files: { "index.ts": `class Holder<Value> { constructor(readonly value: Value) {}
+    files: { "index.ts": `export {};
+      class Holder<Value> { constructor(readonly value: Value) {}
       async get(): Promise<Value> { return this.value; } }
       async function use(holder: Holder<number>): Promise<number> { return await holder.get(); }
       console.log(await use(new Holder(7)));` } });
@@ -737,7 +738,8 @@ for (const recursive of [false, true]) {
   }` : "function deliver<Value>(callback: (value: Value) => void, value: Value, count: number): void { callback(value); }";
   test(`Rust retains ${recursive ? "recursive" : "direct"} resolver/value correlation in native execution`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
-      crateName: `resolver_${recursive ? "recursive" : "direct"}_rows` } }, files: { "index.ts": `${helper}
+      crateName: `resolver_${recursive ? "recursive" : "direct"}_rows` } }, files: { "index.ts": `export {};
+      ${helper}
       function wrap<Value>(value: Value): Promise<number> { return new Promise<number>(resolve => {
         deliver(resolve, 7, 2); deliver(item => { void item; }, value, 2);
       }); }

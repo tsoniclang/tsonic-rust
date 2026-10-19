@@ -1,12 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
 
-import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustExpr, RustStmt } from "../../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
-import { applyRustValueConversion } from "../../expressions/value-conversions.js";
-import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
+import { lowerRustValueConversion } from "../../expressions/value-conversions.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 
 export function planRustParameterEntryConversion(
@@ -29,13 +26,5 @@ export function planRustParameterEntryValue(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (abi.entryConversion === undefined) return expression;
-  const contract = rustValueConversionContract(abi.entryConversion, context.input.program.typeDefinitions);
-  if (contract === undefined || contract.fallible || abi.mode !== "value" ||
-    abi.form !== "required" || !rustTargetTypeRefEquals(contract.source, abi.parameterCarrier) ||
-    !rustTargetTypeRefEquals(contract.target, abi.valueCarrier)) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, parameter ?? context.sourceFile),
-      "rust.backend.parameter-entry-conversion", "The sealed parameter entry conversion conflicts with its native ABI."));
-    return undefined;
-  }
-  return applyRustValueConversion(context, expression, abi.entryConversion, parameter, false);
+  return lowerRustValueConversion(abi.entryConversion.contract, expression, context, parameter);
 }

@@ -190,13 +190,13 @@ test("callback Future physical storage reuses canonical protocol completion incl
     const operation = current.context.records.targetOperation.get(call.node);
     const arguments_ = rustNativeCallableInvocationArguments(call.input, operation);
     assert.equal(arguments_ !== undefined, true);
-    const signature = rustNativeCallableInputPhysicalSignature(call.input, arguments_, current.context.typeDefinitions);
+    const signature = rustNativeCallableInputPhysicalSignature(call.input, arguments_);
     assert.equal(signature !== undefined, true);
     const physical = nativeStorage.valueFor(call.node);
     assert.equal(physical.kind, "selected", physical.reason ?? "exact invocation storage");
     assert.equal(rustTargetTypeRefEquals(physical.carrier, signature.result), true, "one protocol output owner");
     assert.equal(rustNativeCallableInputPhysicalSignature(call.input,
-      [...arguments_, { kind: "type", type: { kind: "source-primitive", name: "int32" } }], current.context.typeDefinitions) === undefined,
+      [...arguments_, { kind: "type", type: { kind: "source-primitive", name: "int32" } }]) === undefined,
     true, "method arity remains exact");
     const [future] = call.completion.futures;
     const selected = rustPhysicalPayloadFor(operation.resultCarrier, physical.carrier, future.carrier, current.context.typeDefinitions);

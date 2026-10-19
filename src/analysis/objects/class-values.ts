@@ -21,7 +21,7 @@ import { rustProjectViewMatches, selectRustProjectViewImplementations } from "./
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { rustCallableAdapterValues } from "../callables/adapter-values.js";
-import { selectRustCallableValueAdapter } from "../callables/adapters.js";
+import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import type { RustClassValueFact } from "../../target-model/records/class-values.js";
 
 export interface RustClassValueView {
@@ -332,7 +332,7 @@ export function selectRustClassValueView(
     : selectRustCallableValueAdapter(constructionPlan.resultCarrier, constructionResult, walk.context.projectTypes, walk.context.typeDefinitions) ??
       (sourceConstructs[0]?.returnType !== undefined && selectRustProjectStructuralView(walk, declaration,
         constructionPlan.resultCarrier, constructionResult, semantics, sourceConstructs[0].returnType)
-        ? { kind: "project-structural-view" as const, sourceCarrier: constructionPlan.resultCarrier, targetCarrier: constructionResult }
+        ? { kind: "project-structural-view" as const, sourceCarrier: constructionPlan.resultCarrier, targetCarrier: constructionResult, fallible: false as const }
         : undefined);
   const construction = constructionPlan === undefined || constructionAdapter === undefined ? undefined
     : finalizeRustClassValueCallable(constructionPlan, constructionAdapter);

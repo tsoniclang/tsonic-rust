@@ -4,13 +4,7 @@ import { planRustOptionBranch } from "../../expressions/option-branch.js";
 import { rustOptionalStorageValue } from "../../../../target-model/types/projections.js";
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
 import { planRustCallableConversion } from "../../expressions/callable-conversions.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
-import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
-import {
-  isRustUnitCarrier,
-  rustOptionElementCarrier,
-} from "../../../../target-model/types/index.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import {
   lowerRustValueConversion,
@@ -23,11 +17,11 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../../names/synthetic.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../../../target-model/conversions/contextual.js";
 import { planRustEmptyRecordConversion } from "../../expressions/empty-record-conversion.js";
 import { planRustProgramErrorConstruction } from "../../expressions/program-errors.js";
 import { planRustProjectUnionMapping } from "../../expressions/project-union-mappings.js";
 import { planRustProjectStructuralConversion } from "../../objects/project-structural-views.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function applyRustCallableValueAdapter(
   expression: RustExpr,
@@ -54,38 +48,38 @@ export function applyRustCallableValueAdapterRaw(
 ): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
   switch (adapter.kind) {
     case "absent-completion":
-      return isRustUnitCarrier(adapter.sourceCarrier) && rustOptionElementCarrier(adapter.targetCarrier) !== undefined
-        ? { expression: { kind: "evaluate-then", effect: expression, discard: "unit",
-            value: planRustAbsentValue(adapter.targetCarrier, context) }, fallible: false } : undefined;
+      return { expression: { kind: "evaluate-then", effect: expression, discard: "unit",
+        value: planRustAbsentValue(adapter.targetCarrier, context) }, fallible: false };
     case "project-structural-view": {
       const projected = planRustProjectStructuralConversion(expression, adapter.sourceCarrier, adapter.targetCarrier, context);
       return projected === undefined ? undefined : { expression: projected, fallible: false };
     }
     case "identity":
-      return rustTargetTypeRefEquals(adapter.sourceCarrier, adapter.targetCarrier)
-        ? { expression, fallible: false }
-        : undefined;
+      return { expression, fallible: false };
     case "conversion": {
       if (adapter.upcast !== undefined) {
         const projected = planRustProjectUpcast(node, expression, adapter.upcast, adapter.sourceCarrier, context, "owned");
-        const { upcast, ...conversion } = adapter;
-        return projected === undefined ? undefined : applyRustCallableValueAdapterRaw(projected,
-          { ...conversion, sourceCarrier: upcast.targetCarrier }, node, context);
+        if (projected === undefined) return undefined;
+        expression = projected;
+      }
+      if (adapter.lowering.kind === "native") {
+        const contract = adapter.lowering.contract;
+        const source = contract.sourceMode === "ref" ? { kind: "reference" as const, expr: expression } : expression;
+        const converted = lowerRustValueConversion(contract, source, context, node);
+        return converted === undefined ? undefined : { expression: converted, fallible: adapter.fallible };
       }
       if (adapter.conversion.kind === "project-union-map") {
         const converted = planRustProjectUnionMapping(node, expression, adapter.conversion,
-          adapter.sourceCarrier, adapter.targetCarrier, context, true,
+          adapter.upcast?.targetCarrier ?? adapter.sourceCarrier, adapter.targetCarrier, context, true,
           (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
             context, owned ? "owned" : "borrowed"));
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "program-error") {
-        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion, context.input.program.typeDefinitions)) return undefined;
         const converted = planRustProgramErrorConstruction(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "callable-adapter") {
-        if (!rustCompilerOwnedContextualConversionMatches(adapter.sourceCarrier, adapter.targetCarrier, adapter.conversion, context.input.program.typeDefinitions)) return undefined;
         const converted = planRustCallableConversion(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
@@ -98,30 +92,13 @@ export function applyRustCallableValueAdapterRaw(
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "provider-record-copy" ||
-        adapter.conversion.kind === "integer-truncation") return undefined;
+        adapter.conversion.kind === "integer-truncation") failRustPlannerInvariant(
+        "An admitted callable adapter requires its selected compiler lowering.", node);
       if (adapter.conversion.kind === "native-trait-object-upcast" ||
         adapter.conversion.kind === "reference-reborrow") {
-        return rustCompilerOwnedContextualConversionMatches(
-          adapter.sourceCarrier,
-          adapter.targetCarrier,
-          adapter.conversion, context.input.program.typeDefinitions,
-        )
-          ? { expression, fallible: false }
-          : undefined;
+        return { expression, fallible: false };
       }
-      const contract = rustValueConversionContract(adapter.conversion, context.input.program.typeDefinitions);
-      if (contract === undefined ||
-        !rustTargetTypeRefEquals(contract.source, adapter.sourceCarrier) ||
-        !rustTargetTypeRefEquals(contract.target, adapter.targetCarrier)) {
-        return undefined;
-      }
-      const source = contract.sourceMode === "ref"
-        ? { kind: "reference" as const, expr: expression }
-        : expression;
-      const converted = lowerRustValueConversion(contract, source, context, node);
-      return converted === undefined
-        ? undefined
-        : { expression: converted, fallible: contract.fallible };
+      return failRustPlannerInvariant("An admitted callable conversion requires its exact selected native lowering.", node);
     }
     case "project-upcast": {
       const projected = planRustProjectUpcast(
@@ -140,8 +117,6 @@ export function applyRustCallableValueAdapterRaw(
     case "call-scoped-lifetime":
       return { expression, fallible: false };
     case "option-some": {
-      if (!rustTargetTypeRefEquals(adapter.sourceCarrier, adapter.element.sourceCarrier) ||
-        !rustTargetTypeRefEquals(rustOptionElementCarrier(adapter.targetCarrier), adapter.element.targetCarrier)) return undefined;
       const element = applyRustCallableValueAdapterRaw(expression, adapter.element, node, context);
       if (element === undefined) {
         return undefined;
@@ -163,8 +138,6 @@ export function applyRustCallableValueAdapterRaw(
           };
     }
     case "option-map": {
-      if (!rustTargetTypeRefEquals(rustOptionElementCarrier(adapter.sourceCarrier), adapter.element.sourceCarrier) ||
-        !rustTargetTypeRefEquals(rustOptionElementCarrier(adapter.targetCarrier), adapter.element.targetCarrier)) return undefined;
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
         node,

@@ -229,7 +229,7 @@ function selectReturn(
           if (setCarrierFact(probe, operand, carrier) === undefined) return undefined;
         }
         const sourceFile = ast.getSourceFile(expression);
-        return sourceFile !== undefined && kind !== "KindIdentifier"
+        return sourceFile !== undefined
           ? resolveExpressionCarrier(probe, expression, sourceFile, expected)
           : resolveRustTargetTypeRef(expression, context, probe.operationOptions);
       } finally {

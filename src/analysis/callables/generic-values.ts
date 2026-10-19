@@ -12,7 +12,8 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import { sourceCallableDefinitionIsDiscarded, sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
@@ -86,8 +87,12 @@ export function createRustGenericCallablePlan(
   };
   const visit = (node: Node): void => {
     if (!isNativeNode(node)) return;
-    if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
-      sourceCallableDefinitionIsDiscarded(node, ast)) return;
+    if (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) {
+      const participation = records.nativeParticipation.get(node);
+      if (participation === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "Native callable selection requires its original pre-seal creation participation.", node);
+      if (participation === "erased") return;
+    }
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }

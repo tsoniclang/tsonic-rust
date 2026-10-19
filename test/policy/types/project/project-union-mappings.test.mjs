@@ -12,6 +12,7 @@ import { selectRustProjectUnionMapConversion, isRustProjectUnionMapConversion, r
 import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract,
   rustContextualValueConversionIsFallible } from "../../../../dist/target-model/conversions/contextual.js";
 import { selectRustProjectUnionMapping } from "../../../../dist/policy/types/project/project-union-mappings.js";
+import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";
 import { rustProjectUnionUpcastRelation } from "../../../../dist/target-model/conversions/project-union-relations.js";
 import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { planRustProjectUnionMapping } from "../../../../dist/backend/planner/expressions/project-union-mappings.js";
@@ -200,11 +201,11 @@ test("canonical nominal union emission moves owned fields and borrows views with
   for (const [actualSource, actualTarget] of [[target, target], [source, source]]) {
     assert.equal(planRustProjectUnionMapping(node, expression, conversion, actualSource, actualTarget,
       context, true, () => assert.fail("inconsistent outer carriers cannot emit an upcast")), undefined);
-    assert.equal(applyRustCallableValueAdapterRaw(expression, { kind: "conversion", sourceCarrier: actualSource,
-      targetCarrier: actualTarget, conversion }, node, context), undefined);
+    assert.equal(rustCompilerOwnedContextualConversionMatches(actualSource, actualTarget, conversion,
+      definitions, rustProjectUnionUpcastRelation(projectTypes)), false);
   }
   const adapted = applyRustCallableValueAdapterRaw(expression,
-    { kind: "conversion", sourceCarrier: source, targetCarrier: target, conversion }, node, context);
+    selectRustCallableValueAdapter(source, target, projectTypes, definitions), node, context);
   assert.equal(adapted.fallible, false);
   assert.equal(adapted.expression.kind, "match");
   assert.deepEqual(adapted.expression.expression, expression);

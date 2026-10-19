@@ -19,7 +19,6 @@ import {
   KindArrayBindingPattern,
   KindObjectBindingPattern,
   Node_Initializer,
-  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
@@ -33,7 +32,7 @@ import {
   rustCallableConstructionType,
   rustOperationFact,
 } from "./fundamentals.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, type RustExpressionResultUse } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "./option-default.js";
@@ -61,12 +60,19 @@ import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiv
   validateRustRecursiveReceiverField } from "./receiver-captures.js";
 import { planRustErrorRegion } from "../program/error-regions.js";
 
+function rustCallableCreationIsErased(node: Node, context: RustPlanContext): boolean {
+  const participation = context.input.program.records.nativeParticipation.get(node);
+  if (participation === undefined) failRustPlannerInvariant(
+    "Callable creation rendering requires its original sealed native participation.", node);
+  return participation === "erased";
+}
+
 export function planCallableExpression(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
-  if (resultUse === "discarded" || sourceCallableDefinitionIsDiscarded(node, context.input.program.source.ast))
+  if (resultUse === "discarded" || rustCallableCreationIsErased(node, context))
     return { kind: "tuple-literal", elements: [] };
   return context.input.program.records.closureCapture.get(node)?.invocationOwner === "shared-state"
     ? planRustSuspendedCallableConstruction(node, context)
@@ -80,7 +86,7 @@ export function planRustCallableExpressionBody(
 ): RustExpr | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
-  if (resultUse === "discarded" || sourceCallableDefinitionIsDiscarded(node, ast))
+  if (resultUse === "discarded" || rustCallableCreationIsErased(node, context))
     return { kind: "tuple-literal", elements: [] };
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {

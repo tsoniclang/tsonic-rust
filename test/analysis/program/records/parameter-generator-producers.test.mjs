@@ -6,6 +6,7 @@ import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/
 import { getRustGeneratorProtocol, rustGeneratorStorageTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
 import { rustFoundationForCarrier } from "../../../../dist/analysis/foundation/requirements.js";
 import { rustFoundationForValueConversion } from "../../../../dist/analysis/foundation/conversion-requirements.js";
 import { maximumRustFoundation } from "../../../../dist/target-model/foundation/model.js";
@@ -142,7 +143,8 @@ for (const form of ["required", "optional", "default", "rest"]) {
     const subject = {};
     const conversion = selectRustSourceValueConversion(integer, wide);
     assert.equal(conversion !== undefined, true, "real native integer entry conversion");
-    const selected = { form, valueCarrier: wide, parameterCarrier: integer, mode: "ref", inputLifetime: lifetime, entryConversion: conversion };
+    const selected = { form, valueCarrier: wide, parameterCarrier: integer, mode: "ref", inputLifetime: lifetime,
+      entryConversion: Object.freeze({ conversion, contract: rustValueConversionContract(conversion) }) };
     builder.sourceParameterAbis.parameter(subject, selected);
     const fact = builder.sourceParameterAbi.get(subject);
     assert.equal(fact !== undefined && Object.isFrozen(fact), true);
@@ -180,7 +182,8 @@ test("parameter ABI retains carrier foundation requirements and all existing con
   const conversion = selectRustSourceValueConversion(integer, wide);
   assert.equal(conversion !== undefined, true);
   const changes = [{ form: "optional" }, { valueCarrier: wide }, { parameterCarrier: wide }, { mode: "mut-ref" },
-    { inputLifetime: { ...lifetime, identity: "other" } }, { inputLifetime: undefined }, { entryConversion: conversion }];
+    { inputLifetime: { ...lifetime, identity: "other" } }, { inputLifetime: undefined },
+    { entryConversion: Object.freeze({ conversion, contract: rustValueConversionContract(conversion) }) }];
   const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
   for (const change of changes) {
     assert.throws(() => child.sourceParameterAbis.parameter(subject, { ...selected, ...change }), /Conflicting Rust semantic plan 'tsonic\.rust\.sourceParameterAbi'/u);
@@ -203,7 +206,8 @@ test("derived parameter use queries validate the complete ABI without admitting 
   }, () => { admissions += 1; }, emptyRustTypeDefinitions);
   const source = {};
   const use = {};
-  const entryConversion = selectRustSourceValueConversion(integer, wide);
+  const conversion = selectRustSourceValueConversion(integer, wide);
+  const entryConversion = Object.freeze({ conversion, contract: rustValueConversionContract(conversion) });
   const selected = { ...abi, inputLifetime: lifetime, entryConversion };
   producer.parameter(source, selected);
   producer.use(use, source);
@@ -238,7 +242,8 @@ test("parameter ABI foundation uses entry conversions and the exact provided sou
   const floating = { kind: "source-primitive", name: "float64" };
   const checked = { kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" };
   const first = createRustProgramRecordBuilder();
-  first.sourceParameterAbis.parameter({}, { ...abi, parameterCarrier: floating, entryConversion: checked });
+  first.sourceParameterAbis.parameter({}, { ...abi, parameterCarrier: floating,
+    entryConversion: Object.freeze({ conversion: checked, contract: rustValueConversionContract(checked) }) });
   assert.equal(first.minimumFoundation(), "alloc", "the checked conversion contributes its error carrier independently");
   const union = rustSourceUnionTargetType("fixture.Parameter", "Parameter");
   const variants = [{ name: "Integer", carrier: integer }, { name: "Text", carrier: rustStringTargetType() }];
@@ -251,16 +256,17 @@ test("parameter ABI foundation uses entry conversions and the exact provided sou
     variantName: "Integer", payloadCarrier: integer, payloadConversion: null };
   const builder = createRustProgramRecordBuilder(definitions);
   const parameter = {};
-  builder.sourceParameterAbis.parameter(parameter, { ...abi, valueCarrier: union, entryConversion: conversion });
+  const entryConversion = Object.freeze({ conversion, contract: rustValueConversionContract(conversion, definitions) });
+  builder.sourceParameterAbis.parameter(parameter, { ...abi, valueCarrier: union, entryConversion });
   assert.equal(definitionReads > 0, true, "the constructor's exact definition context reaches the existing native contract");
   assert.equal(builder.minimumFoundation(), "core", "an unused allocating union variant adds no cost");
-  assert.equal(builder.sourceParameterAbi.get(parameter)?.entryConversion === conversion, true);
+  assert.equal(builder.sourceParameterAbi.get(parameter)?.entryConversion === entryConversion, true);
   const beforeReads = definitionReads;
-  for (let index = 0; index < 32; index++) assert.equal(builder.sourceParameterAbi.get(parameter)?.entryConversion === conversion, true);
+  for (let index = 0; index < 32; index++) assert.equal(builder.sourceParameterAbi.get(parameter)?.entryConversion === entryConversion, true);
   builder.seal([]);
   assert.equal(definitionReads, beforeReads, "reads and sealing do not compute the conversion again");
   const missing = createRustProgramRecordBuilder();
-  assert.throws(() => missing.sourceParameterAbis.parameter({}, { ...abi, valueCarrier: union, entryConversion: conversion }),
+  assert.throws(() => missing.sourceParameterAbis.parameter({}, { ...abi, valueCarrier: union, entryConversion }),
     /no valid lowering contract/u);
 });
 

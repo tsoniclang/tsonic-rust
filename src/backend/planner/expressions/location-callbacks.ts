@@ -22,7 +22,7 @@ export function planRustLocationCallback(
   const node = context.input.program.source.ast.arguments(call)[argumentIndex];
   const source = node === undefined || carrier === undefined ? undefined : rustNativeCallableOperand(carrier, node, {
     records: context.input.program.records, storage: context.input.program.callableValues.nativeStorage,
-    producers: context.input.program.callableValues.nativeProducers, definitions: context.input.program.typeDefinitions,
+    producers: context.input.program.callableValues.nativeProducers,
   });
   if (source === undefined) return undefined;
   const boundary = context.input.program.retainedCallableInputs.forBoundary(call, argumentIndex);

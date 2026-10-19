@@ -128,11 +128,16 @@ export interface RustResourceManagementFact {
   };
 }
 
+export interface RustParameterEntryConversion {
+  readonly conversion: import("../operations/model.js").RustValueConversion;
+  readonly contract: import("../conversions/contracts.js").RustValueConversionContract;
+}
+
 export interface RustSourceParameterAbiFact {
   readonly form: "required" | "optional" | "default" | "rest";
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
   readonly inputLifetime?: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
-  readonly entryConversion?: import("../../target-model/operations/model.js").RustValueConversion;
+  readonly entryConversion?: RustParameterEntryConversion;
 }

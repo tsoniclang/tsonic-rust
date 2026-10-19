@@ -1,6 +1,5 @@
 import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
 import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
-import { rustNativeCallableProtocolResult } from "../../../../analysis/callables/native-protocols.js";
 import { rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
@@ -51,8 +50,7 @@ function planImplementation(
   const environment = rustGenericCallableEnvironmentGenerics(
     rustGenericCallableStorageArguments(definition.signature.environmentParameters, definition.parameters), context);
   const capturePredicates = rustGenericCallableCapturePredicates(definition, context);
-  const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
-  const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(mapRustTargetTypes(result, type => {
+  const returnType = rustTypeFromCarrierInContext(mapRustTargetTypes(protocol.result, type => {
     if (type.kind !== "impl-trait" || type.captures === undefined) return type;
     return { ...type, captures: type.captures.filter(argument => argument.kind !== "type" ||
       argument.type.kind !== "type-parameter" || argument.type.identity !== `${protocol.identity}:Self`) };

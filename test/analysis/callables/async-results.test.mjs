@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustAsyncBodyPromise } from "../../../dist/analysis/callables/async-results.js";
+import { selectRustAsyncBodyPromise } from "../../../dist/policy/types/callables/async-results.js";
+import * as asyncBodyAnalysis from "../../../dist/analysis/callables/async-results.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustNativeRepresentationMatches } from "../../../dist/target-model/conversions/native-representation.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+
 import {
   rustAbsenceTargetType,
   rustFutureTargetType,
@@ -34,6 +36,11 @@ const definitionsFor = alternatives => ({
 });
 const select = (output, contextual, definitions = emptyRustTypeDefinitions) =>
   selectRustAsyncBodyPromise(promise(output), output, contextual, definitions);
+
+test("native async output selection has one policy owner and no analysis export", () => {
+  assert.equal(typeof selectRustAsyncBodyPromise, "function", "the canonical native selector is available in policy");
+  assert.equal(Object.hasOwn(asyncBodyAnalysis, "selectRustAsyncBodyPromise"), false, "the superseded analysis export is removed");
+});
 
 test("async body selection constructs the unique contextual output rather than mapping a promise", () => {
   for (const output of [unit, rustAbsenceTargetType(), integer, rustNeverTargetType()]) {

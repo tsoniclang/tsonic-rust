@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { failTargetAnalysisInvariant, failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceBindingScope, type SourceProgramNavigation } from "@tsonic/target-api/source";
@@ -18,6 +19,8 @@ import type { RustSourceCallableSpecializationIssue } from "./specializations.js
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
+import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
+import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 
 export interface RustFrameCallableImplementation {
   readonly declaration: Node;
@@ -75,6 +78,11 @@ export interface RustFrameCallablePlan {
   implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
   bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
   isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
+  counterNameFor(definition: RustFrameCallableDefinition): string | undefined;
+}
+
+export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
+  sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan;
 }
 
 export function createRustFrameCallablePlan(input: {
@@ -87,7 +95,7 @@ export function createRustFrameCallablePlan(input: {
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
-}): RustFrameCallablePlan {
+}): RustFrameCallablePlanRegistry {
   const definitions: RustFrameCallableDefinition[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
   const byOwner = new Map<string, RustFrameCallableDefinition>();
@@ -348,7 +356,8 @@ export function createRustFrameCallablePlan(input: {
       activationInputs.set(node, selected);
     }
   }
-  return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
+  let counterNames: ReadonlyMap<RustFrameCallableDefinition, string | undefined> | undefined;
+  const plan: RustFrameCallablePlan = Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
     definitionFor: (carrier: TargetTypeRef) => selectedDefinitions.get(closedMetadataKey(carrier)),
     definitionForOwner: (declaration: Node) => byDeclaration.get(declaration),
     entryFor(carrier: TargetTypeRef) {
@@ -361,5 +370,18 @@ export function createRustFrameCallablePlan(input: {
         receiverOwners.get(receiver) === selected.receiverOwner);
     },
     bindingFor: (declaration: Node) => bindings.get(declaration),
+    counterNameFor(definition: RustFrameCallableDefinition): string | undefined {
+      if (counterNames === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "Native frame counter decisions require finalized construction plans before publication.");
+      if (!counterNames.has(definition)) failTargetPlannerInvariant("tsonic-rust",
+        "A native frame counter lookup requires its exact original sealed frame definition.");
+      return counterNames.get(definition);
+    },
+  });
+  return Object.freeze({ ...plan,
+    sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan {
+      counterNames ??= prepareRustRetainedFrameCounters(definitions, input.ast, constructions);
+      return plan;
+    },
   });
 }

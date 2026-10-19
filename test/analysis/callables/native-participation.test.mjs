@@ -146,6 +146,68 @@ test("native placement closes one finite declaration domain and does not inspect
   }
 });
 
+test("anonymous callable participation is published once from checked creation demand before source revocation", () => {
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/src",
+    compilerOptions: { strict: true, target: "es2022", module: "esnext" },
+    files: { "/src/index.ts": `export function run(observe: (value: () => number) => void, branch: boolean): void {
+      const unused = () => 1;
+      const alias = unused;
+      void alias;
+      const typeOnly = function() { return 2; };
+      type Signature = typeof typeOnly;
+      const invoked = () => 3;
+      invoked();
+      const escaped = () => 4;
+      observe(escaped);
+      const conditional = () => 5;
+      if (conditional as unknown) {}
+      const branchVoid = () => 6;
+      if (branch) void branchVoid;
+      const parent = () => { const nested = () => 6; return nested(); };
+      void parent;
+    }` },
+  }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, formatDiagnostics(checked.diagnostics).slice(0, 1024));
+  const source = createTargetSourceProgram(checked);
+  const storage = createSourceStorageQuery(source, source.navigation.sourceFiles);
+  assert.equal(storage.failureReason(), undefined, "the actual checked finite source domain is complete");
+  const definitions = new Map(storage.nodes.flatMap(node => {
+    if (!source.ast.is.IsVariableDeclaration(node)) return [];
+    const expression = source.ast.as.AsVariableDeclaration(node)?.Initializer;
+    return expression !== undefined && (source.ast.is.IsArrowFunction(expression) || source.ast.is.IsFunctionExpression(expression))
+      ? [[source.ast.text(source.ast.name(node)), expression]] : [];
+  }));
+  const ast = Proxy.revocable(source.ast, {});
+  const navigation = Proxy.revocable(source.navigation, {});
+  const builder = createRustProgramRecordBuilder();
+  const requiredRecords = [];
+  const domain = analyzeRustNativeParticipation({ ast: ast.proxy, navigation: navigation.proxy, storage,
+    producer: builder.nativeParticipations, requiredRecords });
+  assert.equal(domain.kind, "resolved", "the native owner consumes the same checked domain");
+  const records = builder.seal(requiredRecords);
+  ast.revoke();
+  navigation.revoke();
+  assert.equal(requiredRecords.filter(record => record.construct === "anonymous-callable-creation").length, 7,
+    "exactly the reached original anonymous definitions have one required record");
+  for (const name of ["unused", "typeOnly", "branchVoid", "parent"]) {
+    const declaration = definitions.get(name);
+    assert.equal(declaration !== undefined, true, `${name}: original checked creation exists`);
+    assert.equal(records.nativeParticipation.get(declaration), "erased", `${name}: an unobserved creation is sealed data`);
+    assert.equal(domain.nodes.includes(declaration), false, `${name}: no native body demand survives`);
+  }
+  for (const name of ["invoked", "escaped", "conditional"]) {
+    const declaration = definitions.get(name);
+    assert.equal(declaration !== undefined, true, `${name}: original checked creation exists`);
+    assert.equal(records.nativeParticipation.get(declaration), "body", `${name}: observed creation remains native`);
+    assert.equal(domain.nodes.includes(declaration), true, `${name}: native demand keeps its original owner`);
+  }
+  const nested = definitions.get("nested");
+  assert.equal(nested !== undefined, true, "the checked nested definition is not fabricated");
+  assert.equal(records.nativeParticipation.get(nested) === undefined, true, "an erased parent prevents a second nested admission");
+  assert.equal(domain.nodes.includes(nested), false, "the unobserved subtree creates no native work");
+  assert.equal(records.nativeParticipation.get({}) === undefined, true, "a foreign node never inherits the creation decision");
+});
+
 test("an exhausted actual checked source domain publishes no partial native participation", () => {
   const current = checkedFunctions("export function run(): number { return 3; }");
   const storage = createSourceStorageQuery(createTargetSourceProgram(current.source), current.program.sourceFiles, {

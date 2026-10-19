@@ -9,7 +9,6 @@ import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
-import { rustRetainedFrameCounterName } from "../../../analysis/callables/frame-counter-storage.js";
 
 export function rustClassFrameFieldLocation(
   declaration: Node, receiverCarrier: TargetTypeRef, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,
@@ -37,7 +36,7 @@ export function createRustClassFrameValue(
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
   if (definition.storage.kind !== "standalone" || types?.frameType.kind !== "named" ||
     definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
-  const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+  const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
   return { kind: "call", path: "alloc::rc::Rc::new", args: [{
     kind: "struct-literal", path: types.frameType.path, fields: [
       ...(counterName === undefined ? [] : [{ name: counterName, value: counter }]),
@@ -53,7 +52,7 @@ export function rustClassFrameLayout(
   const carrier = definition.entries[0]?.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
   if (definition.activation.kind !== "class" || types === undefined) return undefined;
-  const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+  const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
   if (definition.storage.kind === "object") return {
     fields: counterName === undefined ? [] : [{ name: counterName, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility }],
     ownsField: () => false,

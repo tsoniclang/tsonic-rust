@@ -5,11 +5,13 @@ import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-import { selectRustCallableParameterAdapters } from "../../../dist/analysis/callables/adapters.js";
+import { selectRustCallableParameterAdapters } from "../../../dist/policy/conversions/callable-adapters.js";
 import { planRootCallableForwarder } from "../../../dist/backend/planner/objects/polymorphism/callable-adapters.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustParameterTypeFromCarrierInContext, rustReturnTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
 import { planRustCallableArguments } from "../../../dist/backend/planner/declarations/callables/parameter-adapters.js";
+import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
+import { rustSourcePrimitiveTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 
 const files = {
   "base.ts": `
@@ -163,9 +165,36 @@ export function main(): void { const value: Base = new Derived(); value.read(1, 
     parameterAdapters: adapter.parameterAdapters,
   };
   assert.deepEqual(adapter.parameterAdapters.map(parameter => parameter.kind), ["rest-element", "rest"]);
-  assert.ok(planRustCallableArguments(selection, context));
   const head = adapter.parameterAdapters[0];
   const tail = adapter.parameterAdapters[1];
+  const number = rustSourcePrimitiveTargetType("float64");
+  const targetShape = target => ({ form: target.form, mode: target.mode,
+    value: closedMetadataKey(target.valueCarrier), parameter: closedMetadataKey(target.parameterCarrier) });
+  assert.deepEqual(adapter.parameterAdapters.map(parameter => ({
+    kind: parameter.kind,
+    contractParameterIndex: parameter.contractParameterIndex,
+    offset: parameter.kind === "rest-element" ? parameter.offset : undefined,
+    target: targetShape(parameter.target),
+    segments: parameter.kind === "rest" ? parameter.segments.map(segment => ({
+      kind: segment.kind, contractParameterIndex: segment.contractParameterIndex,
+      offset: segment.kind === "sequence" ? segment.offset : undefined,
+    })) : undefined,
+  })), [{
+    kind: "rest-element", contractParameterIndex: 0, offset: 0,
+    target: { form: "required", mode: "value", value: closedMetadataKey(number), parameter: closedMetadataKey(number) },
+    segments: undefined,
+  }, {
+    kind: "rest", contractParameterIndex: undefined, offset: undefined,
+    target: { form: "rest", mode: "value", value: closedMetadataKey(rustVecTargetType(number)),
+      parameter: closedMetadataKey(rustVecTargetType(number)) },
+    segments: [{ kind: "sequence", contractParameterIndex: 0, offset: 1 }],
+  }], "the native producer owns the complete original head, tail, target, index and offset correspondence");
+  const frozen = value => {
+    if (value === null || typeof value !== "object") return;
+    assert.equal(Object.isFrozen(value), true, "every admitted vector, segment, target and carrier object is frozen");
+    for (const child of Object.values(value)) frozen(child);
+  };
+  frozen(adapter.parameterAdapters);
   for (const replacement of [
     [null, tail],
     [{ ...head, target: undefined }, tail],
@@ -176,5 +205,8 @@ export function main(): void { const value: Base = new Derived(); value.read(1, 
     [head, { ...tail, segments: [{ ...tail.segments[0], offset: 0 }] }],
     [head, { ...tail, segments: [{ ...tail.segments[0], contractParameterIndex: 1 }] }],
     [head, { ...tail, segments: [tail.segments[0], tail.segments[0]] }],
-  ]) assert.equal(planRustCallableArguments({ ...selection, parameterAdapters: replacement }, context), undefined);
+  ]) assert.throws(() => {
+    adapter.parameterAdapters.splice(0, adapter.parameterAdapters.length, ...replacement);
+  }, TypeError, "a forged vector cannot replace the canonical native producer result");
+  assert.ok(planRustCallableArguments(selection, context));
 });

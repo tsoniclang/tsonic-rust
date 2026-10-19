@@ -3,7 +3,6 @@ import test from "node:test";
 import { analyzeRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { nativeRetainedErrorSourceFor } from "../../../../tsonic/test/fixtures/native-retained-errors.mjs";
 
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
@@ -36,7 +35,7 @@ for (const [parameterForm, storage, ordering] of [
     assert.equal(abi.mode, "value");
     assert.equal(rustTargetTypeRefEquals(abi.parameterCarrier, rustRetainedErrorTargetType()), true);
     assert.equal(rustTargetTypeRefEquals(abi.valueCarrier, rustSourceErrorTargetType()), true);
-    const contract = rustValueConversionContract(abi.entryConversion, program.typeDefinitions);
+    const contract = abi.entryConversion?.contract;
     assert.equal(contract !== undefined, true, "entry conversion has an exact public contract");
     assert.equal(contract.category, "exact");
     assert.equal(contract.sourceMode, "value");

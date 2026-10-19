@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -51,8 +51,12 @@ export function createRustSuspendedCallablePlan(
   const selected: Node[] = [];
   const usedNames = new Set<string>();
   const visit = (node: Node): void => {
-    if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
-      sourceCallableDefinitionIsDiscarded(node, ast)) return;
+    if (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) {
+      const participation = records.nativeParticipation.get(node);
+      if (participation === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "Suspended callable selection requires its original pre-seal creation participation.", node);
+      if (participation === "erased") return;
+    }
     const name = names.nameForDeclaration(node);
     if (name !== undefined) usedNames.add(name);
     if (records.closureCapture.get(node)?.invocationOwner === "shared-state") selected.push(node);

@@ -4,7 +4,7 @@ import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "..
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
@@ -19,7 +19,6 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 import { planRustFrameCallableFamilyItems } from "./frame-family-implementations.js";
-import { rustRetainedFrameCounterName } from "../../../../analysis/callables/frame-counter-storage.js";
 
 function shared(type: RustType): RustType {
   return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
@@ -33,7 +32,8 @@ function definitionContext(definition: RustFrameCallableDefinition, context: Rus
 function definitionGenerics(definition: RustFrameCallableDefinition, context: RustPlanContext): RustGenerics {
   const contracts = definition.entries.flatMap(entry => entry.implementations).map(implementation =>
     context.input.program.declarationGenericRequirements.contractFor(implementation.declaration));
-  if (contracts.some(contract => contract === undefined)) throw new Error("A sealed frame entry lost its generic requirement contract.");
+  if (contracts.some(contract => contract === undefined))
+    failRustPlannerInvariant("A sealed frame entry lost its generic requirement contract.", definition.activation.ownerDeclaration);
   return rustGenericsWithAssociatedBounds(definition.environmentParameters.map(parameter => ({ kind: "type", name:
     context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
     bounds: rustGenericRequirementBounds([...new Set(contracts.flatMap(contract =>
@@ -230,7 +230,7 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
     context.usedAliases?.add("rt");
     const generics = definitionGenerics(definition, local);
     const marker = definitionMarker(generics);
-    const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+    const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
     if (definition.storage.kind === "standalone") result.push({ kind: "struct", name: definition.targetName, visibility: "public",
       generics, fields: [
         ...(counterName === undefined ? [] : [{ name: counterName, type: { kind: "named" as const, path: "rt::FrameEntryCounter" }, visibility: "public" as const }]),
