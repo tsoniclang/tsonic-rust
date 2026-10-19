@@ -2,6 +2,6 @@ export {
   planBlockLike,
   planStatement,
   planStatementSequence,
-} from "./core.js";
+} from "./planning.js";
 export { planVariableStatement } from "./variable-declarations.js";
 export { isConstLiteralInitializer } from "./control-flow.js";

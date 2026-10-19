@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "../expressions/index.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { planStatementSequence } from "./core.js";
+import { planStatementSequence } from "./planning.js";
 import { createRustBreakTarget, withRustControlTarget } from "./loop-regions.js";
 import { planRustSwitchComparison } from "./switch-comparisons.js";
 

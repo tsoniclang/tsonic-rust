@@ -19,7 +19,7 @@ import {
 } from "../program/plan-context.js";
 import { rustPackageFallibleBoundary, rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
 import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { planBlockLike } from "./core.js";
+import { planBlockLike } from "./planning.js";
 import { planExpression } from "../expressions/index.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 

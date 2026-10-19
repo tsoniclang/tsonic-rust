@@ -16,11 +16,10 @@ import {
   KindWhileStatement,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { diagnosticInput } from "../program/plan-context.js";
 import { prepareRustFrameScope } from "../bindings/frame-storage.js";
 import { directResourceDeclarations, planLoopExitStatement, planResourceDeclarations } from "./resources.js";
 import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker, withExplicitUnsafeContext } from "../safety/explicit-safety.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planDoStatement, planForStatement, planIfStatement, planWhileStatement } from "./control-flow.js";
 import { planLabeledStatement } from "./statement-labels.js";
 import { planSwitchStatement } from "./switch-statements.js";
@@ -36,7 +35,6 @@ import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
-import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
 import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
 
@@ -44,21 +42,13 @@ import { planFunctionDeclarations } from "../declarations/callables/functions.js
 import { planRustDeferredCaptureStorage } from "../bindings/capture-storage.js";
 import { planRustLexicalFunctionValues } from "../declarations/callables/lexical-values.js";
 
-export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const diagnosticCount = context.diagnostics.length;
+export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const construction = context.input.program.source.ast.kindName(node) === KindBlock ? undefined
     : context.construction?.prepare(node, context);
-  if (context.diagnostics.length !== diagnosticCount) return undefined;
   const inner = planStatementInner(node, construction?.context ?? context);
   const planned = inner === undefined ? undefined : construction === undefined ? inner
     : [...construction.before, ...construction.finish(inner)];
-  if (planned === undefined && context.diagnostics.length === diagnosticCount) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.statement-finalization",
-      "Statement planning returned no Rust AST and no specific diagnostic.",
-    ));
-  }
+  if (planned === undefined) failRustPlannerInvariant("Admitted statement requires its finalized Rust syntax.", node);
   return planned;
 }
 
@@ -80,15 +70,17 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return items?.map(item => ({ kind: "item", item }));
     }
     case "KindClassDeclaration": {
-      if (context.input.program.projectTypes.definitionForDeclaration(node) === undefined) return undefined;
+      if (context.input.program.projectTypes.definitionForDeclaration(node) === undefined)
+        failRustPlannerInvariant("Admitted class requires its sealed native definition.", node);
       const environment = context.input.program.classValues.forDeclaration(node)?.environment;
       if (environment === undefined) return [];
       const value = planRustClassEnvironmentValue(node, context);
       return value === undefined ? undefined : [{ kind: "let", name: environment.bindingName, mutable: false, init: value }];
     }
     case "KindTypeAliasDeclaration": {
-      return context.input.program.records.typeAliasDeclaration.get(node)?.kind === "erased"
-        ? [] : undefined;
+      if (context.input.program.records.typeAliasDeclaration.get(node)?.kind !== "erased")
+        failRustPlannerInvariant("An admitted type alias requires its erased declaration record.", node);
+      return [];
     }
     case KindVariableStatement: {
       return planVariableStatement(node, context);
@@ -169,14 +161,12 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   }
 }
 
-export function planBlockLike(node: Node, context: RustPlanContext): RustBlock | undefined {
+export function planBlockLike(node: Node, context: RustPlanContext): RustBlock {
   const { ast } = context.input.program.source;
   const children = ast.kindName(node) === KindBlock ? ast.statements(node) : [node];
-  const diagnosticCount = context.diagnostics.length;
   const construction = ast.kindName(node) === KindBlock ? context.construction?.prepare(node, context) : undefined;
-  if (context.diagnostics.length !== diagnosticCount) return undefined;
   const planned = planStatementSequence(children, node, construction?.context ?? context);
-  return planned === undefined ? undefined : construction === undefined ? planned
+  return construction === undefined ? planned
     : { ...planned, statements: [...construction.before, ...construction.finish(planned.statements)] };
 }
 
@@ -185,14 +175,13 @@ export function planStatementSequence(
   diagnosticNode: Node,
   context: RustPlanContext,
   initializeScope = true,
-): RustBlock | undefined {
+): RustBlock {
   const frame = initializeScope ? prepareRustFrameScope(diagnosticNode, context) : { context, statements: [] };
-  if (frame === undefined) return undefined;
+  if (frame === undefined) failRustPlannerInvariant("An admitted statement scope requires its native frame plan.", diagnosticNode);
   context = frame.context;
   const prologue = initializeScope ? planRustDeferredCaptureStorage(diagnosticNode, context) : [];
-  if (prologue === undefined) return undefined;
+  if (prologue === undefined) failRustPlannerInvariant("An admitted statement scope requires its capture prologue.", diagnosticNode);
   const statements: RustStmt[] = [...frame.statements, ...prologue];
-  let failed = false;
   let sequenceContext = context;
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index];
@@ -200,7 +189,7 @@ export function planStatementSequence(
       failRustPlannerInvariant("Statement sequence requires its dense checked source nodes.", diagnosticNode);
     }
     const callableValues = planRustLexicalFunctionValues(child, sequenceContext);
-    if (callableValues === undefined) return undefined;
+    if (callableValues === undefined) failRustPlannerInvariant("Admitted lexical function values require their native plans.", child);
     statements.push(...callableValues);
     if (isRustExplicitUnsafeBlockMarker(child, sequenceContext.input)) {
       const body = planStatementSequence(
@@ -209,9 +198,6 @@ export function planStatementSequence(
         withExplicitUnsafeContext(sequenceContext),
         false,
       );
-      if (body === undefined) {
-        return undefined;
-      }
       statements.push({ kind: "unsafe-scope", body });
       return { statements };
     }
@@ -222,29 +208,27 @@ export function planStatementSequence(
         sequenceContext,
         (bodyContext) => planStatementSequence(children.slice(index + 1), diagnosticNode, bodyContext, false),
       );
-      if (planned === undefined) {
-        failed = true;
-      } else {
-        statements.push(...planned);
-      }
-      return failed ? undefined : { statements };
+      if (planned === undefined) failRustPlannerInvariant("Admitted resource declarations require their native scope plan.", child);
+      statements.push(...planned);
+      return { statements };
     }
     const borrowed = sequenceContext.input.program.borrowedElementReads.forStatement(child);
     const local = borrowed === undefined ? undefined : planRustBorrowedElementLocal(borrowed, sequenceContext);
     const planned = borrowed === undefined ? planStatement(child, sequenceContext) : local?.statements;
     if (planned === undefined) {
-      failed = true;
-      continue;
+      failRustPlannerInvariant("Admitted borrowed local requires its native binding plan.", child);
     }
     if (local !== undefined) sequenceContext = local.context;
     statements.push(...planned);
-    if (!rustBlockTerminates({ statements: planned })) {
+    const exits = sequenceContext.input.program.records.statementExit.get(child);
+    if (exits === undefined) failRustPlannerInvariant("Admitted statement requires its sealed completion.", child);
+    if (!exits) {
       for (const read of sequenceContext.input.program.borrowedElementReads.endingAt(child)) {
         const name = sequenceContext.input.program.names.nameForDeclaration(read.declaration);
-        if (name === undefined) { failed = true; continue; }
+        if (name === undefined) failRustPlannerInvariant("An admitted borrowed binding requires its authored native name.", read.declaration);
         statements.push({ kind: "expr", expr: { kind: "call", path: "core::mem::drop", args: [{ kind: "path", path: name }] } });
       }
     }
   }
-  return failed ? undefined : { statements };
+  return { statements };
 }

@@ -21,7 +21,7 @@ import {
   planNumericLiteralWithCarrier,
 } from "../expressions/index.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { planBlockLike } from "./core.js";
+import { planBlockLike } from "./planning.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
