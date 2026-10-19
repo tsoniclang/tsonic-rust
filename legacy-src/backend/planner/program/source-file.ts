@@ -59,7 +59,7 @@ import {
   planEnumDeclaration,
   planInterfaceDeclaration,
   planTypeAliasDeclaration,
-} from "../declarations/nominal.js";
+} from "../declarations/index.js";
 import {
   planPolymorphicClassDeclaration,
   planPolymorphicInterfaceDeclaration,

@@ -34,7 +34,7 @@ import {
   projectStateType,
   rustRcType,
 } from "./model.js";
-import { planProjectStaticMethods } from "../../declarations/nominal.js";
+import { planProjectStaticMethods } from "../../declarations/index.js";
 import {
   rustProjectDispatchObjectType,
   rustProjectRootName,
