@@ -345,6 +345,7 @@ export type RustStmt =
       readonly tail?: true;
       readonly catchClause?: {
         readonly binding: string;
+        readonly bindingUsed: boolean;
         readonly body: RustBlock;
         readonly errorType: RustType | undefined;
         readonly terminates: boolean;

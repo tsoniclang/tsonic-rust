@@ -30,7 +30,7 @@ import { planExpressionStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./statement-loops.js";
 import { planRustReturnExit } from "./completion-exits.js";
-import { planThrowStatement, planTryStatement } from "./errors.js";
+import { planThrowStatement, planTryStatement } from "./statement-try.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

@@ -1,60 +1,38 @@
 import {
   CatchClause_Block,
-  CatchClause_VariableDeclaration,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
   TryStatement_TryBlock,
-  KindIdentifier,
   Node_Expression,
-  Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectRustCompletionDispatch, createRustCompletionBoundary, tailCompletionExits } from "./resource-management.js";
-import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import {
-  diagnosticInput,
   registerAliasFromPath,
   rustCurrentErrorBoundary,
   rustActiveErrorType,
 } from "../program/plan-context.js";
 import { rustPackageFallibleBoundary, rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./planning.js";
 import { planExpression } from "../expressions/index.js";
-import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 
-export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const fact = context.input.program.records.targetOperation.get(node);
-  if (fact === undefined || fact.kind !== "throw-op" ||
-    fact.error.kind !== "conversion" && fact.error.kind !== "program") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.error.throw",
-      "throw requires one finalized runtime, project-error, or exact rethrow fact.",
-    ));
-    return undefined;
-  }
+export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
+  const completion = context.input.program.records.throwCompletion.get(node);
+  if (completion === undefined) failRustPlannerInvariant("An admitted throw requires its sealed native error-channel completion.", node);
+  const fact = completion.operation;
   const activeBoundary = context.fallibleBoundary;
   if (activeBoundary === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.error.throw",
-      "throw requires a fallible lowering context.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted throw requires its native fallible rendering frame.", node);
   }
   const localOwner = rustLocalErrorOwner(activeBoundary);
   if (localOwner === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.error.throw-channel", "A local throw requires its exact source-package error channel."));
-    return undefined;
+    failRustPlannerInvariant("An admitted throw requires its exact native source-package error channel.", node);
   }
   const expression = Node_Expression(context.input.program.source.ast, node);
   if (expression === undefined) {
@@ -63,47 +41,28 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
       node,
     );
   }
-  const carrier = fact.error.kind === "conversion" ? fact.error.conversion.source : fact.error.carrier;
-  if (fact.error.expression !== expression ||
-    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(expression, context), carrier) ||
-    fact.error.kind === "program" && !isRustProgramErrorCarrier(carrier)) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
-      "rust.backend.throw-carrier", "Finalized throw fact conflicts with its exact source operand or native Error carrier."));
-    return undefined;
-  }
   const value = planExpression(expression, context);
   if (value === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted throw requires its native operand value plan.", expression);
   }
   context.usedAliases?.add("rt");
   registerAliasFromPath(context, localOwner.errorTypePath);
   let error: RustExpr;
   if (fact.error.kind === "program") {
-    if (localOwner.componentId !== context.sourcePackageComponentId) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.error.cross-package-rethrow",
-        "A source-package program error cannot be rethrown through an unrelated callable error ABI.",
-      ));
-      return undefined;
-    }
     error = value;
   } else {
     const constructed = planRustProgramErrorConstruction(fact.error.conversion, value, expression, context, localOwner);
-    if (constructed === undefined) return undefined;
+    if (constructed === undefined) failRustPlannerInvariant("An admitted throw requires its native error construction plan.", expression);
     error = constructed;
   }
   const injected = rustInjectLocalError(activeBoundary, error);
   if (injected === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.error.throw-channel", "A local throw conflicts with its exact source-package error channel."));
-    return undefined;
+    failRustPlannerInvariant("An admitted throw requires its selected native error-channel injection.", node);
   }
   return [{ kind: "throw", error: injected }];
 }
 
-export function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input.program.source;
+export function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const tryBlock = TryStatement_TryBlock(context.input.program.source.ast, node);
   const catchClause = TryStatement_CatchClause(context.input.program.source.ast, node);
   const catchBlock = CatchClause_Block(context.input.program.source.ast, catchClause);
@@ -128,12 +87,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   const bodyErrorBoundary = catchBlock === undefined ? context.fallibleBoundary
     : catchOwner === undefined ? undefined : rustPackageFallibleBoundary(catchOwner);
   if (bodyFallible && bodyErrorBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.try-error-boundary",
-      "A throwing try body has no exact source-package error ABI.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted throwing try body requires its exact source-package error ABI.", node);
   }
   const bodyBoundary = createRustCompletionBoundary(context, bodyFallible);
   const body = planBlockLike(tryBlock, {
@@ -141,9 +95,6 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     completionBoundary: bodyBoundary,
     fallibleBoundary: bodyErrorBoundary,
   });
-  if (body === undefined) {
-    return undefined;
-  }
 
   let plannedCatch: Extract<RustStmt, { readonly kind: "try-scope" }>["catchClause"];
   let catchBoundary: RustCompletionBoundary | undefined;
@@ -156,39 +107,12 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
         ? {}
         : { fallibleBoundary: context.fallibleBoundary }),
     });
-    if (catchBody === undefined) {
-      return undefined;
-    }
-    const catchDeclaration = CatchClause_VariableDeclaration(context.input.program.source.ast, catchClause);
-    const bindingNode = Node_Name(context.input.program.source.ast, catchDeclaration);
-    const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-    let binding = bindingSource.length === 0
-      ? "_"
-      : context.input.program.names.nameForDeclaration(catchDeclaration) ?? "";
-    if (binding !== "_") {
-      let used = false;
-      const findUse = (candidate: Node): void => {
-        if (used) {
-          return;
-        }
-        if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
-          used = true;
-          return;
-        }
-        ast.forEachChild(candidate, (child) => {
-          if (child !== undefined) {
-            findUse(child);
-          }
-        });
-      };
-      findUse(catchBlock);
-      if (!used) {
-        binding = `_${binding}`;
-      }
-    }
-    const terminates = rustBlockDefinitelyExits(catchBody);
+    const binding = context.input.program.records.catchBinding.get(catchClause);
+    if (binding === undefined) failRustPlannerInvariant("An admitted catch requires its exact native binding plan.", catchClause);
+    const terminates = statementExits(catchBlock, context);
     plannedCatch = {
-      binding,
+      binding: binding.name,
+      bindingUsed: binding.used,
       body: terminates ? tailCompletionExits(catchBody) : catchBody,
       errorType,
       terminates,
@@ -206,10 +130,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
         ? {}
         : { fallibleBoundary: context.fallibleBoundary }),
     });
-    if (finallyBody === undefined) {
-      return undefined;
-    }
-    const terminates = rustBlockDefinitelyExits(finallyBody);
+    const terminates = statementExits(finallyBlock, context);
     plannedFinally = {
       body: terminates ? tailCompletionExits(finallyBody) : finallyBody,
       errorType,
@@ -217,11 +138,8 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     };
   }
 
-  const bodyTerminates = rustBlockDefinitelyExits(body);
-  const terminates = plannedFinally?.terminates === true ||
-    (plannedCatch === undefined
-      ? bodyTerminates
-      : bodyTerminates && plannedCatch.terminates);
+  const bodyTerminates = statementExits(tryBlock, context);
+  const terminates = statementExits(node, context);
   const boundaries = [bodyBoundary, catchBoundary, finallyBoundary]
     .filter((boundary): boundary is RustCompletionBoundary => boundary !== undefined);
   const dispatch = collectRustCompletionDispatch(boundaries);
@@ -251,4 +169,10 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     })),
     terminates,
   }];
+}
+
+function statementExits(node: Node, context: RustPlanContext): boolean {
+  const selected = context.input.program.records.statementExit.get(node);
+  if (selected === undefined) failRustPlannerInvariant("An admitted error region requires its sealed source completion.", node);
+  return selected;
 }

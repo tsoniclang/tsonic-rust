@@ -4,6 +4,7 @@ import { rustTypeEquals } from "../inspection/type-equality.js";
 import { applyRustTailShape } from "./block-flow.js";
 import { rustBlockBreaksToLabel, rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { closeRustCompletionBindings } from "./completion-bindings.js";
+import { rustLintAttributes } from "./lint-policy.js";
 
 type CompletionScope = Extract<RustStmt, { readonly kind: "try-scope" | "resource-scope" }>;
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
@@ -55,6 +56,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     }
     let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
+      ...(caught?.bindingUsed === false ? { attrs: [rustLintAttributes.unusedVariables] } : {}),
       type: resultType(completionType, errorType),
       init: caught === undefined ? path(scope.bodyName) : { kind: "match", expression: path(scope.bodyName), arms: [
         { pattern: variant("Ok", binding("completion")), expression: caught.errorType === undefined

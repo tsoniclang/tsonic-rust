@@ -13,7 +13,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
+import type { RustErrorRegionRecords, RustErrorRegionSelection } from "../../target-model/records/error-regions.js";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationBindingCompletion,
   RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionRecords,
@@ -32,6 +32,9 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
+import { admitRustThrowCompletion } from "../errors/throw-admission.js";
+import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
@@ -46,6 +49,7 @@ export interface RustStatementCompletionInput {
   readonly required: RustRequiredRecord[];
   readonly countedLoops: ReadonlyMap<Node, RustCountedLoopRepresentation>;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly components: RustSourcePackageComponentClassifications;
 }
 
 export type RustStatementCompletionSelection =
@@ -97,7 +101,10 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   const assignments = new Map<Node, RustAssignmentCompletion>();
   const projectReads = new Map<Node, readonly Node[]>();
   const labels = new Map<Node, SourceLabeledStatementTarget>();
-  const frames = new Map<Node, { readonly asynchronous: boolean; readonly fallible: boolean }>();
+  const throws = new Map<Node, RustThrowCompletion>();
+  const catches = new Map<Node, RustCatchBinding>();
+  const frames = new Map<Node, { readonly asynchronous: boolean; readonly fallible: boolean;
+    readonly region: RustErrorRegionSelection | undefined }>();
   const reject = (node: Node, code: string, message: string): void => {
     diagnostics.push({ code, category: "error", source: "tsonic-rust", sourceNode: node, message,
       evidence: ["target.capability=rust.control-flow.finalized-completion"] });
@@ -141,7 +148,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       "A protected try body requires its completed local error-region evidence.", errorOwner);
     const selected = Object.freeze({ asynchronous: records.asyncFunction.get(owner) !== undefined || generator?.kind === "async" ||
       initializer?.asynchronous === true,
-    fallible: region !== undefined && region.kind !== "infallible" });
+    fallible: region !== undefined && region.kind !== "infallible", region });
     frames.set(errorOwner, selected);
     return selected;
   };
@@ -197,6 +204,22 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   };
   const iteration = (node: Node): void => {
     const operation = records.targetOperation.get(node);
+    if (ast.is.IsThrowStatement(node)) {
+      const file = ast.getSourceFile(node);
+      const component = file === undefined ? undefined : input.components.componentForFile(ast.getFileName(file));
+      const admittedThrow = admitRustThrowCompletion({ ast, records, region: frame(node).region, componentId: component?.componentId }, node);
+      if (admittedThrow.kind === "rejected") diagnostics.push(admittedThrow.diagnostic);
+      else publish(throws, node, admittedThrow.completion);
+    }
+    if (ast.is.IsCatchClause(node)) {
+      const declaration = ast.as.AsCatchClause(node)?.VariableDeclaration;
+      const name = declaration === undefined ? "_" : input.names.nameForDeclaration(declaration);
+      if (name === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted catch binding requires its authored native name.", node);
+      const used = declaration === undefined || input.source.navigation.declarationUseSummary(declaration).uses.some(use =>
+        input.isNativeNode(use.reference) && records.nativeUnreachable.get(use.reference) !== true &&
+        records.compileTimeSource.get(use.reference) === undefined && records.nativeParticipation.get(use.reference) !== "erased");
+      publish(catches, node, Object.freeze({ name, used }));
+    }
     const selected = records.selectedOperation.get(node);
     if (operation?.kind !== "iteration" || selected?.operationKind !== "iteration" || selected.operationId !== operation.operationId ||
       !rustTargetTypeRefEquals(selected.resultType, operation.elementCarrier) ||
@@ -372,12 +395,13 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     ["iterationCompletion", iterations], ["runtimeSetter", setters], ["assignmentCompletion", assignments],
     ["projectTypeTestReads", projectReads], ["labeledStatement", labels],
     ["countedLoop", input.countedLoops],
+    ["throwCompletion", throws], ["catchBinding", catches],
   ] as const) {
     for (const subject of selected.keys()) {
       requireRustRecord(input.required, family, subject, ast.kindName(subject), "analyzeRustStatementCompletions");
     }
   }
   input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads, labels,
-    countedLoops: input.countedLoops });
+    countedLoops: input.countedLoops, throws, catches });
   return { kind: "resolved", plan: input.producer.records };
 }

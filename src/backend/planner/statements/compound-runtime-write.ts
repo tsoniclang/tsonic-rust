@@ -7,7 +7,7 @@ import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import { planExpression } from "../expressions/entry.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCompoundAssignmentValue } from "./assignments.js";
-import { planRuntimeSetStatement } from "./iteration.js";
+import { planRuntimeSetStatement } from "./statement-loops.js";
 import { planRustRuntimeIndexInputs } from "../expressions/runtime-index-inputs.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
