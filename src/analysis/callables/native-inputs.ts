@@ -1,4 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
@@ -19,6 +20,16 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import type { RustDeclarationGenericRequirementIndex, RustDeclarationTypeParameterRequirements } from "../declarations/generic-requirements.js";
+import type { RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
+import type { RustRetainedCallableInputPlan } from "./retained-inputs.js";
+import { rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
+import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
+import { emissionDiagnostic } from "./emission-contexts.js";
 
 export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
   readonly owner: Node;
@@ -26,6 +37,21 @@ export interface RustNativeCallableInput extends RustNativeCallableProtocolBindi
   readonly carrier: TargetTypeRef;
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
 }
+
+export interface RustNativeCallableGenericInput {
+  readonly implementation: RustNativeCallableInput["implementation"];
+  readonly traits: readonly TargetTypeRef[];
+  readonly retained: { readonly error: TargetTypeRef; readonly targets: readonly TargetTypeRef[] } | undefined;
+}
+
+export interface RustNativeCallableGenericContext {
+  readonly implicitLifetimes: readonly RustSourceGenericParameterContract[];
+  readonly inputs: readonly RustNativeCallableGenericInput[];
+  readonly sourceRequirements: readonly RustDeclarationTypeParameterRequirements[] | undefined;
+  readonly bodyRequirements: readonly RustDeclarationTypeParameterRequirements[] | undefined;
+}
+
+export type RustNativeCallableGenericContexts = Pick<ReadonlyMap<Node, RustNativeCallableGenericContext>, "get">;
 
 export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
@@ -205,4 +231,100 @@ export function createRustNativeCallableInputPlan(input: {
       return protocol?.ownerFileName === fileName ? protocol : undefined;
     },
   });
+}
+
+export function prepareRustNativeCallableGenericContexts(input: {
+  readonly ast: AstReader;
+  readonly records: RustProgramRecords;
+  readonly native: RustNativeCallableInputPlan;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "futureEnvironmentFor" | "returnFor" | "valueFor">;
+  readonly nativeProducers: RustNativeCallableProducerPlan;
+  readonly nativeGenericProducers: RustNativeGenericProducerPlan;
+  readonly retainedCallableInputs: RustRetainedCallableInputPlan;
+  readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
+}): TargetStageResult<RustNativeCallableGenericContexts> {
+  const contexts = new Map<Node, RustNativeCallableGenericContext>();
+  const diagnostics: TargetDiagnostic[] = [];
+  for (const { declaration } of input.nativeProducers.producers) {
+    const implicitLifetimes = rustCallableImplicitLifetimeParameters(declaration, input.ast, input.records);
+    const environment = input.nativeStorage.futureEnvironmentFor(declaration);
+    if (environment.kind === "unresolved") {
+      diagnostics.push(emissionDiagnostic(declaration, environment.reason));
+      continue;
+    }
+    const callableInputs = [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)];
+    const inputs = [...new Map([...callableInputs, ...environment.inputs, ...environment.captures]
+      .map(selected => [selected.implementation.identity, selected] as const)).values()];
+    const sourceRequirements = input.declarationGenericRequirements.contractFor(declaration)?.nativeInputs;
+    const bodyRequirements = input.declarationGenericRequirements.contractFor(declaration, true)?.nativeInputs;
+    if (inputs.length === 0) {
+      contexts.set(declaration, Object.freeze({ implicitLifetimes, inputs: Object.freeze([]), sourceRequirements, bodyRequirements }));
+      continue;
+    }
+    const bounds = new Map(inputs.map(selected => [selected.implementation.identity, new Map<string, TargetTypeRef>()]));
+    for (const selected of callableInputs)
+      bounds.get(selected.implementation.identity)!.set(closedMetadataKey(selected.trait), selected.trait);
+    const visited = new Set<TargetTypeRef>();
+    const collect = (carrier: TargetTypeRef): void => {
+      if (visited.has(carrier)) return;
+      visited.add(carrier);
+      if (carrier.kind === "associated-type" && carrier.owner.kind === "type-parameter" && carrier.trait !== undefined)
+        bounds.get(carrier.owner.identity)?.set(closedMetadataKey(carrier.trait), carrier.trait);
+      for (const child of rustTargetTypeChildren(carrier)) collect(child);
+    };
+    if (input.records.sourceCallableReturn.get(declaration) !== undefined) {
+      const selected = input.nativeStorage.returnFor(declaration);
+      if (selected.kind === "unresolved") {
+        diagnostics.push(emissionDiagnostic(declaration, selected.reason));
+        continue;
+      }
+      collect(selected.carrier);
+    }
+    let failure: { readonly node: Node; readonly reason: string } | undefined;
+    const visit = (node: Node): void => {
+      if (failure !== undefined) return;
+      for (const error of input.records.errorEffects.get(node)?.nativeErrors ?? []) collect(error.errorType);
+      if (input.records.contextualValueConversion.get(node)?.conversion.kind === "callable-adapter") {
+        const selected = input.nativeStorage.valueFor(node);
+        if (selected.kind === "unresolved") { failure = { node, reason: selected.reason }; return; }
+        collect(selected.carrier);
+      }
+      const call = input.native.callFor(node);
+      if (call !== undefined) bounds.get(call.input.implementation.identity)?.set(closedMetadataKey(call.input.trait), call.input.trait);
+      input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(declaration);
+    if (failure !== undefined) {
+      diagnostics.push(emissionDiagnostic(failure.node, failure.reason));
+      continue;
+    }
+    for (const forwarding of input.nativeGenericProducers.forwardingFor(declaration)) {
+      const selected = bounds.get(forwarding.input.implementation.identity);
+      if (selected === undefined) {
+        failure = { node: declaration, reason: "A native callable forwarding requirement has no admitted original input." };
+        break;
+      }
+      selected.set(closedMetadataKey(forwarding.trait), forwarding.trait);
+    }
+    const selectedInputs: RustNativeCallableGenericInput[] = [];
+    for (const selected of inputs) {
+      if (failure !== undefined) break;
+      const callableInput = callableInputs.find(candidate => candidate === selected);
+      const targets = callableInput === undefined ? [] : input.retainedCallableInputs.forInput(callableInput);
+      const signature = targets.length === 0 || callableInput === undefined ? undefined
+        : rustNativeCallableInputPhysicalSignature(callableInput, []);
+      if (targets.length !== 0 && signature === undefined) {
+        failure = { node: declaration, reason: "A retained native callable requires its exact physical invocation error." };
+        break;
+      }
+      selectedInputs.push(Object.freeze({ implementation: selected.implementation,
+        traits: Object.freeze([...bounds.get(selected.implementation.identity)!.values()]),
+        retained: signature === undefined ? undefined : Object.freeze({ error: signature.error, targets }) }));
+    }
+    if (failure !== undefined) diagnostics.push(emissionDiagnostic(failure.node, failure.reason));
+    else contexts.set(declaration, Object.freeze({ implicitLifetimes, inputs: Object.freeze(selectedInputs),
+      sourceRequirements, bodyRequirements }));
+  }
+  return diagnostics.length !== 0 ? rejectedTargetStage(diagnostics)
+    : resolvedTargetStage(Object.freeze({ get: (declaration: Node) => contexts.get(declaration) }));
 }

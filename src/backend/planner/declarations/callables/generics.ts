@@ -19,7 +19,6 @@ import { rustDeclarationAssociatedPredicates } from "../../types/associated-boun
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
-import { rustCallableImplicitLifetimeParameters } from "../../../../analysis/callables/source-input-lifetimes.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";
 import { planRustRetainedGenerics } from "./retained-generics.js";
 
@@ -81,8 +80,10 @@ function planRustSourceCallableGenerics(
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan | undefined {
-  capturedParameters = [...capturedParameters, ...rustCallableImplicitLifetimeParameters(
-    declaration, context.input.program.source.ast, context.input.program.records)];
+  const native = context.input.program.callableValues.nativeGenericContexts.get(declaration);
+  if (native === undefined) failRustPlannerInvariant(
+    "An emitted native callable requires its exact original pre-seal generic context.", declaration);
+  capturedParameters = [...capturedParameters, ...native.implicitLifetimes];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(

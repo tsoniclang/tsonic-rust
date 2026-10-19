@@ -62,6 +62,8 @@ import { prepareRustProviderSourceOccurrences } from "../operations/provider-sou
 import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
 import { assertRustNativeCallableProtocolResults } from "./native-protocols.js";
+import { prepareRustNativeCallableGenericContexts, type RustNativeCallableGenericContexts } from "./native-inputs.js";
+import type { RustRetainedCallableInputPlan } from "./retained-inputs.js";
 
 export interface RustCallableValuePlan {
   readonly emissionContexts: RustCallableEmissionContexts;
@@ -73,6 +75,7 @@ export interface RustCallableValuePlan {
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
+  readonly nativeGenericContexts: RustNativeCallableGenericContexts;
   readonly genericDispatch: RustGenericCallableDispatchPlan;
   readonly genericIdentities: RustGenericCallableIdentityPlan;
   readonly nativeDispatch: RustNativeCallableDispatchPlan;
@@ -81,12 +84,13 @@ export interface RustCallableValuePlan {
   readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
 
-export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts"> & {
+export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts" | "nativeGenericContexts"> & {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStorageConstruction;
 };
 
 export interface RustCallableValueSealInput {
+  readonly retainedCallableInputs: RustRetainedCallableInputPlan;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly genericErrors: RustGenericCallableErrorIndex;
   readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;
@@ -420,6 +424,14 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         return sealResult;
       }
       const frames = frameConstruction.sealCounters(late.constructions);
+      const nativeGenericContexts = prepareRustNativeCallableGenericContexts({ ast: input.ast, records: input.records,
+        native, nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
+        nativeGenericProducers: selectedPlan.nativeGenericProducers, retainedCallableInputs: late.retainedCallableInputs,
+        declarationGenericRequirements: late.declarationGenericRequirements });
+      if (nativeGenericContexts.kind === "rejected") {
+        sealResult = rejectedTargetStage(nativeGenericContexts.diagnostics);
+        return sealResult;
+      }
       const emission = prepareRustPhysicalEmissionContexts({ ...late, ast: input.ast, sourceFiles: input.sourceFiles,
         isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
         sourceStorage: input.sourceStorage, genericBindingsFor: nativeStorage.genericBindingsFor,
@@ -438,7 +450,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
       publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs, frames,
-        emissionContexts: emission.value.contexts });
+        nativeGenericContexts: nativeGenericContexts.value, emissionContexts: emission.value.contexts });
       sealResult = resolvedTargetStage(publishedPlan);
       return sealResult;
     },
