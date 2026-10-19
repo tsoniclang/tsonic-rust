@@ -16,7 +16,7 @@ import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccesso
 import { isRustBigIntCarrier, isRustBoolCarrier } from "../../../../target-model/types/index.js";
 import { applyRustValueConversion } from "../value-conversions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { planRustIndexedRecordStorage, planRustSourceIndexKey, sourceIndexSelectedOperationMatches } from "../../objects/indexed-records.js";
+import { planRustIndexedRecordStorage, planRustSourceIndexKey } from "../../objects/indexed-records.js";
 import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
@@ -296,7 +296,7 @@ function planRustSourceIndexUpdate(
   returnsPrevious: boolean,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!index.writable || !sourceIndexSelectedOperationMatches(expression, index, context) ||
+  if (!index.writable || context.input.program.records.indexedRecordAccess.get(expression) === undefined ||
     !rustTargetTypeRefEquals(index.resultCarrier, update.resultCarrier) ||
     context.syntheticNames === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
