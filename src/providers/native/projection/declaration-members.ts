@@ -11,15 +11,17 @@ import {
   sourceMethodIsInstance,
 } from "./functions.js";
 import {
-  providerGenericBindingsFor,
-  providerGenericParametersFor,
-  sourceGenericParameterNames,
   sourceTypeFor,
-  targetGenericArgumentFor,
-  targetGenericParameterArguments,
   targetTraitFor,
   targetTypeFor,
 } from "./types.js";
+import {
+  providerGenericBindingsFor,
+  providerGenericParametersFor,
+  sourceGenericParameterNames,
+  targetGenericArgumentFor,
+  targetGenericParameterArguments,
+} from "./type-arguments.js";
 import { compilerAssociatedSourceExportName } from "../model/rustdoc-items.js";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import {
@@ -45,7 +47,7 @@ import type {
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
+import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/identities/provider-relations.js";
 
 export function projectFields(
   exported: Extract<RustCompilerExport, { readonly kind: "struct" | "union" }>,
