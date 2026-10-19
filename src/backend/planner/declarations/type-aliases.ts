@@ -1,8 +1,6 @@
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { planRustTypeFamilyDeclaration } from "./type-families.js";
-import { diagnosticInput, rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
-import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../program/reachability-directives.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
@@ -18,7 +16,6 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     "Type-alias emission requires its sealed native declaration admission.", node);
   const { fact, name: aliasName } = admitted;
   if (fact.kind === "family") return planRustTypeFamilyDeclaration(node, context);
-  const { ast } = context.input.program.source;
   if (fact.kind === "erased") {
     return [];
   }
@@ -29,17 +26,11 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       : rustSourceDeclarationGenerics(contract);
     const target = rustTypeFromCarrierInContext(fact.target, context);
     if (generics === undefined || target === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.native-type-alias",
-        "A lifetime-bearing type alias has no exact generic contract or renderable target type.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted native alias requires its exact generic contract and renderable target type.", node);
     }
-    const visibility = ast.hasModifierKind(node, "export")
-      ? "public" as const
-      : "crate" as const;
-    const deadCode = rustAuthoredDeadCodeDisposition(context, node);
+    const emission = context.input.program.records.declarationLiveness.get(node);
+    if (emission === undefined) failRustPlannerInvariant("An admitted native alias requires its native declaration visibility and liveness.", node);
+    const { visibility, deadCode } = emission;
     return [{
       kind: "type-alias",
       name: aliasName,
@@ -49,11 +40,9 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       target,
     }];
   }
-  const visibility = ast.hasModifierKind(node, "export") ||
-      rustProjectTypeHasPublicImplementationAbi(context, aliasName)
-    ? "public" as const
-    : "crate" as const;
-  const deadCode = rustAuthoredDeadCodeDisposition(context, node);
+  const emission = context.input.program.records.declarationLiveness.get(node);
+  if (emission === undefined) failRustPlannerInvariant("An admitted union alias requires its native declaration visibility and liveness.", node);
+  const { visibility, deadCode } = emission;
   const sourceContract = admitted.genericContract;
   const unionGenerics = sourceContract === undefined
     ? emptyRustGenerics
@@ -64,9 +53,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   const payloadPlan = template === undefined ? undefined : planRustSourceUnionPayloadTemplate(template, unionGenerics,
     selected => rustTypeFromCarrierInContext(selected, context));
   if (fact.kind === "runtime" && payloadPlan === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.union-variant-carrier",
-      "Runtime union variants require one exact renderable physical payload template."));
-    return undefined;
+    failRustPlannerInvariant("An admitted runtime union requires its renderable native payload template.", node);
   }
   return [{
     kind: "enum",
@@ -78,12 +65,9 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       ? ["Clone", "Copy", "Debug", "PartialEq"]
       : ["Clone"]),
     variants: fact.variants.map((variant, index) => {
-      const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
-        context,
-        node,
-        variant.name,
-        fact.kind === "runtime",
-      );
+      const selected = emission.variants[index];
+      if (selected === undefined) failRustPlannerInvariant("An admitted union variant requires its native liveness selection.", node);
+      const variantDeadCode = selected.deadCode;
       return {
         name: variant.name,
         ...(variantDeadCode === undefined ? {} : { deadCode: variantDeadCode }),
