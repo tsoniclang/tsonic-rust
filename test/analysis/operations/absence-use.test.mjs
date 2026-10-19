@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "../../../dist/analysis/expressions/absence-use.js";
+import { sourceAbsenceUse } from "@tsonic/target-api/source";
+import { rustSourceAbsenceReadCarrier } from "../../../dist/analysis/expressions/absence-use.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
@@ -42,12 +43,12 @@ test("nullish operands retain absence only for the exact left input through tran
     ["KindParenthesizedExpression", "KindSatisfiesExpression"]]) {
     for (const side of ["left", "right"]) {
       const { value, context } = input("KindQuestionQuestionToken", side, wrappers);
-      assert.equal(rustSourceAbsenceUse(value, context), side === "left" ? "coalesce" : undefined, `${side}/${wrappers.join(",")}`);
+      assert.equal(sourceAbsenceUse(value, context), side === "left" ? "coalesce" : undefined, `${side}/${wrappers.join(",")}`);
     }
   }
   for (const operator of ["KindPlusToken", "KindEqualsToken", "KindBarBarToken"]) {
     const { value, context } = input(operator, "left");
-    assert.equal(rustSourceAbsenceUse(value, context), undefined, operator);
+    assert.equal(sourceAbsenceUse(value, context), undefined, operator);
   }
 });
 
@@ -73,21 +74,21 @@ test("absence use retains checked nullish comparisons and rejects missing or cyc
     "KindEqualsEqualsEqualsToken", "KindExclamationEqualsEqualsToken"]) {
     for (const side of ["left", "right"]) {
       const { value, context } = input(operator, side);
-      assert.equal(rustSourceAbsenceUse(value, context), "comparison");
+      assert.equal(sourceAbsenceUse(value, context), "comparison");
       context.semanticsFor = () => ({ types: { expressionType: () => ({}), isNullish: () => false, isVoidLike: () => true } });
-      assert.equal(rustSourceAbsenceUse(value, context), "comparison");
+      assert.equal(sourceAbsenceUse(value, context), "comparison");
       context.semanticsFor = () => ({ types: { expressionType: () => ({}), isNullish: () => false, isVoidLike: () => false } });
-      assert.equal(rustSourceAbsenceUse(value, context), undefined);
+      assert.equal(sourceAbsenceUse(value, context), undefined);
       context.semanticsFor = () => ({ types: { expressionType: () => undefined } });
-      assert.equal(rustSourceAbsenceUse(value, context), undefined);
+      assert.equal(sourceAbsenceUse(value, context), undefined);
     }
   }
   const { value, context, parents } = input("KindQuestionQuestionToken", "left");
   parents.delete(value);
-  assert.equal(rustSourceAbsenceUse(value, context), undefined);
+  assert.equal(sourceAbsenceUse(value, context), undefined);
   const cycle = { kind: "KindParenthesizedExpression", expression: value };
   parents.set(value, cycle);
   parents.set(cycle, cycle);
   cycle.expression = cycle;
-  assert.equal(rustSourceAbsenceUse(value, context), undefined);
+  assert.equal(sourceAbsenceUse(value, context), undefined);
 });

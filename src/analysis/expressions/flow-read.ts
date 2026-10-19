@@ -6,6 +6,7 @@ import {
   KindSatisfiesExpression,
   Node_Expression,
   Node_Type,
+  sourceAbsenceUse,
 } from "@tsonic/target-api/source";
 import {
   isRustProgramErrorCarrier,
@@ -41,7 +42,7 @@ import { selectRustGuardedValueMembers } from "../operations/native-flow-refinem
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier,
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
-import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "./absence-use.js";
+import { rustSourceAbsenceReadCarrier } from "./absence-use.js";
 import { resolveRustNativeFlowCarrier } from "../../policy/types/resolution/native-flow-refinement.js";
 
 export function applyFlowReadLane(
@@ -63,7 +64,7 @@ export function applyFlowReadLane(
     parent = walk.context.ast.parent(receiver);
   }
   const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
-  const absenceUse = rustSourceAbsenceUse(expression, walk.context);
+  const absenceUse = sourceAbsenceUse(expression, walk.context);
   if (rustOptionElementCarrier(sourceCarrier) !== undefined && absenceUse === "comparison") return sourceCarrier;
   if (parent !== undefined && walk.context.ast.as.AsCallExpression(parent)?.QuestionDotToken !== undefined &&
     Node_Expression(walk.context.ast, parent) === receiver) return sourceCarrier;

@@ -1,6 +1,7 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 
 import type { ExtensionFactSubject } from "@tsonic/tsts";
+import { sourceAbsenceUse } from "@tsonic/target-api/source";
 
 import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
@@ -9,7 +10,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
-import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "../expressions/absence-use.js";
+import { rustSourceAbsenceReadCarrier } from "../expressions/absence-use.js";
 import { rustOptionElementCarrier, rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 export function selectedValueCarrier(
@@ -22,7 +23,7 @@ export function selectedValueCarrier(
   const storage = reference === undefined ? undefined : operationContext.sourceStorage.subjectFor(reference);
   const context = { ...operationContext, sourceStorageSubject: storage?.kind === "resolved" ? storage.subject : undefined };
   const stored = resolveRustTargetTypeRef(expression, context, options);
-  const absenceUse = reference === undefined ? undefined : rustSourceAbsenceUse(reference, context);
+  const absenceUse = reference === undefined ? undefined : sourceAbsenceUse(reference, context);
   if (stored !== undefined && reference !== undefined &&
     rustOptionElementCarrier(stored) !== undefined && absenceUse === "comparison") return stored;
   const effective = rustSourceAbsenceReadCarrier(stored, rustEffectiveValueCarrier(context.records, expression), absenceUse);
