@@ -440,7 +440,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     generics,
     fields: structFields,
   };
-  const defaultImplementation = rustDefaultImplementation(implementationType, implementationGenerics, constructorFn);
+  const defaultImplementation = rustDefaultImplementation(implementationType, implementationGenerics, emission.defaultConstructor);
   const implementation: RustItem = {
     kind: "impl",
     generics: implementationGenerics,

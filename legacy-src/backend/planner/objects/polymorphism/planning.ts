@@ -171,7 +171,7 @@ export function planPolymorphicClassDeclaration(
   const defaultImplementation = constructor.construct === undefined ? undefined : rustDefaultImplementation(
     implementationType,
     implementationGenerics,
-    constructor.construct,
+    context.input.program.records.classDeclaration.get(declaration)?.defaultConstructor,
   );
   const selectedEnvironment = context.input.program.classValues.forDeclaration(declaration)?.environment;
   const environment = selectedEnvironment?.instancesUseEnvironment ? selectedEnvironment : undefined;

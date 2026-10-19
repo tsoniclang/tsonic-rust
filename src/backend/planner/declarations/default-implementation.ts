@@ -1,5 +1,4 @@
 import type {
-  RustImplFunction,
   RustGenerics,
   RustItem,
   RustType,
@@ -9,15 +8,9 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 export function rustDefaultImplementation(
   target: RustType,
   generics: RustGenerics,
-  constructor: RustImplFunction,
+  constructorName: string | undefined,
 ): RustItem | undefined {
-  if (constructor.name !== "new" || constructor.visibility !== "public" ||
-    constructor.params.length !== 0 || constructor.generics.parameters.length > 0 ||
-    constructor.generics.wherePredicates.length > 0 ||
-    constructor.isAsync === true ||
-    constructor.isUnsafe === true || constructor.errorType !== undefined) {
-    return undefined;
-  }
+  if (constructorName === undefined) return undefined;
   return {
     kind: "impl",
     generics,
@@ -35,7 +28,7 @@ export function rustDefaultImplementation(
           expr: {
             kind: "associated-call",
             owner: { kind: "named", path: "Self" },
-            method: constructor.name,
+            method: constructorName,
             args: [],
           },
         }],

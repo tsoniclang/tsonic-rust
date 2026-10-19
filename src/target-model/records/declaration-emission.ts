@@ -5,6 +5,7 @@ import type { Node } from "@tsonic/tsts";
 export interface RustClassDeclarationEmission {
   readonly environmentBindingName: string | undefined;
   readonly nonCamelCaseName: boolean;
+  readonly defaultConstructor: string | undefined;
 }
 
 export interface RustCallableReturnEmission {
