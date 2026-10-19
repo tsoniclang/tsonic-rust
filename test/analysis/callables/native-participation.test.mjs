@@ -160,7 +160,9 @@ test("anonymous callable participation is published once from checked creation d
       const escaped = () => 4;
       observe(escaped);
       const conditional = () => 5;
-      if (branch) void conditional;
+      if (conditional as unknown) {}
+      const branchVoid = () => 6;
+      if (branch) void branchVoid;
       const parent = () => { const nested = () => 6; return nested(); };
       void parent;
     }` },
@@ -185,9 +187,9 @@ test("anonymous callable participation is published once from checked creation d
   const records = builder.seal(requiredRecords);
   ast.revoke();
   navigation.revoke();
-  assert.equal(requiredRecords.filter(record => record.construct === "anonymous-callable-creation").length, 6,
+  assert.equal(requiredRecords.filter(record => record.construct === "anonymous-callable-creation").length, 7,
     "exactly the reached original anonymous definitions have one required record");
-  for (const name of ["unused", "typeOnly", "parent"]) {
+  for (const name of ["unused", "typeOnly", "branchVoid", "parent"]) {
     const declaration = definitions.get(name);
     assert.equal(declaration !== undefined, true, `${name}: original checked creation exists`);
     assert.equal(records.nativeParticipation.get(declaration), "erased", `${name}: an unobserved creation is sealed data`);
