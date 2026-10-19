@@ -33,7 +33,7 @@ export function planRustNativeCallableGenerics(
     const traits = input.traits.map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) failRustPlannerInvariant("An admitted native generic input requires its renderable trait bounds.", declaration);
     const selectedBounds: RustTypeBound[] = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
-    const required = requirements.find(parameter => parameter.identity === input.implementation.identity);
+    const required = requirements.nativeInputs.find(parameter => parameter.identity === input.implementation.identity);
     if (required !== undefined) selectedBounds.push(...rustGenericRequirementBounds(required.requirements));
     if (input.retained !== undefined) {
       selectedBounds.push({ kind: "lifetime", lifetime: { kind: "static" } });

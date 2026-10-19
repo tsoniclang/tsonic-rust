@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
@@ -32,6 +32,8 @@ import type { RustRetainedCallableInputPlan } from "./retained-inputs.js";
 import { rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import { emissionDiagnostic } from "./emission-contexts.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
 export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
   readonly owner: Node;
@@ -224,11 +226,12 @@ export function createRustNativeCallableInputPlan(input: {
 }
 
 export function analyzeRustNativeCallableGenerics(input: {
+  readonly lifetimes: RustLifetimeIndex;
   readonly producer: RustNativeGenericProducer;
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly native: RustNativeCallableInputPlan;
-  readonly nativeStorage: Pick<RustNativeStoragePlan, "futureEnvironmentFor" | "returnFor" | "valueFor">;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "futureEnvironmentFor" | "returnFor" | "valueFor" | "parameterFor">;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly retainedCallableInputs: RustRetainedCallableInputPlan;
@@ -237,6 +240,46 @@ export function analyzeRustNativeCallableGenerics(input: {
   const contexts = new Map<Node, RustNativeCallableGenericContext>();
   const diagnostics: TargetDiagnostic[] = [];
   for (const { declaration } of input.nativeProducers.producers) {
+    if (contexts.has(declaration)) continue;
+    const parameters = input.ast.typeParameters(declaration);
+    const sourceContract = parameters.length === 0 ? Object.freeze({ declaration, parameters: Object.freeze([]) })
+      : input.lifetimes.contractFor(declaration);
+    if (parameters.some(parameter => parameter === undefined) || sourceContract === undefined ||
+      sourceContract.parameters.length !== parameters.length || sourceContract.parameters.some((parameter, index) => parameter.declaration !== parameters[index]))
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted native callable requires its exact completed source generic contract.", declaration);
+    if (sourceContract.parameters.some(parameter => parameter.kind === "type" && !isValidRustIdentifier(parameter.targetName))) {
+      diagnostics.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: declaration,
+        message: "Callable type parameters require exact valid Rust target names.", evidence: ["target.capability=rust.backend.generics"] });
+      continue;
+    }
+    const retained = input.records.retainedEnvironment.get(declaration);
+    let retention: RustNativeCallableGenericContext["retention"];
+    if (retained !== undefined) {
+      const carriers: TargetTypeRef[] = [];
+      for (const parameter of retained.parameters) {
+        const physical = input.nativeStorage.parameterFor(parameter);
+        if (input.records.sourceParameterAbi.get(parameter) === undefined || physical.kind === "unresolved")
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted retained callable requires its exact native parameter storage.", parameter);
+        carriers.push(physical.carrier);
+      }
+      const source = [...carriers];
+      const body = [...carriers];
+      const asynchronous = input.records.asyncFunction.get(declaration);
+      const generator = input.records.generator.get(declaration);
+      if (asynchronous?.kind === "js-promise") {
+        const output = input.nativeStorage.returnFor(declaration);
+        const sourceError = input.nativeProducers.errorFor(declaration, 0);
+        const bodyError = input.nativeProducers.errorFor(declaration, "body");
+        if (output.kind === "unresolved" || sourceError === undefined || bodyError === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted retained Promise requires its exact native result and rejection carriers.", declaration);
+        source.push(output.carrier, sourceError);
+        body.push(output.carrier, bodyError);
+      } else if (generator !== undefined) {
+        source.push(generator.yieldType, generator.returnType, generator.nextType);
+        body.push(generator.yieldType, generator.returnType, generator.nextType);
+      }
+      retention = Object.freeze({ lifetime: retained.lifetime, source: Object.freeze(source), body: Object.freeze(body) });
+    }
     const implicitLifetimes = rustCallableImplicitLifetimeParameters(declaration, input.ast, input.records);
     const environment = input.nativeStorage.futureEnvironmentFor(declaration);
     if (environment.kind === "unresolved") {
@@ -246,10 +289,10 @@ export function analyzeRustNativeCallableGenerics(input: {
     const callableInputs = [...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)];
     const inputs = [...new Map([...callableInputs, ...environment.inputs, ...environment.captures]
       .map(selected => [selected.implementation.identity, selected] as const)).values()];
-    const sourceRequirements = input.declarationGenericRequirements.contractFor(declaration)?.nativeInputs;
-    const bodyRequirements = input.declarationGenericRequirements.contractFor(declaration, true)?.nativeInputs;
+    const sourceRequirements = input.declarationGenericRequirements.contractFor(declaration);
+    const bodyRequirements = input.declarationGenericRequirements.contractFor(declaration, true);
     if (inputs.length === 0) {
-      contexts.set(declaration, Object.freeze({ implicitLifetimes, inputs: Object.freeze([]), sourceRequirements, bodyRequirements }));
+      contexts.set(declaration, Object.freeze({ sourceContract, retention, implicitLifetimes, inputs: Object.freeze([]), sourceRequirements, bodyRequirements }));
       continue;
     }
     const bounds = new Map(inputs.map(selected => [selected.implementation.identity, new Map<string, TargetTypeRef>()]));
@@ -313,7 +356,7 @@ export function analyzeRustNativeCallableGenerics(input: {
         retained: signature === undefined ? undefined : Object.freeze({ error: signature.error, targets }) }));
     }
     if (failure !== undefined) diagnostics.push(emissionDiagnostic(failure.node, failure.reason));
-    else contexts.set(declaration, Object.freeze({ implicitLifetimes, inputs: Object.freeze(selectedInputs),
+    else contexts.set(declaration, Object.freeze({ sourceContract, retention, implicitLifetimes, inputs: Object.freeze(selectedInputs),
       sourceRequirements, bodyRequirements }));
   }
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);

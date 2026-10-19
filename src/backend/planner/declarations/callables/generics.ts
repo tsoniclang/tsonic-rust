@@ -11,11 +11,12 @@ import {
   type RustGenericParameter,
   type RustTypeBound,
 } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier } from "../../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { isValidRustIdentifier } from "../../program/plan-context.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
@@ -31,12 +32,12 @@ export interface RustCallableGenericPlan {
 
 export function rustSourceDeclarationGenerics(
   contract: import("../../../../target-model/lifetimes/model.js").RustSourceGenericContract,
-): RustGenerics | undefined {
-  if (contract.lifetimeBinder !== undefined) return undefined;
+): RustGenerics {
+  if (contract.lifetimeBinder !== undefined) failRustPlannerInvariant("An admitted item generic contract cannot retain a higher-ranked binder.", contract.declaration);
   const parameters: RustGenericParameter[] = [];
   for (const parameter of contract.parameters) {
     if (parameter.kind === "lifetime") {
-      if (parameter.lifetime.kind !== "parameter") return undefined;
+      if (parameter.lifetime.kind !== "parameter") failRustPlannerInvariant("An admitted item lifetime requires its named native binder.", contract.declaration);
       parameters.push({
         kind: "lifetime",
         name: parameter.lifetime.name,
@@ -44,7 +45,7 @@ export function rustSourceDeclarationGenerics(
       });
       continue;
     }
-    if (!isValidRustIdentifier(parameter.targetName)) return undefined;
+    if (!isValidRustIdentifier(parameter.targetName)) failRustPlannerInvariant("An admitted item type parameter requires its native identifier.", contract.declaration);
     parameters.push({
       kind: "type",
       name: parameter.targetName,
@@ -68,10 +69,10 @@ export function planRustCallableGenerics(
   context: RustPlanContext,
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
-): RustCallableGenericPlan | undefined {
+): RustCallableGenericPlan {
   const source = planRustSourceCallableGenerics(declaration, context, specialization, capturedParameters);
-  const native = source === undefined ? undefined : planRustNativeCallableGenerics(declaration, source);
-  return native === undefined ? undefined : planRustRetainedGenerics(declaration, native);
+  const native = planRustNativeCallableGenerics(declaration, source);
+  return planRustRetainedGenerics(declaration, native);
 }
 
 function planRustSourceCallableGenerics(
@@ -79,28 +80,18 @@ function planRustSourceCallableGenerics(
   context: RustPlanContext,
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
-): RustCallableGenericPlan | undefined {
+): RustCallableGenericPlan {
   const native = context.input.program.records.nativeGenerics.get(declaration);
   if (native === undefined) failRustPlannerInvariant(
     "An emitted native callable requires its exact original pre-seal generic context.", declaration);
   capturedParameters = [...capturedParameters, ...native.implicitLifetimes];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.generic-parameter",
-      "Callable declaration contains an undefined generic-parameter slot.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its dense checked generic parameter list.", declaration);
   }
   if (sourceParameters.length === 0 && capturedParameters.length === 0) {
     if (specialization !== undefined && specialization.size !== 0) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.callable-specialization",
-        "A non-generic callable received a target specialization.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted non-generic callable cannot receive a target specialization.", declaration);
     }
     return {
       context: { ...context, callableDeclaration: declaration },
@@ -110,18 +101,12 @@ function planRustSourceCallableGenerics(
     };
   }
 
-  const sourceContract = sourceParameters.length === 0 ? { declaration, parameters: [] }
-    : context.input.program.sourceLifetimes.contractFor(declaration);
+  const sourceContract = native.sourceContract;
   if (sourceContract === undefined ||
     sourceContract.parameters.length !== sourceParameters.length ||
     sourceContract.parameters.some((parameter, index) =>
       parameter.declaration !== sourceParameters[index])) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.callable-generic-contract",
-      "Callable declaration has no exact sealed Rust generic contract.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact sealed native generic contract.", declaration);
   }
 
   const ordinaryParameters = sourceContract.parameters.filter(
@@ -149,42 +134,24 @@ function planRustSourceCallableGenerics(
   context = { ...context, typeParameterNames, lifetimeSubstitutions };
   if (ordinaryParameters.some((parameter) =>
     !isValidRustIdentifier(parameter.targetName))) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.generics",
-      "Callable type parameters require exact valid Rust target names.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable type parameter requires its preserved native identifier.", declaration);
   }
   const sourceTypeParameterIdentities = Object.freeze(
     ordinaryParameters.map((parameter) => parameter.identity),
   );
-  const requirementContract = context.input.program.declarationGenericRequirements.contractFor(
-    declaration,
-    context.promiseBody,
-  );
+  const requirementContract = context.promiseBody === true ? native.bodyRequirements : native.sourceRequirements;
   if (requirementContract === undefined ||
     requirementContract.typeParameters.length !== ordinaryParameters.length ||
     requirementContract.typeParameters.some((parameter, index) =>
       parameter.identity !== ordinaryParameters[index]?.identity)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.callable-generic-requirements",
-      "Callable declaration has no exact sealed Rust type-requirement contract.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact sealed native type-requirement contract.", declaration);
   }
 
   const substitutions = new Map(context.typeParameterSubstitutions ?? []);
   if (specialization !== undefined) {
     if (specialization.size !== sourceTypeParameterIdentities.length ||
       sourceTypeParameterIdentities.some((name) => !specialization.has(name))) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.callable-specialization",
-        "Callable specialization does not cover the exact ordinary source type parameters.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted callable specialization requires exact ordinary source type parameter coverage.", declaration);
     }
     for (const [name, carrier] of specialization) substitutions.set(name, carrier);
   }
@@ -199,25 +166,12 @@ function planRustSourceCallableGenerics(
     }
     const lifetime = lifetimeSubstitutions.get(rustLifetimeKey(parameter.lifetime)) ?? parameter.lifetime;
     if (lifetime.kind !== "parameter" && lifetime.kind !== "bound") {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.callable-generic-contract",
-        "Callable lifetime declaration substitution must retain an exact native binder.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted callable lifetime substitution requires its exact native binder.", declaration);
     }
     declarationParameters.push({ ...parameter, lifetime, outlives });
   }
   const declarationContract = { ...sourceContract, parameters: declarationParameters };
-  const declarationGenerics = rustSourceDeclarationGenerics(declarationContract);
-  if (declarationGenerics === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.callable-generic-contract",
-      "Callable declaration has a bound lifetime contract that cannot be emitted as item generics.",
-    ));
-    return undefined;
-  }
+  rustSourceDeclarationGenerics(declarationContract);
   const requirementsByIdentity = new Map([...requirementContract.typeParameters, ...requirementContract.capturedTypeParameters].map((parameter) =>
     [parameter.identity, parameter.requirements] as const));
   const parameters = declarationContract.parameters.flatMap((parameter): readonly RustGenericParameter[] => {
@@ -245,9 +199,8 @@ function planRustSourceCallableGenerics(
     ...parameters.filter(parameter => parameter.kind !== "lifetime"),
     ...(specialization === undefined ? rustOptionalStorageParameters(requirementContract.optionalStorage, context) : []),
   ],
-    rustDeclarationAssociatedPredicates(declaration, {
-      ...context, typeParameterSubstitutions: substitutions,
-    }),
+    [...rustAssociatedPredicates(requirementContract.associatedTypes, { ...context, typeParameterSubstitutions: substitutions }),
+      ...rustProjectProjectionPredicates(requirementContract.projectProjections, { ...context, typeParameterSubstitutions: substitutions })],
   );
   return {
     context: {

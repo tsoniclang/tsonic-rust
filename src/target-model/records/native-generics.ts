@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../types/model.js";
-import type { RustSourceGenericParameterContract } from "../lifetimes/model.js";
-import type { RustDeclarationTypeParameterRequirements } from "../../target-model/records/generic-requirements.js";
+import type { RustSourceGenericParameterContract, RustSourceGenericContract, RustLifetimeRef } from "../lifetimes/model.js";
+import type { RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
 
 export interface RustNativeCallableGenericInput {
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
@@ -9,8 +9,14 @@ export interface RustNativeCallableGenericInput {
 }
 
 export interface RustNativeCallableGenericContext {
+  readonly sourceContract: RustSourceGenericContract;
   readonly implicitLifetimes: readonly RustSourceGenericParameterContract[];
   readonly inputs: readonly RustNativeCallableGenericInput[];
-  readonly sourceRequirements: readonly RustDeclarationTypeParameterRequirements[] | undefined;
-  readonly bodyRequirements: readonly RustDeclarationTypeParameterRequirements[] | undefined;
+  readonly sourceRequirements: RustDeclarationGenericRequirementContract | undefined;
+  readonly bodyRequirements: RustDeclarationGenericRequirementContract | undefined;
+  readonly retention: {
+    readonly lifetime: RustLifetimeRef;
+    readonly source: readonly TargetTypeRef[];
+    readonly body: readonly TargetTypeRef[];
+  } | undefined;
 }

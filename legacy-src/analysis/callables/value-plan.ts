@@ -425,7 +425,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         return sealResult;
       }
       const frames = frameConstruction.sealCounters(late.constructions);
-      const nativeGenericContexts = analyzeRustNativeCallableGenerics({ ast: input.ast, records: input.records, producer: late.nativeGenerics,
+      const nativeGenericContexts = analyzeRustNativeCallableGenerics({ ast: input.ast, lifetimes: input.lifetimes, records: input.records, producer: late.nativeGenerics,
         native, nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         nativeGenericProducers: selectedPlan.nativeGenericProducers, retainedCallableInputs: late.retainedCallableInputs,
         declarationGenericRequirements: late.declarationGenericRequirements });
