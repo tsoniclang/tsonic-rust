@@ -1,9 +1,30 @@
 import type { RustNativeCallableProtocol } from "./native-protocols.js";
 import type { RustNativeCallableCompletion } from "../types/callable-completions.js";
+import type { TargetTypeRef } from "../types/model.js";
+
+type RustProducerTypeParameter = Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
+
+export interface RustNativeProducerBridge {
+  readonly implementation: RustProducerTypeParameter;
+  readonly invocationError: RustProducerTypeParameter;
+  readonly arguments: RustProducerTypeParameter;
+  readonly genericTypes: readonly RustProducerTypeParameter[];
+  readonly boundTypes: readonly RustProducerTypeParameter[];
+  readonly errors: readonly { readonly ordinal: number; readonly parameter: RustProducerTypeParameter }[];
+  readonly futureBounds: readonly { readonly parameter: RustProducerTypeParameter; readonly output: TargetTypeRef; readonly error: RustProducerTypeParameter }[];
+  readonly concreteResult: TargetTypeRef;
+  readonly implementationResult: TargetTypeRef;
+  readonly higherRanked: {
+    readonly helperResult: TargetTypeRef;
+    readonly publicResult: TargetTypeRef;
+    readonly outputs: readonly TargetTypeRef[];
+  } | undefined;
+}
 
 export interface RustNativeProtocolEmission {
   readonly invoked: boolean;
   readonly nativeFutures: NonNullable<RustNativeCallableCompletion>["futures"];
+  readonly producer: RustNativeProducerBridge | undefined;
 }
 
 export interface RustNativeProtocolReader {
