@@ -541,7 +541,10 @@ function recordSwitchFacts(
         );
         failed = true;
       } else {
-        finalizedClauses.push(Object.freeze({ clause, expression, carrier, comparison: Object.freeze(comparison) }));
+        const borrowedLiteral = isRustStringCarrier(carrier) &&
+          (ast.is.IsStringLiteral(expression) || ast.is.IsNoSubstitutionTemplateLiteral(expression)) ? ast.text(expression) : undefined;
+        finalizedClauses.push(Object.freeze({ clause, expression, carrier, comparison: Object.freeze(comparison),
+          ...(borrowedLiteral === undefined ? {} : { borrowedLiteral }) }));
       }
     } else {
       finalizedClauses.push(Object.freeze({ clause }));

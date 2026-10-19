@@ -142,6 +142,7 @@ export type RustTargetOperationFact =
         readonly expression?: Node;
         readonly carrier?: TargetTypeRef;
         readonly comparison?: RustSwitchComparison;
+        readonly borrowedLiteral?: string;
       }[];
     }
   | {

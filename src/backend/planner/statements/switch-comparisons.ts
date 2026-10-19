@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSwitchComparison } from "../../../target-model/operations/switch.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
-import { negateRustBooleanExpression, rustBorrowedStringView } from "../../target-ast/syntax/expressions.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
 import { planRustOperatorCallExpression } from "../expressions/binary.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustSwitchComparison(
   left: RustExpr,
@@ -13,7 +13,7 @@ export function planRustSwitchComparison(
   comparison: RustSwitchComparison,
   node: Node,
   context: RustPlanContext,
-): RustExpr | undefined {
+): RustExpr {
   const evaluate = (effect: RustExpr, value: RustExpr): RustExpr => ({
     kind: "evaluate-then", effect, discard: "value", value,
   });
@@ -25,22 +25,25 @@ export function planRustSwitchComparison(
     const check: RustExpr = { kind: "option-presence", receiver, present: false };
     return comparison.operand === "left" ? evaluate(right, check) : evaluate(left, check);
   }
-  const borrowedRight = rustBorrowedStringView(right);
-  const rightValue: RustExpr = borrowedRight.kind === "string-literal"
-    ? { kind: "str-literal", value: borrowedRight.value } : borrowedRight;
+  const rightValue = right;
   const operation = comparison.operation;
   if (!comparison.leftOptional && !comparison.rightOptional) {
-    if (rightValue.kind === "bool-literal") return rightValue.value ? left : negateRustBooleanExpression(left);
-    if (operation.kind === "operator-call") return planRustOperatorCallExpression(
+    if (operation.kind === "operator-call") {
+      const planned = planRustOperatorCallExpression(
       { ...operation, operator: operation.rustOperator, operationId: "tsonic.rust.control.switch.strict-equality" },
       { expression: left, form: "value" }, { expression: rightValue, form: "value" }, node, context);
+      if (planned === undefined) failRustPlannerInvariant("An admitted switch comparison requires its native call plan.", node);
+      return planned;
+    }
     const convertedLeft = applyRustValueConversion(context, left, operation.leftConversion, undefined);
     const convertedRight = applyRustValueConversion(context, rightValue, operation.rightConversion, undefined);
-    return convertedLeft === undefined || convertedRight === undefined ? undefined : {
+    if (convertedLeft === undefined || convertedRight === undefined)
+      failRustPlannerInvariant("An admitted switch comparison requires its operand conversions.", node);
+    return {
       kind: "binary", operator: "==", left: convertedLeft, right: convertedRight,
     };
   }
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted optional switch comparison requires its native name scope.", node);
   const leftName = allocateRustSyntheticName(context.syntheticNames, "switch_left");
   const rightName = allocateRustSyntheticName(context.syntheticNames, "switch_right");
   const pattern = (name: string, optional: boolean): RustPattern => optional
@@ -63,7 +66,7 @@ export function planRustSwitchComparison(
       value = { kind: "binary", operator: "==", left: convertedLeft, right: convertedRight };
     }
   }
-  if (value === undefined) return undefined;
+  if (value === undefined) failRustPlannerInvariant("An admitted optional switch comparison requires its native equality plan.", node);
   const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [{
     pattern: { kind: "tuple", elements: [pattern(leftName, comparison.leftOptional), pattern(rightName, comparison.rightOptional)] },
     expression: value,

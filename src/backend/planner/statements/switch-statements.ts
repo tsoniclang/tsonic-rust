@@ -26,9 +26,7 @@ export function planSwitchStatement(
   }
   const discriminant = planExpression(discriminantNode, context);
   const target = createRustBreakTarget(context, node, "switch");
-  if (discriminant === undefined || target === undefined) {
-    return undefined;
-  }
+  if (discriminant === undefined) failRustPlannerInvariant("An admitted switch requires its discriminant value plan.", discriminantNode);
   const switchContext = withRustControlTarget(context, target);
   const discriminantName = allocateRustSyntheticName(context.syntheticNames, "switch_value");
   const sections: { readonly condition?: RustExpr; readonly body: RustBlock; readonly exits: boolean }[] = [];
@@ -46,21 +44,20 @@ export function planSwitchStatement(
     }
     const expression = sourceExpression === undefined
       ? undefined
-      : planExpression(sourceExpression, context);
+      : selected.borrowedLiteral !== undefined ? { kind: "str-literal" as const, value: selected.borrowedLiteral }
+      : planExpression(sourceExpression, context, "value", selected.comparison?.kind === "native" &&
+          !selected.comparison.rightOptional && selected.comparison.operation.rightConversion === undefined ? "shared-place" : "value");
     if (sourceExpression !== undefined && expression === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted switch case requires its comparison value plan.", sourceExpression);
     }
     const body = planStatementSequence(
       statements,
       clause,
       switchContext,
     );
-    if (body === undefined) {
-      return undefined;
-    }
     const condition = expression === undefined || selected.comparison === undefined ? undefined
       : planRustSwitchComparison({ kind: "path", path: discriminantName }, expression, selected.comparison, clause, context);
-    if (expression !== undefined && condition === undefined) return undefined;
+    if (expression !== undefined && condition === undefined) failRustPlannerInvariant("An admitted switch case requires its native comparison plan.", clause);
     sections.push({
       ...(condition === undefined ? {} : { condition }),
       body,
