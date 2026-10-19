@@ -49,7 +49,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustAwaitValueRequirements } from "../callables/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
-import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";

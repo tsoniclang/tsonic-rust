@@ -82,6 +82,7 @@ import { createRustFieldWriteProducer } from "./field-writes.js";
 import { createRustDeclarationEmissionProducer } from "./declaration-emission.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
+import { createRustNativeGenericProducer } from "./native-generics.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -174,6 +175,7 @@ export function createRustProgramRecordBuilder(
   const declarationEmission = createRustDeclarationEmissionProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
+  const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
     ...borrowedElements.records,
@@ -182,6 +184,7 @@ export function createRustProgramRecordBuilder(
     nativeDeclaration: nativeDeclarations.declarations,
     nativeTypeFamilyImplementations: nativeDeclarations.implementations,
     declarationLiveness: nativeLiveness.declarations,
+    nativeGenerics: nativeGenericPlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -273,6 +276,7 @@ export function createRustProgramRecordBuilder(
     declarationEmission,
     nativeDeclarations,
     nativeLiveness,
+    nativeGenericPlans,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,

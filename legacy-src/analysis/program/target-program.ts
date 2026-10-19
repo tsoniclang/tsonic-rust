@@ -396,6 +396,7 @@ export function analyzeRustTargetProgram(
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const callableValues = context.callableValues.seal({
+    nativeGenerics: context.records.nativeGenericPlans,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     retainedCallableInputs: retainedCallableInputs.value,
     errorRegions: completedErrorRegions, initialization: initializationErrors.value,

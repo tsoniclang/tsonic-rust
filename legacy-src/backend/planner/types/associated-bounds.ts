@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustWherePredicate } from "../../target-ast/syntax/nodes.js";
-import type { RustAssociatedTypeRequirement } from "../../../analysis/declarations/associated-requirements.js";
+import type { RustAssociatedTypeRequirement } from "../../../target-model/records/generic-requirements.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render.js";

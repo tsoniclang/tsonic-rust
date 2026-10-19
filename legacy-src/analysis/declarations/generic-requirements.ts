@@ -6,12 +6,13 @@ import {
 } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { Node } from "@tsonic/tsts";
-import { type RustOptionalStorageRequirement } from "./type-projections.js";
+import type { RustOptionalStorageRequirement } from "../../target-model/records/generic-requirements.js";
 import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
-import { type RustAssociatedTypeRequirement } from "./associated-requirements.js";
+import type { RustAssociatedTypeRequirement } from "../../target-model/records/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
+import { analyzeRustShapeGenericRequirements } from "./generic-shape-requirements.js";
+import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProjectProjectionImplementation } from "../../policy/types/project/project-projections.js";
@@ -48,23 +49,7 @@ import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 
-export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
-
-export interface RustDeclarationTypeParameterRequirements {
-  readonly identity: string;
-  readonly name: string;
-  readonly requirements: readonly RustGenericRequirement[];
-}
-
-export interface RustDeclarationGenericRequirementContract {
-  readonly declaration: Node;
-  readonly typeParameters: readonly RustDeclarationTypeParameterRequirements[];
-  readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
-  readonly nativeInputs: readonly RustDeclarationTypeParameterRequirements[];
-  readonly associatedTypes: readonly RustAssociatedTypeRequirement[];
-  readonly projectProjections: readonly RustProjectProjectionRequirement[];
-  readonly optionalStorage: readonly RustOptionalStorageRequirement[];
-}
+import type { RustGenericRequirement, RustDeclarationTypeParameterRequirements, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 
 export interface RustDeclarationGenericRequirementIndex {
   projectionImplementationsFor(definition: RustProjectTypeDefinition): readonly RustProjectProjectionImplementation[];

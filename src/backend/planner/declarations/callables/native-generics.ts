@@ -10,8 +10,8 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 export function planRustNativeCallableGenerics(
   declaration: Node,
   source: RustCallableGenericPlan,
-): RustCallableGenericPlan | undefined {
-  const selected = source.context.input.program.callableValues.nativeGenericContexts.get(declaration);
+): RustCallableGenericPlan {
+  const selected = source.context.input.program.records.nativeGenerics.get(declaration);
   if (selected === undefined) failRustPlannerInvariant(
     "An emitted native callable requires its exact original pre-seal generic context.", declaration);
   const { inputs } = selected;
@@ -31,17 +31,17 @@ export function planRustNativeCallableGenerics(
     "An emitted native callable generic context requires its finalized declaration requirements.", declaration);
   for (const input of inputs) {
     const traits = input.traits.map(trait => rustTypeFromCarrierInContext(trait, context));
-    if (traits.some(trait => trait === undefined)) return undefined;
+    if (traits.some(trait => trait === undefined)) failRustPlannerInvariant("An admitted native generic input requires its renderable trait bounds.", declaration);
     const selectedBounds: RustTypeBound[] = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
     const required = requirements.find(parameter => parameter.identity === input.implementation.identity);
     if (required !== undefined) selectedBounds.push(...rustGenericRequirementBounds(required.requirements));
     if (input.retained !== undefined) {
       selectedBounds.push({ kind: "lifetime", lifetime: { kind: "static" } });
       const error = rustTypeFromCarrierInContext(input.retained.error, context);
-      if (error === undefined) return undefined;
+      if (error === undefined) failRustPlannerInvariant("An admitted retained native input requires its renderable error carrier.", declaration);
       for (const target of input.retained.targets) {
         const type = rustTypeFromCarrierInContext(target, context);
-        if (type === undefined) return undefined;
+        if (type === undefined) failRustPlannerInvariant("An admitted retained native input requires its renderable error target.", declaration);
         predicates.push({ kind: "type", type: error, bounds: [{ kind: "trait-type", reference: {
           trait: { kind: "named", path: "core::convert::Into", genericArguments: [{ kind: "type", type }] },
         } }] });
@@ -49,7 +49,7 @@ export function planRustNativeCallableGenerics(
     }
     if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
       const type = rustTypeFromCarrierInContext(input.implementation, context);
-      if (type === undefined) return undefined;
+      if (type === undefined) failRustPlannerInvariant("An admitted native generic input requires its renderable implementation carrier.", declaration);
       if (selectedBounds.length > 0) predicates.push({ kind: "type", type, bounds: selectedBounds });
     } else parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!, bounds: selectedBounds });
   }

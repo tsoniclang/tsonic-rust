@@ -23,7 +23,8 @@ import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import type { RustDeclarationGenericRequirementIndex, RustDeclarationTypeParameterRequirements } from "../declarations/generic-requirements.js";
+import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
+import type { RustDeclarationTypeParameterRequirements } from "../../target-model/records/generic-requirements.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
@@ -39,20 +40,8 @@ export interface RustNativeCallableInput extends RustNativeCallableProtocolBindi
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
 }
 
-export interface RustNativeCallableGenericInput {
-  readonly implementation: RustNativeCallableInput["implementation"];
-  readonly traits: readonly TargetTypeRef[];
-  readonly retained: { readonly error: TargetTypeRef; readonly targets: readonly TargetTypeRef[] } | undefined;
-}
-
-export interface RustNativeCallableGenericContext {
-  readonly implicitLifetimes: readonly RustSourceGenericParameterContract[];
-  readonly inputs: readonly RustNativeCallableGenericInput[];
-  readonly sourceRequirements: readonly RustDeclarationTypeParameterRequirements[] | undefined;
-  readonly bodyRequirements: readonly RustDeclarationTypeParameterRequirements[] | undefined;
-}
-
-export type RustNativeCallableGenericContexts = Pick<ReadonlyMap<Node, RustNativeCallableGenericContext>, "get">;
+import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput } from "../../target-model/records/native-generics.js";
+import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
 
 export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
@@ -234,7 +223,8 @@ export function createRustNativeCallableInputPlan(input: {
   });
 }
 
-export function prepareRustNativeCallableGenericContexts(input: {
+export function analyzeRustNativeCallableGenerics(input: {
+  readonly producer: RustNativeGenericProducer;
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly native: RustNativeCallableInputPlan;
@@ -243,7 +233,7 @@ export function prepareRustNativeCallableGenericContexts(input: {
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly retainedCallableInputs: RustRetainedCallableInputPlan;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
-}): TargetStageResult<RustNativeCallableGenericContexts> {
+}): TargetStageResult<void> {
   const contexts = new Map<Node, RustNativeCallableGenericContext>();
   const diagnostics: TargetDiagnostic[] = [];
   for (const { declaration } of input.nativeProducers.producers) {
@@ -326,6 +316,7 @@ export function prepareRustNativeCallableGenericContexts(input: {
     else contexts.set(declaration, Object.freeze({ implicitLifetimes, inputs: Object.freeze(selectedInputs),
       sourceRequirements, bodyRequirements }));
   }
-  return diagnostics.length !== 0 ? rejectedTargetStage(diagnostics)
-    : resolvedTargetStage(Object.freeze({ get: (declaration: Node) => contexts.get(declaration) }));
+  if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
+  for (const [declaration, context] of contexts) input.producer.declaration(declaration, context);
+  return resolvedTargetStage(undefined);
 }

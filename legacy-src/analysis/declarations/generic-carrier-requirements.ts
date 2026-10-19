@@ -1,6 +1,6 @@
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
+import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 import type { RustSourceGenericContract, RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";

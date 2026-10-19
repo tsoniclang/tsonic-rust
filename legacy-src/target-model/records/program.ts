@@ -37,6 +37,7 @@ import type { RustFieldWriteRecords } from "./field-writes.js";
 import type { RustDeclarationEmissionRecords } from "./declaration-emission.js";
 import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "./native-declaration-forms.js";
 import type { RustNativeDeclarationLiveness } from "./native-liveness.js";
+import type { RustNativeCallableGenericContext } from "./native-generics.js";
 
 export interface RustRecordFamily<T> {
   readonly get: (subject: ExtensionFactSubject | undefined) => T | undefined;
@@ -87,6 +88,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly nativeDeclaration: RustRecordFamily<RustNativeDeclarationForm>;
   readonly nativeTypeFamilyImplementations: RustRecordFamily<RustNativeDeclarationForms["implementations"]>;
   readonly declarationLiveness: RustRecordFamily<RustNativeDeclarationLiveness>;
+  readonly nativeGenerics: RustRecordFamily<RustNativeCallableGenericContext>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;

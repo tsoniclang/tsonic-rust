@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
+import type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { unsupportedConstructDiagnostic } from "../diagnostics.js";

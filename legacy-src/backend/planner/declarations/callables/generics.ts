@@ -80,7 +80,7 @@ function planRustSourceCallableGenerics(
   specialization?: ReadonlyMap<string, TargetTypeRef>,
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan | undefined {
-  const native = context.input.program.callableValues.nativeGenericContexts.get(declaration);
+  const native = context.input.program.records.nativeGenerics.get(declaration);
   if (native === undefined) failRustPlannerInvariant(
     "An emitted native callable requires its exact original pre-seal generic context.", declaration);
   capturedParameters = [...capturedParameters, ...native.implicitLifetimes];
