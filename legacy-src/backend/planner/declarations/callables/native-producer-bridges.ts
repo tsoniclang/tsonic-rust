@@ -1,4 +1,4 @@
-import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../../../target-model/types/callable-completions.js";
 import { rustFutureTargetId } from "../../../../target-model/types/carriers/primitives.js";

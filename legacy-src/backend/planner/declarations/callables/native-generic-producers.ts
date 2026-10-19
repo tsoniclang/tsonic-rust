@@ -1,5 +1,5 @@
 import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
-import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import { rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";

@@ -1,4 +1,4 @@
-import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

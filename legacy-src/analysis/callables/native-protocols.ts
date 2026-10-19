@@ -1,46 +1,25 @@
 import { createHash } from "node:crypto";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { TargetTypeRef, RustTargetTraitRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
-import type { RustCallableSignature } from "../../target-model/types/carriers/callable-signatures.js";
+import type { TargetTypeRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
 import { rustCallableSignatureBinding } from "../../target-model/types/carriers/callable-signatures.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import { rustNativeCallableCompletion, instantiateRustNativeCompletion, rustNativeCompletionFutureType,
-  type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion, instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../target-model/types/callable-completions.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { bindRustCallableInputLifetimes } from "../../target-model/types/carriers/callable-input-lifetimes.js";
-import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding, RustNativeCallableOutlivesBound } from "../../target-model/records/native-protocols.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-
-export interface RustNativeCallableProtocol {
-  readonly identity: string;
-  readonly ownerFileName: string;
-  readonly targetName: string;
-  readonly boundProducerName?: string;
-  readonly signature: RustCallableSignature;
-  readonly method: {
-    readonly parameters: readonly TargetTypeRef[];
-    readonly result: TargetTypeRef;
-    readonly binder: RustLifetimeBinder;
-  };
-  readonly completion?: RustNativeCallableCompletion;
-  readonly result: TargetTypeRef;
-  readonly trait: RustTargetTraitRef;
-}
-
-export interface RustNativeCallableProtocolBinding {
-  readonly protocol: RustNativeCallableProtocol;
-  readonly environment: readonly TargetTypeRef[];
-  readonly trait: RustTargetTraitRef;
-}
 
 export interface RustNativeCallableProtocolRegistry {
   bind(ownerFileName: string, carrier: TargetTypeRef): RustNativeCallableProtocolBinding | undefined;
@@ -62,8 +41,9 @@ export function createRustNativeCallableProtocolRegistry(input: {
         rustCallableSignatureBinding([], ordinary.parameters, ordinary.result) :
         { signature: generic.signature, environment: generic.environment };
       if (binding === undefined) return undefined;
-      const method = bindRustCallableInputLifetimes(binding.signature.parameters, binding.signature.result);
-      if (method === undefined) return undefined;
+      const selectedMethod = bindRustCallableInputLifetimes(binding.signature.parameters, binding.signature.result);
+      if (selectedMethod === undefined) return undefined;
+      const method = Object.freeze({ ...selectedMethod, outlives: nativeCallableOutlivesBounds(selectedMethod) });
       const completion = rustNativeCallableCompletion(method.result, input.definitions);
       const contract = { ownerFileName, signature: binding.signature, method,
         ...(completion === undefined ? {} : { completion }) };
@@ -89,6 +69,24 @@ export function createRustNativeCallableProtocolRegistry(input: {
     },
     definitions: () => Object.freeze([...protocols.values()]),
   });
+}
+
+function nativeCallableOutlivesBounds(method: Pick<RustNativeCallableProtocol["method"], "parameters" | "binder">): readonly RustNativeCallableOutlivesBound[] {
+  const lifetimes = new Set(method.binder.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)));
+  const bounds = new Map<string, RustNativeCallableOutlivesBound>();
+  const visited = new Set<TargetTypeRef>();
+  const visit = (carrier: TargetTypeRef): void => {
+    if (visited.has(carrier)) return;
+    visited.add(carrier);
+    if (carrier.kind === "reference" && carrier.lifetime !== undefined && lifetimes.has(rustLifetimeKey(carrier.lifetime))) {
+      const references = rustTargetGenericReferences(carrier.referent);
+      if (references.typeIdentities.length > 0 || references.lifetimes.length > 0)
+        bounds.set(closedMetadataKey([carrier.referent, carrier.lifetime]), Object.freeze({ carrier: carrier.referent, lifetime: carrier.lifetime }));
+    }
+    for (const child of rustTargetTypeChildren(carrier)) visit(child);
+  };
+  for (const carrier of method.parameters) visit(carrier);
+  return Object.freeze([...bounds.values()]);
 }
 
 export function rustNativeCallableErrorType(

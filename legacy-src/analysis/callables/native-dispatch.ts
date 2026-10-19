@@ -1,6 +1,6 @@
 import type { AstReader, SourceFile } from "@tsonic/tsts";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableProtocol } from "./native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
 import { Node_Expression, type SourceProgramNavigation } from "@tsonic/target-api/source";
 
 export interface RustNativeCallableDispatchPlan {

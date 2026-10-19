@@ -13,7 +13,8 @@ import { rustCallableInvocationSignaturesMatch } from "../../target-model/conver
 
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { createRustNativeCallableProtocolRegistry, type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding } from "./native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "./native-protocols.js";
+import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding } from "../../target-model/records/native-protocols.js";
 import { rustNativeCallableErrorType } from "./native-protocols.js";
 import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";

@@ -14,7 +14,7 @@ import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import type { RustNativeCallableProtocol } from "./native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
 
 export interface RustNativeGenericProducerBinding {
   readonly inputs: readonly RustNativeCallableInput[];
