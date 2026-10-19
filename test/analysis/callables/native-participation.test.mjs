@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
@@ -56,42 +57,61 @@ test("native named-function placement publishes immutable exact source identitie
 });
 
 function placementInputs() {
-  const file = {};
-  const block = {};
-  const outer = {};
-  const moduleSignature = {};
-  const moduleUnresolved = {};
-  const blockSignature = {};
-  const unused = {};
-  const written = {};
-  const observed = {};
-  const parents = new Map([[block, file], [outer, file], [moduleSignature, file], [moduleUnresolved, file],
-    [blockSignature, block], [unused, outer], [written, outer], [observed, outer]]);
-  const functions = [outer, moduleSignature, moduleUnresolved, blockSignature, unused, written, observed];
-  const functionSet = new Set(functions);
-  const bodies = new Set([outer, unused, written, observed]);
-  const ast = Proxy.revocable({
-    parent: node => parents.get(node),
-    body: node => bodies.has(node) ? {} : undefined,
-    kindName: node => functionSet.has(node) ? "KindFunctionDeclaration" : node === file ? "KindSourceFile" : "KindBlock",
-    is: { IsFunctionDeclaration: node => functionSet.has(node), IsSourceFile: node => node === file,
-      IsArrowFunction: () => false, IsFunctionExpression: () => false },
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/src",
+    compilerOptions: { strict: true, target: "es2022", module: "esnext" },
+    files: { "/src/index.ts": `
+      export function outer(): void;
+      export function outer(): void {
+        function unused(): void;
+        function unused(): void {}
+        function written(): void {}
+        function observed(): void {}
+        written();
+        const retained = [observed];
+        void retained;
+      }
+      export declare function moduleUnresolved(): void;
+    ` },
+  }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, formatDiagnostics(checked.diagnostics));
+  const source = createTargetSourceProgram(checked);
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.navigation.sourceFiles.forEach(visit);
+  const functions = nodes.filter(source.ast.is.IsFunctionDeclaration);
+  assert.equal(functions.length, 7, "the real checked source has the same seven placement records");
+  const named = (name, body) => functions.find(node => source.ast.text(source.ast.name(node)) === name &&
+    (source.ast.body(node) !== undefined) === body);
+  const readers = ["callableImplementation", "declarationUseSummary", "declarationSymbol", "referencesWithin", "sourceReferenceFor", "getSourceFile"];
+  const reads = Object.fromEntries(readers.map(reader => [reader, { before: 0, after: 0 }]));
+  let sealed = false;
+  let moduleImplementationReads = 0;
+  let lexicalImplementationReads = 0;
+  const count = reader => { reads[reader][sealed ? "after" : "before"] += 1; };
+  const ast = Proxy.revocable({ ...source.ast,
+    getSourceFile(node) { count("getSourceFile"); return source.ast.getSourceFile(node); },
     forEachChild() { throw new Error("native participation must use the existing finite source domain"); },
   }, {});
-  let implementationReads = 0;
-  const navigation = Proxy.revocable({
-    callableImplementation(node) {
-      implementationReads += 1;
-      return node === moduleSignature ? { kind: "resolved", implementation: { declaration: outer } }
-        : { kind: "unresolved", reason: "body not resolved" };
-    },
-    declarationUseSummary(node) {
-      return { exported: false, bindingWritten: node === written, hasUnclassifiedValueUse: node === observed,
-        uses: [{ kind: "type-only" }] };
-    },
+  const navigation = Proxy.revocable({ ...source.navigation,
+    ...Object.fromEntries(readers.filter(reader => reader !== "getSourceFile").map(reader => [reader, (...args) => {
+      count(reader);
+      if (reader === "callableImplementation") {
+        const moduleBodyless = source.ast.body(args[0]) === undefined && source.ast.is.IsSourceFile(source.ast.parent(args[0]));
+        if (moduleBodyless) moduleImplementationReads += 1;
+        else lexicalImplementationReads += 1;
+      }
+      return source.navigation[reader](...args);
+    }])),
   }, {});
-  return { ast, navigation, nodes: [file, block, ...functions], outer, moduleSignature, moduleUnresolved,
-    blockSignature, unused, written, observed, implementationReads: () => implementationReads };
+  return { ast, navigation, nodes, outer: named("outer", true), moduleSignature: named("outer", false),
+    moduleUnresolved: named("moduleUnresolved", false), blockSignature: named("unused", false),
+    unused: named("unused", true), written: named("written", true), observed: named("observed", true),
+    implementationReads: () => reads.callableImplementation.before,
+    moduleImplementationReads: () => moduleImplementationReads,
+    lexicalImplementationReads: () => lexicalImplementationReads, reads, markSealed: () => { sealed = true; } };
 }
 
 test("native placement closes one finite declaration domain and does not inspect source after sealing", () => {
@@ -101,8 +121,15 @@ test("native placement closes one finite declaration domain and does not inspect
   analyzeRustNativeParticipation({ ast: current.ast.proxy, storage: { nodes: current.nodes, failureReason: () => undefined }, navigation: current.navigation.proxy,
     producer: builder.nativeParticipations, requiredRecords });
   const records = builder.seal(requiredRecords);
+  current.markSealed();
   assert.equal(requiredRecords.length, 7);
-  assert.equal(current.implementationReads(), 2, "only source-file bodyless declarations need implementation correspondence");
+  assert.equal(current.moduleImplementationReads(), 2, "only source-file bodyless declarations need implementation correspondence");
+  assert.equal(current.lexicalImplementationReads(), 5, "lexical checked uses retain their exact implementation correspondence");
+  assert.equal(current.implementationReads(), 7, "all module and lexical implementation reads are counted");
+  for (const [reader, expected] of Object.entries({ getSourceFile: 3, declarationSymbol: 3, referencesWithin: 3,
+    declarationUseSummary: 3, sourceReferenceFor: 2 })) {
+    assert.equal(current.reads[reader].before, expected, `${reader}: exact complete pre-seal read count`);
+  }
   current.ast.revoke();
   current.navigation.revoke();
   for (const node of [current.outer, current.moduleUnresolved, current.written, current.observed]) {
@@ -114,6 +141,9 @@ test("native placement closes one finite declaration domain and does not inspect
   assert.equal(records.nativeParticipation.get(current.nodes[0]) === undefined, true, "non-callable nodes stay absent");
   assert.equal(records.nativeParticipation.get({}) === undefined, true);
   assert.throws(() => builder.nativeParticipations.selected(current.outer, "body"), /after analysis is sealed/u);
+  for (const [reader, counts] of Object.entries(current.reads)) {
+    assert.equal(counts.after, 0, `${reader}: no source read occurs after sealing and proxy revocation`);
+  }
 });
 
 test("an exhausted actual checked source domain publishes no partial native participation", () => {

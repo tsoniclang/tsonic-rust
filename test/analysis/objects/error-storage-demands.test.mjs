@@ -200,14 +200,31 @@ export function run(): string {
     assert.equal(demand.receivesWritableNative(requiredStorageSubject(storage, receiver)), false, "an unbound parameter is not a native physical constructor");
   });
 
-  test(`unmodeled destructured Error writes are unresolved rather than guessed origin proof in ${profile}`, () => {
+  test(`checked destructured Error writes retain exact writable source storage in ${profile}`, () => {
     const { source, storage, demand } = analyzed({ "index.ts": `
       export function run(record: { error: Error }): void {
         const { error } = record; error.message = "changed";
       }` }, jsEnabled);
     assert.equal(demand.fieldWrites.length, 1);
     const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
-    assert.equal(demand.storageFor(requiredStorageSubject(storage, receiver)).kind, "unresolved");
+    const subject = requiredStorageSubject(storage, receiver);
+    assert.equal(demand.storageFor(subject).kind, "writable");
+    assert.equal(demand.receivesWritableNative(subject), false, "an unbound formal is not a native physical constructor");
+    assert.equal(demand.nativeConstructors.length, 0, "destructuring introduces no native constructor");
+  });
+
+  test(`opaque destructured Error writes preserve the exact unproven producer reason in ${profile}`, () => {
+    const { source, storage, demand } = analyzed({ "index.ts": `
+      export function run(record: { [key: string]: Error }, key: string): void {
+        const { [key]: error } = record; error.message = "changed";
+      }` }, jsEnabled);
+    assert.equal(demand.fieldWrites.length, 1);
+    const receiver = source.ast.as.AsPropertyAccessExpression(demand.fieldWrites[0]).Expression;
+    const selected = storage.subjectFor(receiver);
+    assert.equal(selected.kind, "unresolved");
+    assert.equal(selected.reason, "A demanded source storage relation has no completed correlated producer or absence proof.");
+    assert.equal(storage.failureReason(), selected.reason, "the canonical producer refusal is preserved unchanged");
+    assert.equal(demand.nativeConstructors.length, 0, "an opaque projection cannot invent a native constructor");
   });
 
   test(`native Error write demand reaches direct and selected-call throw recovery in ${profile}`, () => {
