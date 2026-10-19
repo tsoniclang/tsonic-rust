@@ -21,5 +21,12 @@ export function analyzeRustStatementExits(input: {
   for (const [subject, alwaysExits] of exits) {
     requireRustRecord(input.required, "statementExit", subject, input.ast.kindName(subject), "analyzeRustStatementExits");
     input.producer.statement(subject, alwaysExits);
+    if (input.ast.is.IsWhileStatement(subject) || input.ast.is.IsForStatement(subject)) {
+      const condition = input.ast.is.IsForStatement(subject) ? input.ast.as.AsForStatement(subject)?.Condition
+        : input.ast.as.AsWhileStatement(subject)?.Expression;
+      const unconditional = condition === undefined || input.ast.kindName(condition) === "KindTrueKeyword";
+      requireRustRecord(input.required, "loopForm", subject, input.ast.kindName(subject), "analyzeRustStatementExits");
+      input.producer.loop(subject, { kind: unconditional ? "unconditional" : "conditional", neverFallsThrough: alwaysExits });
+    }
   }
 }

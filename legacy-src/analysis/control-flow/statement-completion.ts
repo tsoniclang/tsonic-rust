@@ -29,6 +29,7 @@ import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-sele
 import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
 import type { RustStatementCompletionProducer } from "../program/records/statement-completion.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
@@ -41,6 +42,7 @@ export interface RustStatementCompletionInput {
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
   readonly producer: RustStatementCompletionProducer;
   readonly required: RustRequiredRecord[];
+  readonly countedLoops: ReadonlyMap<Node, RustCountedLoopRepresentation>;
 }
 
 export type RustStatementCompletionSelection =
@@ -360,11 +362,13 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     ["statementCondition", conditions], ["statementControlTargets", targets], ["controlExit", exits],
     ["iterationCompletion", iterations], ["runtimeSetter", setters], ["assignmentCompletion", assignments],
     ["projectTypeTestReads", projectReads], ["labeledStatement", labels],
+    ["countedLoop", input.countedLoops],
   ] as const) {
     for (const subject of selected.keys()) {
       requireRustRecord(input.required, family, subject, ast.kindName(subject), "analyzeRustStatementCompletions");
     }
   }
-  input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads, labels });
+  input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads, labels,
+    countedLoops: input.countedLoops });
   return { kind: "resolved", plan: input.producer.records };
 }

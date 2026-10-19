@@ -32,9 +32,6 @@ import type {
   RustSourcePackageComponentClassifications,
 } from "./source-package-components.js";
 import type {
-  RustCountedLoopRepresentationPlan,
-} from "../control-flow/counted-loop-representations.js";
-import type {
   RustProviderSemantics,
 } from "../../target-model/metadata/provider-metadata.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -115,7 +112,6 @@ export interface RustTargetProgram {
   readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
   readonly errorTransport: import("./error-transport.js").RustErrorTransportQueries;
-  readonly countedLoops: RustCountedLoopRepresentationPlan;
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
   readonly sourceModuleConstructions: RustSourceModuleConstructionIndex;
   readonly generatedDeclarationUses: readonly RustGeneratedDeclarationUse[];

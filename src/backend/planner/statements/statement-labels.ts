@@ -3,7 +3,8 @@ import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./planning.js";
-import { planDoStatement, planForStatement, planWhileStatement } from "./control-flow.js";
+import { planDoStatement, planWhileStatement } from "./statement-conditionals.js";
+import { planForStatement } from "./statement-for.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { createRustBreakTarget, withRustControlTarget } from "./loop-regions.js";
 

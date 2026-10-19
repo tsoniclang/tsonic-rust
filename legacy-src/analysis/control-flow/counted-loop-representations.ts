@@ -22,29 +22,7 @@ import { rustValueConversionContract } from "../../target-model/conversions/cont
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustBorrowedElementReads } from "../program/borrowed-element-reads.js";
-
-export type RustCountedLoopRepresentation =
-  | {
-      readonly kind: "native-counter";
-      readonly counterDeclaration: Node;
-      readonly start: Node;
-      readonly bound: Node;
-      readonly body: Node;
-      readonly rangeCarrier: TargetTypeRef;
-    }
-  | {
-      readonly kind: "integer-range-number-counter";
-      readonly counterDeclaration: Node;
-      readonly start: Node;
-      readonly bound: Node;
-      readonly body: Node;
-      readonly rangeCarrier: TargetTypeRef;
-      readonly counterCarrier: TargetTypeRef;
-    };
-
-export interface RustCountedLoopRepresentationPlan {
-  representationFor(statement: Node): RustCountedLoopRepresentation | undefined;
-}
+import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
 
 interface RustCountedLoopAnalysisContext {
   readonly ast: AstReader;
@@ -61,8 +39,8 @@ export function analyzeRustCountedLoopRepresentations(input: {
   readonly navigation: SourceProgramNavigation;
   readonly records: RustProgramRecords & SourceLiteralIndex;
   readonly borrowedElementReads: RustBorrowedElementReads;
-}): RustCountedLoopRepresentationPlan {
-  const byStatement = new WeakMap<Node, RustCountedLoopRepresentation>();
+}): ReadonlyMap<Node, RustCountedLoopRepresentation> {
+  const byStatement = new Map<Node, RustCountedLoopRepresentation>();
   const context: RustCountedLoopAnalysisContext = {
     ast: input.ast,
     navigation: input.navigation,
@@ -80,11 +58,7 @@ export function analyzeRustCountedLoopRepresentations(input: {
     }
   };
   for (const node of input.nativeNodes) visit(node);
-  return Object.freeze({
-    representationFor(statement: Node) {
-      return byStatement.get(statement);
-    },
-  });
+  return byStatement;
 }
 
 function classifyCountedLoop(

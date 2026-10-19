@@ -357,7 +357,9 @@ export function analyzeRustTargetProgram(
   const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
     records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections,
-    producer: context.records.statementCompletions, required: context.requiredRecords });
+    producer: context.records.statementCompletions, required: context.requiredRecords,
+    countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
+      navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
     navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
@@ -444,13 +446,6 @@ export function analyzeRustTargetProgram(
     names: context.names,
     sourcePackageFacades: sourcePackageFacades.plan,
     sourcePackageComponents,
-    countedLoops: analyzeRustCountedLoopRepresentations({
-      ast: context.ast,
-      nativeNodes: context.nativeNodes,
-      navigation: context.source.navigation,
-      records: finalRecords,
-      borrowedElementReads,
-    }),
     projectFlowReadSelections,
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),

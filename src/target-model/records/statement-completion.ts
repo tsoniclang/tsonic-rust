@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceLabeledStatementTarget } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact } from "./operations.js";
+import type { RustCountedLoopRepresentation } from "./counted-loops.js";
 
 export type RustAssignmentCompletion = Extract<RustTargetOperationFact, { readonly kind: "operator-token" | "operator-call" }>;
 
@@ -38,4 +39,5 @@ export interface RustStatementCompletionRecords {
   readonly assignmentCompletion: RustStatementRecord<RustAssignmentCompletion>;
   readonly projectTypeTestReads: RustStatementRecord<readonly Node[]>;
   readonly labeledStatement: RustStatementRecord<SourceLabeledStatementTarget>;
+  readonly countedLoop: RustStatementRecord<RustCountedLoopRepresentation>;
 }

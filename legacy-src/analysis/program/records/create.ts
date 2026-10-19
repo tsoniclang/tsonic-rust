@@ -160,6 +160,7 @@ export function createRustProgramRecordBuilder(
   const records: RustAnalysisRecords = Object.freeze({
     ...statementCompletions.records,
     statementExit: statementExits.records,
+    loopForm: statementExits.forms,
     nativeHandler: nativeHandlers.records,
     typeAliasDeclaration: typeAliasDeclarations.records,
     asyncFunction: asyncFunctions.records,

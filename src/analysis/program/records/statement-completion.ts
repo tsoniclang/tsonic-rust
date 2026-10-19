@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceLabeledStatementTarget } from "@tsonic/target-api/source";
+import type { RustCountedLoopRepresentation } from "../../../target-model/records/counted-loops.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationCompletion,
@@ -16,6 +17,7 @@ export interface RustStatementCompletionData {
   readonly assignments: ReadonlyMap<Node, RustAssignmentCompletion>;
   readonly projectReads: ReadonlyMap<Node, readonly Node[]>;
   readonly labels: ReadonlyMap<Node, SourceLabeledStatementTarget>;
+  readonly countedLoops: ReadonlyMap<Node, RustCountedLoopRepresentation>;
 }
 
 export interface RustStatementCompletionProducer {
@@ -38,6 +40,7 @@ export function createRustStatementCompletionProducer(
     assignmentCompletion: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.assignments.get(node) }),
     projectTypeTestReads: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.projectReads.get(node) }),
     labeledStatement: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.labels.get(node) }),
+    countedLoop: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.countedLoops.get(node) }),
   });
   return Object.freeze({ records,
     publish(selected: RustStatementCompletionData): void {
