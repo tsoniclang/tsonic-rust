@@ -73,6 +73,7 @@ import { createRustMemoryLayoutObservationProducer } from "./memory-layout-obser
 import { createRustNativeHandlerProducer } from "./native-handlers.js";
 import { createRustStatementExitProducer } from "./statement-exits.js";
 import { createRustStatementCompletionProducer } from "./statement-completion.js";
+import { createRustResourceScopeProducer } from "./resource-scopes.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -156,9 +157,11 @@ export function createRustProgramRecordBuilder(
   const nativeHandlers = createRustNativeHandlerProducer(assertOpen, parent?.nativeHandler);
   const statementExits = createRustStatementExitProducer(assertOpen);
   const statementCompletions = createRustStatementCompletionProducer(assertOpen);
+  const resourceScopes = createRustResourceScopeProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
     ...statementCompletions.records,
+    ...resourceScopes.records,
     statementExit: statementExits.records,
     loopForm: statementExits.forms,
     nativeHandler: nativeHandlers.records,
@@ -235,6 +238,7 @@ export function createRustProgramRecordBuilder(
     readers: records,
     statementExits,
     statementCompletions,
+    resourceScopes,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,

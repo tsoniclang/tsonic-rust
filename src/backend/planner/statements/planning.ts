@@ -17,7 +17,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { prepareRustFrameScope } from "../bindings/frame-storage.js";
-import { directResourceDeclarations, planLoopExitStatement, planResourceDeclarations } from "./resources.js";
+import { directResourceDeclarations, planLoopExitStatement, planResourceDeclarations } from "./resource-management.js";
 import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker, withExplicitUnsafeContext } from "../safety/explicit-safety.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planDoStatement, planIfStatement, planWhileStatement } from "./statement-conditionals.js";

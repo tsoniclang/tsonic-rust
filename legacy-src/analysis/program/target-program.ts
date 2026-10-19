@@ -69,6 +69,7 @@ import { analyzeRustReachability } from "../reachability/plan.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
+import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -350,6 +351,8 @@ export function analyzeRustTargetProgram(
   if (binaryExecution.kind === "rejected") return binaryExecution;
   analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, records,
     producer: context.records.statementExits, required: context.requiredRecords });
+  analyzeRustResourceScopes({ ast: context.ast, nodes: context.nativeNodes, records,
+    producer: context.records.resourceScopes, required: context.requiredRecords });
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
   const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,

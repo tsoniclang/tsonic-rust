@@ -5,7 +5,7 @@ import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustCountedLoopRepresentation } from "../../../target-model/records/counted-loops.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectVariableDeclarations, planResourceDeclarations } from "./resources.js";
+import { planResourceDeclarations } from "./resource-management.js";
 import { planExpression, planExpressionBeforeValueProjections, planNumericLiteralWithCarrier } from "../expressions/index.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
@@ -42,10 +42,7 @@ export function planForStatement(node: Node, context: RustPlanContext): readonly
   };
   if (initializer === undefined) return planLoop(context).statements;
   const declarationInitializer = context.input.program.source.ast.kindName(initializer) === KindVariableDeclarationList;
-  const declarations = declarationInitializer ? collectVariableDeclarations(initializer, context) : [];
-  const resourceDeclarations = declarations.length > 0 &&
-    (context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "using" ||
-      context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "await using") ? declarations : [];
+  const resourceDeclarations = context.input.program.records.resourceScope.get(node)?.declarations ?? [];
   const deferred = planRustDeferredCaptureStorage(node, context);
   if (deferred === undefined) failRustPlannerInvariant("An admitted for statement requires its deferred capture prologue.", node);
   if (resourceDeclarations.length > 0) {

@@ -1,18 +1,10 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustErrorBoundary, applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import {
-  KindVariableDeclaration,
-  KindVariableDeclarationList,
-  KindVariableStatement,
-  VariableDeclarationList_Declarations,
-  VariableStatement_DeclarationList,
-} from "@tsonic/target-api/source";
-import {
   isValidRustIdentifier,
-  diagnosticInput,
   rustActiveErrorType,
 } from "../program/plan-context.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planVariableStatement } from "./variable-declarations.js";
 
 import type { Node } from "@tsonic/tsts";
@@ -21,9 +13,7 @@ import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from 
 import type { RustResourceManagementFact } from "../../../target-model/records/callables-and-resources.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
-import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
-import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { isRustFinalizedDispatchContextInput, isRustFinalizedSourceInput } from "../../../analysis/operations/finalized-operation/conversions.js";
+import type { RustFinalizedTargetInput, RustFinalizedSourceInput, RustFinalizedDispatchContextInput } from "../../../target-model/records/finalized-operation.js";
 import { finishProviderOperationExpression, planFinalizedTargetInput } from "../expressions/conversions.js";
 import { planRustFinalizedOperationForm } from "../expressions/finalized-operation-form.js";
 import { applyFinalizedValueConversion } from "../expressions/value-conversions.js";
@@ -34,40 +24,31 @@ export function directResourceDeclarations(
   statement: Node,
   context: RustPlanContext,
 ): readonly Node[] {
-  if (context.input.program.source.ast.kindName(statement) !== KindVariableStatement) {
-    return [];
-  }
-  const declarations = collectVariableDeclarations(statement, context);
-  const kind = context.input.program.source.ast.variableDeclarationKind(declarations[0]);
-  return kind === "using" || kind === "await using" ? declarations : [];
+  return context.input.program.records.resourceScope.get(statement)?.declarations ?? [];
 }
 
 export function collectVariableDeclarations(node: Node, context: RustPlanContext): readonly Node[] {
-  const { ast } = context.input.program.source;
-  if (ast.kindName(node) === KindVariableDeclaration) return [node];
-  const list = ast.kindName(node) === KindVariableStatement ? VariableStatement_DeclarationList(ast, node) : node;
-  if (ast.kindName(list) !== KindVariableDeclarationList) return [];
-  const declarations = VariableDeclarationList_Declarations(ast, list);
-  return declarations === undefined || !isDenseDataArray(declarations) || declarations.some(declaration =>
-    declaration === undefined || ast.kindName(declaration) !== KindVariableDeclaration)
-    ? [] : declarations as readonly Node[];
+  const declarations = context.input.program.records.variableDeclarations.get(node);
+  if (declarations === undefined) failRustPlannerInvariant("Admitted variable syntax requires its exact declaration sequence.", node);
+  return declarations;
 }
 
 export function planResourceDeclarations(
   declarations: readonly Node[],
   context: RustPlanContext,
   planBody: (context: RustPlanContext) => RustBlock | undefined,
-): readonly RustStmt[] | undefined {
+): readonly RustStmt[] {
   const [declaration, ...remaining] = declarations;
-  if (declaration === undefined) return planBody(context)?.statements;
-  const fact = resourceFactForPlanning(declaration, context);
-  if (fact === undefined) {
-    return undefined;
+  if (declaration === undefined) {
+    const body = planBody(context);
+    if (body === undefined) failRustPlannerInvariant("An admitted resource continuation requires its native body plan.", context.sourceFile);
+    return body.statements;
   }
+  const fact = resourceFactForPlanning(declaration, context);
   const initialization = planVariableStatement(declaration, context);
   const resourceName = context.input.program.names.nameForDeclaration(declaration);
   if (resourceName === undefined) failRustPlannerInvariant("Admitted resource binding requires its sealed native name.", declaration);
-  if (initialization === undefined) return undefined;
+  if (initialization === undefined) failRustPlannerInvariant("An admitted resource requires its native initialization plan.", declaration);
   const scope = planResourceManagedBody(
     declaration,
     resourceName,
@@ -75,16 +56,16 @@ export function planResourceDeclarations(
     context,
     (bodyContext) => {
       const statements = planResourceDeclarations(remaining, bodyContext, planBody);
-      return statements === undefined ? undefined : { statements };
+      return { statements };
     },
   );
-  return scope === undefined ? undefined : [...initialization, scope];
+  return [...initialization, scope];
 }
 
 export function resourceFactForPlanning(
   declaration: Node,
   context: RustPlanContext,
-): RustResourceManagementFact | undefined {
+): RustResourceManagementFact {
   const fact = context.input.program.records.resourceManagement.get(declaration);
   if (fact === undefined) {
     failRustPlannerInvariant(
@@ -108,7 +89,7 @@ export function planResourceManagedBody(
   fact: RustResourceManagementFact,
   context: RustPlanContext,
   planBody: (context: RustPlanContext) => RustBlock | undefined,
-): Extract<RustStmt, { readonly kind: "resource-scope" }> | undefined {
+): Extract<RustStmt, { readonly kind: "resource-scope" }> {
   if (context.syntheticNames === undefined) {
     failRustPlannerInvariant(
       "Resource management requires a finalized hygienic-name scope.",
@@ -135,9 +116,10 @@ export function planResourceManagedBody(
     context,
   );
   if (body === undefined || cleanup === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted resource scope requires its native body and cleanup plans.", declaration);
   }
-  const terminates = rustBlockDefinitelyExits(body);
+  const terminates = context.input.program.records.resourceContinuationExit.get(declaration);
+  if (terminates === undefined) failRustPlannerInvariant("An admitted resource scope requires its sealed source completion.", declaration);
   const finalizedBody = terminates ? tailCompletionExits(body) : body;
   context.usedAliases?.add("rt");
   return {
@@ -205,7 +187,7 @@ function planResourceCleanup(
   cleanupResourceName: string,
   fact: RustResourceManagementFact,
   context: RustPlanContext,
-): RustBlock | undefined {
+): RustBlock {
   const receiverMode = resourceDisposalReceiverMode(fact);
   const receiver: RustExpr = {
     kind: "path",
@@ -219,7 +201,7 @@ function planResourceCleanup(
     context,
   );
   if (disposal === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted resource requires its native disposal value plan.", declaration);
   }
   const target = fact.disposal.target;
   if (target.form === "source-method" && fact.disposal.kind === "async") {
@@ -305,31 +287,33 @@ function planResourceDisposalExpression(
     };
   }
   const { abi } = target;
-  const dispatch = planRustDispatchContextInputScope(abi.targetArguments.filter(isRustFinalizedDispatchContextInput), subject, context);
-  if (dispatch === undefined) return undefined;
+  const dispatch = planRustDispatchContextInputScope(abi.targetArguments.filter(isDisposalContextInput), subject, context);
+  if (dispatch === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native dispatch inputs.", subject);
   const planReceiver = (input: import("../../../target-model/records/finalized-operation.js").RustFinalizedSourceInput,
     position: "receiver" | "argument"): RustExpr | undefined => {
     if (input.source.kind !== "receiver") failRustPlannerInvariant("A zero-argument disposer requires its admitted resource input.", subject);
     const borrowed = alreadyBorrowed && target.receiverMode !== "value";
     const converted = applyFinalizedValueConversion(context, receiver, input.conversion, subject, borrowed);
-    if (converted === undefined || position === "receiver") return converted;
+    if (converted === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native input conversion.", subject);
+    if (position === "receiver") return converted;
     if (borrowed && input.conversion.kind === "identity" && input.mode !== "value") return converted;
     return applyFinalizedRustArgumentMode(context, subject, converted, input, false);
   };
   const targetReceiver = abi.targetReceiver.kind === "input" ? planReceiver(abi.targetReceiver.input, "receiver") : undefined;
-  if (abi.targetReceiver.kind === "input" && targetReceiver === undefined) return undefined;
+  if (abi.targetReceiver.kind === "input" && targetReceiver === undefined)
+    failRustPlannerInvariant("An admitted resource disposer requires its native receiver plan.", subject);
   const args: RustExpr[] = [];
   for (const input of abi.targetArguments) {
-    const planned = isRustFinalizedSourceInput(input) ? planReceiver(input, "argument")
+    const planned = isDisposalSourceInput(input) ? planReceiver(input, "argument")
       : planFinalizedTargetInput(context, input, undefined, [], subject, undefined, dispatch);
-    if (planned === undefined) return undefined;
+    if (planned === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native argument plan.", subject);
     args.push(planned);
   }
   const native = planRustFinalizedOperationForm(context, abi, targetReceiver, args, subject,
     { resultUse: "value", assignment: false });
-  if (native === undefined) return undefined;
+  if (native === undefined) failRustPlannerInvariant("An admitted resource disposer requires its selected native operation form.", subject);
   let completed = finishProviderOperationExpression(context, target, native, subject);
-  if (completed === undefined) return undefined;
+  if (completed === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native completion plan.", subject);
   if (abi.result.kind === "async") {
     completed = { kind: "await", expr: completed };
     if (abi.effects.awaiting === "fallible") {
@@ -340,17 +324,23 @@ function planResourceDisposalExpression(
       const providerErrorType = abi.effects.errorBoundary === "provider-native"
         ? rustTypeFromCarrierInContext(abi.effects.errorCarrier, context) : undefined;
       if (abi.effects.errorBoundary === "provider-native" && providerErrorType === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, subject), "rust.backend.resource-error-type",
-          "Fallible resource disposal requires its exact rendered native provider error type."));
-        return undefined;
+        failRustPlannerInvariant("Admitted fallible resource disposal requires its exact native provider error type.", subject);
       }
       completed = applyRustLocalErrorBoundary(completed, abi.effects.errorBoundary, region, providerErrorType);
-      if (completed === undefined) return undefined;
+      if (completed === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native error conversion.", subject);
     }
     completed = applyFinalizedValueConversion(context, completed, abi.result.awaitedConversion, subject);
-    if (completed === undefined) return undefined;
+    if (completed === undefined) failRustPlannerInvariant("An admitted async resource disposer requires its native result conversion.", subject);
   }
   return dispatch.apply(completed);
+}
+
+function isDisposalSourceInput(input: RustFinalizedTargetInput): input is RustFinalizedSourceInput {
+  return input.source.kind === "receiver" || input.source.kind === "argument";
+}
+
+function isDisposalContextInput(input: RustFinalizedTargetInput): input is RustFinalizedDispatchContextInput {
+  return input.source.kind === "dispatch-context";
 }
 
 export function planLoopExitStatement(
