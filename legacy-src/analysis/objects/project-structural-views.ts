@@ -3,7 +3,7 @@ import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
-import type { RustClassValueCallable } from "./class-value-callables.js";
+import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { generalizeRustProjectStructuralView } from "./project-structural-views-generics.js";

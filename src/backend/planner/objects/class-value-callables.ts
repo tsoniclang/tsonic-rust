@@ -1,4 +1,5 @@
-import type { RustClassValueCallable } from "../../../analysis/objects/class-value-callables.js";
+import type { RustClassValueCallable } from "../../../target-model/records/class-value-callables.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 
 import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/syntax/nodes.js";
@@ -17,39 +18,36 @@ export function planRustClassValueForwarder(
   const boundary = rustCurrentErrorBoundary(context);
   const owner = rustTypeFromCarrierInContext(callable.ownerCarrier, context);
   const returnType = rustTypeFromCarrierInContext(callable.resultAdapter.targetCarrier, context);
-  if (boundary === undefined || owner === undefined || returnType === undefined) return undefined;
+  if (boundary === undefined || owner === undefined || returnType === undefined) failRustPlannerInvariant("An admitted class forwarder requires its sealed owner, result and native error ABI.", callable.declaration);
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, callable.declaration, []);
   const localContext = { ...context, syntheticNames, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
   const parameters = callable.parameters.map(parameter => {
     const type = rustTypeFromCarrierInContext(parameter.parameterCarrier, localContext);
-    return type === undefined ? undefined : { name: allocateRustSyntheticName(syntheticNames, "argument"), type };
+    if (type === undefined) failRustPlannerInvariant("An admitted class forwarder parameter requires its native carrier.", callable.declaration);
+    return { name: allocateRustSyntheticName(syntheticNames, "argument"), type };
   });
-  if (parameters.some(parameter => parameter === undefined)) return undefined;
-  const params = parameters as readonly RustFunctionParam[];
+  const params: readonly RustFunctionParam[] = parameters;
   const arguments_ = planRustCallableArguments({ declaration: callable.declaration, parameters: params,
     parameterAbis: callable.parameters, parameterAdapters: callable.parameterAdapters }, localContext);
-  if (arguments_ === undefined) return undefined;
-  const definition = context.input.program.projectTypes.definitionForCarrier(callable.ownerCarrier);
-  const environment = definition === undefined ? undefined : context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
-  const contextArgument: RustExpr[] = environment === undefined ? [] : construction
-    ? environment.instancesUseEnvironment || environment.initializationUsesEnvironment ? [{ kind: "path", path: "self" }] : []
-    : environment.consumers.includes(callable.declaration) ? [{ kind: "path", path: "self" }] : [];
+  if (arguments_ === undefined) failRustPlannerInvariant("An admitted class forwarder requires its native argument adaptations.", callable.declaration);
+  const selected = context.input.program.records.classValueForwarder.get(callable, construction);
+  if (selected === undefined) failRustPlannerInvariant("An admitted class forwarder requires its sealed invocation form.", callable.declaration);
+  const contextArgument: RustExpr[] = selected.environmentArgument ? [{ kind: "path", path: "self" }] : [];
   let invocation: RustExpr = { kind: "associated-call", owner, method: callable.targetName,
     args: [...contextArgument, ...arguments_.adaptedArguments] };
-  const moduleFunction = construction ? undefined : context.input.program.projectTypes.memberSlotName(callable.declaration, "static");
+  const moduleFunction = selected.moduleFunction;
   if (moduleFunction !== undefined) {
-    const ast = context.input.program.source.ast;
-    const path = sourceModuleItemPath(context, ast.getFileName(ast.getSourceFile(callable.declaration)), moduleFunction);
-    if (path === undefined) return undefined;
+    const path = sourceModuleItemPath(context, moduleFunction.fileName, moduleFunction.name);
+    if (path === undefined) failRustPlannerInvariant("An admitted class forwarder requires its native module item path.", callable.declaration);
     invocation = { kind: "call", path, args: [...contextArgument, ...arguments_.adaptedArguments] };
   }
   if (context.input.program.records.fallible.get(callable.declaration) !== undefined) {
     const operand = rustErrorBoundaryForProjectMember(callable.declaration, context);
-    if (operand === undefined) return undefined;
+    if (operand === undefined) failRustPlannerInvariant("An admitted fallible class forwarder requires its native operand error ABI.", callable.declaration);
     invocation = { kind: "try", expr: invocation, resultErrorType: rustErrorType(boundary), operandErrorType: rustErrorType(operand) };
   }
   const result = applyRustCallableValueAdapter(invocation, callable.resultAdapter, callable.declaration, localContext);
-  if (result === undefined) return undefined;
+  if (result === undefined) failRustPlannerInvariant("An admitted class forwarder requires its native result adaptation.", callable.declaration);
   return { kind: "function", name, visibility: "private", generics: { parameters: [], wherePredicates: [] },
     selfParam: rustSelfParameter(construction ? "rc" : "ref"),
     params, returnType, errorType: rustErrorType(boundary),

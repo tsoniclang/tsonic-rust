@@ -13,8 +13,8 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 
 import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
-import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan,
-  type RustClassValueCallable } from "./class-value-callables.js";
+import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan } from "./class-value-callables.js";
+import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 import { selectRustProjectStructuralView,
   type RustProjectStructuralView, type RustProjectStructuralViewImplementation } from "./project-structural-views.js";
 import { rustProjectViewMatches, selectRustProjectViewImplementations } from "./view-implementations.js";

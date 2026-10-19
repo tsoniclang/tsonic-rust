@@ -6,7 +6,8 @@ import { rustOperationContext, rustResolutionContext } from "../program/walk.js"
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
+import { selectRustClassValueCallable } from "./class-value-callables.js";
+import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 import { isRustErasedNominalMember } from "../../policy/types/objects/source-shapes.js";
 import { resolveRustProjectAccessor } from "../operations/provider/project-accessors.js";
 import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";

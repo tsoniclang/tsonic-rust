@@ -4,6 +4,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 
 export function analyzeRustClassValueEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -11,6 +12,27 @@ export function analyzeRustClassValueEmission(input: {
   readonly producer: RustClassEmissionProducer;
 }): void {
   const { program, producer } = input;
+  const forwarders = new WeakMap<RustClassValueCallable, Set<boolean>>();
+  const forwarder = (callable: RustClassValueCallable, construction: boolean): void => {
+    let modes = forwarders.get(callable);
+    if (modes === undefined) { modes = new Set(); forwarders.set(callable, modes); }
+    if (modes.has(construction)) return;
+    modes.add(construction);
+    const definition = program.projectTypes.definitionForCarrier(callable.ownerCarrier);
+    const environment = definition === undefined ? undefined : program.classValues.forDeclaration(definition.declaration)?.environment;
+    const moduleFunction = construction ? undefined : program.projectTypes.memberSlotName(callable.declaration, "static");
+    const sourceFile = program.source.ast.getSourceFile(callable.declaration);
+    if (moduleFunction !== undefined && sourceFile === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native class value forwarder requires its checked module identity.", callable.declaration);
+    producer.forwarder(callable, construction, {
+      environmentArgument: environment !== undefined && (construction ? environment.instancesUseEnvironment || environment.initializationUsesEnvironment
+        : environment.consumers.includes(callable.declaration)),
+      moduleFunction: moduleFunction === undefined ? undefined : Object.freeze({ fileName: program.source.ast.getFileName(sourceFile!), name: moduleFunction }),
+    });
+  };
+  for (const view of program.classValues.constructorViewImplementations) {
+    if (view.construction !== undefined) forwarder(view.construction, true);
+    for (const field of view.fields) if (field.callable !== undefined) forwarder(field.callable, false);
+  }
   for (const node of input.nodes) {
     const fact = program.records.classValue.get(node);
     if (fact === undefined) continue;

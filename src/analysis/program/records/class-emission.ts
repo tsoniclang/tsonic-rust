@@ -10,11 +10,14 @@ import type { RustClassValueReadEmission, RustClassValueModuleEmission } from ".
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
+import type { RustClassValueCallable, RustClassValueForwarderEmission, RustClassValueForwarderRecords } from "../../../target-model/records/class-value-callables.js";
 
 export interface RustClassEmissionProducer {
   readonly records: RustRecordFamily<RustNativeClassEmission>;
   readonly visibilityRecords: RustNativeMemberVisibilityRecords;
   readonly environmentRecords: RustClassEnvironmentRecords;
+  readonly forwarderRecords: RustClassValueForwarderRecords;
+  forwarder(subject: RustClassValueCallable, construction: boolean, value: RustClassValueForwarderEmission): void;
   environment(subject: RustProjectTypeDefinition, value: RustClassEnvironmentTypeEmission): void;
   memberEnvironment(subject: Node, value: RustClassMemberEnvironmentEmission): void;
   staticEnvironment(subject: Node, value: RustNamedClassEnvironment): void;
@@ -34,8 +37,17 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const genericArguments = new WeakMap<Node, number>();
   const reads = new WeakMap<Node, RustClassValueReadEmission>();
   const moduleValues = new WeakMap<Node, RustClassValueModuleEmission>();
+  const forwarders = new WeakMap<RustClassValueCallable, Map<boolean, RustClassValueForwarderEmission>>();
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
+    forwarderRecords: Object.freeze({ classValueForwarder: Object.freeze({ get: (subject: RustClassValueCallable, construction: boolean) => forwarders.get(subject)?.get(construction) }) }),
+    forwarder(subject: RustClassValueCallable, construction: boolean, value: RustClassValueForwarderEmission): void {
+      assertOpen();
+      let modes = forwarders.get(subject);
+      if (modes === undefined) { modes = new Map(); forwarders.set(subject, modes); }
+      if (modes.has(construction)) failTargetAnalysisInvariant("tsonic-rust", "A native class value forwarder has one source owner.", subject.declaration);
+      modes.set(construction, Object.freeze(value));
+    },
     environmentRecords: Object.freeze({
       classValueRead: Object.freeze({ get: (subject: Node) => reads.get(subject) }),
       classValueModule: Object.freeze({ get: (subject: Node) => moduleValues.get(subject) }),

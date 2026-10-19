@@ -2,7 +2,8 @@ import type { Node, TypeSignatureInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustCallableParameterAbi, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
@@ -11,16 +12,6 @@ import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { projectOwnerTypeSubstitutions, substituteRustCallableParameterAbi } from "../callables/adapters.js";
 import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
-
-export interface RustClassValueCallable {
-  readonly declaration: Node;
-  readonly ownerCarrier: TargetTypeRef;
-  readonly targetName: string;
-  readonly parameters: readonly RustCallableParameterAbi[];
-  readonly parameterAdapters: readonly RustCallableParameterAdapter[];
-  readonly resultAdapter: RustCallableValueAdapter;
-  readonly carrier: TargetTypeRef;
-}
 
 export interface RustClassValueCallablePlan extends Omit<RustClassValueCallable, "resultAdapter"> {
   readonly resultCarrier: TargetTypeRef;

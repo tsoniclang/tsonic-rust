@@ -65,6 +65,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly nativeMemberVisibility: import("./native-member-names.js").RustNativeMemberVisibilityRecords["nativeMemberVisibility"];
   readonly classEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironment"];
+  readonly classValueForwarder: import("./class-value-callables.js").RustClassValueForwarderRecords["classValueForwarder"];
   readonly classEnvironmentType: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironmentType"];
   readonly classMemberEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classMemberEnvironment"];
   readonly classStaticEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classStaticEnvironment"];
