@@ -3,27 +3,25 @@ import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { diagnosticInput } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustNativeProducerBridge } from "./native-producer-bridges.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustNativeGenericProducerBridges } from "./native-generic-producers.js";
-import { rustJsPromiseOutputTargetType } from "../../../../target-model/types/carriers/promises.js";
 
 export function planRustNativeCallableProtocolItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
-  for (const protocol of context.input.program.callableValues.native.protocols) {
+  const protocols = context.input.program.records.nativeProtocols.get(context.sourceFile);
+  if (protocols === undefined) failRustPlannerInvariant("A native source file requires its sealed callable protocol inventory.", context.sourceFile);
+  for (const protocol of protocols) {
     const generic = planRustNativeGenericProducerBridges(protocol, context);
-    if (generic === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
-      "rust.backend.native-callable-protocol", "An exact native generic producer implementation could not be rendered."));
-    else items.push(...generic);
+    if (generic === undefined) failRustPlannerInvariant("An admitted native generic producer requires its rendered implementation.", context.sourceFile);
+    items.push(...generic);
     if (protocol.ownerFileName === fileName) {
       const item = planRustNativeCallableProtocol(protocol, context);
       const producers = planRustNativeProducerBridge(protocol, context);
-      if (item === undefined || producers === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
-        "rust.backend.native-callable-protocol", "An exact native callable input protocol could not be rendered."));
-      else items.push(item, ...producers);
+      if (producers === undefined) failRustPlannerInvariant("An admitted native callable protocol requires its rendered producer bridge.", context.sourceFile);
+      items.push(item, ...producers);
     }
   }
   return items;
@@ -32,19 +30,22 @@ export function planRustNativeCallableProtocolItems(context: RustPlanContext): r
 export function planRustNativeCallableProtocol(
   protocol: RustNativeCallableProtocol,
   context: RustPlanContext,
-): RustItem | undefined {
+): RustItem {
   const signature = protocol.signature;
   const parameters = protocol.method.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context, "parameter"));
   const returnType = rustTypeFromCarrierInContext(protocol.result, context, "return");
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
-  const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
-  if (parameters.some(parameter => parameter === undefined) || returnType === undefined || methodGenerics === undefined) return undefined;
+  const emission = context.input.program.records.nativeProtocol.get(protocol);
+  if (emission === undefined) failRustPlannerInvariant("An admitted native callable protocol requires its sealed dispatch demand.");
+  const { invoked } = emission;
+  if (parameters.some(parameter => parameter === undefined) || returnType === undefined)
+    failRustPlannerInvariant("An admitted native callable protocol requires its renderable method signature.");
   return { kind: "trait", name: protocol.targetName, visibility: "public",
     generics: { ...emptyRustGenerics, parameters: signature.environmentParameters.map(parameter => ({
       kind: "type", name: parameter.name, bounds: [],
     })) },
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, bounds: [] },
-      ...(protocol.completion?.futures ?? []).filter(future => rustJsPromiseOutputTargetType(future.carrier) === undefined)
+      ...emission.nativeFutures
         .map(future => ({ kind: "type" as const,
           name: `AwaitError${future.ordinal}`, generics: methodGenerics, bounds: [] })),
       ...(invoked ? [{ kind: "function" as const, name: "invoke", selfParam: { kind: "reference" as const, mutable: false },
