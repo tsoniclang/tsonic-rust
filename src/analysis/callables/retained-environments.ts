@@ -25,7 +25,7 @@ export function rustRetainedCallLifetimes(
   if (!references.lifetimeIdentities.includes(rustLifetimeKey(environment.lifetime))) return new Map();
   const caller = sourceEnclosingCallable(invocation, ast);
   const callerBindings = caller === undefined ? { kind: "resolved" as const, bindings: storage.emptyBindings }
-    : storage.bindingsForDeclaration(caller);
+    : storage.bindingsForLexicalOwner(caller);
   if (callerBindings.kind !== "resolved") return undefined;
   const activation = storage.bindingsForInvocation(declaration, invocation, callerBindings.bindings);
   if (activation.kind !== "resolved") return undefined;

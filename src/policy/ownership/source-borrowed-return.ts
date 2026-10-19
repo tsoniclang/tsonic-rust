@@ -44,7 +44,7 @@ function selectSourceBorrowedReturnParameter(
     source.semantics.forNode(declaration).operations.generator(declaration) !== undefined ||
     source.semantics.forNode(declaration).operations.callableCompletion(declaration)?.canFallThrough !== false) return undefined;
   const result = sourceStorage.subject(declaration, "return");
-  const bindings = sourceStorage.bindingsForDeclaration(declaration);
+  const bindings = sourceStorage.bindingsForLexicalOwner(declaration);
   if (result.kind !== "resolved" || bindings.kind !== "resolved") return undefined;
   const origins = sourceStorage.boundOriginsFor(result.subject, bindings.bindings);
   if (origins.kind !== "resolved" || origins.subjects.length !== 1) return undefined;
