@@ -48,7 +48,7 @@ import { readRustStoredObjectField, rustDirectProjectFieldStoragePath, rustProje
 import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationFact, RustAssignmentOperationPlan } from "./core.js";
+import type { RustAssignmentOperationFact, RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 

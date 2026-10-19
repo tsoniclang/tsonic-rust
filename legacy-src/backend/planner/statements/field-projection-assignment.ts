@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustAssignmentOperationPlan } from "./core.js";
+import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
 import { planExpression, sourceFieldSelectedOperationMatches } from "../expressions/index.js";
 import { findRustUpdateProjectField, planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/updates/target.js";
 import { planRustMutableProjectReceiver } from "../expressions/typed-locations.js";

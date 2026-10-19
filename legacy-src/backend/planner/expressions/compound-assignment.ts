@@ -16,7 +16,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
-import type { RustAssignmentOperationFact } from "../statements/core.js";
+import type { RustAssignmentOperationFact } from "../../../target-model/records/operator-selection.js";
 import { planRustAssignmentWrite } from "../statements/expression-statements.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression } from "./entry.js";

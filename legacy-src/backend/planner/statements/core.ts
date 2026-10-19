@@ -33,7 +33,6 @@ import { planThrowStatement, planTryStatement } from "./errors.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
 import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
@@ -43,15 +42,6 @@ import { planRustAbsentValue } from "../expressions/optional-storage.js";
 import { planFunctionDeclarations } from "../declarations/callables/functions.js";
 import { planRustDeferredCaptureStorage } from "../bindings/capture-storage.js";
 import { planRustLexicalFunctionValues } from "../declarations/callables/lexical-values.js";
-
-export type RustAssignmentOperationFact = Extract<
-  RustTargetOperationFact,
-  { readonly kind: "operator-token" | "operator-call" }
->;
-
-export type RustAssignmentOperationPlan =
-  | Omit<Extract<RustAssignmentOperationFact, { readonly kind: "operator-token" }>, "operationId">
-  | Extract<RustAssignmentOperationFact, { readonly kind: "operator-call" }>;
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;

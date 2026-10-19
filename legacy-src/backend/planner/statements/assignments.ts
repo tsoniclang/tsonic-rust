@@ -28,7 +28,7 @@ import { planRustSourceStaticFieldStorage } from "../declarations/classes/static
 import { planRustIndexedRecordStorage, planRustSourceIndexKey, sourceIndexSelectedOperationMatches } from "../objects/indexed-records.js";
 import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationPlan } from "./core.js";
+import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
 import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
