@@ -10,6 +10,7 @@ import type { RustSuspendedCallableEmission, RustSuspendedCallableImplementation
 import type { RustAdmittedConstruction } from "./construction.js";
 import type { RustNativeClassEmission } from "./class-emission.js";
 import type { RustBorrowedInitializer } from "./borrowed-initializers.js";
+import type { RustCaptureStorageScope } from "./capture-storage.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
 import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
@@ -121,6 +122,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly classConstruction: RustRecordFamily<RustAdmittedConstruction>;
   readonly nativeClass: RustRecordFamily<RustNativeClassEmission>;
   readonly borrowedInitializer: RustRecordFamily<RustBorrowedInitializer>;
+  readonly captureStorageScope: RustRecordFamily<RustCaptureStorageScope>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;

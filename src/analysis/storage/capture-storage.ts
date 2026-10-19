@@ -2,23 +2,22 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
-export interface RustCaptureStoragePlan {
-  deferredForScope(scope: Node): readonly Node[];
-  iterationsForScope(scope: Node): readonly Node[];
-}
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { RustCaptureStorageProducer } from "../program/records/capture-storage.js";
 
 export function analyzeRustCaptureStorage(input: {
   readonly ast: AstReader;
   readonly nativeNodes: readonly Node[];
   readonly records: RustProgramRecords;
-}): RustCaptureStoragePlan {
+  readonly producer: RustCaptureStorageProducer;
+}): void {
   const scopes = new Map<Node, Node[]>();
   const iterations = new Map<Node, Node[]>();
   const visit = (node: Node): void => {
     const fact = input.records.bindingStorage.get(node);
     if (fact?.initialization === "deferred") {
       const scope = sourceBindingScope(node, input.ast);
-      if (scope === undefined) throw new Error("Deferred capture storage requires an exact activation scope.");
+      if (scope === undefined) failTargetAnalysisInvariant("tsonic-rust", "Deferred capture storage requires an exact activation scope.", node);
       const declarations = scopes.get(scope) ?? [];
       declarations.push(node);
       scopes.set(scope, declarations);
@@ -26,7 +25,7 @@ export function analyzeRustCaptureStorage(input: {
     if (fact?.iterationScope !== undefined) {
       if (fact.storage !== "location" || sourceBindingIterationScope(node, input.ast) !== fact.iterationScope ||
         sourceBindingScope(node, input.ast) !== fact.iterationScope) {
-        throw new Error("Iteration capture storage requires its exact lexical activation scope.");
+        failTargetAnalysisInvariant("tsonic-rust", "Iteration capture storage requires its exact lexical activation scope.", node);
       }
       const declarations = iterations.get(fact.iterationScope) ?? [];
       declarations.push(node);
@@ -35,10 +34,7 @@ export function analyzeRustCaptureStorage(input: {
   };
   input.nativeNodes.forEach(visit);
   const empty: readonly Node[] = Object.freeze([]);
-  const selected = new Map([...scopes].map(([scope, declarations]) => [scope, Object.freeze(declarations)]));
-  const selectedIterations = new Map([...iterations].map(([scope, declarations]) => [scope, Object.freeze(declarations)]));
-  return Object.freeze({
-    deferredForScope: (scope: Node) => selected.get(scope) ?? empty,
-    iterationsForScope: (scope: Node) => selectedIterations.get(scope) ?? empty,
+  for (const scope of new Set([...scopes.keys(), ...iterations.keys()])) input.producer.scope(scope, {
+    deferred: Object.freeze(scopes.get(scope) ?? empty), iterations: Object.freeze(iterations.get(scope) ?? empty),
   });
 }

@@ -361,6 +361,7 @@ export function analyzeRustTargetProgram(
     } });
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
+  analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records, producer: context.records.captureStorage });
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
@@ -432,7 +433,6 @@ export function analyzeRustTargetProgram(
     sourceOutputIdentities: sourceOutputIdentities.identities,
     physicalEmissionContexts: callableValues.value.emissionContexts,
     errorRegions: completedErrorRegions,
-    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records }),
     promiseResults: promiseResults.results,
     promiseBodies: context.promiseBodies.plan,
     lexicalFunctions,

@@ -64,7 +64,6 @@ export interface RustTargetProgram {
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
-  readonly captureStorage: import("../storage/capture-storage.js").RustCaptureStoragePlan;
   readonly promiseBodies: import("../../target-model/records/callables-and-resources.js").RustPromiseBodies;
   readonly promiseResults: import("../../target-model/records/promise-results.js").RustPromiseResults;
   readonly numericRepresentations: RustNumericRepresentations;
