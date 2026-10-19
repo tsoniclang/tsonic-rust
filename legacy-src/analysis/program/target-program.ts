@@ -82,6 +82,7 @@ import { analyzeRustNativeProtocolEmission } from "../callables/native-protocol-
 import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emission.js";
 import { analyzeRustGenericEmission } from "../callables/generic-emission.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
+import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
@@ -512,6 +513,9 @@ export function analyzeRustTargetProgram(
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
+  const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, reachability, nodes: context.nativeNodes,
+    producer: context.records.callableDeclarationPlans });
+  if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.nativeLiveness, required: context.requiredRecords });
   context.callableValues.publish();

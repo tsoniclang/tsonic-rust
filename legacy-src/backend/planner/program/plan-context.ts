@@ -106,6 +106,7 @@ export interface RustPlanContext {
   readonly controlTargets?: readonly RustControlTarget[];
   readonly completionBoundary?: RustCompletionBoundary;
   readonly functionReturnType?: RustType;
+  readonly returnResult?: { readonly errorType: RustType };
   readonly functionAbsenceReturnCarrier?: TargetTypeRef;
   readonly asyncContext?: boolean;
   readonly explicitUnsafeContextDepth?: number;

@@ -10,7 +10,8 @@ export function planRustReturnExit(
   }
   const boundary = context.completionBoundary;
   if (boundary === undefined) {
-    return { kind: "return", ...(expression === undefined ? {} : { expr: expression }) };
+    return { kind: "return", ...(context.returnResult === undefined ? expression === undefined ? {} : { expr: expression }
+      : { expr: { kind: "call", path: "Ok", args: [expression ?? { kind: "tuple-literal", elements: [] }] } }) };
   }
   markOutermostReturnDispatch(boundary);
   context.usedAliases?.add("rt");
@@ -33,7 +34,7 @@ export function planRustReturnExpression(
   if (boundary === undefined) {
     return {
       kind: "return-expression",
-      expr: expression,
+      expr: context.returnResult === undefined ? expression : { kind: "call", path: "Ok", args: [expression] },
     };
   }
   markOutermostReturnDispatch(boundary);

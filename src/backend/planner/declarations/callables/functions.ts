@@ -3,30 +3,24 @@ import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
 import {
-  diagnosticInput,
-  isValidRustIdentifier,
   rustCurrentErrorBoundary,
-  rustSourceItemIsPubliclyReachable,
 } from "../../program/plan-context.js";
-import { rustAuthoredDeadCodeDisposition } from "../../program/reachability-directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
   rustCallableSpecialization,
 } from "./generics.js";
 import type {
   RustSourceCallableSpecializationVariant,
-} from "../../../../analysis/callables/specializations.js";
+} from "../../../../target-model/records/callable-emission.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../../names/synthetic.js";
-import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../../target-ast/normalization/block-flow.js";
 import { planExpression } from "../../expressions/index.js";
 import {
   planRustCallableParameterPrelude,
@@ -35,7 +29,6 @@ import {
 import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustJsPromiseReturnType } from "./return-types.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
-import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
@@ -48,8 +41,8 @@ import { planRustErrorRegion } from "../../program/error-regions.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
 
 interface RustFunctionItemPlan {
-  readonly item: RustItem;
-  readonly helper: RustItem | undefined;
+  readonly item: Extract<RustItem, { readonly kind: "function" }>;
+  readonly helper: Extract<RustItem, { readonly kind: "function" }> | undefined;
 }
 
 function planRustFunctionParameters(
@@ -59,16 +52,16 @@ function planRustFunctionParameters(
   const { ast } = inputContext.input.program.source;
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const environment = planRustLexicalFunctionEnvironment(node, { ...inputContext, syntheticNames });
-  if (environment === undefined) return undefined;
+  if (environment === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames);
-  if (parameterPlan === undefined) return undefined;
+  if (parameterPlan === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const leading = planRustCallableLeadingParameters(node, environment.context);
-  if (leading === undefined) return undefined;
+  if (leading === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const leadingParams = leading.parameters.map(parameter => {
     const type = rustTypeFromCarrierInContext(parameter.carrier, environment.context);
     return type === undefined ? undefined : { name: parameter.name, type };
   });
-  if (leadingParams.some(parameter => parameter === undefined)) return undefined;
+  if (leadingParams.some(parameter => parameter === undefined)) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   return {
     params: [...leadingParams as NonNullable<typeof leadingParams[number]>[],
       ...parameterPlan.params, ...environment.parameters],
@@ -82,19 +75,20 @@ export function planFunctionDeclarations(
   node: Node,
   outerContext: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const specializations = outerContext.input.program.sourceCallableSpecializations;
-  if (!specializations.requiresSpecialization(node)) {
+  const emission = outerContext.input.program.records.callableDeclaration.get(node);
+  if (emission === undefined) failRustPlannerInvariant("An admitted function requires its sealed declaration emission.", node);
+  if (!emission.requiresSpecialization) {
     const item = planRustFunctionItem({
       callableDeclaration: node,
       nameDeclaration: node,
-      name: outerContext.input.program.names.functionNameForDeclaration(node),
-      exported: outerContext.input.program.source.ast.hasModifierKind(node, "export"),
+      name: emission.name,
+      exported: emission.exported,
     }, outerContext);
     return item === undefined ? undefined : Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
   }
-  const variants = specializations.variantsForCallable(node);
+  const variants = emission.specializations;
   if (variants.length === 0) {
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const items: RustItem[] = [];
   for (const variant of variants) {
@@ -106,7 +100,7 @@ export function planFunctionDeclarations(
       specialization: variant,
     }, outerContext);
     if (item === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
     }
     items.push(item.item);
     if (item.helper !== undefined) items.push(item.helper);
@@ -120,13 +114,13 @@ export function planNativeModuleFunction(
   name: string,
   exported: boolean,
   outerContext: RustPlanContext,
-): RustItem | undefined {
+ ): Extract<RustItem, { readonly kind: "function" }> {
   return planRustFunctionItem({
     callableDeclaration,
     nameDeclaration: declaration,
     name,
     exported,
-  }, outerContext)?.item;
+  }, outerContext).item;
 }
 
 function planRustFunctionItem(
@@ -138,8 +132,10 @@ function planRustFunctionItem(
     readonly specialization?: RustSourceCallableSpecializationVariant;
   },
   outerContext: RustPlanContext,
-): RustFunctionItemPlan | undefined {
+): RustFunctionItemPlan {
   const node = source.callableDeclaration;
+  const emission = outerContext.input.program.records.callableDeclaration.get(node);
+  if (emission === undefined) failRustPlannerInvariant("An admitted callable requires its sealed declaration emission.", node);
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...functionContext } = outerContext;
   const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
@@ -156,41 +152,24 @@ function planRustFunctionItem(
   );
   const asyncFact = outerContext.input.program.records.asyncFunction.get(node);
   const returnsJsPromise = asyncFact?.kind === "js-promise";
-  const nativeBody = outerContext.input.program.promiseBodies.declarations.get(node);
+  const nativeBody = emission.nativeBody;
   const nativeBodyName = nativeBody === undefined ? undefined
     : source.specialization === undefined ? nativeBody.name : source.specialization.nativeBodyName;
   if (nativeBody !== undefined && nativeBodyName === undefined) failRustPlannerInvariant(
     "A specialized native Promise body requires its selected physical name.", node);
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
-    outerContext.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(outerContext, node),
-      "rust.backend.async",
-      "Async functions require a finalized Promise return carrier fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const isExported = source.exported;
-  const name = source.name ??
-    outerContext.input.program.names.nameForDeclaration(source.nameDeclaration) ?? "";
-  const lexical = outerContext.input.program.lexicalFunctions.forDeclaration(node);
-  const visibility = lexical !== undefined ? "private" as const : isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
-    ? "public" as const
-    : "crate" as const;
-  const deadCode = rustAuthoredDeadCodeDisposition(
-    outerContext,
-    source.nameDeclaration,
-  );
+  const name = source.name ?? emission.name;
+  if (name === undefined) failRustPlannerInvariant("An admitted callable requires its exact native declaration name.", node);
+  const lexical = outerContext.input.program.records.lexicalFunction.get(node);
+  const visibility = lexical !== undefined ? "private" as const : isExported ? "public" as const : emission.visibility;
+  const deadCode = emission.deadCode;
   const declarationAttributes = [...safetyAttributes];
   let context: RustPlanContext = nativeBody === undefined ? functionContext
     : { ...functionContext, promiseBody: true, promiseBodyName: nativeBodyName! };
-  if (!isValidRustIdentifier(name)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.function",
-      `Function name '${name}' is not a valid Rust identifier.`,
-    ));
-    return undefined;
-  }
   const specialization = source.specialization === undefined
     ? undefined
     : rustCallableSpecialization(
@@ -198,28 +177,19 @@ function planRustFunctionItem(
         source.specialization.targetTypeArguments,
       );
   if (source.specialization !== undefined && specialization === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.callable-specialization",
-      "Callable specialization does not match its exact source type-parameter arity.",
-    ));
-    return undefined;
-  }
-  if (lexical?.kind === "unresolved") {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.backend.lexical-function-contract", lexical.reason));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const genericPlan = planRustCallableGenerics(node, context, specialization, lexical?.genericParameters);
   if (genericPlan === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   context = genericPlan.context;
   if (genericPlan.preservesExplicitLifetimes) {
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
   const parameters = planRustFunctionParameters(node, context);
-  if (parameters === undefined) return undefined;
+  if (parameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const { params, parameterPlan, syntheticNames } = parameters;
   context = parameters.context;
   const returnTypeNode = Node_Type(ast, node);
@@ -233,12 +203,8 @@ function planRustFunctionItem(
   const bodyErrorBoundary = callableErrorBoundary ?? (generatorErrorOwner === undefined
     ? undefined : rustPackageFallibleBoundary(generatorErrorOwner));
   if (errorRegion === undefined || generatorFact !== undefined && bodyErrorBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.function-error-boundary",
-      "Function has no exact finalized native error region.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
@@ -246,56 +212,20 @@ function planRustFunctionItem(
     ? undefined
     : resolveRustCallableOutwardReturnType(node, returnCarrier, context);
   if (!isUnit && !(fallible && isNever) && returnType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, returnTypeNode ?? node),
-      "rust.backend.function",
-      "Function return type has no supported Rust carrier fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const emittedReturnType = returnsJsPromise && nativeBody === undefined
     ? resolveRustJsPromiseReturnType(node, context)
     : returnType;
   if (returnsJsPromise && nativeBody === undefined && emittedReturnType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, returnTypeNode ?? node),
-      "rust.backend.js-promise-return",
-      "JavaScript-surface async functions require one renderable finalized Promise carrier.",
-    ));
-    return undefined;
-  }
-  if (returnsJsPromise && nativeBody === undefined && !requireRustCarrierRequirements(
-    asyncFact.outputCarrier,
-    asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
-    node,
-    context,
-  )) {
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const bodyNode = ast.body(node);
   if (bodyNode === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.function",
-      "Functions require a body.",
-    ));
-    return undefined;
-  }
-  if (generatorFact !== undefined && generatorFact.storage.kind !== "lifetime" && ![
-    generatorFact.yieldType,
-    generatorFact.returnType,
-    generatorFact.nextType,
-  ].every((carrier) =>
-    requireRustCarrierRequirements(carrier, ["static"], node, context))) {
-    return undefined;
-  }
-  if (generatorFact !== undefined && fallible) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.generator-fallibility",
-      "Throwing generator bodies require a closed Rust generator error protocol.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   if (fallible) {
     context.usedAliases?.add("rt");
@@ -309,12 +239,8 @@ function planRustFunctionItem(
     context,
   );
   if (bodyReturnType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, returnTypeNode ?? node),
-      "rust.backend.generator-return-carrier",
-      "Generator body return type has no supported Rust carrier fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const bodyContext: RustPlanContext = {
     ...context,
@@ -333,6 +259,7 @@ function planRustFunctionItem(
           },
         }),
     fallibleBoundary: bodyErrorBoundary,
+    returnResult: bodyErrorBoundary === undefined ? undefined : { errorType: bodyErrorBoundary.errorType },
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -340,7 +267,7 @@ function planRustFunctionItem(
     planExpression,
   );
   if (parameterStatements === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
     ? planBlockLike(bodyNode, bodyContext)
@@ -348,32 +275,21 @@ function planRustFunctionItem(
         const expression = planRustReturnValueExpression(bodyNode, bodyContext, planExpression);
         return expression === undefined
           ? undefined
-          : { statements: [{ kind: "tail" as const, expr: expression }] };
+          : { statements: [planRustReturnExit(expression, bodyContext)] };
       })();
   if (plannedBody === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
-  const body: RustBlock = retainRustCheckedCompletion({
+  const body: RustBlock = {
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
-      ? [planRustReturnExit(planRustAbsentValue(returnCarrier!, bodyContext), bodyContext)] : [])],
-  }, !isUnit && generatorFact === undefined ? sourceReturn?.canFallThrough : undefined);
+      ? [planRustReturnExit(planRustAbsentValue(returnCarrier!, bodyContext), bodyContext)]
+      : emission.canFallThrough ? [planRustReturnExit(undefined, bodyContext)] : [])],
+  };
   if (generatorFact !== undefined) {
-    if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, bodyNode),
-        "rust.backend.generator-return-flow",
-        "Value-returning generators require finalized control flow that returns on every path.",
-      ));
-      return undefined;
-    }
     context.usedAliases?.add("rt");
     if (returnType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.generator-storage-carrier",
-        "Generator function has no exact lifetime-bound Rust storage carrier.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
+      failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
     }
     const generics = genericPlan.finalizeGenerics();
     const item: Extract<RustItem, { readonly kind: "function" }> = {
@@ -398,26 +314,8 @@ function planRustFunctionItem(
     };
     return Object.freeze({ item, helper: undefined });
   }
-  if (!isUnit && !rustBlockTerminates(body)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, bodyNode),
-      "rust.backend.return-flow",
-      "Value-returning functions require finalized control flow that returns or throws on every path.",
-    ));
-    return undefined;
-  }
   const generics = genericPlan.finalizeGenerics();
-  const finalizedBody = applyFallibleShape(
-    applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-    fallible
-      ? {
-          fallible: true,
-          hasReturnValue: returnType !== undefined,
-          errorType: callableErrorBoundary!.errorType,
-          inferErrorTypeFromReturnType: true,
-        }
-      : { fallible: false, hasReturnValue: returnType !== undefined },
-  );
+  const finalizedBody: RustBlock = { statements: [...parameterStatements, ...body.statements] };
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name: nativeBody === undefined ? name : nativeBodyName!,
@@ -438,23 +336,21 @@ function planRustFunctionItem(
       ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
       : finalizedBody,
   };
-  if (nativeBody === undefined || !context.input.program.promiseBodies.objects.has(node))
+  if (nativeBody === undefined || !emission.promiseObject)
     return Object.freeze({ item, helper: undefined });
   const adapterGenerics = planRustCallableGenerics(node, functionContext, specialization, lexical?.genericParameters);
-  if (adapterGenerics === undefined) return undefined;
+  if (adapterGenerics === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context);
-  if (adapterParameters === undefined) return undefined;
+  if (adapterParameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const adapterContext = adapterParameters.context;
-  if (asyncFact?.kind !== "js-promise" ||
-    !requireRustCarrierRequirements(asyncFact.outputCarrier,
-      asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], node, adapterContext)) return undefined;
+  if (asyncFact?.kind !== "js-promise") failRustPlannerInvariant("An admitted Promise object adapter requires its selected async contract.", node);
   const adapterReturn = resolveRustJsPromiseReturnType(node, adapterContext);
   const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: nativeBodyName!,
     genericArguments: rustPromiseBodyGenericArguments(generics),
     args: adapterParameters.params.map(parameter => ({ kind: "path", path: parameter.name })),
   }, callableErrorBoundary, adapterContext);
-  if (adapterReturn === undefined || adapterBody === undefined) return undefined;
-  const helper: RustItem = { kind: "function", name, visibility,
+  if (adapterReturn === undefined || adapterBody === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
+  const helper: Extract<RustItem, { readonly kind: "function" }> = { kind: "function", name, visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
     ...(declarationAttributes.length === 0 ? {} : { attrs: declarationAttributes }),
     ...(isUnsafe ? { isUnsafe: true } : {}),

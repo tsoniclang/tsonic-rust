@@ -3,6 +3,7 @@ import type { RustRuntimeCarrierSelection, RustConversionSelection } from "./sel
 import type { RustNativeParticipation } from "./native-demand.js";
 import type { RustGenericEmissionRecords } from "./generic-emission.js";
 import type { RustLexicalFunctionEmission } from "./lexical-functions.js";
+import type { RustCallableDeclarationEmission } from "./callable-emission.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
 import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
@@ -108,6 +109,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly staticFieldStorage: RustRecordFamily<RustStaticFieldStorageSelection>;
   readonly callableParameter: RustRecordFamily<RustCallableParameterEmission>;
   readonly lexicalFunction: RustRecordFamily<RustLexicalFunctionEmission>;
+  readonly callableDeclaration: RustRecordFamily<RustCallableDeclarationEmission>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;
