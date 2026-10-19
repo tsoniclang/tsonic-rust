@@ -57,7 +57,7 @@ export function createRustRetainedEnvironmentQueries(
       const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
       return initializer === undefined ? [] : [initializer];
     }), body];
-    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation);
+    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, "source");
     lexical.set(declaration, selected);
     return selected;
   };
@@ -76,7 +76,7 @@ export function createRustRetainedEnvironmentQueries(
       selected.forEach(parameter => retained.add(parameter));
     } else {
       const subject = storage.subject(declaration, "return");
-      const bindings = storage.bindingsForDeclaration(declaration);
+      const bindings = storage.bindingsForLexicalOwner(declaration);
       if (subject.kind !== "resolved" || bindings.kind !== "resolved") return unresolved();
       const producers = storage.storageProducersFor(subject.subject, bindings.bindings);
       if (producers.kind === "unresolved") return unresolved(producers.reason);

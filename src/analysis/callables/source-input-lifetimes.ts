@@ -25,7 +25,9 @@ export function rustCallableInputLifetimeParameters(
   records: RustProgramRecords,
 ): readonly RustSourceGenericParameterContract[] {
   const retained = new Set<string>();
-  return Object.freeze(ast.parameters(declaration).flatMap(parameter => {
+  const parameters = ast.is.IsClassDeclaration(declaration) || ast.is.IsClassExpression(declaration)
+    ? [] : ast.parameters(declaration);
+  return Object.freeze(parameters.flatMap(parameter => {
     const abi = parameter === undefined ? undefined : records.sourceParameterAbi.get(parameter);
     const lifetime = abi?.inputLifetime;
     if (parameter === undefined || lifetime === undefined || abi?.parameterCarrier.kind !== "reference" ||

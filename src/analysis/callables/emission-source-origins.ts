@@ -110,7 +110,7 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     return selected.kind === "unresolved" ? selected : selected.sourceActivations;
   };
   const declarationOrigins = (request: RustEmissionSourceRequest): Origins => {
-    const bindings = storage.bindingsForDeclaration(request.declaration);
+    const bindings = storage.bindingsForLexicalOwner(request.declaration);
     if (bindings.kind === "unresolved") return unavailable(bindings.reason);
     const selected = nativeRows(request.declaration, bindings.bindings);
     if (selected.kind === "unresolved") return unavailable(selected.reason);
