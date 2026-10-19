@@ -94,6 +94,7 @@ import { analyzeRustProjectEmission } from "../project-types/emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
+import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -528,6 +529,7 @@ export function analyzeRustTargetProgram(
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
   if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
+  analyzeRustObjectProjections(program, context.nativeNodes, context.records.objectProjectionPlans);
   const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
