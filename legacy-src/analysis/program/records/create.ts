@@ -6,6 +6,7 @@ import { maximumRustFoundation, type RustFoundation } from "../../../target-mode
 import { createRustConversionProducer } from "./conversion.js";
 import { createRustBorrowedInitializerProducer } from "./borrowed-initializers.js";
 import { createRustCaptureStorageProducer } from "./capture-storage.js";
+import { createRustBindingEmissionProducer } from "./binding-emission.js";
 import { createRustOptionProjectionProducer } from "./option-projection.js";
 import { createRustFlowReadProjectionProducer } from "./flow-read-projection.js";
 import { createRustContextualValueConversionProducer } from "./contextual-value-conversion.js";
@@ -189,6 +190,7 @@ export function createRustProgramRecordBuilder(
   const fieldWrites = createRustFieldWriteProducer(assertOpen);
   const borrowedInitializers = createRustBorrowedInitializerProducer(assertOpen);
   const captureStorage = createRustCaptureStorageProducer(assertOpen);
+  const bindingEmission = createRustBindingEmissionProducer(assertOpen);
   const declarationEmission = createRustDeclarationEmissionProducer(assertOpen);
   const lexicalValuePlans = createRustLexicalValueProducer(assertOpen);
   const nativeProtocolPlans = createRustNativeProtocolProducer(assertOpen);
@@ -212,6 +214,7 @@ export function createRustProgramRecordBuilder(
     ...fieldWrites.records,
     borrowedInitializer: borrowedInitializers.records,
     captureStorageScope: captureStorage.records,
+    bindingProjectionEmission: bindingEmission.records,
     ...declarationEmission.records,
     nativeDeclaration: nativeDeclarations.declarations,
     nativeTypeFamilyImplementations: nativeDeclarations.implementations,
@@ -324,6 +327,7 @@ export function createRustProgramRecordBuilder(
     fieldWrites,
     borrowedInitializers,
     captureStorage,
+    bindingEmission,
     declarationEmission,
     lexicalValuePlans,
     nativeProtocolPlans,

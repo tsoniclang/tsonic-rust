@@ -35,7 +35,7 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression, type RustExpressionResultUse } from "./entry.js";
-import { planRustBindingPattern } from "../bindings/patterns.js";
+import { planRustBindingPattern } from "../bindings/binding-patterns.js";
 import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

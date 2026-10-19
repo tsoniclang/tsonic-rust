@@ -13,7 +13,7 @@ import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { planBlockLike } from "./planning.js";
-import { planRustBindingPattern } from "../bindings/patterns.js";
+import { planRustBindingPattern } from "../bindings/binding-patterns.js";
 import { planRustModuleBindingStore, planRustPromotedStorageWrite } from "../expressions/typed-locations.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 

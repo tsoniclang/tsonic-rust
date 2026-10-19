@@ -3,7 +3,7 @@ import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
-import { planRustBindingPattern, type RustBindingExpressionPlanner } from "../../bindings/patterns.js";
+import { planRustBindingPattern, type RustBindingExpressionPlanner } from "../../bindings/binding-patterns.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustParameterTypeFromCarrierInContext } from "../../types/render.js";
 import { allocateRustSyntheticName, type RustSyntheticNameState } from "../../names/synthetic.js";

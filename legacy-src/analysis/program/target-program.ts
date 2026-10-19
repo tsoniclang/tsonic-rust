@@ -25,6 +25,7 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
+import { analyzeRustBindingProjectionEmission } from "../control-flow/binding-emission.js";
 import { analyzeRustReadOwnership } from "../ownership/reads.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
@@ -521,6 +522,8 @@ export function analyzeRustTargetProgram(
   const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
+  const bindingEmissionIssues = analyzeRustBindingProjectionEmission({ program, nodes: context.nativeNodes, producer: context.records.bindingEmission });
+  if (bindingEmissionIssues.length !== 0) return rejectedTargetStage(bindingEmissionIssues);
   const methodEmissionIssues = analyzeRustMethodEmission({ program, nodes: context.nativeNodes, producer: context.records.methodEmissionPlans });
   if (methodEmissionIssues.length !== 0) return rejectedTargetStage(methodEmissionIssues);
   analyzeRustFrameEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.frameEmissionPlans });

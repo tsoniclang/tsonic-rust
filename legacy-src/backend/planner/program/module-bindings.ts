@@ -10,7 +10,7 @@ import { planRustSourceCallableValue } from "../expressions/source-callable-valu
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustModuleCell } from "../project/module-storage.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { normalizeRustBindingValue, planRustBindingProjection } from "../bindings/patterns.js";
+import { normalizeRustBindingValue, planRustBindingProjection } from "../bindings/binding-patterns.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustSourceItemIsPubliclyReachable } from "./plan-context.js";
