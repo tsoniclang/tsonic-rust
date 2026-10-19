@@ -8,6 +8,7 @@ import type { RustAssignmentWriteProducer } from "./assignment-writes.js";
 import type { RustBorrowedElementProducer } from "./borrowed-element-reads.js";
 import type { RustFieldWriteProducer } from "./field-writes.js";
 import type { RustDeclarationEmissionProducer } from "./declaration-emission.js";
+import type { RustLexicalValueProducer } from "./lexical-values.js";
 import type { RustNativeDeclarationProducer } from "./native-declarations.js";
 import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustNativeGenericProducer } from "./native-generics.js";
@@ -104,6 +105,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly borrowedElements: RustBorrowedElementProducer;
   readonly fieldWrites: RustFieldWriteProducer;
   readonly declarationEmission: RustDeclarationEmissionProducer;
+  readonly lexicalValuePlans: RustLexicalValueProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;

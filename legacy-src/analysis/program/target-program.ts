@@ -77,6 +77,7 @@ import { analyzeRustFieldProjectionAssignments } from "../storage/field-projecti
 import { analyzeRustAssignmentWrites } from "../storage/assignment-writes.js";
 import { analyzeRustFieldWrites } from "../storage/field-writes.js";
 import { analyzeRustDeclarationEmission } from "../declarations/emission.js";
+import { analyzeRustLexicalValues } from "../callables/lexical-values.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
 
 export function analyzeRustTargetProgram(
@@ -487,6 +488,7 @@ export function analyzeRustTargetProgram(
   if (assignmentWriteIssues.length !== 0) return rejectedTargetStage(assignmentWriteIssues);
   analyzeRustFieldWrites({ program, nodes: context.nativeNodes, producer: context.records.fieldWrites, required: context.requiredRecords });
   analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes, producer: context.records.declarationEmission, required: context.requiredRecords });
+  analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,

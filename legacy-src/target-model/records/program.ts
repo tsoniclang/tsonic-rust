@@ -35,6 +35,7 @@ import type { RustAssignmentWriteCompletion } from "./assignment-writes.js";
 import type { RustBorrowedElementRecords } from "./borrowed-element-reads.js";
 import type { RustFieldWriteRecords } from "./field-writes.js";
 import type { RustDeclarationEmissionRecords } from "./declaration-emission.js";
+import type { RustLexicalValueDeclaration } from "./lexical-values.js";
 import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "./native-declaration-forms.js";
 import type { RustNativeDeclarationLiveness } from "./native-liveness.js";
 import type { RustNativeCallableGenericContext } from "./native-generics.js";
@@ -89,6 +90,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly nativeTypeFamilyImplementations: RustRecordFamily<RustNativeDeclarationForms["implementations"]>;
   readonly declarationLiveness: RustRecordFamily<RustNativeDeclarationLiveness>;
   readonly nativeGenerics: RustRecordFamily<RustNativeCallableGenericContext>;
+  readonly lexicalValues: RustRecordFamily<readonly RustLexicalValueDeclaration[]>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;

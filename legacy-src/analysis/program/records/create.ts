@@ -80,6 +80,7 @@ import { createRustAssignmentWriteProducer } from "./assignment-writes.js";
 import { createRustBorrowedElementProducer } from "./borrowed-element-reads.js";
 import { createRustFieldWriteProducer } from "./field-writes.js";
 import { createRustDeclarationEmissionProducer } from "./declaration-emission.js";
+import { createRustLexicalValueProducer } from "./lexical-values.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -173,6 +174,7 @@ export function createRustProgramRecordBuilder(
   const borrowedElements = createRustBorrowedElementProducer(assertOpen);
   const fieldWrites = createRustFieldWriteProducer(assertOpen);
   const declarationEmission = createRustDeclarationEmissionProducer(assertOpen);
+  const lexicalValuePlans = createRustLexicalValueProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -185,6 +187,7 @@ export function createRustProgramRecordBuilder(
     nativeTypeFamilyImplementations: nativeDeclarations.implementations,
     declarationLiveness: nativeLiveness.declarations,
     nativeGenerics: nativeGenericPlans.records,
+    lexicalValues: lexicalValuePlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -274,6 +277,7 @@ export function createRustProgramRecordBuilder(
     borrowedElements,
     fieldWrites,
     declarationEmission,
+    lexicalValuePlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,
