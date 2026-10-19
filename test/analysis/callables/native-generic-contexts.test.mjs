@@ -40,10 +40,20 @@ for (const [name, source] of [
     const expected = owners.map(({ declaration }) => ({ declaration,
       original: program.callableValues.nativeGenericContexts.get(declaration),
       actual: result.value.get(declaration) }));
+    const specializations = owners.map(({ declaration }) => ({ declaration,
+      variants: program.sourceCallableSpecializations.variantsForCallable(declaration) }));
     for (const selected of guarded) selected.revoke();
     assert.equal(Object.isFrozen(result.value), true, "the published context index is immutable");
     assert.equal("set" in result.value, false, "publication exposes no writer");
     assert.equal(result.value.get({}) === undefined, true, "foreign nodes cannot inherit a context");
+    for (const { declaration, variants } of specializations) {
+      assert.equal(Object.isFrozen(variants), true, "the complete named specialization vector is frozen");
+      assert.equal(program.sourceCallableSpecializations.variantsForCallable(declaration) === variants, true,
+        "the published specialization read never filters or allocates another vector");
+      for (const variant of variants) assert.equal(
+        program.sourceCallableSpecializations.variantForCall(declaration, variant.targetTypeArguments) === variant, true,
+        "the exact unique published specialization is a lookup using the original native carrier equality");
+    }
     for (const { declaration, original, actual } of expected) {
       assert.equal(original !== undefined && actual !== undefined, true, "every original emitted owner is covered");
       assert.equal(result.value.get(declaration) === actual, true, "post-revocation access is the same stored value");

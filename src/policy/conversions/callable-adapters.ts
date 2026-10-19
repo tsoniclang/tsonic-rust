@@ -159,5 +159,5 @@ export function selectRustCallableParameterAdapters(
         target, adapter, read, fallible: adapter.fallible }));
     }
   }
-  return Object.freeze(adapters);
+  return snapshotClosedMetadata(adapters);
 }

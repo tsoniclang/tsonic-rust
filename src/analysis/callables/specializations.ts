@@ -355,7 +355,9 @@ function createRustSourceCallableSpecializationPlan(
   }
 
   assignCallableVariantNames(variants, input.ast, input.names, input.projectTypes, input.promiseBodyNames);
-  for (const declarationVariants of variants.values()) {
+  const publishedVariants = new Map<Node, readonly RustSourceCallableSpecializationVariant[]>();
+  const noVariants: readonly RustSourceCallableSpecializationVariant[] = Object.freeze([]);
+  for (const [declaration, declarationVariants] of variants) {
     declarationVariants.sort((left, right) => variantKey(left).localeCompare(variantKey(right), "en"));
     declarationVariants.forEach((variant) => {
       if (variant.targetName === undefined) {
@@ -366,6 +368,8 @@ function createRustSourceCallableSpecializationPlan(
       }
       Object.freeze(variant);
     });
+    publishedVariants.set(declaration, Object.freeze(declarationVariants.filter(
+      (variant): variant is RustSourceCallableSpecializationVariant => variant.targetName !== undefined)));
   }
   methodRequests.sort((left, right) => {
     const fileOrder = input.ast.getFileName(input.ast.getSourceFile(left.declaration)).localeCompare(
@@ -385,18 +389,11 @@ function createRustSourceCallableSpecializationPlan(
       return required.has(declaration);
     },
     variantsForCallable(declaration) {
-      return Object.freeze((variants.get(declaration) ?? []).filter(
-        (variant): variant is RustSourceCallableSpecializationVariant =>
-          variant.targetName !== undefined,
-      ));
+      return publishedVariants.get(declaration) ?? noVariants;
     },
     variantForCall(declaration, targetTypeArguments) {
-      const matches = (variants.get(declaration) ?? []).filter((variant) =>
-        variant.targetName !== undefined &&
+      return publishedVariants.get(declaration)?.find(variant =>
         targetTypeRefListsEqual(variant.targetTypeArguments, targetTypeArguments));
-      return matches.length === 1
-        ? matches[0] as RustSourceCallableSpecializationVariant
-        : undefined;
     },
   };
   return Object.freeze(plan);
