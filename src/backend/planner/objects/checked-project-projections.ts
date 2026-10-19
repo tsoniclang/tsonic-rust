@@ -1,12 +1,12 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustBlock, RustExpr, RustFunctionParam, RustGenerics, RustImplFunction, RustTraitFunction, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
-import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export const rustCheckedNativeProjectionGenerics: RustGenerics = {
   parameters: [],
@@ -32,11 +32,13 @@ export function rustCheckedNativeProjectionOutputParameter(): RustFunctionParam 
 export function checkedProjectProjectionResultType(
   carrier: TargetTypeRef, context: RustPlanContext,
 ): RustType | undefined {
-  const structural = rustStructuralObjectCarrierValue(carrier);
-  const trait = structural === undefined ? undefined : rustStructuralDispatchType(carrier, context);
-  const dispatch: RustType | undefined = structural === undefined ? rustProjectDispatchObjectType(carrier, context)
+  const selected = context.input.program.records.checkedProjectProjection.get(carrier);
+  if (selected === undefined || selected.kind === "excluded") failRustPlannerInvariant("An admitted checked projection requires its eligible native carrier form.");
+  const trait = selected.kind !== "structural" ? undefined : rustStructuralDispatchType(carrier, context);
+  const dispatch: RustType | undefined = selected.kind === "project" ? rustProjectDispatchObjectType(carrier, context)
     : trait === undefined ? undefined : { kind: "trait-object", principal: { trait }, autoTraits: [] };
-  return dispatch === undefined ? undefined : {
+  if (dispatch === undefined) failRustPlannerInvariant("An admitted checked projection requires its native dispatch syntax.");
+  return {
     kind: "named", path: "Option", genericArguments: [{ kind: "type", type: {
       kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: dispatch }],
     } }],
@@ -48,8 +50,11 @@ export function checkedProjectProjectionTypes(
   structuralCarriers: readonly TargetTypeRef[],
   context: RustPlanContext,
 ): readonly RustType[] | undefined {
-  const eligible = [...contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"))
-    .map(contract => contract.carrier), ...structuralCarriers];
+  const eligible = [...contracts.flatMap(contract => {
+    const selected = context.input.program.records.checkedProjectProjection.get(contract.carrier);
+    if (selected === undefined) failRustPlannerInvariant("An admitted checked projection contract requires its sealed eligibility.", contract.definition.declaration);
+    return selected.kind === "excluded" ? [] : [contract.carrier];
+  }), ...structuralCarriers];
   const types = eligible.map(carrier => checkedProjectProjectionResultType(carrier, context));
   return types.some(type => type === undefined) ? undefined
     : types.filter(type => type !== undefined);
