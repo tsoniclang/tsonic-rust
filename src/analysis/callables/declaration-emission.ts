@@ -35,20 +35,25 @@ export function analyzeRustCallableDeclarationEmission(input: {
     const alwaysExits = ast.is.IsBlock(body) ? program.records.statementExit.get(body) : true;
     if (alwaysExits === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable body requires its sealed source statement exit.", body);
     const canFallThrough = !alwaysExits;
+    const method = ast.is.IsMethodDeclaration(declaration) || ast.is.IsGetAccessorDeclaration(declaration) || ast.is.IsSetAccessorDeclaration(declaration);
     if (!isRustUnitCarrier(carrier) && canFallThrough && sourceReturn.fallthroughUndefined !== true) {
       reject(body, generator === undefined ? "rust.backend.return-flow" : "rust.backend.generator-return-flow",
-        generator === undefined ? "Value-returning functions require finalized control flow that returns or throws on every path."
+        generator === undefined ? method ? "Value-returning methods require finalized control flow that returns or throws on every path."
+          : "Value-returning functions require finalized control flow that returns or throws on every path."
+          : method ? "Value-returning generator methods require finalized control flow that returns on every path."
           : "Value-returning generators require finalized control flow that returns on every path.");
       continue;
     }
     if (generator !== undefined && program.records.fallible.get(declaration) !== undefined) {
-      reject(declaration, "rust.backend.generator-fallibility", "Throwing generator bodies require a closed Rust generator error protocol.");
+      reject(declaration, "rust.backend.generator-fallibility", method ? "Throwing generator method bodies require a closed Rust generator error protocol."
+        : "Throwing generator bodies require a closed Rust generator error protocol.");
       continue;
     }
-    const name = program.names.functionNameForDeclaration(declaration) ?? program.names.nameForDeclaration(declaration);
+    const name = method ? program.projectTypes.callableTargetName(declaration)
+      : program.names.functionNameForDeclaration(declaration) ?? program.names.nameForDeclaration(declaration);
     if (name === undefined) {
       if (ast.is.IsFunctionDeclaration(declaration)) failTargetAnalysisInvariant("tsonic-rust", "An admitted function declaration requires its sealed source name.", declaration);
-    } else if (!isValidRustIdentifier(name)) {
+    } else if (!method && !isValidRustIdentifier(name)) {
       reject(declaration, "rust.backend.function", `Function name '${name}' is not a valid Rust identifier.`);
       continue;
     }

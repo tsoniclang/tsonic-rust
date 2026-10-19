@@ -255,7 +255,7 @@ function planProjectPromiseObjectMethod(
   member: Node,
   outerContext: RustPlanContext,
   options: Parameters<typeof planProjectMethod>[2],
-): RustImplFunction | undefined {
+): RustImplFunction {
   const { ast } = outerContext.input.program.source;
   const callable = outerContext.input.program.records.callableDeclaration.get(member);
   const emission = outerContext.input.program.records.methodDeclaration.get(member);
@@ -273,7 +273,7 @@ function planProjectPromiseObjectMethod(
   const context = { ...genericPlan.context, syntheticNames };
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted Promise method requires its native parameter plan.", member);
-  const isStatic = ast.hasModifierKind(member, "static");
+  const isStatic = emission.isStatic;
   const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);
   if (!isStatic && selfMode === undefined) failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   const environment = planMethodEnvironmentParameter(member, context);
@@ -282,7 +282,8 @@ function planProjectPromiseObjectMethod(
   const receiverPlan = planRustSuspendedReceiver(asynchronous.lowering.kind === "factory"
     ? asynchronous.lowering.ownedReceiver : undefined, context);
   const receiver: RustExpr = asynchronous.lowering.kind === "factory" && asynchronous.lowering.ownedReceiver !== undefined
-    ? receiverPlan.context.expressionOverrides?.get(asynchronous.lowering.ownedReceiver.occurrences[0]!)?.expression ?? { kind: "path", path: "self" }
+    ? receiverPlan.context.expressionOverrides?.get(asynchronous.lowering.ownedReceiver.occurrences[0]!)?.expression ??
+      failRustPlannerInvariant("An admitted suspended method requires its exact owned receiver binding.", member)
     : { kind: "path", path: "self" };
   const genericArguments = rustPromiseBodyGenericArguments(nativeGenerics.finalizeGenerics());
   const moduleSlot = emission.staticSlot;
