@@ -90,6 +90,7 @@ import { analyzeRustSuspendedCallableEmission } from "../callables/suspended-emi
 import { analyzeRustConstructionEmission } from "../project-types/construction-emission.js";
 import { analyzeRustClassEmission } from "../declarations/classes/planning.js";
 import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.js";
+import { analyzeRustProjectEmission } from "../project-types/emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -521,6 +522,7 @@ export function analyzeRustTargetProgram(
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
+  analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);

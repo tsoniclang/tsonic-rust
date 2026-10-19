@@ -1,11 +1,10 @@
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
-import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import {
   rustSourceTypeCarrierValue,
-  rustTargetGenericReferences,
 } from "../../../../target-model/types/index.js";
 import type {
   RustExpr,
@@ -20,7 +19,9 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
-import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
@@ -40,7 +41,7 @@ export function rustProjectRootName(
   definition: RustProjectTypeDefinition,
 ): string {
   if (definition.rootName === undefined) {
-    throw new Error("Rust project root names exist only for project classes.");
+    failRustPlannerInvariant("Rust project root names exist only for project classes.", definition.declaration);
   }
   return definition.rootName;
 }
@@ -79,43 +80,23 @@ export function planRustProjectGenerics(
   context: RustPlanContext,
   parameterIndexes: readonly number[] = definition.genericParameters.map((_, index) => index),
 ): RustProjectGenericPlan {
-  const contract = context.input.program.declarationGenericRequirements.contractFor(definition.declaration);
-  if (contract === undefined) throw new Error("A source class has no sealed generic requirement contract.");
-  const boundsFor = (parameter: Extract<RustProjectTypeDefinition["genericParameters"][number], { readonly kind: "type" }>): readonly RustTypeBound[] => {
-    const selected = contract.typeParameters.find(candidate => candidate.identity === parameter.identity);
-    if (selected === undefined) throw new Error("A source class generic parameter lost its selected requirements.");
-    return rustTypeParameterBounds(parameter, selected.requirements, requiredTypeOutlives);
-  };
-  const selectedParameters = parameterIndexes.map(index => {
-    const parameter = definition.genericParameters[index];
-    if (parameter === undefined) throw new Error("A selected native generic parameter is outside its declaration.");
-    return parameter;
-  });
-  const typeIdentities = new Set(selectedParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
-  const lifetimeNames = new Set(selectedParameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime.name] : []));
-  const inScope = (carrier: TargetTypeRef): boolean => {
-    const references = rustTargetGenericReferences(carrier);
-    return references.typeIdentities.every(name => typeIdentities.has(name)) &&
-      references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimeNames.has(lifetime.name));
-  };
-  const bindings = selectedParameters.map((parameter): RustProjectGenericPlan["bindings"][number] =>
+  const selected = context.input.program.records.projectGenerics.get(definition, parameterIndexes, requiredTypeOutlives, context.promiseBody);
+  if (selected === undefined) failRustPlannerInvariant("An admitted source class requires its sealed native generic context.", definition.declaration);
+  const bindings = selected.parameters.map(({ parameter, requirements }): RustProjectGenericPlan["bindings"][number] =>
     parameter.kind === "lifetime"
       ? { argument: { kind: "lifetime", lifetime: parameter.lifetime }, parameter: {
-          kind: "lifetime",
-          name: parameter.lifetime.name,
-          outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
+          kind: "lifetime", name: parameter.lifetime.name, outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
         } }
       : { argument: { kind: "type", type: rustTypeParameterFromSourceContract(parameter) }, parameter: {
-          kind: "type",
-          name: context.typeParameterNames?.get(parameter.identity) ?? parameter.targetName,
-          bounds: boundsFor(parameter),
+          kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.targetName,
+          bounds: rustTypeParameterBounds(parameter, requirements, selected.outlives),
         } });
-  const optionalStorage = contract.optionalStorage.filter(entry => !entry.captured && inScope(entry.carrier));
-  const storageParameters = rustOptionalStorageParameters(optionalStorage, context);
-  bindings.push(...optionalStorage.map((entry, index) => ({
-    argument: { kind: "type" as const, type: entry.carrier }, parameter: storageParameters[index]!,
+  const storage = rustOptionalStorageParameters(selected.optionalStorage, context);
+  bindings.push(...selected.optionalStorage.map((entry, index) => ({
+    argument: { kind: "type" as const, type: entry.carrier }, parameter: storage[index]!,
   })));
-  return { bindings, wherePredicates: rustDeclarationAssociatedPredicates(definition.declaration, context, inScope) };
+  return { bindings, wherePredicates: [...rustAssociatedPredicates(selected.associated, context),
+    ...rustProjectProjectionPredicates(selected.projections, context)] };
 }
 
 function rustProjectGenericSyntax(plan: RustProjectGenericPlan): RustGenerics {
@@ -126,8 +107,8 @@ export function rustProjectDispatchObjectType(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustType | undefined {
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
+  const definition = context.input.program.records.projectType.get(carrier);
+  const representation = context.input.program.records.objectRepresentation.get(definition);
   const dispatch = rustProjectDispatchTraitType(carrier, context);
   return representation?.kind !== "open-hierarchy" ||
       representation.dispatchObjectLifetime === undefined || dispatch === undefined
@@ -175,7 +156,7 @@ export function rustProjectStateMarker(
     return undefined;
   }
   return {
-    name: context.input.program.projectTypes.stateMarkerFieldName(definition),
+    name: requiredProjectMarkerName(definition, parameterIndexes, context),
     type: {
       kind: "named",
       path: "core::marker::PhantomData",
@@ -206,7 +187,7 @@ function rustProjectGeneratedType(
   generatedName: (definition: RustProjectTypeDefinition) => string,
 ): RustType | undefined {
   const value = rustSourceTypeCarrierValue(carrier);
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
+  const definition = context.input.program.records.projectType.get(carrier);
   const path = value === undefined || definition === undefined
     ? undefined
     : sourceModuleItemPath(context, value.fileName, generatedName(definition));
@@ -239,4 +220,10 @@ function rustProjectGeneratedType(
       ? {}
       : { genericArguments: Object.freeze(genericArguments) }),
   };
+}
+
+function requiredProjectMarkerName(definition: RustProjectTypeDefinition, indexes: readonly number[], context: RustPlanContext): string {
+  const selected = context.input.program.records.projectGenerics.get(definition, indexes, [], context.promiseBody);
+  if (selected === undefined) failRustPlannerInvariant("An admitted native state marker requires its sealed generic context.", definition.declaration);
+  return selected.markerName;
 }

@@ -1,0 +1,61 @@
+import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { rustTargetGenericReferences } from "../../target-model/types/index.js";
+import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
+
+export function analyzeRustProjectEmission(input: {
+  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly nodes: readonly Node[];
+  readonly producer: RustProjectEmissionProducer;
+}): void {
+  const { program, producer } = input;
+  for (const definition of program.projectTypes.definitions) {
+    const representation = program.objectRepresentations.representationFor(definition);
+    producer.definition(definition, representation);
+    const indexes = new Map<string, readonly number[]>();
+    const all = definition.genericParameters.map((_, index) => index);
+    indexes.set(JSON.stringify(all), all);
+    const environment = program.classValues.forDeclaration(definition.declaration)?.environment;
+    if (environment !== undefined) indexes.set(JSON.stringify(environment.genericParameterIndexes), environment.genericParameterIndexes);
+    const source = program.declarationGenericRequirements.contractFor(definition.declaration);
+    if (source === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native project definition requires its complete generic contract.", definition.declaration);
+    const outlives: (readonly RustLifetimeRef[])[] = [[]];
+    if (representation?.dispatchObjectLifetime !== undefined) outlives.push([representation.dispatchObjectLifetime]);
+    for (const selectedIndexes of indexes.values()) {
+      const parameters = selectedIndexes.map(index => definition.genericParameters[index] ??
+        failTargetAnalysisInvariant("tsonic-rust", "A selected native generic parameter is outside its declaration.", definition.declaration));
+      const identities = new Set(parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
+      const lifetimes = new Set(parameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
+      const inScope = (carrier: TargetTypeRef): boolean => {
+        const references = rustTargetGenericReferences(carrier);
+        return references.typeIdentities.every(identity => identities.has(identity)) &&
+          references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimes.has(rustLifetimeKey(lifetime)));
+      };
+      const selectedParameters: RustProjectGenericEmission["parameters"] = Object.freeze(parameters.map(parameter => {
+        const requirements = parameter.kind === "type" ? source.typeParameters.find(candidate => candidate.identity === parameter.identity) : undefined;
+        if (parameter.kind === "type" && requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "A source class generic parameter lost its selected requirements.", parameter.declaration);
+        return Object.freeze({ parameter, requirements: requirements?.requirements ?? Object.freeze([]) });
+      }));
+      const optionalStorage = Object.freeze(source.optionalStorage.filter(entry => !entry.captured && inScope(entry.carrier)));
+      for (const body of [undefined, true] as const) {
+        const associated = body === undefined ? source : program.declarationGenericRequirements.contractFor(definition.declaration, body);
+        if (associated === undefined) continue;
+        for (const required of outlives) producer.generics(definition, selectedIndexes, required, body, {
+          parameters: selectedParameters, optionalStorage, outlives: Object.freeze(required),
+          associated: Object.freeze(associated.associatedTypes.filter(requirement => inScope(requirement.carrier))),
+          projections: Object.freeze(associated.projectProjections.filter(requirement => inScope(requirement.sourceCarrier) && inScope(requirement.targetCarrier))),
+          markerName: program.projectTypes.stateMarkerFieldName(definition),
+        });
+      }
+    }
+  }
+  for (const node of new Set(input.nodes)) {
+    const owner = program.projectTypes.definitionContainingDeclaration(node);
+    if (owner !== undefined) producer.member(node, owner);
+  }
+}
