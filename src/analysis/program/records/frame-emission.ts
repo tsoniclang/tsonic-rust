@@ -2,8 +2,14 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustFrameBindingEmission, RustFrameDefinitionEmission, RustFrameEmissionRecords, RustFrameInputAdmission } from "../../../target-model/records/frame-emission.js";
 import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCallableImplementation } from "../../../target-model/records/frame-callables.js";
+import type { RustClassFrameFieldEmission } from "../../../target-model/records/frame-emission.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export interface RustFrameEmissionProducer {
+  bindingDeclaration(subject: Node, value: RustFrameCallableBinding): void;
+  owner(subject: Node, value: RustFrameCallableDefinition): void;
+  classField(subject: Node, carrier: TargetTypeRef, value: RustClassFrameFieldEmission): void;
   readonly records: RustFrameEmissionRecords;
   binding(subject: RustFrameCallableBinding, value: RustFrameBindingEmission): void;
   input(subject: Node, value: ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>): void;
@@ -22,7 +28,13 @@ export function createRustFrameEmissionProducer(assertOpen: () => void): RustFra
   const receivers = new WeakMap<Node, Node>();
   const implementations = new WeakMap<Node, RustFrameCallableImplementation>();
   const scopes = new WeakMap<Node, readonly RustFrameCallableDefinition[]>();
+  const bindingDeclarations = new WeakMap<Node, RustFrameCallableBinding>();
+  const owners = new WeakMap<Node, RustFrameCallableDefinition>();
+  const fields = new WeakMap<Node, Map<string, RustClassFrameFieldEmission>>();
   return Object.freeze({ records: Object.freeze({
+    frameBindingDeclaration: Object.freeze({ get: (subject: Node) => bindingDeclarations.get(subject) }),
+    frameOwner: Object.freeze({ get: (subject: Node) => owners.get(subject) }),
+    classFrameField: Object.freeze({ get: (subject: Node, carrier: TargetTypeRef) => fields.get(subject)?.get(closedMetadataKey(carrier)) }),
     frameBinding: Object.freeze({ get: (subject: RustFrameCallableBinding) => bindings.get(subject) }),
     frameInput: Object.freeze({ get: (subject: Node) => inputs.get(subject) }),
     frameReceiverOwner: Object.freeze({ get: (subject: Node) => receivers.get(subject) }),
@@ -31,6 +43,24 @@ export function createRustFrameEmissionProducer(assertOpen: () => void): RustFra
     frameDeclaration: Object.freeze({ get: (subject: RustFrameCallableDefinition) => definitions.get(subject) }),
     frameDeclarations: Object.freeze({ get: (subject: SourceFile) => sources.get(subject) }),
   }),
+    bindingDeclaration(subject: Node, value: RustFrameCallableBinding): void {
+      assertOpen();
+      if (bindingDeclarations.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A canonical native frame binding has one declaration owner.", subject);
+      bindingDeclarations.set(subject, value);
+    },
+    owner(subject: Node, value: RustFrameCallableDefinition): void {
+      assertOpen();
+      if (owners.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native class activation has one frame owner.", subject);
+      owners.set(subject, value);
+    },
+    classField(subject: Node, carrier: TargetTypeRef, value: RustClassFrameFieldEmission): void {
+      assertOpen();
+      let receivers = fields.get(subject);
+      if (receivers === undefined) { receivers = new Map(); fields.set(subject, receivers); }
+      const key = closedMetadataKey(carrier);
+      if (receivers.has(key)) failTargetAnalysisInvariant("tsonic-rust", "An instantiated native frame field has one source owner.", subject);
+      receivers.set(key, Object.freeze(value));
+    },
     binding(subject: RustFrameCallableBinding, value: RustFrameBindingEmission): void {
       assertOpen();
       if (bindings.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native frame binding emission is written exactly once.", subject.declaration);

@@ -6,19 +6,30 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
+  readonly nodes: readonly Node[];
   readonly producer: RustFrameEmissionProducer;
 }): void {
   const { program } = input;
   const frames = program.callableValues.frames;
   const scopes = new Map<Node, RustFrameCallableDefinition[]>();
   const implementationDeclarations = new Set<Node>();
+  const bindingDeclarations = new Set<Node>();
   for (const [subject, value] of frames.activationInputs) input.producer.input(subject, value);
   for (const [subject, owner] of frames.receiverOwners) input.producer.receiver(subject, owner);
   for (const definition of frames.definitions) {
+    if (definition.activation.kind === "class") input.producer.owner(definition.activation.ownerDeclaration, definition);
+    for (const binding of definition.bindings) if (!bindingDeclarations.has(binding.declaration)) {
+      bindingDeclarations.add(binding.declaration);
+      const selected = frames.bindingFor(binding.declaration);
+      if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted frame binding requires its canonical source declaration.", binding.declaration);
+      input.producer.bindingDeclaration(binding.declaration, selected);
+    }
     if (definition.activation.kind === "lexical") {
       const existing = scopes.get(definition.activation.activationScope) ?? [];
       existing.push(definition);
@@ -59,4 +70,33 @@ export function analyzeRustFrameEmission(input: {
   }
   for (const sourceFile of input.sourceFiles) input.producer.sourceFile(sourceFile,
     frames.definitions.filter(definition => definition.ownerFileName === program.source.ast.getFileName(sourceFile)));
+  const fields = new WeakMap<Node, Set<string>>();
+  const field = (declaration: Node, receiver: TargetTypeRef): void => {
+    const binding = frames.bindingFor(declaration);
+    const definition = program.projectTypes.definitionForCarrier(receiver);
+    const frame = definition === undefined ? undefined : frames.definitionForOwner(definition.declaration);
+    if (binding === undefined || frame === undefined || !frame.bindings.includes(binding)) return;
+    let carriers = fields.get(declaration);
+    if (carriers === undefined) { carriers = new Set(); fields.set(declaration, carriers); }
+    const key = closedMetadataKey(receiver);
+    if (carriers.has(key)) return;
+    carriers.add(key);
+    const carrier = program.projectTypes.instantiateMemberCarrier(declaration, receiver, binding.carrier);
+    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted frame field requires its exact instantiated native carrier.", declaration);
+    const selected = rustTargetTypeRefEquals(carrier, binding.carrier) ? binding : Object.freeze({ ...binding, carrier });
+    if (selected !== binding) input.producer.binding(selected, { copy: selected.entry?.copy === true || selected.entry === undefined &&
+      isRustCopyCarrier(carrier, callable => program.callableValues.generic.definitionFor(callable)?.copy === true),
+      checkedWrite: program.frozenDataWrites.receiverForDeclaration(declaration) !== undefined });
+    input.producer.classField(declaration, receiver, { binding: selected, frame });
+  };
+  for (const node of input.nodes) {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-field" && operation.declaration !== undefined) field(operation.declaration, operation.receiverCarrier);
+  }
+  for (const definition of program.projectTypes.definitions) {
+    const frame = frames.definitionForOwner(definition.declaration);
+    if (frame === undefined) continue;
+    const receiver = program.projectTypes.openCarrier(definition);
+    for (const binding of frame.bindings) field(binding.declaration, receiver);
+  }
 }

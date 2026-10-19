@@ -2,6 +2,12 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCallableImplementation } from "./frame-callables.js";
 import type { RustGenericRequirement, RustAssociatedTypeRequirement } from "./generic-requirements.js";
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
+import type { TargetTypeRef } from "../types/model.js";
+
+export interface RustClassFrameFieldEmission {
+  readonly binding: RustFrameCallableBinding;
+  readonly frame: RustFrameCallableDefinition;
+}
 
 export interface RustFrameDefinitionEmission {
   readonly counterName: string | undefined;
@@ -12,6 +18,9 @@ export interface RustFrameDefinitionEmission {
 }
 
 export interface RustFrameEmissionRecords {
+  readonly frameBindingDeclaration: { readonly get: (subject: Node) => RustFrameCallableBinding | undefined };
+  readonly frameOwner: { readonly get: (subject: Node) => RustFrameCallableDefinition | undefined };
+  readonly classFrameField: { readonly get: (subject: Node, carrier: TargetTypeRef) => RustClassFrameFieldEmission | undefined };
   readonly frameBinding: { readonly get: (subject: RustFrameCallableBinding) => RustFrameBindingEmission | undefined };
   readonly frameInput: { readonly get: (subject: Node) => ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission> | undefined };
   readonly frameReceiverOwner: { readonly get: (subject: Node) => Node | undefined };

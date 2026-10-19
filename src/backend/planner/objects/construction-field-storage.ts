@@ -22,7 +22,7 @@ export interface RustConstructionFieldStorage {
 export function rustConstructionFieldStorage(
   declaration: Node, carrier: TargetTypeRef, context: RustPlanContext, plan: RustAdmittedConstruction,
 ): RustConstructionFieldStorage {
-  const binding = context.input.program.callableValues.frames.bindingFor(declaration);
+  const binding = context.input.program.records.frameBindingDeclaration.get(declaration);
   if (binding !== undefined) return {
     deferred: binding.initialization === "deferred", mutable: binding.storage === "value" &&
       plan.unpublishedMutations.has(declaration), retainedFieldOwner: false,
