@@ -8,6 +8,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import type { RustFrameOwner } from "./frame-owners.js";
+import type { RustBlockPlanner } from "../statements/model.js";
 import {
   resolveRustSourcePackageErrorBoundary,
   type RustSourcePackageErrorBoundary,
@@ -16,7 +17,7 @@ import {
 import { rustSourceItemIdentity } from "./source-package-facades.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 export { rustErrorType } from "./fallible-boundaries.js";
-import type { RustBlock, RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
+import type { RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import {
   isValidRustIdentifier,
   rustTargetIdentifier,
@@ -99,7 +100,7 @@ export interface RustPlanContext {
   readonly diagnostics: TargetDiagnostic[];
   readonly errorDomain: RustErrorDomain;
   readonly sourcePackageErrors: RustSourcePackageErrorPlan;
-  readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
+  readonly planBlock: RustBlockPlanner;
   readonly syntheticNames?: RustSyntheticNameState;
   readonly controlFlow?: RustControlFlowState;
   readonly controlTargets?: readonly RustControlTarget[];
