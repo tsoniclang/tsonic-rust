@@ -101,16 +101,7 @@ export function planProjectMethod(
   const generatorFact = context.input.program.records.generator.get(member);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const asyncFact = context.input.program.records.asyncFunction.get(member);
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        options?.promiseBody !== true && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? {
-          requiredStaticParameters: generatorFact?.capturedParameters ??
-            (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-              ? asyncFact.lowering.capturedParameters : []),
-        }
-      : {}),
-  });
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -403,9 +394,7 @@ function planProjectPromiseObjectMethod(
   if (genericPlan === undefined || nativeGenerics === undefined) return undefined;
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const context = { ...genericPlan.context, syntheticNames };
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    requiredStaticParameters: asynchronous.lowering.kind === "factory" ? asynchronous.lowering.capturedParameters : [],
-  });
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined || !requireRustCarrierRequirements(asynchronous.outputCarrier,
     asynchronous.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], member, context)) return undefined;
   const isStatic = ast.hasModifierKind(member, "static");

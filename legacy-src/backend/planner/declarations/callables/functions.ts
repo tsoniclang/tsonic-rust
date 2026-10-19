@@ -55,15 +55,12 @@ interface RustFunctionItemPlan {
 function planRustFunctionParameters(
   node: Node,
   inputContext: RustPlanContext,
-  requiredStaticParameters: readonly Node[],
 ) {
   const { ast } = inputContext.input.program.source;
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const environment = planRustLexicalFunctionEnvironment(node, { ...inputContext, syntheticNames });
   if (environment === undefined) return undefined;
-  const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames, {
-    requiredStaticParameters,
-  });
+  const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames);
   if (parameterPlan === undefined) return undefined;
   const leading = planRustCallableLeadingParameters(node, environment.context);
   if (leading === undefined) return undefined;
@@ -221,11 +218,7 @@ function planRustFunctionItem(
   if (genericPlan.preservesExplicitLifetimes) {
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
-  const parameters = planRustFunctionParameters(node, context,
-    generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
-      ? generatorFact.capturedParameters
-      : nativeBody === undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-        ? asyncFact.lowering.capturedParameters : []);
+  const parameters = planRustFunctionParameters(node, context);
   if (parameters === undefined) return undefined;
   const { params, parameterPlan, syntheticNames } = parameters;
   context = parameters.context;
@@ -449,9 +442,7 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   const adapterGenerics = planRustCallableGenerics(node, functionContext, specialization, lexical?.genericParameters);
   if (adapterGenerics === undefined) return undefined;
-  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context,
-    asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? asyncFact.lowering.capturedParameters : []);
+  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context);
   if (adapterParameters === undefined) return undefined;
   const adapterContext = adapterParameters.context;
   if (asyncFact?.kind !== "js-promise" ||
