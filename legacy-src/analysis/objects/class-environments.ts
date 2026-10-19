@@ -38,28 +38,7 @@ export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
   for (const sourceFile of walk.context.sourceFiles) visit(sourceFile);
 }
 
-export interface RustClassEnvironment {
-  readonly declaration: Node;
-  readonly carrier: TargetTypeRef;
-  readonly storage: "value" | "shared";
-  readonly copy: boolean;
-  readonly constructorValue: boolean;
-  readonly constructorIdentity: boolean;
-  readonly evaluatedConstructorValue: boolean;
-  readonly genericParameterIndexes: readonly number[];
-  readonly consumers: readonly Node[];
-  readonly initializationUsesEnvironment: boolean;
-  readonly instancesUseEnvironment: boolean;
-  readonly captures: readonly (RustClosureCaptureFact["captures"][number] & {
-    readonly fieldName: string;
-  })[];
-  readonly staticFields: readonly {
-    readonly declaration: Node;
-    readonly fieldName: string;
-    readonly carrier: TargetTypeRef;
-    readonly readonly: boolean;
-  }[];
-}
+import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
 
 export type RustClassEnvironmentSelection =
   | { readonly kind: "none" }

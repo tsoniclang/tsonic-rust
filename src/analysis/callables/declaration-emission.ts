@@ -11,7 +11,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
-  readonly program: RustTargetProgram;
+  readonly program: Omit<RustTargetProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly reachability: RustReachability;
   readonly producer: RustCallableDeclarationProducer;

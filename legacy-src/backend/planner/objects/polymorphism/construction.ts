@@ -51,7 +51,7 @@ export function planProjectClassConstructor(
   const environment = environmentSelection?.instancesUseEnvironment || environmentSelection?.initializationUsesEnvironment
     ? environmentSelection : undefined;
   const environmentParameter = environment === undefined ? undefined
-    : rustClassEnvironmentParameter(definition.declaration, context, "owned");
+    : rustClassEnvironmentParameter(environment, context, "owned");
   if (environment !== undefined && environmentParameter === undefined) return undefined;
   const fallible = context.input.program.records.fallible.get(safetyDeclaration) !== undefined;
   const boundary = fallible ? rustErrorBoundaryForDeclaration(safetyDeclaration, context) : undefined;

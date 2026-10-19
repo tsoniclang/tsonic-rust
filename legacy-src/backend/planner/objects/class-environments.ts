@@ -134,12 +134,10 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
 }
 
 export function rustClassEnvironmentParameter(
-  declaration: Node,
+  environment: Environment,
   context: RustPlanContext,
   mode: "owned" | "borrowed",
 ): RustFunctionParam | undefined {
-  const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
-  if (environment === undefined) return undefined;
   const type = mode === "owned" ? rustClassEnvironmentHandleType(environment.carrier, context)
     : rustClassEnvironmentType(environment.carrier, context);
   return type === undefined ? undefined : { name: environment.parameterName,

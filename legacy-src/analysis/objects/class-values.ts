@@ -6,7 +6,7 @@ import { closedMetadataKey, closedMetadataEquals, snapshotClosedMetadata } from 
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import type { RustClassEnvironment } from "./class-environments.js";
+import type { RustClassEnvironment, RustNamedClassEnvironment } from "../../target-model/records/class-values.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -38,13 +38,7 @@ export interface RustClassValueView {
 
 export interface RustClassValueDefinition {
   readonly declaration: Node;
-  readonly environment?: RustClassEnvironment & {
-    readonly typeName: string;
-    readonly instanceFieldName: string;
-    readonly bindingName: string;
-    readonly parameterName: string;
-    readonly identityFieldName: string;
-  };
+  readonly environment?: RustNamedClassEnvironment;
   readonly views: readonly RustClassValueView[];
 }
 

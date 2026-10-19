@@ -8,6 +8,7 @@ import type { RustMethodEmissionRecords } from "./method-emission.js";
 import type { RustFrameEmissionRecords } from "./frame-emission.js";
 import type { RustSuspendedCallableEmission, RustSuspendedCallableImplementation } from "./suspended-callables.js";
 import type { RustAdmittedConstruction } from "./construction.js";
+import type { RustNativeClassEmission } from "./class-emission.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
 import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
@@ -117,6 +118,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly suspendedDeclaration: RustRecordFamily<RustSuspendedCallableEmission>;
   readonly suspendedDeclarations: RustRecordFamily<readonly RustSuspendedCallableImplementation[]>;
   readonly classConstruction: RustRecordFamily<RustAdmittedConstruction>;
+  readonly nativeClass: RustRecordFamily<RustNativeClassEmission>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;

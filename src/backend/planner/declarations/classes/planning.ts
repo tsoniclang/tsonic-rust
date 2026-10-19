@@ -2,28 +2,11 @@ import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/s
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
-import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
 import {
-  diagnosticInput,
-  isValidRustIdentifier,
   rustErrorBoundaryForDeclaration,
   rustErrorType,
-  rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
-import {
-  rustAuthoredFieldDeadCodeDisposition,
-  rustProjectConstructorDeadCodeDisposition,
-} from "../../program/reachability-directives.js";
-import {
-  KindClassStaticBlockDeclaration,
-  Node_Initializer,
-  Node_Type,
-  sourceClassFieldIsTypeOnly,
-  sourceObjectMemberDeclarations,
-  sourceParameterIsProperty,
-} from "@tsonic/target-api/source";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planExpression } from "../../expressions/index.js";
 import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
@@ -53,16 +36,17 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import {
   rustProjectImplementationVisibility,
-  rustProjectMemberStorageVisibility,
 } from "../../objects/project-storage-abi.js";
 import { rustProjectStateIdentityImplementation } from "../../objects/project-identity.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
-import { rustCapturedFieldStorage, rustCapturedFieldType } from "../../objects/captured-fields.js";
+import { rustCapturedFieldType } from "../../objects/captured-fields.js";
 import { rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { rustClassFrameLayout } from "../../objects/frame-storage.js";
+import type { RustNativeClassEmission } from "../../../../target-model/records/class-emission.js";
+import type { RustDeadCodeDisposition } from "../../../../target-model/records/native-liveness.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -74,6 +58,7 @@ export interface PlannedProjectObjectField {
   readonly storageType: RustType;
   readonly visibility: import("../../../target-ast/syntax/nodes.js").RustVisibility;
   readonly initializer?: Node;
+  readonly deadCode?: RustDeadCodeDisposition;
 }
 
 export function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -81,228 +66,36 @@ export function carrierOf(context: RustPlanContext, node: Node | undefined) {
 }
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input.program.source;
-  const definition = context.input.program.projectTypes.definitionForDeclaration(node);
-  const className = context.input.program.names.nameForDeclaration(node) ?? "";
-  if (!isValidRustIdentifier(className)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class",
-      "Class names must be valid Rust identifiers.",
-    ));
-    return undefined;
-  }
-  const exported = ast.hasModifierKind(node, "export");
-  const publiclyReachable = definition !== undefined &&
-    context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, definition?.targetPath ?? className);
+  const selected = context.input.program.records.nativeClass.get(node);
+  if (selected?.kind !== "ordinary") failRustPlannerInvariant("An admitted ordinary class requires its sealed native declaration plan.", node);
+  const { definition, name: className, representation, publiclyReachable } = selected;
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
-  const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
-  if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class",
-      "Class inheritance and interface implementation are not supported by the Rust target.",
-    ));
-    return undefined;
-  }
-  if (definition?.kind !== "class") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class-definition",
-      "Class declaration has no exact project-type definition.",
-    ));
-    return undefined;
-  }
+  const structVisibility = selected.visibility;
   context = rustProjectTypeParameterContext(definition, context, "declaration");
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
-  if (representation === undefined || representation.kind === "open-hierarchy" ||
-    representation.kind === "closed-hierarchy") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class-representation",
-      "Non-polymorphic class declaration has no exact Rust object representation.",
-    ));
-    return undefined;
-  }
-  const openType = rustTypeFromCarrierInContext(
-    context.input.program.projectTypes.openCarrier(definition),
-    context,
-  );
-  if (openType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class-carrier",
-      "Class declaration has no renderable open Rust carrier.",
-    ));
-    return undefined;
-  }
-  const stateType = representation.kind === "value"
-    ? undefined
-    : rustProjectStateType(
-        context.input.program.projectTypes.openCarrier(definition),
-        context,
-      );
-  if (representation.kind !== "value" && stateType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class-state-carrier",
-      "Class declaration has no renderable named Rust state carrier.",
-    ));
-    return undefined;
-  }
+  const openType = rustTypeFromCarrierInContext(selected.carrier, context);
+  const stateType = representation.kind === "value" ? undefined : rustProjectStateType(selected.carrier, context);
+  if (openType === undefined || representation.kind !== "value" && stateType === undefined)
+    failRustPlannerInvariant("An admitted class requires its renderable native object and state carriers.", node);
   const generics = rustProjectGenerics(definition, context);
   const stateMarker = rustProjectStateMarker(definition, context);
-
-  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
-  if (layout?.kind !== "class") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class-layout",
-      "Class declaration has no deterministic Rust project-object layout.",
-    ));
-    return undefined;
-  }
-  const fields: PlannedProjectObjectField[] = [];
-  const constructorMembers: Node[] = [];
-  const methods: Node[] = [];
-  const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
-  let failed = false;
-  for (const member of sourceObjectMemberDeclarations(ast, node)) {
-    if (member === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.class-member",
-        "Class declaration contains an undefined member slot.",
-      ));
-      failed = true;
-      continue;
-    }
-    const memberKind = ast.kindName(member);
-    if (sourceClassFieldIsTypeOnly(ast, member)) continue;
-    if (memberKind === KindClassStaticBlockDeclaration) {
-      continue;
-    }
-    if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
-      if (ast.hasModifierKind(member, "static")) {
-        continue;
-      }
-      if (context.input.program.objectRepresentations.aliasFor(member) !== undefined) continue;
-      const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
-      const layoutField = layout.fields.find((field) => field.declaration === member);
-      if (layoutField === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class-field-layout",
-          `Class field '${fieldName}' has no exact project-object storage slot.`,
-        ));
-        failed = true;
-        continue;
-      }
-      const sourceFieldName = layoutField.sourceName;
-      const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
-      const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
-      if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class",
-          `Class field '${sourceFieldName}' has no supported Rust storage identity or carrier fact.`,
-        ));
-        failed = true;
-        continue;
-      }
-      const initializer = sourceParameterIsProperty(ast, member)
-        ? ast.name(member)
-        : Node_Initializer(ast, member);
-      fields.push({
-        declaration: member,
-        sourceName: layoutField.sourceName,
-        targetName: fieldName,
-        storageIndex: layoutField.storageIndex,
-        carrier: fieldCarrier,
-        type: fieldType,
-        storageType: context.input.program.callableValues.frames.bindingFor(member) === undefined
-          ? rustCapturedFieldType(rustCapturedFieldStorage(member, context), fieldType)
-          : rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(member)!, context)!,
-        visibility: rustProjectMemberStorageVisibility(ast, member, publiclyReachable),
-        ...(initializer === undefined ? {} : { initializer }),
-      });
-      continue;
-    }
-    if (memberKind === "KindConstructor") {
-      constructorMembers.push(member);
-      continue;
-    }
-    if (memberKind === "KindMethodDeclaration") {
-      if (ast.body(member) === undefined) {
-        const implementation = context.input.program.sourceNavigation
-          .callableImplementation(member);
-        if (implementation.kind !== "resolved" ||
-          implementation.implementation.declaration === member) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, member),
-            "rust.backend.method-implementation",
-            implementation.kind === "unresolved"
-              ? implementation.reason
-              : "Method overload declaration has no distinct concrete implementation.",
-          ));
-          failed = true;
-        }
-        continue;
-      }
-      methods.push(member);
-      continue;
-    }
-    if (memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
-      accessors.push({
-        declaration: member,
-        role: memberKind === "KindGetAccessor" ? "read" : "write",
-      });
-      continue;
-    }
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member),
-      "rust.backend.class",
-      "This class member is not supported by the Rust target.",
-    ));
-    failed = true;
-  }
-  const constructorImplementations = constructorMembers.filter((member) =>
-    ast.body(member) !== undefined);
-  if (constructorImplementations.length > 1 ||
-    (constructorMembers.length > 0 && constructorImplementations.length !== 1)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.constructor-implementation",
-      "Class constructor signatures must resolve to one concrete implementation body.",
-    ));
-    failed = true;
-  }
-  const constructorMember = constructorImplementations[0];
+  const fields = planClassFields(selected, context);
+  const constructorMember = selected.constructor;
+  const methods = selected.methods;
+  const accessors = selected.accessors;
   const methodProperties = projectOwnMethodProperties(
     definition,
-    context.input.program.projectTypes.openCarrier(definition),
+    selected.carrier,
     context,
   );
   if (methodProperties === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.method-property-layout",
-      "Class method properties have no exact mutable callable storage plan.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
   const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
-  const implementationType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), implementationContext);
+  const implementationType = rustTypeFromCarrierInContext(selected.carrier, implementationContext);
   const implementationGenerics = rustProjectGenerics(definition, implementationContext);
-  const implementationFields = fields.map(field => {
-    const type = rustTypeFromCarrierInContext(field.carrier, implementationContext);
-    return { ...field, type, storageType: type === undefined ? undefined
-      : context.input.program.callableValues.frames.bindingFor(field.declaration) === undefined
-        ? rustCapturedFieldType(rustCapturedFieldStorage(field.declaration, implementationContext), type)
-        : rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(field.declaration)!, implementationContext) };
-  });
-  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) return undefined;
+  const implementationFields = planClassFields(selected, implementationContext);
+  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   const constructorFn = planConstructor(
     node,
     constructorMember,
@@ -316,37 +109,25 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     publiclyReachable,
     implementationContext,
   );
-  if (failed || constructorFn === undefined) {
-    return undefined;
+  if (constructorFn === undefined) {
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
-    if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
     const planned = planProjectMethodVariants(method, implementationContext);
     if (planned === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
     }
     implFunctions.push(...planned);
   }
   for (const accessor of accessors) {
-    const targetName = context.input.program.projectTypes.memberSlotName(
-      accessor.declaration,
-      accessor.role,
-    );
-    if (targetName === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, accessor.declaration),
-        "rust.backend.accessor-slot",
-        "Class accessor has no deterministic Rust declaration slot.",
-      ));
-      return undefined;
-    }
+    const targetName = accessor.name;
     const planned = planProjectMethod(accessor.declaration, implementationContext, {
       targetName,
       safetyPlacement: accessor.role === "read" ? "getter" : "setter",
     });
     if (planned === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
     }
     implFunctions.push(planned);
   }
@@ -357,27 +138,22 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const emission = context.input.program.records.classDeclaration.get(node);
   if (emission === undefined) failRustPlannerInvariant("An admitted class requires its native declaration emission metadata.", node);
   const generatedStructAttributes = structAttributes(emission.nonCamelCaseName) ?? [];
-  const environment = context.input.program.classValues.forDeclaration(node)?.environment;
+  const environment = selected.environment;
   const environmentType = !environment?.instancesUseEnvironment ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
-  if (environment?.instancesUseEnvironment && environmentType === undefined) return undefined;
+  if (environment?.instancesUseEnvironment && environmentType === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   const stateCarrier = stateType === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation, environmentType);
-  const frame = context.input.program.callableValues.frames.definitionForOwner(node);
+  const frame = selected.frame;
   const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, context, storageVisibility);
-  if (frame !== undefined && frameLayout === undefined) return undefined;
+  if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   const valueFields: readonly RustStructField[] = [
     ...(frameLayout?.fields ?? []),
     ...(representation.kind !== "value" || environment === undefined || environmentType === undefined ? [] : [{
       name: environment.instanceFieldName, type: environmentType, visibility: "private" as const,
     }]),
     ...fields.filter(field => frameLayout?.ownsField(field.declaration) !== true).map((field): RustStructField => {
-      const deadCode = rustAuthoredFieldDeadCodeDisposition(
-        context,
-        node,
-        field.declaration,
-        field.visibility === "public",
-      );
+      const deadCode = field.deadCode;
       return {
         name: field.targetName,
         type: field.storageType,
@@ -405,7 +181,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
   const stateField: RustStructField | undefined = stateCarrier === undefined
     ? undefined
@@ -429,10 +205,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       ? undefined
       : [stateField];
   if (structFields === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
-  const explicitWrapperTraits = representation.kind !== "value" &&
-    generics.parameters.some(parameter => parameter.kind === "type");
+  const explicitWrapperTraits = selected.explicitWrapperTraits;
   const structItem: RustItem = {
     kind: "struct",
     name: className,
@@ -474,6 +249,8 @@ function planConstructor(
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input.program.source;
+  const selected = context.input.program.records.nativeClass.get(classDeclaration);
+  if (selected === undefined) failRustPlannerInvariant("An admitted constructor requires its native class emission.", classDeclaration);
   const isUnsafe = rustDeclarationRequiresUnsafe(
     classDeclaration,
     "constructor",
@@ -487,12 +264,8 @@ function planConstructor(
   );
   const body = member === undefined ? undefined : ast.body(member);
   if (member !== undefined && body === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, member),
-      "rust.backend.constructor-body",
-      "Constructor declaration has no concrete source body.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", node);
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
   const syntheticNames = createRustSyntheticNameState(
     ast,
@@ -503,24 +276,20 @@ function planConstructor(
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
     : planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
-  const selectedEnvironment = context.input.program.classValues.forDeclaration(classDeclaration)?.environment;
+  const selectedEnvironment = selected.environment;
   const environment = selectedEnvironment?.instancesUseEnvironment || selectedEnvironment?.initializationUsesEnvironment ? selectedEnvironment : undefined;
-  const environmentParameter = environment === undefined ? undefined : rustClassEnvironmentParameter(classDeclaration, context, "owned");
-  if (environment !== undefined && environmentParameter === undefined) return undefined;
+  const environmentParameter = environment === undefined ? undefined : rustClassEnvironmentParameter(environment, context, "owned");
+  if (environment !== undefined && environmentParameter === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
   const fallible = context.input.program.records.fallible.get(member ?? classDeclaration) !== undefined;
   const errorBoundary = fallible
     ? rustErrorBoundaryForDeclaration(member ?? classDeclaration, context)
     : undefined;
   if (fallible && errorBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, member ?? classDeclaration),
-      "rust.backend.constructor-error-boundary",
-      "Constructor has no exact source-package error boundary.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", node);
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
   if (fallible) {
     context.usedAliases?.add("rt");
@@ -533,6 +302,7 @@ function planConstructor(
     functionReturnType: classType,
     functionAbsenceReturnCarrier: undefined,
     fallibleBoundary: errorBoundary === undefined ? undefined : rustPackageFallibleBoundary(errorBoundary),
+    returnResult: errorBoundary === undefined ? undefined : { errorType: rustErrorType(errorBoundary) },
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -540,20 +310,20 @@ function planConstructor(
     planExpression,
   );
   if (parameterStatements === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
-  const definition = context.input.program.projectTypes.definitionForDeclaration(classDeclaration);
+  const definition = selected.definition;
   const constructionPlan = definition === undefined ? undefined
     : context.input.program.records.classConstruction.get(definition.declaration);
   if (definition === undefined || constructionPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, classDeclaration),
       "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
-    return undefined;
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   }
-  const frame = context.input.program.callableValues.frames.definitionForOwner(classDeclaration);
+  const frame = selected.frame;
   const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, constructorContext,
     rustProjectImplementationVisibility(publiclyReachable));
-  if (frame !== undefined && frameLayout === undefined) return undefined;
+  if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   const construction = planRustConstructionBody(constructionPlan, fields,
     classType,
     (values, identity, frameCounter, retainedFrame) => {
@@ -570,7 +340,7 @@ function planConstructor(
         ? undefined : { kind: "path", path: environment.parameterName }, identity);
     },
     constructorContext);
-  if (construction === undefined) return undefined;
+  if (construction === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
   const returnLabel = !constructionPlan.earlyReturnLayers.has(definition) ? undefined
     : { id: constructorContext.controlFlow!.nextLoopId++,
       label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
@@ -578,57 +348,50 @@ function planConstructor(
   const statements: RustStmt[] = [...parameterStatements, ...construction.declarations];
   for (const field of constructionPlan.fields) {
     const slot = construction.values.get(field.declaration);
-    if (slot === undefined) return undefined;
+    if (slot === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
     if (field.initializer !== undefined) {
       const prepared = construction.prepare(field.initializer, layerContext);
-      if (prepared === undefined) return undefined;
+      if (prepared === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
       const value = construction.input(field.declaration, field.initializer, prepared.context,
         () => planExpression(field.initializer!, prepared.context));
-      if (value === undefined) return undefined;
+      if (value === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
       const initialization = construction.initialize(field.declaration, value);
-      if (initialization === undefined) return undefined;
+      if (initialization === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
       statements.push(...prepared.before, ...prepared.finish(initialization));
     }
   }
   if (body !== undefined) {
     const bodyPlan = planStatementSequence(ast.statements(body), body, layerContext);
-    if (bodyPlan === undefined) return undefined;
+    if (bodyPlan === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
     statements.push(...returnLabel === undefined ? bodyPlan.statements
       : [{ kind: "scope" as const, label: returnLabel.label, body: { statements: bodyPlan.statements } }]);
   }
   statements.push(...construction.finish());
-  const constructorDeadCode = rustProjectConstructorDeadCodeDisposition(
-    context,
-    classDeclaration,
-    member ?? classDeclaration,
-    publiclyReachable,
-  );
+  const constructorDeadCode = selected.constructorDeadCode;
   const constructorAttributes = safetyAttributes;
   return { kind: "function",
     name: "new",
     ...(constructorDeadCode === undefined ? {} : { deadCode: constructorDeadCode }),
     generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}),
-    visibility: member === undefined ||
-        (!ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"))
-      ? "public"
-      : "private",
+    visibility: selected.constructorVisibility,
     ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     params,
     returnType: classType,
-    body: {
-      ...applyFallibleShape(
-        { statements },
-        fallible
-          ? {
-              fallible: true,
-              hasReturnValue: true,
-              errorType: rustErrorType(errorBoundary!),
-              inferErrorTypeFromReturnType: true,
-            }
-          : { fallible: false, hasReturnValue: true },
-      ),
-    },
+    body: { statements },
   };
+}
+
+function planClassFields(selected: RustNativeClassEmission, context: RustPlanContext): readonly PlannedProjectObjectField[] {
+  return Object.freeze(selected.fields.map(field => {
+    const type = rustTypeFromCarrierInContext(field.carrier, context);
+    const storageType = type === undefined ? undefined : field.frameBinding === undefined
+      ? rustCapturedFieldType(field.capturedStorage, type) : rustFrameBindingType(field.frameBinding, context);
+    if (type === undefined || storageType === undefined) failRustPlannerInvariant("An admitted class field requires its renderable native storage.", field.declaration);
+    return { declaration: field.declaration, sourceName: field.sourceName, targetName: field.targetName,
+      storageIndex: field.storageIndex, carrier: field.carrier, type, storageType, visibility: field.visibility,
+      ...(field.initializer === undefined ? {} : { initializer: field.initializer }),
+      ...(field.deadCode === undefined ? {} : { deadCode: field.deadCode }) };
+  }));
 }

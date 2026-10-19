@@ -20,6 +20,7 @@ import type { RustMethodEmissionProducer } from "./method-emission.js";
 import type { RustFrameEmissionProducer } from "./frame-emission.js";
 import type { RustSuspendedCallableProducer } from "./suspended-callables.js";
 import type { RustConstructionProducer } from "./construction.js";
+import type { RustClassEmissionProducer } from "./class-emission.js";
 import type { RustNativeDeclarationProducer } from "./native-declarations.js";
 import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustNativeGenericProducer } from "./native-generics.js";
@@ -128,6 +129,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly frameEmissionPlans: RustFrameEmissionProducer;
   readonly suspendedCallablePlans: RustSuspendedCallableProducer;
   readonly constructionPlans: RustConstructionProducer;
+  readonly classEmissionPlans: RustClassEmissionProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;

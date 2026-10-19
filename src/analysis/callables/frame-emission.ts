@@ -6,7 +6,7 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 export function analyzeRustFrameEmission(input: {
-  readonly program: RustTargetProgram;
+  readonly program: Omit<RustTargetProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustFrameEmissionProducer;
 }): void {

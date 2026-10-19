@@ -10,7 +10,7 @@ import { rustLocationTargetType } from "../../target-model/types/carriers/callab
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 
 export function analyzeRustLexicalFunctionEmission(input: {
-  readonly program: RustTargetProgram;
+  readonly program: Omit<RustTargetProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustLexicalFunctionProducer;
 }): void {

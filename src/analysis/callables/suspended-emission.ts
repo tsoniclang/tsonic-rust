@@ -10,7 +10,7 @@ import { rustCallablePhysicalSignature } from "../../target-model/conversions/ca
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 
 export function analyzeRustSuspendedCallableEmission(input: {
-  readonly program: RustTargetProgram;
+  readonly program: Omit<RustTargetProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustSuspendedCallableProducer;
 }): void {

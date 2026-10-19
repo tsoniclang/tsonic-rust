@@ -92,6 +92,7 @@ import { createRustMethodEmissionProducer } from "./method-emission.js";
 import { createRustFrameEmissionProducer } from "./frame-emission.js";
 import { createRustSuspendedCallableProducer } from "./suspended-callables.js";
 import { createRustConstructionProducer } from "./construction.js";
+import { createRustClassEmissionProducer } from "./class-emission.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -197,6 +198,7 @@ export function createRustProgramRecordBuilder(
   const frameEmissionPlans = createRustFrameEmissionProducer(assertOpen);
   const suspendedCallablePlans = createRustSuspendedCallableProducer(assertOpen);
   const constructionPlans = createRustConstructionProducer(assertOpen);
+  const classEmissionPlans = createRustClassEmissionProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -225,6 +227,7 @@ export function createRustProgramRecordBuilder(
     suspendedDeclaration: suspendedCallablePlans.implementations,
     suspendedDeclarations: suspendedCallablePlans.declarations,
     classConstruction: constructionPlans.records,
+    nativeClass: classEmissionPlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -326,6 +329,7 @@ export function createRustProgramRecordBuilder(
     frameEmissionPlans,
     suspendedCallablePlans,
     constructionPlans,
+    classEmissionPlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,

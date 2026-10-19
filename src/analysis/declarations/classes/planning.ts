@@ -1,0 +1,104 @@
+import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { Node_Initializer, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import type { RustTargetProgram } from "../../program/model.js";
+import type { RustReachability } from "../../reachability/model.js";
+import type { RustClassEmissionProducer } from "../../program/records/class-emission.js";
+import type { RustNativeClassField, RustNativeClassEmission } from "../../../target-model/records/class-emission.js";
+import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
+import { rustSourceItemIdentity } from "../../program/source-package-facades.js";
+import { rustProjectMemberIsPrivate } from "../../project-types/member-privacy.js";
+import { validatedRustCapturedFieldStorageFact } from "../../storage/receiver-captures.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+
+export function analyzeRustClassEmission(input: {
+  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly reachability: RustReachability;
+  readonly producer: RustClassEmissionProducer;
+}): readonly TargetDiagnostic[] {
+  const { program, reachability } = input;
+  const { ast } = program.source;
+  const issues: TargetDiagnostic[] = [];
+  const reject = (node: Node, message: string): void => {
+    issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: ["target.capability=rust.backend.class"] });
+  };
+  for (const definition of program.projectTypes.definitions) {
+    if (definition.kind !== "class") continue;
+    const declaration = definition.declaration;
+    const name = program.names.nameForDeclaration(declaration);
+    if (name === undefined || !isValidRustIdentifier(name)) {
+      reject(declaration, "Class names must be valid Rust identifiers.");
+      continue;
+    }
+    const representation = program.objectRepresentations.representationFor(definition);
+    const layout = program.projectTypes.objectLayoutForDefinition(definition);
+    if (representation === undefined || layout?.kind !== "class") failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its exact native representation and object layout.", declaration);
+    const polymorphic = program.projectTypes.isPolymorphic(definition);
+    if (!polymorphic && (ast.extendsHeritageElements(declaration).length !== 0 || ast.implementsHeritageElements(declaration).length !== 0)) {
+      reject(declaration, "Class inheritance and interface implementation are not supported by the Rust target.");
+      continue;
+    }
+    const component = program.sourcePackageComponents.componentForFile(definition.fileName);
+    const publiclyReachable = program.projectTypes.programErrorVariant(definition) !== undefined || component !== undefined &&
+      (component.publishesImplementationAbi || program.sourcePackageFacades.publicImplementationItemIdentitiesForComponent(component.componentId)
+        .includes(rustSourceItemIdentity(definition.fileName, definition.targetPath)));
+    const fields: RustNativeClassField[] = [];
+    const methods: Node[] = [];
+    const accessors: RustNativeClassEmission["accessors"][number][] = [];
+    const constructors: Node[] = [];
+    for (const member of sourceObjectMemberDeclarations(ast, declaration)) {
+      if (member === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its dense source member inventory.", declaration);
+      if (sourceClassFieldIsTypeOnly(ast, member) || ast.is.IsClassStaticBlockDeclaration(member)) continue;
+      if (ast.is.IsPropertyDeclaration(member) || sourceParameterIsProperty(ast, member)) {
+        if (ast.hasModifierKind(member, "static") || program.objectRepresentations.aliasFor(member) !== undefined) continue;
+        const field = layout.fields.find(field => field.declaration === member);
+        const targetName = program.projectTypes.fieldStorageName(definition, member);
+        const carrier = program.records.runtimeCarrier.get(member)?.carrier;
+        if (field === undefined || targetName === undefined || !isValidRustIdentifier(targetName) || carrier === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted class field requires its exact native slot, identifier and carrier.", member);
+        const visibility = rustProjectMemberIsPrivate(ast, member) ? "private" as const : publiclyReachable ? "public" as const : "crate" as const;
+        fields.push(Object.freeze({ ...field, targetName, carrier,
+          initializer: sourceParameterIsProperty(ast, member) ? ast.name(member) : Node_Initializer(ast, member), visibility,
+          deadCode: visibility === "public" || reachability.externallyReachable.has(declaration) || reachability.readAuthoredFields.has(member)
+            ? undefined : "authored-unread-field", frameBinding: program.callableValues.frames.bindingFor(member),
+          capturedStorage: validatedRustCapturedFieldStorageFact(member, program)?.storage }));
+      } else if (ast.kindName(member) === "KindConstructor") constructors.push(member);
+      else if (ast.is.IsMethodDeclaration(member)) {
+        if (ast.body(member) !== undefined && program.projectTypes.memberSlotName(member, "static") === undefined) methods.push(member);
+      } else if (ast.is.IsGetAccessorDeclaration(member) || ast.is.IsSetAccessorDeclaration(member)) {
+        const role = ast.is.IsGetAccessorDeclaration(member) ? "read" as const : "write" as const;
+        const targetName = program.projectTypes.memberSlotName(member, role);
+        if (targetName === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted accessor requires its exact native slot.", member);
+        accessors.push(Object.freeze({ declaration: member, role, name: targetName }));
+      } else reject(member, "This class member is not supported by the Rust target.");
+    }
+    const implemented = constructors.filter(constructor => ast.body(constructor) !== undefined);
+    if (implemented.length > 1 || constructors.length !== 0 && implemented.length !== 1)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires one exact implemented constructor.", declaration);
+    const constructor = implemented[0];
+    const requirements = program.declarationGenericRequirements.contractFor(declaration);
+    if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its finalized native generic contract.", declaration);
+    const typeIdentities = new Set(definition.genericParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
+    const lifetimes = new Set(definition.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
+    const hasStorageParameters = requirements.optionalStorage.some(entry => {
+      if (entry.captured) return false;
+      const references = rustTargetGenericReferences(entry.carrier);
+      return references.typeIdentities.every(identity => typeIdentities.has(identity)) &&
+        references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimes.has(rustLifetimeKey(lifetime)));
+    });
+    input.producer.classDeclaration(declaration, { kind: polymorphic ? "polymorphic" : "ordinary", name, definition,
+      carrier: program.projectTypes.openCarrier(definition), representation, publiclyReachable,
+      visibility: ast.hasModifierKind(declaration, "export") || publiclyReachable ? "public" : "crate",
+      explicitWrapperTraits: representation.kind !== "value" && (typeIdentities.size !== 0 || hasStorageParameters),
+      fields: Object.freeze(fields), constructor, methods: Object.freeze(methods), accessors: Object.freeze(accessors),
+      constructorVisibility: constructor === undefined || !ast.hasModifierKind(constructor, "private") && !ast.hasModifierKind(constructor, "protected") ? "public" : "private",
+      constructorDeadCode: publiclyReachable ? undefined : constructor === undefined
+        ? reachability.invokedProjectConstructors.has(declaration) ? undefined : "generated-retained-constructor"
+        : reachability.suppressedDeclarations.has(constructor) ? "authored-declaration" : undefined,
+      environment: program.classValues.forDeclaration(declaration)?.environment,
+      frame: program.callableValues.frames.definitionForOwner(declaration) });
+  }
+  return Object.freeze(issues);
+}

@@ -9,7 +9,7 @@ import { rustGenericCallableStorageArguments } from "../../target-model/types/ca
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustGenericEmission(input: {
-  readonly program: RustTargetProgram;
+  readonly program: Omit<RustTargetProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustGenericEmissionProducer;
 }): void {

@@ -9,7 +9,7 @@ import { rustSourceItemIdentity } from "../../program/source-package-facades.js"
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 
 export function analyzeRustMethodEmission(input: {
-  readonly program: RustTargetProgram;
+  readonly program: Omit<RustTargetProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustMethodEmissionProducer;
 }): readonly TargetDiagnostic[] {

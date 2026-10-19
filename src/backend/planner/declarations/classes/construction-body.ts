@@ -80,6 +80,7 @@ export function planRustConstructionBody(
   }
   const rootName = allocateRustSyntheticName(context.syntheticNames, "constructed");
   const root: RustExpr = { kind: "path", path: rootName };
+  const completion = (value: RustExpr): RustExpr => context.returnResult === undefined ? value : { kind: "call", path: "Ok", args: [value] };
   const exposure = plan.emission.exposure;
   const frameCarrier = exposure?.carrier;
   const frameType = frameCarrier === undefined ? undefined : rustFrameCallableTypes(frameCarrier, context)?.frameType;
@@ -239,7 +240,7 @@ export function planRustConstructionBody(
       }))];
     },
     finish: () => !plan.completesNormally ? []
-      : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: root }]
-      : [{ kind: "tail", expr: materialize(values, identity, frameCounter, retainedFrame) }],
+      : plan.publishesReceiver ? [...(final?.published ? [] : publication()), { kind: "tail", expr: completion(root) }]
+      : [{ kind: "tail", expr: completion(materialize(values, identity, frameCounter, retainedFrame)) }],
   };
 }
