@@ -1,6 +1,7 @@
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function initializeRustDeferredStorage(owner: RustExpr, payload: RustExpr, message: string): RustExpr {
   return { kind: "macro-invocation", path: "assert", delimiter: "parentheses", args: [{
@@ -16,7 +17,7 @@ export function initializeOrWriteRustDeferredStorage(
   message: string,
   mutable: boolean,
 ): RustExpr | undefined {
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("Admitted deferred storage requires its hygienic native emission scope.");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
   const ownerName = allocateRustSyntheticName(context.syntheticNames, "initialized_field");
   const selected: RustExpr = { kind: "path", path: valueName };
