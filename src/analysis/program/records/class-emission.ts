@@ -4,7 +4,8 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import { createRustRecordFamily } from "./family.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustNativeMemberVisibility, RustNativeMemberVisibilityRecords } from "../../../target-model/records/native-member-names.js";
-import type { RustClassEnvironmentRecords, RustClassEnvironmentTypeEmission } from "../../../target-model/records/class-environments.js";
+import type { RustClassEnvironmentRecords, RustClassEnvironmentTypeEmission, RustClassMemberEnvironmentEmission } from "../../../target-model/records/class-environments.js";
+import type { RustNamedClassEnvironment } from "../../../target-model/records/class-values.js";
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
@@ -14,6 +15,9 @@ export interface RustClassEmissionProducer {
   readonly visibilityRecords: RustNativeMemberVisibilityRecords;
   readonly environmentRecords: RustClassEnvironmentRecords;
   environment(subject: RustProjectTypeDefinition, value: RustClassEnvironmentTypeEmission): void;
+  memberEnvironment(subject: Node, value: RustClassMemberEnvironmentEmission): void;
+  staticEnvironment(subject: Node, value: RustNamedClassEnvironment): void;
+  callGenericArguments(subject: Node, count: number): void;
   visibility(subject: Node, value: RustNativeMemberVisibility): void;
   classDeclaration(subject: Node, value: RustNativeClassEmission): void;
 }
@@ -22,15 +26,36 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const visibility = new WeakMap<Node, RustNativeMemberVisibility>();
   const environments = new WeakMap<Node, RustClassEnvironmentTypeEmission>();
   const environmentsByFile = new Map<string, Map<string, RustClassEnvironmentTypeEmission>>();
+  const memberEnvironments = new WeakMap<Node, RustClassMemberEnvironmentEmission>();
+  const staticEnvironments = new WeakMap<Node, RustNamedClassEnvironment>();
+  const genericArguments = new WeakMap<Node, number>();
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
     environmentRecords: Object.freeze({
+      classMemberEnvironment: Object.freeze({ get: (subject: Node) => memberEnvironments.get(subject) }),
+      classStaticEnvironment: Object.freeze({ get: (subject: Node) => staticEnvironments.get(subject) }),
+      classCallGenericArguments: Object.freeze({ get: (subject: Node) => genericArguments.get(subject) }),
       classEnvironment: Object.freeze({ get: (subject: Node) => environments.get(subject) }),
       classEnvironmentType: Object.freeze({ get: (carrier: TargetTypeRef) => {
         const identity = rustSourceTypeCarrierValue(carrier);
         return identity === undefined ? undefined : environmentsByFile.get(identity.fileName)?.get(identity.typeName);
       } }),
     }),
+    memberEnvironment(subject: Node, value: RustClassMemberEnvironmentEmission): void {
+      assertOpen();
+      if (memberEnvironments.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native member environment has one producer.", subject);
+      memberEnvironments.set(subject, Object.freeze(value));
+    },
+    staticEnvironment(subject: Node, value: RustNamedClassEnvironment): void {
+      assertOpen();
+      if (staticEnvironments.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native static environment has one producer.", subject);
+      staticEnvironments.set(subject, value);
+    },
+    callGenericArguments(subject: Node, count: number): void {
+      assertOpen();
+      if (genericArguments.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native class call generic context has one producer.", subject);
+      genericArguments.set(subject, count);
+    },
     environment(subject: RustProjectTypeDefinition, value: RustClassEnvironmentTypeEmission): void {
       assertOpen();
       if (environments.has(subject.declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native class environment is written exactly once.", subject.declaration);

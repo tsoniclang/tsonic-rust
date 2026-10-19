@@ -66,6 +66,9 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly nativeMemberVisibility: import("./native-member-names.js").RustNativeMemberVisibilityRecords["nativeMemberVisibility"];
   readonly classEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironment"];
   readonly classEnvironmentType: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironmentType"];
+  readonly classMemberEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classMemberEnvironment"];
+  readonly classStaticEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classStaticEnvironment"];
+  readonly classCallGenericArguments: import("./class-environments.js").RustClassEnvironmentRecords["classCallGenericArguments"];
   readonly projectType: import("./project-emission.js").RustProjectEmissionRecords["projectType"];
   readonly projectDeclaration: import("./project-emission.js").RustProjectEmissionRecords["projectDeclaration"];
   readonly projectMemberOwner: import("./project-emission.js").RustProjectEmissionRecords["projectMemberOwner"];

@@ -11,6 +11,7 @@ import { rustProjectMemberIsPrivate } from "../../project-types/member-privacy.j
 import { validatedRustCapturedFieldStorageFact } from "../../storage/receiver-captures.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
 
 export function analyzeRustClassEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -28,7 +29,43 @@ export function analyzeRustClassEmission(input: {
     if (definition.kind !== "class") continue;
     const declaration = definition.declaration;
     const environment = program.classValues.forDeclaration(declaration)?.environment;
-    if (environment !== undefined) input.producer.environment(definition, { definition, environment });
+    if (environment !== undefined) {
+      const component = program.sourcePackageComponents.componentForFile(definition.fileName);
+      const publicEnvironment = component !== undefined && (component.publishesImplementationAbi ||
+        program.sourcePackageFacades.publicImplementationItemIdentitiesForComponent(component.componentId)
+          .includes(rustSourceItemIdentity(definition.fileName, environment.typeName)));
+      const generics = program.records.projectGenerics.get(definition, environment.genericParameterIndexes);
+      if (generics === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class environment requires its exact generic context.", declaration);
+      const representation = program.objectRepresentations.representationFor(definition);
+      const polymorphic = program.projectTypes.isPolymorphic(definition);
+      input.producer.environment(definition, { definition, environment,
+        module: ast.parent(declaration) === ast.getSourceFile(declaration), visibility: publicEnvironment ? "public" : "crate",
+        manualClone: environment.storage === "value" && (generics.parameters.length + generics.optionalStorage.length > 0 || !environment.copy),
+        captures: Object.freeze(environment.captures.map(capture => Object.freeze({ name: capture.fieldName,
+          carrier: capture.storage === "location" ? rustLocationTargetType(capture.carrier) : capture.carrier,
+          copy: capture.storage === "value" && isRustCopyCarrier(capture.carrier) }))),
+        fields: Object.freeze(environment.staticFields.map(field => {
+          const visibility = rustProjectMemberIsPrivate(ast, field.declaration) ? "private" as const : publicEnvironment ? "public" as const : "crate" as const;
+          const initializer = Node_Initializer(ast, field.declaration);
+          if (initializer === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class environment field requires its exact native initializer.", field.declaration);
+          return Object.freeze({ field, visibility, initializer,
+            deadCode: visibility === "public" || reachability.externallyReachable.has(declaration) || reachability.readAuthoredFields.has(field.declaration)
+              ? undefined : "authored-unread-field" as const });
+        })),
+      });
+      for (const member of sourceObjectMemberDeclarations(ast, declaration)) {
+        if (member === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class environment requires dense checked members.", declaration);
+        const isStatic = ast.hasModifierKind(member, "static");
+        if (environment.consumers.includes(member)) {
+          input.producer.callGenericArguments(member, generics.parameters.filter(selected => selected.parameter.kind !== "lifetime").length + generics.optionalStorage.length);
+          if (isStatic) input.producer.staticEnvironment(member, environment);
+        }
+        if (isStatic ? !environment.consumers.includes(member) : !environment.instancesUseEnvironment && ast.kindName(member) !== "KindConstructor") continue;
+        input.producer.memberEnvironment(member, { environment,
+          source: isStatic || ast.kindName(member) === "KindConstructor" ? "parameter" : polymorphic || representation?.kind === "value" ? "field" : "state",
+          borrowed: isStatic || !polymorphic && representation?.kind !== "value" });
+      }
+    }
     if (program.records.classDeclaration.get(declaration) === undefined) continue;
     const name = program.names.nameForDeclaration(declaration);
     if (name === undefined || !isValidRustIdentifier(name)) {

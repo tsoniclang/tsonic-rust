@@ -1,13 +1,12 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import type { Node } from "@tsonic/tsts";
-import { Node_Initializer } from "@tsonic/target-api/source";
-import type { RustClassValueDefinition } from "../../../analysis/objects/class-values.js";
+import type { RustNamedClassEnvironment } from "../../../target-model/records/class-values.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustSourceBindingPath, sourceModuleItemPath, rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
+import { rustSourceBindingPath, sourceModuleItemPath } from "../program/plan-context.js";
 import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/syntax/nodes.js";
-import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics, rustProjectStateMarker } from "./polymorphism/names.js";
 import { planExpression } from "../expressions/index.js";
@@ -17,31 +16,26 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import { rustClassEnvironmentType, rustClassEnvironmentHandleType } from "./class-environment-types.js";
-import { rustProjectImplementationVisibility, rustProjectMemberStorageVisibility } from "./project-storage-abi.js";
-import { rustAuthoredFieldDeadCodeDisposition } from "../program/reachability-directives.js";
 import { rustProjectTypeParameterContext } from "../names/type-parameters.js";
 
-type Environment = NonNullable<RustClassValueDefinition["environment"]>;
+type Environment = RustNamedClassEnvironment;
 
 export function planRustClassEnvironmentItems(declaration: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
-  if (environment === undefined) return [];
-  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
-  if (definition === undefined) return undefined;
+  const emission = context.input.program.records.classEnvironment.get(declaration);
+  if (emission === undefined) return [];
+  const { environment, definition } = emission;
   context = rustProjectTypeParameterContext(definition, context, "declaration");
   const fields: RustStructField[] = [];
-  const publiclyReachable = rustSourceItemIsPubliclyReachable(context, environment.typeName);
   if (environment.constructorIdentity) {
     context.usedAliases?.add("rt");
     fields.push({ name: environment.identityFieldName, visibility: "crate", type: {
       kind: "named", path: "core::cell::OnceCell", genericArguments: [{ kind: "type", type: { kind: "named", path: "rt::ObjectIdentity" } }],
     } });
   }
-  for (const capture of environment.captures) {
-    const type = rustTypeFromCarrierInContext(capture.storage === "location"
-      ? rustLocationTargetType(capture.carrier) : capture.carrier, context);
-    if (type === undefined) return undefined;
-    fields.push({ name: capture.fieldName, visibility: "private", type });
+  for (const capture of emission.captures) {
+    const type = rustTypeFromCarrierInContext(capture.carrier, context);
+    if (type === undefined) failRustPlannerInvariant("An admitted class capture requires its native storage carrier.", declaration);
+    fields.push({ name: capture.name, visibility: "private", type });
   }
   for (const field of environment.staticFields) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
@@ -56,14 +50,14 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   const marker = rustProjectStateMarker(definition, context, environment.genericParameterIndexes);
   if (marker !== undefined) fields.push({ name: marker.name, type: marker.type, visibility: "private" });
   const generics = rustProjectGenerics(definition, context, environment.genericParameterIndexes);
-  const manualClone = environment.storage === "value" && (generics.parameters.length > 0 || !environment.copy);
+  const manualClone = emission.manualClone;
   const target = manualClone ? rustClassEnvironmentType(environment.carrier, context) : undefined;
-  if (manualClone && target === undefined) return undefined;
+  if (manualClone && target === undefined) failRustPlannerInvariant("An admitted class environment Clone implementation requires its native type.", declaration);
   const identityOwner = environment.constructorIdentity ? rustClassEnvironmentType(environment.carrier, context) : undefined;
-  if (environment.constructorIdentity && identityOwner === undefined) return undefined;
-  const clonedFields: { readonly name: string; readonly value: RustExpr }[] = environment.captures.map(capture => {
-    const value: RustExpr = { kind: "field", receiver: { kind: "path", path: "self" }, name: capture.fieldName };
-    return { name: capture.fieldName, value: capture.storage === "value" && isRustCopyCarrier(capture.carrier) ? value
+  if (environment.constructorIdentity && identityOwner === undefined) failRustPlannerInvariant("An admitted class environment identity requires its native owner type.", declaration);
+  const clonedFields: { readonly name: string; readonly value: RustExpr }[] = emission.captures.map(capture => {
+    const value: RustExpr = { kind: "field", receiver: { kind: "path", path: "self" }, name: capture.name };
+    return { name: capture.name, value: capture.copy ? value
       : { kind: "method-call" as const, receiver: value, method: "clone", args: [] } };
   });
   if (marker !== undefined) clonedFields.push({ name: marker.name, value: marker.value });
@@ -80,7 +74,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
         kind: "call", path: "core::ptr::eq", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }],
       } }] },
     }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, members: [] }];
-  return [{ kind: "struct", name: environment.typeName, visibility: rustProjectImplementationVisibility(publiclyReachable),
+  return [{ kind: "struct", name: environment.typeName, visibility: emission.visibility,
     attrs: rustDeriveAttributes(environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : []), generics, fields },
     ...identityItems,
     ...(target === undefined ? [] : [
@@ -97,10 +91,12 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
 }
 
 export function planRustClassEnvironmentValue(declaration: Node, context: RustPlanContext): RustExpr | undefined {
-  const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
-  if (environment === undefined || context.syntheticNames === undefined) return undefined;
+  const emission = context.input.program.records.classEnvironment.get(declaration);
+  if (emission === undefined) return undefined;
+  const { environment, definition } = emission;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted class environment requires its native synthetic-name scope.", declaration);
   const type = rustClassEnvironmentType(environment.carrier, context);
-  if (type?.kind !== "named") return undefined;
+  if (type?.kind !== "named") failRustPlannerInvariant("An admitted class environment requires its native named type.", declaration);
   const fields: { name: string; value: RustExpr }[] = [];
   if (environment.constructorIdentity) fields.push({ name: environment.identityFieldName,
     value: { kind: "call", path: "core::cell::OnceCell::new", args: [] } });
@@ -108,24 +104,22 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
   for (const capture of environment.captures) {
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
-    if (path === undefined) return undefined;
+    if (path === undefined) failRustPlannerInvariant("An admitted class environment capture requires its exact native binding path.", capture.reference);
     const name = allocateRustSyntheticName(context.syntheticNames, "class_capture");
     const value = planRustCaptureValue(declaration, capture, path, capture.storage, context);
     bindings.push({ name, value });
     fields.push({ name: capture.fieldName, value: { kind: "path", path: name } });
   }
-  for (const field of environment.staticFields) {
-    const initializer = Node_Initializer(context.input.program.source.ast, field.declaration);
-    const value = initializer === undefined ? undefined : planExpression(initializer, context);
-    if (value === undefined) return undefined;
+  for (const selected of emission.fields) {
+    const { field } = selected;
+    const value = planExpression(selected.initializer, context);
+    if (value === undefined) failRustPlannerInvariant("An admitted class static initializer requires its native value.", field.declaration);
     const name = allocateRustSyntheticName(context.syntheticNames, "class_static");
     bindings.push({ name, value });
     const reference: RustExpr = { kind: "path", path: name };
     fields.push({ name: field.fieldName, value: field.readonly ? reference
       : { kind: "call", path: "core::cell::RefCell::new", args: [reference] } });
   }
-  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
-  if (definition === undefined) return undefined;
   const marker = rustProjectStateMarker(definition, context, environment.genericParameterIndexes);
   if (marker !== undefined) fields.push({ name: marker.name, value: marker.value });
   const value: RustExpr = { kind: "struct-literal", path: type.path, fields };
@@ -167,11 +161,11 @@ export function rustClassEnvironmentContext(
 }
 
 export function rustClassEnvironmentForCall(declaration: Node, context: RustPlanContext): RustExpr | undefined {
-  const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
+  const environment = context.input.program.records.classEnvironment.get(declaration)?.environment;
   if (environment === undefined) return undefined;
   const active = context.classEnvironment;
   const ast = context.input.program.source.ast;
-  if (ast.parent(declaration) === ast.getSourceFile(declaration)) {
+  if (context.input.program.records.classEnvironment.get(declaration)?.module === true) {
     const path = sourceModuleItemPath(context, ast.getFileName(ast.getSourceFile(declaration)), environment.bindingName);
     return path === undefined ? undefined : rustModuleCellAccess({ kind: "path", path }, "load", []);
   }
@@ -179,47 +173,33 @@ export function rustClassEnvironmentForCall(declaration: Node, context: RustPlan
 }
 
 export function rustOwnedClassEnvironmentForCall(declaration: Node, context: RustPlanContext, retained?: RustExpr): RustExpr | undefined {
-  const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
+  const environment = context.input.program.records.classEnvironment.get(declaration)?.environment;
   if (environment !== undefined && !environment.instancesUseEnvironment && !environment.initializationUsesEnvironment) return undefined;
   const value = retained ?? rustClassEnvironmentForCall(declaration, context);
   if (environment === undefined || value === undefined) return undefined;
-  const ast = context.input.program.source.ast;
-  if (retained !== undefined || ast.parent(declaration) === ast.getSourceFile(declaration)) return value;
+  if (retained !== undefined || context.input.program.records.classEnvironment.get(declaration)?.module === true) return value;
   if (!environment.copy) return { kind: "method-call", receiver: value, method: "clone", args: [] };
   return context.classEnvironment?.declaration === declaration && context.classEnvironment.borrowed
     ? { kind: "dereference", pointer: value } : value;
 }
 
 export function rustClassMemberEnvironmentContext(member: Node, context: RustPlanContext): RustPlanContext {
-  const definition = context.input.program.projectTypes.definitionContainingDeclaration(member);
-  const environment = definition === undefined ? undefined
-    : context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
-  if (environment === undefined) return context;
-  const ast = context.input.program.source.ast;
-  if (ast.hasModifierKind(member, "static") && !environment.consumers.includes(member)) return context;
-  if (!ast.hasModifierKind(member, "static") && !environment.instancesUseEnvironment && ast.kindName(member) !== "KindConstructor") return context;
-  const value: RustExpr = ast.hasModifierKind(member, "static") || ast.kindName(member) === "KindConstructor"
+  const selected = context.input.program.records.classMemberEnvironment.get(member);
+  if (selected === undefined) return context;
+  const { environment } = selected;
+  const value: RustExpr = selected.source === "parameter"
     ? { kind: "path", path: environment.parameterName }
-    : context.input.program.projectTypes.isPolymorphic(definition!) ||
-      context.input.program.objectRepresentations.representationFor(definition)?.kind === "value"
+    : selected.source === "field"
       ? { kind: "field", receiver: context.projectDispatchRoot ?? { kind: "path", path: "self" }, name: environment.instanceFieldName }
-      : { kind: "method-call", receiver: {
-        kind: "field", receiver: { kind: "path", path: "self" }, name: "state",
-      }, method: "context", args: [] };
-  const selected = rustClassEnvironmentContext(environment, value, context);
-  return { ...selected, classEnvironment: { declaration: environment.declaration, expression: value,
-    borrowed: ast.hasModifierKind(member, "static") ||
-      !context.input.program.projectTypes.isPolymorphic(definition!) &&
-        context.input.program.objectRepresentations.representationFor(definition)?.kind !== "value",
-  } };
+      : { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "self" }, name: "state" }, method: "context", args: [] };
+  const input = rustClassEnvironmentContext(environment, value, context);
+  return { ...input, classEnvironment: { declaration: environment.declaration, expression: value, borrowed: selected.borrowed } };
 }
 
 export function rustClassStaticEnvironmentForCall(member: Node | undefined, context: RustPlanContext, retained?: RustExpr): RustExpr | undefined {
-  if (member === undefined || !context.input.program.source.ast.hasModifierKind(member, "static")) return undefined;
-  const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
-  const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
-  if (environment === undefined || !environment.consumers.includes(member)) return undefined;
-  return retained ?? rustClassEnvironmentForCall(environment.declaration, context);
+  if (member === undefined) return undefined;
+  const environment = context.input.program.records.classStaticEnvironment.get(member);
+  return environment === undefined ? undefined : retained ?? rustClassEnvironmentForCall(environment.declaration, context);
 }
 
 export function rustClassStaticCallGenericArguments(
@@ -228,10 +208,6 @@ export function rustClassStaticCallGenericArguments(
   context: RustPlanContext,
 ): readonly RustCallGenericArgument[] | undefined {
   if (member === undefined || arguments_ === undefined) return arguments_;
-  const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
-  const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
-  if (owner === undefined || environment === undefined || !environment.consumers.includes(member)) return arguments_;
-  const captured = rustProjectGenerics(owner, context, environment.genericParameterIndexes);
-  return [...arguments_, ...captured.parameters.flatMap((parameter): readonly RustCallGenericArgument[] =>
-    parameter.kind === "lifetime" ? [] : [{ kind: "type", type: { kind: "infer" } }])];
+  const count = context.input.program.records.classCallGenericArguments.get(member);
+  return count === undefined ? arguments_ : [...arguments_, ...Array.from({ length: count }, (): RustCallGenericArgument => ({ kind: "type", type: { kind: "infer" } }))];
 }
