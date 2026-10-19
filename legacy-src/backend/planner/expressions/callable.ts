@@ -327,7 +327,7 @@ export function planRustCallableExpressionBody(
       "rust.backend.closure-invocation-owner", "A suspended callable's retained owner conflicts with its finalized callable contract."));
     return undefined;
   }
-  const leadingPlan = planRustCallableLeadingParameters(node, leadingParameters, context);
+  const leadingPlan = planRustCallableLeadingParameters(node, context);
   if (leadingPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
