@@ -17,6 +17,7 @@ export function analyzeRustMethodEmission(input: {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   for (const definition of program.projectTypes.definitions) {
+    if (definition.kind === "class" && program.records.classDeclaration.get(definition.declaration) === undefined) continue;
     const members = sourceObjectMemberDeclarations(ast, definition.declaration).filter((member): member is Node =>
       member !== undefined && (ast.is.IsMethodDeclaration(member) || ast.kindName(member) === "KindMethodSignature"));
     input.producer.classDeclaration(definition.declaration, members);
@@ -25,6 +26,7 @@ export function analyzeRustMethodEmission(input: {
     if (!ast.is.IsMethodDeclaration(member) && !ast.is.IsGetAccessorDeclaration(member) && !ast.is.IsSetAccessorDeclaration(member)) continue;
     const owner = program.projectTypes.definitionContainingDeclaration(member);
     if (owner === undefined) continue;
+    if (owner.kind === "class" && program.records.classDeclaration.get(owner.declaration) === undefined) continue;
     const name = program.projectTypes.callableTargetName(member);
     if (name === undefined || !isValidRustIdentifier(name)) {
       issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: member,
@@ -35,7 +37,8 @@ export function analyzeRustMethodEmission(input: {
     const body = ast.body(member);
     if (body === undefined) {
       const implementation = program.sourceNavigation.callableImplementation(member);
-      if (implementation.kind !== "resolved" || implementation.implementation.declaration === member)
+      if (!ast.hasModifierKind(member, "abstract") && owner.kind !== "interface" &&
+        (implementation.kind !== "resolved" || implementation.implementation.declaration === member))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted method overload requires its exact concrete source implementation.", member);
     }
     const isStatic = ast.hasModifierKind(member, "static");

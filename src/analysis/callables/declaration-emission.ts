@@ -27,7 +27,8 @@ export function analyzeRustCallableDeclarationEmission(input: {
     if (!ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsFunctionExpression(declaration) && !ast.is.IsArrowFunction(declaration) &&
       !ast.is.IsMethodDeclaration(declaration) && !ast.is.IsGetAccessorDeclaration(declaration) && !ast.is.IsSetAccessorDeclaration(declaration)) continue;
     const body = ast.body(declaration);
-    if (body === undefined || program.records.nativeParticipation.get(declaration) === "erased") continue;
+    if (body === undefined || program.records.nativeParticipation.get(declaration) === "erased" ||
+      program.records.nativeUnreachable.get(declaration) === true || program.records.compileTimeSource.get(declaration) !== undefined) continue;
     const sourceReturn = program.records.sourceCallableReturn.get(declaration);
     const asyncFact = program.records.asyncFunction.get(declaration);
     const generator = program.records.generator.get(declaration);

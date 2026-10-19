@@ -23,14 +23,15 @@ export interface RustGenericMemberEmission {
   } | undefined;
 }
 
-export interface RustGenericDefinitionEmission {
+export type RustGenericDefinitionEmission = {
   readonly identity: RustGenericCallableIdentitySelection | undefined;
-  readonly invoked: boolean;
+} & ({ readonly invoked: false } | {
+  readonly invoked: true;
   readonly result: TargetTypeRef;
   readonly parameters: readonly TargetTypeRef[];
   readonly nativeFuture: { readonly optional: boolean } | undefined;
   readonly members: ReadonlyMap<RustGenericCallablePhysicalMember, RustGenericMemberEmission>;
-}
+});
 
 export interface RustGenericDeclarationInventory {
   readonly implementations: readonly RustGenericCallableImplementation[];

@@ -15,6 +15,7 @@ export function analyzeRustConstructionEmission(input: {
     .map(context => [context.use.subject, context]));
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
+    if (program.records.classDeclaration.get(definition.declaration) === undefined) continue;
     const plan = program.projectConstructions.forDefinition(definition);
     if (plan === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its complete construction readiness plan.", definition.declaration);
     const rejected = [...plan.issues, ...plan.emission.issues];

@@ -30,6 +30,11 @@ export function analyzeRustGenericEmission(input: {
   const physical = generic.physical.definitions();
   for (const definition of physical) {
     const invoked = program.callableValues.genericDispatch.requiredFor(definition);
+    const identity = program.callableValues.genericIdentities.forDefinition(definition);
+    if (!invoked) {
+      producer.definition(definition, { invoked: false, identity });
+      continue;
+    }
     const completion = program.callableValues.genericCompletions.forDefinition(definition);
     const carrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
       environment: definition.signature.environmentParameters });
@@ -65,7 +70,7 @@ export function analyzeRustGenericEmission(input: {
       }));
     }
     producer.definition(definition, { invoked, result: future?.output ?? completion.result, parameters: protocol.parameters,
-      identity: program.callableValues.genericIdentities.forDefinition(definition),
+      identity,
       nativeFuture: future === undefined ? undefined : Object.freeze({ optional: future.optional }), members });
   }
   for (const sourceFile of input.sourceFiles) {

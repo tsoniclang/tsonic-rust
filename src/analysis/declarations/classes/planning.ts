@@ -27,6 +27,7 @@ export function analyzeRustClassEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
     const declaration = definition.declaration;
+    if (program.records.classDeclaration.get(declaration) === undefined) continue;
     const name = program.names.nameForDeclaration(declaration);
     if (name === undefined || !isValidRustIdentifier(name)) {
       reject(declaration, "Class names must be valid Rust identifiers.");
