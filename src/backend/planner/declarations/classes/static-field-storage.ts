@@ -6,7 +6,6 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { isValidRustIdentifier, sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustModuleCellAccess } from "../../project/module-storage.js";
 import { rustClassEnvironmentForCall } from "../../objects/class-environments.js";
-import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planExpression } from "../../expressions/entry.js";
 
@@ -21,7 +20,7 @@ function rustSourceStaticFieldCell(
 ): RustExpr | undefined {
   const path = sourceModuleItemPath(context, fact.storageFileName, fact.storageName);
   if (path === undefined || !isValidRustIdentifier(fact.storageName)) {
-    return undefined;
+    failRustPlannerInvariant("An admitted static field requires its native storage identifier and module path.", fact.declaration);
   }
   return { kind: "path", path };
 }
@@ -34,7 +33,7 @@ export function readRustSourceStaticField(
   if (local !== undefined) {
     const value: RustExpr = local.readonly ? local.field
       : { kind: "method-call", receiver: local.field, method: "borrow", args: [] };
-    const read: RustExpr = isRustCopyCarrier(fact.resultCarrier)
+    const read: RustExpr = local.copy
       ? local.readonly ? value : { kind: "dereference", pointer: value }
       : { kind: "method-call", receiver: value, method: "clone", args: [] };
     if (local.bindings.length === 0) return read;
@@ -44,12 +43,13 @@ export function readRustSourceStaticField(
   }
   const cell = rustSourceStaticFieldCell(fact, context);
   if (cell === undefined) {
-    return undefined;
+      failRustPlannerInvariant("An admitted static field requires its native module cell.", fact.declaration);
   }
   const read = rustModuleCellAccess(cell, "load", []);
   if (fact.classReceiver === undefined) return read;
   const receiver = planExpression(fact.classReceiver, context);
-  return receiver === undefined ? undefined : { kind: "evaluate-then", effect: receiver, discard: "value", value: read };
+  if (receiver === undefined) failRustPlannerInvariant("An admitted static field requires its native class receiver.", fact.declaration);
+  return { kind: "evaluate-then", effect: receiver, discard: "value", value: read };
 }
 
 export function planRustSourceStaticFieldStorage(
@@ -60,16 +60,16 @@ export function planRustSourceStaticFieldStorage(
   readonly read: RustExpr;
   readonly write: (value: RustExpr) => RustExpr;
 } | undefined {
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted static field write requires its native local-name allocator.", fact.declaration);
   const name = allocateRustSyntheticName(context.syntheticNames, "static_field");
   const reference: RustExpr = { kind: "path", path: name };
   const local = classStaticField(fact, context);
   if (local !== undefined) {
-    if (local.readonly) return undefined;
+    if (local.readonly) failRustPlannerInvariant("An admitted static field write requires its writable environment slot.", fact.declaration);
     const borrowed: RustExpr = { kind: "method-call", receiver: reference, method: "borrow", args: [] };
     return {
       bindings: [...local.bindings, { name, value: { kind: "reference", expr: local.field } }],
-      read: isRustCopyCarrier(fact.resultCarrier) ? { kind: "dereference", pointer: borrowed }
+      read: local.copy ? { kind: "dereference", pointer: borrowed }
         : { kind: "method-call", receiver: borrowed, method: "clone", args: [] },
       write: value => ({ kind: "evaluate-then", discard: "unit", effect: {
         kind: "assignment", operator: "=", value, target: {
@@ -80,10 +80,10 @@ export function planRustSourceStaticFieldStorage(
   }
   const cell = rustSourceStaticFieldCell(fact, context);
   if (cell === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted static field write requires its native module cell.", fact.declaration);
   }
   const receiver = fact.classReceiver === undefined ? undefined : planExpression(fact.classReceiver, context);
-  if (fact.classReceiver !== undefined && receiver === undefined) return undefined;
+  if (fact.classReceiver !== undefined && receiver === undefined) failRustPlannerInvariant("An admitted static field write requires its native class receiver.", fact.declaration);
   return {
     bindings: [...(receiver === undefined ? [] : [{ name: allocateRustSyntheticName(context.syntheticNames, "_class_receiver"), value: receiver }]),
       { name, value: rustModuleCellAccess(cell, "location", []) }],
@@ -96,15 +96,15 @@ function classStaticField(fact: RustSourceStaticFieldFact, context: RustPlanCont
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly field: RustExpr;
   readonly readonly: boolean;
+  readonly copy: boolean;
 } | undefined {
-  const owner = context.input.program.projectTypes.definitionContainingDeclaration(fact.declaration);
-  const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
-  if (environment === undefined || context.input.program.source.ast.parent(environment.declaration) ===
-    context.input.program.source.ast.getSourceFile(environment.declaration)) return undefined;
-  const field = environment.staticFields.find(field => field.declaration === fact.declaration);
+  const selected = context.input.program.records.staticFieldStorage.get(fact.declaration);
+  if (selected === undefined) failRustPlannerInvariant("An admitted static field requires its sealed native storage selection.", fact.declaration);
+  const environment = selected.environment;
+  if (environment === undefined) return undefined;
   let receiver = fact.classReceiver === undefined ? rustClassEnvironmentForCall(environment.declaration, context)
     : planExpression(fact.classReceiver, context);
-  if (field === undefined || receiver === undefined) throw new Error("A local static field lost its sealed environment storage.");
+  if (receiver === undefined) failRustPlannerInvariant("An admitted local static field requires its native environment receiver.", fact.declaration);
   const bindings: { name: string; value: RustExpr }[] = [];
   if (fact.classReceiver !== undefined) {
     if (context.syntheticNames === undefined) failRustPlannerInvariant("A selected class receiver has no native local-name allocator.", fact.declaration);
@@ -112,5 +112,5 @@ function classStaticField(fact: RustSourceStaticFieldFact, context: RustPlanCont
     bindings.push({ name, value: receiver });
     receiver = { kind: "path", path: name };
   }
-  return { bindings, field: { kind: "field", receiver, name: field.fieldName }, readonly: field.readonly };
+  return { bindings, field: { kind: "field", receiver, name: environment.name }, readonly: environment.readonly, copy: selected.copy };
 }

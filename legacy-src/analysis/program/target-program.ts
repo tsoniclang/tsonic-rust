@@ -80,6 +80,7 @@ import { analyzeRustDeclarationEmission } from "../declarations/emission.js";
 import { analyzeRustLexicalValues } from "../callables/lexical-values.js";
 import { analyzeRustNativeProtocolEmission } from "../callables/native-protocol-emission.js";
 import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emission.js";
+import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
 
 export function analyzeRustTargetProgram(
@@ -490,6 +491,8 @@ export function analyzeRustTargetProgram(
   analyzeRustFieldWrites({ program, nodes: context.nativeNodes, producer: context.records.fieldWrites, required: context.requiredRecords });
   analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes, producer: context.records.declarationEmission, required: context.requiredRecords });
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
+  const classInitializationIssues = analyzeRustClassInitialization({ program, nodes: context.nativeNodes, producer: context.records.classInitializationPlans });
+  if (classInitializationIssues.length !== 0) return rejectedTargetStage(classInitializationIssues);
   const nativeProtocolIssues = analyzeRustNativeProtocolEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.nativeProtocolPlans });
   if (nativeProtocolIssues.length !== 0) return rejectedTargetStage(nativeProtocolIssues);
   analyzeRustGenericErrorEmission({ ast: context.ast, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
