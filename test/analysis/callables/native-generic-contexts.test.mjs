@@ -15,6 +15,14 @@ for (const [name, source] of [
       return next;
     }
   `],
+  ["Promise source and native-body facets", `
+    import type { int32 } from "@tsonic/core/types.js";
+    import type { Life, Ref } from "@tsonic/rust/types.js";
+    import { load } from "@tsonic/rust/lang.js";
+    export async function read<Region extends Life>(value: Ref<int32, Region>): Promise<int32> {
+      return load(value);
+    }
+  `],
   ["retained and forwarded native inputs", retainedPointerInputSource],
 ]) {
   test(`native generic contexts publish original-owner data before source revocation: ${name}`, () => {

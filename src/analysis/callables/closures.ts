@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 
@@ -16,7 +17,6 @@ import {
   Node_Name,
   Node_Type,
   sourceLexicalEnvironment,
-  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 
 import {
@@ -111,8 +111,15 @@ export function resolveFunctionExpressionCarrier(
   },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
-  if ((ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) &&
-    sourceCallableDefinitionIsDiscarded(expression, ast)) return setCarrierFact(walk, expression, rustUnitTargetType());
+  if (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) {
+    const participation = walk.context.records.nativeParticipation.get(expression);
+    if (participation === undefined) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Anonymous callable source carrier requires its published native participation.",
+        expression);
+    }
+    if (participation === "erased") return setCarrierFact(walk, expression, rustUnitTargetType());
+  }
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
