@@ -551,7 +551,7 @@ export function planRustLocationStorage(
       const receiver = Node_Expression(context.input.program.source.ast, expression);
       const value = receiver === undefined ? undefined : planExpression(receiver, context);
       return value === undefined ? undefined
-        : readRustStructuralObjectField(value, field.targetName, rustLocationTargetType(field.carrier));
+        : readRustStructuralObjectField(value, field.targetName, rustLocationTargetType(field.carrier), context);
     }
   }
   if (expression === rootExpression) {

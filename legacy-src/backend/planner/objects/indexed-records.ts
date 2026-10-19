@@ -19,7 +19,8 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectStateType } from "./polymorphism/names.js";
 import { rustProjectObjectRepresentation } from "./project-storage.js";
-import { createRustProjectObject, copyRustProjectObjectIndexStorage, readRustProjectObjectIndex, writeRustProjectObjectIndex } from "./project-objects.js";
+import { createRustProjectObject } from "./project-objects.js";
+import { copyRustProjectObjectIndexStorage, readRustProjectObjectIndex, writeRustProjectObjectIndex } from "./project-index-storage.js";
 
 type SourceIndexFact = Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>;
 type ExpressionPlanner = typeof planRustExpression;
@@ -109,7 +110,7 @@ export function planRustIndexedRecordStorage(
     context.input.program.projectTypes.isPolymorphic(definition) || wrapper?.kind !== "named" || state?.kind !== "named") return undefined;
   return {
     read(receiver: RustExpr, index: RustExpr): RustExpr {
-      return readRustProjectObjectIndex(receiver, storage.name, index, value, representation);
+      return readRustProjectObjectIndex(receiver, storage.name, index, value, representation, context);
     },
     write(receiver: RustExpr, index: RustExpr, item: RustExpr): RustExpr | undefined {
       return writeRustProjectObjectIndex(receiver, storage.name, index, item, representation);

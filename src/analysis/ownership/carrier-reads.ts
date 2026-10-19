@@ -3,7 +3,8 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustCarrierReadProducer } from "../program/records/carrier-reads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { isRustCopyCarrier, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustLocationTargetType, rustOptionTargetType, rustStructuralPropertyValueCarrier,
+  rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 
@@ -26,6 +27,16 @@ export function analyzeRustCarrierReads(program: Omit<RustTargetProgram, "reacha
   for (const shape of program.structuralShapes.instances) {
     pending.push(shape.carrier, ...shape.fields.map(field => field.carrier));
     for (const field of shape.fields) if (field.nativeLayout !== undefined) pending.push(rustLocationTargetType(field.carrier));
+    for (const field of shape.fields) {
+      if (field.methodStorageCarrier !== undefined) pending.push(field.methodStorageCarrier);
+      if (field.property === undefined) continue;
+      const value = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
+      const getter = rustStructuralPropertyGetterStorageCarrier(shape.carrier, field.carrier, field.presence);
+      const setter = rustStructuralPropertySetterStorageCarrier(shape.carrier, field.carrier, field.presence);
+      if (value !== undefined) pending.push(value, rustOptionTargetType(value));
+      if (getter !== undefined) pending.push(getter);
+      if (setter !== undefined) pending.push(setter);
+    }
   }
   for (const definition of program.callableValues.generic.definitions) {
     pending.push(...definition.signature.parameters, definition.signature.result);

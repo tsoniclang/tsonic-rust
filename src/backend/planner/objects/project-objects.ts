@@ -4,7 +4,7 @@ import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import { isRustCopyCarrier } from "../../../target-model/types/index.js";
+import { requireRustCarrierRead } from "../types/carrier-reads.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustObjectRepresentation } from "../../../target-model/records/object-representation.js";
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
@@ -16,7 +16,7 @@ export const rustProjectObjectStateField = "state";
 export const rustProjectObjectIdentityField = "identity";
 export const rustProjectObjectDispatchField = "dispatch";
 
-const rustProjectObjectStateBinding = "state";
+export const rustProjectObjectStateBinding = "state";
 
 export function enterRustProjectObjectMutableState(
   receiver: RustExpr,
@@ -122,7 +122,7 @@ export function readRustProjectObjectField(
 ): RustExpr {
   return withRustProjectStoredField(receiver, storagePath, representation, field => captureStorage !== undefined
     ? rustCapturedFieldLocation(captureStorage, field, resultCarrier, context, projection, resultCarrier).read
-    : isRustCopyCarrier(resultCarrier) ? field : { kind: "method-call", receiver: field, method: "clone", args: [] });
+    : requireRustCarrierRead(resultCarrier, context).copy ? field : { kind: "method-call", receiver: field, method: "clone", args: [] });
 }
 
 export function readRustProjectObjectFieldOwner(
@@ -178,7 +178,7 @@ export function readRustStructuralObjectField(
   receiver: RustExpr,
   storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
-  copy = isRustCopyCarrier(resultCarrier),
+  context: RustPlanContext,
 ): RustExpr {
   const field = rustStructuralObjectStatePath(storagePath);
   return {
@@ -189,7 +189,7 @@ export function readRustStructuralObjectField(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: copy
+      body: requireRustCarrierRead(resultCarrier, context).copy
         ? field
         : { kind: "method-call", receiver: field, method: "clone", args: [] },
     }],
@@ -392,174 +392,6 @@ export function writeRustProjectMethodOverride(
   };
 }
 
-export function readRustProjectObjectIndex(
-  receiver: RustExpr,
-  storageName: string,
-  key: RustExpr,
-  resultCarrier: TargetTypeRef,
-  representation: RustObjectRepresentation,
-): RustExpr {
-  if (representation.kind === "value") {
-    return rustProjectObjectValueRead({
-      kind: "index",
-      receiver: rustProjectObjectDirectPath(receiver, storageName),
-      index: key,
-    }, resultCarrier);
-  }
-  const value: RustExpr = {
-    kind: "index",
-    receiver: rustProjectObjectStatePath(storageName),
-    index: key,
-  };
-  return {
-    kind: "method-call",
-    receiver: {
-      kind: "field",
-      receiver,
-      name: rustProjectObjectStateField,
-    },
-    method: "with",
-    receiverMode: "ref",
-    args: [{
-      kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: isRustCopyCarrier(resultCarrier)
-        ? value
-        : { kind: "method-call", receiver: value, method: "clone", args: [] },
-    }],
-  };
-}
-
-export function copyRustProjectObjectIndexStorage(
-  receiver: RustExpr,
-  storageName: string,
-  destination: RustExpr,
-  representation: RustObjectRepresentation,
-): RustExpr {
-  const copy = (source: RustExpr): RustExpr => ({
-    kind: "call",
-    path: "rt::record::extend_entries",
-    args: [{ kind: "reference", mutable: true, expr: destination }, { kind: "reference", expr: source }],
-  });
-  if (representation.kind === "value") {
-    return copy(rustProjectObjectDirectPath(receiver, storageName));
-  }
-  return {
-    kind: "method-call",
-    receiver: {
-      kind: "field",
-      receiver,
-      name: rustProjectObjectStateField,
-    },
-    method: "with",
-    receiverMode: "ref",
-    args: [{
-      kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: copy(rustProjectObjectStatePath(storageName)),
-    }],
-  };
-}
-
-export function writeRustProjectObjectIndex(
-  receiver: RustExpr,
-  storageName: string,
-  key: RustExpr,
-  value: RustExpr,
-  representation: RustObjectRepresentation,
-): RustExpr | undefined {
-  if (representation.kind === "value") {
-    return {
-      kind: "method-call",
-      receiver: rustProjectObjectDirectPath(receiver, storageName),
-      receiverMode: "mut-ref",
-      method: "insert",
-      args: [key, value],
-    };
-  }
-  if (representation.kind === "shared-immutable") {
-    return undefined;
-  }
-  return {
-    kind: "method-call",
-    receiver: {
-      kind: "field",
-      receiver,
-      name: rustProjectObjectStateField,
-    },
-    method: "with_mut",
-    receiverMode: "ref",
-    args: [{
-      kind: "closure-block",
-      params: [{ name: rustProjectObjectStateBinding, mutable: false }],
-      move: false,
-      async: false,
-      body: {
-        statements: [{
-          kind: "let",
-          name: "_",
-          mutable: false,
-          init: {
-            kind: "method-call",
-            receiver: rustProjectObjectStatePath(storageName),
-            receiverMode: "mut-ref",
-            method: "insert",
-            args: [key, value],
-          },
-        }],
-      },
-    }],
-  };
-}
-
-export function mutateRustProjectObjectIndex(
-  receiver: RustExpr,
-  storageName: string,
-  key: RustExpr,
-  mutation: (value: RustExpr) => RustExpr | undefined,
-  representation: RustObjectRepresentation,
-): RustExpr | undefined {
-  if (representation.kind === "shared-immutable") {
-    return undefined;
-  }
-  const storage = representation.kind === "value"
-    ? rustProjectObjectDirectPath(receiver, storageName)
-    : rustProjectObjectStatePath(storageName);
-  const location: RustExpr = {
-    kind: "dereference",
-    pointer: {
-      kind: "method-call",
-      receiver: {
-        kind: "method-call",
-        receiver: storage,
-        method: "get_mut",
-        args: [{ kind: "reference", expr: key }],
-      },
-      method: "expect",
-      args: [{ kind: "str-literal", value: "selected index key must exist" }],
-    },
-  };
-  const body = mutation(location);
-  if (body === undefined || representation.kind === "value") {
-    return body;
-  }
-  return {
-    kind: "method-call",
-    receiver: {
-      kind: "field",
-      receiver,
-      name: rustProjectObjectStateField,
-    },
-    method: "with_mut",
-    receiverMode: "ref",
-    args: [{
-      kind: "closure",
-      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body,
-    }],
-  };
-}
-
 export function writeRustStructuralObjectField(
   receiver: RustExpr,
   storagePath: string | readonly string[],
@@ -637,7 +469,7 @@ export function mutateRustStructuralObjectField(
       };
 }
 
-function rustProjectObjectStatePath(
+export function rustProjectObjectStatePath(
   storagePath: string | readonly string[],
 ): RustExpr {
   const path = typeof storagePath === "string" ? [storagePath] : storagePath;
@@ -647,7 +479,7 @@ function rustProjectObjectStatePath(
   );
 }
 
-function rustProjectObjectDirectPath(
+export function rustProjectObjectDirectPath(
   receiver: RustExpr,
   storagePath: string | readonly string[],
 ): RustExpr {
@@ -656,15 +488,6 @@ function rustProjectObjectDirectPath(
     (current, name) => ({ kind: "field", receiver: current, name }),
     receiver,
   );
-}
-
-function rustProjectObjectValueRead(
-  field: RustExpr,
-  resultCarrier: TargetTypeRef,
-): RustExpr {
-  return isRustCopyCarrier(resultCarrier)
-    ? field
-    : { kind: "method-call", receiver: field, method: "clone", args: [] };
 }
 
 function rustSharedObjectCarrierPath(
@@ -765,6 +588,5 @@ export function writeRustProjectDispatchedField(
   };
   const write = roles.write.fallible
     ? rustPropagateLocalError(roles.write.region, roles.write.operandErrorType, writeCall) : writeCall;
-  return write === undefined ? undefined : rustValueBlock([{ name: receiverBinding, value: receiver.kind === "reference"
-    ? receiver : { kind: "reference", expr: receiver } }], write);
+  return write === undefined ? undefined : rustValueBlock([{ name: receiverBinding, value: { kind: "reference", expr: receiver } }], write);
 }

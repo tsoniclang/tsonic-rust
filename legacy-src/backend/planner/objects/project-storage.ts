@@ -202,7 +202,7 @@ export function readRustStoredObjectField(
       return isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
     }
     if (field.nativeLayout !== undefined) return { kind: "method-call",
-      receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
+      receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier), context),
       method: "load", args: [] };
     return field.storage === "property"
       ? readRustStructuralObjectProperty(
@@ -212,7 +212,7 @@ export function readRustStoredObjectField(
           resultCarrier,
           context,
         )
-      : readRustStructuralObjectField(receiver, path, resultCarrier, rustCarrierHasCopyContract(resultCarrier, context));
+      : readRustStructuralObjectField(receiver, path, resultCarrier, context);
   }
   const dispatch = rustStoredProjectFieldDispatch(receiverCarrier, storageIndex, context);
   if (dispatch !== undefined) {
@@ -272,7 +272,7 @@ export function readRustStructuralObjectMethodStorage(
   }
   return field.receiverIndependent === true
     ? readRustStoredObjectField("structural-object", receiverCarrier, receiver, storageIndex, storageCarrier, context)
-    : readRustStructuralObjectField(receiver, field.targetName, storageCarrier, rustCarrierHasCopyContract(storageCarrier, context));
+    : readRustStructuralObjectField(receiver, field.targetName, storageCarrier, context);
 }
 
 export interface RustStructuralMethodStorageOverride {
@@ -414,7 +414,7 @@ function writeRustStoredObjectFieldStorage(
       };
     }
     if (field.nativeLayout !== undefined) {
-      const location = readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier));
+      const location = readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier), context);
       if (operator === "=") return { kind: "method-call", receiver: location, method: "store", args: [value] };
       if (context.syntheticNames === undefined) return undefined;
       const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
@@ -499,7 +499,7 @@ function mutateRustStoredObjectFieldStorage(
       const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
       const body = mutation({ kind: "dereference", pointer: { kind: "path", path: valueName } });
       return body === undefined ? undefined : { kind: "method-call",
-        receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
+        receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier), context),
         method: "with_mut", args: [{ kind: "closure", params: [{ name: valueName, byRefCopy: false }], body }] };
     }
     if (field.method === true || access === "property" && field.readonly) {
@@ -579,6 +579,7 @@ function readRustStructuralObjectProperty(
     receiverPath,
     field.targetName,
     storedCarrier,
+    context,
   );
   const absentGetterValue: RustExpr = field.presence === "optional"
     ? storedValue
@@ -606,6 +607,7 @@ function readRustStructuralObjectProperty(
         receiverPath,
         field.property.getterTargetName,
         getterCarrier,
+        context,
       ),
       arms: [{
         pattern: {
@@ -708,6 +710,7 @@ function writeRustStructuralObjectProperty(
       receiverPath,
       field.property.setterTargetName,
       setterCarrier,
+      context,
     ),
     arms: [{
       pattern: {
