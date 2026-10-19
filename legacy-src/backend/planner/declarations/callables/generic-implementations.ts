@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../../analysis/callables/generic-values.js";
-import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
+import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/generic-callables.js";
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";

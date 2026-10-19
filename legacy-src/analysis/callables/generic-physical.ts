@@ -8,11 +8,13 @@ import { rustGenericCallableSignaturesMatch } from "../../target-model/conversio
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableStorageMember } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { failTargetAnalysisInvariant, failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
-import { rustGenericCallableEnvironment, type RustGenericCallableEnvironment } from "./generic-environments.js";
+import { rustGenericCallableEnvironment } from "./generic-environments.js";
+import { type RustGenericCallableEnvironment } from "../../target-model/records/generic-callables.js";
 import type { RustNativeCaptureConstruction } from "./native-captures.js";
-import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStorageSelection } from "./native-storage.js";
-import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "./generic-values.js";
+import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
@@ -21,30 +23,8 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import { rustGenericCallableMemberBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 
-export interface RustGenericCallablePhysicalMember {
-  readonly implementation: RustGenericCallableImplementation;
-  readonly variantName: string;
-  readonly arguments: readonly RustTargetGenericArgument[];
-  readonly bindings: RustTargetGenericBindings | undefined;
-}
-
-export interface RustGenericCallablePhysicalDefinition extends RustGenericCallableDefinition {
-  readonly familyIdentity: string;
-  readonly parameters: readonly RustTargetGenericArgument[];
-  readonly members: readonly RustGenericCallablePhysicalMember[];
-  readonly carrier: TargetTypeRef;
-}
-
-export interface RustGenericCallablePhysicalSelection {
-  readonly definition: RustGenericCallablePhysicalDefinition;
-  readonly arguments: readonly RustTargetGenericArgument[];
-}
-
-export type RustGenericCallablePhysicalConversion =
-  | { readonly kind: "identity" }
-  | { readonly kind: "variants"; readonly members: readonly {
-      readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember;
-    }[] };
+import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition,
+  RustGenericCallablePhysicalSelection, RustGenericCallablePhysicalConversion } from "../../target-model/records/generic-callables.js";
 
 export interface RustGenericCallablePhysicalPlan {
   definitions(): readonly RustGenericCallablePhysicalDefinition[];
@@ -164,7 +144,7 @@ export function createRustGenericCallablePhysicalPlan(
         environment.parameters.length !== member.arguments.length ||
         environment.parameters.some((parameter, index) => parameter.kind !== parameters[member.arguments[index]!]!.kind)) return undefined;
       const arguments_ = member.arguments.map(index => parameters[index]!);
-      selected.push(Object.freeze({ implementation,
+      selected.push(Object.freeze({ implementation, environment,
         variantName: allocateRustGeneratedName(variantNames, implementation.variantName), arguments: snapshotClosedMetadata(arguments_) }));
     }
     const ownerFileName = selected.length === 1 ? selected[0]!.implementation.sourceFileName

@@ -8,7 +8,7 @@ import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/err
 import type { RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import { rustGenericCallableInvocationBindings,
   type RustGenericCallableBindingContext } from "./generic-bindings.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 
 export interface RustGenericCallableMemberCompletion {
   readonly result: TargetTypeRef;

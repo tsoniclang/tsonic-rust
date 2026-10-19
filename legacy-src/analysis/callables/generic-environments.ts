@@ -6,18 +6,10 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustNativeCaptureSelection } from "./native-captures.js";
-import type { RustGenericCallableImplementation } from "./generic-values.js";
-import type { RustNativeCallableInput } from "./native-inputs.js";
+import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 
-export interface RustGenericCallableEnvironment {
-  readonly captures: RustGenericCallableImplementation["captures"];
-  readonly receiverFields: RustGenericCallableImplementation["receiverFields"];
-  readonly receivers: RustGenericCallableImplementation["receivers"];
-  readonly parameters: readonly RustTargetGenericArgument[];
-  readonly arguments: readonly RustTargetGenericArgument[];
-  readonly inputs: readonly RustNativeCallableInput[];
-  readonly substitutions: RustTargetGenericBindings;
-}
+import type { RustGenericCallableEnvironment } from "../../target-model/records/generic-callables.js";
 
 export function rustGenericCallableEnvironment(
   implementation: RustGenericCallableImplementation,

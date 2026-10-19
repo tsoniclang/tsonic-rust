@@ -4,7 +4,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../target-model/records/generic-callables.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";

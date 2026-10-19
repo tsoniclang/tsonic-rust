@@ -1,8 +1,9 @@
-import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/generic-callables.js";
 import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "./self-parameter.js";
 import { rustCallableIdentityPredicate } from "../../../target-ast/syntax/callable-identities.js";
-import type { RustGenericCallableIdentitySelection } from "../../../../analysis/callables/generic-identities.js";
+import type { RustGenericCallableIdentitySelection } from "../../../../target-model/records/generic-callables.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function genericCallableStorageItems(
   definition: RustGenericCallablePhysicalDefinition,
@@ -10,7 +11,7 @@ export function genericCallableStorageItems(
   target: RustType,
   variants: Extract<RustItem, { readonly kind: "enum" }>["variants"],
   identity: RustGenericCallableIdentitySelection | undefined,
-): readonly RustItem[] | undefined {
+): readonly RustItem[] {
   const receiver: RustExpr = { kind: "path", path: "self" };
   const clone: RustExpr = definition.copy
     ? { kind: "dereference", pointer: receiver }
@@ -32,7 +33,8 @@ export function genericCallableStorageItems(
     items.push({ kind: "impl", trait: { kind: "named", path: "Copy" }, target, generics, members: [] });
   }
   if (!definition.identityObserved) return items;
-  if (identity?.left !== definition || identity.right !== definition) return undefined;
+  if (identity?.left !== definition || identity.right !== definition)
+    failRustPlannerInvariant("An observed native callable family requires its exact admitted identity comparison.");
   const equality: RustExpr = { kind: "match", expression: { kind: "tuple-literal", elements: [
     receiver, { kind: "path", path: "other" },
   ] }, arms: [

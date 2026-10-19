@@ -35,12 +35,7 @@ import { emissionDiagnostic } from "./emission-contexts.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
-export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
-  readonly owner: Node;
-  readonly subject: SourceStorageSubject;
-  readonly carrier: TargetTypeRef;
-  readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
-}
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 
 import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput } from "../../target-model/records/native-generics.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";

@@ -24,32 +24,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalConstruction,
   type RustGenericCallablePhysicalInput, type RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 
-export interface RustGenericCallableImplementation {
-  readonly declaration: Node;
-  readonly carrier: TargetTypeRef;
-  readonly sourceFileName: string;
-  readonly variantName: string;
-  readonly stateName: string;
-  readonly functionName: string;
-  readonly storage: "value" | "shared";
-  readonly creation: "declaration" | "activation";
-  readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
-  readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
-  readonly receivers: readonly (RustClosureCaptureFact["receivers"][number] & { readonly storageCarrier: TargetTypeRef })[];
-  readonly substitutions: readonly (readonly [string, TargetTypeRef])[];
-}
-
-export interface RustGenericCallableDefinition {
-  readonly identity: string;
-  readonly origin: RustCallableOrigin;
-  readonly targetName: string;
-  readonly nativeFutureDispatchName?: string;
-  readonly copy: boolean;
-  readonly identityObserved: boolean;
-  readonly ownerFileName: string;
-  readonly signature: RustCallableSignature;
-  readonly implementations: readonly RustGenericCallableImplementation[];
-}
+import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
 
 export interface RustGenericCallablePlan {
   readonly definitions: readonly RustGenericCallableDefinition[];

@@ -4,7 +4,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
 import type { RustGenericCallableEffectsFact } from "../../target-model/records/generic-callable-effects.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallableBindingContext } from "./generic-bindings.js";
 import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";

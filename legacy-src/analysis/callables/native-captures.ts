@@ -7,7 +7,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 
-import type { RustNativeCallableInput } from "./native-inputs.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 
 export type RustNativeCaptureSelection =

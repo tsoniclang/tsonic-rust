@@ -17,7 +17,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustStoredFutureValues, type RustStoredFutureValue } from "./future-storage.js";
 import { createRustEffectsWorkBudget } from "./effects-work-budget.js";
-import type { RustNativeCallableInput } from "../callables/native-inputs.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 

@@ -1,4 +1,4 @@
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../analysis/callables/generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../target-model/records/generic-callables.js";
 import type { RustGenericCallableEffectsFact } from "../../../../target-model/records/generic-callable-effects.js";
 import type { RustExpr, RustGenericArgument, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";

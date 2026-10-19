@@ -11,7 +11,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
-import type { RustNativeCallableInput } from "./native-inputs.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";

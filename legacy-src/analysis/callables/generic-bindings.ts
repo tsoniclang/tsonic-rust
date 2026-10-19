@@ -5,8 +5,9 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import { rustTargetGenericBindingsForArguments, rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import type { RustGenericCallableDefinition } from "./generic-values.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember, RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
+import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 export interface RustGenericCallableBindingContext {

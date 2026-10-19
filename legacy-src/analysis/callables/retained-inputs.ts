@@ -11,7 +11,8 @@ import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/me
 
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
-import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";
 

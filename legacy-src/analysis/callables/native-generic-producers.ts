@@ -11,8 +11,9 @@ import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloa
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import type { RustGenericCallablePlan } from "./generic-values.js";
-import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
-import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustGenericCallablePhysicalDefinition } from "../../target-model/records/generic-callables.js";
+import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
 

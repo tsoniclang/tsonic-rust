@@ -1,4 +1,4 @@
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../analysis/callables/generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../target-model/records/generic-callables.js";
 import type { RustSourceCallEffectsFact } from "../../../../target-model/records/object-methods.js";
 import type { RustGenericCallableEffectsFact } from "../../../../target-model/records/generic-callable-effects.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

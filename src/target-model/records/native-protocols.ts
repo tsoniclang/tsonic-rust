@@ -2,6 +2,15 @@ import type { TargetTypeRef, RustTargetTraitRef } from "../types/model.js";
 import type { RustCallableSignature } from "../types/carriers/callable-signatures.js";
 import type { RustNativeCallableCompletion } from "../types/callable-completions.js";
 import type { RustLifetimeBinder, RustLifetimeRef } from "../lifetimes/index.js";
+import type { Node } from "@tsonic/tsts";
+import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+
+export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
+  readonly owner: Node;
+  readonly subject: SourceStorageSubject;
+  readonly carrier: TargetTypeRef;
+  readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
+}
 
 export interface RustNativeCallableOutlivesBound {
   readonly carrier: TargetTypeRef;

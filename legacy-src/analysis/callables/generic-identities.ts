@@ -8,32 +8,14 @@ import { isRustBoolCarrier } from "../../target-model/types/index.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember,
-  RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../resources/effects-work-budget.js";
 
-export interface RustGenericCallableIdentityPair {
-  readonly left: RustGenericCallablePhysicalMember;
-  readonly right: RustGenericCallablePhysicalMember;
-  readonly kind: "declaration" | "activation";
-}
-
-export interface RustGenericCallableIdentitySelection {
-  readonly leftCarrier: TargetTypeRef;
-  readonly rightCarrier: TargetTypeRef;
-  readonly left: RustGenericCallablePhysicalDefinition;
-  readonly right: RustGenericCallablePhysicalDefinition;
-  readonly pairs: readonly RustGenericCallableIdentityPair[];
-  readonly exhaustive: boolean;
-}
-
-export interface RustGenericCallableIdentityComparison extends RustGenericCallableIdentitySelection {
-  readonly operation: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>;
-  readonly leftNode: Node;
-  readonly rightNode: Node;
-}
+import type { RustGenericCallableIdentityPair, RustGenericCallableIdentitySelection,
+  RustGenericCallableIdentityComparison } from "../../target-model/records/generic-callables.js";
 
 export interface RustGenericCallableIdentityPlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
