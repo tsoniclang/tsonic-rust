@@ -6,6 +6,8 @@ import type { RustObjectRepresentation } from "./object-representation.js";
 import type { RustGenericRequirement, RustAssociatedTypeRequirement, RustOptionalStorageRequirement } from "./generic-requirements.js";
 import type { RustShapeGenericRequirementContract } from "./generic-requirements.js";
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
+import type { RustStructuralShapeDefinition } from "./structural-shapes.js";
+import type { RustGeneratedUnionDefinition } from "./generated-unions.js";
 
 export interface RustProjectGenericEmission {
   readonly parameters: readonly { readonly parameter: RustSourceGenericParameterContract; readonly requirements: readonly RustGenericRequirement[] }[];
@@ -17,6 +19,10 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly structuralShape: { readonly get: (carrier: TargetTypeRef | undefined) => RustStructuralShapeDefinition | undefined };
+  readonly structuralDeclarations: { readonly get: (component: string) => readonly RustStructuralShapeDefinition[] | undefined };
+  readonly sourceUnion: { readonly get: (carrier: TargetTypeRef) => RustGeneratedUnionDefinition | undefined };
+  readonly sourceUnionDeclarations: { readonly get: (component: string) => readonly RustGeneratedUnionDefinition[] | undefined };
   readonly structuralGenerics: { readonly get: (carrier: TargetTypeRef) => RustShapeGenericRequirementContract | undefined };
   readonly projectType: { readonly get: (carrier: TargetTypeRef | undefined) => RustProjectTypeDefinition | undefined };
   readonly projectDeclaration: { readonly get: (declaration: Node | undefined) => RustProjectTypeDefinition | undefined };

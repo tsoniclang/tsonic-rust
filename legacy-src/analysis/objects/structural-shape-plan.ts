@@ -38,6 +38,7 @@ export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeFie
 
 export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
+  readonly instances: readonly RustStructuralShapeDefinition[];
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
   sharesStorage(left: TargetTypeRef, right: TargetTypeRef): boolean;
   fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
@@ -123,6 +124,9 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     get definitions() {
       return requireCurrent().definitions;
     },
+    get instances() {
+      return requireCurrent().instances;
+    },
     get unionDefinitions() {
       return requireCurrent().unionDefinitions;
     },
@@ -181,19 +185,19 @@ function createRustStructuralShapeConstruction(
   const physicalKey = (carrier: TargetTypeRef): string =>
     structuralStorageKey(physicalSelection(carrier).carrier, componentForFile);
   const uniqueByKey = new Map<string, Map<string, TargetTypeRef>>();
-  for (const shape of shapes) {
-    const structural = rustStructuralObjectCarrierValue(shape.carrier);
+  for (const carrier of [...shapes.map(shape => shape.carrier), ...instantiations.map(instantiation => instantiation.instance)]) {
+    const structural = rustStructuralObjectCarrierValue(carrier);
     if (structural === undefined) {
       continue;
     }
-    const key = physicalKey(shape.carrier);
+    const key = physicalKey(carrier);
     const instances = uniqueByKey.get(key) ?? new Map<string, TargetTypeRef>();
     uniqueByKey.set(key, instances);
-    const instanceKey = closedMetadataKey(shape.carrier);
+    const instanceKey = closedMetadataKey(carrier);
     const existing = instances.get(instanceKey);
     if (existing === undefined) {
-      instances.set(instanceKey, shape.carrier);
-    } else if (!rustTargetTypeRefEquals(existing, shape.carrier)) {
+      instances.set(instanceKey, carrier);
+    } else if (!rustTargetTypeRefEquals(existing, carrier)) {
       throw new Error("Rust structural carrier canonicalization produced a non-injective identity.");
     }
   }
@@ -380,18 +384,13 @@ function createRustStructuralShapeConstruction(
   const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
     const key = closedMetadataKey(carrier);
-    const selected = byKey.get(key);
-    if (selected !== undefined) return rustTargetTypeRefEquals(selected.carrier, carrier) ? selected : undefined;
-    const template = byStorageKey.get(structuralStorageKey(carrier, componentForFile));
-    if (template === undefined) return undefined;
-    const instantiated = instantiateStructuralDefinition(template, carrier);
-    if (instantiated !== undefined) byKey.set(key, instantiated);
-    return instantiated;
+    return byKey.get(key);
   };
   const plan: RustStructuralShapePlan = Object.freeze({
     get unionDefinitions() { return unions.unionDefinitions; },
     unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
     get definitions() { return definitions; },
+    get instances() { return Object.freeze([...byKey.values()]); },
     sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
       const leftDefinition = definitionFor(left);
       const rightDefinition = definitionFor(right);

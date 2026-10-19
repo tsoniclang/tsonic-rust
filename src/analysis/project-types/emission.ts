@@ -7,6 +7,8 @@ import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 export function analyzeRustProjectEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -15,6 +17,25 @@ export function analyzeRustProjectEmission(input: {
 }): void {
   const { program, producer } = input;
   producer.structuralGenerics(program.declarationGenericRequirements.contractForCarrier);
+  const components = new Set([...program.structuralShapes.definitions.map(shape => shape.componentId),
+    ...program.structuralShapes.unionDefinitions.map(union => union.componentId)]);
+  for (const component of components) {
+    producer.structuralDeclarations(component, program.structuralShapes.definitions.filter(shape => shape.componentId === component));
+    producer.unionDeclarations(component, program.structuralShapes.unionDefinitions.filter(union => union.componentId === component));
+  }
+  for (const shape of program.structuralShapes.instances) producer.shape(shape.carrier, shape);
+  const unionCarriers = [...program.structuralShapes.unionDefinitions.flatMap(union => union.sourceCarriers),
+    ...input.nodes.flatMap(node => { const carrier = program.records.runtimeCarrier.get(node)?.carrier; return carrier === undefined ? [] : [carrier]; })];
+  const seenCarriers = new Set<string>();
+  for (let index = 0; index < unionCarriers.length; index++) {
+    const carrier = unionCarriers[index]!;
+    const key = closedMetadataKey(carrier);
+    if (seenCarriers.has(key)) continue;
+    seenCarriers.add(key);
+    const union = program.structuralShapes.unionForCarrier(carrier);
+    if (union !== undefined) producer.union(carrier, union);
+    unionCarriers.push(...rustTargetTypeChildren(carrier));
+  }
   for (const definition of program.projectTypes.definitions) {
     const representation = program.objectRepresentations.representationFor(definition);
     producer.definition(definition, representation);

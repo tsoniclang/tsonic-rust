@@ -8,8 +8,15 @@ import type { RustLifetimeRef } from "../../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import type { RustShapeGenericRequirementContract } from "../../../target-model/records/generic-requirements.js";
+import type { RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
+import type { RustGeneratedUnionDefinition } from "../../../target-model/records/generated-unions.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export interface RustProjectEmissionProducer {
+  shape(carrier: TargetTypeRef, value: RustStructuralShapeDefinition): void;
+  structuralDeclarations(component: string, values: readonly RustStructuralShapeDefinition[]): void;
+  union(carrier: TargetTypeRef, value: RustGeneratedUnionDefinition): void;
+  unionDeclarations(component: string, values: readonly RustGeneratedUnionDefinition[]): void;
   structuralGenerics(reader: (carrier: TargetTypeRef) => RustShapeGenericRequirementContract | undefined): void;
   readonly records: RustProjectEmissionRecords;
   definition(definition: RustProjectTypeDefinition, representation: RustObjectRepresentation | undefined): void;
@@ -24,9 +31,17 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
   const members = new WeakMap<Node, RustProjectTypeDefinition>();
   const representations = new WeakMap<RustProjectTypeDefinition, RustObjectRepresentation>();
   const generics = new WeakMap<RustProjectTypeDefinition, Map<string, RustProjectGenericEmission>>();
+  const shapes = new Map<string, RustStructuralShapeDefinition>();
+  const structuralDeclarations = new Map<string, readonly RustStructuralShapeDefinition[]>();
+  const unions = new Map<string, RustGeneratedUnionDefinition>();
+  const unionDeclarations = new Map<string, readonly RustGeneratedUnionDefinition[]>();
   const genericKey = (indexes: readonly number[], outlives: readonly RustLifetimeRef[], body: true | undefined): string =>
     JSON.stringify([indexes, outlives.map(rustLifetimeKey), body === true]);
   return Object.freeze({ records: Object.freeze({
+    structuralShape: Object.freeze({ get: (carrier: TargetTypeRef | undefined) => carrier === undefined ? undefined : shapes.get(closedMetadataKey(carrier)) }),
+    structuralDeclarations: Object.freeze({ get: (component: string) => structuralDeclarations.get(component) }),
+    sourceUnion: Object.freeze({ get: (carrier: TargetTypeRef) => unions.get(closedMetadataKey(carrier)) }),
+    sourceUnionDeclarations: Object.freeze({ get: (component: string) => unionDeclarations.get(component) }),
     structuralGenerics: Object.freeze({ get: (carrier: TargetTypeRef) => structuralGenerics?.(carrier) }),
     projectType: Object.freeze({ get: (carrier: TargetTypeRef | undefined) => {
       const source = rustSourceTypeCarrierValue(carrier);
@@ -38,6 +53,28 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
     projectGenerics: Object.freeze({ get: (definition: RustProjectTypeDefinition, indexes?: readonly number[], outlives: readonly RustLifetimeRef[] = [], body?: true) =>
       generics.get(definition)?.get(genericKey(indexes ?? definition.genericParameters.map((_, index) => index), outlives, body)) }),
   }),
+    shape(carrier: TargetTypeRef, value: RustStructuralShapeDefinition): void {
+      assertOpen();
+      const key = closedMetadataKey(carrier);
+      if (shapes.has(key)) failTargetAnalysisInvariant("tsonic-rust", "An exact structural instance has one native shape producer.");
+      shapes.set(key, value);
+    },
+    structuralDeclarations(component: string, values: readonly RustStructuralShapeDefinition[]): void {
+      assertOpen();
+      if (structuralDeclarations.has(component)) failTargetAnalysisInvariant("tsonic-rust", "A source component has one structural declaration inventory.");
+      structuralDeclarations.set(component, Object.freeze(values));
+    },
+    union(carrier: TargetTypeRef, value: RustGeneratedUnionDefinition): void {
+      assertOpen();
+      const key = closedMetadataKey(carrier);
+      if (unions.has(key)) failTargetAnalysisInvariant("tsonic-rust", "An exact source union has one native declaration producer.");
+      unions.set(key, value);
+    },
+    unionDeclarations(component: string, values: readonly RustGeneratedUnionDefinition[]): void {
+      assertOpen();
+      if (unionDeclarations.has(component)) failTargetAnalysisInvariant("tsonic-rust", "A source component has one union declaration inventory.");
+      unionDeclarations.set(component, Object.freeze(values));
+    },
     structuralGenerics(reader: (carrier: TargetTypeRef) => RustShapeGenericRequirementContract | undefined): void {
       assertOpen();
       if (structuralGenerics !== undefined) failTargetAnalysisInvariant("tsonic-rust", "The closed structural generic lookup is published exactly once.");

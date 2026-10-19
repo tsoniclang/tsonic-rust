@@ -78,6 +78,10 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly objectRepresentation: import("./project-emission.js").RustProjectEmissionRecords["objectRepresentation"];
   readonly projectGenerics: import("./project-emission.js").RustProjectEmissionRecords["projectGenerics"];
   readonly structuralGenerics: import("./project-emission.js").RustProjectEmissionRecords["structuralGenerics"];
+  readonly structuralShape: import("./project-emission.js").RustProjectEmissionRecords["structuralShape"];
+  readonly structuralDeclarations: import("./project-emission.js").RustProjectEmissionRecords["structuralDeclarations"];
+  readonly sourceUnion: import("./project-emission.js").RustProjectEmissionRecords["sourceUnion"];
+  readonly sourceUnionDeclarations: import("./project-emission.js").RustProjectEmissionRecords["sourceUnionDeclarations"];
   readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
   readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
   readonly generator: RustRecordFamily<RustGeneratorFact>;
