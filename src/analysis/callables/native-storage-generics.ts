@@ -67,9 +67,11 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
     const previous = lexicalOwners.get(declaration);
     if (previous !== undefined) return previous;
     const captures = input.records.closureCapture.get(declaration);
+    const parameters = input.ast.is.IsClassDeclaration(declaration) || input.ast.is.IsClassExpression(declaration)
+      ? [] : input.ast.parameters(declaration);
     const carriers = [input.records.sourceCallableReturn.get(declaration)?.returnCarrier,
       input.records.asyncFunction.get(declaration)?.futureCarrier,
-      ...input.ast.parameters(declaration).map(parameter => input.records.sourceParameterAbi.get(parameter)?.parameterCarrier),
+      ...parameters.map(parameter => input.records.sourceParameterAbi.get(parameter)?.parameterCarrier),
       ...[...captures?.captures ?? [], ...captures?.receiverFields ?? [], ...captures?.receivers ?? []].map(capture => capture.carrier),
     ].filter((carrier): carrier is TargetTypeRef => carrier !== undefined);
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
