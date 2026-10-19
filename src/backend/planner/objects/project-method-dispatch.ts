@@ -3,9 +3,8 @@ import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectDispatchField } from "./project-objects.js";
 import { rustProjectDispatchTraitType } from "./polymorphism/names.js";
@@ -20,12 +19,7 @@ export function planRustVirtualProjectMethodCall(
 ): RustExpr | undefined {
   if (context.syntheticNames === undefined ||
     rustProjectDispatchTraitType(ownerCarrier, context) === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, subject),
-      "rust.backend.project-dispatch-temporary",
-      "Project method dispatch requires a finalized owner trait and hygienic-name scope.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Project method dispatch requires a finalized owner trait and hygienic-name scope.", subject);
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
@@ -54,12 +48,7 @@ export function planRustExactProjectMethodCall(
 ): RustExpr | undefined {
   const trait = rustProjectDispatchTraitType(ownerCarrier, context);
   if (root === undefined || trait === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, subject),
-      "rust.backend.project-exact-dispatch",
-      "Exact project method dispatch has no finalized root receiver or owner trait.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Exact project method dispatch has no finalized root receiver or owner trait.", subject);
   }
   return {
     kind: "associated-call",
