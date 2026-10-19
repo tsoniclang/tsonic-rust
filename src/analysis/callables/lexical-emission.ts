@@ -6,6 +6,8 @@ import type { RustLexicalCaptureEmission } from "../../target-model/records/lexi
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustRetainedCallableStorage } from "./results.js";
+import { rustLocationTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 
 export function analyzeRustLexicalFunctionEmission(input: {
   readonly program: RustTargetProgram;
@@ -33,7 +35,12 @@ export function analyzeRustLexicalFunctionEmission(input: {
       const borrowedCarrier: TargetTypeRef | undefined = owned || storage !== undefined ? undefined : Object.freeze({
         kind: "reference", referent: physical.carrier, mutable: capture.mutable,
       });
-      captures.push(Object.freeze({ ...capture, carrier, physicalCarrier: physical.carrier, storage, owned, borrowedCarrier }));
+      const storageCarrier = storage === undefined ? physical.carrier : storage.storage === "location" ? rustLocationTargetType(physical.carrier)
+        : rustNamedTargetType(storage.storage === "cell" ? "rust.core.cell.Cell" : "rust.core.cell.RefCell",
+          storage.storage === "cell" ? "core::cell::Cell" : "core::cell::RefCell", [{ kind: "type", type: physical.carrier }]);
+      const parameterCarrier: TargetTypeRef = borrowedCarrier !== undefined ? borrowedCarrier : owned ? storageCarrier
+        : Object.freeze({ kind: "reference", referent: storageCarrier, mutable: false });
+      captures.push(Object.freeze({ ...capture, carrier, physicalCarrier: physical.carrier, storage, owned, borrowedCarrier, parameterCarrier }));
     }
     input.producer.declaration(declaration, { captures: Object.freeze(captures), genericParameters: selection.genericParameters });
   }

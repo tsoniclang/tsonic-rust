@@ -1,19 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import {
-  createRustCallableOwnershipComponentQueries,
-  type RustCallableOwnershipComponent, type RustCallableOwnershipComponentQueries, type RustCallableOwnershipCapture,
-} from "./ownership-components.js";
+import { createRustCallableOwnershipComponentQueries, type RustCallableOwnershipComponentQueries } from "./ownership-components.js";
+import type { RustCallableOwnershipComponent, RustCallableOwnershipCapture } from "../../target-model/records/callable-ownership.js";
 
-export interface RustCallableActivation {
-  readonly kind: "lexical" | "class";
-  readonly ownerDeclaration: Node;
-  readonly activationScope: Node;
-  readonly components: readonly RustCallableOwnershipComponent[];
-  readonly callableDeclarations: readonly Node[];
-  readonly slotDeclarations: readonly Node[];
-  readonly externalCaptures: readonly RustCallableOwnershipCapture[];
-}
+import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 
 export type RustCallableStorageOwnership =
   | { readonly kind: "ordinary" }

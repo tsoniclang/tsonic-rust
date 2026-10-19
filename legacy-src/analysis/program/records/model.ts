@@ -17,6 +17,7 @@ import type { RustGenericEmissionProducer } from "./generic-emission.js";
 import type { RustLexicalFunctionProducer } from "./lexical-functions.js";
 import type { RustCallableDeclarationProducer } from "./callable-emission.js";
 import type { RustMethodEmissionProducer } from "./method-emission.js";
+import type { RustFrameEmissionProducer } from "./frame-emission.js";
 import type { RustNativeDeclarationProducer } from "./native-declarations.js";
 import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustNativeGenericProducer } from "./native-generics.js";
@@ -122,6 +123,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly lexicalFunctionPlans: RustLexicalFunctionProducer;
   readonly callableDeclarationPlans: RustCallableDeclarationProducer;
   readonly methodEmissionPlans: RustMethodEmissionProducer;
+  readonly frameEmissionPlans: RustFrameEmissionProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;

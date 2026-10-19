@@ -1,5 +1,5 @@
 import type { AstReader } from "@tsonic/tsts";
-import type { RustFrameCallableDefinition } from "./frame-values.js";
+import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 
 export function prepareRustRetainedFrameCounters(

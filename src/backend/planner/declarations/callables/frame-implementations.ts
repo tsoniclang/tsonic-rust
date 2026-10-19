@@ -1,10 +1,9 @@
-import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation } from "../../../../analysis/callables/frame-values.js";
+import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation } from "../../../../target-model/records/frame-callables.js";
 
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
@@ -15,8 +14,9 @@ import { genericCallableCopyStateItems } from "./generic-storage.js";
 import { rustSelfParameter } from "./self-parameter.js";
 import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
-import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
-import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
+import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
+import type { RustFrameDefinitionEmission } from "../../../../target-model/records/frame-emission.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 import { planRustFrameCallableFamilyItems } from "./frame-family-implementations.js";
@@ -31,16 +31,13 @@ function definitionContext(definition: RustFrameCallableDefinition, context: Rus
 }
 
 function definitionGenerics(definition: RustFrameCallableDefinition, context: RustPlanContext): RustGenerics {
-  const contracts = definition.entries.flatMap(entry => entry.implementations).map(implementation =>
-    context.input.program.declarationGenericRequirements.contractFor(implementation.declaration));
-  if (contracts.some(contract => contract === undefined))
-    failRustPlannerInvariant("A sealed frame entry lost its generic requirement contract.", definition.activation.ownerDeclaration);
-  return rustGenericsWithAssociatedBounds(definition.environmentParameters.map(parameter => ({ kind: "type", name:
-    context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
-    bounds: rustGenericRequirementBounds([...new Set(contracts.flatMap(contract =>
-      [...contract!.typeParameters, ...contract!.capturedTypeParameters].filter(selected => selected.identity === parameter.identity)
-        .flatMap(selected => selected.requirements)))]) })), [...new Map(contracts.flatMap(contract =>
-    rustDeclarationAssociatedPredicates(contract!.declaration, context)).map(predicate => [closedMetadataKey(predicate), predicate])).values()]);
+  const emission = context.input.program.records.frameDeclaration.get(definition);
+  if (emission === undefined) failRustPlannerInvariant("An admitted frame requires its sealed generic emission contract.", definition.activation.ownerDeclaration);
+  return rustGenericsWithAssociatedBounds(emission.parameters.map(parameter => ({
+    kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
+    bounds: rustGenericRequirementBounds(parameter.requirements),
+  })), [...rustAssociatedPredicates(emission.associated, context),
+    ...rustProjectProjectionPredicates(emission.projections, context)]);
 }
 
 function definitionMarker(generics: RustGenerics): RustType | undefined {
@@ -49,9 +46,10 @@ function definitionMarker(generics: RustGenerics): RustType | undefined {
   return parameters.length === 0 ? undefined : rustInvariantTypeMarker(parameters);
 }
 
-function entryHasPayload(implementation: RustFrameCallableImplementation, generics: RustGenerics): boolean {
-  return implementation.captures.length !== 0 || implementation.receiverFields.length !== 0 ||
-    implementation.receivers.length !== 0 || definitionMarker(generics) !== undefined;
+function entryHasPayload(implementation: RustFrameCallableImplementation, emission: RustFrameDefinitionEmission): boolean {
+  const payload = emission.payloads.get(implementation);
+  if (payload === undefined) failRustPlannerInvariant("An admitted native frame member requires its selected payload layout.", implementation.declaration);
+  return payload;
 }
 
 function stateType(implementation: RustFrameCallableImplementation, generics: RustGenerics): RustType {
@@ -60,7 +58,7 @@ function stateType(implementation: RustFrameCallableImplementation, generics: Ru
 }
 
 function entryClone(
-  entry: RustFrameCallableEntryDefinition, target: RustType, generics: RustGenerics,
+  entry: RustFrameCallableEntryDefinition, target: RustType, generics: RustGenerics, emission: RustFrameDefinitionEmission,
 ): readonly RustItem[] {
   if (entry.copy) return genericCallableCopyStateItems(target, generics);
   return [{ kind: "impl", trait: { kind: "named", path: "Clone" }, target, generics, members: [{
@@ -70,11 +68,11 @@ function entryClone(
         ...entry.implementations.filter(implementation => !implementation.independent).map((implementation):
           Extract<RustExpr, { readonly kind: "match" }>["arms"][number] => ({
         pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
-          { kind: "binding", name: "identity" }, ...(!entryHasPayload(implementation, generics) ? [] : [{ kind: "binding" as const, name: "state" }]),
+          { kind: "binding", name: "identity" }, ...(!entryHasPayload(implementation, emission) ? [] : [{ kind: "binding" as const, name: "state" }]),
         ] },
         expression: { kind: "call", path: `Self::${implementation.variantName}`, args: [
           { kind: "dereference", pointer: { kind: "path", path: "identity" } },
-          ...(!entryHasPayload(implementation, generics) ? [] : [implementation.copy
+          ...(!entryHasPayload(implementation, emission) ? [] : [implementation.copy
             ? { kind: "dereference" as const, pointer: { kind: "path" as const, path: "state" } }
             : { kind: "method-call" as const, receiver: { kind: "path" as const, path: "state" }, method: "clone", args: [] }]),
         ] },
@@ -88,10 +86,10 @@ function entryClone(
   }] }];
 }
 
-function entryEquality(entry: RustFrameCallableEntryDefinition, target: RustType, generics: RustGenerics): readonly RustItem[] {
+function entryEquality(entry: RustFrameCallableEntryDefinition, target: RustType, generics: RustGenerics, emission: RustFrameDefinitionEmission): readonly RustItem[] {
   const pattern = (implementation: RustFrameCallableImplementation, name: string): RustPattern => ({
     kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
-      { kind: "binding", name }, ...(!entryHasPayload(implementation, generics) ? [] : [{ kind: "wildcard" as const }]),
+      { kind: "binding", name }, ...(!entryHasPayload(implementation, emission) ? [] : [{ kind: "wildcard" as const }]),
     ],
   });
   return [{ kind: "impl", trait: { kind: "named", path: "PartialEq" }, target, generics, members: [{
@@ -119,10 +117,12 @@ function entryEquality(entry: RustFrameCallableEntryDefinition, target: RustType
 function planFrameEntry(
   definition: RustFrameCallableDefinition, entry: RustFrameCallableEntryDefinition, context: RustPlanContext,
 ): readonly RustItem[] | undefined {
+  const emission = context.input.program.records.frameDeclaration.get(definition);
+  if (emission === undefined) failRustPlannerInvariant("An admitted native frame requires its selected emission metadata.", definition.activation.ownerDeclaration);
   const carrier = entry.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
   const boundary = rustCurrentErrorBoundary(context);
-  if (types === undefined || boundary === undefined) return undefined;
+  if (types === undefined || boundary === undefined) failRustPlannerInvariant("An admitted native frame requires its complete storage and callable syntax.", definition.activation.ownerDeclaration);
   const generics = definitionGenerics(definition, context);
   const items: RustItem[] = [];
   const variants: Extract<RustItem, { readonly kind: "enum" }>["variants"][number][] = [];
@@ -131,11 +131,13 @@ function planFrameEntry(
   let resultType: RustType | undefined;
   for (const implementation of entry.implementations) {
     if (implementation.independent) continue;
+    const callable = context.input.program.records.callableDeclaration.get(implementation.declaration);
+    if (callable === undefined || callable.nativeAsync) failRustPlannerInvariant("An admitted frame entry requires its synchronous native invocation contract.", implementation.declaration);
     const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
       context.input.program.records.generator.get(implementation.declaration) !== undefined;
     const state = stateType(implementation, generics);
     const captures = rustCallablePayloadTypes(implementation, context);
-    if (captures === undefined) return undefined;
+    if (captures === undefined) failRustPlannerInvariant("An admitted native frame requires its complete storage and callable syntax.", definition.activation.ownerDeclaration);
     const marker = definitionMarker(generics);
     if (captures.length !== 0 || marker !== undefined) {
       items.push({ kind: "struct", name: implementation.stateName, visibility: "public", generics,
@@ -153,12 +155,13 @@ function planFrameEntry(
       rustCallablePayloadContext(implementation, { kind: "path", path: stateName }, context));
     const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
       implementation.functionName, true, helperContext);
-    if (helper?.kind !== "function" || helper.isAsync === true) return undefined;
     const parameters = helper.params;
-    argumentTypes ??= parameters.map(parameter => parameter.type);
-    const fallible = helper.errorType !== undefined;
+    argumentTypes ??= callable.parameterCarriers.map(carrier => rustTypeFromCarrierInContext(carrier, context)
+      ?? failRustPlannerInvariant("An admitted frame entry requires its renderable native argument ABI.", implementation.declaration));
+    const fallible = callable.resultWrapped;
     const output: RustType = { kind: "named", path: "Result", genericArguments: [
-      { kind: "type" as const, type: helper.returnType ?? { kind: "unit" as const } },
+      { kind: "type" as const, type: rustTypeFromCarrierInContext(callable.resultCarrier, context)
+        ?? failRustPlannerInvariant("An admitted frame entry requires its renderable native completion ABI.", implementation.declaration) },
       { kind: "type" as const, type: rustErrorType(boundary) },
     ] };
     resultType ??= output;
@@ -170,22 +173,22 @@ function planFrameEntry(
       ...parameters,
     ] });
     variants.push({ name: implementation.variantName, fields: [{ kind: "primitive", name: "usize" },
-      ...(!entryHasPayload(implementation, generics) ? [] : [implementation.copy ? state : shared(state)])] });
+      ...(!entryHasPayload(implementation, emission) ? [] : [implementation.copy ? state : shared(state)])] });
     const call: RustExpr = { kind: "call", path: implementation.functionName, args: [
       suspended ? { kind: "call", path: "alloc::rc::Rc::clone", args: [{ kind: "path", path: "frame" }] }
         : { kind: "path", path: "frame" },
       ...(captures.length === 0 ? [] : [!suspended ? { kind: "path" as const, path: "state" }
         : implementation.copy ? { kind: "dereference" as const, pointer: { kind: "path" as const, path: "state" } }
           : { kind: "call" as const, path: "alloc::rc::Rc::clone", args: [{ kind: "path" as const, path: "state" }] }]),
-      ...parameters.map((_parameter, index) => ({ kind: "field" as const,
+      ...callable.parameterCarriers.map((_parameter, index) => ({ kind: "field" as const,
         receiver: { kind: "path" as const, path: "arguments" }, name: String(index) })),
     ] };
     arms.push({ pattern: { kind: "tuple-variant", path: `Self::${implementation.variantName}`, elements: [
-      { kind: "wildcard" }, ...(!entryHasPayload(implementation, generics) ? [] : [captures.length === 0
+      { kind: "wildcard" }, ...(!entryHasPayload(implementation, emission) ? [] : [captures.length === 0
         ? { kind: "wildcard" as const } : { kind: "binding" as const, name: "state" }]),
     ] }, expression: fallible ? call : { kind: "call", path: "Ok", args: [call] } });
   }
-  if (argumentTypes === undefined || resultType === undefined) return undefined;
+  if (argumentTypes === undefined || resultType === undefined) failRustPlannerInvariant("An admitted native frame requires its complete storage and callable syntax.", definition.activation.ownerDeclaration);
   const independentType: RustType = { kind: "named", path: "rt::Callable", genericArguments: [
     { kind: "lifetime", lifetime: { kind: "static" } },
     { kind: "type", type: { kind: "tuple", elements: argumentTypes } }, { kind: "type", type: resultType },
@@ -197,7 +200,7 @@ function planFrameEntry(
         args: [{ kind: "path", path: "arguments" }] } });
   }
   items.push({ kind: "enum", name: entry.targetName, visibility: "public", generics, variants },
-    ...entryClone(entry, types.entryType, generics), ...entryEquality(entry, types.entryType, generics),
+    ...entryClone(entry, types.entryType, generics, emission), ...entryEquality(entry, types.entryType, generics, emission),
     { kind: "impl", generics, trait: { kind: "named", path: "rt::FrameCallableEntry",
       genericArguments: [{ kind: "type", type: types.frameType }] }, target: types.entryType, members: [
       { kind: "type", name: "Arguments", generics: emptyRustGenerics, type: { kind: "tuple", elements: argumentTypes } },
@@ -214,9 +217,9 @@ function planFrameEntry(
 
 export function planRustFrameCallableItems(context: RustPlanContext): readonly RustItem[] {
   const result: RustItem[] = [];
-  const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
-  for (const definition of context.input.program.callableValues.frames.definitions) {
-    if (definition.ownerFileName !== fileName) continue;
+  const definitions = context.input.program.records.frameDeclarations.get(context.sourceFile);
+  if (definitions === undefined) failRustPlannerInvariant("An admitted source module requires its sealed native frame inventory.", context.sourceFile);
+  for (const definition of definitions) {
     const local = definitionContext(definition, context);
     const fields = definition.bindings.map(binding => {
       const type = rustFrameBindingType(binding, local);
@@ -224,14 +227,14 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
     });
     const entries = definition.entries.map(entry => planFrameEntry(definition, entry, local));
     if (fields.some(field => field === undefined) || entries.some(items => items === undefined)) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, definition.activation.ownerDeclaration),
-        "rust.backend.frame-declaration", "A native frame requires its complete selected storage and invocation protocol."));
-      continue;
+      failRustPlannerInvariant("An admitted native frame requires its complete storage and invocation syntax.", definition.activation.ownerDeclaration);
     }
     context.usedAliases?.add("rt");
     const generics = definitionGenerics(definition, local);
     const marker = definitionMarker(generics);
-    const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
+    const emission = context.input.program.records.frameDeclaration.get(definition);
+    if (emission === undefined) failRustPlannerInvariant("An admitted frame requires its sealed counter storage selection.", definition.activation.ownerDeclaration);
+    const counterName = emission.counterName;
     if (definition.storage.kind === "standalone") result.push({ kind: "struct", name: definition.targetName, visibility: "public",
       generics, fields: [
         ...(counterName === undefined ? [] : [{ name: counterName, type: { kind: "named" as const, path: "rt::FrameEntryCounter" }, visibility: "public" as const }]),

@@ -5,6 +5,7 @@ import type { RustGenericEmissionRecords } from "./generic-emission.js";
 import type { RustLexicalFunctionEmission } from "./lexical-functions.js";
 import type { RustCallableDeclarationEmission } from "./callable-emission.js";
 import type { RustMethodEmissionRecords } from "./method-emission.js";
+import type { RustFrameEmissionRecords } from "./frame-emission.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
 import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
@@ -55,7 +56,7 @@ export interface RustRecordFamily<T> {
 }
 
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
-  RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords {
+  RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
   readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
   readonly generator: RustRecordFamily<RustGeneratorFact>;

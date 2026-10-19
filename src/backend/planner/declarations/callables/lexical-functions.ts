@@ -16,16 +16,9 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
   const parameters: { name: string; type: RustType }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
   for (const capture of selection.captures) {
-    const { carrier, physicalCarrier, storage, owned, borrowedCarrier } = capture;
-    const valueType = rustTypeFromCarrierInContext(physicalCarrier, context);
-    if (valueType === undefined || carrier === undefined) failRustPlannerInvariant("An admitted lexical function requires its renderable native capture environment.", declaration);
-    const physicalType: RustType = storage?.storage === "location"
-      ? { kind: "named", path: "rt::Location", genericArguments: [{ kind: "type", type: valueType }] }
-      : storage === undefined ? valueType : rustInlineBindingStorageType(storage.storage, valueType);
+    const { carrier, storage, owned, borrowedCarrier } = capture;
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
-    const parameterType = borrowedCarrier === undefined ? owned ? physicalType : {
-      kind: "reference" as const, referent: physicalType, mutable: false,
-    } : rustTypeFromCarrierInContext(borrowedCarrier, context);
+    const parameterType = rustTypeFromCarrierInContext(capture.parameterCarrier, context);
     if (parameterType === undefined) failRustPlannerInvariant("An admitted lexical function requires its renderable native capture environment.", declaration);
     parameters.push({ name, type: parameterType });
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },

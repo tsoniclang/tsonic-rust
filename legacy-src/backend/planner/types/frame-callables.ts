@@ -1,4 +1,4 @@
-import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../../analysis/callables/frame-values.js";
+import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../../target-model/records/frame-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";

@@ -7,6 +7,8 @@ import type { RustCallableDeclarationProducer } from "../program/records/callabl
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { isRustUnitCarrier } from "../../target-model/types/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustUnitTargetType } from "../../target-model/types/index.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
   readonly program: RustTargetProgram;
@@ -64,13 +66,32 @@ export function analyzeRustCallableDeclarationEmission(input: {
     const publicAbi = component !== undefined && (component.publishesImplementationAbi || name !== undefined && fileName !== undefined &&
       program.sourcePackageFacades.publicImplementationItemIdentitiesForComponent(component.componentId).includes(rustSourceItemIdentity(fileName, name)));
     const lexical = program.records.lexicalFunction.get(declaration);
+    const leading = program.records.callableLeading.get(declaration);
+    if (leading === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its exact leading parameter ABI.", declaration);
+    const parameterCarriers: TargetTypeRef[] = [...leading.parameters.map(parameter => parameter.carrier)];
+    for (const parameter of ast.parameters(declaration)) {
+      const selected = program.records.callableParameter.get(parameter);
+      if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its complete native formal parameter ABI.", parameter);
+      parameterCarriers.push(selected.carrier);
+    }
+    parameterCarriers.push(...(lexical?.captures.map(capture => capture.parameterCarrier) ?? []));
+    const nativeBody = program.promiseBodies.declarations.get(declaration);
+    const objectPromise = asyncFact?.kind === "js-promise" && nativeBody === undefined;
+    const resultCarrier = objectPromise ? program.records.callableReturn.get(declaration)?.invocation
+      : isRustUnitCarrier(carrier) ? rustUnitTargetType() : program.records.callableReturn.get(declaration)?.outward;
+    if (resultCarrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its selected physical native result.", declaration);
+    const error = program.records.nativeErrorRegion.get(declaration);
+    if (error === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its selected native error region.", declaration);
     input.producer.declaration(declaration, { name, exported,
       visibility: lexical !== undefined ? "private" : exported || publicAbi ? "public" : "crate",
       deadCode: input.reachability.suppressedDeclarations.has(declaration) ? "authored-declaration" : undefined,
-      nativeBody: program.promiseBodies.declarations.get(declaration), promiseObject: program.promiseBodies.objects.has(declaration),
+      nativeBody, promiseObject: program.promiseBodies.objects.has(declaration),
       requiresSpecialization: program.sourceCallableSpecializations.requiresSpecialization(declaration),
       specializations: program.sourceCallableSpecializations.variantsForCallable(declaration),
       canFallThrough,
+      parameterCarriers: Object.freeze(parameterCarriers), resultCarrier,
+      nativeAsync: generator === undefined && (asyncFact?.kind === "native-future" || nativeBody !== undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"),
+      resultWrapped: !objectPromise && error.kind !== "infallible",
     });
   }
   return Object.freeze(issues);

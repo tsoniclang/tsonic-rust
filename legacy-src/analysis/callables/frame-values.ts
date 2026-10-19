@@ -14,7 +14,8 @@ import { rustCallableOrigin } from "../../policy/types/callables/callable-origin
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
@@ -22,52 +23,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 
-export interface RustFrameCallableImplementation {
-  readonly declaration: Node;
-  readonly carrier: TargetTypeRef;
-  readonly capture: RustClosureCaptureFact;
-  readonly variantName: string;
-  readonly functionName: string;
-  readonly stateName: string;
-  readonly captures: RustClosureCaptureFact["captures"];
-  readonly receiverFields: RustClosureCaptureFact["receiverFields"];
-  readonly receivers: RustClosureCaptureFact["receivers"];
-  readonly copy: boolean;
-  readonly independent: boolean;
-}
-
-export interface RustFrameCallableEntryDefinition {
-  readonly key: string;
-  readonly targetName: string;
-  readonly signature: RustCallableSignature;
-  readonly implementations: readonly RustFrameCallableImplementation[];
-  readonly copy: boolean;
-  readonly environmentIndexes: readonly number[];
-  readonly hasIndependent: boolean;
-}
-
-export interface RustFrameCallableBinding {
-  readonly declaration: Node;
-  readonly fieldName: string;
-  readonly carrier: TargetTypeRef;
-  readonly entry: RustFrameCallableEntryDefinition | undefined;
-  readonly initialization: "ready" | "deferred";
-  readonly storage: "value" | "location" | "cell" | "borrow-cell";
-}
-
-export interface RustFrameCallableDefinition {
-  readonly activation: RustCallableActivation;
-  readonly owner: RustCallableOrigin;
-  readonly ownerFileName: string;
-  readonly targetName: string;
-  readonly counterName: string;
-  readonly storage: { readonly kind: "standalone"; readonly instanceFieldName?: string }
-    | { readonly kind: "object"; readonly mutable: boolean };
-  readonly entries: readonly RustFrameCallableEntryDefinition[];
-  readonly bindings: readonly RustFrameCallableBinding[];
-  readonly environmentParameters: readonly Extract<TargetTypeRef, { readonly kind: "type-parameter" }>[];
-  readonly constructionExposure?: { readonly declaration: Node; readonly expression: Node };
-}
+import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding, RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
 
 export interface RustFrameCallablePlan {
   readonly definitions: readonly RustFrameCallableDefinition[];

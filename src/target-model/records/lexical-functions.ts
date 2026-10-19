@@ -12,6 +12,7 @@ export interface RustLexicalCaptureEmission {
   readonly storage: RustBindingStorageFact | undefined;
   readonly owned: boolean;
   readonly borrowedCarrier: TargetTypeRef | undefined;
+  readonly parameterCarrier: TargetTypeRef;
 }
 
 export interface RustLexicalFunctionEmission {

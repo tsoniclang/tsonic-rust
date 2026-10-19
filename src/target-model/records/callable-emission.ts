@@ -21,4 +21,8 @@ export interface RustCallableDeclarationEmission {
   readonly requiresSpecialization: boolean;
   readonly specializations: readonly RustSourceCallableSpecializationVariant[];
   readonly canFallThrough: boolean;
+  readonly parameterCarriers: readonly TargetTypeRef[];
+  readonly resultCarrier: TargetTypeRef;
+  readonly nativeAsync: boolean;
+  readonly resultWrapped: boolean;
 }

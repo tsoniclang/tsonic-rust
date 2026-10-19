@@ -5,7 +5,8 @@ import { rustCallableOrigin } from "../../policy/types/callables/callable-origin
 import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 import type { RustClassFrameInstantiation } from "../../policy/types/resolution/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
