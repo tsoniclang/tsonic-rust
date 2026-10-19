@@ -27,12 +27,13 @@ import type { RustCapturedFieldStorageFact } from "./receiver-captures.js";
 import type { RustPropertyProjectionFact } from "./property-projections.js";
 import type { RustClassValueFact } from "./class-values.js";
 import type { RustStatementExitRecords } from "./statement-exits.js";
+import type { RustStatementCompletionRecords } from "./statement-completion.js";
 
 export interface RustRecordFamily<T> {
   readonly get: (subject: ExtensionFactSubject | undefined) => T | undefined;
 }
 
-export interface RustProgramRecords extends RustStatementExitRecords {
+export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords {
   readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
   readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
   readonly generator: RustRecordFamily<RustGeneratorFact>;

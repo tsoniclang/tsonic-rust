@@ -32,14 +32,15 @@ import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
+import { createRustBreakTarget, createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCountedLoopRepresentation } from "../../../analysis/control-flow/counted-loop-representations.js";
 import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
-import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
+import type { RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
 function planCondition(statement: Node, context: RustPlanContext) {
-  const condition = context.input.program.statementCompletions.conditionFor(statement);
+  const condition = context.input.program.records.statementCondition.get(statement);
   if (condition === undefined) failRustPlannerInvariant("Control flow requires its admitted native Boolean condition.", statement);
   return planExpression(condition, context);
 }
@@ -113,7 +114,7 @@ function tryPlanSelectedProjectTypeTestIf(
   elseStatement: Node | undefined,
   context: RustPlanContext,
 ): { readonly handled: boolean; readonly statements?: readonly RustStmt[] } {
-  const narrowedReads = context.input.program.statementCompletions.projectTypeTestReadsFor(statement);
+  const narrowedReads = context.input.program.records.projectTypeTestReads.get(statement);
   if (narrowedReads === undefined) return { handled: false };
   const fact = context.input.program.records.targetOperation.get(condition);
   if (fact?.kind !== "project-type-test" || fact.lowering.kind !== "dispatch" ||
@@ -283,7 +284,7 @@ export function planForStatement(
     return planCountedForStatement(node, counted, context);
   }
   const initializer = ForStatement_Initializer(context.input.program.source.ast, node);
-  const condition = context.input.program.statementCompletions.conditionFor(node);
+  const condition = context.input.program.records.statementCondition.get(node);
   const incrementor = ForStatement_Incrementor(context.input.program.source.ast, node);
   const planLoop = (loopContext: RustPlanContext): RustBlock | undefined => {
     const conditionExpr = condition === undefined
@@ -417,66 +418,6 @@ function planCountedForStatement(
       }, ...body.statements],
     },
   }];
-}
-
-export function createRustLoopTarget(
-  context: RustPlanContext,
-  source: Node,
-  continuePrelude: readonly RustStmt[],
-): RustLoopTarget | undefined {
-  if (context.syntheticNames === undefined || context.controlFlow === undefined) {
-    failRustPlannerInvariant("Loop lowering requires finalized hygienic names and control-flow state.", context.sourceFile);
-  }
-  const sourceTargets = context.input.program.statementCompletions.controlTargetsFor(source);
-  if (sourceTargets === undefined) failRustPlannerInvariant("Loop lowering requires its exact admitted source targets.", source);
-  const target: RustLoopTarget = {
-    kind: "loop",
-    id: context.controlFlow.nextLoopId,
-    label: allocateRustSyntheticName(context.syntheticNames, "loop"),
-    sourceTargets,
-    ...(context.completionBoundary === undefined
-      ? {}
-      : { resourceBoundary: context.completionBoundary }),
-    used: { value: false },
-    breakUsed: { value: false },
-    continuePrelude,
-  };
-  context.controlFlow.nextLoopId += 1;
-  return target;
-}
-
-export function createRustBreakTarget(
-  context: RustPlanContext,
-  source: Node,
-  kind: "switch" | "label",
-): RustControlTarget | undefined {
-  if (context.syntheticNames === undefined || context.controlFlow === undefined) {
-    failRustPlannerInvariant("Labeled control flow requires finalized hygienic names and control-flow state.", context.sourceFile);
-  }
-  const sourceTargets = context.input.program.statementCompletions.controlTargetsFor(source);
-  if (sourceTargets === undefined) failRustPlannerInvariant("Labeled control flow requires its exact admitted source targets.", source);
-  const target: RustControlTarget = {
-    kind,
-    id: context.controlFlow.nextLoopId,
-    label: allocateRustSyntheticName(context.syntheticNames, kind),
-    sourceTargets,
-    ...(context.completionBoundary === undefined
-      ? {}
-      : { resourceBoundary: context.completionBoundary }),
-    used: { value: false },
-  };
-  context.controlFlow.nextLoopId += 1;
-  return target;
-}
-
-export function withRustControlTarget(
-  context: RustPlanContext,
-  target: RustControlTarget,
-): RustPlanContext {
-  return {
-    ...context,
-    controlTargets: [...(context.controlTargets ?? []), target],
-  };
 }
 
 function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {

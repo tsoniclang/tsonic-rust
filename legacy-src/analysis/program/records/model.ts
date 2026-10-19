@@ -74,6 +74,7 @@ import type { RustPreparedOperationResultProducer } from "./prepared-operation-r
 import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
 import type { RustStatementExitProducer } from "./statement-exits.js";
+import type { RustStatementCompletionProducer } from "./statement-completion.js";
 
 export interface RustAnalysisRecords extends RustProgramRecords {
   readonly rawLocationPlan: RustRecordFamily<RustRawLocationPlan>;
@@ -85,6 +86,7 @@ export interface RustAnalysisRecords extends RustProgramRecords {
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly statementExits: RustStatementExitProducer;
+  readonly statementCompletions: RustStatementCompletionProducer;
   readonly nativeHandlers: RustNativeHandlerProducer;
   readonly assertOpen: () => void;
   readonly conversions: RustConversionProducer;

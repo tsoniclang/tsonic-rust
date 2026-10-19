@@ -356,7 +356,8 @@ export function analyzeRustTargetProgram(
     isNativeNode: context.isNativeNode, records });
   const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
-    records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections });
+    records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections,
+    producer: context.records.statementCompletions, required: context.requiredRecords });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
     navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
@@ -383,7 +384,6 @@ export function analyzeRustTargetProgram(
   } = {
     sourceOutputIdentities: sourceOutputIdentities.identities,
     physicalEmissionContexts: callableValues.value.emissionContexts,
-    statementCompletions: statementCompletions.plan,
     errorRegions: completedErrorRegions,
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records }),

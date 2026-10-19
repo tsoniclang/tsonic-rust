@@ -119,7 +119,7 @@ export function planExpressionAsStatement(
         ));
         return undefined;
       }
-      if (context.input.program.statementCompletions.assignmentFor(expression) !== assignment)
+      if (context.input.program.records.assignmentCompletion.get(expression) !== assignment)
         failRustPlannerInvariant("Assignment requires its admitted native operator selection.", expression);
       selectedAssignmentFact = assignment;
     }
@@ -139,7 +139,7 @@ export function planExpressionAsStatement(
         ));
         return undefined;
       }
-      if (context.input.program.statementCompletions.assignmentFor(expression) !== fact)
+      if (context.input.program.records.assignmentCompletion.get(expression) !== fact)
         failRustPlannerInvariant("Compound assignment requires its admitted native operator selection.", expression);
       const operator = fact.operator;
       if (!isRustAssignmentOperator(operator)) {

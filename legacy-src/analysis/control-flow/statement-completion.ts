@@ -15,7 +15,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationBindingCompletion,
-  RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionIndex,
+  RustIterationCompletion, RustRuntimeSetterCompletion, RustStatementCompletionRecords,
 } from "../../target-model/records/statement-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustBoolCarrier, isRustUnitCarrier } from "../../target-model/types/index.js";
@@ -26,6 +26,8 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import { rustSwitchComparisonMatches } from "../operations/contracts/switch.js";
 import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-selections.js";
 import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
+import type { RustStatementCompletionProducer } from "../program/records/statement-completion.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
@@ -36,10 +38,12 @@ export interface RustStatementCompletionInput {
   readonly typeDefinitions: RustTypeDefinitions;
   readonly errorRegions: RustErrorRegionRecords;
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
+  readonly producer: RustStatementCompletionProducer;
+  readonly required: RustRequiredRecord[];
 }
 
 export type RustStatementCompletionSelection =
-  | { readonly kind: "resolved"; readonly plan: RustStatementCompletionIndex }
+  | { readonly kind: "resolved"; readonly plan: RustStatementCompletionRecords }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
 
 const supportedStatements: ReadonlySet<string> = new Set([
@@ -340,9 +344,18 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
   }
   if (diagnostics.length > 0) return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
-  return { kind: "resolved", plan: Object.freeze({ admitted: (node: Node) => admitted.has(node),
-    conditionFor: (node: Node) => conditions.get(node), controlTargetsFor: (node: Node) => targets.get(node),
-    exitFor: (node: Node) => exits.get(node), iterationFor: (node: Node) => iterations.get(node),
-    setterFor: (node: Node) => setters.get(node), assignmentFor: (node: Node) => assignments.get(node),
-    projectTypeTestReadsFor: (node: Node) => projectReads.get(node) }) };
+  for (const subject of admitted) {
+    requireRustRecord(input.required, "statementAdmission", subject, ast.kindName(subject), "analyzeRustStatementCompletions");
+  }
+  for (const [family, selected] of [
+    ["statementCondition", conditions], ["statementControlTargets", targets], ["controlExit", exits],
+    ["iterationCompletion", iterations], ["runtimeSetter", setters], ["assignmentCompletion", assignments],
+    ["projectTypeTestReads", projectReads],
+  ] as const) {
+    for (const subject of selected.keys()) {
+      requireRustRecord(input.required, family, subject, ast.kindName(subject), "analyzeRustStatementCompletions");
+    }
+  }
+  input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads });
+  return { kind: "resolved", plan: input.producer.records };
 }

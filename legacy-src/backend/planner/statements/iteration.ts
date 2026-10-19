@@ -9,7 +9,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "../expressions/conversions.js";
 import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
-import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
+import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
@@ -27,7 +27,7 @@ export function planRuntimeSetStatement(
   fact: Extract<import("../../../target-model/records/operations.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const admitted = context.input.program.statementCompletions.setterFor(expression);
+  const admitted = context.input.program.records.runtimeSetter.get(expression);
   if (admitted === undefined) failRustPlannerInvariant("Runtime setter requires its admitted native source operands and ABI correspondence.", expression);
   const sourceArgumentNodes = admitted.sourceArguments;
   if (fact.abi.effects.safety === "requires-unsafe" &&
@@ -52,7 +52,7 @@ export function planForOfStatement(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const fact = context.input.program.records.targetOperation.get(node);
-  const completion = context.input.program.statementCompletions.iterationFor(node);
+  const completion = context.input.program.records.iterationCompletion.get(node);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind === "for-in") {
     failRustPlannerInvariant("for-of requires its admitted native iteration selection.", node);
   }
@@ -239,7 +239,7 @@ export function planForInStatement(
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
   const fact = context.input.program.records.targetOperation.get(node);
-  const completion = context.input.program.statementCompletions.iterationFor(node);
+  const completion = context.input.program.records.iterationCompletion.get(node);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
     (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "js-array-index-keys" &&
       fact.lowering.kind !== "static-keys" && fact.lowering.kind !== "record-keys")) {

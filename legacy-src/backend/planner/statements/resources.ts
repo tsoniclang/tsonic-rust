@@ -358,7 +358,7 @@ export function planLoopExitStatement(
   completion: "break" | "continue",
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const exit = context.input.program.statementCompletions.exitFor(node);
+  const exit = context.input.program.records.controlExit.get(node);
   if (exit === undefined || exit.completion !== completion) {
     failRustPlannerInvariant("Control transfer requires its exact admitted source destination.", node);
   }

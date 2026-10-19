@@ -10,12 +10,12 @@ import { rustTargetOperationIsDirectLocation } from "../operations/target-operat
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
 import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
-import type { RustStatementCompletionIndex } from "../../target-model/records/statement-completion.js";
+import type { RustStatementCompletionRecords } from "../../target-model/records/statement-completion.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;
 
 type RustProviderMutableInputContext = RustNativeStoragePathInput & {
-  readonly statementCompletions: Pick<RustStatementCompletionIndex, "setterFor">;
+  readonly statementCompletions: Pick<RustStatementCompletionRecords, "runtimeSetter">;
 };
 
 export type RustProviderMutableInputSelection =
@@ -48,7 +48,7 @@ export function selectRustProviderMutableInputs(
       reason: "Mutable provider admission requires its exact owned operation fact." });
   const mutable = rustFinalizedSourceInputs(operation.abi).filter(value => value.mode === "mut-ref");
   if (mutable.length === 0) return undefined;
-  const setter = operation.kind === "runtime-set" ? input.statementCompletions.setterFor(operationNode) : undefined;
+  const setter = operation.kind === "runtime-set" ? input.statementCompletions.runtimeSetter.get(operationNode) : undefined;
   if (operation.kind === "runtime-set" && setter === undefined) return Object.freeze({ kind: "rejected", node: operationNode,
     reason: "Mutable setter admission requires its exact admitted source operand binding." });
   const kind = input.ast.kindName(operationNode);

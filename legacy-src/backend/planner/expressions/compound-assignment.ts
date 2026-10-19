@@ -38,7 +38,7 @@ export function planCompoundAssignmentExpression(
   }
   if (left === undefined || right === undefined || context.syntheticNames === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.compound-assignment-carrier") ||
-    context.input.program.statementCompletions.assignmentFor(node) !== fact) return undefined;
+    context.input.program.records.assignmentCompletion.get(node) !== fact) return undefined;
   const evaluation = prepareRustComputedMemberEvaluation(left, context);
   if (evaluation === undefined) return undefined;
   if (evaluation.bindings.length !== 0) {

@@ -23,13 +23,17 @@ export interface RustRuntimeSetterCompletion {
   readonly sourceArguments: readonly Node[];
 }
 
-export interface RustStatementCompletionIndex {
-  readonly admitted: (statement: Node) => boolean;
-  readonly conditionFor: (statement: Node) => Node | undefined;
-  readonly controlTargetsFor: (statement: Node) => readonly Node[] | undefined;
-  readonly exitFor: (statement: Node) => RustControlExitCompletion | undefined;
-  readonly iterationFor: (statement: Node) => RustIterationCompletion | undefined;
-  readonly setterFor: (expression: Node) => RustRuntimeSetterCompletion | undefined;
-  readonly assignmentFor: (expression: Node) => RustAssignmentCompletion | undefined;
-  readonly projectTypeTestReadsFor: (statement: Node) => readonly Node[] | undefined;
+interface RustStatementRecord<Value> {
+  readonly get: (subject: Node | undefined) => Value | undefined;
+}
+
+export interface RustStatementCompletionRecords {
+  readonly statementAdmission: RustStatementRecord<true>;
+  readonly statementCondition: RustStatementRecord<Node>;
+  readonly statementControlTargets: RustStatementRecord<readonly Node[]>;
+  readonly controlExit: RustStatementRecord<RustControlExitCompletion>;
+  readonly iterationCompletion: RustStatementRecord<RustIterationCompletion>;
+  readonly runtimeSetter: RustStatementRecord<RustRuntimeSetterCompletion>;
+  readonly assignmentCompletion: RustStatementRecord<RustAssignmentCompletion>;
+  readonly projectTypeTestReads: RustStatementRecord<readonly Node[]>;
 }
