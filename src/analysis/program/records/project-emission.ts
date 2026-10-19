@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
+import type { RustProjectTypeDefinition, RustProjectMemberSlotRole } from "../../../target-model/types/project-types.js";
 import type { RustObjectRepresentation } from "../../../target-model/records/object-representation.js";
 import type { RustProjectEmissionRecords, RustProjectGenericEmission } from "../../../target-model/records/project-emission.js";
 import type { RustLifetimeRef } from "../../../target-model/lifetimes/model.js";
@@ -15,6 +15,7 @@ import type { RustCheckedProjectProjectionEmission } from "../../../target-model
 import type { RustProjectProjectionImplementation } from "../../../target-model/records/project-projections.js";
 
 export interface RustProjectEmissionProducer {
+  memberSlots(declaration: Node, values: ReadonlyMap<RustProjectMemberSlotRole, string>): void;
   projections(definition: RustProjectTypeDefinition, values: readonly RustProjectProjectionImplementation[]): void;
   stateConstruction(definition: RustProjectTypeDefinition, value: { readonly baseName: string; readonly visibility: "public" | "crate" }): void;
   checkedProjection(carrier: TargetTypeRef, value: RustCheckedProjectProjectionEmission): void;
@@ -43,9 +44,11 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
   const stateConstruction = new WeakMap<RustProjectTypeDefinition, { readonly baseName: string; readonly visibility: "public" | "crate" }>();
   const checkedProjections = new Map<string, RustCheckedProjectProjectionEmission>();
   const projections = new WeakMap<RustProjectTypeDefinition, readonly RustProjectProjectionImplementation[]>();
+  const slots = new WeakMap<Node, ReadonlyMap<RustProjectMemberSlotRole, string>>();
   const genericKey = (indexes: readonly number[], outlives: readonly RustLifetimeRef[], body: true | undefined): string =>
     JSON.stringify([indexes, outlives.map(rustLifetimeKey), body === true]);
   return Object.freeze({ records: Object.freeze({
+    projectMemberSlot: Object.freeze({ get: (declaration: Node, role: RustProjectMemberSlotRole) => slots.get(declaration)?.get(role) }),
     projectProjectionImplementations: Object.freeze({ get: (definition: RustProjectTypeDefinition) => projections.get(definition) }),
     projectStateConstruction: Object.freeze({ get: (definition: RustProjectTypeDefinition) => stateConstruction.get(definition) }),
     checkedProjectProjection: Object.freeze({ get: (carrier: TargetTypeRef) => checkedProjections.get(closedMetadataKey(carrier)) }),
@@ -64,6 +67,11 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
     projectGenerics: Object.freeze({ get: (definition: RustProjectTypeDefinition, indexes?: readonly number[], outlives: readonly RustLifetimeRef[] = [], body?: true) =>
       generics.get(definition)?.get(genericKey(indexes ?? definition.genericParameters.map((_, index) => index), outlives, body)) }),
   }),
+    memberSlots(declaration: Node, values: ReadonlyMap<RustProjectMemberSlotRole, string>): void {
+      assertOpen();
+      if (slots.has(declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native member slot inventory has one source owner.", declaration);
+      slots.set(declaration, new Map(values));
+    },
     projections(definition: RustProjectTypeDefinition, values: readonly RustProjectProjectionImplementation[]): void {
       assertOpen();
       if (projections.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A native project projection inventory has one source owner.", definition.declaration);

@@ -11,6 +11,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { selectRustCheckedProjectProjection } from "../../policy/objects/checked-project-projections.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import type { RustProjectMemberSlotRole } from "../../target-model/types/project-types.js";
 
 export function analyzeRustProjectEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -96,5 +97,11 @@ export function analyzeRustProjectEmission(input: {
   for (const node of new Set(input.nodes)) {
     const owner = program.projectTypes.definitionContainingDeclaration(node);
     if (owner !== undefined) producer.member(node, owner);
+    const slots = new Map<RustProjectMemberSlotRole, string>();
+    for (const role of ["read", "write", "capture", "virtual", "exact", "method-write", "static"] as const) {
+      const name = program.projectTypes.memberSlotName(node, role);
+      if (name !== undefined) slots.set(role, name);
+    }
+    producer.memberSlots(node, slots);
   }
 }

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
-import type { RustProjectTypeDefinition } from "../types/project-types.js";
+import type { RustProjectTypeDefinition, RustProjectMemberSlotRole } from "../types/project-types.js";
 import type { RustLifetimeRef, RustSourceGenericParameterContract } from "../lifetimes/model.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 import type { RustGenericRequirement, RustAssociatedTypeRequirement, RustOptionalStorageRequirement } from "./generic-requirements.js";
@@ -20,6 +20,7 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly projectMemberSlot: { readonly get: (declaration: Node, role: RustProjectMemberSlotRole) => string | undefined };
   readonly projectProjectionImplementations: { readonly get: (definition: RustProjectTypeDefinition) => readonly RustProjectProjectionImplementation[] | undefined };
   readonly projectStateConstruction: { readonly get: (definition: RustProjectTypeDefinition) => { readonly baseName: string; readonly visibility: "public" | "crate" } | undefined };
   readonly checkedProjectProjection: { readonly get: (carrier: TargetTypeRef) => RustCheckedProjectProjectionEmission | undefined };
