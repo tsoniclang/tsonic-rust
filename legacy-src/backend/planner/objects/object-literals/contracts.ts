@@ -87,6 +87,7 @@ export function planContractImplementation(
           stateField.targetName,
           field.carrier,
           representation,
+          context,
         )
       : {
           kind: "method-call",

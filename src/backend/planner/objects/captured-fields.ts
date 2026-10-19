@@ -1,29 +1,16 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
-import { isRustCopyCarrier } from "../../../target-model/types/index.js";
-
-import { validatedRustCapturedFieldStorageFact } from "../../../analysis/storage/receiver-captures.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../expressions/binding-storage.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "../bindings/deferred-storage.js";
 
 export function rustCapturedFieldStorage(declaration: Node, context: RustPlanContext): RustCapturedFieldStorage | undefined {
   const fact = context.input.program.records.capturedFieldStorage.get(declaration);
-  const captures = context.input.program.objectRepresentations.receiverCaptures;
-  const demanded = captures.isCaptured(declaration);
-  if (!demanded && fact === undefined) return undefined;
-  const validated = validatedRustCapturedFieldStorageFact(declaration, context.input.program);
-  if (validated === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
-      "rust.backend.captured-field-storage", "A live field owner requires its exact canonical declaration-carrier storage fact."));
-    return undefined;
-  }
-  return validated.storage;
+  return fact?.storage;
 }
 
 export function rustCapturedFieldType(storage: RustCapturedFieldStorage | undefined, type: RustType): RustType {
@@ -70,19 +57,22 @@ function rustCapturedFieldPayload(storage: RustCapturedFieldStorage, owner: Rust
   }, method: "expect", args: [{ kind: "str-literal", value: "captured field is not initialized" }] };
 }
 
-export function readRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, carrier: TargetTypeRef): RustExpr {
+export function readRustCapturedField(storage: RustCapturedFieldStorage, owner: RustExpr, carrier: TargetTypeRef, context: RustPlanContext): RustExpr {
   if (storage.kind === "copy") return owner;
+  const selected = context.input.program.records.carrierRead.get(carrier);
+  if (selected === undefined) failRustPlannerInvariant("An admitted captured field read requires its sealed native ownership disposition.");
   const payload = rustCapturedFieldPayload(storage, owner);
-  if (storage.kind !== "shared") return rustBindingStorageOperations(storage.kind, isRustCopyCarrier(carrier)).read(payload);
+  if (storage.kind !== "shared") return rustBindingStorageOperations(storage.kind, selected.copy).read(payload);
   const reference: RustExpr = storage.initialization === "deferred" ? payload
     : { kind: "method-call", receiver: payload, method: "as_ref", args: [] };
-  return isRustCopyCarrier(carrier) ? { kind: "dereference", pointer: reference }
+  return selected.copy ? { kind: "dereference", pointer: reference }
     : { kind: "method-call", receiver: reference,
       method: "clone", args: [] };
 }
 
 export function rustCapturedFieldLocation(
   storage: RustCapturedFieldStorage, owner: RustExpr, carrier: TargetTypeRef,
+  context: RustPlanContext,
   projection: readonly string[] = [], resultCarrier: TargetTypeRef = carrier,
 ): RustValueFieldLocation & { readonly withRead: NonNullable<RustValueFieldLocation["withRead"]> } {
   const payload = rustCapturedFieldPayload(storage, owner);
@@ -90,10 +80,12 @@ export function rustCapturedFieldLocation(
   const borrowed: RustExpr = storage.kind === "borrow-cell" || storage.kind === "cell"
     ? rustBindingStorageOperations(storage.kind).borrowedRead(payload) : payload;
   const selected = project(borrowed);
-  return { bindings: [], read: projection.length === 0 ? readRustCapturedField(storage, owner, carrier)
-      : isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
+  const ownership = context.input.program.records.carrierRead.get(resultCarrier);
+  if (ownership === undefined) failRustPlannerInvariant("An admitted captured field projection requires its sealed native ownership disposition.");
+  return { bindings: [], read: projection.length === 0 ? readRustCapturedField(storage, owner, carrier, context)
+      : ownership.copy ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
     write: value => writeRustCapturedField(storage, owner, value, projection),
-    project: (names, selectedCarrier) => rustCapturedFieldLocation(storage, owner, carrier, [...projection, ...names], selectedCarrier),
+    project: (names, selectedCarrier) => rustCapturedFieldLocation(storage, owner, carrier, context, [...projection, ...names], selectedCarrier),
     withRead: apply => apply(project(borrowed)),
   };
 }

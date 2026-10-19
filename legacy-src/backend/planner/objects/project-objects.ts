@@ -10,6 +10,7 @@ import type { RustObjectRepresentation } from "../../../target-model/records/obj
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { rustCapturedFieldLocation, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
+import type { RustPlanContext } from "../program/plan-context.js";
 
 export const rustProjectObjectStateField = "state";
 export const rustProjectObjectIdentityField = "identity";
@@ -115,11 +116,12 @@ export function readRustProjectObjectField(
   storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
   representation: RustObjectRepresentation,
+  context: RustPlanContext,
   captureStorage?: RustCapturedFieldStorage,
   projection: readonly string[] = [],
 ): RustExpr {
   return withRustProjectStoredField(receiver, storagePath, representation, field => captureStorage !== undefined
-    ? rustCapturedFieldLocation(captureStorage, field, resultCarrier, projection, resultCarrier).read
+    ? rustCapturedFieldLocation(captureStorage, field, resultCarrier, context, projection, resultCarrier).read
     : isRustCopyCarrier(resultCarrier) ? field : { kind: "method-call", receiver: field, method: "clone", args: [] });
 }
 

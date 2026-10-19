@@ -62,7 +62,7 @@ export function planProjectPrivateStateAccessors(
           kind: "tail",
           expr: rustCapturedFieldStorage(field.declaration, context) !== undefined
             ? readRustCapturedField(rustCapturedFieldStorage(field.declaration, context)!,
-              { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier)
+              { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier, context)
             : isRustCopyCarrier(field.carrier)
             ? fieldExpression
             : { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] },
@@ -86,7 +86,7 @@ export function planProjectPrivateStateAccessors(
               target: fieldExpression,
               value: { kind: "path", path: "value" },
             } : rustCapturedFieldLocation(rustCapturedFieldStorage(field.declaration, context)!,
-              { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier)
+              { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] }, field.carrier, context)
               .write({ kind: "path", path: "value" }, context)!,
           }],
         },

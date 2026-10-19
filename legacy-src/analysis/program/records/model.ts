@@ -22,6 +22,7 @@ import type { RustSuspendedCallableProducer } from "./suspended-callables.js";
 import type { RustConstructionProducer } from "./construction.js";
 import type { RustClassEmissionProducer } from "./class-emission.js";
 import type { RustProjectEmissionProducer } from "./project-emission.js";
+import type { RustCarrierReadProducer } from "./carrier-reads.js";
 import type { RustBorrowedInitializerProducer } from "./borrowed-initializers.js";
 import type { RustCaptureStorageProducer } from "./capture-storage.js";
 import type { RustBindingEmissionProducer } from "./binding-emission.js";
@@ -138,6 +139,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly constructionPlans: RustConstructionProducer;
   readonly classEmissionPlans: RustClassEmissionProducer;
   readonly projectEmissionPlans: RustProjectEmissionProducer;
+  readonly carrierReadPlans: RustCarrierReadProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;

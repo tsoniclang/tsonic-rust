@@ -226,7 +226,7 @@ export function readRustStoredObjectField(
   const captured = declaration === undefined ? undefined : rustCapturedFieldStorage(declaration, context);
   return path === undefined || representation === undefined
     ? undefined
-    : readRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, resultCarrier, representation,
+    : readRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, resultCarrier, representation, context,
       captured, captured === undefined ? [] : projection);
 }
 

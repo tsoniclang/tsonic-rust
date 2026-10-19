@@ -213,7 +213,7 @@ export function rustCapturedReceiverFieldContext(
       context.lifetimeSubstitutions ?? new Map());
     for (const reference of capture.references) {
       owners.set(reference, owner);
-      const location = rustCapturedFieldLocation(capture.storage, owner, carrier);
+      const location = rustCapturedFieldLocation(capture.storage, owner, carrier, context);
       if (guarded) identities.set(reference, identity);
       locations.set(reference, !guarded ? location : { ...location, write: (value, writeContext) => {
         const region = writeContext.fallibleBoundary;

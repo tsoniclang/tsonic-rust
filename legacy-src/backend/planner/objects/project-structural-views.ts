@@ -154,7 +154,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         const selected = path.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), { kind: "path", path: "state" });
         const read: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with", args: [{
           kind: "closure", params: [{ name: "state", byRefCopy: false }],
-          body: captured !== undefined ? readRustCapturedField(captured, selected, source.resultCarrier)
+          body: captured !== undefined ? readRustCapturedField(captured, selected, source.resultCarrier, local)
             : isRustCopyCarrier(source.resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
         }] };
         const adapted = member.readAdapter === undefined ? undefined : applyRustCallableValueAdapter(read, member.readAdapter, member.declaration, local);

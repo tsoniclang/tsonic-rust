@@ -106,7 +106,7 @@ export function planRustValueFieldLocation(
             selectedField.receiverCarrier, receiver, selectedField.storageIndex, "=", value, context),
             ...(path === undefined || representation === undefined ? {} : {
               withRead: (apply: (value: RustExpr) => RustExpr | undefined) => withRustProjectStoredField(receiver, path, representation,
-                field => rustCapturedFieldLocation(storage, field, selectedField.resultCarrier).withRead(apply)),
+                field => rustCapturedFieldLocation(storage, field, selectedField.resultCarrier, context).withRead(apply)),
             }) };
         }
         const dispatch = context.input.program.projectFieldDispatch.planFor(selectedField.declaration);
@@ -126,7 +126,7 @@ export function planRustValueFieldLocation(
       const owner = planRustCapturedFieldOwner(node, context, true);
       if (owner === undefined || context.syntheticNames === undefined) return undefined;
       const name = allocateRustSyntheticName(context.syntheticNames, "field_owner");
-      return { ...rustCapturedFieldLocation(storage, { kind: "path", path: name }, selectedField.resultCarrier),
+      return { ...rustCapturedFieldLocation(storage, { kind: "path", path: name }, selectedField.resultCarrier, context),
         bindings: [{ name, value: owner }] };
     }
   }

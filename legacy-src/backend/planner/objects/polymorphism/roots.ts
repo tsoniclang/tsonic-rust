@@ -271,6 +271,7 @@ function planRootContractFunctions(
                   storagePath,
                   field.carrier,
                   representation,
+                  context,
                   rustCapturedFieldStorage(implementation.declaration, context),
                 );
             return expression === undefined ? undefined : { expression };

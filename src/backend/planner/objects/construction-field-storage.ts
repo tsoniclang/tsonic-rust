@@ -39,6 +39,6 @@ export function rustConstructionFieldStorage(
     createDeferred: () => storage?.initialization === "deferred" ? createRustDeferredFieldOwner() : undefined,
     initialize: (owner, value) => initializeRustCapturedField(storage, owner, value),
     initializeOrWrite: (owner, value) => storage === undefined ? undefined : initializeOrWriteRustCapturedField(storage, owner, value, context),
-    location: owner => storage === undefined ? undefined : rustCapturedFieldLocation(storage, owner, carrier),
+    location: owner => storage === undefined ? undefined : rustCapturedFieldLocation(storage, owner, carrier, context),
   };
 }
