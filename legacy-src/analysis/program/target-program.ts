@@ -80,6 +80,7 @@ import { analyzeRustDeclarationEmission } from "../declarations/emission.js";
 import { analyzeRustLexicalValues } from "../callables/lexical-values.js";
 import { analyzeRustNativeProtocolEmission } from "../callables/native-protocol-emission.js";
 import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emission.js";
+import { analyzeRustGenericEmission } from "../callables/generic-emission.js";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
@@ -500,6 +501,7 @@ export function analyzeRustTargetProgram(
   analyzeRustGenericErrorEmission({ ast: context.ast, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     regions: program.errorRegions, index: genericCallableErrors.value, physical: program.callableValues.generic.physical,
     producer: context.records.errorEmissionPlans });
+  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.genericEmissionPlans });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,

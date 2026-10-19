@@ -1,14 +1,11 @@
-import type { Node } from "@tsonic/tsts";
-import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../../../target-model/records/generic-callables.js";
+import type { RustGenericCallableImplementation } from "../../../../target-model/records/generic-callables.js";
 import type { RustGenericCallablePhysicalDefinition } from "../../../../target-model/records/generic-callables.js";
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
-import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 
 import type { RustExpr, RustFunctionParam, RustItem, RustPattern, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext, rustTargetCallGenericArgumentToAstInContext } from "../../types/render.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
@@ -22,7 +19,6 @@ import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.j
 import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvocation } from "./generic-native-futures.js";
 import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
-import { validateRustCapturedReceiverFields, validateRustCapturedReceivers } from "../../expressions/receiver-captures.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 import { rustGenericCallableEnvironmentGenerics, rustGenericCallableCapturePredicates } from "./generic-signatures.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
@@ -44,7 +40,7 @@ export function rustGenericCallableCaptureType(
 
 export function rustGenericCallableMarker(arguments_: readonly RustTargetGenericArgument[], context: RustTypeRenderingContext): RustType | undefined {
   const values = arguments_.map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
-  if (values.some(value => value === undefined || value.kind !== "type" && value.kind !== "lifetime")) return undefined;
+  if (values.some(value => value === undefined || value.kind !== "type" && value.kind !== "lifetime")) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   return rustInvariantTypeMarker(values.map(value => value!.kind === "type" ? value!.type : {
     kind: "reference", mutable: false, referent: { kind: "unit" }, lifetime: (value as Extract<NonNullable<typeof value>, { kind: "lifetime" }>).lifetime,
   }));
@@ -52,51 +48,42 @@ export function rustGenericCallableMarker(arguments_: readonly RustTargetGeneric
 
 export function planRustGenericCallableItems(context: RustPlanContext): readonly RustItem[] {
   const result: RustItem[] = [];
-  const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
-  for (const definition of context.input.program.callableValues.generic.definitions) {
-    for (const implementation of definition.implementations) {
-      if (implementation.sourceFileName !== fileName) continue;
-      const items = planImplementation(definition, implementation, context);
-      if (items === undefined) reject(implementation.declaration, context);
-      else result.push(...items);
-    }
+  const inventory = context.input.program.records.genericDeclarations.get(context.sourceFile);
+  if (inventory === undefined) failRustPlannerInvariant("An admitted source module requires its generic declaration inventory.", context.sourceFile);
+  for (const implementation of inventory.implementations) {
+    result.push(...planImplementation(implementation, context));
   }
-  for (const definition of context.input.program.callableValues.generic.physical.definitions()) {
-    if (definition.ownerFileName !== fileName) continue;
+  for (const definition of inventory.definitions) {
     const items = planDefinition(definition, context);
-    if (items === undefined) reject(definition.implementations[0]!.declaration, context);
-    else result.push(...items);
+    result.push(...items);
   }
   return result;
 }
 
 function planImplementation(
-  definition: RustGenericCallableDefinition, implementation: RustGenericCallableImplementation, context: RustPlanContext,
-): readonly RustItem[] | undefined {
-  const selected = context.input.program.callableValues.generic.physical.environmentFor(implementation);
-  if (selected === undefined) return undefined;
-  const arguments_ = rustGenericCallableStorageArguments(definition.signature.environmentParameters, selected.parameters);
+  implementation: RustGenericCallableImplementation, context: RustPlanContext,
+): readonly RustItem[] {
+  const emission = context.input.program.records.genericImplementation.get(implementation);
+  if (emission === undefined) failRustPlannerInvariant("An admitted generic implementation requires its sealed emission record.", implementation.declaration);
+  const selected = emission.environment;
+  const arguments_ = emission.arguments;
   const helperContext = rustGeneratedTypeParameterContext(arguments_.flatMap(argument =>
     argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type] : []),
     rustAuthoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
     { ...context, typeParameterSubstitutions: selected.substitutions.types, lifetimeSubstitutions: selected.substitutions.lifetimes });
   const captures = rustCallablePayloadTypes(selected, helperContext);
-  if (captures === undefined) return undefined;
+  if (captures === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
-  const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
-    context.input.program.records.generator.get(implementation.declaration) !== undefined;
-  if (!validateRustCapturedReceiverFields(implementation.declaration, implementation.receiverFields, context) ||
-    !validateRustCapturedReceivers(implementation.declaration, implementation.receivers, context)) return undefined;
+  const suspended = emission.suspended;
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);
   const helper = implementation.creation === "declaration" ? undefined
     : planNativeModuleFunction(implementation.declaration, implementation.declaration,
         implementation.functionName, true, bodyContext);
-  if (implementation.creation !== "declaration" && helper?.kind !== "function") return undefined;
-  const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
-  if (contract === undefined) return undefined;
+  if (implementation.creation !== "declaration" && helper === undefined) failRustPlannerInvariant("An admitted generic implementation requires its native helper function.", implementation.declaration);
+  const contract = emission.requirements;
   const generics = rustGenericCallableEnvironmentGenerics(arguments_, helperContext);
-  if (generics === undefined) return undefined;
+  if (generics === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const environment = generics.parameters;
   const parameters = environment.map((parameter, index) => {
     if (parameter.kind !== "type") return parameter;
@@ -111,10 +98,10 @@ function planImplementation(
     name: `capture_${index}`, type: captures[index]!, visibility: "public" as const,
   }));
   const marker = rustGenericCallableMarker(arguments_, helperContext);
-  if (marker === undefined) return undefined;
+  if (marker === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   if (environment.length > 0) fields.push({ name: "marker", type: marker, visibility: "public" });
   const stateArguments = arguments_.map(argument => rustTargetGenericArgumentToAstInContext(argument, helperContext));
-  if (stateArguments.some(argument => argument === undefined)) return undefined;
+  if (stateArguments.some(argument => argument === undefined)) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const state: RustType = { kind: "named", path: implementation.stateName,
     genericArguments: stateArguments as NonNullable<typeof stateArguments[number]>[],
   };
@@ -125,17 +112,19 @@ function planImplementation(
   return [{ kind: "struct", name: implementation.stateName, visibility: "public",
     generics, fields,
   }, ...(implementation.storage === "value" ? genericCallableCopyStateItems(state, generics) : []),
-  ...(helper?.kind !== "function" ? [] : [{ ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
+  ...(helper === undefined ? [] : [{ ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
     helper.generics.wherePredicates),
     params: [...ownerParams, ...helper.params],
   }])];
 }
 
-function planDefinition(definition: RustGenericCallablePhysicalDefinition, context: RustPlanContext): readonly RustItem[] | undefined {
+function planDefinition(definition: RustGenericCallablePhysicalDefinition, context: RustPlanContext): readonly RustItem[] {
+  const emission = context.input.program.records.genericDefinition.get(definition);
+  if (emission === undefined) failRustPlannerInvariant("An admitted generic family requires its sealed emission record.");
   const parameters = rustGenericCallableStorageArguments(definition.signature.environmentParameters, definition.parameters);
   const environment = rustGenericCallableEnvironmentGenerics(parameters, context);
   const arguments_ = parameters.map(parameter => rustTargetGenericArgumentToAstInContext(parameter, context));
-  if (environment === undefined || arguments_.some(argument => argument === undefined)) return undefined;
+  if (environment === undefined || arguments_.some(argument => argument === undefined)) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const variants = definition.members.map(member => {
     const implementation = member.implementation;
     const path = rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
@@ -146,43 +135,37 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
       fields: [implementation.storage === "shared" ? shared(state) : state],
     };
   });
-  if (variants.some(variant => variant === undefined)) return undefined;
+  if (variants.some(variant => variant === undefined)) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const target: RustType = { kind: "named", path: definition.targetName, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
   const storage = genericCallableStorageItems(definition, environment, target, variants as NonNullable<typeof variants[number]>[],
-    context.input.program.callableValues.genericIdentities.forDefinition(definition));
-  if (storage === undefined) return undefined;
-  if (!context.input.program.callableValues.genericDispatch.requiredFor(definition)) return storage;
-  const signatureCarrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
-    environment: definition.signature.environmentParameters,
-  });
-  const protocol = rustGenericCallableProtocol(signatureCarrier);
+    emission.identity);
+  if (storage === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
+  if (!emission.invoked) return storage;
   const errors = planRustGenericCallableErrors(definition, context);
-  if (protocol === undefined || errors === undefined) return undefined;
   const effects = errors.effects;
-  const nativeFuture = rustNativeFutureCallableResult(protocol.result);
-  const completion = context.input.program.callableValues.genericCompletions.forDefinition(definition);
-  if (completion.kind === "unresolved") return undefined;
-  const payload = nativeFuture?.output ?? completion.result;
-  const parameterTypes = protocol.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
-  const output = rustTypeFromCarrierInContext(payload, context);
-  if (parameterTypes.some(type => type === undefined) || output === undefined) return undefined;
+  const nativeFuture = emission.nativeFuture;
+  const parameterTypes = emission.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context));
+  const output = rustTypeFromCarrierInContext(emission.result, context);
+  if (parameterTypes.some(type => type === undefined) || output === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const capturePredicates = rustGenericCallableCapturePredicates(definition, context);
-  if (capturePredicates === undefined) return undefined;
+  if (capturePredicates === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   const predicates = new Map<string, RustWherePredicate>(capturePredicates.map(predicate => [closedMetadataKey(predicate), predicate]));
   const arms: { pattern: RustPattern; expression: RustExpr }[] = [];
   const nativeInvocations: RustGenericNativeFutureInvocation[] = [];
   for (const member of definition.members) {
     const implementation = member.implementation;
-    const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
+    const contract = context.input.program.records.genericImplementation.get(implementation)?.requirements;
+    const memberEmission = emission.members.get(member);
+    if (memberEmission === undefined) failRustPlannerInvariant("An admitted generic family member requires its sealed completion record.", implementation.declaration);
     const path = rustGenericCallableImplementationPath(implementation, implementation.functionName, context);
     const bindings = member.bindings;
-    if (contract === undefined || path === undefined || bindings === undefined) return undefined;
+    if (contract === undefined || path === undefined || bindings === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
     const substitutions = bindings.types;
     for (const parameter of [...contract.typeParameters, ...contract.capturedTypeParameters]) {
       const type = substitutions.get(parameter.identity);
       if (type === undefined) continue;
       const rendered = rustTypeFromCarrierInContext(type, context);
-      if (rendered === undefined) return undefined;
+      if (rendered === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
       const predicate: RustWherePredicate = { kind: "type", type: rendered, bounds: rustGenericRequirementBounds(parameter.requirements) };
       if (predicate.bounds.length > 0) predicates.set(closedMetadataKey(predicate), predicate);
     }
@@ -190,10 +173,7 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
       predicates.set(closedMetadataKey(predicate), predicate);
     for (const predicate of rustProjectProjectionPredicates(contract.projectProjections, { ...context, typeParameterSubstitutions: substitutions }))
       predicates.set(closedMetadataKey(predicate), predicate);
-    const asyncFact = context.input.program.records.asyncFunction.get(implementation.declaration);
-    const suspended = asyncFact !== undefined ||
-      context.input.program.records.generator.get(implementation.declaration) !== undefined;
-    if (nativeFuture !== undefined && asyncFact !== undefined && asyncFact.kind !== "native-future") return undefined;
+    const suspended = memberEmission.suspended;
     const owner: RustExpr = { kind: "path", path: "environment" };
     const ownerArgument: RustExpr = suspended
       ? implementation.storage === "value" ? { kind: "dereference", pointer: owner }
@@ -201,7 +181,7 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
       : implementation.storage === "shared" ? { kind: "method-call", receiver: owner, method: "as_ref", args: [] } : owner;
     const helperArguments = rustGenericCallableStorageArguments(definition.signature.environmentParameters, member.arguments)
       .filter(argument => argument.kind !== "lifetime").map(argument => rustTargetCallGenericArgumentToAstInContext(argument, context));
-    if (helperArguments.some(argument => argument === undefined)) return undefined;
+    if (helperArguments.some(argument => argument === undefined)) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
     const call: RustExpr = { kind: "call", path,
       genericArguments: [...helperArguments as NonNullable<typeof helperArguments[number]>[], ...definition.signature.typeParameters.map(parameter => ({ kind: "type" as const, type: { kind: "named" as const, path: parameter.name } }))],
       args: [...(implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length === 0 ? [] : [ownerArgument]),
@@ -210,30 +190,22 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     const pattern: RustPattern = { kind: "tuple-variant", path: `Self::${member.variantName}`,
       elements: [implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length === 0 ? { kind: "wildcard" } : { kind: "binding", name: "environment" }] };
     if (nativeFuture !== undefined) {
-      const selectedEffects = context.input.program.records.sourceCallEffects.get(implementation.declaration);
-      const sourceReturn = context.input.program.records.sourceCallableReturn.get(implementation.declaration);
-      const returned = sourceReturn === undefined ? undefined : rustNativeFutureCallableResult(sourceReturn.returnCarrier);
-      if (selectedEffects === undefined || sourceReturn === undefined ||
-        asyncFact === undefined && returned === undefined) return undefined;
-      nativeInvocations.push({ member, pattern, call, effects: selectedEffects,
-        optional: asyncFact === undefined && returned?.optional === true,
-        absent: sourceReturn.implementationCompletion === "absence",
-      });
+      const future = memberEmission.future;
+      if (future === undefined) failRustPlannerInvariant("An admitted generic future requires its sealed invocation and awaiting contract.", implementation.declaration);
+      nativeInvocations.push({ member, pattern, call, ...future });
       continue;
     }
     const methodFallible = effects.invocation === "fallible";
     const selected = errors.forMember(member);
-    if (selected === undefined) return undefined;
-    const converted = selected.invocation === undefined ? undefined : errors.invocation.propagate(selected.invocation, call);
-    if (selected.invocation !== undefined && converted?.kind !== "try") return undefined;
-    const memberCompletion = completion.kind === "selected" ? completion.forMember(member) : undefined;
-    if (completion.kind === "selected" && memberCompletion === undefined) return undefined;
-    if (memberCompletion?.variant === undefined) {
-      arms.push({ pattern, expression: converted?.kind === "try" ? converted.expr :
+    if (selected === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
+    const converted = selected.invocation === undefined ? undefined : errors.invocation.propagatedValue(selected.invocation, call);
+    if (selected.invocation !== undefined && converted === undefined) failRustPlannerInvariant("An admitted generic invocation requires its selected native error injection.", implementation.declaration);
+    if (memberEmission.completionVariant === undefined) {
+      arms.push({ pattern, expression: converted !== undefined ? converted :
         methodFallible ? { kind: "call", path: "Ok", args: [call] } : call });
     } else {
-      const value: RustExpr = { kind: "associated-call", owner: output, method: memberCompletion.variant,
-        args: [converted?.kind === "try" ? { ...converted, nativeReturn: true } : call] };
+      const value: RustExpr = { kind: "associated-call", owner: output, method: memberEmission.completionVariant,
+        args: [selected.invocation === undefined ? call : errors.invocation.propagateReturn(selected.invocation, call)!] };
       arms.push({ pattern, expression: methodFallible ? { kind: "call", path: "Ok", args: [value] } : value });
     }
   }
@@ -249,7 +221,7 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
       ...definition.signature.typeParameters.map(parameter => ({ kind: "type" as const, type: { kind: "named" as const, path: parameter.name } }))],
     invocations: nativeInvocations,
   });
-  if (nativeFuture !== undefined && native === undefined) return undefined;
+  if (nativeFuture !== undefined && native === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
   return [...storage,
   ...(native?.items ?? []),
   { kind: "impl", target, generics, members: [{ kind: "function",
@@ -266,7 +238,4 @@ function shared(type: RustType): RustType {
   return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
 }
 
-function reject(node: Node, context: RustPlanContext): void {
-  context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.generic-callable-environment",
-    "A generic callable has no complete closed native environment or quantified call contract."));
-}
+

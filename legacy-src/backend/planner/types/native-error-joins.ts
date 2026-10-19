@@ -19,6 +19,8 @@ export interface RustNativeErrorJoinPlan {
   accepts(source: RustNativeErrorJoinSelection): boolean;
   inject(source: RustNativeErrorJoinSelection, error: RustExpr): RustExpr | undefined;
   propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
+  propagatedValue(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
+  propagateReturn(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
 }
 
 export function planRustNativeErrorJoin(input: {
@@ -55,7 +57,21 @@ export function planRustNativeErrorJoin(input: {
     const selected = sources.get(source.identity);
     return selected !== undefined && rustTypeEquals(selected.errorType, source.errorType) ? selected : undefined;
   };
+  const propagatedValue = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined => {
+    const selected = select(source);
+    if (selected === undefined || errorType === undefined) return undefined;
+    return sources.size === 1 ? result : {
+      kind: "method-call", receiver: result, method: "map_err",
+      args: [{ kind: "associated-value", owner: errorType, name: selected.variant }],
+    };
+  };
   return Object.freeze({ errorType, items,
+    propagatedValue,
+    propagateReturn(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined {
+      const value = propagatedValue(source, result);
+      return value === undefined ? undefined : { kind: "try", expr: value, nativeReturn: true,
+        operandErrorType: errorType, resultErrorType: errorType };
+    },
     mapError(error: RustExpr, bindingName: string,
       select: (source: RustNativeErrorJoinSelection, value: RustExpr) => RustExpr | undefined): RustExpr | undefined {
       if (errorType === undefined || !isValidRustIdentifier(bindingName)) return undefined;
@@ -79,12 +95,8 @@ export function planRustNativeErrorJoin(input: {
         : { kind: "associated-call", owner: errorType, method: selected.variant, args: [error] };
     },
     propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined {
-      const selected = select(source);
-      if (selected === undefined || errorType === undefined) return undefined;
-      const mapped: RustExpr = sources.size === 1 ? result : {
-        kind: "method-call", receiver: result, method: "map_err",
-        args: [{ kind: "associated-value", owner: errorType, name: selected.variant }],
-      };
+      const mapped = propagatedValue(source, result);
+      if (mapped === undefined) return undefined;
       return { kind: "try", expr: mapped, operandErrorType: errorType, resultErrorType: errorType };
     },
   });

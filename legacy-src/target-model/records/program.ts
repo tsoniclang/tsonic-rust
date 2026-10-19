@@ -1,6 +1,7 @@
 import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustYieldFact, RustResourceManagementFact, RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { RustRuntimeCarrierSelection, RustConversionSelection } from "./selections.js";
 import type { RustNativeParticipation } from "./native-demand.js";
+import type { RustGenericEmissionRecords } from "./generic-emission.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
 import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
@@ -51,7 +52,7 @@ export interface RustRecordFamily<T> {
 }
 
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
-  RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords {
+  RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords {
   readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
   readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
   readonly generator: RustRecordFamily<RustGeneratorFact>;

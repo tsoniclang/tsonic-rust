@@ -13,6 +13,7 @@ import type { RustNativeProtocolProducer } from "./native-protocol-emission.js";
 import type { RustErrorEmissionProducer } from "./error-emission.js";
 import type { RustClassInitializationProducer } from "./class-initialization.js";
 import type { RustCallableParameterProducer } from "./parameter-emission.js";
+import type { RustGenericEmissionProducer } from "./generic-emission.js";
 import type { RustNativeDeclarationProducer } from "./native-declarations.js";
 import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustNativeGenericProducer } from "./native-generics.js";
@@ -114,6 +115,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly errorEmissionPlans: RustErrorEmissionProducer;
   readonly classInitializationPlans: RustClassInitializationProducer;
   readonly callableParameterPlans: RustCallableParameterProducer;
+  readonly genericEmissionPlans: RustGenericEmissionProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;
