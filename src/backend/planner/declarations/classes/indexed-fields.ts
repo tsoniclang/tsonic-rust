@@ -1,12 +1,12 @@
-import type { RustSourceTypeFamilyImplementation } from "../../../../target-model/types/type-families.js";
+import type { RustNativeDeclarationForms } from "../../../../target-model/records/native-declaration-forms.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
-import { rustTargetGenericReferences } from "../../../../target-model/types/carriers/generic-references.js";
 import type { RustGenerics, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext } from "../../types/render.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustGenericRequirementBounds } from "../../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
@@ -14,34 +14,41 @@ import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 
 export function planRustIndexedFieldImplementation(
-  implementation: RustSourceTypeFamilyImplementation,
+  admitted: RustNativeDeclarationForms["implementations"][number],
   context: RustPlanContext,
-): readonly RustItem[] | undefined {
+): readonly RustItem[] {
+  const { implementation, genericContract: contract } = admitted;
   const field = implementation.field;
   const key = implementation.arguments[0];
-  if (implementation.family.kind !== "indexed" || field === undefined || key?.kind !== "type") return undefined;
-  const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
-    kind: "tuple", elements: [implementation.owner, implementation.output],
-  });
-  if (contract === undefined) return undefined;
+  if (implementation.family.kind !== "indexed" || field === undefined || key?.kind !== "type")
+    failRustPlannerInvariant("An admitted indexed-field implementation requires its exact field and key contract.");
   context = rustGeneratedTypeParameterContext(contract.typeParameters, [], context);
   const owner = rustTypeFromCarrierInContext(implementation.owner, context);
   const keyType = rustTypeFromCarrierInContext(key.type, context);
   const output = rustTypeFromCarrierInContext(implementation.output, context);
   const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
   const boundary = rustCurrentErrorBoundary(context);
-  const parameters = rustTargetGenericReferences(implementation.owner);
-  if (owner === undefined || keyType === undefined || output === undefined || error === undefined || boundary === undefined ||
-    parameters.lifetimes.length !== 0 || parameters.constIdentities.length !== 0) return undefined;
+  if (owner === undefined || keyType === undefined || output === undefined || error === undefined || boundary === undefined)
+    failRustPlannerInvariant("An admitted indexed-field implementation requires renderable native owner, key, payload and error types.");
   const generics: RustGenerics = {
     parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
       bounds: rustGenericRequirementBounds(parameter.requirements) })),
     wherePredicates: rustAssociatedPredicates(contract.associatedTypes, context),
   };
-  const handle = owner.kind === "named" && (owner.path === "rt::ObjectHandle" || owner.path === "rt::ObjectRef");
-  const stateArgument = handle ? owner.genericArguments?.[0] : undefined;
-  const storage = !handle ? owner : stateArgument?.kind === "type" ? stateArgument.type : undefined;
-  if (storage === undefined) return undefined;
+  const handle = admitted.storage.kind === "structural-state";
+  let storage: RustType = owner;
+  if (admitted.storage.kind === "structural-state") {
+    const selected = admitted.storage;
+    const external = context.externalStructuralShapeModuleByFileName.get(selected.ownerFileName);
+    const crate = context.externalCrateNameByFileName.get(selected.ownerFileName);
+    const path = external !== undefined && crate !== context.crateName ? `${external}::${selected.targetName}`
+      : context.moduleName === context.structuralShapesModuleName ? selected.targetName
+      : `crate::${context.structuralShapesModuleName}::${selected.targetName}`;
+    const arguments_ = selected.arguments.map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
+    if (arguments_.some(argument => argument === undefined))
+      failRustPlannerInvariant("An admitted indexed-field storage requires renderable native generic arguments.");
+    storage = { kind: "named", path, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
+  }
   const trait: RustType = { kind: "named", path: "rt::Field", genericArguments: [{ kind: "type", type: keyType }] };
   const items: RustItem[] = [{ kind: "impl", trait, target: storage, generics,
     members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: output },
@@ -57,7 +64,7 @@ export function planRustIndexedFieldImplementation(
       receiver, field.storageIndex, implementation.output, bodyContext, [], handle)
       : writeRustStoredObjectField(field.storage, implementation.owner, receiver, field.storageIndex,
         "=", { kind: "path", path: "value" }, bodyContext, [], handle);
-    if (value === undefined) return undefined;
+    if (value === undefined) failRustPlannerInvariant("An admitted indexed-field operation requires its native storage expression.");
     const result: RustType = { kind: "named", path: "Result", genericArguments: [
       { kind: "type", type: access === "read" ? output : { kind: "unit" } }, { kind: "type", type: error },
     ] };

@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustShapeGenericRequirementContract } from "./generic-requirements.js";
+import type { RustTargetGenericArgument } from "../types/model.js";
 import type { RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustSourceTypeFamilyImplementation } from "../types/type-families.js";
 import type {
@@ -16,6 +18,13 @@ export interface RustNativeDeclarationForms {
   readonly implementations: readonly {
     readonly implementation: RustSourceTypeFamilyImplementation;
     readonly projectDefinition?: RustProjectTypeDefinition;
+    readonly genericContract: RustShapeGenericRequirementContract;
+    readonly storage: { readonly kind: "owner" } | {
+      readonly kind: "structural-state";
+      readonly ownerFileName: string;
+      readonly targetName: string;
+      readonly arguments: readonly RustTargetGenericArgument[];
+    };
   }[];
   get(declaration: Node): RustNativeDeclarationForm | undefined;
 }

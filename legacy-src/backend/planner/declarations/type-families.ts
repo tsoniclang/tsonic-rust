@@ -40,7 +40,7 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
     context = baseContext;
     if (implementation.sourceFileName !== fileName) continue;
     if (implementation.family.kind === "indexed") {
-      const selected = planRustIndexedFieldImplementation(implementation, context);
+      const selected = planRustIndexedFieldImplementation(admitted, context);
       if (selected === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
         "rust.backend.indexed-field-implementation", "A dependent field has no exact native storage implementation."));
       else items.push(...selected);

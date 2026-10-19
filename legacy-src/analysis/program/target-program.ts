@@ -491,7 +491,7 @@ export function analyzeRustTargetProgram(
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
     objectRepresentations, typeFamilies: program.typeFamilies,
-    genericRequirements: declarationGenericRequirements.index });
+    genericRequirements: declarationGenericRequirements.index, structuralShapes: program.structuralShapes });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);

@@ -5,6 +5,8 @@ import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "../.
 import { admitRustNativeValueDeclaration, type RustNativeValueDeclarationInput } from "./native-value-declarations.js";
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 
 export type AnalyzeRustNativeDeclarationFormsResult =
   | { readonly kind: "resolved"; readonly forms: RustNativeDeclarationForms }
@@ -12,7 +14,8 @@ export type AnalyzeRustNativeDeclarationFormsResult =
 
 export function analyzeRustNativeDeclarationForms(
   input: RustNativeValueDeclarationInput & { readonly sourceFiles: readonly SourceFile[];
-    readonly genericRequirements: RustDeclarationGenericRequirementIndex },
+    readonly genericRequirements: RustDeclarationGenericRequirementIndex;
+    readonly structuralShapes: RustStructuralShapePlan },
 ): AnalyzeRustNativeDeclarationFormsResult {
   const forms = new WeakMap<Node, RustNativeDeclarationForm>();
   const diagnostics: TargetDiagnostic[] = [];
@@ -35,7 +38,7 @@ export function analyzeRustNativeDeclarationForms(
       implementation.family.kind === "conditional" ? implementation.family.declaration : undefined);
     const projectDefinition = input.projectTypes.definitionForCarrier(implementation.owner);
     const references = rustTargetGenericReferences(implementation.owner);
-    if (projectDefinition === undefined &&
+    if ((projectDefinition === undefined || implementation.family.kind === "indexed") &&
       (references.lifetimes.length !== 0 || references.constIdentities.length !== 0)) {
       diagnostics.push({ code: "RUST_TYPE_FAMILY_IMPLEMENTATION_NOT_CLOSED", category: "error",
         source: "tsonic-rust", message: "A checked type family implementation requires its exact native generic declaration contract.",
@@ -43,7 +46,16 @@ export function analyzeRustNativeDeclarationForms(
         evidence: ["target.capability=rust.declaration.native-form"] });
       continue;
     }
-    implementations.push(Object.freeze({ implementation,
+    const structural = rustStructuralObjectCarrierValue(implementation.owner);
+    const shape = structural === undefined ? undefined : input.structuralShapes.definitionForCarrier(implementation.owner);
+    if (structural !== undefined && shape === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An indexed native owner requires its completed structural storage definition.");
+    const storage: RustNativeDeclarationForms["implementations"][number]["storage"] =
+      structural?.representation === "reference" && shape !== undefined && shape.dispatchName === undefined
+        ? Object.freeze({ kind: "structural-state", ownerFileName: shape.ownerFileName,
+          targetName: shape.targetName, arguments: shape.genericArguments })
+        : Object.freeze({ kind: "owner" });
+    implementations.push(Object.freeze({ implementation, genericContract: contract, storage,
       ...(projectDefinition === undefined ? {} : { projectDefinition }) }));
   }
   return diagnostics.length > 0 ? { kind: "rejected", diagnostics: Object.freeze(diagnostics) }
