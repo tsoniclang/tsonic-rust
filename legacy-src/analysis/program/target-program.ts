@@ -73,6 +73,7 @@ import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-model/types/index.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
+import { analyzeRustFieldProjectionAssignments } from "../storage/field-projection-assignment.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -472,6 +473,9 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
+  analyzeRustFieldProjectionAssignments({ ast: context.ast, nodes: context.nativeNodes, records,
+    navigation: context.source.navigation, projectTypes, representations: objectRepresentations,
+    dispatch: program.projectFieldDispatch, producer: context.records.fieldProjectionAssignments, required: context.requiredRecords });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,

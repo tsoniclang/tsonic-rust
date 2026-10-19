@@ -75,6 +75,7 @@ import { createRustStatementExitProducer } from "./statement-exits.js";
 import { createRustStatementCompletionProducer } from "./statement-completion.js";
 import { createRustResourceScopeProducer } from "./resource-scopes.js";
 import { createRustLocalBindingProducer } from "./local-bindings.js";
+import { createRustFieldProjectionAssignmentProducer } from "./field-projection-assignment.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -160,11 +161,13 @@ export function createRustProgramRecordBuilder(
   const statementCompletions = createRustStatementCompletionProducer(assertOpen);
   const resourceScopes = createRustResourceScopeProducer(assertOpen);
   const localBindings = createRustLocalBindingProducer(assertOpen);
+  const fieldProjectionAssignments = createRustFieldProjectionAssignmentProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
+    fieldProjectionAssignment: fieldProjectionAssignments.records,
     statementExit: statementExits.records,
     loopForm: statementExits.forms,
     nativeHandler: nativeHandlers.records,
@@ -244,6 +247,7 @@ export function createRustProgramRecordBuilder(
     statementCompletions,
     resourceScopes,
     localBindings,
+    fieldProjectionAssignments,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,

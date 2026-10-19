@@ -287,11 +287,9 @@ export function planRustAssignmentWrite(
       : planRustCompoundRuntimeWrite(expression, left, valueNode, fact, context);
   }
   const storageOverride = context.expressionOverrides?.get(left);
+  if (storageOverride?.valueForm !== "storage" && context.input.program.records.fieldProjectionAssignment.get(expression) !== undefined)
+    return planRustFieldProjectionAssignment(expression, left, valueNode, fact, context);
   const target = planRustDirectStorage(left, context);
-  if (target === undefined) {
-    const projection = planRustFieldProjectionAssignment(left, valueNode, fact, context);
-    if (projection !== undefined) return projection;
-  }
   if (storageOverride?.valueForm !== "storage" && rustSourceFieldHasValueReceiver(left, context)) {
     const location = planRustValueFieldLocation(left, context, "write");
     const value = location === undefined ? undefined : planRustValueFieldInput(location, valueNode, context);

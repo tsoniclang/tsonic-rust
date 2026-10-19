@@ -1,11 +1,11 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
-import { planExpression, sourceFieldSelectedOperationMatches } from "../expressions/index.js";
-import { findRustUpdateProjectField, planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/updates/target.js";
+import { planExpression } from "../expressions/index.js";
+import { planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/updates/target.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustMutableProjectReceiver } from "../expressions/typed-locations.js";
 import { mutateRustStoredObjectField } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -13,32 +13,22 @@ import { planRustCompoundAssignmentValue } from "./assignments.js";
 import { rustArrayFieldMutationName } from "../objects/polymorphism/array-fields.js";
 
 export function planRustFieldProjectionAssignment(
+  expression: Node,
   left: Node,
   right: Node,
   assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const field = findRustUpdateProjectField(left, context);
-  if (field === undefined || field.expression === left || field.fact.kind !== "source-field" ||
-    field.fact.valueSemantics.kind !== "stored" ||
-    field.fact.resultCarrier.kind !== "array" || context.syntheticNames === undefined ||
-    !sourceFieldSelectedOperationMatches(field.expression, field.fact, context)) return undefined;
-  const rightEffects = context.input.program.sourceNavigation.expressionEffects(right);
-  if (rightEffects.invokes || rightEffects.mutates || rightEffects.suspends) return undefined;
-  let projectionNode: Node | undefined = left;
-  while (projectionNode !== undefined && projectionNode !== field.expression) {
-    const index = context.input.program.source.ast.as.AsElementAccessExpression(projectionNode)?.ArgumentExpression;
-    if (index !== undefined) {
-      const effects = context.input.program.sourceNavigation.expressionEffects(index);
-      if (effects.invokes || effects.mutates || effects.suspends) return undefined;
-    }
-    projectionNode = Node_Expression(context.input.program.source.ast, projectionNode);
-  }
-  const receiverNode = Node_Expression(context.input.program.source.ast, field.expression);
-  const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+): readonly RustStmt[] {
+  const selected = context.input.program.records.fieldProjectionAssignment.get(expression);
+  if (selected === undefined || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted field-projection write requires its sealed native field and name scope.", expression);
+  const field = { expression: selected.expression, fact: selected.field };
+  const receiverNode = selected.receiver;
+  const plannedReceiver = planExpression(receiverNode, context);
   const projection = planRustUpdateProjectionArguments(left, field.expression, context);
   const value = planExpression(right, context);
-  if (receiverNode === undefined || plannedReceiver === undefined || projection === undefined || value === undefined) return undefined;
+  if (plannedReceiver === undefined || projection === undefined || value === undefined)
+    failRustPlannerInvariant("An admitted field-projection write requires its native receiver, indices and value plans.", expression);
   const ownerName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
   const dispatched = field.fact.dispatch !== undefined;
@@ -61,9 +51,6 @@ export function planRustFieldProjectionAssignment(
   };
   let mutation: RustExpr | undefined;
   if (field.fact.dispatch !== undefined) {
-    const dispatch = field.fact.declaration === undefined ? undefined
-      : context.input.program.projectFieldDispatch.planFor(field.fact.declaration);
-    if (dispatch?.stored !== true || !dispatch.mutableContent) return undefined;
     const storageName = allocateRustSyntheticName(context.syntheticNames, "array_storage");
     const body = mutate({ kind: "path", path: storageName });
     mutation = body === undefined ? undefined : {
@@ -78,7 +65,8 @@ export function planRustFieldProjectionAssignment(
     mutation = mutateRustStoredObjectField(field.fact.storage, field.fact.receiverCarrier,
       { kind: "path", path: ownerName }, field.fact.storageIndex, mutate, context, "content");
   }
-  return mutation === undefined ? undefined : [{ kind: "expr", expr: rustValueBlock([{ name: ownerName, value: receiver }, ...projection.bindings,
+  if (mutation === undefined) failRustPlannerInvariant("An admitted field-projection write requires its native mutation plan.", expression);
+  return [{ kind: "expr", expr: rustValueBlock([{ name: ownerName, value: receiver }, ...projection.bindings,
       { name: valueName, mutable: dispatched,
         value: dispatched ? { kind: "call", path: "Some", args: [value] } : value }], mutation) }];
 }
