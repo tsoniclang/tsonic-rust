@@ -11,8 +11,14 @@ import type { RustProjectTypeDefinition } from "../../../target-model/types/proj
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import type { RustClassValueCallable, RustClassValueForwarderEmission, RustClassValueForwarderRecords } from "../../../target-model/records/class-value-callables.js";
+import type { RustClassImplementationContext, RustClassImplementationGenerics, RustClassConstructorViewEmission, RustClassImplementationRecords } from "../../../target-model/records/class-implementations.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export interface RustClassEmissionProducer {
+  readonly implementationRecords: RustClassImplementationRecords;
+  implementationContext(declaration: Node, carrier: TargetTypeRef, value: RustClassImplementationContext): void;
+  implementationGenerics(carrier: TargetTypeRef, value: RustClassImplementationGenerics): void;
+  constructorViews(declaration: Node, fileName: string, values: readonly RustClassConstructorViewEmission[]): void;
   readonly records: RustRecordFamily<RustNativeClassEmission>;
   readonly visibilityRecords: RustNativeMemberVisibilityRecords;
   readonly environmentRecords: RustClassEnvironmentRecords;
@@ -38,8 +44,37 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const reads = new WeakMap<Node, RustClassValueReadEmission>();
   const moduleValues = new WeakMap<Node, RustClassValueModuleEmission>();
   const forwarders = new WeakMap<RustClassValueCallable, Map<boolean, RustClassValueForwarderEmission>>();
+  const implementationContexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
+  const implementationGenerics = new Map<string, RustClassImplementationGenerics>();
+  const constructorViews = new WeakMap<Node, Map<string, readonly RustClassConstructorViewEmission[]>>();
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
+    implementationRecords: Object.freeze({
+      classImplementationContext: Object.freeze({ get: (declaration: Node, carrier: TargetTypeRef) => implementationContexts.get(declaration)?.get(closedMetadataKey(carrier)) }),
+      classImplementationGenerics: Object.freeze({ get: (carrier: TargetTypeRef) => implementationGenerics.get(closedMetadataKey(carrier)) }),
+      classConstructorViews: Object.freeze({ get: (declaration: Node, fileName: string) => constructorViews.get(declaration)?.get(fileName) }),
+    }),
+    implementationContext(declaration: Node, carrier: TargetTypeRef, value: RustClassImplementationContext): void {
+      assertOpen();
+      let instances = implementationContexts.get(declaration);
+      if (instances === undefined) { instances = new Map(); implementationContexts.set(declaration, instances); }
+      const key = closedMetadataKey(carrier);
+      if (instances.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A class implementation context has one exact source owner.", declaration);
+      instances.set(key, Object.freeze(value));
+    },
+    implementationGenerics(carrier: TargetTypeRef, value: RustClassImplementationGenerics): void {
+      assertOpen();
+      const key = closedMetadataKey(carrier);
+      if (implementationGenerics.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A class implementation generic inventory has one source owner.");
+      implementationGenerics.set(key, Object.freeze(value));
+    },
+    constructorViews(declaration: Node, fileName: string, values: readonly RustClassConstructorViewEmission[]): void {
+      assertOpen();
+      let files = constructorViews.get(declaration);
+      if (files === undefined) { files = new Map(); constructorViews.set(declaration, files); }
+      if (files.has(fileName)) failTargetAnalysisInvariant("tsonic-rust", "A class constructor implementation inventory has one source owner.", declaration);
+      files.set(fileName, Object.freeze(values));
+    },
     forwarderRecords: Object.freeze({ classValueForwarder: Object.freeze({ get: (subject: RustClassValueCallable, construction: boolean) => forwarders.get(subject)?.get(construction) }) }),
     forwarder(subject: RustClassValueCallable, construction: boolean, value: RustClassValueForwarderEmission): void {
       assertOpen();

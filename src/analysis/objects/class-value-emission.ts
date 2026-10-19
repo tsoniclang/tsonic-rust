@@ -5,6 +5,7 @@ import type { RustClassEmissionProducer } from "../program/records/class-emissio
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
+import { analyzeRustClassImplementations } from "./class-implementations.js";
 
 export function analyzeRustClassValueEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -12,6 +13,7 @@ export function analyzeRustClassValueEmission(input: {
   readonly producer: RustClassEmissionProducer;
 }): void {
   const { program, producer } = input;
+  analyzeRustClassImplementations(program, producer);
   const forwarders = new WeakMap<RustClassValueCallable, Set<boolean>>();
   const forwarder = (callable: RustClassValueCallable, construction: boolean): void => {
     let modes = forwarders.get(callable);

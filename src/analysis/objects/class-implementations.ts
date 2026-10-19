@@ -1,0 +1,100 @@
+import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
+import type { RustClassConstructorViewEmission, RustClassImplementationContext } from "../../target-model/records/class-implementations.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
+import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
+import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+
+export function analyzeRustClassImplementations(program: Omit<RustTargetProgram, "reachability">, producer: RustClassEmissionProducer): void {
+  const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
+  const genericCarriers = new Set<string>();
+  const contextFor = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext => {
+    let instances = contexts.get(definition.declaration);
+    if (instances === undefined) { instances = new Map(); contexts.set(definition.declaration, instances); }
+    const key = closedMetadataKey(carrier);
+    const existing = instances.get(key);
+    if (existing !== undefined) return existing;
+    const arguments_ = rustSourceTypeCarrierValue(carrier)?.genericArguments;
+    if (arguments_ === undefined || arguments_.length !== definition.genericParameters.length)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires its exact native generic correspondence.", definition.declaration);
+    const types = new Map<string, TargetTypeRef>();
+    const lifetimes = new Map<string, RustLifetimeRef>();
+    for (const [index, parameter] of definition.genericParameters.entries()) {
+      const argument = arguments_[index];
+      if (parameter.kind === "type" && argument?.kind === "type") types.set(parameter.identity, argument.type);
+      else if (parameter.kind === "lifetime" && argument?.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+      else failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires exact native generic argument kinds.", definition.declaration);
+    }
+    const value = Object.freeze({ types, lifetimes, names: rustGeneratedTypeParameterNames(rustTargetGenericReferences(carrier).typeParameters,
+      rustAuthoredTypeParameterNames(definition.declaration, program.source.ast, new Set(definition.typeParameterIdentities))) });
+    instances.set(key, value);
+    producer.implementationContext(definition.declaration, carrier, value);
+    return value;
+  };
+  const genericsFor = (carrier: TargetTypeRef, selected: RustProjectGenericEmission, context: RustClassImplementationContext, declaration: Node): void => {
+    const key = closedMetadataKey(carrier);
+    if (genericCarriers.has(key)) return;
+    genericCarriers.add(key);
+    const references = rustTargetGenericReferences(carrier);
+    if (references.constIdentities.length !== 0 || references.lifetimes.some(lifetime => lifetime.kind !== "parameter"))
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted native implementation requires its closed type and lifetime parameter inventory.", declaration);
+    const parameters = new Map(references.typeParameters.map(parameter => [parameter.identity, parameter]));
+    const arguments_ = [...selected.parameters.flatMap(({ parameter }) => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []),
+      ...selected.optionalStorage.map(storage => storage.carrier)];
+    for (const argument of arguments_) {
+      const type = substituteRustTargetGenerics(argument, context.types, context.lifetimes);
+      if (type.kind === "type-parameter" && type.optionalStorageValue !== undefined) parameters.set(type.identity, type);
+    }
+    producer.implementationGenerics(carrier, { parameters: Object.freeze([...parameters.values()]),
+      lifetimes: Object.freeze(references.lifetimes.filter((lifetime): lifetime is Extract<RustLifetimeRef, { readonly kind: "parameter" }> => lifetime.kind === "parameter")) });
+  };
+  const constructors = new Map<Node, Map<string, RustClassConstructorViewEmission[]>>();
+  for (const view of program.classValues.constructorViewImplementations) {
+    const definition = program.projectTypes.definitionForDeclaration(view.declaration);
+    const environment = program.classValues.forDeclaration(view.declaration)?.environment;
+    const shape = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+    if (definition === undefined || environment === undefined || shape?.dispatchName === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted constructor view requires its native class environment and structural dispatch contract.", view.declaration);
+    const arguments_ = rustSourceTypeCarrierValue(view.sourceCarrier)?.genericArguments;
+    if (arguments_ === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted constructor view requires its native generic arguments.", view.declaration);
+    const bound = arguments_.flatMap((argument, index) => !environment.genericParameterIndexes.includes(index) &&
+      (argument.kind === "type" && argument.type.kind === "type-parameter" || argument.kind === "lifetime" && argument.lifetime.kind === "parameter") ? [index] : []);
+    const genericCarrier = rustClassConstructorTargetType(view.sourceCarrier, bound);
+    const selected = program.records.projectGenerics.get(definition, environment.genericParameterIndexes);
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted constructor view requires its complete native generic requirements.", view.declaration);
+    genericsFor(genericCarrier, selected, contextFor(definition, view.sourceCarrier), view.declaration);
+    if (view.construction !== undefined && shape.construction === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted constructor view requires its exact native construction slot.", view.declaration);
+    const fields = view.fields.map(field => {
+      const storage = shape.fields[field.storageIndex];
+      if (storage === undefined || field.callable === undefined && storage.property === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted constructor field requires its exact native callable or property slot.", field.declaration);
+      return Object.freeze({ declaration: field.declaration, fileName: field.fileName, targetName: field.targetName, storage, callable: field.callable });
+    });
+    let files = constructors.get(view.declaration);
+    if (files === undefined) { files = new Map(); constructors.set(view.declaration, files); }
+    const emitted = files.get(view.ownerFileName) ?? [];
+    emitted.push(Object.freeze({ sourceCarrier: view.sourceCarrier, targetCarrier: view.targetCarrier, genericCarrier,
+      dispatchName: shape.dispatchName, fields: Object.freeze(fields), construction: view.construction === undefined ? undefined
+        : Object.freeze({ callable: view.construction, name: shape.construction!.targetName }) }));
+    files.set(view.ownerFileName, emitted);
+  }
+  for (const [declaration, files] of constructors) for (const [file, views] of files) producer.constructorViews(declaration, file, views);
+  for (const view of program.classValues.instanceViewImplementations) {
+    const definition = program.projectTypes.definitionForDeclaration(view.declaration);
+    const representation = program.objectRepresentations.representationFor(definition);
+    if (definition === undefined || representation === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact source representation.", view.declaration);
+    const selected = program.records.projectGenerics.get(definition, undefined,
+      representation.dispatchObjectLifetime === undefined ? [] : [representation.dispatchObjectLifetime]);
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its complete native generic requirements.", view.declaration);
+    genericsFor(view.sourceCarrier, selected, contextFor(definition, view.sourceCarrier), view.declaration);
+  }
+}

@@ -242,6 +242,7 @@ export function createRustProgramRecordBuilder(
     ...classEmissionPlans.visibilityRecords,
     ...classEmissionPlans.environmentRecords,
     ...classEmissionPlans.forwarderRecords,
+    ...classEmissionPlans.implementationRecords,
     ...projectEmissionPlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
