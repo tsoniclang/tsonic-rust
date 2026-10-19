@@ -10,6 +10,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup } from "../operations/target-operation.js";
@@ -289,7 +290,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
       const independent = implementation?.independent === true && frame?.hasIndependent === true && frame.implementations.includes(implementation) && protocol !== undefined
         ? rustCallableTargetType(protocol.parameters, protocol.result) : undefined;
       const carrier = independent ?? records.receiverIndependentMethod.get(node)?.carrier ?? operation.resultCarrier;
-      if (rustCallableProtocol(carrier) !== undefined) producer(owner, node, node, carrier);
+      if (rustFrameCallableValue(carrier) === undefined && rustCallableProtocol(carrier) !== undefined)
+        producer(owner, node, node, carrier);
       visitConstruct(node, node);
     } else if (operation?.kind === "record-literal") {
       for (const [index, contribution] of operation.contributions.entries()) {

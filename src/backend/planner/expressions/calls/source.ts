@@ -544,7 +544,7 @@ export function planSelectedSourceCall(
     const source = rustValueCarrierBeforeContextualConversion(context.input.program.records, callee);
     const physical = source === undefined ? undefined : rustNativeCallableOperand(source, callee, {
       records: context.input.program.records, storage: context.input.program.callableValues.nativeStorage,
-      producers: context.input.program.callableValues.nativeProducers, definitions: context.input.program.typeDefinitions,
+      producers: context.input.program.callableValues.nativeProducers,
     });
     const error = physical === undefined ? undefined : rustTypeFromCarrierInContext(physical.signature.error, context);
     if (error?.kind === "named" && error.path === "core::convert::Infallible" && context.syntheticNames !== undefined) {

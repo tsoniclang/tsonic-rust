@@ -4,7 +4,7 @@ import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "..
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
@@ -33,7 +33,8 @@ function definitionContext(definition: RustFrameCallableDefinition, context: Rus
 function definitionGenerics(definition: RustFrameCallableDefinition, context: RustPlanContext): RustGenerics {
   const contracts = definition.entries.flatMap(entry => entry.implementations).map(implementation =>
     context.input.program.declarationGenericRequirements.contractFor(implementation.declaration));
-  if (contracts.some(contract => contract === undefined)) throw new Error("A sealed frame entry lost its generic requirement contract.");
+  if (contracts.some(contract => contract === undefined))
+    failRustPlannerInvariant("A sealed frame entry lost its generic requirement contract.", definition.activation.ownerDeclaration);
   return rustGenericsWithAssociatedBounds(definition.environmentParameters.map(parameter => ({ kind: "type", name:
     context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
     bounds: rustGenericRequirementBounds([...new Set(contracts.flatMap(contract =>

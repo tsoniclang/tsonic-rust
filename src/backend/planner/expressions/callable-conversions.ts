@@ -172,8 +172,7 @@ function physicalCallableSource(
 ): RustNativeCallablePhysicalSource | undefined {
   const program = context.input.program;
   return rustNativeCallableOperand(source, node, { records: program.records,
-    storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers,
-    definitions: program.typeDefinitions });
+    storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers });
 }
 
 function inlineCallableProducer(

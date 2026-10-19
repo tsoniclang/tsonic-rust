@@ -65,7 +65,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
     carrierHost: input.carrierHost });
   const captures = createRustNativeCapturePlan({ records, storage: sourceStorage, nativeStorage: queries });
   physical = createRustGenericCallablePhysicalPlan(generic.definitions, generic.definitionFor, {
-    ast, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
+    ast, lifetimes: input.lifetimes, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
   });
   const storage = finalizeRustNativeParameterStorage({ ast, storage: sourceStorage, nativeNodes: input.nativeNodes, records }, queries);
   const occurrences = prepareRustProviderSourceOccurrences({ ast, records, nodes: input.nativeNodes,

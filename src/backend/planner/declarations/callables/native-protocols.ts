@@ -1,5 +1,4 @@
 import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
-import { rustNativeCallableProtocolResult } from "../../../../analysis/callables/native-protocols.js";
 import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -36,8 +35,7 @@ export function planRustNativeCallableProtocol(
 ): RustItem | undefined {
   const signature = protocol.signature;
   const parameters = protocol.method.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, context, "parameter"));
-  const result = rustNativeCallableProtocolResult(protocol, context.input.program.typeDefinitions);
-  const returnType = result === undefined ? undefined : rustTypeFromCarrierInContext(result, context, "return");
+  const returnType = rustTypeFromCarrierInContext(protocol.result, context, "return");
   const methodGenerics = planRustNativeCallableMethodGenerics(protocol, context);
   const invoked = context.input.program.callableValues.nativeDispatch.requiredFor(protocol);
   if (parameters.some(parameter => parameter === undefined) || returnType === undefined || methodGenerics === undefined) return undefined;

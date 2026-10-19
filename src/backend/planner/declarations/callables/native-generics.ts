@@ -85,8 +85,7 @@ export function planRustNativeCallableGenerics(
     const retained = callableInput === undefined ? [] : context.input.program.retainedCallableInputs.forInput(callableInput);
     if (retained.length > 0) {
       selectedBounds.push({ kind: "lifetime", lifetime: { kind: "static" } });
-      const signature = callableInput !== undefined ? rustNativeCallableInputPhysicalSignature(callableInput, [],
-        context.input.program.typeDefinitions) : undefined;
+      const signature = callableInput !== undefined ? rustNativeCallableInputPhysicalSignature(callableInput, []) : undefined;
       const error = signature === undefined ? undefined : rustTypeFromCarrierInContext(signature.error, context);
       if (error === undefined) return undefined;
       for (const target of retained) {

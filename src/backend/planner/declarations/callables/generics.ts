@@ -11,7 +11,7 @@ import {
   type RustGenericParameter,
   type RustTypeBound,
 } from "../../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier } from "../../program/plan-context.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -231,7 +231,7 @@ function planRustSourceCallableGenerics(
     if (specialization?.has(parameter.identity) === true) return Object.freeze([]);
     const requirements = requirementsByIdentity.get(parameter.identity);
     if (requirements === undefined) {
-      throw new Error("Sealed callable generic requirements lost one exact source type parameter.");
+      failRustPlannerInvariant("Sealed callable generic requirements lost one exact source type parameter.", declaration);
     }
     return Object.freeze([{
       kind: "type" as const,

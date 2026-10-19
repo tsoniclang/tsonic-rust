@@ -35,7 +35,7 @@ function inspectFixture(program, requiredRecords) {
   };
   program.sourceFiles.forEach(visit);
   const input = { records: program.records, storage: program.callableValues.nativeStorage,
-    producers: program.callableValues.nativeProducers, definitions: program.typeDefinitions };
+    producers: program.callableValues.nativeProducers };
   const declaration = name => {
     const node = declarations.get(name);
     assert.equal(node !== undefined, true, name);
@@ -91,7 +91,7 @@ test("source-produced physical formal signatures retain exact selected input and
     assert.equal(rustTargetTypeRefEquals(value.signature.error.trait, inputs[index].trait), true);
     const wrong = inputs[1 - index];
     assert.equal(rustNativeCallablePhysicalSource(inputs[index].carrier,
-      { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }, current.program.typeDefinitions) === undefined,
+      { kind: "selected", carrier: inputs[index].implementation, inputs: [wrong] }) === undefined,
     true, "an equal logical signature cannot replace exact physical input identity");
   }
 });
@@ -169,7 +169,7 @@ test("physical callable operand queries reject unrelated values, missing owners 
   const selected = current.input.storage.valueFor(current.declaration("callback"));
   assert.equal(selected.kind, "selected");
   assert.equal(rustNativeCallablePhysicalSource(source,
-    { kind: "identity", carrier: source }, current.program.typeDefinitions) === undefined, true,
+    { kind: "identity", carrier: source }) === undefined, true,
     "logical callable storage cannot masquerade as exact native Result storage");
 });
 

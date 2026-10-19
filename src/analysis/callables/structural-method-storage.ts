@@ -298,7 +298,7 @@ export function createRustStructuralMethodStorage(input: {
           const logical = records.receiverIndependentMethod.get(subject.node)?.carrier ?? operation.resultCarrier;
           const physical = input.nativeProducers.physicalFor(subject.node, logical);
           const source = physical === undefined ? undefined : rustNativeCallablePhysicalSource(logical,
-            { kind: "identity", carrier: physical }, input.typeDefinitions);
+            { kind: "identity", carrier: physical });
           const owner = sourceEnclosingCallable(ast.parent(subject.node), ast);
           const bound = input.nativeStorage.genericBindingsFor(owner ?? subject.node, producer.bindings);
           if (bound.kind === "unresolved") throw new Error(bound.reason);

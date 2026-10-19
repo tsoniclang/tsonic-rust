@@ -14,7 +14,6 @@ import { rustValueCarrierBeforeContextualConversion } from "../conversions/value
 import type { RustNativeCallableInput } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
-import { rustNativeCallableProtocolResult } from "./native-protocols.js";
 import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
 import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
@@ -52,7 +51,6 @@ export function rustNativeCallablePhysicalSource(
   storage: Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }>
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "identity" }>, "kind" | "carrier">
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs">,
-  definitions: RustTypeDefinitions,
 ): RustNativeCallablePhysicalSource | undefined {
   if (storage.kind === "unresolved") return undefined;
   const signature = rustCallablePhysicalSignature(storage.carrier);
@@ -64,14 +62,13 @@ export function rustNativeCallablePhysicalSource(
   const protocol = input.protocol;
   if (!rustTargetTypeRefEquals(input.carrier, source) || protocol.signature.typeParameters.length !== 0 ||
     protocol.method.binder.parameters.length !== 0) return undefined;
-  const selected = rustNativeCallableInputPhysicalSignature(input, [], definitions);
+  const selected = rustNativeCallableInputPhysicalSignature(input, []);
   return selected === undefined ? undefined : Object.freeze({ carrier: storage.carrier, input, signature: selected });
 }
 
 export function rustNativeCallableInputPhysicalSignature(
   input: RustNativeCallableInput,
   methodArguments: readonly RustTargetGenericArgument[],
-  definitions: RustTypeDefinitions,
 ): RustCallablePhysicalSignature | undefined {
   const protocol = input.protocol;
   const parameters: readonly RustTargetGenericParameter[] = [
@@ -87,8 +84,7 @@ export function rustNativeCallableInputPhysicalSignature(
   const arguments_ = [...methodArguments, ...input.environment.map(type => ({ kind: "type" as const, type }))];
   const bindings = rustTargetGenericBindingsForArguments(parameters, arguments_);
   if (bindings === undefined) return undefined;
-  const selectedResult = rustNativeCallableProtocolResult(protocol, definitions);
-  if (selectedResult === undefined) return undefined;
+  const selectedResult = protocol.result;
   const result = substituteRustTargetGenerics(selectedResult, bindings.types, bindings.lifetimes, bindings.consts, (carrier, original) => {
     if (carrier.kind === "associated-type" && original.kind === "associated-type" && original.owner.kind === "type-parameter" &&
       original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: input.trait };
@@ -109,7 +105,6 @@ export function rustNativeCallableOperand(
     readonly records: RustProgramRecords;
     readonly storage: Pick<RustNativeStoragePlan, "operandFor">;
     readonly producers: RustNativeCallableProducerPlan;
-    readonly definitions: RustTypeDefinitions;
   },
 ): RustNativeCallablePhysicalSource | undefined {
   const reference = input.records.directCallableReference.get(node);
@@ -117,8 +112,8 @@ export function rustNativeCallableOperand(
     if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
     const carrier = input.producers.physicalFor(reference.sourceDeclaration, source);
     return carrier === undefined ? undefined
-      : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier }, input.definitions);
+      : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier });
   }
   if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.records, node), source)) return undefined;
-  return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.definitions);
+  return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node));
 }
