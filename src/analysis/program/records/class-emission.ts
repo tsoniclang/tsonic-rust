@@ -6,6 +6,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustNativeMemberVisibility, RustNativeMemberVisibilityRecords } from "../../../target-model/records/native-member-names.js";
 import type { RustClassEnvironmentRecords, RustClassEnvironmentTypeEmission, RustClassMemberEnvironmentEmission } from "../../../target-model/records/class-environments.js";
 import type { RustNamedClassEnvironment } from "../../../target-model/records/class-values.js";
+import type { RustClassValueReadEmission, RustClassValueModuleEmission } from "../../../target-model/records/class-environments.js";
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
@@ -18,6 +19,8 @@ export interface RustClassEmissionProducer {
   memberEnvironment(subject: Node, value: RustClassMemberEnvironmentEmission): void;
   staticEnvironment(subject: Node, value: RustNamedClassEnvironment): void;
   callGenericArguments(subject: Node, count: number): void;
+  valueRead(subject: Node, value: RustClassValueReadEmission): void;
+  moduleValue(subject: Node, value: RustClassValueModuleEmission): void;
   visibility(subject: Node, value: RustNativeMemberVisibility): void;
   classDeclaration(subject: Node, value: RustNativeClassEmission): void;
 }
@@ -29,9 +32,13 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const memberEnvironments = new WeakMap<Node, RustClassMemberEnvironmentEmission>();
   const staticEnvironments = new WeakMap<Node, RustNamedClassEnvironment>();
   const genericArguments = new WeakMap<Node, number>();
+  const reads = new WeakMap<Node, RustClassValueReadEmission>();
+  const moduleValues = new WeakMap<Node, RustClassValueModuleEmission>();
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
     environmentRecords: Object.freeze({
+      classValueRead: Object.freeze({ get: (subject: Node) => reads.get(subject) }),
+      classValueModule: Object.freeze({ get: (subject: Node) => moduleValues.get(subject) }),
       classMemberEnvironment: Object.freeze({ get: (subject: Node) => memberEnvironments.get(subject) }),
       classStaticEnvironment: Object.freeze({ get: (subject: Node) => staticEnvironments.get(subject) }),
       classCallGenericArguments: Object.freeze({ get: (subject: Node) => genericArguments.get(subject) }),
@@ -41,6 +48,16 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
         return identity === undefined ? undefined : environmentsByFile.get(identity.fileName)?.get(identity.typeName);
       } }),
     }),
+    valueRead(subject: Node, value: RustClassValueReadEmission): void {
+      assertOpen();
+      if (reads.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native class value read is selected exactly once.", subject);
+      reads.set(subject, Object.freeze(value));
+    },
+    moduleValue(subject: Node, value: RustClassValueModuleEmission): void {
+      assertOpen();
+      if (moduleValues.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native class module value is selected exactly once.", subject);
+      moduleValues.set(subject, Object.freeze(value));
+    },
     memberEnvironment(subject: Node, value: RustClassMemberEnvironmentEmission): void {
       assertOpen();
       if (memberEnvironments.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A native member environment has one producer.", subject);

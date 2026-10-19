@@ -21,10 +21,24 @@ export interface RustClassMemberEnvironmentEmission {
   readonly borrowed: boolean;
 }
 
+export interface RustClassValueReadEmission {
+  readonly environment: RustNamedClassEnvironment;
+  readonly source: "new" | "existing";
+  readonly clone: boolean;
+  readonly target: TargetTypeRef | undefined;
+}
+
+export interface RustClassValueModuleEmission {
+  readonly environment: RustNamedClassEnvironment;
+  readonly visibility: "public" | "crate";
+}
+
 export interface RustClassEnvironmentRecords {
   readonly classEnvironment: { readonly get: (declaration: Node) => RustClassEnvironmentTypeEmission | undefined };
   readonly classEnvironmentType: { readonly get: (carrier: TargetTypeRef) => RustClassEnvironmentTypeEmission | undefined };
   readonly classMemberEnvironment: { readonly get: (declaration: Node) => RustClassMemberEnvironmentEmission | undefined };
   readonly classStaticEnvironment: { readonly get: (declaration: Node) => RustNamedClassEnvironment | undefined };
   readonly classCallGenericArguments: { readonly get: (declaration: Node) => number | undefined };
+  readonly classValueRead: { readonly get: (node: Node) => RustClassValueReadEmission | undefined };
+  readonly classValueModule: { readonly get: (declaration: Node) => RustClassValueModuleEmission | undefined };
 }

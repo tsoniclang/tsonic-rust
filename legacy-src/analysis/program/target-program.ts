@@ -91,6 +91,7 @@ import { analyzeRustConstructionEmission } from "../project-types/construction-e
 import { analyzeRustClassEmission } from "../declarations/classes/planning.js";
 import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.js";
 import { analyzeRustProjectEmission } from "../project-types/emission.js";
+import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -536,6 +537,7 @@ export function analyzeRustTargetProgram(
   if (constructionEmissionIssues.length !== 0) return rejectedTargetStage(constructionEmissionIssues);
   const classEmissionIssues = analyzeRustClassEmission({ program, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
+  analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
   analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>
     sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
