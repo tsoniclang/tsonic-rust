@@ -5,14 +5,16 @@ import {
 } from "./operations.js";
 import {
   parameterPassing,
-  providerGenericBindingsFor,
-  providerGenericParametersFor,
   sourceTypeFor,
-  targetGenericArgumentFor,
-  targetGenericParameterArguments,
   targetTraitFor,
   targetTypeFor,
 } from "./types.js";
+import {
+  providerGenericBindingsFor,
+  providerGenericParametersFor,
+  targetGenericArgumentFor,
+  targetGenericParameterArguments,
+} from "./type-arguments.js";
 import {
   requireCurrentType,
   withProjectionGenericParameters,
@@ -39,7 +41,7 @@ import type {
 } from "../model/model.js";
 import type {
   RustProviderOperationDefinition,
-} from "../../packages/model.js";
+} from "../../../target-model/providers/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function projectFunction(

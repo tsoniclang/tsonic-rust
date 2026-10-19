@@ -17,7 +17,7 @@ import type {
   RustProviderOperationDefinition,
   RustProviderOperationRow,
   RustProviderTypeDefinition,
-} from "./model.js";
+} from "../../target-model/providers/model.js";
 import type {
   RustProviderGenericParameter,
   RustProviderOperationForm,

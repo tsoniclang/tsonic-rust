@@ -36,7 +36,7 @@ import type {
 } from "../control-flow/counted-loop-representations.js";
 import type {
   RustProviderSemantics,
-} from "../../providers/packages/model.js";
+} from "../../target-model/providers/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
 import type { RustFoundationPlan } from "../foundation/plan.js";

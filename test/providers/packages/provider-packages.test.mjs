@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   acmeFilesPackage,
   acmePlatformPackage,
@@ -17,6 +18,33 @@ import { captureRustProviderContributions } from "../../helpers/provider-contrib
 function providerContext(selectedCapabilities) {
   return captureRustProviderContributions(selectedCapabilities);
 }
+
+test("provider data declarations have one target-model owner and no implementation-owner type aliases", () => {
+  const data = readFileSync(new URL("../../../src/target-model/providers/model.ts", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("../../../src/providers/packages/model.ts", import.meta.url), "utf8");
+  const declarations = readFileSync(new URL("../../../dist/target-model/providers/model.d.ts", import.meta.url), "utf8");
+  const oldDeclarations = readFileSync(new URL("../../../dist/providers/packages/model.d.ts", import.meta.url), "utf8");
+  for (const name of [
+    "RustProviderOperationKind", "RustProviderImmediateCallbackDefinition", "RustProviderOperationDefinitionBase",
+    "RustProviderOperationDefinition", "RustProviderTypeDefinition", "RustProviderTypeRow", "RustProviderOperationRow",
+    "RustProviderExportRow", "RustProviderSemantics", "RustProviderDispatchContextRow", "RustProviderBinaryHookDefinitionBase",
+    "RustProviderBinaryHookDefinition", "RustProviderBinaryHookRow",
+  ]) {
+    const declaration = new RegExp(`^(?:export )?(?:interface|type) ${name}(?:[\\s<=]|$)`, "mu");
+    assert.match(data, declaration, `${name}: sole source declaration is data-owned`);
+    assert.match(declarations, declaration, `${name}: emitted declaration is data-owned`);
+    assert.doesNotMatch(shell, declaration, `${name}: old source declaration is removed`);
+    assert.doesNotMatch(oldDeclarations, declaration, `${name}: old declaration output is removed`);
+    assert.doesNotMatch(oldDeclarations, new RegExp(`^export[^\\n]*\\b${name}\\b`, "mu"),
+      `${name}: no old-owner forwarding alias is emitted`);
+  }
+  assert.doesNotMatch(data, /from\s+["'][^"']*providers\/packages\//u,
+    "target data does not import the provider implementation owner");
+  assert.doesNotMatch(data, /\bresultLoans\b/u, "data relocation does not admit the excluded result-loan schema");
+  const publicProvider = readFileSync(new URL("../../../dist/public/provider.d.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(publicProvider, /\bRustProviderSemantics\b/u,
+    "the data move does not add a public Semantics export");
+});
 
 test("provider call lowers to the mapped Rust operation with cargo dependency", () => {
   const packages = [acmeFilesPackage()];

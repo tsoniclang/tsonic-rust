@@ -1,22 +1,16 @@
-import type { ProviderDeclarationKind, ProviderExportDeclaration } from "@tsonic/tsts";
-import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
+import type { ProviderExportDeclaration } from "@tsonic/tsts";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
-  RustProviderGenericParameter,
-  RustProviderOperationForm,
-  RustProviderTypeParameterRequirement,
-  RustValueConversion,
-} from "../../target-model/operations/model.js";
+  RustProviderBinaryHookDefinition,
+  RustProviderOperationDefinition,
+  RustProviderTypeDefinition,
+} from "../../target-model/providers/model.js";
 import type {
   TargetCapabilityContribution,
   TargetCapabilityImplementation,
 } from "@tsonic/target-api/provider";
-import type {
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../../target-model/types/model.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
-import type { RustDispatchContextDefinition, RustDispatchContextInput, RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";
+import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -25,120 +19,6 @@ export interface RustProviderModuleDefinition {
   readonly imports?: readonly { readonly moduleSpecifier: string; readonly namedImports: readonly { readonly exportedName: string }[] }[];
   readonly exports: readonly ProviderExportDeclaration[];
 }
-
-export type RustProviderOperationKind =
-  | "method"
-  | "constructor"
-  | "property"
-  | "indexer"
-  | "property-set"
-  | "index-set";
-
-export interface RustProviderImmediateCallbackDefinition {
-  readonly sourceArgumentIndex: number;
-  readonly fallibleTarget: RustProviderOperationForm;
-}
-
-interface RustProviderOperationDefinitionBase<
-  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
-> {
-  readonly exportId: string;
-  readonly memberId?: string;
-  readonly signatureId?: string;
-  readonly operationKind: OperationKind;
-  readonly target: RustProviderOperationForm;
-  readonly resultCarrier: TargetTypeRef;
-  readonly parameterCarriers?: readonly TargetTypeRef[];
-  readonly receiverCarrier?: TargetTypeRef;
-  readonly genericParameters?: readonly RustProviderGenericParameter[];
-  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
-  readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
-  readonly resultConversion?: RustValueConversion;
-  readonly evaluation?: "pure";
-  // Async provider operations produce future carriers that must be awaited.
-  readonly isAsync?: boolean;
-  // Exact target invocation safety. This does not grant a lexical unsafe
-  // context; source code must still select an explicit unsafecontext region.
-  readonly isUnsafe?: boolean;
-  readonly immediateCallback?: RustProviderImmediateCallbackDefinition;
-  readonly dispatchInputs?: readonly RustDispatchContextInput[];
-  readonly nativeErrorCarriers?: readonly TargetTypeRef[];
-}
-
-export type RustProviderOperationDefinition<
-  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
-> = RustProviderOperationDefinitionBase<OperationKind> & (
-  | {
-      readonly isFallible: true;
-      readonly errorBoundary: "provider-native";
-      readonly errorCarrier: TargetTypeRef;
-    }
-  | {
-      readonly isFallible: true;
-      readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
-      readonly errorCarrier?: never;
-    }
-  | {
-      readonly isFallible?: false;
-      readonly errorBoundary?: never;
-      readonly errorCarrier?: never;
-    }
-);
-
-export interface RustProviderTypeDefinition {
-  readonly nativeMemoryFieldIds?: readonly string[];
-  readonly exportId: string;
-  readonly genericParameters?: readonly RustProviderGenericParameter[];
-  readonly targetCarrier: TargetTypeRef;
-  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
-  readonly objectLiteralConstruction?: {
-    readonly kind: "struct" | "struct-default" | "default";
-  };
-}
-
-export interface RustProviderTypeRow extends RustProviderTypeDefinition {
-  readonly providerPackageId: string;
-  readonly providerId: string;
-  readonly providerVersion: string;
-  readonly providerModuleId: string;
-  readonly moduleSpecifier: string;
-}
-
-export type RustProviderOperationRow<
-  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
-> = RustProviderOperationDefinition<OperationKind> & {
-  readonly providerPackageId: string;
-  readonly providerId: string;
-  readonly providerVersion: string;
-  readonly providerModuleId: string;
-  readonly moduleSpecifier: string;
-};
-
-export interface RustProviderExportRow {
-  readonly exportId: string;
-  readonly globalNames?: readonly string[];
-  readonly declarationKind: ProviderDeclarationKind;
-  readonly providerPackageId: string;
-  readonly providerId: string;
-  readonly providerVersion: string;
-  readonly providerModuleId: string;
-  readonly moduleSpecifier: string;
-}
-
-export interface RustProviderSemantics {
-  readonly exports: readonly RustProviderExportRow[];
-  readonly operations: readonly RustProviderOperationRow[];
-  readonly carrierPaths: Readonly<Record<string, string>>;
-  readonly carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>;
-  readonly types: readonly RustProviderTypeRow[];
-  readonly binaryHooks: readonly RustProviderBinaryHookRow[];
-  readonly dispatchContexts: readonly RustProviderDispatchContextRow[];
-}
-
-export type RustProviderDispatchContextRow = RustDispatchContextDefinition & {
-  readonly providerPackageId: string;
-  readonly providerVersion: string;
-};
 
 export interface RustProviderCrateDefinition {
   readonly crateName: string;
@@ -158,39 +38,6 @@ export interface RustProviderModuleAliasDefinition {
   readonly moduleSpecifier: string;
   readonly canonicalModuleSpecifier: string;
 }
-
-interface RustProviderBinaryHookDefinitionBase {
-  readonly id: string;
-  readonly phase: import("../../target-model/operations/binary-hooks.js").RustBinaryHookPhase;
-  readonly path: string;
-  readonly requiredCrate: string;
-  readonly dispatchGroups?: readonly RustDispatchContextGroupInput[];
-}
-
-export type RustProviderBinaryHookDefinition =
-  & RustProviderBinaryHookDefinitionBase
-  & (
-    | {
-        readonly isFallible: true;
-        readonly errorBoundary: "provider-native";
-        readonly errorCarrier: TargetTypeRef;
-      }
-    | {
-        readonly isFallible: true;
-        readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
-        readonly errorCarrier?: never;
-      }
-    | {
-        readonly isFallible?: false;
-        readonly errorBoundary?: never;
-        readonly errorCarrier?: never;
-      }
-  );
-
-export type RustProviderBinaryHookRow = RustProviderBinaryHookDefinition & {
-  readonly providerPackageId: string;
-  readonly providerVersion: string;
-};
 
 export interface RustProviderPackageDefinition {
   readonly id: string;

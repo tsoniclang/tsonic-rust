@@ -17,14 +17,16 @@ import {
 } from "./operations.js";
 import { projectFunction, selectUnambiguousMembers } from "./functions.js";
 import {
-  providerGenericBindingsFor,
-  providerGenericParametersFor,
-  sourceGenericParameterArguments,
   sourceTypeFor,
-  targetGenericParameterArguments,
   targetTraitFor,
   targetTypeFor,
 } from "./types.js";
+import {
+  providerGenericBindingsFor,
+  providerGenericParametersFor,
+  sourceGenericParameterArguments,
+  targetGenericParameterArguments,
+} from "./type-arguments.js";
 import {
   projectAssociatedConstants,
   projectAssociatedTypes,
@@ -61,7 +63,7 @@ import type {
 import type {
   RustProviderOperationDefinition,
   RustProviderTypeDefinition,
-} from "../../packages/model.js";
+} from "../../../target-model/providers/model.js";
 import type { RustProviderGenericParameter } from "../../../target-model/operations/model.js";
 
 interface ProjectedExport {

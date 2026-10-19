@@ -21,7 +21,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustProjectTypePolicy } from "./type-policy.js";
 import { rustProjectObjectField } from "./object-layout.js";
-import type { RustProviderOperationRow } from "../../providers/packages/model.js";
+import type { RustProviderOperationRow } from "../../target-model/providers/model.js";
 import { createRustStructuralStorageCollector } from "./structural-storage-requirements.js";
 
 export interface RustMutableProjectStorageRequirements {

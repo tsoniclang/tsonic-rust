@@ -15,7 +15,7 @@ import {
 import type {
   RustProviderSemantics,
   RustProviderTypeRow,
-} from "../packages/model.js";
+} from "../../target-model/providers/model.js";
 import { rustNativeScalarTargetId } from "../../target-model/types/index.js";
 import { rustJsTimerDispatchContext } from "../model/js-dispatch.js";
 

@@ -4,7 +4,7 @@ import { sourceTypeFor, targetTypeFor } from "./types.js";
 import type { ProviderExportDeclaration } from "@tsonic/tsts";
 import type { RustCompilerExport, RustCompilerFunction, RustCompilerType } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
-import type { RustProviderOperationDefinition } from "../../packages/model.js";
+import type { RustProviderOperationDefinition } from "../../../target-model/providers/model.js";
 
 export function projectPrimitiveExport(
   exported: Extract<RustCompilerExport, { readonly kind: "primitive" }>,

@@ -26,7 +26,7 @@ export interface RustOperationsProviderOptions extends RustTargetTypeResolutionO
   readonly dispatchContextInputFor: (input: unknown) =>
     import("../../../target-model/operations/dispatch-contexts.js").RustResolvedDispatchContextInput | undefined;
   readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
-  readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
+  readonly providerExports: readonly import("../../../target-model/providers/model.js").RustProviderExportRow[];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;

@@ -15,10 +15,10 @@ import type { RustTargetConfiguration } from "../../target-model/configuration/m
 import type {
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
-  RustProviderPackageDefinition,
   RustProviderSemantics,
   RustProviderTypeDefinition,
-} from "../packages/model.js";
+} from "../../target-model/providers/model.js";
+import type { RustProviderPackageDefinition } from "../packages/model.js";
 import {
   mergeRustProviderSemantics,
   collectRustProviderSemanticsFromDefinitions,

@@ -57,7 +57,7 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
-import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
+import type { RustProviderTypeRow } from "../../../target-model/providers/model.js";
 import type { RustSourceProfileRegistry } from "../model/source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type {

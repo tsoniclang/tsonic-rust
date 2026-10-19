@@ -3,21 +3,23 @@ export { rustJsTimerDispatchContextId } from "../providers/model/js-dispatch.js"
 export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
-  RustProviderCrateDefinition,
   RustProviderDispatchContextRow,
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
-  RustProviderModuleAliasDefinition,
-  RustProviderModuleDefinition,
   RustProviderOperationDefinition,
   RustProviderOperationKind,
   RustProviderOperationRow,
+  RustProviderTypeDefinition,
+  RustProviderTypeRow,
+} from "../target-model/providers/model.js";
+export type {
+  RustProviderCrateDefinition,
+  RustProviderModuleAliasDefinition,
+  RustProviderModuleDefinition,
   RustProviderPackageDefinition,
   RustProviderPackageImplementation,
   RustProviderPolicyContribution,
   RustProviderSourceDependency,
-  RustProviderTypeDefinition,
-  RustProviderTypeRow,
 } from "../providers/packages/model.js";
 export type {
   RustProviderTypeParameterRequirement,
