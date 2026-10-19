@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/model.js";
 import type { RustClassValueCallable } from "./class-value-callables.js";
 import type { RustStructuralShapeField } from "./structural-shapes.js";
-import type { RustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
 import type { RustShapeGenericRequirementContract } from "./generic-requirements.js";
 
 export interface RustClassImplementationContext {
@@ -28,8 +28,18 @@ export interface RustClassConstructorViewEmission {
 }
 
 export interface RustClassImplementationRecords {
+  readonly structuralView: { readonly get: (source: TargetTypeRef, target: TargetTypeRef) => RustProjectStructuralView | undefined };
+  readonly structuralViewImplementations: { readonly get: (declaration: Node, fileName: string) => readonly RustProjectStructuralViewImplementation[] | undefined };
+  readonly structuralViewPolymorphic: { readonly get: (declaration: Node) => boolean | undefined };
+  readonly structuralViewCallable: { readonly get: (callable: RustClassValueCallable) => RustStructuralViewCallableEmission | undefined };
   readonly structuralViewRequirements: { readonly get: (view: RustProjectStructuralView) => RustShapeGenericRequirementContract | undefined };
   readonly classImplementationContext: { readonly get: (declaration: Node, carrier: TargetTypeRef) => RustClassImplementationContext | undefined };
   readonly classImplementationGenerics: { readonly get: (carrier: TargetTypeRef) => RustClassImplementationGenerics | undefined };
   readonly classConstructorViews: { readonly get: (declaration: Node, fileName: string) => readonly RustClassConstructorViewEmission[] | undefined };
+}
+
+export interface RustStructuralViewCallableEmission {
+  readonly result: TargetTypeRef;
+  readonly owner: TargetTypeRef | undefined;
+  readonly exactSlot: string | undefined;
 }

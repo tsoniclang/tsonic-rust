@@ -6,10 +6,12 @@ import type { RustClassConstructorViewEmission, RustClassImplementationContext }
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
+import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
+import type { RustProjectStructuralViewImplementation } from "../../target-model/records/project-structural-views.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
 import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 
@@ -88,6 +90,9 @@ export function analyzeRustClassImplementations(program: Omit<RustTargetProgram,
     files.set(view.ownerFileName, emitted);
   }
   for (const [declaration, files] of constructors) for (const [file, views] of files) producer.constructorViews(declaration, file, views);
+  const instances = new Map<Node, Map<string, RustProjectStructuralViewImplementation[]>>();
+  const polymorphicDeclarations = new Set<Node>();
+  const selectedCallables = new Set<RustClassValueCallable>();
   for (const view of program.classValues.instanceViewImplementations) {
     const requirements = program.declarationGenericRequirements.contractForStructuralView(view);
     if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its sealed native generic requirements.", view.declaration);
@@ -95,9 +100,32 @@ export function analyzeRustClassImplementations(program: Omit<RustTargetProgram,
     const definition = program.projectTypes.definitionForDeclaration(view.declaration);
     const representation = program.objectRepresentations.representationFor(definition);
     if (definition === undefined || representation === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact source representation.", view.declaration);
+    const polymorphic = program.projectTypes.isPolymorphic(definition);
+    if (!polymorphicDeclarations.has(view.declaration)) {
+      polymorphicDeclarations.add(view.declaration);
+      producer.instanceViewPolymorphic(view.declaration, polymorphic);
+    }
+    let files = instances.get(view.declaration);
+    if (files === undefined) { files = new Map(); instances.set(view.declaration, files); }
+    const views = files.get(view.ownerFileName) ?? [];
+    views.push(view);
+    files.set(view.ownerFileName, views);
+    for (const member of view.fields) {
+      const callable = member.callable;
+      if (callable === undefined || selectedCallables.has(callable)) continue;
+      selectedCallables.add(callable);
+      const protocol = rustCallableProtocol(callable.carrier);
+      const variant = program.projectMethodDispatch.variantForMember(callable.declaration, []);
+      const owner = program.projectTypes.definitionContainingDeclaration(callable.declaration);
+      const relationship = owner === undefined ? undefined : program.projectTypes.relationship(callable.ownerCarrier, owner);
+      if (protocol === undefined || polymorphic && (variant === undefined || relationship?.kind !== "related"))
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted structural callable requires its exact native result and dispatch relationship.", callable.declaration);
+      producer.instanceViewCallable(callable, { result: protocol.result, owner: relationship?.kind === "related" ? relationship.targetType : undefined, exactSlot: variant?.exactSlot });
+    }
     const selected = program.records.projectGenerics.get(definition, undefined,
       representation.dispatchObjectLifetime === undefined ? [] : [representation.dispatchObjectLifetime]);
     if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its complete native generic requirements.", view.declaration);
     genericsFor(view.sourceCarrier, selected, contextFor(definition, view.sourceCarrier), view.declaration);
   }
+  for (const [declaration, files] of instances) for (const [file, views] of files) producer.instanceViews(declaration, file, views);
 }

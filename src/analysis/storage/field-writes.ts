@@ -11,7 +11,9 @@ export function analyzeRustFieldWrites(input: {
   readonly required: RustRequiredRecord[];
 }): void {
   const { program } = input;
-  for (const node of input.nodes) {
+  for (const node of new Set(input.nodes)) {
+    const frozen = program.frozenDataWrites.receiverForDeclaration(node);
+    if (frozen !== undefined) input.producer.frozen(node, frozen);
     const borrowed = program.ownership.writes.get(node);
     if (borrowed !== undefined) input.producer.borrowed(node, borrowed);
     const dispatch = program.projectFieldDispatch.planFor(node);

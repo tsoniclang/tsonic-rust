@@ -25,6 +25,7 @@ export interface RustMethodWriteReceiver {
 }
 
 export interface RustFieldWriteRecords {
+  readonly frozenDataReceiver: RustRecordFamily<RustFrozenWriteReceiver>;
   readonly borrowedFieldWrite: RustRecordFamily<RustBorrowedFieldWrite>;
   readonly projectFieldDispatch: RustRecordFamily<RustProjectFieldDispatchPlan>;
   readonly methodWriteReceiver: RustRecordFamily<RustMethodWriteReceiver>;

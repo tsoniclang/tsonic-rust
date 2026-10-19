@@ -13,10 +13,14 @@ import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js
 import type { RustClassValueCallable, RustClassValueForwarderEmission, RustClassValueForwarderRecords } from "../../../target-model/records/class-value-callables.js";
 import type { RustClassImplementationContext, RustClassImplementationGenerics, RustClassConstructorViewEmission, RustClassImplementationRecords } from "../../../target-model/records/class-implementations.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
+import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "../../../target-model/records/project-structural-views.js";
+import type { RustStructuralViewCallableEmission } from "../../../target-model/records/class-implementations.js";
 import type { RustShapeGenericRequirementContract } from "../../../target-model/records/generic-requirements.js";
 
 export interface RustClassEmissionProducer {
+  instanceViews(declaration: Node, fileName: string, values: readonly RustProjectStructuralViewImplementation[]): void;
+  instanceViewPolymorphic(declaration: Node, value: boolean): void;
+  instanceViewCallable(callable: RustClassValueCallable, value: RustStructuralViewCallableEmission): void;
   structuralViewRequirements(view: RustProjectStructuralView, value: RustShapeGenericRequirementContract): void;
   readonly implementationRecords: RustClassImplementationRecords;
   implementationContext(declaration: Node, carrier: TargetTypeRef, value: RustClassImplementationContext): void;
@@ -51,14 +55,43 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const implementationGenerics = new Map<string, RustClassImplementationGenerics>();
   const constructorViews = new WeakMap<Node, Map<string, readonly RustClassConstructorViewEmission[]>>();
   const viewRequirements = new WeakMap<RustProjectStructuralView, RustShapeGenericRequirementContract>();
+  const instanceViews = new WeakMap<Node, Map<string, readonly RustProjectStructuralViewImplementation[]>>();
+  const instanceConversions = new Map<string, RustProjectStructuralView>();
+  const instancePolymorphic = new WeakMap<Node, boolean>();
+  const instanceCallables = new WeakMap<RustClassValueCallable, RustStructuralViewCallableEmission>();
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
     implementationRecords: Object.freeze({
+      structuralView: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => instanceConversions.get(closedMetadataKey([source, target])) }),
+      structuralViewImplementations: Object.freeze({ get: (declaration: Node, fileName: string) => instanceViews.get(declaration)?.get(fileName) }),
+      structuralViewPolymorphic: Object.freeze({ get: (declaration: Node) => instancePolymorphic.get(declaration) }),
+      structuralViewCallable: Object.freeze({ get: (callable: RustClassValueCallable) => instanceCallables.get(callable) }),
       structuralViewRequirements: Object.freeze({ get: (view: RustProjectStructuralView) => viewRequirements.get(view) }),
       classImplementationContext: Object.freeze({ get: (declaration: Node, carrier: TargetTypeRef) => implementationContexts.get(declaration)?.get(closedMetadataKey(carrier)) }),
       classImplementationGenerics: Object.freeze({ get: (carrier: TargetTypeRef) => implementationGenerics.get(closedMetadataKey(carrier)) }),
       classConstructorViews: Object.freeze({ get: (declaration: Node, fileName: string) => constructorViews.get(declaration)?.get(fileName) }),
     }),
+    instanceViews(declaration: Node, fileName: string, values: readonly RustProjectStructuralViewImplementation[]): void {
+      assertOpen();
+      let files = instanceViews.get(declaration);
+      if (files === undefined) { files = new Map(); instanceViews.set(declaration, files); }
+      if (files.has(fileName)) failTargetAnalysisInvariant("tsonic-rust", "A structural implementation inventory has one source owner.", declaration);
+      files.set(fileName, Object.freeze(values));
+      for (const view of values) {
+        const key = closedMetadataKey([view.sourceCarrier, view.targetCarrier]);
+        if (!instanceConversions.has(key)) instanceConversions.set(key, view);
+      }
+    },
+    instanceViewPolymorphic(declaration: Node, value: boolean): void {
+      assertOpen();
+      if (instancePolymorphic.has(declaration)) failTargetAnalysisInvariant("tsonic-rust", "A structural class has one native dispatch decision.", declaration);
+      instancePolymorphic.set(declaration, value);
+    },
+    instanceViewCallable(callable: RustClassValueCallable, value: RustStructuralViewCallableEmission): void {
+      assertOpen();
+      if (instanceCallables.has(callable)) failTargetAnalysisInvariant("tsonic-rust", "A structural callable has one native dispatch owner.", callable.declaration);
+      instanceCallables.set(callable, Object.freeze(value));
+    },
     structuralViewRequirements(view: RustProjectStructuralView, value: RustShapeGenericRequirementContract): void {
       assertOpen();
       if (viewRequirements.has(view)) failTargetAnalysisInvariant("tsonic-rust", "A native structural view has one generic requirement owner.", view.declaration);
