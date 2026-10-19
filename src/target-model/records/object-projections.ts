@@ -13,7 +13,7 @@ export interface RustClosedNativeProjectionEmission {
   readonly optional: boolean;
 }
 
-export type RustProjectClosedValueEmission = { readonly kind: "error" | "value" } | { readonly kind: "shared"; readonly representation: RustObjectRepresentation };
+export type RustProjectClosedValueEmission = { readonly kind: "error" } | { readonly kind: "value" } | { readonly kind: "shared"; readonly representation: RustObjectRepresentation };
 
 export interface RustProjectProjectionEmission {
   readonly carrier: TargetTypeRef;

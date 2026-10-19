@@ -48,7 +48,7 @@ export function analyzeRustObjectProjections(program: Omit<RustTargetProgram, "r
     const selected = Object.freeze({ carrier: fact.targetCarrier, optional: optional !== undefined, projection: fact.projection, route });
     const existing = requests.get(key);
     if (existing !== undefined) {
-      if (!closedMetadataEquals(existing.projection, selected.projection) || existing.route !== route)
+      if (!closedMetadataEquals(existing.projection, selected.projection) || !closedMetadataEquals(existing.route, route))
         failTargetAnalysisInvariant("tsonic-rust", "A checked project projection has one exact native route.", node);
       return;
     }
