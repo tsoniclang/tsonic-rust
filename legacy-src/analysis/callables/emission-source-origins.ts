@@ -9,7 +9,8 @@ import type { RustPhysicalCallableSourceProducer, RustPhysicalCallableSourceSele
   from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustProjectConstructionPlan, RustConstructionLayer } from "../project-types/construction-plan.js";
+import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
+import type { RustConstructionLayer } from "../../target-model/records/construction.js";
 import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";

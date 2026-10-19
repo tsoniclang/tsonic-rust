@@ -1,4 +1,4 @@
-import type { RustProjectConstructionPlan } from "../../../../analysis/project-types/construction-plan.js";
+import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
 import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters,
   type RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
@@ -13,7 +13,7 @@ import { planRustImplicitConstructorParameters } from "./construction-parameters
 import { projectTypeSubstitutions, projectLifetimeSubstitutions, type ProjectClassStateLayer } from "./model.js";
 
 export function planRustConstructionLayers(
-  plan: RustProjectConstructionPlan,
+  plan: RustAdmittedConstruction,
   layers: readonly ProjectClassStateLayer[],
   parameters: RustCallableParameterPlan,
   construction: RustConstructionBody,
@@ -32,7 +32,7 @@ export function planRustConstructionLayers(
       lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
         ...projectLifetimeSubstitutions(layer.definition, storage.carrier)]),
     };
-    const label = !plan.layerHasEarlyReturn(layer.definition) ? undefined
+    const label = !plan.earlyReturnLayers.has(layer.definition) ? undefined
       : { id: controlFlow.nextLoopId++, label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
     const layerContext = construction.contextForLayer(selectedContext, label);
     const prelude = planRustCallableParameterPrelude(parameterPlan, layerContext, planExpression);
@@ -71,7 +71,7 @@ export function planRustConstructionLayers(
       if (body === undefined) return undefined;
       statements.push(...temporaries, ...construction.exportInitialized(
         plan.layers.slice(0, index).flatMap(layer => layer.fields.map(field => field.declaration)), [...bindings, ...body]));
-      if (!plan.layerCompletes(base.definition)) return statements;
+      if (!plan.completingLayers.has(base.definition)) return statements;
     } else {
       const external = context.input.program.projectTypes.externalBaseForDefinition(layer.definition);
       if (external !== undefined) {

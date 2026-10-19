@@ -1,13 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectConstructionPlan } from "../../../../analysis/project-types/construction-plan.js";
+import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
-import { unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { renderRustReceiverAlias } from "../../objects/polymorphism/receiver-aliases.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { diagnosticInput, type RustPlanContext, type RustConstructionPreparation } from "../../program/plan-context.js";
+import { type RustPlanContext, type RustConstructionPreparation } from "../../program/plan-context.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { rustConstructionFieldStorage } from "../../objects/construction-field-storage.js";
 import { planRustValueFieldInput } from "../../objects/value-fields.js";
@@ -38,15 +37,13 @@ export interface RustConstructionBody {
 }
 
 export function planRustConstructionBody(
-  plan: RustProjectConstructionPlan,
+  plan: RustAdmittedConstruction,
   fields: readonly RustConstructionStorageField[],
   type: RustType,
   materialize: (values: ReadonlyMap<Node, RustExpr>, identity?: RustExpr, frameCounter?: RustExpr, retainedFrame?: RustExpr) => RustExpr,
   context: RustPlanContext,
 ): RustConstructionBody | undefined {
-  for (const issue of plan.issues) context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, issue.node), "rust.backend.constructor-readiness", issue.reason));
-  if (plan.issues.length !== 0 || context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted construction requires its hygienic name owner.", plan.definition.declaration);
   const physicalFields = new Map(fields.map(field => [field.declaration, field]));
   const slots: (RustConstructionStorageField & { readonly expression: Extract<RustExpr, { readonly kind: "path" }> })[] = [];
   const declarations: RustStmt[] = [];
@@ -58,7 +55,7 @@ export function planRustConstructionBody(
     declarations.push({ kind: "let", name: frameCounter.path, mutable: false,
       init: { kind: "call", path: "rt::FrameEntryCounter::new", args: [] } });
   }
-  const retainedIdentity = fields.some(field => context.input.program.frozenDataWrites.capturesFieldIdentity(field.declaration));
+  const retainedIdentity = fields.some(field => plan.retainedFieldIdentities.has(field.declaration));
   const identity: RustExpr | undefined = !retainedIdentity ? undefined : { kind: "path",
     path: allocateRustSyntheticName(context.syntheticNames, "object_identity") };
   if (identity?.kind === "path") declarations.push({ kind: "let", name: identity.path, mutable: false,
@@ -72,7 +69,7 @@ export function planRustConstructionBody(
     const expression: Extract<RustExpr, { readonly kind: "path" }> = { kind: "path", path: name };
     const absence = planned.absenceDefault;
     const storage = rustConstructionFieldStorage(field.declaration, field.carrier, context, plan);
-    if (!storage.deferred && !plan.layerHasEarlyReturn(planned.owner) &&
+    if (!storage.deferred && !plan.earlyReturnLayers.has(planned.owner) &&
       (planned.initializer !== undefined || planned.externallyInitialized))
       declarationAtInitialization.add(field.declaration);
     else declarations.push({ kind: "let", name, mutable: storage.mutable, type: field.storageType,
@@ -92,7 +89,7 @@ export function planRustConstructionBody(
     "Retained construction syntax requires its admitted exact native frame type.", exposure!.expression);
   const retainedOwner: RustLiveFrameOwner | undefined = retainedFrame === undefined ? undefined
     : { kind: "live", expression: retainedFrame, borrowed: false, data: { kind: "direct" } };
-  const retainsFrameAt = (node: Node): boolean => plan.emission.preparationFor(node)?.retainsFrame === true;
+  const retainsFrameAt = (node: Node): boolean => plan.emission.preparations.get(node)?.retainsFrame === true;
   const retainedLocation = (declaration: Node, selectedContext: RustPlanContext) => {
     const binding = frame?.bindings.find(binding => binding.declaration === declaration);
     return binding === undefined || retainedOwner === undefined ? undefined
@@ -103,11 +100,9 @@ export function planRustConstructionBody(
   const overrideNodes = new Set(plan.expressions.flatMap(expression => expression.receiver === undefined
     ? [expression.node] : [expression.node, expression.receiver]));
   const prepare: RustConstructionBody["prepare"] = (node, selectedContext) => {
-    const admitted = plan.emission.preparationFor(node);
+    const admitted = plan.emission.preparations.get(node);
     if (admitted === undefined) return undefined;
     const point = admitted.point;
-    const emission = context.input.program.physicalEmissionContexts.contexts.find(selected => selected.use.subject === admitted.layer && selected.use.role === "constructor-layer");
-    if (emission === undefined) failRustPlannerInvariant("Construction requires its admitted exact physical layer context.", node);
     if (frame !== undefined && frameCounter !== undefined) {
       const frameOwners = new Map(selectedContext.frameOwners);
       const owner = retainedOwner !== undefined && retainsFrameAt(node) ? retainedOwner
@@ -135,11 +130,11 @@ export function planRustConstructionBody(
           if (projection.storage !== "value") failRustPlannerInvariant("Captured construction storage requires its admitted native owner syntax.", expression.node);
           overrides.set(expression.node, { expression: slot.expression, carrier: slot.carrier, valueForm: "storage" });
         } else {
-          const selectedPoint = plan.pointFor(expression.node) ?? point;
+          const selectedPoint = plan.points.get(expression.node) ?? point;
           const initialized = selectedPoint.initializedFields.includes(slot.declaration);
           const possiblyInitialized = selectedPoint.possiblyInitializedFields.includes(slot.declaration);
           if (storage.retainedFieldOwner) capturedFieldOwners.set(expression.node, slot.expression);
-          if (identity !== undefined && selectedContext.input.program.frozenDataWrites.capturesFieldIdentity(slot.declaration, expression.node))
+          if (identity !== undefined && plan.retainedReferenceIdentities.has(expression.node))
             capturedFieldIdentities.set(expression.node, identity);
           locations.set(expression.node, initialized ? location : { ...location,
             write: value => possiblyInitialized ? storage.initializeOrWrite(slot.expression, value)
@@ -148,8 +143,7 @@ export function planRustConstructionBody(
         }
       } else {
         const receiverNode = projection.node;
-        const substituted = selectedContext.input.program.physicalEmissionContexts.carrierFor(emission.use, projection.carrier);
-        if (substituted === undefined) failRustPlannerInvariant("Construction requires its admitted physical receiver application.", receiverNode);
+        const substituted = projection.carrier;
         let receiver: RustExpr = root;
         if (projection.projection === "polymorphic") {
           const receiverType = rustTypeFromCarrierInContext(substituted, selectedContext);
@@ -180,7 +174,7 @@ export function planRustConstructionBody(
     construction: {
       prepare,
       returnFor(node, returnContext) {
-        if (plan.returnLayerFor(node) === undefined) return undefined;
+        if (plan.returns.get(node) === undefined) return undefined;
         if (returnLabel === undefined) failRustPlannerInvariant("A constructor completion requires its admitted exact native layer boundary.", node);
         if (returnContext.completionBoundary === undefined) return [{ kind: "break", label: returnLabel.label }];
         let boundary = returnContext.completionBoundary;
@@ -193,8 +187,12 @@ export function planRustConstructionBody(
       },
     },
   });
-  const final = plan.pointFor(plan.definition.declaration);
-  const physicalDeclaration = context.input.program.objectRepresentations.receiverCaptures.storageDeclaration;
+  const final = plan.points.get(plan.definition.declaration);
+  const physicalDeclaration = (declaration: Node): Node => {
+    const physical = plan.physicalDeclarations.get(declaration);
+    if (physical === undefined) failRustPlannerInvariant("An admitted construction field requires its exact physical declaration.", declaration);
+    return physical;
+  };
   for (const layer of plan.layers) for (const field of layer.fields) {
     const value = values.get(physicalDeclaration(field.declaration));
     if (value !== undefined) values.set(field.declaration, value);

@@ -12,47 +12,18 @@ import type { RustFrameCallableDefinition } from "../../target-model/records/fra
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { analyzeRustConstructionReadiness, type RustConstructionExpression, type RustConstructionPoint,
-  type RustConstructionPointQueries } from "./construction-readiness.js";
+import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
+import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/construction.js";
 import { selectRustExternalInitialization, type RustExternalInitialization } from "./external-initialization.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-export interface RustConstructionField {
-  readonly declaration: Node;
-  readonly owner: RustProjectTypeDefinition;
-  readonly carrier: TargetTypeRef;
-  readonly initializer?: Node;
-  readonly absenceDefault: boolean;
-  readonly externallyInitialized: boolean;
-}
-
-export interface RustConstructionLayer {
-  readonly definition: RustProjectTypeDefinition;
-  readonly signature: RustProjectConstructorSignature;
-  readonly constructor: Node | undefined;
-  readonly baseCall?: Node;
-  readonly fields: readonly RustConstructionField[];
-  readonly statements: readonly Node[];
-}
+import type { RustConstructionField, RustConstructionLayer, RustConstructionProjection, RustConstructionPreparationSelection } from "../../target-model/records/construction.js";
 
 export interface RustConstructionIssue {
   readonly node: Node;
   readonly reason: string;
 }
 
-export type RustConstructionProjection =
-  | { readonly kind: "fixed-self"; readonly expression: RustConstructionExpression }
-  | { readonly kind: "local"; readonly expression: RustConstructionExpression; readonly declaration: Node;
-      readonly storage: "value" | "frame" | "captured" }
-  | { readonly kind: "receiver"; readonly expression: RustConstructionExpression; readonly node: Node;
-      readonly carrier: TargetTypeRef; readonly projection: "identity" | "polymorphic" };
-
-export interface RustConstructionPreparationSelection {
-  readonly point: RustConstructionPoint;
-  readonly layer: RustConstructionLayer;
-  readonly retainsFrame: boolean;
-  readonly projections: readonly RustConstructionProjection[];
-}
 
 export interface RustConstructionEmissionPlan {
   readonly frame: RustFrameCallableDefinition | undefined;

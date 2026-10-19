@@ -86,6 +86,7 @@ import { analyzeRustCallableDeclarationEmission } from "../callables/declaration
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
 import { analyzeRustFrameEmission } from "../callables/frame-emission.js";
 import { analyzeRustSuspendedCallableEmission } from "../callables/suspended-emission.js";
+import { analyzeRustConstructionEmission } from "../project-types/construction-emission.js";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
@@ -523,6 +524,8 @@ export function analyzeRustTargetProgram(
   if (methodEmissionIssues.length !== 0) return rejectedTargetStage(methodEmissionIssues);
   analyzeRustFrameEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.frameEmissionPlans });
   analyzeRustSuspendedCallableEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.suspendedCallablePlans });
+  const constructionEmissionIssues = analyzeRustConstructionEmission({ program, producer: context.records.constructionPlans });
+  if (constructionEmissionIssues.length !== 0) return rejectedTargetStage(constructionEmissionIssues);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.nativeLiveness, required: context.requiredRecords });
   context.callableValues.publish();

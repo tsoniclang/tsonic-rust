@@ -13,23 +13,7 @@ import { rustConstructionFallthrough as fallthrough, rustConstructionFlowStates,
 import type { RustConstructionIssue } from "./construction-plan.js";
 import type { RustProjectTypeDefinition } from "./type-policy.js";
 
-export interface RustConstructionExpression {
-  readonly node: Node;
-  readonly kind: "receiver" | "field" | "capture";
-  readonly declaration?: Node;
-  readonly receiver?: Node;
-}
-
-export interface RustConstructionPoint {
-  readonly node: Node;
-  readonly layer: RustProjectTypeDefinition;
-  readonly initializedFields: readonly Node[];
-  readonly possiblyInitializedFields: readonly Node[];
-  readonly published: boolean;
-  readonly publishBefore: boolean;
-  readonly publishAfter: boolean;
-  readonly publishMissingElse: boolean;
-}
+import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/construction.js";
 
 export interface RustConstructionPointQueries {
   readonly points: readonly RustConstructionPoint[];

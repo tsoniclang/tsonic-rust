@@ -544,7 +544,7 @@ function planConstructor(
   }
   const definition = context.input.program.projectTypes.definitionForDeclaration(classDeclaration);
   const constructionPlan = definition === undefined ? undefined
-    : context.input.program.projectConstructions.forDefinition(definition);
+    : context.input.program.records.classConstruction.get(definition.declaration);
   if (definition === undefined || constructionPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, classDeclaration),
       "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
@@ -571,7 +571,7 @@ function planConstructor(
     },
     constructorContext);
   if (construction === undefined) return undefined;
-  const returnLabel = !constructionPlan.layerHasEarlyReturn(definition) ? undefined
+  const returnLabel = !constructionPlan.earlyReturnLayers.has(definition) ? undefined
     : { id: constructorContext.controlFlow!.nextLoopId++,
       label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
   const layerContext = construction.contextForLayer(constructorContext, returnLabel);

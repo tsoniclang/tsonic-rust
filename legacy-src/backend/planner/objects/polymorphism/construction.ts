@@ -29,7 +29,7 @@ export function planProjectClassConstructor(
   context: RustPlanContext,
 ): { readonly construct?: RustImplFunction } | undefined {
   if (context.input.program.source.ast.hasModifierKind(definition.declaration, "abstract")) return {};
-  const plan = context.input.program.projectConstructions.forDefinition(definition);
+  const plan = context.input.program.records.classConstruction.get(definition.declaration);
   const selected = plan?.layers[plan.layers.length - 1];
   if (plan === undefined || selected === undefined || wrapperType.kind !== "named" || rootType.kind !== "named") {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, definition.declaration),

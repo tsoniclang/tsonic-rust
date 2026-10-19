@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectConstructionPlan } from "../../../analysis/project-types/construction-plan.js";
+import type { RustAdmittedConstruction } from "../../../target-model/records/construction.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
@@ -20,12 +20,12 @@ export interface RustConstructionFieldStorage {
 }
 
 export function rustConstructionFieldStorage(
-  declaration: Node, carrier: TargetTypeRef, context: RustPlanContext, plan: RustProjectConstructionPlan,
+  declaration: Node, carrier: TargetTypeRef, context: RustPlanContext, plan: RustAdmittedConstruction,
 ): RustConstructionFieldStorage {
   const binding = context.input.program.callableValues.frames.bindingFor(declaration);
   if (binding !== undefined) return {
     deferred: binding.initialization === "deferred", mutable: binding.storage === "value" &&
-      plan.mutatesUnpublishedField(declaration), retainedFieldOwner: false,
+      plan.unpublishedMutations.has(declaration), retainedFieldOwner: false,
     create: value => createRustFrameBindingValue(binding, value),
     createDeferred: () => ({ kind: "call", path: "core::cell::OnceCell::new", args: [] }),
     initialize: (owner, value) => initializeRustFrameBindingValue(binding, owner, value),
