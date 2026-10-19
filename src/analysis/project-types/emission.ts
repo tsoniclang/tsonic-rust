@@ -9,6 +9,8 @@ import { rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { selectRustCheckedProjectProjection } from "../../policy/objects/checked-project-projections.js";
+import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 
 export function analyzeRustProjectEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -25,6 +27,10 @@ export function analyzeRustProjectEmission(input: {
   }
   for (const shape of program.structuralShapes.instances) producer.shape(shape.carrier, shape);
   const unionCarriers = [...program.structuralShapes.unionDefinitions.flatMap(union => union.sourceCarriers),
+    ...program.structuralShapes.instances.map(shape => shape.carrier),
+    ...program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition)),
+    ...program.classValues.constructorViewImplementations.flatMap(view => [view.sourceCarrier, view.targetCarrier]),
+    ...program.classValues.instanceViewImplementations.flatMap(view => [view.sourceCarrier, view.targetCarrier]),
     ...input.nodes.flatMap(node => { const carrier = program.records.runtimeCarrier.get(node)?.carrier; return carrier === undefined ? [] : [carrier]; })];
   const seenCarriers = new Set<string>();
   for (let index = 0; index < unionCarriers.length; index++) {
@@ -34,11 +40,21 @@ export function analyzeRustProjectEmission(input: {
     seenCarriers.add(key);
     const union = program.structuralShapes.unionForCarrier(carrier);
     if (union !== undefined) producer.union(carrier, union);
+    const definition = program.projectTypes.definitionForCarrier(carrier);
+    const shape = program.structuralShapes.definitionForCarrier(carrier);
+    const projection = selectRustCheckedProjectProjection({ project: definition !== undefined, structural: shape !== undefined,
+      hasDispatch: shape?.dispatchName !== undefined, lifetimeParameters: definition?.genericParameters.some(parameter => parameter.kind === "lifetime") === true });
+    if (projection !== undefined) producer.checkedProjection(carrier, projection);
     unionCarriers.push(...rustTargetTypeChildren(carrier));
   }
   for (const definition of program.projectTypes.definitions) {
     const representation = program.objectRepresentations.representationFor(definition);
     producer.definition(definition, representation);
+    const component = program.sourcePackageComponents.componentForFile(definition.fileName);
+    const publicState = component !== undefined && (component.publishesImplementationAbi ||
+      program.sourcePackageFacades.publicImplementationItemIdentitiesForComponent(component.componentId)
+        .includes(rustSourceItemIdentity(definition.fileName, definition.targetPath)));
+    producer.stateConstruction(definition, { baseName: program.projectTypes.baseStateFieldName(definition), visibility: publicState ? "public" : "crate" });
     const indexes = new Map<string, readonly number[]>();
     const all = definition.genericParameters.map((_, index) => index);
     indexes.set(JSON.stringify(all), all);

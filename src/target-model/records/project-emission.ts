@@ -19,6 +19,8 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly projectStateConstruction: { readonly get: (definition: RustProjectTypeDefinition) => { readonly baseName: string; readonly visibility: "public" | "crate" } | undefined };
+  readonly checkedProjectProjection: { readonly get: (carrier: TargetTypeRef) => RustCheckedProjectProjectionEmission | undefined };
   readonly structuralShape: { readonly get: (carrier: TargetTypeRef | undefined) => RustStructuralShapeDefinition | undefined };
   readonly structuralDeclarations: { readonly get: (component: string) => readonly RustStructuralShapeDefinition[] | undefined };
   readonly sourceUnion: { readonly get: (carrier: TargetTypeRef) => RustGeneratedUnionDefinition | undefined };
@@ -30,3 +32,5 @@ export interface RustProjectEmissionRecords {
   readonly objectRepresentation: { readonly get: (definition: RustProjectTypeDefinition | undefined) => RustObjectRepresentation | undefined };
   readonly projectGenerics: { readonly get: (definition: RustProjectTypeDefinition, indexes?: readonly number[], outlives?: readonly RustLifetimeRef[], body?: true) => RustProjectGenericEmission | undefined };
 }
+
+export type RustCheckedProjectProjectionEmission = { readonly kind: "structural" | "project" | "excluded" };
