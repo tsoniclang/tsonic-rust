@@ -1,9 +1,8 @@
-import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput } from "../program/plan-context.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "./project-objects.js";
 import { rustProjectRepresentationGenerics } from "./polymorphism/names.js";
@@ -13,17 +12,17 @@ export function planRustProjectProjectionImplementations(
   definition: RustProjectTypeDefinition, context: RustPlanContext,
 ): readonly RustItem[] {
   const items: RustItem[] = [];
-  for (const { route, sourceCarrier, genericOwner } of context.input.program.declarationGenericRequirements.projectionImplementationsFor(definition)) {
+  const selected = context.input.program.records.projectProjectionImplementations.get(definition);
+  if (selected === undefined) failRustPlannerInvariant("An admitted project type requires its sealed native projection inventory.", definition.declaration);
+  for (const { route, sourceCarrier, genericOwner } of selected) {
     const sourceType = rustTypeFromCarrierInContext(sourceCarrier, context);
     const targetType = rustTypeFromCarrierInContext(route.targetCarrier, context);
     const representation = genericOwner === undefined ? undefined
-      : context.input.program.objectRepresentations.representationFor(genericOwner);
+      : context.input.program.records.objectRepresentation.get(genericOwner);
     const resultType = checkedProjectProjectionResultType(route.targetCarrier, context);
     if (sourceType === undefined || targetType === undefined || resultType === undefined ||
       genericOwner !== undefined && representation === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, definition.declaration),
-        "rust.backend.project-projection", "A sealed native projection route has no complete source and destination type."));
-      continue;
+      failRustPlannerInvariant("A sealed native projection route has no complete source and destination type.", definition.declaration);
     }
     const receiver = { kind: "field" as const, receiver: { kind: "path" as const, path: "source" },
       name: rustProjectObjectDispatchField };

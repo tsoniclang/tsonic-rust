@@ -50,6 +50,7 @@ export function analyzeRustProjectEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     const representation = program.objectRepresentations.representationFor(definition);
     producer.definition(definition, representation);
+    producer.projections(definition, program.declarationGenericRequirements.projectionImplementationsFor(definition));
     const component = program.sourcePackageComponents.componentForFile(definition.fileName);
     const publicState = component !== undefined && (component.publishesImplementationAbi ||
       program.sourcePackageFacades.publicImplementationItemIdentitiesForComponent(component.componentId)

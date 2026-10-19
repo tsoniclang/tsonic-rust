@@ -15,7 +15,7 @@ import { analyzeRustShapeGenericRequirements } from "./generic-shape-requirement
 import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustProjectProjectionImplementation } from "../../policy/types/project/project-projections.js";
+import type { RustProjectProjectionImplementation } from "../../target-model/records/project-projections.js";
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
 import { createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";

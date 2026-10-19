@@ -8,6 +8,7 @@ import type { RustShapeGenericRequirementContract } from "./generic-requirements
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
 import type { RustStructuralShapeDefinition } from "./structural-shapes.js";
 import type { RustGeneratedUnionDefinition } from "./generated-unions.js";
+import type { RustProjectProjectionImplementation } from "./project-projections.js";
 
 export interface RustProjectGenericEmission {
   readonly parameters: readonly { readonly parameter: RustSourceGenericParameterContract; readonly requirements: readonly RustGenericRequirement[] }[];
@@ -19,6 +20,7 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly projectProjectionImplementations: { readonly get: (definition: RustProjectTypeDefinition) => readonly RustProjectProjectionImplementation[] | undefined };
   readonly projectStateConstruction: { readonly get: (definition: RustProjectTypeDefinition) => { readonly baseName: string; readonly visibility: "public" | "crate" } | undefined };
   readonly checkedProjectProjection: { readonly get: (carrier: TargetTypeRef) => RustCheckedProjectProjectionEmission | undefined };
   readonly structuralShape: { readonly get: (carrier: TargetTypeRef | undefined) => RustStructuralShapeDefinition | undefined };
