@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import {
   acmeFilesPackage,
   acmePlatformPackage,
@@ -17,6 +18,47 @@ import { captureRustProviderContributions } from "../../helpers/provider-contrib
 function providerContext(selectedCapabilities) {
   return captureRustProviderContributions(selectedCapabilities);
 }
+
+test("provider data declarations have one target-model owner and no implementation-owner type aliases", () => {
+  const relations = readFileSync(new URL("../../../src/target-model/identities/provider-relations.ts", import.meta.url), "utf8");
+  const metadata = readFileSync(new URL("../../../src/target-model/metadata/provider-metadata.ts", import.meta.url), "utf8");
+  const data = `${relations}\n${metadata}`;
+  const shell = readFileSync(new URL("../../../src/providers/packages/model.ts", import.meta.url), "utf8");
+  const relationDeclarations = readFileSync(new URL("../../../dist/target-model/identities/provider-relations.d.ts", import.meta.url), "utf8");
+  const metadataDeclarations = readFileSync(new URL("../../../dist/target-model/metadata/provider-metadata.d.ts", import.meta.url), "utf8");
+  const oldDeclarations = readFileSync(new URL("../../../dist/providers/packages/model.d.ts", import.meta.url), "utf8");
+  for (const [name, owner] of [
+    ["RustProviderOperationKind", "relations"], ["RustProviderImmediateCallbackDefinition", "relations"],
+    ["RustProviderOperationDefinitionBase", "relations"], ["RustProviderOperationDefinition", "relations"],
+    ["RustProviderTypeDefinition", "relations"], ["RustProviderTypeRow", "relations"],
+    ["RustProviderOperationRow", "relations"], ["RustProviderExportRow", "relations"],
+    ["RustProviderSemantics", "metadata"], ["RustProviderDispatchContextRow", "metadata"],
+    ["RustProviderBinaryHookDefinitionBase", "metadata"], ["RustProviderBinaryHookDefinition", "metadata"],
+    ["RustProviderBinaryHookRow", "metadata"],
+  ]) {
+    const declaration = new RegExp(`^(?:export )?(?:interface|type) ${name}(?:[\\s<=]|$)`, "mu");
+    assert.match(owner === "relations" ? relations : metadata, declaration, `${name}: source declaration has its semantic owner`);
+    assert.doesNotMatch(owner === "relations" ? metadata : relations, declaration, `${name}: no second data owner`);
+    assert.match(owner === "relations" ? relationDeclarations : metadataDeclarations, declaration,
+      `${name}: emitted declaration has its semantic owner`);
+    assert.doesNotMatch(owner === "relations" ? metadataDeclarations : relationDeclarations, declaration,
+      `${name}: no second emitted data owner`);
+    assert.doesNotMatch(shell, declaration, `${name}: old source declaration is removed`);
+    assert.doesNotMatch(oldDeclarations, declaration, `${name}: old declaration output is removed`);
+    assert.doesNotMatch(oldDeclarations, new RegExp(`^export[^\\n]*\\b${name}\\b`, "mu"),
+      `${name}: no old-owner forwarding alias is emitted`);
+  }
+  assert.doesNotMatch(data, /from\s+["'][^"']*providers\/packages\//u,
+    "target data does not import the provider implementation owner");
+  assert.doesNotMatch(data, /\bresultLoans\b/u, "data relocation does not admit the excluded result-loan schema");
+  assert.equal(existsSync(new URL("../../../src/target-model/providers/model.ts", import.meta.url)), false,
+    "the provisional source owner is removed, not aliased");
+  assert.equal(existsSync(new URL("../../../dist/target-model/providers/model.d.ts", import.meta.url)), false,
+    "the provisional declaration output is removed, not re-exported");
+  const publicProvider = readFileSync(new URL("../../../dist/public/provider.d.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(publicProvider, /\bRustProviderSemantics\b/u,
+    "the data move does not add a public Semantics export");
+});
 
 test("provider call lowers to the mapped Rust operation with cargo dependency", () => {
   const packages = [acmeFilesPackage()];

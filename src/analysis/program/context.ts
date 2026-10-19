@@ -16,7 +16,7 @@ import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import type { RustProviderSemantics } from "../../providers/packages/model.js";
+import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import {
   createRustNamePlan,
 } from "../names/plan.js";

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceErrorRetainedDemand } from "@tsonic/target-api/analysis";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustProviderOperationRow } from "../../providers/packages/model.js";
+import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
