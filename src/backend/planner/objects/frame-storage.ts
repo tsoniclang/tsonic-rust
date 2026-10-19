@@ -9,18 +9,16 @@ import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function rustClassFrameFieldLocation(
   declaration: Node, receiverCarrier: TargetTypeRef, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,
 ): RustValueFieldLocation | undefined {
-  const binding = context.input.program.callableValues.frames.bindingFor(declaration);
-  const definition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
-  const frame = definition === undefined ? undefined : context.input.program.callableValues.frames.definitionForOwner(definition.declaration);
-  if (binding === undefined || frame === undefined || !frame.bindings.includes(binding)) return undefined;
-  const selectedCarrier = context.input.program.projectTypes.instantiateMemberCarrier(declaration, receiverCarrier, binding.carrier);
-  if (selectedCarrier === undefined) return undefined;
-  const owner = rustClassFrameOwner(frame, receiver, context, sourceReceiver);
-  return owner === undefined ? undefined : rustFrameBindingLocation({ ...binding, carrier: selectedCarrier }, owner, context);
+  const selected = context.input.program.records.classFrameField.get(declaration, receiverCarrier);
+  if (selected === undefined) return undefined;
+  const owner = rustClassFrameOwner(selected.frame, receiver, context, sourceReceiver);
+  if (owner === undefined) failRustPlannerInvariant("An admitted native frame field requires its exact live owner.", sourceReceiver ?? declaration);
+  return rustFrameBindingLocation(selected.binding, owner, context);
 }
 
 export interface RustClassFrameLayout {
@@ -35,8 +33,10 @@ export function createRustClassFrameValue(
   const carrier = definition.entries[0]?.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
   if (definition.storage.kind !== "standalone" || types?.frameType.kind !== "named" ||
-    definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
-  const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
+    definition.bindings.some(binding => !values.has(binding.declaration))) failRustPlannerInvariant("An admitted standalone frame requires its complete native field initialization.", definition.activation.kind === "class" ? definition.activation.ownerDeclaration : definition.activation.activationScope);
+  const selected = context.input.program.records.frameDeclaration.get(definition);
+  if (selected === undefined) failRustPlannerInvariant("An admitted frame requires its sealed native counter layout.", definition.activation.kind === "class" ? definition.activation.ownerDeclaration : definition.activation.activationScope);
+  const counterName = selected.counterName;
   return { kind: "call", path: "alloc::rc::Rc::new", args: [{
     kind: "struct-literal", path: types.frameType.path, fields: [
       ...(counterName === undefined ? [] : [{ name: counterName, value: counter }]),
@@ -51,15 +51,17 @@ export function rustClassFrameLayout(
 ): RustClassFrameLayout | undefined {
   const carrier = definition.entries[0]?.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
-  if (definition.activation.kind !== "class" || types === undefined) return undefined;
-  const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
+  if (definition.activation.kind !== "class" || types === undefined) failRustPlannerInvariant("An admitted class frame requires its exact native activation layout.", definition.activation.kind === "class" ? definition.activation.ownerDeclaration : definition.activation.activationScope);
+  const selected = context.input.program.records.frameDeclaration.get(definition);
+  if (selected === undefined) failRustPlannerInvariant("An admitted class frame requires its sealed native counter layout.", definition.activation.ownerDeclaration);
+  const counterName = selected.counterName;
   if (definition.storage.kind === "object") return {
     fields: counterName === undefined ? [] : [{ name: counterName, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility }],
     ownsField: () => false,
     materialize: (_values, counter) => counterName === undefined ? [] : [{ name: counterName, value: counter }],
   };
   const instanceFieldName = definition.storage.instanceFieldName;
-  if (instanceFieldName === undefined || types.frameType.kind !== "named") return undefined;
+  if (instanceFieldName === undefined || types.frameType.kind !== "named") failRustPlannerInvariant("An admitted class frame requires its native instance-field identity and type.", definition.activation.ownerDeclaration);
   return {
     fields: [{ name: instanceFieldName, type: { kind: "named", path: "alloc::rc::Rc",
       genericArguments: [{ kind: "type", type: types.frameType }] }, visibility }],
@@ -72,11 +74,13 @@ export function rustClassFrameLayout(
 export function rustClassFrameOwner(
   definition: RustFrameCallableDefinition, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,
 ): RustLiveFrameOwner | undefined {
-  if (definition.activation.kind !== "class") return undefined;
-  if (definition.storage.kind === "standalone") return definition.storage.instanceFieldName === undefined ? undefined
-    : { kind: "live", expression: { kind: "field", receiver, name: definition.storage.instanceFieldName },
+  if (definition.activation.kind !== "class") failRustPlannerInvariant("An admitted class frame owner requires its exact native activation.", sourceReceiver);
+  if (definition.storage.kind === "standalone") {
+    if (definition.storage.instanceFieldName === undefined) failRustPlannerInvariant("An admitted standalone class frame requires its native field identity.", sourceReceiver ?? definition.activation.ownerDeclaration);
+    return { kind: "live", expression: { kind: "field", receiver, name: definition.storage.instanceFieldName },
       borrowed: false, data: { kind: "direct" }, ...(sourceReceiver === undefined ? {} : { receiver: sourceReceiver }) };
-  if (context.syntheticNames === undefined) return undefined;
+  }
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted class frame owner requires its hygienic native emission scope.", sourceReceiver ?? definition.activation.ownerDeclaration);
   return { kind: "live", expression: { kind: "method-call", receiver: { kind: "field", receiver, name: rustProjectObjectStateField },
     method: "shared", args: [] }, borrowed: true, data: { kind: "object", mutable: definition.storage.mutable,
       name: allocateRustSyntheticName(context.syntheticNames, "frame_data") },
