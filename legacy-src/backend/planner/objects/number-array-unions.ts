@@ -1,4 +1,4 @@
-import type { RustGeneratedUnionDefinition } from "../../../analysis/objects/generated-union-plan.js";
+import type { RustGeneratedUnionDefinition } from "../../../target-model/records/generated-unions.js";
 import { emptyRustGenerics, type RustExpr, type RustItem, type RustType } from "../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 

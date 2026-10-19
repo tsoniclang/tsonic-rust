@@ -7,16 +7,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustNumberArrayPayload } from "../../target-model/types/carriers/array-unions.js";
 import { instantiateRustSourceUnionVariants, createRustSourceUnionPayloadTemplate,
   rustSourceUnionDefinitionIdentity, type RustSourceUnionDefinition,
-  type RustSourceUnionPayloadTemplate } from "../../target-model/types/source-union-definitions.js";
-
-export interface RustGeneratedUnionDefinition {
-  readonly ownerFileName: string;
-  readonly componentId: string;
-  readonly targetName: string;
-  readonly payloadTemplate: RustSourceUnionPayloadTemplate;
-  readonly sourceCarriers: readonly TargetTypeRef[];
-  readonly numberArrayLike: boolean;
-}
+  } from "../../target-model/types/source-union-definitions.js";
+import type { RustGeneratedUnionDefinition } from "../../target-model/records/generated-unions.js";
 
 export interface RustGeneratedUnionPlan {
   readonly unionDefinitions: readonly RustGeneratedUnionDefinition[];
