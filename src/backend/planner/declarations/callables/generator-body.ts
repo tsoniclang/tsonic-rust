@@ -1,20 +1,16 @@
 import type { RustGeneratorFact } from "../../../../target-model/records/callables-and-resources.js";
-import { isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
-import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
-import { applyFallibleShape } from "../../types/fallible-shape.js";
 
 export function planRustGeneratorBody(
   body: RustBlock,
   fact: RustGeneratorFact,
   controllerName: string,
-  errorType: RustType,
+  _errorType: RustType,
 ): RustExpr {
   const staticStorage = fact.storage.kind === "static";
   const path = fact.kind === "sync"
     ? staticStorage ? "rt::Generator::new" : "rt::BorrowedGenerator::new"
     : staticStorage ? "rt::AsyncGenerator::new" : "rt::BorrowedAsyncGenerator::new";
-  const hasReturnValue = !isRustUnitCarrier(fact.returnType);
   return {
     kind: "call",
     path,
@@ -23,12 +19,7 @@ export function planRustGeneratorBody(
       params: [{ name: controllerName, mutable: false }],
       move: true,
       async: true,
-      body: applyFallibleShape(applyRustTailShape(body, hasReturnValue), {
-        fallible: true,
-        hasReturnValue,
-        errorType,
-        inferErrorTypeFromReturnType: false,
-      }),
+      body,
     }],
   };
 }
