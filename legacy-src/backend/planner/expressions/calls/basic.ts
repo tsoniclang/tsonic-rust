@@ -40,7 +40,7 @@ type RustNativeCallHandler = Extract<RustNativeHandler, { readonly kind: "js-str
 
 export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value",
   nativeCall?: RustNativeCallHandler): RustExpr | undefined {
-  const borrowed = context.input.program.borrowedElementReads.forExpression(node);
+  const borrowed = context.input.program.records.borrowedElementRead.get(node);
   if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context,
     (expression, inner) => planCallExpressionInner(expression, inner, resultUse, nativeCall));
   return planOptionalChainExpression(

@@ -49,7 +49,7 @@ import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import {
   rustProjectImplementationVisibility,
   rustProjectMemberStorageVisibility,

@@ -46,7 +46,7 @@ export function planRustAssignmentWrite(
   fact: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] {
-  const borrowed = context.input.program.borrowedElementReads.forExpression(expression);
+  const borrowed = context.input.program.records.borrowedElementRead.get(expression);
   if (borrowed !== undefined && context.expressionOverrides?.has(borrowed.receiver) !== true) {
     const planned = planRustBorrowedElementRead(expression, borrowed, context, (selectedExpression, selected) => {
       const statements = planRustAssignmentWrite(selectedExpression, left, valueNode, fact, selected);
@@ -75,7 +75,7 @@ export function planRustAssignmentWrite(
     failRustPlannerInvariant("An admitted assignment requires its native assignment token.", expression);
   }
   const sourceField = context.input.program.records.targetOperation.get(left);
-  const borrowedWrite = context.input.program.ownership.writes.get(expression);
+  const borrowedWrite = context.input.program.records.borrowedFieldWrite.get(expression);
   if (borrowedWrite !== undefined && context.expressionOverrides?.has(borrowedWrite.receiver) !== true) {
     const errorType = borrowedWrite.fallible ? rustActiveErrorType(context) : undefined;
     if (borrowedWrite.fallible && errorType === undefined) {
@@ -323,7 +323,7 @@ export function planRustAssignmentWrite(
       ? undefined
       : sourceField.declaration === undefined
         ? undefined
-        : context.input.program.projectFieldDispatch.planFor(sourceField.declaration);
+        : context.input.program.records.projectFieldDispatch.get(sourceField.declaration);
     if (sourceField.dispatch !== undefined && dispatchPlan?.write === undefined) {
       failRustPlannerInvariant("An admitted field write requires its native dispatch plan.", left);
     }

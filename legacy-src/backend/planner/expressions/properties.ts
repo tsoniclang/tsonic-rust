@@ -39,7 +39,7 @@ import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.
 import { planRustIndexedFieldRead } from "./indexed-fields.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const borrowed = context.input.program.borrowedElementReads.forExpression(node);
+  const borrowed = context.input.program.records.borrowedElementRead.get(node);
   if (borrowed !== undefined) return planRustComputedMemberExpression(node, context,
     selectedContext => planRustBorrowedElementRead(node, borrowed, selectedContext, planPropertyAccessInner));
   return planOptionalChainExpression(

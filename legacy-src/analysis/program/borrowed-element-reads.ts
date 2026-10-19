@@ -1,18 +1,11 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Right, Node_Expression, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import { analyzeRustBorrowedElementLocals, type RustBorrowedElementLocal } from "./borrowed-element-locals.js";
+import { analyzeRustBorrowedElementLocals } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
-import { analyzeRustBorrowedIterationBindings, type RustBorrowedIterationBinding } from "./borrowed-iteration-bindings.js";
-
-export interface RustBorrowedElementRead {
-  readonly receiver: Node;
-  readonly element: Node;
-  readonly array: Node;
-  readonly index: Node;
-  readonly method: string;
-}
+import { analyzeRustBorrowedIterationBindings } from "./borrowed-iteration-bindings.js";
+import type { RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
 
 export interface RustBorrowedElementReads {
   forExpression(node: Node): RustBorrowedElementRead | undefined;

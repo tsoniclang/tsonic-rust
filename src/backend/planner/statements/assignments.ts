@@ -78,14 +78,10 @@ export function planRustSourceMethodPropertyAssignment(
     ? undefined
     : planExpression(receiverNode, context);
   const value = planExpression(valueNode, context);
-  const receiverDefinition = context.input.program.projectTypes.definitionForCarrier(
-    method.receiverCarrier,
-  );
-  const representation = context.input.program.objectRepresentations.representationFor(
-    receiverDefinition,
-  );
+  const selectedReceiver = context.input.program.records.methodWriteReceiver.get(left);
+  const representation = selectedReceiver?.representation;
   if (receiverNode === undefined || plannedReceiver === undefined || value === undefined ||
-    receiverDefinition === undefined || representation === undefined ||
+    representation === undefined ||
     context.syntheticNames === undefined) {
     failRustPlannerInvariant("An admitted method replacement requires its native receiver representation and operand plans.", left);
   }
@@ -123,7 +119,7 @@ export function planRustSourceMethodPropertyAssignment(
   if (write === undefined) {
     failRustPlannerInvariant("An admitted method replacement requires its native storage route.", left);
   }
-  const check = context.input.program.frozenDataWrites.receiverForDeclaration(method.declaration);
+  const check = selectedReceiver?.check;
   if (check !== undefined) {
     const region = context.fallibleBoundary;
     const checked = region === undefined ? undefined : checkRustDataWrite(check, receiver, write, region);

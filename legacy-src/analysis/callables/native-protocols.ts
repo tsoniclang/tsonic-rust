@@ -47,7 +47,7 @@ export function createRustNativeCallableProtocolRegistry(input: {
       const completion = rustNativeCallableCompletion(method.result, input.definitions);
       const contract = { ownerFileName, signature: binding.signature, method,
         ...(completion === undefined ? {} : { completion }) };
-      const key = closedMetadataKey(contract);
+      const key = closedMetadataKey({ ...contract, method: selectedMethod });
       let protocol = protocols.get(key);
       if (protocol === undefined) {
         const identity = `native-protocol:${createHash("sha256").update(key).digest("hex")}`;

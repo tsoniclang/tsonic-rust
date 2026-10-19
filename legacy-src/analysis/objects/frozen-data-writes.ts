@@ -9,7 +9,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustStructuralShapePlan } from "./structural-shape-plan.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-export type RustFrozenWriteReceiver = "receiver" | "state" | "identity";
+import type { RustFrozenWriteReceiver } from "../../target-model/records/field-writes.js";
 
 export interface RustFrozenDataWritePlan {
   receiverFor(storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number): RustFrozenWriteReceiver | undefined;

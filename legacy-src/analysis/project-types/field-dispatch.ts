@@ -12,19 +12,7 @@ import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 
-export interface RustProjectFieldDispatchRole {
-  readonly selfMode: "ref" | "rc";
-  readonly fallible: boolean;
-}
-
-export interface RustProjectFieldDispatchPlan {
-  readonly declaration: Node;
-  readonly readonly: boolean;
-  readonly stored: boolean;
-  readonly mutableContent: boolean;
-  readonly read: RustProjectFieldDispatchRole;
-  readonly write?: RustProjectFieldDispatchRole;
-}
+import type { RustProjectFieldDispatchPlan } from "../../target-model/records/field-writes.js";
 
 export type RustProjectFieldImplementation =
   | {

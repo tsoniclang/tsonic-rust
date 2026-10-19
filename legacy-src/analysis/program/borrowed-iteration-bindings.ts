@@ -9,13 +9,9 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
 import { rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
-
-export interface RustBorrowedIterationBinding {
-  readonly declaration: Node;
-  readonly references: readonly Node[];
-}
 
 export function selectRustBorrowedIterationBinding(
   node: Node, ast: AstReader, records: RustProgramRecords, navigation: SourceProgramNavigation,

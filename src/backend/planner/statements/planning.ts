@@ -71,12 +71,12 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return items?.map(item => ({ kind: "item", item }));
     }
     case "KindClassDeclaration": {
-      if (context.input.program.projectTypes.definitionForDeclaration(node) === undefined)
+      const declaration = context.input.program.records.classDeclaration.get(node);
+      if (declaration === undefined)
         failRustPlannerInvariant("Admitted class requires its sealed native definition.", node);
-      const environment = context.input.program.classValues.forDeclaration(node)?.environment;
-      if (environment === undefined) return [];
+      if (declaration.environmentBindingName === undefined) return [];
       const value = planRustClassEnvironmentValue(node, context);
-      return value === undefined ? undefined : [{ kind: "let", name: environment.bindingName, mutable: false, init: value }];
+      return value === undefined ? undefined : [{ kind: "let", name: declaration.environmentBindingName, mutable: false, init: value }];
     }
     case "KindTypeAliasDeclaration": {
       if (context.input.program.records.typeAliasDeclaration.get(node)?.kind !== "erased")
@@ -213,7 +213,7 @@ export function planStatementSequence(
       statements.push(...planned);
       return { statements };
     }
-    const borrowed = sequenceContext.input.program.borrowedElementReads.forStatement(child);
+    const borrowed = sequenceContext.input.program.records.borrowedElementLocal.get(child);
     const local = borrowed === undefined ? undefined : planRustBorrowedElementLocal(borrowed, sequenceContext);
     const planned = borrowed === undefined ? planStatement(child, sequenceContext) : local?.statements;
     if (planned === undefined) {
@@ -224,7 +224,7 @@ export function planStatementSequence(
     const exits = sequenceContext.input.program.records.statementExit.get(child);
     if (exits === undefined) failRustPlannerInvariant("Admitted statement requires its sealed completion.", child);
     if (!exits) {
-      for (const read of sequenceContext.input.program.borrowedElementReads.endingAt(child)) {
+      for (const read of sequenceContext.input.program.records.borrowedElementEnds.get(child) ?? []) {
         const name = sequenceContext.input.program.names.nameForDeclaration(read.declaration);
         if (name === undefined) failRustPlannerInvariant("An admitted borrowed binding requires its authored native name.", read.declaration);
         statements.push({ kind: "expr", expr: { kind: "call", path: "core::mem::drop", args: [{ kind: "path", path: name }] } });

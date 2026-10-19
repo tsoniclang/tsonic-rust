@@ -27,7 +27,7 @@ import {
   rustGeneratedDowncastDeadCodeDisposition,
 } from "../../program/reachability-directives.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";

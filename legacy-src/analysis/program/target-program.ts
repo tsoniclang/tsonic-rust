@@ -75,6 +75,8 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 import { analyzeRustFieldProjectionAssignments } from "../storage/field-projection-assignment.js";
 import { analyzeRustAssignmentWrites } from "../storage/assignment-writes.js";
+import { analyzeRustFieldWrites } from "../storage/field-writes.js";
+import { analyzeRustDeclarationEmission } from "../declarations/emission.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -326,6 +328,7 @@ export function analyzeRustTargetProgram(
     })));
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
+  context.records.borrowedElements.publish(context.nativeNodes, borrowedElementReads);
   const borrowEffectsInput = {
     isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
@@ -447,7 +450,6 @@ export function analyzeRustTargetProgram(
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     ownership: ownership.ownership,
-    borrowedElementReads,
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
@@ -481,6 +483,8 @@ export function analyzeRustTargetProgram(
   const assignmentWriteIssues = analyzeRustAssignmentWrites({ program, nodes: context.nativeNodes,
     producer: context.records.assignmentWrites, required: context.requiredRecords });
   if (assignmentWriteIssues.length !== 0) return rejectedTargetStage(assignmentWriteIssues);
+  analyzeRustFieldWrites({ program, nodes: context.nativeNodes, producer: context.records.fieldWrites, required: context.requiredRecords });
+  analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes, producer: context.records.declarationEmission, required: context.requiredRecords });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,

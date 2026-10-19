@@ -1,7 +1,7 @@
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import {
   rustSourceTypeCarrierValue,

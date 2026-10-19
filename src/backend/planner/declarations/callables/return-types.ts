@@ -9,7 +9,7 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 export function resolveRustJsPromiseReturnType(
   declaration: Node, context: RustPlanContext,
 ): RustType {
-  const carrier = context.input.program.callableValues.nativeProducers.invocationResultFor(declaration);
+  const carrier = context.input.program.records.callableReturn.get(declaration)?.invocation;
   if (carrier === undefined) failRustPlannerInvariant("An admitted Promise declaration requires its native invocation-result carrier.", declaration);
   return rustReturnTypeFromCarrierInContext(carrier, context)
     ?? failRustPlannerInvariant("An admitted Promise declaration requires its renderable native result carrier.", declaration);
@@ -19,7 +19,7 @@ export function resolveRustCallableOutwardReturnType(
   declaration: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
 ): RustType {
   if (carrier === undefined) failRustPlannerInvariant("An admitted callable requires its native logical result carrier.", declaration);
-  const selected = context.input.program.callableValues.nativeProducers.outwardReturnFor(declaration);
+  const selected = context.input.program.records.callableReturn.get(declaration)?.outward;
   if (selected === undefined) failRustPlannerInvariant("An admitted callable requires its native outward-result carrier.", declaration);
   return rustReturnTypeFromCarrierInContext(selected, context)
     ?? failRustPlannerInvariant("An admitted callable requires its renderable native outward result.", declaration);

@@ -91,7 +91,6 @@ export interface RustTargetProgram {
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly ownership: import("../../target-model/records/ownership.js").RustOwnershipRecords;
-  readonly borrowedElementReads: import("./borrowed-element-reads.js").RustBorrowedElementReads;
   readonly borrowedInitializers: import("../storage/borrowed-initializers.js").RustBorrowedInitializerQueries;
   readonly providerMutableInputs: import("../storage/provider-mutable-inputs.js").RustProviderMutableInputPlan;
   readonly retainedCallableInputs: import("../callables/retained-inputs.js").RustRetainedCallableInputPlan;

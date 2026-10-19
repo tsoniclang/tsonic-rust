@@ -77,6 +77,9 @@ import { createRustResourceScopeProducer } from "./resource-scopes.js";
 import { createRustLocalBindingProducer } from "./local-bindings.js";
 import { createRustFieldProjectionAssignmentProducer } from "./field-projection-assignment.js";
 import { createRustAssignmentWriteProducer } from "./assignment-writes.js";
+import { createRustBorrowedElementProducer } from "./borrowed-element-reads.js";
+import { createRustFieldWriteProducer } from "./field-writes.js";
+import { createRustDeclarationEmissionProducer } from "./declaration-emission.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -164,8 +167,14 @@ export function createRustProgramRecordBuilder(
   const localBindings = createRustLocalBindingProducer(assertOpen);
   const fieldProjectionAssignments = createRustFieldProjectionAssignmentProducer(assertOpen);
   const assignmentWrites = createRustAssignmentWriteProducer(assertOpen);
+  const borrowedElements = createRustBorrowedElementProducer(assertOpen);
+  const fieldWrites = createRustFieldWriteProducer(assertOpen);
+  const declarationEmission = createRustDeclarationEmissionProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
+    ...borrowedElements.records,
+    ...fieldWrites.records,
+    ...declarationEmission.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -252,6 +261,9 @@ export function createRustProgramRecordBuilder(
     localBindings,
     fieldProjectionAssignments,
     assignmentWrites,
+    borrowedElements,
+    fieldWrites,
+    declarationEmission,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,

@@ -6,16 +6,10 @@ import {
 
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
-import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
+import type { RustBorrowedElementLocal } from "../../target-model/records/borrowed-element-reads.js";
 import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-
-export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
-  readonly declaration: Node;
-  readonly references: readonly Node[];
-  readonly lastStatement: Node;
-}
 
 export function analyzeRustBorrowedElementLocals(
   ast: AstReader,

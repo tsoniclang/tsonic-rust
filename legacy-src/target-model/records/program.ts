@@ -32,12 +32,16 @@ import type { RustResourceScopeRecords } from "./resource-scopes.js";
 import type { RustLocalBindingCompletion } from "./local-bindings.js";
 import type { RustFieldProjectionAssignment } from "./field-projection-assignment.js";
 import type { RustAssignmentWriteCompletion } from "./assignment-writes.js";
+import type { RustBorrowedElementRecords } from "./borrowed-element-reads.js";
+import type { RustFieldWriteRecords } from "./field-writes.js";
+import type { RustDeclarationEmissionRecords } from "./declaration-emission.js";
 
 export interface RustRecordFamily<T> {
   readonly get: (subject: ExtensionFactSubject | undefined) => T | undefined;
 }
 
-export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords {
+export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
+  RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords {
   readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
   readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
   readonly generator: RustRecordFamily<RustGeneratorFact>;

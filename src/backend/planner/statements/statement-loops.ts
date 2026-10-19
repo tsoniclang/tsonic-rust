@@ -74,7 +74,7 @@ export function planForOfStatement(
     failRustPlannerInvariant("An admitted resource iteration requires its native disposal fact.", node);
   }
   const borrowedBinding = resourceBinding || bindingPattern !== undefined ? undefined
-    : context.input.program.borrowedElementReads.forIteration(node);
+    : context.input.program.records.borrowedIterationBinding.get(node);
   const expressionOverrides = borrowedBinding === undefined ? undefined : new Map(context.expressionOverrides);
   if (borrowedBinding !== undefined && expressionOverrides !== undefined) {
     for (const reference of borrowedBinding.references) expressionOverrides.set(reference, {

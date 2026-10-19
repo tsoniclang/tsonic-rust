@@ -34,7 +34,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
-import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import { rustCapturedFieldStorage } from "../captured-fields.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
