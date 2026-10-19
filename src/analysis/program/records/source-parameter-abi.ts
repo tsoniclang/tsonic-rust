@@ -29,7 +29,7 @@ export function createRustSourceParameterAbiProducer(
     const carriers = maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier),
       rustFoundationForCarrier(fact.parameterCarrier));
     requireFoundation(fact.entryConversion === undefined ? carriers : maximumRustFoundation(carriers,
-      rustFoundationForValueConversion(fact.entryConversion, definitions)));
+      rustFoundationForValueConversion(fact.entryConversion.conversion, definitions)));
   });
   return Object.freeze({
     records: family.reader,

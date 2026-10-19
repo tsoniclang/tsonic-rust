@@ -5,7 +5,7 @@ import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-import { selectRustCallableParameterAdapters } from "../../../dist/analysis/callables/adapters.js";
+import { selectRustCallableParameterAdapters } from "../../../dist/policy/conversions/callable-adapters.js";
 import { planRootCallableForwarder } from "../../../dist/backend/planner/objects/polymorphism/callable-adapters.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustParameterTypeFromCarrierInContext, rustReturnTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";

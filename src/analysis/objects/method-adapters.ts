@@ -13,7 +13,8 @@ import { instantiateRustProjectMethodDispatchArguments } from "../project-types/
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
-import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, rustCallableParameterAdapterIsFallible, rustCallableValueAdapterIsFallible } from "../callables/adapters.js";
+import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions } from "../callables/adapters.js";
+import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 
 export interface RustObjectLiteralMethodAdapterIssue {
   readonly expression: Node;
@@ -175,8 +176,7 @@ export function selectRustObjectLiteralMethodAdapter(
           returnCarrier: contractReturnCarrier,
           parameterAdapters: Object.freeze(parameterAdapters),
           resultAdapter,
-          adapterFallible: parameterAdapters.some(adapter => rustCallableParameterAdapterIsFallible(adapter, input.typeDefinitions)) ||
-            rustCallableValueAdapterIsFallible(resultAdapter, input.typeDefinitions),
+          adapterFallible: parameterAdapters.some(adapter => adapter.fallible) || resultAdapter.fallible,
         }));
       }
     }

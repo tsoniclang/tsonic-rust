@@ -13,6 +13,7 @@ import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/so
 import { rustSourceUnionTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { closedMetadataEquals } from "../../../../dist/target-model/metadata/closed-data.js";
+import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
 
 
 import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment } from "../../../../dist/analysis/operations/target-operation.js";
@@ -244,7 +245,7 @@ test("every finalized contextual conversion family contributes its actual native
   const cases = [
     ["contextualValueConversion", { sourceCarrier: source, targetCarrier: target, conversion }],
     ["sourceParameterAbi", { form: "required", valueCarrier: target, parameterCarrier: source,
-      mode: "value", entryConversion: conversion }],
+      mode: "value", entryConversion: Object.freeze({ conversion, contract: rustValueConversionContract(conversion) }) }],
     ["futureValue", { outputCarrier: target, awaitedConversion: finalized,
       awaiting: "fallible", errorBoundary: "target-runtime" }],
     ["awaitValue", { operandCarrier: source, resultCarrier: target,
@@ -276,7 +277,7 @@ test("all nine foundation-bearing families account through their typed admission
       path: "std::ops::Add::add", resultCarrier: integer, fallible: false, operandModes: ["value", "value"] }, "std"],
     ["contextualValueConversion", { sourceCarrier: floating, targetCarrier: integer, conversion }, "alloc"],
     ["sourceParameterAbi", { form: "required", valueCarrier: integer, parameterCarrier: floating,
-      mode: "value", entryConversion: conversion }, "alloc"],
+      mode: "value", entryConversion: Object.freeze({ conversion, contract: rustValueConversionContract(conversion) }) }, "alloc"],
     ["futureValue", { outputCarrier: integer, awaitedConversion: identity, awaiting: "fallible",
       errorBoundary: "target-runtime", errorCarrier: nativeError }, "std"],
     ["deferredProducerEffects", { kind: "futures", channels: [{ awaiting: "infallible", errorCarrier: integer },
@@ -319,11 +320,13 @@ test("all definition-dependent foundation admissions retain the supplied source-
   const conversion = { kind: "source-union-variant", source: integer, target: union,
     variantName: "Integer", payloadCarrier: integer, payloadConversion: null };
   const finalized = { kind: "semantic", sourceCarrier: integer, targetCarrier: union, conversion, fallible: false };
+  const entryConversion = Object.freeze({ conversion, contract: rustValueConversionContract(conversion,
+    { ...emptyRustTypeDefinitions, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, union) ? variants : undefined }) });
   const cases = [
     ["targetOperation", { kind: "source-conversion", operationId: "native.inject", conversion, resultCarrier: union }],
     ["contextualValueConversion", { sourceCarrier: integer, targetCarrier: union, conversion }],
     ["sourceParameterAbi", { form: "required", valueCarrier: union, parameterCarrier: integer,
-      mode: "value", entryConversion: conversion }],
+      mode: "value", entryConversion }],
     ["futureValue", { outputCarrier: union, awaitedConversion: finalized, awaiting: "infallible", errorBoundary: "none" }],
     ["awaitValue", { operandCarrier: integer, resultCarrier: union,
       selection: { kind: "leaf", value: { carrier: integer, completion: { kind: "value", conversion: finalized } } } }],

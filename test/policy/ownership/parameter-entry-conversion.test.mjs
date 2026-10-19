@@ -2,19 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustParameterEntryConversion } from "../../../dist/policy/ownership/parameter-entry-conversion.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 
 const primitive = name => ({ kind: "source-primitive", name });
 
 test("native parameter entry admits only proven complete-width float widening", () => {
   for (const name of ["int8", "uint8", "int16", "uint16", "int32", "uint32", "float32"]) {
     const selected = selectRustParameterEntryConversion(primitive(name), primitive("float64"), emptyRustTypeDefinitions);
-    const contract = rustValueConversionContract(selected, emptyRustTypeDefinitions);
+    const contract = selected?.contract;
     assert.equal(contract !== undefined, true, name);
     assert.equal(contract.sourceMode, "value");
     assert.equal(contract.fallible, false);
     assert.equal(contract.source.name, name);
     assert.equal(contract.target.name, "float64");
+    assert.equal(Object.isFrozen(selected), true, "selected conversion and native contract publish together");
+    assert.equal(selected.contract === contract, true, "the contract is stored rather than reconstructed");
   }
 });
 

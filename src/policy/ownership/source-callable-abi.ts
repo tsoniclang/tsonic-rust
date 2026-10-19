@@ -1,5 +1,5 @@
 import { flowStateFactKey } from "@tsonic/tsts";
-import type { RustValueConversion } from "../../target-model/operations/model.js";
+import type { RustParameterEntryConversion } from "../../target-model/records/callables-and-resources.js";
 import { selectRustParameterEntryConversion } from "./parameter-entry-conversion.js";
 import type { Node } from "@tsonic/tsts";
 import {
@@ -73,7 +73,7 @@ export interface RustSourceParameterAbi {
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
   readonly inputLifetime?: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
-  readonly entryConversion?: RustValueConversion;
+  readonly entryConversion?: RustParameterEntryConversion;
 }
 
 export function rustSourceParameterContractCarrier(

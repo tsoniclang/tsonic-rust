@@ -66,7 +66,7 @@ import { selectRustMemoryLayoutObservation } from "../../policy/operations/point
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
-import { callableRestElement } from "../callables/adapters.js";
+import { callableRestElement } from "../../target-model/records/callable-adapters.js";
 import { rustCallableInvocationResult } from "../callables/results.js";
 import { resolveRustModuleBindingValue } from "../program/module-declarations.js";
 

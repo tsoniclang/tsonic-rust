@@ -3,6 +3,7 @@ import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { recordRustParameterAbiSelection } from "../../../dist/analysis/declarations/types-and-bindings.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
+import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -55,7 +56,7 @@ test("a cached parameter refuses every changed native ABI dimension before publi
   assert.equal(conversion !== undefined, true, "use a selected native widening conversion");
   for (const change of [{ form: "optional" }, { valueCarrier: wide }, { parameterCarrier: integer },
     { mode: "mut-ref" }, { inputLifetime: { ...lifetime, identity: "other" } },
-    { inputLifetime: undefined }, { entryConversion: conversion }]) {
+    { inputLifetime: undefined }, { entryConversion: Object.freeze({ conversion, contract: rustValueConversionContract(conversion) }) }]) {
     assert.throws(() => recordRustParameterAbiSelection(current.walk, parameter, { ...selected, ...change }),
       /Conflicting Rust semantic plan 'tsonic\.rust\.sourceParameterAbi'/u, Object.keys(change).join());
     assert.equal(current.builder.sourceParameterAbi.get(parameter) === canonical, true);

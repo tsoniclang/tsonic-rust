@@ -12,11 +12,8 @@ import {
   projectOwnerTypeSubstitutions,
   sourceCallableParameterAbis,
   sourceCallableReturnCarrier,
-  selectRustCallableParameterAdapters,
-  selectRustCallableValueAdapter,
-  rustCallableParameterAdapterIsFallible,
-  rustCallableValueAdapterIsFallible,
 } from "../callables/adapters.js";
+import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 
 export function selectRustProjectCallableAdapters(
   walk: RustFactWalk,
@@ -105,8 +102,7 @@ function classifyAdapter(
     returnCarrier, implementationReturnCarrier,
     parameterAdapters: Object.freeze(parameterAdapters),
     resultAdapter,
-    adapterFallible: parameterAdapters.some(adapter => rustCallableParameterAdapterIsFallible(adapter, walk.context.typeDefinitions)) ||
-      rustCallableValueAdapterIsFallible(resultAdapter, walk.context.typeDefinitions),
+    adapterFallible: parameterAdapters.some(adapter => adapter.fallible) || resultAdapter.fallible,
   });
 
   function substitutions(owner: RustProjectTypeDefinition, member: Node): ReadonlyMap<string, TargetTypeRef> | undefined {
