@@ -84,7 +84,7 @@ export function planFunctionDeclarations(
       name: emission.name,
       exported: emission.exported,
     }, outerContext);
-    return item === undefined ? undefined : Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
+    return Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
   }
   const variants = emission.specializations;
   if (variants.length === 0) {
@@ -114,7 +114,7 @@ export function planNativeModuleFunction(
   name: string,
   exported: boolean,
   outerContext: RustPlanContext,
- ): Extract<RustItem, { readonly kind: "function" }> {
+): Extract<RustItem, { readonly kind: "function" }> {
   return planRustFunctionItem({
     callableDeclaration,
     nameDeclaration: declaration,
@@ -159,7 +159,6 @@ function planRustFunctionItem(
     "A specialized native Promise body requires its selected physical name.", node);
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const isExported = source.exported;
   const name = source.name ?? emission.name;
@@ -178,7 +177,6 @@ function planRustFunctionItem(
       );
   if (source.specialization !== undefined && specialization === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const genericPlan = planRustCallableGenerics(node, context, specialization, lexical?.genericParameters);
   if (genericPlan === undefined) {
@@ -204,7 +202,6 @@ function planRustFunctionItem(
     ? undefined : rustPackageFallibleBoundary(generatorErrorOwner));
   if (errorRegion === undefined || generatorFact !== undefined && bodyErrorBoundary === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
@@ -213,19 +210,16 @@ function planRustFunctionItem(
     : resolveRustCallableOutwardReturnType(node, returnCarrier, context);
   if (!isUnit && !(fallible && isNever) && returnType === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const emittedReturnType = returnsJsPromise && nativeBody === undefined
     ? resolveRustJsPromiseReturnType(node, context)
     : returnType;
   if (returnsJsPromise && nativeBody === undefined && emittedReturnType === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const bodyNode = ast.body(node);
   if (bodyNode === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   if (fallible) {
     context.usedAliases?.add("rt");
@@ -240,7 +234,6 @@ function planRustFunctionItem(
   );
   if (bodyReturnType === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
-    failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   }
   const bodyContext: RustPlanContext = {
     ...context,

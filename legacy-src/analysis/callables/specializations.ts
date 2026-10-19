@@ -13,13 +13,7 @@ import {
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
-export interface RustSourceCallableSpecializationVariant {
-  readonly declaration: Node;
-  readonly sourceTypeParameterIdentities: readonly string[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
-  readonly targetName: string;
-  readonly nativeBodyName?: string;
-}
+import type { RustSourceCallableSpecializationVariant } from "../../target-model/records/callable-emission.js";
 
 export interface RustProjectMethodSpecializationRequest {
   readonly declaration: Node;

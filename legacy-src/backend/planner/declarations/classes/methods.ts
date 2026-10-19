@@ -38,7 +38,7 @@ import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
-import type { RustSourceCallableSpecializationVariant } from "../../../../analysis/callables/specializations.js";
+import type { RustSourceCallableSpecializationVariant } from "../../../../target-model/records/callable-emission.js";
 
 export function planProjectMethod(
   member: Node,
