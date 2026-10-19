@@ -5,7 +5,8 @@ import type { RustProviderChainStep } from "../../../target-model/operations/mod
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
 import { isRustFinalizedSourceInput } from "../../../analysis/operations/finalized-operation/conversions.js";
 import type { RustCallGenericArgument, RustExpr, RustGenericArgument } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,

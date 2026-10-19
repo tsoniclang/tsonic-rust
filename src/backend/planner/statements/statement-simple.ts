@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceExpressionSequence } from "@tsonic/target-api/source";
 import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression } from "../expressions/entry.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import { planRuntimeSetStatement } from "./statement-loops.js";

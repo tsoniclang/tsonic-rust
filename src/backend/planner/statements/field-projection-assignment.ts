@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/updates/target.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planRustMutableProjectReceiver } from "../expressions/typed-locations.js";
 import { mutateRustStoredObjectField } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

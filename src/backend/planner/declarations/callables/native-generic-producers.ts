@@ -7,7 +7,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustGenericCallableErrors } from "./generic-errors.js";
 import { rustGenericCallableEnvironmentGenerics, rustGenericCallableCapturePredicates } from "./generic-signatures.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function planRustNativeGenericProducerBridges(
   protocol: RustNativeCallableProtocol,

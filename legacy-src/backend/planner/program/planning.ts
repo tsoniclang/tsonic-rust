@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import {
   rejectedTargetStage,
   resolvedTargetStage,

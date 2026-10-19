@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGenerics, RustItem } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics } from "../objects/polymorphism/names.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";

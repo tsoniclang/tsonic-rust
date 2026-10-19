@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function planRustNativeProducerBridge(protocol: RustNativeCallableProtocol, context: RustPlanContext): readonly RustItem[] {
   const emission = context.input.program.records.nativeProtocol.get(protocol);

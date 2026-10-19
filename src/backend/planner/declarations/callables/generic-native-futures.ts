@@ -4,7 +4,7 @@ import type { RustExpr, RustGenericArgument, RustItem, RustPattern, RustType } f
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustNativeFutureType } from "../../types/native-futures.js";
 import type { RustGenericCallableErrorPlan } from "./generic-errors.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export interface RustGenericNativeFutureInvocation {
   readonly member: RustGenericCallablePhysicalMember;

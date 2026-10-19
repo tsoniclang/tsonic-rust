@@ -7,7 +7,7 @@ import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import type { RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function planRustRetainedGenerics(declaration: Node, source: RustCallableGenericPlan): RustCallableGenericPlan {
   const { context } = source;

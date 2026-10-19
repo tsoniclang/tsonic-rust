@@ -9,7 +9,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCompoundAssignmentValue } from "./assignments.js";
 import { planRuntimeSetStatement } from "./statement-loops.js";
 import { planRustRuntimeIndexInputs } from "../expressions/runtime-index-inputs.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustCompoundRuntimeWrite(
   expression: Node, left: Node, right: Node, assignment: RustAssignmentOperationPlan,

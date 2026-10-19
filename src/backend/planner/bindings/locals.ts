@@ -4,7 +4,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustLocalBindingCompletion } from "../../../target-model/records/local-bindings.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations } from "../statements/resource-management.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustBindingPattern } from "./patterns.js";
 import { planRustLocalBindingStorage } from "./local-storage.js";

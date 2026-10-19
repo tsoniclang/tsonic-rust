@@ -7,7 +7,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustValueReferenceReborrow } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustBorrowedStringView } from "../../target-ast/syntax/expressions.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";

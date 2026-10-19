@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planRustSourceCallableValueConstruction } from "../../expressions/source-callable-value.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

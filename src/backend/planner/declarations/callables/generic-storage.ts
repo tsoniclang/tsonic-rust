@@ -3,7 +3,7 @@ import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, typ
 import { rustSelfParameter } from "./self-parameter.js";
 import { rustCallableIdentityPredicate } from "../../../target-ast/syntax/callable-identities.js";
 import type { RustGenericCallableIdentitySelection } from "../../../../target-model/records/generic-callables.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function genericCallableStorageItems(
   definition: RustGenericCallablePhysicalDefinition,

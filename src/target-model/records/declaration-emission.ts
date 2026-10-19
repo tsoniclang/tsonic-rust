@@ -6,6 +6,7 @@ export interface RustClassDeclarationEmission {
   readonly environmentBindingName: string | undefined;
   readonly nonCamelCaseName: boolean;
   readonly defaultConstructor: string | undefined;
+  readonly scope: string | undefined;
 }
 
 export interface RustCallableReturnEmission {
@@ -25,4 +26,5 @@ export interface RustDeclarationEmissionRecords {
   readonly classDeclaration: RustRecordFamily<RustClassDeclarationEmission>;
   readonly callableReturn: RustRecordFamily<RustCallableReturnEmission>;
   readonly callableLeading: RustRecordFamily<RustCallableLeadingEmission>;
+  readonly sourceTypeScopes: RustRecordFamily<readonly string[]>;
 }

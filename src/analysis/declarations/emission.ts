@@ -6,13 +6,21 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustDeclarationEmission(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications">;
+  readonly program: Pick<RustTargetProgram, "source" | "sourceFiles" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications">;
   readonly nodes: readonly Node[];
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
 }): void {
   const { program } = input;
   const { ast } = program.source;
+  for (const sourceFile of program.sourceFiles) {
+    const scopes = program.projectTypes.definitions.filter(definition => definition.sourceFile === sourceFile)
+      .flatMap(definition => {
+        const scope = program.names.scopeForDeclaration(definition.declaration);
+        return scope === undefined ? [] : [scope];
+      });
+    input.producer.sourceFile(sourceFile, scopes);
+  }
   for (const node of input.nodes) {
     if (!ast.is.IsFunctionDeclaration(node) && !ast.is.IsFunctionExpression(node) && !ast.is.IsArrowFunction(node) &&
       !ast.is.IsMethodDeclaration(node) && !ast.is.IsGetAccessorDeclaration(node) && !ast.is.IsSetAccessorDeclaration(node)) continue;
@@ -58,7 +66,7 @@ export function analyzeRustDeclarationEmission(input: {
       !environment?.instancesUseEnvironment && !environment?.initializationUsesEnvironment && publiclyConstructible && !unsafe &&
       program.records.fallible.get(constructor ?? node) === undefined ? layer.signature.targetName : undefined;
     input.producer.classDeclaration(node, { environmentBindingName: environment?.bindingName,
-      nonCamelCaseName: !/^[A-Z][A-Za-z0-9]*$/u.test(name), defaultConstructor });
+      nonCamelCaseName: !/^[A-Z][A-Za-z0-9]*$/u.test(name), defaultConstructor, scope: program.names.scopeForDeclaration(node) });
     requireRustRecord(input.required, "classDeclaration", node, "native class declaration", "analyzeRustDeclarationEmission");
   }
   const declarations = new Set(program.callableValues.nativeProducers.producers.map(producer => producer.declaration));

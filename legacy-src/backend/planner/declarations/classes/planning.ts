@@ -23,7 +23,8 @@ import {
   sourceObjectMemberDeclarations,
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planExpression } from "../../expressions/index.js";
 import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";

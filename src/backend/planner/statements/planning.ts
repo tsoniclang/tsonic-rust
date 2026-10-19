@@ -19,7 +19,7 @@ import {
 import { prepareRustFrameScope } from "../bindings/frame-storage.js";
 import { directResourceDeclarations, planLoopExitStatement, planResourceDeclarations } from "./resource-management.js";
 import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker, withExplicitUnsafeContext } from "../safety/explicit-safety.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planDoStatement, planIfStatement, planWhileStatement } from "./statement-conditionals.js";
 import { planForStatement } from "./statement-for.js";
 import { planLabeledStatement } from "./statement-labels.js";

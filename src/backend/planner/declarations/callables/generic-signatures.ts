@@ -4,7 +4,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function rustGenericCallableEnvironmentGenerics(
   arguments_: readonly RustTargetGenericArgument[], context: RustPlanContext,

@@ -16,7 +16,7 @@ import {
   rustStringPushStrMethod,
 } from "../../../target-model/syntax/tokens.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression } from "../expressions/index.js";
 import { planRuntimeSetStatement } from "./statement-loops.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";

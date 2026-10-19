@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
 import { rustGenericRequirementBounds } from "../../types/generic-bounds.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,

@@ -25,7 +25,8 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustTypeContainsImplTrait } from "../types/type-observations.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";

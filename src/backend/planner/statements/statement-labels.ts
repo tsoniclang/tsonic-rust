@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planBlockLike } from "./planning.js";
 import { planDoStatement, planWhileStatement } from "./statement-conditionals.js";
 import { planForStatement } from "./statement-for.js";

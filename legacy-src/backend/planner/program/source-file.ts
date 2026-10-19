@@ -31,11 +31,8 @@ import type {
   RustSourceFileModel,
 } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanningContext } from "../context.js";
-import {
-  failRustPlannerInvariant,
-  missingFactDiagnostic,
-  unsupportedConstructDiagnostic,
-} from "../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression } from "../expressions/index.js";
 import {
   planFunctionDeclarations,
@@ -78,7 +75,7 @@ import { planRustTypeFamilyImplementations } from "../declarations/type-families
 import { planRustGenericCallableItems } from "../declarations/callables/generic-implementations.js";
 import { planRustFrameCallableItems } from "../declarations/callables/frame-implementations.js";
 import { planRustSuspendedCallableItems } from "../declarations/callables/suspended.js";
-import { completeRustAuthoredStructScopes } from "../declarations/scoped-types.js";
+import { completeRustAuthoredStructScopes } from "../../target-ast/normalization/authored-type-scopes.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
@@ -178,12 +175,9 @@ export function planRustSourceFile(
       rustItemsReferenceModuleAlias(plannedModule.items, alias)),
   ));
   const useItems = rustRuntimeAliasUseItems(aliases, errorDomain === "project" ? programModuleName : undefined);
-  const scopes = new Set(input.program.projectTypes.definitions
-    .filter(definition => definition.sourceFile === sourceFile)
-    .flatMap(definition => {
-      const scope = input.program.names.scopeForDeclaration(definition.declaration);
-      return scope === undefined ? [] : [scope];
-    }));
+  const selectedScopes = input.program.records.sourceTypeScopes.get(sourceFile);
+  if (selectedScopes === undefined) failRustPlannerInvariant("An admitted source module requires its authored native type scope inventory.", sourceFile);
+  const scopes = new Set(selectedScopes);
   const model = createRustSourceFile(completeRustAuthoredStructScopes([
     ...useItems,
     ...childModuleNames.map((name): RustItem => {

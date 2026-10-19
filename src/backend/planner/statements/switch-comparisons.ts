@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
 import { planRustOperatorCallExpression } from "../expressions/binary.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustSwitchComparison(
   left: RustExpr,

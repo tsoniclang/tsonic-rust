@@ -24,10 +24,8 @@ import {
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import {
-  failRustPlannerInvariant,
-  unsupportedConstructDiagnostic,
-} from "../diagnostics.js";
+import { unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import {
   diagnosticInput,
   rustSourceBindingPath,

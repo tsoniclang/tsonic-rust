@@ -11,7 +11,7 @@ import { finishProviderOperationExpression, planProviderOperationExpression } fr
 import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resource-management.js";
 import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planBlockLike } from "./planning.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { planRustModuleBindingStore, planRustPromotedStorageWrite } from "../expressions/typed-locations.js";

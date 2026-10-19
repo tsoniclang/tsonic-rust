@@ -16,11 +16,8 @@ import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import { rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import {
-  failRustPlannerInvariant,
-  missingFactDiagnostic,
-  unsupportedConstructDiagnostic,
-} from "../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import {
   diagnosticInput,
 } from "../program/plan-context.js";

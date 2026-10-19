@@ -32,7 +32,8 @@ import {
   rustCallableConstructionType,
   rustOperationFact,
 } from "./fundamentals.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression, type RustExpressionResultUse } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "./option-default.js";

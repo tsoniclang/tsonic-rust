@@ -4,7 +4,7 @@ import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
 import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
 import { planRustCaptureValue } from "../../expressions/typed-locations.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { type RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

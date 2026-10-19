@@ -10,7 +10,7 @@ import {
   negateRustPlannedBooleanExpression,
   planExpression,
 } from "../expressions/index.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { planBlockLike } from "./planning.js";
 import { requireRustReadOwnership } from "../expressions/typed-locations.js";
 import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";

@@ -20,7 +20,7 @@ import { planRustEmptyRecordConversion } from "../../expressions/empty-record-co
 import { planRustProgramErrorConstruction } from "../../expressions/program-errors.js";
 import { planRustProjectUnionMapping } from "../../expressions/project-union-mappings.js";
 import { planRustProjectStructuralConversion } from "../../objects/project-structural-views.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function applyRustCallableValueAdapter(
   expression: RustExpr,

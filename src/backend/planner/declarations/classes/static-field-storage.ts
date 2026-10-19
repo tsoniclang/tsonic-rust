@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";

@@ -1,10 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
-
-export function failRustPlannerInvariant(message: string, sourceNode?: Node): never {
-  return failTargetPlannerInvariant("tsonic-rust", message, sourceNode);
-}
 
 export interface RustDiagnosticInput {
   readonly ast: AstReader;
