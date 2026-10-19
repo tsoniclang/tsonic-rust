@@ -19,7 +19,9 @@ import {
   rustStructuralMethodStorageCarrier,
   rustOptionElementCarrier,
   rustCallableProtocol,
+  rustProgramErrorTargetType,
 } from "../../target-model/types/index.js";
+import { rustRuntimeRecordFieldTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { visitRustTargetTypeParameters } from "../../target-model/types/carriers/generic-references.js";
@@ -286,6 +288,8 @@ function createRustStructuralShapeConstruction(
           presence: field.presence,
           readonly: field.readonly,
           storage: field.bound === true ? "bound" as const : propertyStorage ? "property" as const : "stored" as const,
+          ...(field.bound === true ? { boundStorage: Object.freeze({ carrier: rustRuntimeRecordFieldTargetType(field.type, rustProgramErrorTargetType()),
+            direct: structural.representation === "value" }) } : {}),
           ...(!propertyStorage
             ? {}
             : {
@@ -521,6 +525,7 @@ function instantiateStructuralDefinition(
     fields: Object.freeze(definition.fields.map(field => Object.freeze({
       ...field,
       carrier: substitute(field.carrier),
+      ...(field.boundStorage === undefined ? {} : { boundStorage: Object.freeze({ ...field.boundStorage, carrier: substitute(field.boundStorage.carrier) }) }),
       ...(field.methodStorageCarrier === undefined ? {} : {
         methodStorageCarrier: substitute(field.methodStorageCarrier),
       }),

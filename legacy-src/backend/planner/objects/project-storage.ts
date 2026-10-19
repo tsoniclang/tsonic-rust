@@ -195,7 +195,7 @@ export function readRustStoredObjectField(
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
     const path = [field.targetName, ...projection];
-    if (field.storage === "bound") return readRustBoundRecordField(receiverCarrier, receiver, field, context, receiverIsBorrowed);
+    if (field.storage === "bound") return readRustBoundRecordField(receiver, field, context, receiverIsBorrowed);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       if (field.storage !== "stored" || field.nativeLayout !== undefined) return undefined;
       const selected = path.reduce<RustExpr>((value, name) => ({ kind: "field", receiver: value, name }), receiver);
@@ -406,7 +406,7 @@ function writeRustStoredObjectFieldStorage(
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
     const path = [field.targetName, ...projection];
-    if (field.storage === "bound") return writeRustBoundRecordField(receiverCarrier, receiver, field, operator, value, context, receiverIsBorrowed);
+    if (field.storage === "bound") return writeRustBoundRecordField(receiver, field, operator, value, context, receiverIsBorrowed);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       return field.storage !== "stored" || field.nativeLayout !== undefined ? undefined : {
         kind: "assignment", operator,
@@ -489,7 +489,7 @@ function mutateRustStoredObjectFieldStorage(
     if (field === undefined) {
       return undefined;
     }
-    if (field.storage === "bound") return mutateRustBoundRecordField(receiverCarrier, receiver, field, mutation, context);
+    if (field.storage === "bound") return mutateRustBoundRecordField(receiver, field, mutation, context);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       return field.storage !== "stored" || field.method === true || access === "property" && field.readonly || field.nativeLayout !== undefined
         ? undefined : mutation({ kind: "field", receiver, name: field.targetName });

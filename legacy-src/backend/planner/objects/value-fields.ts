@@ -158,9 +158,9 @@ export function planRustValueFieldLocation(
     const receiver = receiverNode === undefined ? undefined : access === "read"
       ? planExpression(receiverNode, context) : planRustDirectStorage(receiverNode, context);
     if (receiver === undefined) return reject();
-    const read = readRustBoundRecordField(operation.receiverCarrier, receiver, field, context);
+    const read = readRustBoundRecordField(receiver, field, context);
     return read === undefined ? reject() : { bindings: [], read,
-      write: value => writeRustBoundRecordField(operation.receiverCarrier, receiver, field, "=", value, context) };
+      write: value => writeRustBoundRecordField(receiver, field, "=", value, context) };
   }
   const names: string[] = [];
   let current = node;

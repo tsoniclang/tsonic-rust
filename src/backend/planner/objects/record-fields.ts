@@ -1,18 +1,19 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import { rustStructuralObjectCarrierValue, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function rustRecordFieldStorageType(field: RustStructuralShapeField, context: RustPlanContext): RustType | undefined {
-  return rustTypeFromCarrierInContext(rustRuntimeRecordFieldTargetType(field.carrier, rustProgramErrorTargetType()), context);
+  if (field.boundStorage === undefined) failRustPlannerInvariant("An admitted bound record field requires its exact native storage carrier.");
+  const type = rustTypeFromCarrierInContext(field.boundStorage.carrier, context);
+  if (type === undefined) failRustPlannerInvariant("An admitted bound record field requires its native storage syntax.");
+  return type;
 }
 
 export function rustRecordFieldSelector(field: RustStructuralShapeField, mutable: boolean): RustExpr {
@@ -23,18 +24,18 @@ export function rustRecordFieldSelector(field: RustStructuralShapeField, mutable
 
 export function rustRecordFieldResult(expression: RustExpr, context: RustPlanContext): RustExpr | undefined {
   const boundary = rustCurrentErrorBoundary(context);
-  return boundary === undefined || context.fallibleBoundary === undefined ? undefined
-    : rustPropagateLocalError(context.fallibleBoundary, rustErrorType(boundary), expression);
+  if (boundary === undefined || context.fallibleBoundary === undefined) failRustPlannerInvariant("An admitted fallible record operation requires its exact native error region.");
+  return rustPropagateLocalError(context.fallibleBoundary, rustErrorType(boundary), expression);
 }
 
 export function readRustBoundRecordField(
-  receiverCarrier: TargetTypeRef, receiver: RustExpr, field: RustStructuralShapeField, context: RustPlanContext,
+  receiver: RustExpr, field: RustStructuralShapeField, context: RustPlanContext,
   receiverIsBorrowed = false,
 ): RustExpr | undefined {
   context.usedAliases?.add("rt");
   const owner = rustRecordFieldStorageType(field, context);
-  if (owner === undefined) return undefined;
-  const value = rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value";
+  if (owner === undefined || field.boundStorage === undefined) failRustPlannerInvariant("An admitted bound record read requires its sealed native storage form.");
+  const value = field.boundStorage.direct;
   return rustRecordFieldResult(value ? {
     kind: "method-call", receiver: { kind: "field", receiver, name: field.targetName }, method: "try_load", args: [],
   } : { kind: "associated-call", owner, method: "try_load_object", args: [
@@ -43,16 +44,17 @@ export function readRustBoundRecordField(
 }
 
 export function writeRustBoundRecordField(
-  receiverCarrier: TargetTypeRef, receiver: RustExpr, field: RustStructuralShapeField,
+  receiver: RustExpr, field: RustStructuralShapeField,
   operator: RustAssignmentOperator, value: RustExpr, context: RustPlanContext,
   receiverIsBorrowed = false,
 ): RustExpr | undefined {
-  if (operator !== "=") return mutateRustBoundRecordField(receiverCarrier, receiver, field,
+  if (operator !== "=") return mutateRustBoundRecordField(receiver, field,
     current => ({ kind: "assignment", target: current, operator, value }), context);
   context.usedAliases?.add("rt");
   const owner = rustRecordFieldStorageType(field, context);
-  if (owner === undefined || field.readonly) return undefined;
-  const direct = rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value";
+  if (owner === undefined || field.boundStorage === undefined) failRustPlannerInvariant("An admitted bound record write requires its sealed native storage form.");
+  if (field.readonly) return undefined;
+  const direct = field.boundStorage.direct;
   return rustRecordFieldResult(direct ? {
     kind: "method-call", receiver: { kind: "field", receiver, name: field.targetName }, receiverMode: "mut-ref", method: "try_store", args: [value],
   } : { kind: "associated-call", owner, method: "try_store_object", args: [
@@ -61,19 +63,20 @@ export function writeRustBoundRecordField(
 }
 
 export function mutateRustBoundRecordField(
-  receiverCarrier: TargetTypeRef, receiver: RustExpr, field: RustStructuralShapeField,
+  receiver: RustExpr, field: RustStructuralShapeField,
   mutation: (field: RustExpr) => RustExpr | undefined, context: RustPlanContext,
 ): RustExpr | undefined {
-  if (context.syntheticNames === undefined || field.readonly) return undefined;
+  if (context.syntheticNames === undefined || field.boundStorage === undefined) failRustPlannerInvariant("An admitted bound record mutation requires its native storage form and hygienic scope.");
+  if (field.readonly) return undefined;
   const ownerName = allocateRustSyntheticName(context.syntheticNames, "record_owner");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "record_value");
   const resultName = allocateRustSyntheticName(context.syntheticNames, "record_result");
   const owner: RustExpr = { kind: "path", path: ownerName };
-  const direct = rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value";
+  const direct = field.boundStorage.direct;
   const selected: RustExpr = direct ? { kind: "dereference", pointer: owner } : owner;
-  const loaded = readRustBoundRecordField(receiverCarrier, selected, field, context);
+  const loaded = readRustBoundRecordField(selected, field, context);
   const changed = mutation({ kind: "path", path: valueName });
-  const stored = writeRustBoundRecordField(receiverCarrier, selected, field, "=", { kind: "path", path: valueName }, context);
+  const stored = writeRustBoundRecordField(selected, field, "=", { kind: "path", path: valueName }, context);
   if (loaded === undefined || changed === undefined || stored === undefined) return undefined;
   return rustValueBlock([
     { name: ownerName, value: direct ? { kind: "reference", mutable: true, expr: receiver }

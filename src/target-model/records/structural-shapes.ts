@@ -11,6 +11,7 @@ export interface RustStructuralShapeField {
   readonly presence: "required" | "optional";
   readonly readonly: boolean;
   readonly storage: "stored" | "property" | "bound";
+  readonly boundStorage?: { readonly carrier: TargetTypeRef; readonly direct: boolean };
   readonly property?: {
     readonly getterTargetName: string;
     readonly setterTargetName?: string;
