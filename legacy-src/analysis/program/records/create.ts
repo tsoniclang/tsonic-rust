@@ -238,6 +238,7 @@ export function createRustProgramRecordBuilder(
     classConstruction: constructionPlans.records,
     nativeClass: classEmissionPlans.records,
     ...classEmissionPlans.visibilityRecords,
+    ...classEmissionPlans.environmentRecords,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,

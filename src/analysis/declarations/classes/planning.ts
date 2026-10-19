@@ -27,6 +27,8 @@ export function analyzeRustClassEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
     const declaration = definition.declaration;
+    const environment = program.classValues.forDeclaration(declaration)?.environment;
+    if (environment !== undefined) input.producer.environment(definition, { definition, environment });
     if (program.records.classDeclaration.get(declaration) === undefined) continue;
     const name = program.names.nameForDeclaration(declaration);
     if (name === undefined || !isValidRustIdentifier(name)) {
@@ -98,7 +100,7 @@ export function analyzeRustClassEmission(input: {
       constructorDeadCode: publiclyReachable ? undefined : constructor === undefined
         ? reachability.invokedProjectConstructors.has(declaration) ? undefined : "generated-retained-constructor"
         : reachability.suppressedDeclarations.has(constructor) ? "authored-declaration" : undefined,
-      environment: program.classValues.forDeclaration(declaration)?.environment,
+      environment,
       frame: program.callableValues.frames.definitionForOwner(declaration) });
   }
   return Object.freeze(issues);

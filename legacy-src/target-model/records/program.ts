@@ -64,6 +64,8 @@ export interface RustRecordFamily<T> {
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly nativeMemberVisibility: import("./native-member-names.js").RustNativeMemberVisibilityRecords["nativeMemberVisibility"];
+  readonly classEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironment"];
+  readonly classEnvironmentType: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironmentType"];
   readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
   readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
   readonly generator: RustRecordFamily<RustGeneratorFact>;
