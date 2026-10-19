@@ -13,65 +13,58 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { readRustSourceStaticField, planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
-import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
-import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustClassValueImplementations(declaration: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const selected = context.input.program.classValues.forDeclaration(declaration);
-  const views = context.input.program.classValues.constructorViewImplementations.filter(view => view.declaration === declaration &&
-    view.ownerFileName === context.input.program.source.ast.getFileName(context.sourceFile));
-  if (selected === undefined || views.length === 0) return [];
+  const selected = context.input.program.records.classEnvironment.get(declaration);
+  const views = context.input.program.records.classConstructorViews.get(declaration, context.input.program.source.ast.getFileName(context.sourceFile));
+  if (views === undefined || views.length === 0) return [];
+  if (selected === undefined) failRustPlannerInvariant("An admitted constructor view requires its native class environment.", declaration);
   const environment = selected.environment;
-  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
+  const definition = context.input.program.records.projectDeclaration.get(declaration);
   const boundary = rustCurrentErrorBoundary(context);
-  if (environment === undefined || definition === undefined || boundary === undefined) return undefined;
+  if (definition === undefined || boundary === undefined) failRustPlannerInvariant("An admitted constructor view requires its native definition and error boundary.", declaration);
   const items: RustItem[] = [];
   const baseContext = context;
   for (const view of views) {
     context = rustProjectImplementationContext(definition, view.sourceCarrier, baseContext);
     const target = rustClassEnvironmentType(view.sourceCarrier, context);
-    const sourceArguments = rustSourceTypeCarrierValue(view.sourceCarrier)?.genericArguments;
-    if (target === undefined || sourceArguments === undefined) return undefined;
-    const bound = sourceArguments.flatMap((argument, index) => !environment.genericParameterIndexes.includes(index) &&
-      (argument.kind === "type" && argument.type.kind === "type-parameter" || argument.kind === "lifetime" && argument.lifetime.kind === "parameter") ? [index] : []);
-    const generics = rustProjectImplementationGenerics(rustClassConstructorTargetType(view.sourceCarrier, bound),
+    if (target === undefined) failRustPlannerInvariant("An admitted constructor view requires its native environment type.", declaration);
+    const generics = rustProjectImplementationGenerics(view.genericCarrier,
       planRustProjectGenerics(definition, [], context, environment.genericParameterIndexes), context);
-    if (generics === undefined) return undefined;
-    const shape = context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier);
+    if (generics === undefined) failRustPlannerInvariant("An admitted constructor view requires its native implementation generics.", declaration);
     const wrapper = rustTypeFromCarrierInContext(view.targetCarrier, context);
-    if (shape?.dispatchName === undefined || wrapper?.kind !== "named") return undefined;
+    if (wrapper?.kind !== "named") failRustPlannerInvariant("An admitted constructor view requires its named native wrapper.", declaration);
     const ownerPath = wrapper.path.slice(0, wrapper.path.lastIndexOf("::") + 2);
     const functions: RustImplFunction[] = [];
     if (view.construction !== undefined) {
-      if (shape.construction === undefined) return undefined;
-      const construct = planRustClassValueForwarder(view.construction, shape.construction.targetName, context, true);
-      if (construct === undefined) return undefined;
+      const construct = planRustClassValueForwarder(view.construction.callable, view.construction.name, context, true);
+      if (construct === undefined) failRustPlannerInvariant("An admitted constructor view requires its native constructor forwarder.", declaration);
       functions.push(construct);
     }
     for (const field of view.fields) {
-      const storage = shape.fields[field.storageIndex];
-      if (storage === undefined) return undefined;
+      const storage = field.storage;
       if (field.callable !== undefined) {
         const method = planRustClassValueForwarder(field.callable, storage.targetName, context);
-        if (method === undefined) return undefined;
+        if (method === undefined) failRustPlannerInvariant("An admitted constructor view requires its native static method forwarder.", field.declaration);
         functions.push(method);
         continue;
       }
       const type = rustTypeFromCarrierInContext(storage.carrier, context);
-      if (type === undefined || storage.property === undefined) return undefined;
+      if (type === undefined || storage.property === undefined) failRustPlannerInvariant("An admitted constructor property requires its native carrier and accessor slots.", field.declaration);
       const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, field.declaration, ["value"]);
       const local = rustClassEnvironmentContext(environment, { kind: "path", path: "self" },
         { ...context, syntheticNames, fallibleBoundary: rustPackageFallibleBoundary(boundary) });
       const fact = { kind: "source-static-field" as const, declaration: field.declaration,
         storageFileName: field.fileName, storageName: field.targetName, resultCarrier: storage.carrier };
       const read = readRustSourceStaticField(fact, local);
-      if (read === undefined) return undefined;
+      if (read === undefined) failRustPlannerInvariant("An admitted constructor property requires its native static read.", field.declaration);
       functions.push({ kind: "function", name: storage.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("ref"), params: [], returnType: type, errorType: rustErrorType(boundary),
         body: { statements: [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [read] } }] } });
       if (storage.property.setterTargetName !== undefined) {
         const target = planRustSourceStaticFieldStorage(fact, local);
-        if (target === undefined) return undefined;
+        if (target === undefined) failRustPlannerInvariant("An admitted constructor property requires its native static write.", field.declaration);
         functions.push({ kind: "function", name: storage.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
           selfParam: rustSelfParameter("ref"), params: [{ name: "value", type }], returnType: { kind: "unit" },
           errorType: rustErrorType(boundary), body: { statements: [{ kind: "tail", expr: rustValueBlock(target.bindings, { kind: "evaluate-then", effect: target.write({ kind: "path", path: "value" }), discard: "unit",
@@ -79,7 +72,7 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
       }
     }
     items.push({ kind: "impl", generics, target,
-      trait: { kind: "named", path: `${ownerPath}${shape.dispatchName}`, genericArguments: wrapper.genericArguments }, members: functions });
+      trait: { kind: "named", path: `${ownerPath}${view.dispatchName}`, genericArguments: wrapper.genericArguments }, members: functions });
   }
   return items;
 }
