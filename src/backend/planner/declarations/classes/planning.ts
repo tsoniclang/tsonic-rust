@@ -88,14 +88,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     context,
   );
   if (methodProperties === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.");
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", node);
   }
   const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
   const implementationType = rustTypeFromCarrierInContext(selected.carrier, implementationContext);
   const implementationGenerics = rustProjectGenerics(definition, implementationContext);
   const implementationFields = planClassFields(selected, implementationContext);
-  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+  if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
   const constructorFn = planConstructor(
     node,
     constructorMember,
@@ -110,13 +109,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     implementationContext,
   );
   if (constructorFn === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
   }
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
     const planned = planProjectMethodVariants(method, implementationContext);
     if (planned === undefined) {
-      failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+      failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
     }
     implFunctions.push(...planned);
   }
@@ -127,7 +126,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       safetyPlacement: accessor.role === "read" ? "getter" : "setter",
     });
     if (planned === undefined) {
-      failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+      failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
     }
     implFunctions.push(planned);
   }
@@ -140,13 +139,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const generatedStructAttributes = structAttributes(emission.nonCamelCaseName) ?? [];
   const environment = selected.environment;
   const environmentType = !environment?.instancesUseEnvironment ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
-  if (environment?.instancesUseEnvironment && environmentType === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+  if (environment?.instancesUseEnvironment && environmentType === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
   const stateCarrier = stateType === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation, environmentType);
   const frame = selected.frame;
   const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, context, storageVisibility);
-  if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+  if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
   const valueFields: readonly RustStructField[] = [
     ...(frameLayout?.fields ?? []),
     ...(representation.kind !== "value" || environment === undefined || environmentType === undefined ? [] : [{
@@ -181,7 +180,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
   }
   const stateField: RustStructField | undefined = stateCarrier === undefined
     ? undefined
@@ -205,7 +204,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       ? undefined
       : [stateField];
   if (structFields === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", node);
   }
   const explicitWrapperTraits = selected.explicitWrapperTraits;
   const structItem: RustItem = {
@@ -264,8 +263,7 @@ function planConstructor(
   );
   const body = member === undefined ? undefined : ast.body(member);
   if (member !== undefined && body === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", node);
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", classDeclaration);
   }
   const syntheticNames = createRustSyntheticNameState(
     ast,
@@ -276,20 +274,19 @@ function planConstructor(
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
     : planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }
   const selectedEnvironment = selected.environment;
   const environment = selectedEnvironment?.instancesUseEnvironment || selectedEnvironment?.initializationUsesEnvironment ? selectedEnvironment : undefined;
   const environmentParameter = environment === undefined ? undefined : rustClassEnvironmentParameter(environment, context, "owned");
-  if (environment !== undefined && environmentParameter === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+  if (environment !== undefined && environmentParameter === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
   const fallible = context.input.program.records.fallible.get(member ?? classDeclaration) !== undefined;
   const errorBoundary = fallible
     ? rustErrorBoundaryForDeclaration(member ?? classDeclaration, context)
     : undefined;
   if (fallible && errorBoundary === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", node);
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete field, method and constructor plan.", classDeclaration);
   }
   if (fallible) {
     context.usedAliases?.add("rt");
@@ -310,20 +307,18 @@ function planConstructor(
     planExpression,
   );
   if (parameterStatements === undefined) {
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }
   const definition = selected.definition;
   const constructionPlan = definition === undefined ? undefined
     : context.input.program.records.classConstruction.get(definition.declaration);
   if (definition === undefined || constructionPlan === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, classDeclaration),
-      "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
-    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }
   const frame = selected.frame;
   const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, constructorContext,
     rustProjectImplementationVisibility(publiclyReachable));
-  if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+  if (frame !== undefined && frameLayout === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   const construction = planRustConstructionBody(constructionPlan, fields,
     classType,
     (values, identity, frameCounter, retainedFrame) => {
@@ -340,7 +335,7 @@ function planConstructor(
         ? undefined : { kind: "path", path: environment.parameterName }, identity);
     },
     constructorContext);
-  if (construction === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+  if (construction === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   const returnLabel = !constructionPlan.earlyReturnLayers.has(definition) ? undefined
     : { id: constructorContext.controlFlow!.nextLoopId++,
       label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
@@ -348,21 +343,21 @@ function planConstructor(
   const statements: RustStmt[] = [...parameterStatements, ...construction.declarations];
   for (const field of constructionPlan.fields) {
     const slot = construction.values.get(field.declaration);
-    if (slot === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    if (slot === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
     if (field.initializer !== undefined) {
       const prepared = construction.prepare(field.initializer, layerContext);
-      if (prepared === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+      if (prepared === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
       const value = construction.input(field.declaration, field.initializer, prepared.context,
         () => planExpression(field.initializer!, prepared.context));
-      if (value === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+      if (value === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
       const initialization = construction.initialize(field.declaration, value);
-      if (initialization === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+      if (initialization === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
       statements.push(...prepared.before, ...prepared.finish(initialization));
     }
   }
   if (body !== undefined) {
     const bodyPlan = planStatementSequence(ast.statements(body), body, layerContext);
-    if (bodyPlan === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.");
+    if (bodyPlan === undefined) failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
     statements.push(...returnLabel === undefined ? bodyPlan.statements
       : [{ kind: "scope" as const, label: returnLabel.label, body: { statements: bodyPlan.statements } }]);
   }
