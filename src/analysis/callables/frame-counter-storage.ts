@@ -1,16 +1,23 @@
 import type { AstReader } from "@tsonic/tsts";
 import type { RustFrameCallableDefinition } from "./frame-values.js";
-import type { RustProjectConstructionQueries } from "../project-types/construction-plan.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 
-export function rustRetainedFrameCounterName(
+export function prepareRustRetainedFrameCounters(
+  definitions: readonly RustFrameCallableDefinition[],
+  ast: AstReader,
+  constructions: readonly RustProjectConstructionPlan[],
+): ReadonlyMap<RustFrameCallableDefinition, string | undefined> {
+  const byDeclaration = new Map(constructions.map(plan => [plan.definition.declaration, plan]));
+  return new Map(definitions.map(definition => [definition,
+    retainedFrameCounterName(definition, ast, byDeclaration.get(definition.activation.ownerDeclaration))]));
+}
+
+function retainedFrameCounterName(
   definition: RustFrameCallableDefinition,
-  input: { readonly source: { readonly ast: AstReader }; readonly projectTypes: RustProjectTypePolicy;
-    readonly projectConstructions: RustProjectConstructionQueries },
+  ast: AstReader,
+  construction: RustProjectConstructionPlan | undefined,
 ): string | undefined {
   if (definition.activation.kind === "lexical" || definition.constructionExposure !== undefined) return definition.counterName;
-  const owner = input.projectTypes.definitionForDeclaration(definition.activation.ownerDeclaration);
-  const construction = owner === undefined ? undefined : input.projectConstructions.forDefinition(owner);
   if (construction === undefined || construction.issues.length !== 0) return definition.counterName;
   for (const implementation of definition.entries.flatMap(entry => entry.implementations)) {
     if (implementation.independent) continue;
@@ -22,11 +29,11 @@ export function rustRetainedFrameCounterName(
         constructionOnly = !point.published && !point.publishBefore;
         break;
       }
-      const parent = input.source.ast.parent(current);
+      const parent = ast.parent(current);
       if (parent === undefined) break;
-      if (input.source.ast.is.IsArrowFunction(parent) || input.source.ast.is.IsFunctionExpression(parent) ||
-        input.source.ast.is.IsFunctionDeclaration(parent) || input.source.ast.is.IsMethodDeclaration(parent) ||
-        input.source.ast.is.IsGetAccessorDeclaration(parent) || input.source.ast.is.IsSetAccessorDeclaration(parent)) break;
+      if (ast.is.IsArrowFunction(parent) || ast.is.IsFunctionExpression(parent) ||
+        ast.is.IsFunctionDeclaration(parent) || ast.is.IsMethodDeclaration(parent) ||
+        ast.is.IsGetAccessorDeclaration(parent) || ast.is.IsSetAccessorDeclaration(parent)) break;
       current = parent;
     }
     if (!constructionOnly) return definition.counterName;

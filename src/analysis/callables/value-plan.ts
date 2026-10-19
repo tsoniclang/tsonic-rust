@@ -17,7 +17,7 @@ import { rustStructuralObjectCarrierValue } from "../../target-model/types/carri
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { createRustFrameCallablePlan, type RustFrameCallablePlan } from "./frame-values.js";
+import { createRustFrameCallablePlan, type RustFrameCallablePlan, type RustFrameCallablePlanRegistry } from "./frame-values.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -327,6 +327,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[] | undefined;
   let structuralMethodStorage: ReturnType<typeof createRustStructuralMethodStorage> | undefined;
   let selectedPlan: RustCallableValueSelection | undefined;
+  let frameConstruction: RustFrameCallablePlanRegistry | undefined;
   let publishedPlan: RustCallableValuePlan | undefined;
   let sealResult: TargetStageResult<RustCallableValuePlan> | undefined;
   return Object.freeze({
@@ -357,6 +358,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
       const frames = createRustFrameCallablePlan({ ...input, usedNames });
+      frameConstruction = frames;
       const occurrences = prepareRustProviderSourceOccurrences({ ast: input.ast, nodes: input.nativeNodes,
         isNativeNode: input.isNativeNode, records: input.records, semantics: input.sourceStorage.source.semantics });
       if (occurrences.kind === "rejected") {
@@ -408,7 +410,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     },
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;
-      if (physicalLifecycle === undefined || selectedPlan === undefined || emissionRequests === undefined || sourceOccurrences === undefined)
+      if (physicalLifecycle === undefined || selectedPlan === undefined || frameConstruction === undefined ||
+        emissionRequests === undefined || sourceOccurrences === undefined)
         throw new Error("Physical callable publication requires completed source-selected families and effects.");
       assertRustNativeCallableProtocolResults(native.protocols, input.typeDefinitions);
       const publication = physicalLifecycle.complete(physical);
@@ -416,11 +419,12 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         sealResult = rejectedTargetStage(publication.diagnostics);
         return sealResult;
       }
+      const frames = frameConstruction.sealCounters(late.constructions);
       const emission = prepareRustPhysicalEmissionContexts({ ...late, ast: input.ast, sourceFiles: input.sourceFiles,
         isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
         sourceStorage: input.sourceStorage, genericBindingsFor: nativeStorage.genericBindingsFor,
         projectTypes: input.projectTypes,
-        generic, frames: selectedPlan.frames, suspended: selectedPlan.suspended, native,
+        generic, frames, suspended: selectedPlan.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         genericCompletions: completions(), sourceOccurrences, emissionRequests });
       if (emission.kind === "rejected") {
@@ -433,7 +437,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
-      publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs,
+      publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs, frames,
         emissionContexts: emission.value.contexts });
       sealResult = resolvedTargetStage(publishedPlan);
       return sealResult;

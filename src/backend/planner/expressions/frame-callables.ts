@@ -12,7 +12,6 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustReceiverFieldOwners, planRustReceiverOwners, validateRustCapturedReceiverFields,
   validateRustCapturedReceivers } from "./receiver-captures.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../target-model/types/carriers/callables.js";
-import { rustRetainedFrameCounterName } from "../../../analysis/callables/frame-counter-storage.js";
 
 function planFrameEntry(
   node: Node, carrier: TargetTypeRef, context: RustPlanContext,
@@ -28,7 +27,7 @@ function planFrameEntry(
     return undefined;
   }
   const identity = allocateRustSyntheticName(context.syntheticNames, "frame_entry_identity");
-  const counterName = rustRetainedFrameCounterName(types.definition, context.input.program);
+  const counterName = context.input.program.callableValues.frames.counterNameFor(types.definition);
   if (owner.kind === "live" && counterName === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.frame-entry-identity",
       "A live callback creation requires its exact retained activation counter."));

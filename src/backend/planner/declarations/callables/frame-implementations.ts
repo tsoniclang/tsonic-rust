@@ -19,7 +19,6 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustLiveFrameOwner } from "../../program/frame-owners.js";
 import { planRustFrameCallableFamilyItems } from "./frame-family-implementations.js";
-import { rustRetainedFrameCounterName } from "../../../../analysis/callables/frame-counter-storage.js";
 
 function shared(type: RustType): RustType {
   return { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }] };
@@ -231,7 +230,7 @@ export function planRustFrameCallableItems(context: RustPlanContext): readonly R
     context.usedAliases?.add("rt");
     const generics = definitionGenerics(definition, local);
     const marker = definitionMarker(generics);
-    const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+    const counterName = context.input.program.callableValues.frames.counterNameFor(definition);
     if (definition.storage.kind === "standalone") result.push({ kind: "struct", name: definition.targetName, visibility: "public",
       generics, fields: [
         ...(counterName === undefined ? [] : [{ name: counterName, type: { kind: "named" as const, path: "rt::FrameEntryCounter" }, visibility: "public" as const }]),
