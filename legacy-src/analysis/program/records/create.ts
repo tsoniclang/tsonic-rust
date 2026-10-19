@@ -98,6 +98,7 @@ import { createRustConstructionProducer } from "./construction.js";
 import { createRustClassEmissionProducer } from "./class-emission.js";
 import { createRustProjectEmissionProducer } from "./project-emission.js";
 import { createRustCarrierReadProducer } from "./carrier-reads.js";
+import { createRustIndexedRecordProducer } from "./indexed-records.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -209,6 +210,7 @@ export function createRustProgramRecordBuilder(
   const classEmissionPlans = createRustClassEmissionProducer(assertOpen);
   const projectEmissionPlans = createRustProjectEmissionProducer(assertOpen);
   const carrierReadPlans = createRustCarrierReadProducer(assertOpen);
+  const indexedRecordPlans = createRustIndexedRecordProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -247,6 +249,7 @@ export function createRustProgramRecordBuilder(
     ...classEmissionPlans.implementationRecords,
     ...projectEmissionPlans.records,
     ...carrierReadPlans.records,
+    ...indexedRecordPlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -354,6 +357,7 @@ export function createRustProgramRecordBuilder(
     classEmissionPlans,
     projectEmissionPlans,
     carrierReadPlans,
+    indexedRecordPlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,

@@ -93,6 +93,7 @@ import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.
 import { analyzeRustProjectEmission } from "../project-types/emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
+import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -525,6 +526,8 @@ export function analyzeRustTargetProgram(
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
+  const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
+  if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
   const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);

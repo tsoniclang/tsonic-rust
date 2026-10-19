@@ -23,10 +23,6 @@ export function rustRecordCarrierValue(carrier: TargetTypeRef | undefined): {
   return { key: arguments_[0]!, value: arguments_[1]! };
 }
 
-export type RustIndexedRecordStorage =
-  | { readonly kind: "project-field"; readonly name: string }
-  | { readonly kind: "record" };
-
 export function rustRecordReadAdmitsAbsence(value: TargetTypeRef | undefined): boolean {
   return isRustAbsenceCarrier(value) || rustOptionElementCarrier(value) !== undefined ||
     rustOptionalStorageValue(value) !== undefined;

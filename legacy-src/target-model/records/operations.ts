@@ -336,7 +336,7 @@ export type RustTargetOperationFact =
       readonly accessMode: "read" | "write" | "read-write" | "delete";
       readonly receiverCarrier: TargetTypeRef;
       readonly keyCarrier: TargetTypeRef;
-      readonly storage: import("../types/carriers/records.js").RustIndexedRecordStorage;
+      readonly storage: import("./indexed-records.js").RustIndexedRecordStorage;
       readonly writable: boolean;
       readonly resultCarrier: TargetTypeRef;
     }
@@ -589,7 +589,7 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly keyCarrier: TargetTypeRef;
       readonly valueCarrier: TargetTypeRef;
-      readonly storage: import("../types/carriers/records.js").RustIndexedRecordStorage;
+      readonly storage: import("./indexed-records.js").RustIndexedRecordStorage;
       readonly contributions: readonly (
         | {
             readonly kind: "property";
@@ -602,7 +602,7 @@ export type RustTargetOperationFact =
             readonly property: Node;
             readonly expression: Node;
             readonly sourceCarrier: TargetTypeRef;
-            readonly sourceStorage: import("../types/carriers/records.js").RustIndexedRecordStorage;
+            readonly sourceStorage: import("./indexed-records.js").RustIndexedRecordStorage;
           }
       )[];
     }

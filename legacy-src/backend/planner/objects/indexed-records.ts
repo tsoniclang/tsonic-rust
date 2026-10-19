@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustIndexedRecordStorage } from "../../../target-model/types/carriers/records.js";
+import type { RustIndexedRecordStorage } from "../../../target-model/records/indexed-records.js";
 import { rustRecordCarrierValue, rustRecordReadAdmitsAbsence } from "../../../target-model/types/carriers/records.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
