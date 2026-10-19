@@ -8,7 +8,6 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../n
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../../types/error-boundary.js";
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { applyRustCallableValueAdapter, applyRustCallableValueAdapterRaw } from "./adapters.js";
 import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
@@ -22,7 +21,8 @@ export function planRustCallableArguments(
     readonly parameterAdapters: readonly RustCallableParameterAdapter[];
   },
   context: RustPlanContext,
-): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[] } | undefined {
+): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[] } {
+  function missingPlan(): never { return failRustPlannerInvariant("An admitted callable adapter requires its complete native argument adaptation.", input.declaration); }
   if (input.parameters.length !== input.parameterAbis.length) failRustPlannerInvariant(
     "An admitted callable adapter requires its complete rendered parameter vector.", input.declaration);
   const statements: RustStmt[] = [];
@@ -36,9 +36,7 @@ export function planRustCallableArguments(
     const existing = iterators.get(index);
     if (existing !== undefined) return { kind: "path", path: existing };
     const source = parameter(index);
-    if (source === undefined) return undefined;
-    if (iteration.cloneRequirement !== undefined &&
-      !requireRustCarrierRequirements(iteration.cloneRequirement, ["clone"], input.declaration, context)) return undefined;
+    if (source === undefined) missingPlan();
     const sequence: RustExpr = iteration.collection === "js-array"
       ? { kind: "method-call", receiver: source, method: "into_values", args: [] } : source;
     const name = allocateRustSyntheticName(names, "rest_values");
@@ -54,15 +52,15 @@ export function planRustCallableArguments(
     }
     if (adapter.kind === "rest") {
       const value = planRest(adapter);
-      if (value === undefined) return undefined;
+      if (value === undefined) missingPlan();
       adaptedArguments.push(value);
       continue;
     }
     const source = parameter(adapter.contractParameterIndex);
-    if (source === undefined) return undefined;
+    if (source === undefined) missingPlan();
     if (adapter.kind === "runtime-value") {
       const value = applyRustCallableValueAdapter(source, adapter.adapter, input.declaration, context);
-      if (value === undefined) return undefined;
+      if (value === undefined) missingPlan();
       adaptedArguments.push(value);
       continue;
     }
@@ -70,11 +68,11 @@ export function planRustCallableArguments(
     let value: RustExpr | undefined;
     if (adapter.kind === "rest-element") {
       const sequence = iterator(adapter.contractParameterIndex, adapter.iteration);
-      if (sequence === undefined) return undefined;
+      if (sequence === undefined) missingPlan();
       const next: RustExpr = { kind: "method-call", receiver: sequence, receiverMode: "mut-ref", method: "next", args: [] };
       const elementName = allocateRustSyntheticName(names, "rest_value");
       const element = applyRustCallableValueAdapter({ kind: "path", path: elementName }, adapter.adapter, input.declaration, context);
-      if (element === undefined) return undefined;
+      if (element === undefined) missingPlan();
       if (optional) {
         value = adapter.optionalAdapter === undefined ? next
           : applyRustCallableValueAdapter(next, adapter.optionalAdapter, input.declaration, context);
@@ -89,7 +87,7 @@ export function planRustCallableArguments(
       const selected = logical === undefined ? undefined : applyRustCallableValueAdapter(logical, adapter.adapter, input.declaration, context);
       value = selected === undefined ? undefined : optional ? { kind: "call", path: "Some", args: [selected] } : selected;
     }
-    if (value === undefined) return undefined;
+    if (value === undefined) missingPlan();
     if (adapter.kind === "rest-element" || adapter.target.mode === "mut-ref") {
       const name = allocateRustSyntheticName(names, "adapted_argument");
       statements.push({ kind: "let", name, mutable: adapter.target.mode === "mut-ref", init: value });
@@ -101,10 +99,10 @@ export function planRustCallableArguments(
   }
   return { statements: Object.freeze(statements), adaptedArguments: Object.freeze(adaptedArguments) };
 
-  function planRest(adapter: Extract<RustCallableParameterAdapter, { readonly kind: "rest" }>): RustExpr | undefined {
+  function planRest(adapter: Extract<RustCallableParameterAdapter, { readonly kind: "rest" }>): RustExpr {
     const vector = rustTypeFromCarrierInContext(rustVecTargetType(adapter.elementCarrier), context);
     const target = rustTypeFromCarrierInContext(adapter.target.parameterCarrier, context);
-    if (vector === undefined || target === undefined) return undefined;
+    if (vector === undefined || target === undefined) missingPlan();
     const fallible = adapter.fallible;
     const prefix: RustExpr[] = [];
     let sequence: RustExpr | undefined;
@@ -113,16 +111,16 @@ export function planRustCallableArguments(
         const source = parameter(segment.contractParameterIndex);
         const logical = source === undefined ? undefined : readLogicalParameter(source, segment.source, segment.read, context);
         const value = logical === undefined ? undefined : mappedValue(logical, segment, fallible);
-        if (value === undefined) return undefined;
+        if (value === undefined) missingPlan();
         prefix.push(value);
       } else {
         const source = iterator(segment.contractParameterIndex, segment.iteration);
-        if (source === undefined) return undefined;
+        if (source === undefined) missingPlan();
         if (!fallible && segment.adapter.kind === "identity") sequence = source;
         else {
           const name = allocateRustSyntheticName(names, "rest_element");
           const value = mappedValue({ kind: "path", path: name }, segment, fallible);
-          if (value === undefined) return undefined;
+          if (value === undefined) missingPlan();
           sequence = { kind: "method-call", receiver: source, method: "map",
             args: [{ kind: "closure", params: [{ name, byRefCopy: false }], body: value }] };
         }
@@ -142,10 +140,10 @@ export function planRustCallableArguments(
         genericArguments: [{ kind: "type", type: collectedType }], args: [] };
       if (fallible) {
         const region = context.fallibleBoundary;
-        if (region === undefined) return undefined;
+        if (region === undefined) missingPlan();
         context.usedAliases?.add("rt");
         const propagated = rustPropagateLocalError(region, rustTargetRuntimeErrorType, value);
-        if (propagated === undefined) return undefined;
+        if (propagated === undefined) missingPlan();
         value = propagated;
       }
     }
@@ -153,9 +151,10 @@ export function planRustCallableArguments(
       ? { kind: "associated-call", owner: target, method: "from_dense", args: [value] } : value;
   }
 
-  function mappedValue(value: RustExpr, segment: RustCallableRestSegment, fallible: boolean): RustExpr | undefined {
+  function mappedValue(value: RustExpr, segment: RustCallableRestSegment, fallible: boolean): RustExpr {
     const converted = applyRustCallableValueAdapterRaw(value, segment.adapter, input.declaration, context);
-    return converted === undefined ? undefined : fallible && !converted.fallible
+    if (converted === undefined) missingPlan();
+    return fallible && !converted.fallible
       ? { kind: "call", path: "Ok", args: [converted.expression] } : converted.expression;
   }
 }
