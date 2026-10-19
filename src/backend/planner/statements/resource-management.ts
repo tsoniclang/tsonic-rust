@@ -5,7 +5,7 @@ import {
   rustActiveErrorType,
 } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { planVariableStatement } from "./variable-declarations.js";
+import { planVariableStatement } from "../bindings/locals.js";
 
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";

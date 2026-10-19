@@ -1,0 +1,99 @@
+import type { AstReader, Node } from "@tsonic/tsts";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
+import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustOptionElementCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustLocalStorageAliasPlan } from "./local-aliases.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import type { RustLocalBindingProducer } from "../program/records/local-bindings.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+
+export function analyzeRustLocalBindings(input: {
+  readonly ast: AstReader; readonly nodes: readonly Node[]; readonly records: RustProgramRecords;
+  readonly navigation: SourceProgramNavigation; readonly names: RustNamePlan;
+  readonly aliases: RustLocalStorageAliasPlan; readonly representations: RustObjectRepresentationPlan;
+  readonly projectTypes: RustProjectTypePolicy; readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
+  readonly lexicalFunctions: RustLexicalFunctionQueries; readonly producer: RustLocalBindingProducer;
+  readonly required: RustRequiredRecord[];
+}): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  const refuse = (node: Node, capability: string, message: string, code = "RUST_UNSUPPORTED_AST"): void => {
+    issues.push(Object.freeze({ code, category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `${message} Node kind: ${input.ast.kindName(node)}.`, evidence: Object.freeze([`target.capability=${capability}`]) }));
+  };
+  for (const node of input.nodes) {
+    if (input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
+    if (input.ast.is.IsVariableStatement(node) && input.records.variableDeclarations.get(node)?.length === 0) {
+      refuse(node, "rust.backend.variable", "Variable statement has no exact variable declaration.");
+    }
+    if (!input.ast.is.IsVariableDeclaration(node)) continue;
+    const parent = input.ast.parent(node);
+    if (parent !== undefined && input.ast.is.IsCatchClause(parent)) continue;
+    const statement = parent === undefined ? undefined : input.ast.parent(parent);
+    if (statement !== undefined && (input.ast.is.IsForInStatement(statement) || input.ast.is.IsForOfStatement(statement))) continue;
+    requireRustRecord(input.required, "localBinding", node, input.ast.kindName(node), "analyzeRustLocalBindings");
+    const owner = input.aliases.owner(node);
+    if (input.records.compileTimeSource.get(node) !== undefined || owner !== undefined && owner !== node) {
+      input.producer.declaration(node, { kind: "erased" });
+      continue;
+    }
+    const variable = input.ast.as.AsVariableDeclaration(node);
+    const nameNode = variable?.name;
+    const initializer = variable?.Initializer;
+    const carrier = input.records.runtimeCarrier.get(node)?.carrier;
+    if (nameNode !== undefined && (input.ast.is.IsArrayBindingPattern(nameNode) || input.ast.is.IsObjectBindingPattern(nameNode))) {
+      if (initializer === undefined || carrier === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "A checked binding pattern requires its initializer and native carrier.", node);
+      input.producer.declaration(node, { kind: "pattern", pattern: nameNode, initializer, carrier });
+      continue;
+    }
+    const name = input.names.nameForDeclaration(node);
+    if (nameNode === undefined || !input.ast.is.IsIdentifier(nameNode) || name === undefined || !isValidRustIdentifier(name)) {
+      refuse(node, "rust.backend.variable", "Variable declarations require a plain identifier that is valid in Rust.");
+      continue;
+    }
+    const lexical = initializer === undefined ? undefined : input.lexicalFunctions.forDeclaration(initializer);
+    if (lexical?.kind === "unresolved") {
+      refuse(node, "rust.backend.lexical-function", lexical.reason, "RUST_MISSING_TARGET_FACT");
+      continue;
+    }
+    if (lexical !== undefined && initializer !== undefined) {
+      input.producer.declaration(node, { kind: "function", initializer, name });
+      continue;
+    }
+    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted local binding requires its finalized carrier.", node);
+    const physical = input.nativeStorage.valueFor(node);
+    if (physical.kind === "unresolved") {
+      refuse(node, "rust.backend.value-destination", physical.reason, "RUST_MISSING_TARGET_FACT");
+      continue;
+    }
+    const nativeArray = input.records.nativeArrayStorage.get(node);
+    const storage = nativeArray === undefined ? input.records.bindingStorage.get(node) : undefined;
+    const absenceInitializer = initializer === undefined && rustOptionElementCarrier(carrier) !== undefined;
+    if (initializer === undefined && !absenceInitializer && storage !== undefined) {
+      refuse(node, "rust.backend.typed-location-storage", "Promoted Rust location storage requires a source initializer or a native absence carrier.");
+      continue;
+    }
+    const summary = input.navigation.declarationUseSummary(node);
+    const representation = input.representations.representationFor(input.projectTypes.definitionForCarrier(carrier));
+    const resource = input.records.resourceManagement.get(node);
+    const mutable = nativeArray !== undefined ? summary.bindingWritten : storage?.iterationScope !== undefined || storage === undefined &&
+      (input.aliases.requiresMutableOwner(node) || summary.bindingWritten || input.records.mutatedBinding.get(node) !== undefined ||
+        representation?.kind === "value" && representation.mutable && summary.memberWritten ||
+        carrier.kind !== "pointer" && carrier.kind !== "reference" && input.records.mutatedReferentBinding.get(node) !== undefined ||
+        resource?.disposal.target.receiverMode === "mut-ref");
+    const operation = initializer === undefined ? undefined : input.records.targetOperation.get(initializer);
+    input.producer.declaration(node, { kind: "value", name, initializer, carrier,
+      nativeCarrier: physical.kind === "selected" ? physical.carrier : carrier,
+      initializerCarrier: physical.kind === "selected" ? physical.carrier : undefined, storage, mutable,
+      selfTypedCallable: storage === undefined && operation?.kind === "closure" && rustCallableProtocol(carrier) !== undefined &&
+        rustTargetTypeRefEquals(operation.resultCarrier, carrier), annotated: variable?.Type !== undefined, absenceInitializer });
+  }
+  return Object.freeze(issues);
+}

@@ -3,4 +3,4 @@ export {
   planStatement,
   planStatementSequence,
 } from "./planning.js";
-export { planVariableStatement } from "./variable-declarations.js";
+export { planVariableStatement } from "../bindings/locals.js";

@@ -74,6 +74,7 @@ import { createRustNativeHandlerProducer } from "./native-handlers.js";
 import { createRustStatementExitProducer } from "./statement-exits.js";
 import { createRustStatementCompletionProducer } from "./statement-completion.js";
 import { createRustResourceScopeProducer } from "./resource-scopes.js";
+import { createRustLocalBindingProducer } from "./local-bindings.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -123,7 +124,7 @@ export function createRustProgramRecordBuilder(
   const sourceBindings = createRustSourceBindingProducer(assertOpen, parent?.sourceBinding);
   const bindingProjections = createRustBindingProjectionProducer(assertOpen, parent?.bindingProjection);
   const mutatedBindings = createRustMutatedBindingProducer(assertOpen, parent?.mutatedBinding);
-  const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent);
+  const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent, parent?.mutatedReferentBinding);
   const selfModes = createRustSelfModeProducer(assertOpen, parent?.selfMode);
   const targetOperations = createRustTargetOperationProducer(assertOpen, requireFoundation, definitions, parent?.targetOperation);
   const compoundWrites = createRustCompoundWriteProducer(assertOpen, parent?.compoundWrite);
@@ -158,10 +159,12 @@ export function createRustProgramRecordBuilder(
   const statementExits = createRustStatementExitProducer(assertOpen);
   const statementCompletions = createRustStatementCompletionProducer(assertOpen);
   const resourceScopes = createRustResourceScopeProducer(assertOpen);
+  const localBindings = createRustLocalBindingProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
     ...statementCompletions.records,
     ...resourceScopes.records,
+    localBinding: localBindings.records,
     statementExit: statementExits.records,
     loopForm: statementExits.forms,
     nativeHandler: nativeHandlers.records,
@@ -201,6 +204,7 @@ export function createRustProgramRecordBuilder(
     bindingProjection: bindingProjections.records,
     mutatedBinding: mutatedBindings.records,
     mutatedReferent: mutatedReferents.records,
+    mutatedReferentBinding: mutatedReferents.mutableBindings,
     selfMode: selfModes.records,
     targetOperation: targetOperations.records,
     compoundWrite: compoundWrites.records,
@@ -239,6 +243,7 @@ export function createRustProgramRecordBuilder(
     statementExits,
     statementCompletions,
     resourceScopes,
+    localBindings,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,

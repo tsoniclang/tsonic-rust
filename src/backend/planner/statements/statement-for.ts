@@ -9,7 +9,7 @@ import { planResourceDeclarations } from "./resource-management.js";
 import { planExpression, planExpressionBeforeValueProjections, planNumericLiteralWithCarrier } from "../expressions/index.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
-import { planVariableStatement } from "./variable-declarations.js";
+import { planVariableStatement } from "../bindings/locals.js";
 import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { planCondition, planEmbeddedBlock } from "./statement-conditionals.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";

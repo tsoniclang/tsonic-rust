@@ -70,6 +70,9 @@ import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
+import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-model/types/index.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -148,6 +151,14 @@ export function analyzeRustTargetProgram(
     message: issue.message, evidence: issue.evidence,
   })));
   const objectRepresentations = context.objectRepresentations.seal();
+  context.records.mutatedReferents.finalizeBindings(declaration => {
+    const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
+    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "A mutated referent requires its finalized declaration carrier.", declaration);
+    return rustCarrierReferentMutationRequiresMutableBinding(carrier, selected => {
+      const representation = objectRepresentations.representationFor(context.projectTypes.definitionForCarrier(selected));
+      return representation !== undefined && (representation.kind !== "value" || !representation.mutable);
+    });
+  });
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
     factRequirement: context.typeDefinitions.definitionCarriers().map(rustFoundationForCarrier)
@@ -386,6 +397,13 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
+  const localStorageAliases = analyzeRustLocalStorageAliases({ ast: context.ast,
+    navigation: context.source.navigation, nativeNodes: context.nativeNodes, records });
+  const localBindingIssues = analyzeRustLocalBindings({ ast: context.ast, nodes: context.nativeNodes, records,
+    navigation: context.source.navigation, names: context.names, aliases: localStorageAliases,
+    representations: objectRepresentations, projectTypes, nativeStorage: callableValues.value.nativeStorage,
+    lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords });
+  if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
@@ -398,8 +416,7 @@ export function analyzeRustTargetProgram(
     promiseBodies: context.promiseBodies.plan,
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
-    localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
-      navigation: context.source.navigation, nativeNodes: context.nativeNodes, records }),
+    localStorageAliases,
     numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,
       sourceFiles: context.sourceFiles, records }),
     host: Object.freeze({

@@ -27,7 +27,7 @@ import { planSwitchStatement } from "./switch-statements.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustReturnValueExpression } from "../expressions/value-destinations.js";
 import { planExpressionStatement } from "./expression-statements.js";
-import { planVariableStatement } from "./variable-declarations.js";
+import { planVariableStatement } from "../bindings/locals.js";
 import { planForInStatement, planForOfStatement } from "./statement-loops.js";
 import { planRustReturnExit } from "./completion-exits.js";
 import { planThrowStatement, planTryStatement } from "./statement-try.js";
