@@ -6,7 +6,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "../expressions/index.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import { planStatementSequence } from "./core.js";
 import { createRustBreakTarget, withRustControlTarget } from "./control-flow.js";
 import { planRustSwitchComparison } from "./switch-comparisons.js";
@@ -32,7 +31,7 @@ export function planSwitchStatement(
   }
   const switchContext = withRustControlTarget(context, target);
   const discriminantName = allocateRustSyntheticName(context.syntheticNames, "switch_value");
-  const sections: { readonly condition?: RustExpr; readonly body: RustBlock }[] = [];
+  const sections: { readonly condition?: RustExpr; readonly body: RustBlock; readonly exits: boolean }[] = [];
   for (let index = 0; index < clauseNodes.length; index += 1) {
     const clause = clauseNodes[index]!;
     const selected = fact.clauses[index]!;
@@ -40,6 +39,10 @@ export function planSwitchStatement(
     const statements = CaseOrDefaultClause_Statements(ast, clause);
     if (statements === undefined) {
       failRustPlannerInvariant("Switch clause requires its admitted dense source statement sequence.", clause);
+    }
+    const exits = context.input.program.records.statementExit.get(clause);
+    if (exits === undefined) {
+      failRustPlannerInvariant("An admitted switch clause lost its sealed source completion.", clause);
     }
     const expression = sourceExpression === undefined
       ? undefined
@@ -61,6 +64,7 @@ export function planSwitchStatement(
     sections.push({
       ...(condition === undefined ? {} : { condition }),
       body,
+      exits,
     });
   }
 
@@ -69,7 +73,7 @@ export function planSwitchStatement(
     for (let index = start; index < sections.length; index += 1) {
       const section = sections[index]!;
       statements.push(...section.body.statements);
-      if (rustBlockDefinitelyExits(section.body)) {
+      if (section.exits) {
         break;
       }
     }

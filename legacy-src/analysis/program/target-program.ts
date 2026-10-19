@@ -68,6 +68,7 @@ import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js
 import { analyzeRustReachability } from "../reachability/plan.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
+import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -165,7 +166,7 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  const records = context.records.seal(context.requiredRecords);
+  const records = context.records.readers;
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     isNativeNode: context.isNativeNode,
     typeDefinitions: context.typeDefinitions,
@@ -347,6 +348,8 @@ export function analyzeRustTargetProgram(
     jsEnabled, asynchronous: initializationErrors.value.root.asynchronous ||
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
+  analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, records,
+    producer: context.records.statementExits, required: context.requiredRecords });
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
   const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,
@@ -460,6 +463,7 @@ export function analyzeRustTargetProgram(
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   context.callableValues.publish();
+  context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({ ...program,
     nativeDeclarations: nativeDeclarations.forms,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),

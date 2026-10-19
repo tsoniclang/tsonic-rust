@@ -73,6 +73,7 @@ import type { RustRetainedEnvironmentProducer } from "./retained-environment.js"
 import type { RustPreparedOperationResultProducer } from "./prepared-operation-result.js";
 import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
+import type { RustStatementExitProducer } from "./statement-exits.js";
 
 export interface RustAnalysisRecords extends RustProgramRecords {
   readonly rawLocationPlan: RustRecordFamily<RustRawLocationPlan>;
@@ -83,6 +84,7 @@ export interface RustAnalysisRecords extends RustProgramRecords {
 }
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
+  readonly statementExits: RustStatementExitProducer;
   readonly nativeHandlers: RustNativeHandlerProducer;
   readonly assertOpen: () => void;
   readonly conversions: RustConversionProducer;
@@ -155,6 +157,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
+  readonly readers: RustAnalysisRecords;
   seal(required: readonly RustRequiredRecord[]): RustAnalysisRecords;
   minimumFoundation(): RustFoundation;
 }

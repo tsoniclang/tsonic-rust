@@ -71,6 +71,7 @@ import { createRustMutatedBindingProducer } from "./mutated-binding.js";
 import { createRustMutatedReferentProducer } from "./mutated-referent.js";
 import { createRustMemoryLayoutObservationProducer } from "./memory-layout-observation.js";
 import { createRustNativeHandlerProducer } from "./native-handlers.js";
+import { createRustStatementExitProducer } from "./statement-exits.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -152,8 +153,10 @@ export function createRustProgramRecordBuilder(
   const memoryLayoutObservations = createRustMemoryLayoutObservationProducer(assertOpen, parent?.memoryLayoutObservation);
   const classValues = createRustClassValueProducer(assertOpen, parent?.classValue);
   const nativeHandlers = createRustNativeHandlerProducer(assertOpen, parent?.nativeHandler);
+  const statementExits = createRustStatementExitProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
+    statementExit: statementExits.records,
     nativeHandler: nativeHandlers.records,
     typeAliasDeclaration: typeAliasDeclarations.records,
     asyncFunction: asyncFunctions.records,
@@ -225,6 +228,8 @@ export function createRustProgramRecordBuilder(
   });
   return Object.freeze({
     ...records,
+    readers: records,
+    statementExits,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,
