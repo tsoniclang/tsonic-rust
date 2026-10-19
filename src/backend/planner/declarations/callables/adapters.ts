@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue, planRustPresentValue } from "../../expressions/optional-storage.js";
 import { planRustOptionBranch } from "../../expressions/option-branch.js";
-import { rustOptionalStorageValue } from "../../../../target-model/types/projections.js";
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
 import { planRustCallableConversion } from "../../expressions/callable-conversions.js";
 import type { RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
@@ -28,16 +27,17 @@ export function applyRustCallableValueAdapter(
   adapter: RustCallableValueAdapter,
   node: Node,
   context: RustPlanContext,
-): RustExpr | undefined {
+): RustExpr {
   const raw = applyRustCallableValueAdapterRaw(expression, adapter, node, context);
   if (raw === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted callable value adapter requires its native expression.", node);
   }
   if (!raw.fallible) {
     return raw.expression;
   }
-  return context.fallibleBoundary === undefined ? undefined
-    : rustPropagateLocalError(context.fallibleBoundary, rustTargetRuntimeErrorType, raw.expression);
+  if (context.fallibleBoundary === undefined) failRustPlannerInvariant("An admitted fallible callable adapter requires its native error boundary.", node);
+  return rustPropagateLocalError(context.fallibleBoundary, rustTargetRuntimeErrorType, raw.expression)
+    ?? failRustPlannerInvariant("An admitted fallible callable adapter requires its selected error propagation.", node);
 }
 
 export function applyRustCallableValueAdapterRaw(
@@ -45,51 +45,58 @@ export function applyRustCallableValueAdapterRaw(
   adapter: RustCallableValueAdapter,
   node: Node,
   context: RustPlanContext,
-): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
+): { readonly expression: RustExpr; readonly fallible: boolean } {
   switch (adapter.kind) {
     case "absent-completion":
       return { expression: { kind: "evaluate-then", effect: expression, discard: "unit",
         value: planRustAbsentValue(adapter.targetCarrier, context) }, fallible: false };
     case "project-structural-view": {
       const projected = planRustProjectStructuralConversion(expression, adapter.sourceCarrier, adapter.targetCarrier, context);
-      return projected === undefined ? undefined : { expression: projected, fallible: false };
+      if (projected === undefined) failRustPlannerInvariant("An admitted callable structural adapter requires its native projection.", node);
+      return { expression: projected, fallible: false };
     }
     case "identity":
       return { expression, fallible: false };
     case "conversion": {
       if (adapter.upcast !== undefined) {
         const projected = planRustProjectUpcast(node, expression, adapter.upcast, adapter.sourceCarrier, context, "owned");
-        if (projected === undefined) return undefined;
+        if (projected === undefined) failRustPlannerInvariant("An admitted callable adapter requires its native upcast expression.", node);
         expression = projected;
       }
       if (adapter.lowering.kind === "native") {
         const contract = adapter.lowering.contract;
         const source = contract.sourceMode === "ref" ? { kind: "reference" as const, expr: expression } : expression;
         const converted = lowerRustValueConversion(contract, source, context, node);
-        return converted === undefined ? undefined : { expression: converted, fallible: adapter.fallible };
+        if (converted === undefined) failRustPlannerInvariant("An admitted native callable conversion requires its native expression.", node);
+        return { expression: converted, fallible: adapter.fallible };
       }
       if (adapter.conversion.kind === "project-union-map") {
         const converted = planRustProjectUnionMapping(node, expression, adapter.conversion,
           adapter.upcast?.targetCarrier ?? adapter.sourceCarrier, adapter.targetCarrier, context, true,
           (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
             context, owned ? "owned" : "borrowed"));
-        return converted === undefined ? undefined : { expression: converted, fallible: false };
+        if (converted === undefined) failRustPlannerInvariant("An admitted callable union conversion requires its native expression.", node);
+        return { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "program-error") {
         const converted = planRustProgramErrorConstruction(adapter.conversion, expression, node, context);
-        return converted === undefined ? undefined : { expression: converted, fallible: false };
+        if (converted === undefined) failRustPlannerInvariant("An admitted callable error conversion requires its native expression.", node);
+        return { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "callable-adapter") {
         const converted = planRustCallableConversion(adapter.conversion, expression, node, context);
-        return converted === undefined ? undefined : { expression: converted, fallible: false };
+        if (converted === undefined) failRustPlannerInvariant("An admitted callable conversion requires its native expression.", node);
+        return { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "generic-callable-flow") {
         const converted = planRustGenericCallableFlow(node, adapter.conversion, expression, context);
-        return converted === undefined ? undefined : { expression: converted, fallible: false };
+        if (converted === undefined) failRustPlannerInvariant("An admitted generic callable conversion requires its native expression.", node);
+        return { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "empty-record") {
         const converted = planRustEmptyRecordConversion(adapter.conversion, expression, node, context);
-        return converted === undefined ? undefined : { expression: converted, fallible: false };
+        if (converted === undefined) failRustPlannerInvariant("An admitted empty-record callable conversion requires its native expression.", node);
+        return { expression: converted, fallible: false };
       }
       if (adapter.conversion.kind === "provider-record-copy" ||
         adapter.conversion.kind === "integer-truncation") failRustPlannerInvariant(
@@ -112,14 +119,15 @@ export function applyRustCallableValueAdapterRaw(
         context,
         "owned",
       );
-      return projected === undefined ? undefined : { expression: projected, fallible: false };
+      if (projected === undefined) failRustPlannerInvariant("An admitted callable upcast requires its native expression.", node);
+      return { expression: projected, fallible: false };
     }
     case "call-scoped-lifetime":
       return { expression, fallible: false };
     case "option-some": {
       const element = applyRustCallableValueAdapterRaw(expression, adapter.element, node, context);
       if (element === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted optional callable adapter requires its native element expression.", node);
       }
       return element.fallible
         ? {
@@ -151,9 +159,9 @@ export function applyRustCallableValueAdapterRaw(
         context,
       );
       if (element === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted optional callable adapter requires its native element expression.", node);
       }
-      if (rustOptionalStorageValue(adapter.sourceCarrier) !== undefined || rustOptionalStorageValue(adapter.targetCarrier) !== undefined) {
+      if (adapter.lowering === "branch") {
         const absent = planRustAbsentValue(adapter.targetCarrier, context);
         const present = element.fallible ? { kind: "method-call" as const, receiver: element.expression, method: "map",
           args: [{ kind: "closure" as const, params: [{ name: "value", byRefCopy: false }],

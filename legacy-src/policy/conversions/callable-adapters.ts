@@ -5,6 +5,7 @@ import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableParameterRead,
   RustCallableRestIteration, RustCallableRestSegment, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { callableRestElement } from "../../target-model/records/callable-adapters.js";
+import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier, isRustStringCarrier, isRustUnitCarrier, rustCarrierSupportsClone,
@@ -34,7 +35,8 @@ export function selectRustCallableValueAdapter(
   if (sourceOption !== undefined && targetOption !== undefined) {
     const element = selectRustCallableValueAdapter(sourceOption, targetOption, projectTypes, definitions);
     return element === undefined ? undefined
-      : Object.freeze({ kind: "option-map", sourceCarrier, targetCarrier, element, fallible: element.fallible });
+      : Object.freeze({ kind: "option-map", sourceCarrier, targetCarrier, element, fallible: element.fallible,
+        lowering: rustOptionalStorageValue(sourceCarrier) !== undefined || rustOptionalStorageValue(targetCarrier) !== undefined ? "branch" : "native-option" });
   }
   const selected = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, projectTypes, definitions);
   switch (selected.kind) {
@@ -149,7 +151,8 @@ export function selectRustCallableParameterAdapters(
       const optional = target.form === "optional" || target.form === "default";
       const optionalAdapter: RustCallableValueAdapter | undefined = optional && adapter.kind !== "identity"
         ? Object.freeze({ kind: "option-map", sourceCarrier: rustOptionTargetType(adapter.sourceCarrier),
-            targetCarrier: target.parameterCarrier, element: adapter, fallible: adapter.fallible }) : undefined;
+            targetCarrier: target.parameterCarrier, element: adapter, fallible: adapter.fallible,
+            lowering: rustOptionalStorageValue(target.parameterCarrier) !== undefined ? "branch" : "native-option" }) : undefined;
       adapters.push(Object.freeze({ kind: "rest-element", contractParameterIndex: sourceIndex, source,
         offset: restOffset++, target, adapter, iteration, optionalAdapter, fallible: adapter.fallible }));
     } else {

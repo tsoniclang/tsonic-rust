@@ -49,6 +49,7 @@ export type RustCallableValueAdapter =
     }
   | {
       readonly kind: "option-map";
+      readonly lowering: "branch" | "native-option";
       readonly fallible: boolean;
       readonly sourceCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;
