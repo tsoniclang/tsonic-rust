@@ -6,7 +6,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations } from "../statements/resource-management.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression } from "../expressions/index.js";
-import { planRustBindingPattern } from "./patterns.js";
+import { planRustBindingPattern } from "./binding-patterns.js";
 import { planRustLocalBindingStorage } from "./local-storage.js";
 import { planRustBorrowedInitializer } from "./borrowed-initializers.js";
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
