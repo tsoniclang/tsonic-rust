@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import {
   sourceGenericArgumentFor,
   targetGenericArgumentFor,
-} from "./types.js";
+} from "./type-arguments.js";
 import {
   createRustCompilerSubstitutions,
   compilerTypeRequirementCanonicalPath,

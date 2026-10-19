@@ -12,7 +12,9 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
-import type { RustProviderBinaryHookRow, RustProviderDispatchContextRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
+import type { RustProviderExportRow, RustProviderOperationRow, RustProviderTypeRow } from "../../target-model/identities/provider-relations.js";
+import type { RustProviderBinaryHookRow, RustProviderDispatchContextRow, RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
+import type { RustProviderPackageDefinition, RustProviderPolicyContribution } from "./model.js";
 import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
 
 export function rustProviderPolicyContributionsOf(

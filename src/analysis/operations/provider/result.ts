@@ -37,7 +37,7 @@ import type { RustProviderFactOperationKind, RustProviderOperationTemplate, Rust
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustProviderOperationRow } from "../../../providers/packages/model.js";
+import type { RustProviderOperationRow } from "../../../target-model/identities/provider-relations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function acceptRustOperation(
