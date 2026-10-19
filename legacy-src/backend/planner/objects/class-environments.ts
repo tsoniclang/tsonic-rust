@@ -46,7 +46,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   for (const field of environment.staticFields) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
     if (type === undefined) return undefined;
-    const visibility = rustProjectMemberStorageVisibility(context.input.program.source.ast,
+    const visibility = rustProjectMemberStorageVisibility(context.input.program.records,
       field.declaration, publiclyReachable);
     const deadCode = rustAuthoredFieldDeadCodeDisposition(context, declaration, field.declaration, visibility === "public");
     fields.push({ name: field.fieldName, visibility, ...(deadCode === undefined ? {} : { deadCode }), type: field.readonly ? type : {

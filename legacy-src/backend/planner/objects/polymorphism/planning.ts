@@ -235,7 +235,7 @@ export function planPolymorphicClassDeclaration(
             }]),
         ...ownLayer.fields.map((field): RustStructField => {
           const visibility = rustProjectMemberStorageVisibility(
-            context.input.program.source.ast,
+            context.input.program.records,
             field.declaration,
             publiclyReachable,
           );
