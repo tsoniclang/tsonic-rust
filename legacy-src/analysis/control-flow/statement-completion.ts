@@ -4,6 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import {
   Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right,
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
+  sourceLabeledStatementTarget, type SourceLabeledStatementTarget,
   IterationStatement_Statement, LabeledStatement_Statement,
   TryStatement_TryBlock, TryStatement_CatchClause, CatchClause_Block,
   type TargetSourceProgram,
@@ -90,6 +91,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   const setters = new Map<Node, RustRuntimeSetterCompletion>();
   const assignments = new Map<Node, RustAssignmentCompletion>();
   const projectReads = new Map<Node, readonly Node[]>();
+  const labels = new Map<Node, SourceLabeledStatementTarget>();
   const frames = new Map<Node, { readonly asynchronous: boolean; readonly fallible: boolean }>();
   const reject = (node: Node, code: string, message: string): void => {
     diagnostics.push({ code, category: "error", source: "tsonic-rust", sourceNode: node, message,
@@ -315,7 +317,14 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       ast.is.IsForInStatement(node) || ast.is.IsForOfStatement(node)) {
       admit(IterationStatement_Statement(ast, node), node);
     }
-    if (ast.is.IsLabeledStatement(node)) admit(LabeledStatement_Statement(ast, node), node);
+    if (ast.is.IsLabeledStatement(node)) {
+      admit(LabeledStatement_Statement(ast, node), node);
+      const selected = sourceLabeledStatementTarget(ast, node);
+      if (selected === undefined || selected.loop !== undefined && selected.loopBody === undefined) {
+        failTargetAnalysisInvariant("tsonic-rust", "A checked label requires its exact source body and iteration target.", node);
+      }
+      publish(labels, node, selected);
+    }
     if (ast.is.IsIfStatement(node)) { condition(node, ast.as.AsIfStatement(node)?.Expression); projectTypeTest(node); }
     else if (ast.is.IsWhileStatement(node)) condition(node, ast.as.AsWhileStatement(node)?.Expression);
     else if (ast.is.IsDoStatement(node)) condition(node, ast.as.AsDoStatement(node)?.Expression);
@@ -350,12 +359,12 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   for (const [family, selected] of [
     ["statementCondition", conditions], ["statementControlTargets", targets], ["controlExit", exits],
     ["iterationCompletion", iterations], ["runtimeSetter", setters], ["assignmentCompletion", assignments],
-    ["projectTypeTestReads", projectReads],
+    ["projectTypeTestReads", projectReads], ["labeledStatement", labels],
   ] as const) {
     for (const subject of selected.keys()) {
       requireRustRecord(input.required, family, subject, ast.kindName(subject), "analyzeRustStatementCompletions");
     }
   }
-  input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads });
+  input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads, labels });
   return { kind: "resolved", plan: input.producer.records };
 }

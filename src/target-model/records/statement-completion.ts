@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { SourceLabeledStatementTarget } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact } from "./operations.js";
 
 export type RustAssignmentCompletion = Extract<RustTargetOperationFact, { readonly kind: "operator-token" | "operator-call" }>;
@@ -36,4 +37,5 @@ export interface RustStatementCompletionRecords {
   readonly runtimeSetter: RustStatementRecord<RustRuntimeSetterCompletion>;
   readonly assignmentCompletion: RustStatementRecord<RustAssignmentCompletion>;
   readonly projectTypeTestReads: RustStatementRecord<readonly Node[]>;
+  readonly labeledStatement: RustStatementRecord<SourceLabeledStatementTarget>;
 }

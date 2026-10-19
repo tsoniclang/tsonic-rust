@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { SourceLabeledStatementTarget } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationCompletion,
@@ -14,6 +15,7 @@ export interface RustStatementCompletionData {
   readonly setters: ReadonlyMap<Node, RustRuntimeSetterCompletion>;
   readonly assignments: ReadonlyMap<Node, RustAssignmentCompletion>;
   readonly projectReads: ReadonlyMap<Node, readonly Node[]>;
+  readonly labels: ReadonlyMap<Node, SourceLabeledStatementTarget>;
 }
 
 export interface RustStatementCompletionProducer {
@@ -35,6 +37,7 @@ export function createRustStatementCompletionProducer(
     runtimeSetter: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.setters.get(node) }),
     assignmentCompletion: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.assignments.get(node) }),
     projectTypeTestReads: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.projectReads.get(node) }),
+    labeledStatement: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.labels.get(node) }),
   });
   return Object.freeze({ records,
     publish(selected: RustStatementCompletionData): void {

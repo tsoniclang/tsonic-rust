@@ -1,18 +1,12 @@
 import {
   DoStatement_Statement,
-  LabeledStatement_Label,
-  LabeledStatement_Statement,
   IterationStatement_Statement,
   ForStatement_Incrementor,
   ForStatement_Initializer,
   IfStatement_ElseStatement,
   IfStatement_ThenStatement,
-  KindDoStatement,
-  KindForStatement,
-  KindForInStatement,
   KindNumericLiteral,
   KindStringLiteral,
-  KindWhileStatement,
   KindVariableDeclarationList,
   Node_Expression,
 } from "@tsonic/target-api/source";
@@ -31,8 +25,7 @@ import { planBlockLike } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
-import { planForInStatement, planForOfStatement } from "./iteration.js";
-import { createRustBreakTarget, createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
+import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
@@ -162,40 +155,6 @@ function tryPlanSelectedProjectTypeTestIf(
         }, ...thenBlock.statements],
       } }, ...(elseBlock === undefined ? {} : { whenFalse: { kind: "block", body: elseBlock } }) } }],
   };
-}
-
-export function planLabeledStatement(
-  node: Node,
-  context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const { ast } = context.input.program.source;
-  const labelNode = LabeledStatement_Label(ast, node);
-  const bodyNode = LabeledStatement_Statement(ast, node);
-  if (bodyNode === undefined || labelNode === undefined) {
-    failRustPlannerInvariant("Labeled statements require exact label and body nodes.", node);
-  }
-  switch (ast.kindName(bodyNode)) {
-    case KindWhileStatement:
-      return planWhileStatement(bodyNode, context);
-    case KindDoStatement:
-      return planDoStatement(bodyNode, context);
-    case KindForStatement:
-      return planForStatement(bodyNode, context);
-    case KindForInStatement:
-      return planForInStatement(bodyNode, context);
-    case "KindForOfStatement":
-      return planForOfStatement(bodyNode, context);
-    default: {
-      const target = createRustBreakTarget(context, node, "label");
-      if (target === undefined) {
-        return undefined;
-      }
-      const body = planEmbeddedBlock(bodyNode, withRustControlTarget(context, target));
-      return body === undefined
-        ? undefined
-        : [{ kind: "scope", ...(target.used.value ? { label: target.label } : {}), body }];
-    }
-  }
 }
 
 export function planWhileStatement(
