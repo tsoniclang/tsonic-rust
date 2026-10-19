@@ -81,6 +81,7 @@ import { analyzeRustLexicalValues } from "../callables/lexical-values.js";
 import { analyzeRustNativeProtocolEmission } from "../callables/native-protocol-emission.js";
 import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emission.js";
 import { analyzeRustGenericEmission } from "../callables/generic-emission.js";
+import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
@@ -493,6 +494,7 @@ export function analyzeRustTargetProgram(
   analyzeRustFieldWrites({ program, nodes: context.nativeNodes, producer: context.records.fieldWrites, required: context.requiredRecords });
   analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes, producer: context.records.declarationEmission, required: context.requiredRecords });
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
+  analyzeRustLexicalFunctionEmission({ program, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
   analyzeRustCallableParameterEmission({ program, nodes: context.nativeNodes, producer: context.records.callableParameterPlans, required: context.requiredRecords });
   const classInitializationIssues = analyzeRustClassInitialization({ program, nodes: context.nativeNodes, producer: context.records.classInitializationPlans });
   if (classInitializationIssues.length !== 0) return rejectedTargetStage(classInitializationIssues);
