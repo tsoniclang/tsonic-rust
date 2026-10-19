@@ -9,16 +9,17 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
 import { rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustStructuralFrameField(
   declaration: Node, member: RustProjectStructuralView["fields"][number],
   field: RustStructuralShapeField, type: RustType, context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
-  const binding = context.input.program.callableValues.frames.bindingFor(member.declaration);
-  const frame = context.input.program.callableValues.frames.definitionForOwner(declaration);
+  const binding = context.input.program.records.frameBindingDeclaration.get(member.declaration);
+  const frame = context.input.program.records.frameOwner.get(declaration);
   const boundary = rustCurrentErrorBoundary(context);
   if (binding?.entry === undefined || frame?.storage.kind !== "object" || !frame.bindings.includes(binding) ||
-    field.property?.selfMode !== "rc" || boundary === undefined || context.syntheticNames === undefined) return undefined;
+    field.property?.selfMode !== "rc" || boundary === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted structural frame field requires its exact native entry, owner and accessor ABI.", member.declaration);
   const owner: RustLiveFrameOwner = { kind: "live", expression: { kind: "path", path: "self" }, borrowed: false,
     data: { kind: "object", mutable: frame.storage.mutable,
       name: allocateRustSyntheticName(context.syntheticNames, "frame_data") } };
@@ -33,7 +34,7 @@ export function planRustStructuralFrameField(
     const value = { kind: "method-call" as const, receiver: { kind: "path" as const, path: "value" },
       method: "into_entry_for", args: [rustFrameOwnerReference(owner)] };
     const write = location.write(value, context);
-    if (write === undefined) return undefined;
+    if (write === undefined) failRustPlannerInvariant("An admitted structural frame field requires its exact native write plan.", member.declaration);
     functions.push({
       kind: "function", name: field.property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("rc"), params: [{ name: "value", type }], returnType: { kind: "unit" },
