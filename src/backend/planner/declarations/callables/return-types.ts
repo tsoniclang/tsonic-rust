@@ -4,29 +4,35 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function resolveRustJsPromiseReturnType(
   declaration: Node, context: RustPlanContext,
-): RustType | undefined {
+): RustType {
   const carrier = context.input.program.callableValues.nativeProducers.invocationResultFor(declaration);
-  return carrier === undefined ? undefined : rustReturnTypeFromCarrierInContext(carrier, context);
+  if (carrier === undefined) failRustPlannerInvariant("An admitted Promise declaration requires its native invocation-result carrier.", declaration);
+  return rustReturnTypeFromCarrierInContext(carrier, context)
+    ?? failRustPlannerInvariant("An admitted Promise declaration requires its renderable native result carrier.", declaration);
 }
 
 export function resolveRustCallableOutwardReturnType(
   declaration: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
-): RustType | undefined {
-  if (carrier === undefined) return undefined;
+): RustType {
+  if (carrier === undefined) failRustPlannerInvariant("An admitted callable requires its native logical result carrier.", declaration);
   const selected = context.input.program.callableValues.nativeProducers.outwardReturnFor(declaration);
-  return selected === undefined ? undefined : rustReturnTypeFromCarrierInContext(selected, context);
+  if (selected === undefined) failRustPlannerInvariant("An admitted callable requires its native outward-result carrier.", declaration);
+  return rustReturnTypeFromCarrierInContext(selected, context)
+    ?? failRustPlannerInvariant("An admitted callable requires its renderable native outward result.", declaration);
 }
 
 export function resolveRustCallableBodyReturnType(
   outwardReturnType: RustType | undefined,
   generator: RustGeneratorFact | undefined,
   context: RustPlanContext,
-): RustType | undefined {
+): RustType {
   if (generator === undefined) {
     return outwardReturnType ?? { kind: "unit" };
   }
-  return rustTypeFromCarrierInContext(generator.returnType, context);
+  return rustTypeFromCarrierInContext(generator.returnType, context)
+    ?? failRustPlannerInvariant("An admitted generator requires its renderable native body result.");
 }
