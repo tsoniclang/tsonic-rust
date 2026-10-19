@@ -1,5 +1,5 @@
-import type { SourceFile } from "@tsonic/tsts";
-import type { RustFrameCallableDefinition, RustFrameCallableImplementation } from "./frame-callables.js";
+import type { Node, SourceFile } from "@tsonic/tsts";
+import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCallableImplementation } from "./frame-callables.js";
 import type { RustGenericRequirement, RustAssociatedTypeRequirement } from "./generic-requirements.js";
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
 
@@ -12,6 +12,21 @@ export interface RustFrameDefinitionEmission {
 }
 
 export interface RustFrameEmissionRecords {
+  readonly frameBinding: { readonly get: (subject: RustFrameCallableBinding) => RustFrameBindingEmission | undefined };
+  readonly frameInput: { readonly get: (subject: Node) => ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission> | undefined };
+  readonly frameReceiverOwner: { readonly get: (subject: Node) => Node | undefined };
+  readonly frameImplementation: { readonly get: (subject: Node) => RustFrameCallableImplementation | undefined };
+  readonly frameScopes: { readonly get: (subject: Node) => readonly RustFrameCallableDefinition[] | undefined };
   readonly frameDeclarations: { readonly get: (subject: SourceFile) => readonly RustFrameCallableDefinition[] | undefined };
   readonly frameDeclaration: { readonly get: (subject: RustFrameCallableDefinition) => RustFrameDefinitionEmission | undefined };
+}
+
+export interface RustFrameBindingEmission {
+  readonly copy: boolean;
+  readonly checkedWrite: boolean;
+}
+
+export interface RustFrameInputAdmission {
+  readonly independent: boolean;
+  readonly receiverOwner?: Node;
 }

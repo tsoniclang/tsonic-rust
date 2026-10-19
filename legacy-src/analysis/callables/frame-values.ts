@@ -24,8 +24,11 @@ import type { RustProjectConstructionPlan } from "../project-types/construction-
 import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 
 import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding, RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
+import type { RustFrameInputAdmission } from "../../target-model/records/frame-emission.js";
 
 export interface RustFrameCallablePlan {
+  readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
+  readonly receiverOwners: ReadonlyMap<Node, Node>;
   readonly definitions: readonly RustFrameCallableDefinition[];
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   definitionFor(carrier: TargetTypeRef): RustFrameCallableDefinition | undefined;
@@ -314,6 +317,7 @@ export function createRustFrameCallablePlan(input: {
   }
   let counterNames: ReadonlyMap<RustFrameCallableDefinition, string | undefined> | undefined;
   const plan: RustFrameCallablePlan = Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
+    activationInputs, receiverOwners,
     definitionFor: (carrier: TargetTypeRef) => selectedDefinitions.get(closedMetadataKey(carrier)),
     definitionForOwner: (declaration: Node) => byDeclaration.get(declaration),
     entryFor(carrier: TargetTypeRef) {
