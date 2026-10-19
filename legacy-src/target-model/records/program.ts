@@ -69,6 +69,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly classConstructorViews: import("./class-implementations.js").RustClassImplementationRecords["classConstructorViews"];
   readonly classImplementationContext: import("./class-implementations.js").RustClassImplementationRecords["classImplementationContext"];
   readonly classImplementationGenerics: import("./class-implementations.js").RustClassImplementationRecords["classImplementationGenerics"];
+  readonly structuralViewRequirements: import("./class-implementations.js").RustClassImplementationRecords["structuralViewRequirements"];
   readonly classEnvironmentType: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironmentType"];
   readonly classMemberEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classMemberEnvironment"];
   readonly classStaticEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classStaticEnvironment"];

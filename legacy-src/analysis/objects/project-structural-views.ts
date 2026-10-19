@@ -2,27 +2,10 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
-import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
-import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
-import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { generalizeRustProjectStructuralView } from "./project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "./project-structural-views-members.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-
-export interface RustProjectStructuralView {
-  readonly declaration: Node;
-  readonly sourceCarrier: TargetTypeRef;
-  readonly targetCarrier: TargetTypeRef;
-  readonly fields: readonly {
-    readonly declaration: Node;
-    readonly storageIndex: number;
-    readonly field?: RustProjectFieldSelection;
-    readonly accessor?: RustProjectAccessorSelection;
-    readonly readAdapter?: RustCallableValueAdapter;
-    readonly callable?: RustClassValueCallable;
-  }[];
-}
 
 export function selectRustProjectStructuralView(
   walk: RustFactWalk, declaration: Node, sourceCarrier: TargetTypeRef,
@@ -46,6 +29,3 @@ export function selectRustProjectStructuralView(
   })));
 }
 
-export interface RustProjectStructuralViewImplementation extends RustProjectStructuralView {
-  readonly ownerFileName: string;
-}

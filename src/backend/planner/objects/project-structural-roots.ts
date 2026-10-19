@@ -8,10 +8,11 @@ import { rustProjectRootType, rustProjectStateType } from "./polymorphism/names.
 import { planRustProjectRepresentationGenerics } from "./polymorphism/names.js";
 import type { RustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
-import type { RustProjectStructuralView } from "../../../analysis/objects/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function rustStructuralViewImplementationContext(
   carrier: TargetTypeRef, representation: RustObjectRepresentation, context: RustPlanContext,
@@ -24,15 +25,18 @@ export function rustStructuralViewImplementationGenerics(
 ): RustGenerics | undefined {
   const selected = planRustProjectRepresentationGenerics(representation, context);
   const generics = rustProjectImplementationGenerics(view.sourceCarrier, selected, context);
-  const requirements = context.input.program.declarationGenericRequirements.contractForStructuralView(view);
-  if (generics === undefined || requirements === undefined) return undefined;
-  const byName = new Map(requirements.typeParameters.map(parameter => [
-    context.typeParameterNames?.get(parameter.identity) ?? parameter.name, parameter.requirements,
-  ]));
-  return rustGenericsWithAssociatedBounds(generics.parameters.map(parameter => parameter.kind !== "type" ? parameter : {
-    ...parameter, bounds: [...new Map([...parameter.bounds, ...rustGenericRequirementBounds(byName.get(parameter.name) ?? [])]
+  const requirements = context.input.program.records.structuralViewRequirements.get(view);
+  const inventory = context.input.program.records.classImplementationGenerics.get(view.sourceCarrier);
+  if (generics === undefined || requirements === undefined || inventory === undefined) failRustPlannerInvariant("An admitted structural view requires its exact native generic inventory and requirements.", view.declaration);
+  const byIdentity = new Map(requirements.typeParameters.map(parameter => [parameter.identity, parameter.requirements]));
+  return rustGenericsWithAssociatedBounds(generics.parameters.map((parameter, index) => {
+    if (parameter.kind !== "type") return parameter;
+    const source = inventory.parameters[index - inventory.lifetimes.length];
+    if (source === undefined) failRustPlannerInvariant("An admitted structural view parameter requires its exact source identity.", view.declaration);
+    return {
+    ...parameter, bounds: [...new Map([...parameter.bounds, ...rustGenericRequirementBounds(byIdentity.get(source.identity) ?? [])]
       .map(bound => [closedMetadataKey(bound), bound])).values()],
-  }), [...new Map([...generics.wherePredicates, ...rustAssociatedPredicates(requirements.associatedTypes, context)]
+  }; }), [...new Map([...generics.wherePredicates, ...rustAssociatedPredicates(requirements.associatedTypes, context)]
     .map(predicate => [closedMetadataKey(predicate), predicate])).values()]);
 }
 
@@ -44,7 +48,7 @@ export function rustStructuralViewRootType(
   }
   if (representation.kind === "value") return undefined;
   const state = rustProjectStateType(carrier, context);
-  const environment = context.input.program.classValues.forDeclaration(representation.definition.declaration)?.environment;
+  const environment = context.input.program.records.classEnvironment.get(representation.definition.declaration)?.environment;
   const captures = environment?.instancesUseEnvironment ? rustClassEnvironmentHandleType(carrier, context) : undefined;
   if (state === undefined || environment?.instancesUseEnvironment && captures === undefined) return undefined;
   return { kind: "named", path: representation.kind === "shared-immutable" ? "rt::ObjectRefState" : "rt::ObjectHandleState",

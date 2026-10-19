@@ -13,8 +13,11 @@ import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js
 import type { RustClassValueCallable, RustClassValueForwarderEmission, RustClassValueForwarderRecords } from "../../../target-model/records/class-value-callables.js";
 import type { RustClassImplementationContext, RustClassImplementationGenerics, RustClassConstructorViewEmission, RustClassImplementationRecords } from "../../../target-model/records/class-implementations.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
+import type { RustShapeGenericRequirementContract } from "../../../target-model/records/generic-requirements.js";
 
 export interface RustClassEmissionProducer {
+  structuralViewRequirements(view: RustProjectStructuralView, value: RustShapeGenericRequirementContract): void;
   readonly implementationRecords: RustClassImplementationRecords;
   implementationContext(declaration: Node, carrier: TargetTypeRef, value: RustClassImplementationContext): void;
   implementationGenerics(carrier: TargetTypeRef, value: RustClassImplementationGenerics): void;
@@ -47,13 +50,20 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const implementationContexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
   const implementationGenerics = new Map<string, RustClassImplementationGenerics>();
   const constructorViews = new WeakMap<Node, Map<string, readonly RustClassConstructorViewEmission[]>>();
+  const viewRequirements = new WeakMap<RustProjectStructuralView, RustShapeGenericRequirementContract>();
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
     implementationRecords: Object.freeze({
+      structuralViewRequirements: Object.freeze({ get: (view: RustProjectStructuralView) => viewRequirements.get(view) }),
       classImplementationContext: Object.freeze({ get: (declaration: Node, carrier: TargetTypeRef) => implementationContexts.get(declaration)?.get(closedMetadataKey(carrier)) }),
       classImplementationGenerics: Object.freeze({ get: (carrier: TargetTypeRef) => implementationGenerics.get(closedMetadataKey(carrier)) }),
       classConstructorViews: Object.freeze({ get: (declaration: Node, fileName: string) => constructorViews.get(declaration)?.get(fileName) }),
     }),
+    structuralViewRequirements(view: RustProjectStructuralView, value: RustShapeGenericRequirementContract): void {
+      assertOpen();
+      if (viewRequirements.has(view)) failTargetAnalysisInvariant("tsonic-rust", "A native structural view has one generic requirement owner.", view.declaration);
+      viewRequirements.set(view, value);
+    },
     implementationContext(declaration: Node, carrier: TargetTypeRef, value: RustClassImplementationContext): void {
       assertOpen();
       let instances = implementationContexts.get(declaration);

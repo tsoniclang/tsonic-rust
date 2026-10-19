@@ -15,7 +15,7 @@ import { selectRustCallableValueAdapter } from "../../policy/conversions/callabl
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
 import { instantiateRustSelectedMemberCarrier } from "../operations/provider/member-carriers.js";
-import type { RustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 
 export type RustProjectStructuralViewSource = {
   readonly declaration: Node;

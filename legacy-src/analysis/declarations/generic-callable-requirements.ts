@@ -58,7 +58,7 @@ import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js"
 import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
-import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 import { rustProjectViewBindings } from "../objects/view-implementations.js";

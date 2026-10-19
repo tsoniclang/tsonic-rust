@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { analyzeRustFrozenReceiverCaptures } from "./frozen-receiver-captures.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";

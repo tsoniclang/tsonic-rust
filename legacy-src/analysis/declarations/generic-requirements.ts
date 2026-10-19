@@ -39,7 +39,7 @@ import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-n
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
-import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";

@@ -89,6 +89,9 @@ export function analyzeRustClassImplementations(program: Omit<RustTargetProgram,
   }
   for (const [declaration, files] of constructors) for (const [file, views] of files) producer.constructorViews(declaration, file, views);
   for (const view of program.classValues.instanceViewImplementations) {
+    const requirements = program.declarationGenericRequirements.contractForStructuralView(view);
+    if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its sealed native generic requirements.", view.declaration);
+    producer.structuralViewRequirements(view, requirements);
     const definition = program.projectTypes.definitionForDeclaration(view.declaration);
     const representation = program.objectRepresentations.representationFor(definition);
     if (definition === undefined || representation === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact source representation.", view.declaration);

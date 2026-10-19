@@ -15,8 +15,8 @@ import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan } from "./class-value-callables.js";
 import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
-import { selectRustProjectStructuralView,
-  type RustProjectStructuralView, type RustProjectStructuralViewImplementation } from "./project-structural-views.js";
+import { selectRustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "../../target-model/records/project-structural-views.js";
 import { rustProjectViewMatches, selectRustProjectViewImplementations } from "./view-implementations.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";

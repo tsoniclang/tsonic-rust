@@ -11,7 +11,7 @@ import type { RustSourceObjectShape } from "../project-types/source-type-registr
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { callableRestElement } from "../../target-model/records/callable-adapters.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
-import type { RustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources,
   type RustProjectStructuralViewSource } from "./project-structural-views-members.js";
 import { rustProjectViewMatches } from "./view-implementations.js";

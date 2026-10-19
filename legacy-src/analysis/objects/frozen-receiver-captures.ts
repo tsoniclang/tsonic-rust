@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
-import type { RustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import type { RustReceiverFieldCapture } from "../../target-model/records/receiver-captures.js";
 import type { RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
 
