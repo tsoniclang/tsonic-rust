@@ -1,7 +1,5 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
-import { diagnosticInput, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
-import { rustAuthoredFieldDeadCodeDisposition, rustGeneratedProjectInterfaceFieldDeadCodeDisposition, rustProjectInterfaceDeadCodeDisposition } from "../../program/reachability-directives.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -10,35 +8,28 @@ import type { PlannedProjectObjectField } from "../classes/planning.js";
 import type { RustItem, RustStructField } from "../../../target-ast/syntax/nodes.js";
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustProjectImplementationVisibility } from "../../objects/project-storage-abi.js";
 import { structAttributes } from "../struct-attributes.js";
 import { rustProjectStateIdentityImplementation } from "../../objects/project-identity.js";
 
-export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input.program.source;
+export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] {
   const admitted = context.input.program.records.nativeDeclaration.get(node);
   if (admitted?.kind !== "interface") return failRustPlannerInvariant(
     "Record-interface emission requires its sealed native declaration admission.", node);
   const { definition, name: interfaceName } = admitted;
-  const exported = ast.hasModifierKind(node, "export");
-  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, interfaceName);
-  const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
-  const interfaceVisibility = exported || publiclyReachable
-    ? "public" as const
-    : "crate" as const;
+  const emission = context.input.program.records.declarationLiveness.get(node);
+  if (emission?.interface === undefined) failRustPlannerInvariant("An admitted interface requires its native declaration liveness.", node);
+  const selectedLiveness = emission.interface;
+  const { publiclyReachable } = selectedLiveness;
+  const storageVisibility = publiclyReachable ? "public" as const : "crate" as const;
+  const interfaceVisibility = emission.visibility;
   const generics = rustProjectGenerics(definition, context);
-  const interfaceType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), context);
+  const interfaceType = rustTypeFromCarrierInContext(admitted.carrier, context);
   const stateType = rustProjectStateType(
-    context.input.program.projectTypes.openCarrier(definition),
+    admitted.carrier,
     context,
   );
   if (stateType === undefined || interfaceType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record-state-carrier",
-      "Record declaration has no renderable named Rust state carrier.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted record interface requires its renderable native interface and state carriers.", node);
   }
   const stateMarker = rustProjectStateMarker(definition, context);
   const fields: PlannedProjectObjectField[] = [];
@@ -47,12 +38,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     const keyType = rustTypeFromCarrierInContext(admitted.index.keyCarrier, context);
     const valueType = rustTypeFromCarrierInContext(admitted.index.valueCarrier, context);
     if (keyType === undefined || valueType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, admitted.index.declaration),
-        "rust.backend.record-index-carrier",
-        "An admitted record index requires its renderable native key and value carriers.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted record index requires its renderable native key and value carriers.", admitted.index.declaration);
     }
     indexField = {
       name: admitted.index.targetName,
@@ -70,12 +56,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   for (const field of admitted.fields) {
     const fieldType = rustTypeFromCarrierInContext(field.carrier, context);
     if (fieldType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, field.declaration),
-        "rust.backend.record",
-        `Record field '${field.targetName}' has no renderable native carrier.`,
-      ));
-      return undefined;
+      failRustPlannerInvariant("An admitted record field requires its renderable native carrier.", field.declaration);
     }
     fields.push({
       ...field,
@@ -84,30 +65,19 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       visibility: storageVisibility,
     });
   }
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
-  const stateCarrier = representation === undefined
-    ? undefined
-    : rustProjectObjectType(stateType, representation);
-  if (representation === undefined || representation.kind !== "value" && stateCarrier === undefined) {
+  const representation = admitted.representation;
+  const stateCarrier = rustProjectObjectType(stateType, representation);
+  if (representation.kind !== "value" && stateCarrier === undefined) {
     return failRustPlannerInvariant("An admitted record interface lost its native object representation.", node);
   }
   if (representation.kind !== "value") context.usedAliases?.add("rt");
   const interfaceAttributes = structAttributes(admitted.nonCamelCaseName) ?? [];
-  const interfaceDeadCode = rustProjectInterfaceDeadCodeDisposition(
-    context,
-    node,
-    publiclyReachable,
-  );
+  const interfaceDeadCode = selectedLiveness.deadCode;
   const explicitWrapperTraits = representation.kind !== "value" &&
     generics.parameters.some(parameter => parameter.kind === "type");
   const valueFields: RustStructField[] = [
       ...fields.map((field): RustStructField => {
-        const deadCode = rustAuthoredFieldDeadCodeDisposition(
-          context,
-          node,
-          field.declaration,
-          field.visibility === "public",
-        );
+        const deadCode = selectedLiveness.fields.get(field.declaration);
         return {
           name: field.targetName,
           type: field.type,
@@ -120,13 +90,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         : [{
             ...indexField,
             ...(() => {
-              const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
-                context,
-                node,
-                "index-storage",
-                publiclyReachable,
-                indexField.visibility === "public",
-              );
+              const deadCode = selectedLiveness.indexDeadCode;
               return deadCode === undefined ? {} : { deadCode };
             })(),
           }]),
