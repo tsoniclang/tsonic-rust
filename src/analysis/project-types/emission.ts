@@ -14,6 +14,7 @@ export function analyzeRustProjectEmission(input: {
   readonly producer: RustProjectEmissionProducer;
 }): void {
   const { program, producer } = input;
+  producer.structuralGenerics(program.declarationGenericRequirements.contractForCarrier);
   for (const definition of program.projectTypes.definitions) {
     const representation = program.objectRepresentations.representationFor(definition);
     producer.definition(definition, representation);

@@ -4,6 +4,7 @@ import type { RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustLifetimeRef, RustSourceGenericParameterContract } from "../lifetimes/model.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 import type { RustGenericRequirement, RustAssociatedTypeRequirement, RustOptionalStorageRequirement } from "./generic-requirements.js";
+import type { RustShapeGenericRequirementContract } from "./generic-requirements.js";
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
 
 export interface RustProjectGenericEmission {
@@ -16,6 +17,7 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly structuralGenerics: { readonly get: (carrier: TargetTypeRef) => RustShapeGenericRequirementContract | undefined };
   readonly projectType: { readonly get: (carrier: TargetTypeRef | undefined) => RustProjectTypeDefinition | undefined };
   readonly projectDeclaration: { readonly get: (declaration: Node | undefined) => RustProjectTypeDefinition | undefined };
   readonly projectMemberOwner: { readonly get: (declaration: Node | undefined) => RustProjectTypeDefinition | undefined };

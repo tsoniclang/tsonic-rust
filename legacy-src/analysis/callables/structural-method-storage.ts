@@ -18,7 +18,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStructuralGenericCarrier } from "../objects/structural-generic-carrier.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection,
-  RustStructuralShapeDefinition, RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
+  RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan, RustNativeCallableProducerConstruction } from "./native-producers.js";

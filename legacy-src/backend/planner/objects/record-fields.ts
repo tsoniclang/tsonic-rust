@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
+import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";

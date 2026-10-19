@@ -1,4 +1,4 @@
-import type { RustStructuralShapeDefinition } from "../../../analysis/objects/structural-shape-plan.js";
+import type { RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
 import type { RustExpr, RustGenerics, RustItem, RustTraitFunction, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import type { RustDeadCodeDisposition } from "../../../target-model/records/native-liveness.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";

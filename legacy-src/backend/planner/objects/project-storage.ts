@@ -15,7 +15,7 @@ import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
-import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
+import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
 import { readRustBoundRecordField, writeRustBoundRecordField, mutateRustBoundRecordField } from "./record-fields.js";
 import {
   createRustStructuralObject,

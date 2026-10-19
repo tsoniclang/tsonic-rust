@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectStructuralView } from "../../../analysis/objects/project-structural-views.js";
-import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
+import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
 import type { RustImplFunction, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
