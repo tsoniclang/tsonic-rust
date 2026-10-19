@@ -6,6 +6,7 @@ import type { RustGenericMemberEmission } from "../../target-model/records/gener
 import type { RustGenericCallableImplementation, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustGenericEmission(input: {
   readonly program: RustTargetProgram;
@@ -47,6 +48,7 @@ export function analyzeRustGenericEmission(input: {
       const effects = program.records.sourceCallEffects.get(declaration);
       const returned = program.records.sourceCallableReturn.get(declaration);
       const nativeReturn = returned === undefined ? undefined : rustNativeFutureCallableResult(returned.returnCarrier);
+      const memberError = errors?.members.get(member)?.awaiting;
       if (invoked && future !== undefined && (effects === undefined || returned === undefined ||
         asyncFact === undefined && nativeReturn === undefined || asyncFact !== undefined && asyncFact.kind !== "native-future"))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted native generic future requires exact source completion and effect evidence.", declaration);
@@ -56,7 +58,9 @@ export function analyzeRustGenericEmission(input: {
         future: future === undefined || effects === undefined || returned === undefined ? undefined : Object.freeze({
           effects, optional: asyncFact === undefined && nativeReturn?.optional === true,
           absent: returned.implementationCompletion === "absence",
-          unchangedAwaitError: errors !== undefined && errors.awaiting.length <= 1,
+          unchangedAwaitError: errors !== undefined && (errors.awaiting.length === 0 ||
+            errors.awaiting.length === 1 && memberError !== undefined &&
+              rustTargetTypeRefEquals(memberError.errorType, errors.awaiting[0]!.errorType)),
         }),
       }));
     }

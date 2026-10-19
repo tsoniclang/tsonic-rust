@@ -4,7 +4,7 @@ import type { RustExpr, RustGenericArgument, RustItem, RustPattern, RustType } f
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustNativeFutureType } from "../../types/native-futures.js";
 import type { RustGenericCallableErrorPlan } from "./generic-errors.js";
-import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export interface RustGenericNativeFutureInvocation {
   readonly member: RustGenericCallablePhysicalMember;
@@ -13,6 +13,7 @@ export interface RustGenericNativeFutureInvocation {
   readonly effects: RustGenericCallableEffectsFact;
   readonly optional: boolean;
   readonly absent: boolean;
+  readonly unchangedAwaitError: boolean;
 }
 
 export function planRustGenericNativeFutureDispatch(input: {
@@ -32,19 +33,22 @@ export function planRustGenericNativeFutureDispatch(input: {
     (effects.awaiting === "fallible") !== (input.errors.awaiting.errorType !== undefined) ||
     invocations.some(invocation => invocation.effects.awaiting === "not-applicable" || invocation.absent && !input.optional ||
       invocation.effects.invocation === "fallible" && effects.invocation !== "fallible" ||
-      !invocation.absent && invocation.effects.awaiting === "fallible" && effects.awaiting !== "fallible")) return undefined;
+      !invocation.absent && invocation.effects.awaiting === "fallible" && effects.awaiting !== "fallible"))
+    failRustPlannerInvariant("An admitted native future dispatch requires its exact effects and members.");
   const calls = new Map<RustGenericCallablePhysicalMember, RustExpr>();
   const awaitedValues = new Map<RustGenericCallablePhysicalMember, RustExpr>();
   for (const invocation of invocations) {
     const selected = input.errors.forMember(invocation.member);
     if (selected === undefined || selected.effects.invocation !== invocation.effects.invocation ||
-      selected.effects.awaiting !== invocation.effects.awaiting) return undefined;
-    const call = selected.invocation === undefined ? invocation.call : input.errors.invocation.propagate(selected.invocation, invocation.call);
+      selected.effects.awaiting !== invocation.effects.awaiting)
+      failRustPlannerInvariant("An admitted native future member requires its exact error channels.", invocation.member.implementation.declaration);
+    const call = selected.invocation === undefined ? invocation.call : input.errors.invocation.propagateReturn(selected.invocation, invocation.call);
     const awaited: RustExpr = { kind: "await", expr: { kind: "path", path: "future" } };
-    const converted = selected.awaiting === undefined ? undefined : input.errors.awaiting.propagate(selected.awaiting, awaited);
-    if (call === undefined || selected.awaiting !== undefined && converted?.kind !== "try") return undefined;
-    calls.set(invocation.member, call.kind === "try" ? { ...call, nativeReturn: true } : call);
-    awaitedValues.set(invocation.member, converted?.kind === "try" ? converted.expr :
+    const converted = selected.awaiting === undefined ? undefined : input.errors.awaiting.propagatedValue(selected.awaiting, awaited);
+    if (call === undefined || selected.awaiting !== undefined && converted === undefined)
+      failRustPlannerInvariant("An admitted native future member requires its selected error injection.", invocation.member.implementation.declaration);
+    calls.set(invocation.member, call);
+    awaitedValues.set(invocation.member, converted !== undefined ? converted :
       effects.awaiting === "fallible" ? { kind: "call", path: "Ok", args: [awaited] } : awaited);
   }
   const futureOutput = effects.awaiting === "fallible" ? resultType(input.output, input.errors.awaiting.errorType!) : input.output;
@@ -66,9 +70,7 @@ export function planRustGenericNativeFutureDispatch(input: {
     return { items: [], returnType: returnedType(futureType), body: { statements: [{ kind: "tail", expr: {
       kind: "match", expression: { kind: "path", path: "self" }, arms: invocations.map(invocation => {
         const call = invoked(invocation);
-        const selected = input.errors.forMember(invocation.member)!;
-        const unchanged = input.errors.awaiting.errorType === undefined || selected.awaiting !== undefined &&
-          rustTypeEquals(selected.awaiting.errorType, input.errors.awaiting.errorType);
+        const unchanged = invocation.unchangedAwaitError;
         const pending = (value: RustExpr): RustExpr => unchanged ? value : { kind: "block", body: { statements: [
           { kind: "let", name: "future", mutable: false, init: value },
           { kind: "tail", expr: { kind: "async-block", move: true,
