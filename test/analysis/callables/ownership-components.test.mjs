@@ -659,12 +659,12 @@ test("a fixed-self field remains excluded from this new physical ownership selec
   assert.equal(queries.componentForCallable(arrow) === undefined, true);
 });
 
-for (const change of [
-  capture => ({ ...capture, receiver: {} }),
-  capture => ({ ...capture, reference: {} }),
-  capture => ({ ...capture, declaration: {} }),
-  capture => ({ ...capture, references: [] }),
-]) test("stale field-capture evidence never supplies an exact receiver relationship", () => {
+for (const [label, change] of [
+  ["receiver={}", capture => ({ ...capture, receiver: {} })],
+  ["reference={}", capture => ({ ...capture, reference: {} })],
+  ["declaration={}", capture => ({ ...capture, declaration: {} })],
+  ["references=[]", capture => ({ ...capture, references: [] })],
+]) test(`stale field-capture evidence never supplies an exact receiver relationship [${label}]`, () => {
   const current = fixture(fieldSource);
   const arrow = current.arrows[0];
   const queries = current.analyze({ receiverCaptures: { ...current.receiverCaptures,

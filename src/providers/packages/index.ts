@@ -3,22 +3,26 @@ export { rustProviderPolicyContributionKind } from "./model.js";
 export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
-  RustProviderCrateDefinition,
   RustProviderDispatchContextRow,
+  RustProviderSemantics,
+} from "../../target-model/metadata/provider-metadata.js";
+export type {
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
-  RustProviderModuleAliasDefinition,
-  RustProviderModuleDefinition,
   RustProviderOperationDefinition,
   RustProviderOperationKind,
   RustProviderOperationRow,
+  RustProviderTypeDefinition,
+  RustProviderTypeRow,
+} from "../../target-model/identities/provider-relations.js";
+export type {
+  RustProviderCrateDefinition,
+  RustProviderModuleAliasDefinition,
+  RustProviderModuleDefinition,
   RustProviderPackageDefinition,
   RustProviderPackageImplementation,
   RustProviderPolicyContribution,
   RustProviderSourceDependency,
-  RustProviderSemantics,
-  RustProviderTypeDefinition,
-  RustProviderTypeRow,
 } from "./model.js";
 export type {
   RustProviderTypeParameterRequirement,
