@@ -77,18 +77,23 @@ export function planCallableExpression(
     return { kind: "tuple-literal", elements: [] };
   return context.input.program.records.closureCapture.get(node)?.invocationOwner === "shared-state"
     ? planRustSuspendedCallableConstruction(node, context)
-    : planRustCallableExpressionBody(node, context, resultUse);
+    : planRustCallableExpressionBody(node, context, resultUse)?.expression;
+}
+
+export interface RustCallableExpressionPlan {
+  readonly expression: RustExpr;
+  readonly sharedInvocation?: { readonly ownerName: string; readonly argumentsName: string; readonly body: RustBlock };
 }
 
 export function planRustCallableExpressionBody(
   node: Node,
   outerContext: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
-): RustExpr | undefined {
+): RustCallableExpressionPlan | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
   if (resultUse === "discarded" || rustCallableCreationIsErased(node, context))
-    return { kind: "tuple-literal", elements: [] };
+    return { expression: { kind: "tuple-literal", elements: [] } };
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -114,10 +119,13 @@ export function planRustCallableExpressionBody(
   const independent = context.input.program.records.receiverIndependentMethod.get(node);
   const frameAlternative = rustIndependentFrameConstruction(node, closureFact.resultCarrier, context);
   const constructionCarrier = frameAlternative?.carrier ?? independent?.carrier ?? closureFact.resultCarrier;
-  if (rustFrameCallableValue(constructionCarrier) !== undefined)
-    return planRustFrameCallableValue(node, constructionCarrier, context);
+  if (rustFrameCallableValue(constructionCarrier) !== undefined) {
+    const expression = planRustFrameCallableValue(node, constructionCarrier, context);
+    return expression === undefined ? undefined : { expression };
+  }
   if (rustGenericCallableValue(constructionCarrier) !== undefined) {
-    return planRustGenericCallableValue(node, constructionCarrier, context);
+    const expression = planRustGenericCallableValue(node, constructionCarrier, context);
+    return expression === undefined ? undefined : { expression };
   }
   const sourceCallableProtocol = rustCallableProtocol(closureFact.resultCarrier);
   const callableProtocol = rustCallableProtocol(constructionCarrier);
@@ -357,6 +365,7 @@ export function planRustCallableExpressionBody(
     controlFlow: { nextLoopId: 0 },
     controlTargets: undefined,
     completionBoundary: undefined,
+    returnResult: undefined,
     construction: undefined,
     expressionOverrides: context.construction === undefined ? leadingPlan.context.expressionOverrides : undefined,
     valueFieldLocations: context.construction === undefined ? leadingPlan.context.valueFieldLocations : undefined,
@@ -417,6 +426,7 @@ export function planRustCallableExpressionBody(
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
+  let invocationArgumentsName: string | undefined;
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean; type?: RustType }[];
   let closureMove = nativeClosureProtocol !== undefined &&
     (captureFact.captures.length > 0 || captureFact.receiverFields.length > 0 || captureFact.receivers.length > 0);
@@ -441,6 +451,7 @@ export function planRustCallableExpressionBody(
     const tupleName = leadingParameterPlans.length + sourceParameterPlans.length === 0
       ? `_${allocatedTupleName}`
       : allocatedTupleName;
+    invocationArgumentsName = tupleName;
     const tupleType = rustTypeFromCarrierInContext({ kind: "tuple", elements: callableProtocol.parameters }, context);
     if (tupleType === undefined) return undefined;
     closureParams = [
@@ -516,6 +527,7 @@ export function planRustCallableExpressionBody(
   const bodyContext: RustPlanContext = {
     ...callableClosureContext,
     functionReturnType: resultType,
+    returnResult: generator === undefined ? undefined : { errorType: callableErrorBoundary!.errorType },
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? bodyResultCarrier : undefined,
   };
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
@@ -531,7 +543,9 @@ export function planRustCallableExpressionBody(
   }
   const block = retainRustCheckedCompletion({
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
-      ? [planRustReturnExit(planRustAbsentValue(bodyResultCarrier, bodyContext), bodyContext)] : [])],
+      ? [planRustReturnExit(planRustAbsentValue(bodyResultCarrier, bodyContext), bodyContext)]
+      : generator !== undefined && isRustUnitCarrier(bodyResultCarrier) && context.input.program.records.callableDeclaration.get(node)?.canFallThrough === true
+        ? [planRustReturnExit(undefined, bodyContext)] : [])],
   }, !isRustUnitCarrier(bodyResultCarrier) && generator === undefined ? sourceReturn?.canFallThrough : undefined);
   if (!isRustUnitCarrier(bodyResultCarrier) && !rustBlockTerminates(block)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -586,38 +600,23 @@ export function planRustCallableExpressionBody(
       errorType: invocationErrorType!, inferErrorTypeFromReturnType: false,
     });
   }
-  const onlyStatement = finalizedBlock.statements.length === 1
-    ? finalizedBlock.statements[0]
-    : undefined;
-  const closure: RustExpr = asynchronous?.kind !== "native-future" && onlyStatement?.kind === "tail" &&
-      closureParams.every((parameter) => !parameter.mutable)
-    ? {
-      kind: "closure",
-      params: closureParams.map((parameter) => ({
-        name: parameter.name,
-        byRefCopy: parameter.byRefCopy === true,
-        ...(parameter.type === undefined ? {} : { type: parameter.type }),
-      })),
-      ...(closureMove ? { move: true } : {}),
-      body: onlyStatement.expr,
-    }
-    : {
-        kind: "closure-block",
-        params: closureParams,
-        move: closureMove,
-        async: asynchronous?.kind === "native-future",
-        body: finalizedBlock,
-      };
-  if (ownedStateName !== undefined) return closure;
-  if (borrowedInput) return { kind: "reference", mutable: false, expr: rustValueBlock(captureBindings, closure) };
+  const closure: RustExpr = {
+    kind: "closure-block",
+    params: closureParams,
+    move: closureMove,
+    async: asynchronous?.kind === "native-future",
+    body: finalizedBlock,
+  };
+  if (ownedStateName !== undefined) {
+    if (invocationArgumentsName === undefined) failRustPlannerInvariant("An admitted shared callable requires its selected invocation argument name.", node);
+    return { expression: closure, sharedInvocation: { ownerName: ownedStateName, argumentsName: invocationArgumentsName, body: finalizedBlock } };
+  }
+  if (borrowedInput) return { expression: { kind: "reference", mutable: false, expr: rustValueBlock(captureBindings, closure) } };
   if (callableProtocol === undefined) {
-    return nativeClosureProtocol === undefined || captureBindings.length === 0
-      ? closure
-      : rustValueBlock(captureBindings, closure);
+    return { expression: nativeClosureProtocol === undefined || captureBindings.length === 0
+      ? closure : rustValueBlock(captureBindings, closure) };
   }
-  if (callableType === undefined) {
-    return undefined;
-  }
+  if (callableType === undefined) return undefined;
   context.usedAliases?.add("rt");
   const callable = {
     kind: "associated-call" as const,
@@ -625,10 +624,7 @@ export function planRustCallableExpressionBody(
     method: recursiveName === undefined ? "new" : "recursive",
     args: [closure],
   };
-  const result = finishRuntimeCallableExpression(
-    callable,
-    captureBindings,
-  );
-  return frameAlternative === undefined ? result : frameAlternative.wrap(result);
+  const result = finishRuntimeCallableExpression(callable, captureBindings);
+  return { expression: frameAlternative === undefined ? result : frameAlternative.wrap(result) };
 }
 import { planRustReturnValueExpression } from "./value-destinations.js";

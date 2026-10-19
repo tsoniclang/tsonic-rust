@@ -25,6 +25,7 @@ export function planRustNativeCallableGenerics(
   }
   const context: RustPlanContext = { ...source.context, typeParameterNames };
   const parameters: RustGenericParameter[] = [];
+  const parameterSlots = new Map(source.parameterSlots);
   const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
   const requirements = context.promiseBody === true ? selected.bodyRequirements : selected.sourceRequirements;
   if (requirements === undefined) failRustPlannerInvariant(
@@ -51,9 +52,12 @@ export function planRustNativeCallableGenerics(
       const type = rustTypeFromCarrierInContext(input.implementation, context);
       if (type === undefined) failRustPlannerInvariant("An admitted native generic input requires its renderable implementation carrier.", declaration);
       if (selectedBounds.length > 0) predicates.push({ kind: "type", type, bounds: selectedBounds });
-    } else parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!, bounds: selectedBounds });
+    } else {
+      parameterSlots.set(input.implementation.identity, sourceGenerics.parameters.length + parameters.length);
+      parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!, bounds: selectedBounds });
+    }
   }
   const generics: RustGenerics = { parameters: [...sourceGenerics.parameters, ...parameters],
     wherePredicates: predicates };
-  return { ...source, context, finalizeGenerics: () => generics };
+  return { ...source, context, parameterSlots, finalizeGenerics: () => generics };
 }

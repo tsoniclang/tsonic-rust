@@ -90,6 +90,7 @@ import { createRustLexicalFunctionProducer } from "./lexical-functions.js";
 import { createRustCallableDeclarationProducer } from "./callable-emission.js";
 import { createRustMethodEmissionProducer } from "./method-emission.js";
 import { createRustFrameEmissionProducer } from "./frame-emission.js";
+import { createRustSuspendedCallableProducer } from "./suspended-callables.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -193,6 +194,7 @@ export function createRustProgramRecordBuilder(
   const callableDeclarationPlans = createRustCallableDeclarationProducer(assertOpen);
   const methodEmissionPlans = createRustMethodEmissionProducer(assertOpen);
   const frameEmissionPlans = createRustFrameEmissionProducer(assertOpen);
+  const suspendedCallablePlans = createRustSuspendedCallableProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -218,6 +220,8 @@ export function createRustProgramRecordBuilder(
     callableDeclaration: callableDeclarationPlans.records,
     ...methodEmissionPlans.records,
     ...frameEmissionPlans.records,
+    suspendedDeclaration: suspendedCallablePlans.implementations,
+    suspendedDeclarations: suspendedCallablePlans.declarations,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -317,6 +321,7 @@ export function createRustProgramRecordBuilder(
     callableDeclarationPlans,
     methodEmissionPlans,
     frameEmissionPlans,
+    suspendedCallablePlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,

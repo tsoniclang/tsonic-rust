@@ -27,6 +27,7 @@ export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
   readonly preservesExplicitLifetimes: boolean;
   readonly sourceTypeParameterIdentities: readonly string[];
+  readonly parameterSlots: ReadonlyMap<string, number>;
   finalizeGenerics(): RustGenerics;
 }
 
@@ -97,6 +98,7 @@ function planRustSourceCallableGenerics(
       context: { ...context, callableDeclaration: declaration },
       preservesExplicitLifetimes: false,
       sourceTypeParameterIdentities: Object.freeze([]),
+      parameterSlots: new Map(),
       finalizeGenerics: () => emptyRustGenerics,
     };
   }
@@ -174,31 +176,37 @@ function planRustSourceCallableGenerics(
   rustSourceDeclarationGenerics(declarationContract);
   const requirementsByIdentity = new Map([...requirementContract.typeParameters, ...requirementContract.capturedTypeParameters].map((parameter) =>
     [parameter.identity, parameter.requirements] as const));
+  const identities = new Map<RustGenericParameter, string>();
   const parameters = declarationContract.parameters.flatMap((parameter): readonly RustGenericParameter[] => {
     if (parameter.kind === "lifetime") {
       if (parameter.lifetime.kind !== "parameter") return Object.freeze([]);
-      return Object.freeze([{
+      const rendered: RustGenericParameter = {
         kind: "lifetime" as const,
         name: parameter.lifetime.name,
         outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
-      }]);
+      };
+      identities.set(rendered, rustLifetimeKey(parameter.lifetime));
+      return Object.freeze([rendered]);
     }
     if (specialization?.has(parameter.identity) === true) return Object.freeze([]);
     const requirements = requirementsByIdentity.get(parameter.identity);
     if (requirements === undefined) {
       failRustPlannerInvariant("Sealed callable generic requirements lost one exact source type parameter.", declaration);
     }
-    return Object.freeze([{
+    const rendered: RustGenericParameter = {
       kind: "type" as const,
       name: typeParameterNames.get(parameter.identity)!,
       bounds: rustTypeParameterBounds(parameter, requirements),
-    }]);
+    };
+    identities.set(rendered, parameter.identity);
+    return Object.freeze([rendered]);
   });
-  const generics: RustGenerics = rustGenericsWithAssociatedBounds([
+  const orderedParameters = [
     ...parameters.filter(parameter => parameter.kind === "lifetime"),
     ...parameters.filter(parameter => parameter.kind !== "lifetime"),
     ...(specialization === undefined ? rustOptionalStorageParameters(requirementContract.optionalStorage, context) : []),
-  ],
+  ];
+  const generics: RustGenerics = rustGenericsWithAssociatedBounds(orderedParameters,
     [...rustAssociatedPredicates(requirementContract.associatedTypes, { ...context, typeParameterSubstitutions: substitutions }),
       ...rustProjectProjectionPredicates(requirementContract.projectProjections, { ...context, typeParameterSubstitutions: substitutions })],
   );
@@ -212,6 +220,10 @@ function planRustSourceCallableGenerics(
       (parameter) => parameter.kind === "lifetime",
     ),
     sourceTypeParameterIdentities,
+    parameterSlots: new Map(orderedParameters.flatMap((parameter, index) => {
+      const identity = identities.get(parameter);
+      return identity === undefined ? [] : [[identity, index] as const];
+    })),
     finalizeGenerics: () => generics,
   };
 }

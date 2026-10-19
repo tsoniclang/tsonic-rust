@@ -16,23 +16,7 @@ import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolu
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import type { RustNativeCapturePlan } from "./native-captures.js";
 
-export interface RustSuspendedCallableImplementation {
-  readonly declaration: Node;
-  readonly sourceFileName: string;
-  readonly stateName: string;
-  readonly carrier: TargetTypeRef;
-  readonly captures: RustClosureCaptureFact["captures"];
-  readonly receiverFields: RustClosureCaptureFact["receiverFields"];
-  readonly receivers: RustClosureCaptureFact["receivers"];
-  readonly storage: readonly TargetTypeRef[];
-  readonly environment: ReturnType<typeof rustTargetGenericReferences>;
-  readonly signature: ReturnType<typeof rustTargetGenericReferences>;
-  readonly parameters: readonly RustSourceGenericParameterContract[];
-  readonly elision?: {
-    readonly parameterIndex: number;
-    readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
-  };
-}
+import type { RustSuspendedCallableImplementation } from "../../target-model/records/suspended-callables.js";
 
 export interface RustSuspendedCallablePlan {
   readonly implementations: readonly RustSuspendedCallableImplementation[];
