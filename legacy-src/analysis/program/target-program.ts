@@ -360,6 +360,7 @@ export function analyzeRustTargetProgram(
       return selected?.kind !== "resolved" || !selected.valueObserved && selected.singleInvocation;
     } });
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
+  analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records, ownership.ownership.reads, context.records.borrowedInitializers);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
@@ -464,7 +465,6 @@ export function analyzeRustTargetProgram(
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     ownership: ownership.ownership,
-    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.seal(),

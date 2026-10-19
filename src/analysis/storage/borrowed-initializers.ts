@@ -4,21 +4,13 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-
-export interface RustBorrowedInitializer {
-  readonly receiver: Node;
-  readonly carrier: TargetTypeRef;
-}
-
-export interface RustBorrowedInitializerQueries {
-  forExpression(expression: Node): RustBorrowedInitializer | undefined;
-}
+import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
+import type { RustBorrowedInitializerProducer } from "../program/records/borrowed-initializers.js";
 
 export function analyzeRustBorrowedInitializers(
   ast: AstReader, nativeNodes: readonly Node[], records: RustProgramRecords,
-): RustBorrowedInitializerQueries {
-  const selections = new WeakMap<Node, RustBorrowedInitializer>();
+  reads: RustOwnershipRecords["reads"], producer: RustBorrowedInitializerProducer,
+): void {
   const select = (expression: Node): void => {
     let source = expression;
     while (ast.is.IsParenthesizedExpression(source) || ast.is.IsAsExpression(source) ||
@@ -43,7 +35,7 @@ export function analyzeRustBorrowedInitializers(
       rustTargetGenericReferences(abi.result.carrier).elisionInputs.some(lifetime => lifetime.kind === "placeholder") &&
       rustTargetGenericReferences(result).elisionInputs.some(lifetime => lifetime.kind === "placeholder")
       ? Object.freeze({ receiver, carrier: input.sourceCarrier }) : undefined;
-    if (selected !== undefined) selections.set(expression, selected);
+    if (selected !== undefined && reads.get(selected.receiver)?.readsStorage !== true) producer.retain(expression, selected);
   };
   const visit = (node: Node): void => {
     if (ast.is.IsVariableDeclaration(node)) {
@@ -52,5 +44,4 @@ export function analyzeRustBorrowedInitializers(
     }
   };
   nativeNodes.forEach(visit);
-  return Object.freeze({ forExpression: (expression: Node) => selections.get(expression) });
 }
