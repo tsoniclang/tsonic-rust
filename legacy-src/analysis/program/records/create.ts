@@ -80,6 +80,8 @@ import { createRustAssignmentWriteProducer } from "./assignment-writes.js";
 import { createRustBorrowedElementProducer } from "./borrowed-element-reads.js";
 import { createRustFieldWriteProducer } from "./field-writes.js";
 import { createRustDeclarationEmissionProducer } from "./declaration-emission.js";
+import { createRustNativeDeclarationProducer } from "./native-declarations.js";
+import { createRustNativeLivenessProducer } from "./native-liveness.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -170,11 +172,16 @@ export function createRustProgramRecordBuilder(
   const borrowedElements = createRustBorrowedElementProducer(assertOpen);
   const fieldWrites = createRustFieldWriteProducer(assertOpen);
   const declarationEmission = createRustDeclarationEmissionProducer(assertOpen);
+  const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
+  const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
 
   const records: RustAnalysisRecords = Object.freeze({
     ...borrowedElements.records,
     ...fieldWrites.records,
     ...declarationEmission.records,
+    nativeDeclaration: nativeDeclarations.declarations,
+    nativeTypeFamilyImplementations: nativeDeclarations.implementations,
+    declarationLiveness: nativeLiveness.declarations,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -264,6 +271,8 @@ export function createRustProgramRecordBuilder(
     borrowedElements,
     fieldWrites,
     declarationEmission,
+    nativeDeclarations,
+    nativeLiveness,
     assertOpen,
     nativeHandlers,
     typeAliasDeclarations,

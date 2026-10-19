@@ -16,7 +16,7 @@ export function planRustTypeFamilyDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const admitted = context.input.program.nativeDeclarations.get(declaration);
+  const admitted = context.input.program.records.nativeDeclaration.get(declaration);
   if (admitted?.kind !== "alias" || admitted.fact.kind !== "family" || admitted.family === undefined) {
     return failRustPlannerInvariant("Type-family emission requires its exact sealed declaration and native name.", declaration);
   }
@@ -33,7 +33,9 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
   const baseContext = context;
-  for (const admitted of context.input.program.nativeDeclarations.implementations) {
+  const implementations = context.input.program.records.nativeTypeFamilyImplementations.get(context.sourceFile);
+  if (implementations === undefined) failRustPlannerInvariant("A source file requires its sealed native type-family implementations.", context.sourceFile);
+  for (const admitted of implementations) {
     const { implementation } = admitted;
     context = baseContext;
     if (implementation.sourceFileName !== fileName) continue;

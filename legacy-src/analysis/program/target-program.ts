@@ -77,6 +77,7 @@ import { analyzeRustFieldProjectionAssignments } from "../storage/field-projecti
 import { analyzeRustAssignmentWrites } from "../storage/assignment-writes.js";
 import { analyzeRustFieldWrites } from "../storage/field-writes.js";
 import { analyzeRustDeclarationEmission } from "../declarations/emission.js";
+import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -410,7 +411,7 @@ export function analyzeRustTargetProgram(
     representations: objectRepresentations, projectTypes, nativeStorage: callableValues.value.nativeStorage,
     lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords });
   if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
-  const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
+  const program: Omit<RustTargetProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
     sourceOutputIdentities: sourceOutputIdentities.identities,
@@ -491,11 +492,13 @@ export function analyzeRustTargetProgram(
     objectRepresentations, typeFamilies: program.typeFamilies,
     genericRequirements: declarationGenericRequirements.index });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
+  context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
+  analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
+    producer: context.records.nativeLiveness, required: context.requiredRecords });
   context.callableValues.publish();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({ ...program,
-    nativeDeclarations: nativeDeclarations.forms,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
     reachability }));
 }

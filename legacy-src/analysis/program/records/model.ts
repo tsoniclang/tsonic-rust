@@ -8,6 +8,8 @@ import type { RustAssignmentWriteProducer } from "./assignment-writes.js";
 import type { RustBorrowedElementProducer } from "./borrowed-element-reads.js";
 import type { RustFieldWriteProducer } from "./field-writes.js";
 import type { RustDeclarationEmissionProducer } from "./declaration-emission.js";
+import type { RustNativeDeclarationProducer } from "./native-declarations.js";
+import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
 import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
 import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
@@ -101,6 +103,8 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly borrowedElements: RustBorrowedElementProducer;
   readonly fieldWrites: RustFieldWriteProducer;
   readonly declarationEmission: RustDeclarationEmissionProducer;
+  readonly nativeDeclarations: RustNativeDeclarationProducer;
+  readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeHandlers: RustNativeHandlerProducer;
   readonly assertOpen: () => void;
   readonly conversions: RustConversionProducer;

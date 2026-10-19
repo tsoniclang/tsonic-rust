@@ -16,7 +16,7 @@ import { rustProjectStateIdentityImplementation } from "../../objects/project-id
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input.program.source;
-  const admitted = context.input.program.nativeDeclarations.get(node);
+  const admitted = context.input.program.records.nativeDeclaration.get(node);
   if (admitted?.kind !== "interface") return failRustPlannerInvariant(
     "Record-interface emission requires its sealed native declaration admission.", node);
   const { definition, name: interfaceName } = admitted;

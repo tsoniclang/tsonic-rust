@@ -13,7 +13,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const admitted = context.input.program.nativeDeclarations.get(node);
+  const admitted = context.input.program.records.nativeDeclaration.get(node);
   if (admitted?.kind !== "alias") return failRustPlannerInvariant(
     "Type-alias emission requires its sealed native declaration admission.", node);
   const { fact, name: aliasName } = admitted;

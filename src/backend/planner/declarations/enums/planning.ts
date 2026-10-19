@@ -1,6 +1,4 @@
 import { rustDeriveAttributes, rustListAttribute, rustWordAttribute } from "../../../target-ast/syntax/attributes.js";
-import { isUpperSnakeName, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
-import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition, rustGeneratedEnumDiscriminantDeadCodeDisposition } from "../../program/reachability-directives.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
@@ -8,25 +6,19 @@ import type { RustItem } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
-export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input.program.source;
-  const admitted = context.input.program.nativeDeclarations.get(node);
+export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] {
+  const admitted = context.input.program.records.nativeDeclaration.get(node);
   if (admitted?.kind !== "enum") return failRustPlannerInvariant(
     "Enum emission requires its sealed native declaration admission.", node);
   const enumName = admitted.name;
   const variants = admitted.variants;
   const integerType = admitted.integerWidth === 32 ? "i32" : "i64";
-  const visibility = ast.hasModifierKind(node, "export") ||
-      rustProjectTypeHasPublicImplementationAbi(context, enumName)
-    ? "public" as const
-    : "crate" as const;
-  const deadCode = rustAuthoredDeadCodeDisposition(context, node);
+  const emission = context.input.program.records.declarationLiveness.get(node);
+  if (emission === undefined) failRustPlannerInvariant("An admitted enum requires its native visibility and liveness decisions.", node);
+  const { visibility, deadCode } = emission;
   if (admitted.representation === "constants") {
     const enumType = { kind: "named" as const, path: enumName };
-    const discriminantDeadCode = rustGeneratedEnumDiscriminantDeadCodeDisposition(
-      context,
-      node,
-    );
+    const discriminantDeadCode = emission.enumDiscriminant;
     return [{
       kind: "struct",
       name: enumName,
@@ -46,13 +38,11 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       kind: "impl",
       generics: emptyRustGenerics,
       target: enumType,
-      members: variants.map((variant) => {
-        const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
-          context,
-          node,
-          variant.name,
-        );
-        const constantAttrs = isUpperSnakeName(variant.name)
+      members: variants.map((variant, index) => {
+        const selected = emission.variants[index];
+        if (selected === undefined) failRustPlannerInvariant("An admitted enum member requires its native liveness selection.", variant.declaration);
+        const variantDeadCode = selected.deadCode;
+        const constantAttrs = !selected.nonUpperCaseConstant
             ? []
             : [rustLintAttributes.nonUpperCaseGlobal];
         return {
@@ -82,12 +72,10 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     ...(deadCode === undefined ? {} : { deadCode }),
     attrs: [rustListAttribute("repr", [rustWordAttribute(integerType)]),
       ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"])],
-    variants: variants.map((variant) => {
-      const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
-        context,
-        node,
-        variant.name,
-      );
+    variants: variants.map((variant, index) => {
+      const selected = emission.variants[index];
+      if (selected === undefined) failRustPlannerInvariant("An admitted enum member requires its native liveness selection.", variant.declaration);
+      const variantDeadCode = selected.deadCode;
       return {
         name: variant.name,
         discriminant: variant.discriminant,

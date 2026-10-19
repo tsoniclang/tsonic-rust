@@ -384,17 +384,7 @@ export type RustSelfParam =
 
 export type RustVisibility = "private" | "parent" | "crate" | "public";
 
-export type RustDeadCodeDisposition =
-  | "authored-declaration"
-  | "authored-unread-field"
-  | "authored-unused-variant"
-  | "generated-enum-discriminant"
-  | "generated-retained-constructor"
-  | "generated-unconstructed-instance"
-  | "generated-unconstructed-shape"
-  | "generated-unconstructed-variant"
-  | "generated-unused-dispatch"
-  | "generated-unused-storage";
+import type { RustDeadCodeDisposition } from "../../../target-model/records/native-liveness.js";
 
 export interface RustStructField {
   readonly name: string;
