@@ -8,7 +8,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planResourceDeclarations } from "./resource-management.js";
 import { planExpression, planExpressionBeforeValueProjections, planNumericLiteralWithCarrier } from "../expressions/index.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
-import { planExpressionAsStatement } from "./expression-statements.js";
+import { planExpressionAsStatement } from "./statement-simple.js";
 import { planVariableStatement } from "../bindings/locals.js";
 import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { planCondition, planEmbeddedBlock } from "./statement-conditionals.js";

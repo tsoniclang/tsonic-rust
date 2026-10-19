@@ -4,6 +4,7 @@ import type { RustProgramRecords, RustRecordFamily } from "../../../target-model
 import type { RustResourceScopeProducer } from "./resource-scopes.js";
 import type { RustLocalBindingProducer } from "./local-bindings.js";
 import type { RustFieldProjectionAssignmentProducer } from "./field-projection-assignment.js";
+import type { RustAssignmentWriteProducer } from "./assignment-writes.js";
 import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
 import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
 import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
@@ -93,6 +94,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly resourceScopes: RustResourceScopeProducer;
   readonly localBindings: RustLocalBindingProducer;
   readonly fieldProjectionAssignments: RustFieldProjectionAssignmentProducer;
+  readonly assignmentWrites: RustAssignmentWriteProducer;
   readonly nativeHandlers: RustNativeHandlerProducer;
   readonly assertOpen: () => void;
   readonly conversions: RustConversionProducer;

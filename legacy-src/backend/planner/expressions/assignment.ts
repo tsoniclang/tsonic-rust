@@ -9,7 +9,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planExpressionAsStatement } from "../statements/expression-statements.js";
+import { planExpressionAsStatement } from "../statements/statement-simple.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpressionBeforeContextualConversion } from "./entry.js";

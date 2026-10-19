@@ -17,7 +17,7 @@ import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
 import type { RustAssignmentOperationFact } from "../../../target-model/records/operator-selection.js";
-import { planRustAssignmentWrite } from "../statements/expression-statements.js";
+import { planRustAssignmentWrite } from "../statements/assignment-writes.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier } from "./fundamentals.js";

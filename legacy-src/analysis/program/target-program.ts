@@ -74,6 +74,7 @@ import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 import { analyzeRustFieldProjectionAssignments } from "../storage/field-projection-assignment.js";
+import { analyzeRustAssignmentWrites } from "../storage/assignment-writes.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -477,6 +478,9 @@ export function analyzeRustTargetProgram(
   analyzeRustFieldProjectionAssignments({ ast: context.ast, nodes: context.nativeNodes, records,
     navigation: context.source.navigation, projectTypes, representations: objectRepresentations,
     dispatch: program.projectFieldDispatch, producer: context.records.fieldProjectionAssignments, required: context.requiredRecords });
+  const assignmentWriteIssues = analyzeRustAssignmentWrites({ program, nodes: context.nativeNodes,
+    producer: context.records.assignmentWrites, required: context.requiredRecords });
+  if (assignmentWriteIssues.length !== 0) return rejectedTargetStage(assignmentWriteIssues);
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,

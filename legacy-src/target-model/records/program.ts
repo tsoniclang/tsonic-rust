@@ -31,6 +31,7 @@ import type { RustStatementCompletionRecords } from "./statement-completion.js";
 import type { RustResourceScopeRecords } from "./resource-scopes.js";
 import type { RustLocalBindingCompletion } from "./local-bindings.js";
 import type { RustFieldProjectionAssignment } from "./field-projection-assignment.js";
+import type { RustAssignmentWriteCompletion } from "./assignment-writes.js";
 
 export interface RustRecordFamily<T> {
   readonly get: (subject: ExtensionFactSubject | undefined) => T | undefined;
@@ -76,6 +77,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly mutatedReferentBinding: RustRecordFamily<{ readonly mutableBinding: true }>;
   readonly localBinding: RustRecordFamily<RustLocalBindingCompletion>;
   readonly fieldProjectionAssignment: RustRecordFamily<RustFieldProjectionAssignment>;
+  readonly assignmentWrite: RustRecordFamily<RustAssignmentWriteCompletion>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;
