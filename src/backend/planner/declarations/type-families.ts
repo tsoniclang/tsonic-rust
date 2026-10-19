@@ -2,11 +2,9 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGenerics, RustItem } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput } from "../program/plan-context.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics } from "../objects/polymorphism/names.js";
-import { rustAuthoredDeadCodeDisposition } from "../program/reachability-directives.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { planRustIndexedFieldImplementation } from "./classes/indexed-fields.js";
@@ -15,13 +13,15 @@ import { rustGeneratedTypeParameterContext } from "../names/type-parameters.js";
 export function planRustTypeFamilyDeclaration(
   declaration: Node,
   context: RustPlanContext,
-): readonly RustItem[] | undefined {
+): readonly RustItem[] {
   const admitted = context.input.program.records.nativeDeclaration.get(declaration);
   if (admitted?.kind !== "alias" || admitted.fact.kind !== "family" || admitted.family === undefined) {
     return failRustPlannerInvariant("Type-family emission requires its exact sealed declaration and native name.", declaration);
   }
   const name = admitted.name;
-  const deadCode = rustAuthoredDeadCodeDisposition(context, declaration);
+  const liveness = context.input.program.records.declarationLiveness.get(declaration);
+  if (liveness === undefined) failRustPlannerInvariant("An admitted type family requires its native declaration liveness.", declaration);
+  const { deadCode } = liveness;
   return [{
     kind: "trait", visibility: "public", name, generics: emptyRustGenerics,
     ...(deadCode === undefined ? {} : { deadCode }),
@@ -40,17 +40,10 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
     context = baseContext;
     if (implementation.sourceFileName !== fileName) continue;
     if (implementation.family.kind === "indexed") {
-      const selected = planRustIndexedFieldImplementation(admitted, context);
-      if (selected === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
-        "rust.backend.indexed-field-implementation", "A dependent field has no exact native storage implementation."));
-      else items.push(...selected);
+      items.push(...planRustIndexedFieldImplementation(admitted, context));
       continue;
     }
-    const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
-      kind: "tuple", elements: [implementation.owner, implementation.output],
-    });
-    if (contract === undefined) return failRustPlannerInvariant(
-      "An admitted type-family implementation lost its selected native generic contract.");
+    const contract = admitted.genericContract;
     context = rustGeneratedTypeParameterContext(contract.typeParameters, [], context);
     const owner = rustTypeFromCarrierInContext(implementation.owner, context);
     const trait = rustTypeFromCarrierInContext({ ...implementation.family.trait,
@@ -64,9 +57,7 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
       };
     const generics = definition === undefined ? compoundGenerics : rustProjectGenerics(definition, context);
     if (owner === undefined || trait === undefined || output === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, implementation.family.declaration),
-        "rust.backend.type-family-implementation", "A checked type family implementation has no exact native declaration contract."));
-      continue;
+      failRustPlannerInvariant("An admitted type-family implementation requires renderable native owner, trait and output types.", implementation.family.declaration);
     }
     items.push({ kind: "impl", trait, target: owner, generics,
       members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: output }] });
