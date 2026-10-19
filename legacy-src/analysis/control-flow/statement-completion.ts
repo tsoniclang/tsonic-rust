@@ -30,6 +30,8 @@ import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
 import type { RustStatementCompletionProducer } from "../program/records/statement-completion.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
+import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
+import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
@@ -43,6 +45,7 @@ export interface RustStatementCompletionInput {
   readonly producer: RustStatementCompletionProducer;
   readonly required: RustRequiredRecord[];
   readonly countedLoops: ReadonlyMap<Node, RustCountedLoopRepresentation>;
+  readonly safetyApplications: RustSafetyApplicationFactIndex;
 }
 
 export type RustStatementCompletionSelection =
@@ -258,6 +261,12 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     }
   };
   const setter = (node: Node, operation: Extract<RustTargetOperationFact, { readonly kind: "runtime-set" }>): void => {
+    if (operation.abi.effects.safety === "requires-unsafe" &&
+      !rustSourceHasExplicitUnsafeContext(ast, node, input.safetyApplications)) {
+      diagnostics.push({ code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED", category: "error", source: "tsonic-rust",
+        message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.", sourceNode: node });
+      return;
+    }
     const inputs = rustRuntimeSetSourceInputs(ast, node, operation);
     if (inputs === undefined) {
       reject(node, "RUST_SETTER_ABI_NOT_PROVEN", "Assignment requires one exact synchronous native setter ABI and checked source operands.");

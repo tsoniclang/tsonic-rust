@@ -5,7 +5,7 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./planning.js";
 import { planDoStatement, planWhileStatement } from "./statement-conditionals.js";
 import { planForStatement } from "./statement-for.js";
-import { planForInStatement, planForOfStatement } from "./iteration.js";
+import { planForInStatement, planForOfStatement } from "./statement-loops.js";
 import { createRustBreakTarget, withRustControlTarget } from "./loop-regions.js";
 
 export function planLabeledStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {

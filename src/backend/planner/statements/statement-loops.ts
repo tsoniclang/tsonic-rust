@@ -30,21 +30,11 @@ export function planRuntimeSetStatement(
   const admitted = context.input.program.records.runtimeSetter.get(expression);
   if (admitted === undefined) failRustPlannerInvariant("Runtime setter requires its admitted native source operands and ABI correspondence.", expression);
   const sourceArgumentNodes = admitted.sourceArguments;
-  if (fact.abi.effects.safety === "requires-unsafe" &&
-    (context.explicitUnsafeContextDepth ?? 0) === 0) {
-    context.diagnostics.push({
-      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
-      category: "error",
-      source: "tsonic-rust",
-      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
-      sourceNode: expression,
-    });
-    return undefined;
-  }
   const native = planProviderOperationExpression(context, fact, admitted.receiver, sourceArgumentNodes, expression, { resultUse: "value" });
-  if (native === undefined) return undefined;
+  if (native === undefined) failRustPlannerInvariant("An admitted runtime setter requires its native operation plan.", expression);
   const completed = finishProviderOperationExpression(context, fact, native, expression);
-  return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
+  if (completed === undefined) failRustPlannerInvariant("An admitted runtime setter requires its native completion plan.", expression);
+  return [{ kind: "expr", expr: completed }];
 }
 
 export function planForOfStatement(
@@ -66,7 +56,7 @@ export function planForOfStatement(
   const borrowedIterable = fact.lowering.kind === "borrowed" && fact.lowering.input === "reference" || fact.lowering.kind === "js-array";
   const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context, "value", borrowedIterable ? "shared-reference" : "value");
   if (iterable === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted iteration requires its native collection value plan.", node);
   }
   const bodyNode = ForInOrOfStatement_Statement(context.input.program.source.ast, node);
   if (bodyNode === undefined) {
@@ -76,15 +66,12 @@ export function planForOfStatement(
     );
   }
   const target = createRustLoopTarget(context, node, []);
-  if (target === undefined) {
-    return undefined;
-  }
   const resourceBinding = completion.resource !== undefined;
   const resourceFact = completion.resource !== undefined
     ? resourceFactForPlanning(completion.resource, context)
     : undefined;
   if (resourceBinding && resourceFact === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted resource iteration requires its native disposal fact.", node);
   }
   const borrowedBinding = resourceBinding || bindingPattern !== undefined ? undefined
     : context.input.program.borrowedElementReads.forIteration(node);
@@ -120,7 +107,7 @@ export function planForOfStatement(
           : { statements: [resourceScope] };
       })();
   if (body === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted iteration requires its native body plan.", bodyNode);
   }
   if (bindingPattern !== undefined) {
     const bindings = planRustBindingPattern(
@@ -131,13 +118,13 @@ export function planForOfStatement(
       planExpression,
     );
     if (bindings === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted iteration pattern requires its native bindings.", bindingPattern);
     }
     body = { statements: [...bindings, ...body.statements] };
   }
   if (selectedBinding.kind === "assignment") {
     const activation = activateIterationBinding(selectedBinding, { kind: "path", path: binding }, context);
-    if (activation === undefined) return undefined;
+    if (activation === undefined) failRustPlannerInvariant("An admitted iteration assignment requires its native binding activation.", node);
     body = { statements: [...activation, ...body.statements] };
   }
   const bindingMutable = selectedBinding.kind === "declaration" && selectedBinding.mutable ||
@@ -190,8 +177,7 @@ export function planForOfStatement(
           : iterable],
       }
     : fact.lowering.kind === "js-array"
-      ? { kind: "method-call", receiver: iterable.kind === "reference"
-          ? iterable.expr : iterable, method: "iter_values", args: [] }
+      ? { kind: "method-call", receiver: iterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
         ? { kind: "method-call", receiver: iterable, method: fact.lowering.name, args: [] }
       : fact.lowering.kind === "owned-call"
@@ -210,7 +196,7 @@ export function planForOfStatement(
     loopBindingMutable = false;
     const item = rustPropagateLocalError(context.fallibleBoundary!, { kind: "named", path: "js_abi::JsError" },
       { kind: "path", path: loopBinding });
-    if (item === undefined) return undefined;
+    if (item === undefined) failRustPlannerInvariant("An admitted fallible iteration requires its native error transport.", node);
     body = {
       statements: [
         {
@@ -251,15 +237,9 @@ export function planForInStatement(
   const expression = expressionNode === undefined ? undefined : planExpression(expressionNode, context);
   const bodyNode = ForInOrOfStatement_Statement(ast, node);
   if (bodyNode === undefined || expressionNode === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("for-in requires its checked source body, receiver and native name frame.", node);
-  if (expression === undefined) return undefined;
+  if (expression === undefined) failRustPlannerInvariant("An admitted property-key iteration requires its collection value plan.", node);
   const target = createRustLoopTarget(context, node, []);
-  if (target === undefined) {
-    return undefined;
-  }
   const body = planBlockLike(bodyNode, withRustControlTarget(context, target));
-  if (body === undefined) {
-    return undefined;
-  }
   if (fact.lowering.kind === "dense-index-keys") {
     const lengthName = allocateRustSyntheticName(context.syntheticNames, "for_in_length");
     const indexName = allocateRustSyntheticName(context.syntheticNames, "for_in_index");
@@ -269,7 +249,7 @@ export function planForInStatement(
       method: "to_string",
       args: [],
     }, context);
-    if (activation === undefined) return undefined;
+    if (activation === undefined) failRustPlannerInvariant("An admitted property-key iteration requires its native binding activation.", node);
     return [{
       kind: "scope",
       body: {
@@ -306,7 +286,7 @@ export function planForInStatement(
   const activation = binding.kind === "assignment"
     ? activateIterationBinding(binding, { kind: "path", path: keyName }, context)
     : [];
-  if (activation === undefined) return undefined;
+  if (activation === undefined) failRustPlannerInvariant("An admitted property-key iteration requires its native binding activation.", node);
   const iterable: RustExpr = fact.lowering.kind === "js-array-index-keys" || fact.lowering.kind === "record-keys"
     ? {
         kind: "method-call",
@@ -349,9 +329,12 @@ function activateIterationBinding(
   const moduleStore = planRustModuleBindingStore(binding.reference, value, context);
   if (moduleStore !== undefined) return [{ kind: "expr", expr: moduleStore }];
   const promoted = planRustPromotedStorageWrite(binding.reference, "=", value, context, planExpression);
-  if (promoted.handled) return promoted.statement === undefined ? undefined : [promoted.statement];
+  if (promoted.handled) {
+    if (promoted.statement === undefined) failRustPlannerInvariant("An admitted iteration assignment requires its promoted storage write.", binding.reference);
+    return [promoted.statement];
+  }
   const target = planRustDirectStorage(binding.reference, context);
-  if (target === undefined) return undefined;
+  if (target === undefined) failRustPlannerInvariant("An admitted iteration assignment requires its native destination.", binding.reference);
   return [{
     kind: "assign",
     target,

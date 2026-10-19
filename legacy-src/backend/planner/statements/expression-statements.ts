@@ -38,7 +38,7 @@ import {
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
-import { planRuntimeSetStatement } from "./iteration.js";
+import { planRuntimeSetStatement } from "./statement-loops.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
 import { planRustBuiltinErrorAssignment } from "./assignments.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField, writeRustUnionField } from "../expressions/unions.js";
