@@ -375,6 +375,7 @@ export function analyzeRustTargetProgram(
     producer: context.records.statementCompletions, required: context.requiredRecords,
     safetyApplications: context.safetyApplications,
     components: sourcePackageComponents,
+    ownership: ownership.ownership, projectTypes,
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);

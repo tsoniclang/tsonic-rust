@@ -35,6 +35,10 @@ import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 import { admitRustThrowCompletion } from "../errors/throw-admission.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
+import type { RustAssignmentValueSelection } from "../../target-model/records/operator-selection.js";
+import { selectRustAssignmentValue } from "../../policy/operations/operators/assignment-value.js";
+import type { RustOwnershipRecords } from "../../target-model/records/ownership.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
@@ -50,6 +54,8 @@ export interface RustStatementCompletionInput {
   readonly countedLoops: ReadonlyMap<Node, RustCountedLoopRepresentation>;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly components: RustSourcePackageComponentClassifications;
+  readonly ownership: RustOwnershipRecords;
+  readonly projectTypes: RustProjectTypePolicy;
 }
 
 export type RustStatementCompletionSelection =
@@ -103,6 +109,8 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   const labels = new Map<Node, SourceLabeledStatementTarget>();
   const throws = new Map<Node, RustThrowCompletion>();
   const catches = new Map<Node, RustCatchBinding>();
+  const assignmentValues = new Map<Node, RustAssignmentValueSelection>();
+  const methodWrites = new Map<Node, boolean>();
   const frames = new Map<Node, { readonly asynchronous: boolean; readonly fallible: boolean;
     readonly region: RustErrorRegionSelection | undefined }>();
   const reject = (node: Node, code: string, message: string): void => {
@@ -316,6 +324,42 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       return;
     }
     publish(assignments, node, operation);
+    let target = ast.is.IsBinaryExpression(node) ? BinaryExpression_Left(ast, node) : Node_Operand(ast, node);
+    const read = target === undefined ? undefined : input.ownership.reads.get(target);
+    const right = ast.is.IsBinaryExpression(node) ? BinaryExpression_Right(ast, node) : undefined;
+    if (operation.operator !== "=" && read === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted compound assignment requires its selected previous-value ownership.", node);
+    const borrowed = operation.kind === "operator-call" && operation.operandModes[0] === "ref" && read?.value.kind === "borrow" &&
+      right !== undefined && read.borrowedAcross.has(right);
+    const previous = borrowed ? read!.value : read?.snapshot ?? read?.source ?? { kind: "copy" as const };
+    const value = selectRustAssignmentValue(operation, previous);
+    if (value === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted assignment requires its selected native value operation.", node);
+    publish(assignmentValues, node, value);
+    while (target !== undefined && target !== node) {
+      publish(assignmentValues, target, value);
+      const targetOperation = records.targetOperation.get(target);
+      if (targetOperation?.kind === "source-method-property") {
+        const definition = input.projectTypes.definitionForCarrier(targetOperation.receiverCarrier);
+        if (definition === undefined) failTargetAnalysisInvariant("tsonic-rust", "A selected method replacement requires its native receiver definition.", target);
+        publish(methodWrites, target, input.projectTypes.isPolymorphic(definition));
+      }
+      if (targetOperation?.kind === "source-accessor") {
+        const selected = records.selectedOperation.get(target);
+        const unsafe = (role: "getter" | "setter"): boolean => {
+          const declaration = role === "getter" ? selected?.provenance?.sourceSelectedReadDeclaration : selected?.provenance?.sourceSelectedWriteDeclaration;
+          return declaration !== undefined && input.safetyApplications.forDeclaration(declaration).some(application =>
+            application.applicationPlacement === role && application.contract === "requires-unsafe");
+        };
+        if ((unsafe("setter") || operation.operator !== "=" && unsafe("getter")) &&
+          !rustSourceHasExplicitUnsafeContext(ast, target, input.safetyApplications)) diagnostics.push({
+          code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED", category: "error", source: "tsonic-rust", sourceNode: target,
+          message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
+        });
+      }
+      const inner = sourceTransparentExpressionOperand(ast, target);
+      if (inner === undefined) break;
+      target = inner;
+    }
   };
   const projectTypeTest = (node: Node): void => {
     const selected = ast.as.AsIfStatement(node);
@@ -396,12 +440,14 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     ["projectTypeTestReads", projectReads], ["labeledStatement", labels],
     ["countedLoop", input.countedLoops],
     ["throwCompletion", throws], ["catchBinding", catches],
+    ["assignmentValue", assignmentValues],
+    ["methodWriteDispatch", methodWrites],
   ] as const) {
     for (const subject of selected.keys()) {
       requireRustRecord(input.required, family, subject, ast.kindName(subject), "analyzeRustStatementCompletions");
     }
   }
   input.producer.publish({ admitted, conditions, targets, exits, iterations, setters, assignments, projectReads, labels,
-    countedLoops: input.countedLoops, throws, catches });
+    countedLoops: input.countedLoops, throws, catches, assignmentValues, methodWrites });
   return { kind: "resolved", plan: input.producer.records };
 }

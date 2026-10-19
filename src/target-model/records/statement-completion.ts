@@ -3,6 +3,7 @@ import type { SourceLabeledStatementTarget } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact } from "./operations.js";
 import type { RustCountedLoopRepresentation } from "./counted-loops.js";
 import type { RustThrowCompletion, RustCatchBinding } from "./exception-flow.js";
+import type { RustAssignmentValueSelection } from "./operator-selection.js";
 
 export type RustAssignmentCompletion = Extract<RustTargetOperationFact, { readonly kind: "operator-token" | "operator-call" }>;
 
@@ -43,4 +44,6 @@ export interface RustStatementCompletionRecords {
   readonly countedLoop: RustStatementRecord<RustCountedLoopRepresentation>;
   readonly throwCompletion: RustStatementRecord<RustThrowCompletion>;
   readonly catchBinding: RustStatementRecord<RustCatchBinding>;
+  readonly assignmentValue: RustStatementRecord<RustAssignmentValueSelection>;
+  readonly methodWriteDispatch: RustStatementRecord<boolean>;
 }

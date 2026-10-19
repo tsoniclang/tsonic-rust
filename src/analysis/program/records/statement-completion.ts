@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceLabeledStatementTarget } from "@tsonic/target-api/source";
 import type { RustCountedLoopRepresentation } from "../../../target-model/records/counted-loops.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../../target-model/records/exception-flow.js";
+import type { RustAssignmentValueSelection } from "../../../target-model/records/operator-selection.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type {
   RustAssignmentCompletion, RustControlExitCompletion, RustIterationCompletion,
@@ -21,6 +22,8 @@ export interface RustStatementCompletionData {
   readonly countedLoops: ReadonlyMap<Node, RustCountedLoopRepresentation>;
   readonly throws: ReadonlyMap<Node, RustThrowCompletion>;
   readonly catches: ReadonlyMap<Node, RustCatchBinding>;
+  readonly assignmentValues: ReadonlyMap<Node, RustAssignmentValueSelection>;
+  readonly methodWrites: ReadonlyMap<Node, boolean>;
 }
 
 export interface RustStatementCompletionProducer {
@@ -46,6 +49,8 @@ export function createRustStatementCompletionProducer(
     countedLoop: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.countedLoops.get(node) }),
     throwCompletion: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.throws.get(node) }),
     catchBinding: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.catches.get(node) }),
+    assignmentValue: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.assignmentValues.get(node) }),
+    methodWriteDispatch: Object.freeze({ get: (node: Node | undefined) => node === undefined ? undefined : data?.methodWrites.get(node) }),
   });
   return Object.freeze({ records,
     publish(selected: RustStatementCompletionData): void {

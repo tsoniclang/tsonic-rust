@@ -4,41 +4,31 @@ import {
   planRustOperatorCallExpression,
   finishRustSourceAccessorCall,
   planRustSourceAccessorCall,
-  sourceAccessorSelectedOperationMatches,
-  sourceMethodPropertySelectedOperationMatches,
-  sourceStaticFieldSelectedOperationMatches,
 } from "../expressions/index.js";
 import {
   rustProjectObjectDispatchField,
   writeRustProjectMethodOverride,
 } from "../objects/project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import {
   KindIdentifier,
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import { isRustCopyCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
-import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
-import { planRustIndexedRecordStorage, planRustSourceIndexKey, sourceIndexSelectedOperationMatches } from "../objects/indexed-records.js";
+import { planRustIndexedRecordStorage, planRustSourceIndexKey } from "../objects/indexed-records.js";
 import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
-import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
-import { effectivePlannedExpressionCarrier, selectedOperationMatches } from "../expressions/fundamentals.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";
-import { rustCarrierProvidesErrorMutation } from "../../../target-model/types/carriers/error-protocols.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function planRustBuiltinErrorAssignment(
   left: Node,
@@ -48,25 +38,18 @@ export function planRustBuiltinErrorAssignment(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const receiverNode = Node_Expression(context.input.program.source.ast, left);
-  if (receiverNode === undefined || property.accessMode === "read" ||
-    !rustCarrierProvidesErrorMutation(property.receiverCarrier, context.input.program.typeDefinitions) ||
-    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(receiverNode, context), property.receiverCarrier) ||
-    !selectedOperationMatches(context.input.program.records.selectedOperation.get(left),
-      property.operationId, "property", property.resultCarrier) || context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, left),
-      "rust.backend.error-write-storage", "Error mutation requires exact selected physical writable storage and member evidence."));
-    return undefined;
-  }
+  if (receiverNode === undefined || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted error-field assignment requires its native receiver and name scope.", left);
   const receiver = planExpression(receiverNode, context);
   const value = planExpression(valueNode, context);
-  if (receiver === undefined || value === undefined) return undefined;
+  if (receiver === undefined || value === undefined) failRustPlannerInvariant("An admitted error-field assignment requires its native operand plans.", left);
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "error_receiver");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "error_value");
   const currentName = allocateRustSyntheticName(context.syntheticNames, "error_previous");
   const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
   const bindings = [{ name: receiverName, value: planRustSharedReceiver(receiverNode, receiver, context) }];
   if (assignment.operator !== "=") {
-    if (property.property === "stack") return undefined;
+    if (property.property === "stack") failRustPlannerInvariant("An admitted compound error-field assignment requires its selected string payload.", left);
     bindings.push({ name: currentName, value: { kind: "owned-string-from-borrowed-str", expression: {
       kind: "call", path: `tsonic_rust_runtime::ErrorObject::error_${property.property}`, args: [selectedReceiver],
     } } });
@@ -74,7 +57,7 @@ export function planRustBuiltinErrorAssignment(
   bindings.push({ name: valueName, value });
   const next = assignment.operator === "=" ? { kind: "path" as const, path: valueName }
     : planRustCompoundAssignmentValue(assignment, { kind: "path", path: currentName }, { kind: "path", path: valueName }, left, context);
-  if (next === undefined) return undefined;
+  if (next === undefined) failRustPlannerInvariant("An admitted error-field assignment requires its native value operation.", left);
   return [{ kind: "expr", expr: rustValueBlock(bindings, {
     kind: "call", path: `tsonic_rust_runtime::WritableErrorObject::set_error_${property.property}`,
     args: [selectedReceiver, next],
@@ -89,15 +72,7 @@ export function planRustSourceMethodPropertyAssignment(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (assignment.kind !== "operator-token" || assignment.operator !== "=" ||
-    method.write === undefined ||
-    !sourceMethodPropertySelectedOperationMatches(left, method, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, left),
-      "rust.backend.source-method-property-assignment",
-      "Project method replacement requires exact writable property evidence and plain assignment.",
-    ));
-    return undefined;
-  }
+    method.write === undefined) failRustPlannerInvariant("An admitted method replacement requires its sealed native write contract.", left);
   const receiverNode = Node_Expression(context.input.program.source.ast, left);
   const plannedReceiver = receiverNode === undefined
     ? undefined
@@ -112,7 +87,7 @@ export function planRustSourceMethodPropertyAssignment(
   if (receiverNode === undefined || plannedReceiver === undefined || value === undefined ||
     receiverDefinition === undefined || representation === undefined ||
     context.syntheticNames === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted method replacement requires its native receiver representation and operand plans.", left);
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
@@ -124,7 +99,9 @@ export function planRustSourceMethodPropertyAssignment(
   );
   const receiver: RustExpr = { kind: "path", path: receiverName };
   const replacement: RustExpr = { kind: "path", path: valueName };
-  let write = context.input.program.projectTypes.isPolymorphic(receiverDefinition)
+  const dispatched = context.input.program.records.methodWriteDispatch.get(left);
+  if (dispatched === undefined) failRustPlannerInvariant("An admitted method replacement requires its sealed dispatch form.", left);
+  let write = dispatched
     ? {
         kind: "method-call" as const,
         receiver: {
@@ -144,18 +121,13 @@ export function planRustSourceMethodPropertyAssignment(
           representation,
         );
   if (write === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, left),
-      "rust.backend.source-method-property-storage",
-      "Project method replacement has no exact generated storage route.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted method replacement requires its native storage route.", left);
   }
   const check = context.input.program.frozenDataWrites.receiverForDeclaration(method.declaration);
   if (check !== undefined) {
     const region = context.fallibleBoundary;
     const checked = region === undefined ? undefined : checkRustDataWrite(check, receiver, write, region);
-    if (checked === undefined) return undefined;
+    if (checked === undefined) failRustPlannerInvariant("An admitted method replacement requires its native checked-write region.", left);
     write = checked;
   }
   return [{
@@ -183,25 +155,12 @@ export function planRustSourceStaticFieldAssignment(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (!isRustAssignmentOperator(assignment.operator)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-static-field-operator",
-      "Project static-field assignment requires an exact Rust assignment operator.",
-    ));
-    return undefined;
-  }
-  if (!sourceStaticFieldSelectedOperationMatches(target, field, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-static-field-selected-evidence",
-      "Project static-field assignment conflicts with the TSTS-selected property fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted static-field assignment requires its native operator.", target);
   }
   const storage = planRustSourceStaticFieldStorage(field, context);
   const value = planExpression(valueNode, context);
   if (storage === undefined || value === undefined || context.syntheticNames === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted static-field assignment requires its native storage and operand plans.", target);
   }
   const valueName = allocateRustSyntheticName(context.syntheticNames, "static_field_value");
   const valuePath: RustExpr = { kind: "path", path: valueName };
@@ -224,12 +183,7 @@ export function planRustSourceStaticFieldAssignment(
     context,
   );
   if (nextValue === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-static-field-operator",
-      "Project static-field compound assignment has no exact Rust value operation.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted static-field assignment requires its native value operation.", target);
   }
   return [{
     kind: "expr",
@@ -266,7 +220,7 @@ export function planRustDirectOperatorCallAssignment(
   );
   if (promoted.kind === "promoted") {
     if (promoted.expression === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted promoted compound assignment requires its native location plan.", targetNode);
     }
     const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
     const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
@@ -280,9 +234,6 @@ export function planRustDirectOperatorCallAssignment(
       targetNode,
       context,
     );
-    if (next === undefined) {
-      return undefined;
-    }
     return [{
       kind: "expr",
       expr: rustValueBlock([
@@ -298,12 +249,7 @@ export function planRustDirectOperatorCallAssignment(
   }
 
   if (target === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, targetNode),
-      "rust.backend.compound-assignment-storage",
-      "Compound assignment requires its exact direct or promoted storage owner.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted compound assignment requires its direct or promoted native storage owner.", targetNode);
   }
   const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
@@ -315,19 +261,19 @@ export function planRustDirectOperatorCallAssignment(
   const locationPath: RustExpr = locationName === undefined
     ? target
     : { kind: "dereference", pointer: { kind: "path", path: locationName } };
-  const current = isRustCopyCarrier(assignment.resultCarrier)
-    ? locationPath
-    : { kind: "method-call", receiver: locationPath, method: "clone", args: [] } as RustExpr;
+  const selection = context.input.program.records.assignmentValue.get(targetNode);
+  if (selection === undefined) failRustPlannerInvariant("An admitted compound assignment requires its previous-value ownership.", targetNode);
+  const current: RustExpr = selection.previous.kind === "clone"
+    ? { kind: "method-call", receiver: locationPath, method: "clone", args: [] }
+    : selection.previous.kind === "borrow" ? { kind: "reference", mutable: selection.previous.mutable, expr: locationPath } : locationPath;
   const next = planRustCompoundAssignmentValue(
     assignment,
     { kind: "path", path: currentName },
     { kind: "path", path: valueName },
     targetNode,
     context,
+    selection.previous.kind === "borrow" ? "shared-reference" : "value",
   );
-  if (next === undefined) {
-    return undefined;
-  }
   return [{
     kind: "expr",
     expr: rustValueBlock([
@@ -349,35 +295,6 @@ export function planRustDirectOperatorCallAssignment(
   }];
 }
 
-function rustBinaryOperatorForAssignment(
-  operator: RustAssignmentOperator,
-): RustBinaryOperator | undefined {
-  switch (operator) {
-    case "+=":
-      return "+";
-    case "-=":
-      return "-";
-    case "*=":
-      return "*";
-    case "/=":
-      return "/";
-    case "%=":
-      return "%";
-    case "&=":
-      return "&";
-    case "|=":
-      return "|";
-    case "^=":
-      return "^";
-    case "<<=":
-      return "<<";
-    case ">>=":
-      return ">>";
-    case "=":
-      return undefined;
-  }
-}
-
 export function planRustSourceAccessorAssignment(
   target: Node,
   valueNode: Node,
@@ -387,49 +304,12 @@ export function planRustSourceAccessorAssignment(
 ): readonly RustStmt[] | undefined {
   const operator = assignment.operator;
   if (!isRustAssignmentOperator(operator)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-accessor-assignment-operator",
-      "Project accessor assignment requires a finalized Rust assignment operator.",
-    ));
-    return undefined;
-  }
-  if (!sourceAccessorSelectedOperationMatches(target, accessor, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-accessor-selected-evidence",
-      "Project accessor assignment conflicts with the TSTS-selected property fact.",
-    ));
-    return undefined;
-  }
-  const unsafeAccessor = rustSelectedAccessorRequiresUnsafe(
-    target,
-    "setter",
-    context.input,
-  ) || (operator !== "=" && rustSelectedAccessorRequiresUnsafe(
-    target,
-    "getter",
-    context.input,
-  ));
-  if (unsafeAccessor && (context.explicitUnsafeContextDepth ?? 0) === 0) {
-    context.diagnostics.push({
-      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
-      category: "error",
-      source: "tsonic-rust",
-      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.",
-      sourceNode: target,
-    });
-    return undefined;
+    failRustPlannerInvariant("An admitted accessor assignment requires its native operator.", target);
   }
   const write = accessor.write;
   const read = operator === "=" ? undefined : accessor.read;
   if (write === undefined || (operator !== "=" && read === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-accessor-assignment",
-      "Project accessor assignment requires the exact selected setter and compound assignments also require the selected getter.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted accessor assignment requires its selected native accessors.", target);
   }
   if (context.syntheticNames === undefined) {
     failRustPlannerInvariant(
@@ -441,7 +321,7 @@ export function planRustSourceAccessorAssignment(
   let receiver: RustExpr | undefined;
   if (accessor.receiver.kind === "instance") {
     const evaluation = planRustSourceAccessorReceiver(target, [valueNode], context);
-    if (evaluation === undefined) return undefined;
+    if (evaluation === undefined) failRustPlannerInvariant("An admitted accessor assignment requires its native receiver plan.", target);
     bindings.push(...evaluation.bindings);
     receiver = evaluation.receiver;
   }
@@ -459,7 +339,7 @@ export function planRustSourceAccessorAssignment(
       ? undefined
       : finishRustSourceAccessorCall(target, read.declaration, "read", plannedRead, context);
     if (finalizedRead === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted accessor assignment requires its native getter completion.", target);
     }
     const currentName = allocateRustSyntheticName(context.syntheticNames, "accessor_current");
     bindings.push({ name: currentName, value: finalizedRead });
@@ -467,7 +347,7 @@ export function planRustSourceAccessorAssignment(
   }
   const plannedValue = planExpression(valueNode, context);
   if (plannedValue === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted accessor assignment requires its native operand plan.", valueNode);
   }
   const valueName = allocateRustSyntheticName(context.syntheticNames, "accessor_value");
   bindings.push({ name: valueName, value: plannedValue });
@@ -484,12 +364,7 @@ export function planRustSourceAccessorAssignment(
           context,
         );
   if (next === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-accessor-operator",
-      "Project accessor compound assignment has no exact Rust value operation.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted accessor assignment requires its native value operation.", target);
   }
   const plannedWrite = planRustSourceAccessorCall(
     target,
@@ -502,9 +377,8 @@ export function planRustSourceAccessorAssignment(
   const finalizedWrite = plannedWrite === undefined
     ? undefined
     : finishRustSourceAccessorCall(target, write.declaration, "write", plannedWrite, context);
-  return finalizedWrite === undefined
-    ? undefined
-    : [{ kind: "expr", expr: rustValueBlock(bindings, finalizedWrite) }];
+  if (finalizedWrite === undefined) failRustPlannerInvariant("An admitted accessor assignment requires its native setter completion.", target);
+  return [{ kind: "expr", expr: rustValueBlock(bindings, finalizedWrite) }];
 }
 
 export function planRustCompoundAssignmentValue(
@@ -513,29 +387,23 @@ export function planRustCompoundAssignmentValue(
   value: RustExpr,
   node: Node,
   context: RustPlanContext,
-): RustExpr | undefined {
-  if (assignment.kind === "operator-call") {
-    return planRustOperatorCallExpression(assignment,
-      { expression: current, form: "value" }, { expression: value, form: "value" }, node, context);
+  currentForm: "value" | "shared-reference" = "value",
+): RustExpr {
+  if (assignment.operator === "=") return value;
+  const selection = context.input.program.records.assignmentValue.get(node);
+  if (selection === undefined) failRustPlannerInvariant("An admitted assignment requires its sealed native value operation.", node);
+  if (selection.kind === "plain") return value;
+  if (selection.kind === "string-concat") return rustStringConcat([current, value]);
+  if (selection.kind === "call") {
+    const planned = planRustOperatorCallExpression(selection.operation,
+      { expression: current, form: currentForm }, { expression: value, form: "value" }, node, context);
+    if (planned === undefined) failRustPlannerInvariant("An admitted assignment requires its native operator call plan.", node);
+    return planned;
   }
-  const operator = assignment.operator;
-  if (!isRustAssignmentOperator(operator)) {
-    return undefined;
-  }
-  if (operator === "=") {
-    return value;
-  }
-  if (operator === "+=" && isRustStringCarrier(assignment.resultCarrier)) {
-    return rustStringConcat([current, value]);
-  }
-  const binary = rustBinaryOperatorForAssignment(operator);
-  if (binary === undefined) {
-    return undefined;
-  }
-  const left = applyRustValueConversion(context, current, assignment.leftConversion, node);
-  const right = applyRustValueConversion(context, value, assignment.rightConversion, node);
-  return left === undefined || right === undefined ? undefined
-    : { kind: "binary", operator: binary, left, right };
+  const left = applyRustValueConversion(context, current, selection.leftConversion, node);
+  const right = applyRustValueConversion(context, value, selection.rightConversion, node);
+  if (left === undefined || right === undefined) failRustPlannerInvariant("An admitted assignment requires its native operand conversions.", node);
+  return { kind: "binary", operator: selection.operator, left, right };
 }
 
 export function planRustSourceIndexAssignment(
@@ -545,15 +413,7 @@ export function planRustSourceIndexAssignment(
   assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  if (!index.writable || !sourceIndexSelectedOperationMatches(target, index, context) ||
-    context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.project-index-assignment-contract",
-      "Project index assignment requires the exact writable selected index-signature fact.",
-    ));
-    return undefined;
-  }
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted index assignment requires its native name scope.", target);
   const receiverNode = Node_Expression(context.input.program.source.ast, target);
   const plannedReceiver = receiverNode === undefined
     ? undefined
@@ -562,7 +422,7 @@ export function planRustSourceIndexAssignment(
   const value = planExpression(valueNode, context);
   const storage = planRustIndexedRecordStorage(index.receiverCarrier, index.keyCarrier, index.resultCarrier, index.storage, context);
   if (receiverNode === undefined || plannedReceiver === undefined || key === undefined || value === undefined || storage === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted index assignment requires its native storage and operand plans.", target);
   }
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
   const keyName = allocateRustSyntheticName(context.syntheticNames, "index_key");
@@ -605,9 +465,6 @@ export function planRustSourceIndexAssignment(
       target,
       context,
     );
-    if (plannedNext === undefined) {
-      return undefined;
-    }
     const nextName = allocateRustSyntheticName(context.syntheticNames, "index_next");
     bindings.push({ name: nextName, value: plannedNext });
     next = { kind: "path", path: nextName };
@@ -620,7 +477,7 @@ export function planRustSourceIndexAssignment(
     next,
   );
   if (write === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted index assignment requires its native write plan.", target);
   }
   return [{
     kind: "expr",
