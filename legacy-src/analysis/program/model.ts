@@ -60,7 +60,6 @@ export interface RustTargetProgram {
   readonly physicalEmissionContexts: import("../../target-model/records/physical-emission-contexts.js").RustCallableEmissionContexts;
   readonly reachability: import("../reachability/model.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
-  readonly genericCallableErrors: import("../callables/generic-errors.js").RustGenericCallableErrorIndex;
   readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;

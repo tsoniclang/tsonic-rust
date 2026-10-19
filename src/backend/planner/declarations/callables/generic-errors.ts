@@ -7,6 +7,7 @@ import type { RustNativeErrorSource } from "../../../../target-model/types/nativ
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinPlan, type RustNativeErrorJoinSelection,
   type RustNativeErrorJoinSource } from "../../types/native-error-joins.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export interface RustGenericCallableProducerErrors {
   readonly effects: RustSourceCallEffectsFact;
@@ -24,14 +25,13 @@ export interface RustGenericCallableErrorPlan {
 export function planRustGenericCallableErrors(
   definition: RustGenericCallablePhysicalDefinition,
   context: RustPlanContext,
-): RustGenericCallableErrorPlan | undefined {
-  const { program } = context.input;
-  const selected = program.genericCallableErrors.forDefinition(definition);
-  if (selected === undefined) return undefined;
+): RustGenericCallableErrorPlan {
+  const selected = context.input.program.records.genericCallableErrors.get(definition);
+  if (selected === undefined) failRustPlannerInvariant("An admitted generic callable requires its sealed error emission record.");
   const selections = new Map<RustGenericCallablePhysicalMember, RustGenericCallableProducerErrors>();
   for (const member of definition.members) {
-    const errors = selected.forMember(member);
-    if (errors === undefined) return undefined;
+    const errors = selected.members.get(member);
+    if (errors === undefined) failRustPlannerInvariant("An admitted generic callable member requires its native error channels.", member.implementation.declaration);
     const rendered: { invocation: RustNativeErrorJoinSelection | undefined; awaiting: RustNativeErrorJoinSelection | undefined } = {
       invocation: undefined, awaiting: undefined,
     };
@@ -39,14 +39,14 @@ export function planRustGenericCallableErrors(
       const source = errors[channel];
       if (source === undefined) continue;
       const errorType = rustTypeFromCarrierInContext(source.errorType, context);
-      if (errorType === undefined) return undefined;
+      if (errorType === undefined) failRustPlannerInvariant("An admitted generic callable error requires its renderable native carrier.", member.implementation.declaration);
       rendered[channel] = { ...source, errorType };
     }
     selections.set(member, Object.freeze({ effects: errors.effects, ...rendered }));
   }
   const invocationJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.invocation, context);
   const awaitingJoin = planRustGenericCallableErrorJoin(definition.ownerFileName, selected.awaiting, context);
-  return invocationJoin === undefined || awaitingJoin === undefined ? undefined : Object.freeze({
+  return Object.freeze({
     effects: selected.effects,
     invocation: invocationJoin, awaiting: awaitingJoin,
     forMember: (member: RustGenericCallablePhysicalMember) => selections.get(member),
@@ -55,19 +55,19 @@ export function planRustGenericCallableErrors(
 
 export function planRustGenericCallableErrorJoin(
   ownerFileName: string, sources: readonly RustNativeErrorSource<TargetTypeRef>[], context: RustPlanContext,
-): RustNativeErrorJoinPlan | undefined {
+): RustNativeErrorJoinPlan {
   const rendered: RustNativeErrorJoinSource[] = [];
   for (const source of sources) {
     const errorType = rustTypeFromCarrierInContext(source.errorType, context);
-    if (errorType === undefined) return undefined;
+    if (errorType === undefined) failRustPlannerInvariant("An admitted generic callable error join requires its renderable native source carrier.");
     rendered.push({ ...source, errorType });
   }
   const arity = sources.length;
-  const name = arity < 2 ? `NativeErrors${arity}` : context.input.errorRegions.nameFor(ownerFileName, arity);
+  const name = context.input.program.records.nativeErrorJoinName.get(ownerFileName, arity);
   const moduleName = context.moduleNameByFileName.get(ownerFileName);
-  if (name === undefined || moduleName === undefined) return undefined;
+  if (name === undefined || moduleName === undefined) failRustPlannerInvariant("An admitted generic callable error join requires its native declaration name and source module.");
   const external = context.externalCrateNameByFileName.get(ownerFileName);
   return planRustNativeErrorJoin({ identity: `native-error-join:${ownerFileName}:${arity}`,
     name, referencePath: `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`,
-    visibility: "public", sources: rendered });
+    visibility: "public", sources: rendered }) ?? failRustPlannerInvariant("An admitted generic callable error join requires its selected native join plan.");
 }

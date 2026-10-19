@@ -82,6 +82,7 @@ import { createRustFieldWriteProducer } from "./field-writes.js";
 import { createRustDeclarationEmissionProducer } from "./declaration-emission.js";
 import { createRustLexicalValueProducer } from "./lexical-values.js";
 import { createRustNativeProtocolProducer } from "./native-protocol-emission.js";
+import { createRustErrorEmissionProducer } from "./error-emission.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -177,6 +178,7 @@ export function createRustProgramRecordBuilder(
   const declarationEmission = createRustDeclarationEmissionProducer(assertOpen);
   const lexicalValuePlans = createRustLexicalValueProducer(assertOpen);
   const nativeProtocolPlans = createRustNativeProtocolProducer(assertOpen);
+  const errorEmissionPlans = createRustErrorEmissionProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -192,6 +194,8 @@ export function createRustProgramRecordBuilder(
     lexicalValues: lexicalValuePlans.records,
     nativeProtocols: nativeProtocolPlans.inventories,
     nativeProtocol: nativeProtocolPlans.protocol,
+    ...errorEmissionPlans.records,
+    nativeErrorRegion: errorEmissionPlans.regions,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -283,6 +287,7 @@ export function createRustProgramRecordBuilder(
     declarationEmission,
     lexicalValuePlans,
     nativeProtocolPlans,
+    errorEmissionPlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,

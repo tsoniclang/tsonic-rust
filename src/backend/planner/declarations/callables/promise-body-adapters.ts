@@ -6,6 +6,7 @@ import { rustInjectNativeError, rustErrorType, type RustFallibleBoundary } from 
 import { planRustJsRejectionRegion } from "../../program/js-rejection-regions.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { wrapRustJsPromiseBody, wrapRustJsPromiseCompletion } from "./async-promise.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function rustPromiseBodyGenericArguments(generics: RustGenerics): readonly RustCallGenericArgument[] {
   return generics.parameters.flatMap((parameter): RustCallGenericArgument[] => parameter.kind === "lifetime" ? []
@@ -18,14 +19,14 @@ export function planRustPromiseBodyObjectAdapter(
   invocation: RustExpr,
   nativeBoundary: RustFallibleBoundary | undefined,
   context: RustPlanContext,
-): RustBlock | undefined {
+): RustBlock {
   const asynchronous = context.input.program.records.asyncFunction.get(declaration);
-  if (asynchronous?.kind !== "js-promise") return undefined;
+  if (asynchronous?.kind !== "js-promise") failRustPlannerInvariant("An admitted Promise object adapter requires its native async function record.", declaration);
   let completion: RustExpr = asynchronous.lowering.kind === "factory" ? { kind: "await", expr: invocation } : invocation;
   if (nativeBoundary !== undefined) {
-    const region = context.input.program.errorRegions.get(declaration);
+    const region = context.input.program.records.nativeErrorRegion.get(declaration);
     const objectBoundary = region === undefined ? undefined : planRustJsRejectionRegion(declaration, region, context)?.boundary;
-    if (objectBoundary === undefined || context.syntheticNames === undefined) return undefined;
+    if (objectBoundary === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted Promise adapter requires its native rejection region and local-name allocator.", declaration);
     if (!rustTypeEquals(nativeBoundary.errorType, objectBoundary.errorType)) {
       const errorName = allocateRustSyntheticName(context.syntheticNames, "promise_error");
       const error: RustExpr = { kind: "path", path: errorName };
@@ -34,7 +35,7 @@ export function planRustPromiseBodyObjectAdapter(
             (source, payload) => rustInjectNativeError(objectBoundary, source, payload))
         : rustInjectNativeError(objectBoundary,
             { identity: `package:${nativeBoundary.owner.errorTypeIdentity}`, errorType: rustErrorType(nativeBoundary.owner) }, error);
-      if (converted === undefined) return undefined;
+      if (converted === undefined) failRustPlannerInvariant("An admitted Promise adapter requires its native rejection conversion.", declaration);
       completion = { kind: "method-call", receiver: completion, method: "map_err",
         args: [{ kind: "closure", params: [{ name: errorName }], body: converted }] };
     }

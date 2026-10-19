@@ -37,6 +37,8 @@ import type { RustFieldWriteRecords } from "./field-writes.js";
 import type { RustDeclarationEmissionRecords } from "./declaration-emission.js";
 import type { RustLexicalValueDeclaration } from "./lexical-values.js";
 import type { RustNativeProtocolReader } from "./native-protocol-emission.js";
+import type { RustErrorEmissionRecords } from "./error-emission.js";
+import type { RustErrorRegionSelection } from "./error-regions.js";
 import type { RustNativeCallableProtocol } from "./native-protocols.js";
 import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "./native-declaration-forms.js";
 import type { RustNativeDeclarationLiveness } from "./native-liveness.js";
@@ -95,6 +97,9 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly lexicalValues: RustRecordFamily<readonly RustLexicalValueDeclaration[]>;
   readonly nativeProtocols: RustRecordFamily<readonly RustNativeCallableProtocol[]>;
   readonly nativeProtocol: RustNativeProtocolReader;
+  readonly genericCallableErrors: RustErrorEmissionRecords["genericCallableErrors"];
+  readonly nativeErrorJoinName: RustErrorEmissionRecords["nativeErrorJoinName"];
+  readonly nativeErrorRegion: RustRecordFamily<RustErrorRegionSelection>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly nativeHandler: RustRecordFamily<RustNativeHandler>;

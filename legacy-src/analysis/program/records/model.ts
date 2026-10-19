@@ -10,6 +10,7 @@ import type { RustFieldWriteProducer } from "./field-writes.js";
 import type { RustDeclarationEmissionProducer } from "./declaration-emission.js";
 import type { RustLexicalValueProducer } from "./lexical-values.js";
 import type { RustNativeProtocolProducer } from "./native-protocol-emission.js";
+import type { RustErrorEmissionProducer } from "./error-emission.js";
 import type { RustNativeDeclarationProducer } from "./native-declarations.js";
 import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustNativeGenericProducer } from "./native-generics.js";
@@ -108,6 +109,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly declarationEmission: RustDeclarationEmissionProducer;
   readonly lexicalValuePlans: RustLexicalValueProducer;
   readonly nativeProtocolPlans: RustNativeProtocolProducer;
+  readonly errorEmissionPlans: RustErrorEmissionProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;

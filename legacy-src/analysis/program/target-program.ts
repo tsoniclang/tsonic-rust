@@ -79,6 +79,7 @@ import { analyzeRustFieldWrites } from "../storage/field-writes.js";
 import { analyzeRustDeclarationEmission } from "../declarations/emission.js";
 import { analyzeRustLexicalValues } from "../callables/lexical-values.js";
 import { analyzeRustNativeProtocolEmission } from "../callables/native-protocol-emission.js";
+import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emission.js";
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
 
 export function analyzeRustTargetProgram(
@@ -420,7 +421,6 @@ export function analyzeRustTargetProgram(
     sourceOutputIdentities: sourceOutputIdentities.identities,
     physicalEmissionContexts: callableValues.value.emissionContexts,
     errorRegions: completedErrorRegions,
-    genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records }),
     promiseResults: promiseResults.results,
     promiseBodies: context.promiseBodies.plan,
@@ -492,6 +492,9 @@ export function analyzeRustTargetProgram(
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
   const nativeProtocolIssues = analyzeRustNativeProtocolEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.nativeProtocolPlans });
   if (nativeProtocolIssues.length !== 0) return rejectedTargetStage(nativeProtocolIssues);
+  analyzeRustGenericErrorEmission({ ast: context.ast, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
+    regions: program.errorRegions, index: genericCallableErrors.value, physical: program.callableValues.generic.physical,
+    producer: context.records.errorEmissionPlans });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
