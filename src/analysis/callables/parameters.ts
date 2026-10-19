@@ -5,11 +5,13 @@ import type { RustCallableParameterProducer } from "../program/records/parameter
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export function analyzeRustCallableParameterEmission(input: {
   readonly program: Pick<RustTargetProgram, "source" | "records" | "callableValues" | "projectTypes" | "objectRepresentations" | "names">;
   readonly nodes: readonly Node[];
   readonly producer: RustCallableParameterProducer;
+  readonly required: RustRequiredRecord[];
 }): void {
   const { program } = input;
   const { ast } = program.source;
@@ -46,5 +48,6 @@ export function analyzeRustCallableParameterEmission(input: {
       parameterMutable: abi.form !== "default" && abi.entryConversion === undefined && mutable,
       default: initializer === undefined ? undefined : Object.freeze({ initializer, valueCarrier: abi.valueCarrier }),
     });
+    requireRustRecord(input.required, "callableParameter", parameter, "native callable parameter", "analyzeRustCallableParameterEmission");
   }
 }

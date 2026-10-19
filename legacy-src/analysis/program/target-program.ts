@@ -492,7 +492,7 @@ export function analyzeRustTargetProgram(
   analyzeRustFieldWrites({ program, nodes: context.nativeNodes, producer: context.records.fieldWrites, required: context.requiredRecords });
   analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes, producer: context.records.declarationEmission, required: context.requiredRecords });
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
-  analyzeRustCallableParameterEmission({ program, nodes: context.nativeNodes, producer: context.records.callableParameterPlans });
+  analyzeRustCallableParameterEmission({ program, nodes: context.nativeNodes, producer: context.records.callableParameterPlans, required: context.requiredRecords });
   const classInitializationIssues = analyzeRustClassInitialization({ program, nodes: context.nativeNodes, producer: context.records.classInitializationPlans });
   if (classInitializationIssues.length !== 0) return rejectedTargetStage(classInitializationIssues);
   const nativeProtocolIssues = analyzeRustNativeProtocolEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.nativeProtocolPlans });
