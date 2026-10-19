@@ -1,10 +1,10 @@
 import type { ProviderExportDeclaration } from "@tsonic/tsts";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
-  RustProviderBinaryHookDefinition,
   RustProviderOperationDefinition,
   RustProviderTypeDefinition,
-} from "../../target-model/providers/model.js";
+} from "../../target-model/identities/provider-relations.js";
+import type { RustProviderBinaryHookDefinition } from "../../target-model/metadata/provider-metadata.js";
 import type {
   TargetCapabilityContribution,
   TargetCapabilityImplementation,

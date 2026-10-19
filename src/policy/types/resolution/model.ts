@@ -1,4 +1,4 @@
-import type { RustProviderOperationRow, RustProviderTypeRow } from "../../../target-model/providers/model.js";
+import type { RustProviderOperationRow, RustProviderTypeRow } from "../../../target-model/identities/provider-relations.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { RustSourceProfileRegistry } from "../model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../model/source-type-registry.js";

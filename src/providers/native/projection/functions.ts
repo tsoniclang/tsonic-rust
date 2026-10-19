@@ -41,7 +41,7 @@ import type {
 } from "../model/model.js";
 import type {
   RustProviderOperationDefinition,
-} from "../../../target-model/providers/model.js";
+} from "../../../target-model/identities/provider-relations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function projectFunction(

@@ -4,6 +4,8 @@ export type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
   RustProviderDispatchContextRow,
+} from "../target-model/metadata/provider-metadata.js";
+export type {
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
   RustProviderOperationDefinition,
@@ -11,7 +13,7 @@ export type {
   RustProviderOperationRow,
   RustProviderTypeDefinition,
   RustProviderTypeRow,
-} from "../target-model/providers/model.js";
+} from "../target-model/identities/provider-relations.js";
 export type {
   RustProviderCrateDefinition,
   RustProviderModuleAliasDefinition,

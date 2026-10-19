@@ -7,7 +7,7 @@ import type {
 } from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition } from "../../packages/model.js";
-import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/providers/model.js";
+import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/identities/provider-relations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface RustCompilerProviderProjection {

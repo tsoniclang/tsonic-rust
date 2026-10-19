@@ -1,4 +1,4 @@
-import type { RustProviderBinaryHookRow } from "../../target-model/providers/model.js";
+import type { RustProviderBinaryHookRow } from "../../target-model/metadata/provider-metadata.js";
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";

@@ -63,7 +63,7 @@ import type {
 import type {
   RustProviderOperationDefinition,
   RustProviderTypeDefinition,
-} from "../../../target-model/providers/model.js";
+} from "../../../target-model/identities/provider-relations.js";
 import type { RustProviderGenericParameter } from "../../../target-model/operations/model.js";
 
 interface ProjectedExport {

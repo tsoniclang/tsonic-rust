@@ -1,7 +1,7 @@
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustProviderTypeRow } from "../../../../target-model/providers/model.js";
+import type { RustProviderTypeRow } from "../../../../target-model/identities/provider-relations.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";

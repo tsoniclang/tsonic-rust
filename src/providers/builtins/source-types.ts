@@ -12,10 +12,8 @@ import {
   rustSourceVirtualModulesProviderId,
   rustTypesModule,
 } from "../../source/extension/identity.js";
-import type {
-  RustProviderSemantics,
-  RustProviderTypeRow,
-} from "../../target-model/providers/model.js";
+import type { RustProviderTypeRow } from "../../target-model/identities/provider-relations.js";
+import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import { rustNativeScalarTargetId } from "../../target-model/types/index.js";
 import { rustJsTimerDispatchContext } from "../model/js-dispatch.js";
 

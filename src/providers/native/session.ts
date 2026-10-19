@@ -13,12 +13,11 @@ import type {
 import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type {
-  RustProviderModuleDefinition,
   RustProviderOperationDefinition,
-  RustProviderSemantics,
   RustProviderTypeDefinition,
-} from "../../target-model/providers/model.js";
-import type { RustProviderPackageDefinition } from "../packages/model.js";
+} from "../../target-model/identities/provider-relations.js";
+import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
+import type { RustProviderModuleDefinition, RustProviderPackageDefinition } from "../packages/model.js";
 import {
   mergeRustProviderSemantics,
   collectRustProviderSemanticsFromDefinitions,

@@ -47,7 +47,7 @@ import type {
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/providers/model.js";
+import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/identities/provider-relations.js";
 
 export function projectFields(
   exported: Extract<RustCompilerExport, { readonly kind: "struct" | "union" }>,

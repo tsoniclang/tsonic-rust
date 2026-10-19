@@ -16,7 +16,7 @@ import type {
   RustTargetTraitRef,
 } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition } from "../../packages/model.js";
-import type { RustProviderOperationDefinition } from "../../../target-model/providers/model.js";
+import type { RustProviderOperationDefinition } from "../../../target-model/identities/provider-relations.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 
 export function operationRow(

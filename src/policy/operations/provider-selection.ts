@@ -5,7 +5,7 @@ import type {
   RustProviderExportRow,
   RustProviderOperationKind,
   RustProviderOperationRow,
-} from "../../target-model/providers/model.js";
+} from "../../target-model/identities/provider-relations.js";
 
 interface RustProviderOwnerIdentity {
   readonly providerId: string;

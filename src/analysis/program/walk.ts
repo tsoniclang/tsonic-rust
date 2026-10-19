@@ -40,7 +40,7 @@ import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingPolicy } from "./module-bindings.js";
 
 import type { RustOperationsProviderOptions, RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
-import type { RustProviderOperationRow } from "../../target-model/providers/model.js";
+import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
 import type { RustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";

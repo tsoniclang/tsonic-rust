@@ -22,7 +22,7 @@ import type {
   TargetRuntimeReference,
 } from "@tsonic/target-api/artifacts";
 import type { CompilerExtension } from "@tsonic/tsts";
-import type { RustProviderOperationRow } from "../../target-model/providers/model.js";
+import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
 import type { RustProviderPackageDefinition, RustProviderPackageImplementation, RustProviderPolicyContribution } from "./model.js";
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {

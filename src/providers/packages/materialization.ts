@@ -14,10 +14,12 @@ import type {
   RustProviderBinaryHookDefinition,
   RustProviderBinaryHookRow,
   RustProviderDispatchContextRow,
+} from "../../target-model/metadata/provider-metadata.js";
+import type {
   RustProviderOperationDefinition,
   RustProviderOperationRow,
   RustProviderTypeDefinition,
-} from "../../target-model/providers/model.js";
+} from "../../target-model/identities/provider-relations.js";
 import type {
   RustProviderGenericParameter,
   RustProviderOperationForm,
