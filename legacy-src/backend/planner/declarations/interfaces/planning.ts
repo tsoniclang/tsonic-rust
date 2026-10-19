@@ -92,7 +92,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return failRustPlannerInvariant("An admitted record interface lost its native object representation.", node);
   }
   if (representation.kind !== "value") context.usedAliases?.add("rt");
-  const interfaceAttributes = structAttributes(interfaceName) ?? [];
+  const interfaceAttributes = structAttributes(admitted.nonCamelCaseName) ?? [];
   const interfaceDeadCode = rustProjectInterfaceDeadCodeDisposition(
     context,
     node,

@@ -143,6 +143,7 @@ function admitInterface(
       "Record field selections do not cover its exact project-object storage layout.");
   }
   return { kind: "accepted", form: Object.freeze({ kind: "interface", name, definition,
+    carrier: projectTypes.openCarrier(definition), representation, nonCamelCaseName: !/^[A-Z][A-Za-z0-9]*$/u.test(name),
     fields: Object.freeze(fields), ...(index === undefined ? {} : { index }) }) };
 }
 

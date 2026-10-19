@@ -41,7 +41,19 @@ export function analyzeRustDeclarationLiveness(input: {
       }
       return Object.freeze({ name: variant.name, deadCode: disposition, nonUpperCaseConstant: !/^[A-Z][A-Z0-9_]*$/u.test(variant.name) });
     }));
-    input.producer.declaration(node, { visibility, deadCode, enumDiscriminant, variants });
+    const interfaceDeadCode: RustDeadCodeDisposition | undefined = publiclyReachable ? undefined
+      : deadCode !== undefined ? deadCode
+      : reachability.constructedProjectTypes.has(node) || reachability.reifiedProjectTypes.has(node) ? undefined
+      : "generated-unconstructed-instance";
+    const interfaceLiveness = form.kind !== "interface" ? undefined : Object.freeze({ publiclyReachable,
+      deadCode: interfaceDeadCode,
+      fields: new Map(form.fields.map(field => [field.declaration,
+        publiclyReachable || reachability.externallyReachable.has(node) || reachability.readAuthoredFields.has(field.declaration)
+          ? undefined : "authored-unread-field" as const])),
+      indexDeadCode: interfaceDeadCode !== undefined || publiclyReachable || reachability.usedProjectFields.get(node)?.has("index-storage") === true
+        ? undefined : "generated-unused-storage" as const,
+    });
+    input.producer.declaration(node, { visibility, deadCode, enumDiscriminant, variants, interface: interfaceLiveness });
     requireRustRecord(input.required, "declarationLiveness", node, "native declaration liveness", "analyzeRustDeclarationLiveness");
   }
 }

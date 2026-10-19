@@ -353,7 +353,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (representation.kind !== "value") {
     context.usedAliases?.add("rt");
   }
-  const generatedStructAttributes = structAttributes(className) ?? [];
+  const emission = context.input.program.records.classDeclaration.get(node);
+  if (emission === undefined) failRustPlannerInvariant("An admitted class requires its native declaration emission metadata.", node);
+  const generatedStructAttributes = structAttributes(emission.nonCamelCaseName) ?? [];
   const environment = context.input.program.classValues.forDeclaration(node)?.environment;
   const environmentType = !environment?.instancesUseEnvironment ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
   if (environment?.instancesUseEnvironment && environmentType === undefined) return undefined;

@@ -5,6 +5,7 @@ import type { RustSourceGenericContract } from "../lifetimes/model.js";
 import type { RustTypeAliasDeclarationFact } from "./callables-and-resources.js";
 import type { RustSourceUnionPayloadTemplate } from "../types/source-union-definitions.js";
 import type { RustConditionalSourceTypeFamily } from "../types/type-families.js";
+import type { RustObjectRepresentation } from "./object-representation.js";
 
 export interface RustNativeEnumDeclaration {
   readonly kind: "enum";
@@ -30,6 +31,9 @@ export interface RustNativeInterfaceDeclaration {
   readonly kind: "interface";
   readonly name: string;
   readonly definition: RustProjectTypeDefinition;
+  readonly carrier: TargetTypeRef;
+  readonly representation: RustObjectRepresentation;
+  readonly nonCamelCaseName: boolean;
   readonly fields: readonly RustNativeInterfaceField[];
   readonly index?: {
     readonly declaration: Node;

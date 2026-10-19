@@ -14,9 +14,17 @@ export interface RustNativeDeclarationLiveness {
   readonly visibility: "public" | "crate";
   readonly deadCode: RustDeadCodeDisposition | undefined;
   readonly enumDiscriminant: RustDeadCodeDisposition | undefined;
+  readonly interface: {
+    readonly publiclyReachable: boolean;
+    readonly deadCode: RustDeadCodeDisposition | undefined;
+    readonly fields: ReadonlyMap<Node, RustDeadCodeDisposition | undefined>;
+    readonly indexDeadCode: RustDeadCodeDisposition | undefined;
+  } | undefined;
   readonly variants: readonly {
     readonly name: string;
     readonly deadCode: RustDeadCodeDisposition | undefined;
     readonly nonUpperCaseConstant: boolean;
   }[];
 }
+import type { Node } from "@tsonic/tsts";
+
