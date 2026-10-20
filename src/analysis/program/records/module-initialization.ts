@@ -1,6 +1,6 @@
 import type { SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { SourceBinaryEntryIssue } from "@tsonic/target-api/source";
+import type { SourceBinaryEntryIssue } from "@tsonic/target-api/analysis";
 import type { RustModuleInitializationPlan, RustModuleInitializationRequirement } from "../../../target-model/records/module-initialization.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 

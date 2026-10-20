@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { SourceBinaryEntryIssue } from "@tsonic/target-api/source";
+import type { SourceBinaryEntryIssue } from "@tsonic/target-api/analysis";
 import type { RustFoundation } from "../foundation/model.js";
 
 export type RustModuleInitializationRequirement =

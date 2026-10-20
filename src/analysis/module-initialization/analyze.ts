@@ -1,3 +1,4 @@
+import { validateSourceBinaryEntry } from "@tsonic/target-api/analysis";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
 import { resolve } from "node:path";
@@ -9,7 +10,6 @@ import {
   KindImportDeclaration,
   KindVariableStatement,
   Node_Expression,
-  validateSourceBinaryEntry,
 } from "@tsonic/target-api/source";
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
