@@ -38,3 +38,32 @@ export interface RustCallableActivation {
   readonly slotDeclarations: readonly Node[];
   readonly externalCaptures: readonly RustCallableOwnershipCapture[];
 }
+
+export interface RustCallableOwnershipIssue {
+  readonly node: Node;
+  readonly reason: string;
+}
+
+export interface RustCallableOwnershipComponentQueries {
+  readonly components: readonly RustCallableOwnershipComponent[];
+  readonly issues: readonly RustCallableOwnershipIssue[];
+  failureReason(): string | undefined;
+  componentForCallable(declaration: Node): RustCallableOwnershipComponent | undefined;
+  componentForSlot(declaration: Node): RustCallableOwnershipComponent | undefined;
+  isCyclicCallable(declaration: Node): boolean;
+  isCyclicSlot(declaration: Node): boolean;
+  isIndependentCallable(declaration: Node): boolean;
+  instanceReceiverOwner(receiver: Node): Node | undefined;
+}\n
+export interface RustCallableOwnershipComponentPublication {
+  readonly components: readonly RustCallableOwnershipComponent[];
+  readonly issues: readonly RustCallableOwnershipIssue[];
+  readonly failure: string | undefined;
+  readonly callableComponents: ReadonlyMap<Node, RustCallableOwnershipComponent>;
+  readonly slotComponents: ReadonlyMap<Node, RustCallableOwnershipComponent>;
+  readonly canonicalSlots: ReadonlyMap<Node, Node>;
+  readonly cyclicCallables: ReadonlySet<Node>;
+  readonly cyclicSlots: ReadonlySet<Node>;
+  readonly independentCallables: ReadonlySet<Node>;
+  readonly receiverOwners: ReadonlyMap<Node, Node>;
+}

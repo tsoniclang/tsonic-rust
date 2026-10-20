@@ -1,9 +1,6 @@
 import type { Node, Type } from "@tsonic/tsts";
 import { targetStronglyConnectedComponents, type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import {
-  Node_Expression, Node_Initializer, sourceBindingScope, sourceEnclosingCallable, sourceLexicalEnvironment, sourceParameterIsProperty,
-  type SourceDeclarationUse,
-} from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, sourceBindingScope, sourceEnclosingCallable, sourceLexicalEnvironment, sourceParameterIsProperty, type SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
 
 export interface RustCallableOwnershipLimits {
@@ -18,22 +15,8 @@ export const defaultRustCallableOwnershipLimits: RustCallableOwnershipLimits = O
 
 import type { RustCallableOwnershipCapture, RustCallableOwnershipReceiverRelation, RustCallableOwnershipComponent } from "../../target-model/records/callable-ownership.js";
 
-export interface RustCallableOwnershipIssue {
-  readonly node: Node;
-  readonly reason: string;
-}
-
-export interface RustCallableOwnershipComponentQueries {
-  readonly components: readonly RustCallableOwnershipComponent[];
-  readonly issues: readonly RustCallableOwnershipIssue[];
-  failureReason(): string | undefined;
-  componentForCallable(declaration: Node): RustCallableOwnershipComponent | undefined;
-  componentForSlot(declaration: Node): RustCallableOwnershipComponent | undefined;
-  isCyclicCallable(declaration: Node): boolean;
-  isCyclicSlot(declaration: Node): boolean;
-  isIndependentCallable(declaration: Node): boolean;
-  instanceReceiverOwner(receiver: Node): Node | undefined;
-}
+import type { RustCallableOwnershipIssue, RustCallableOwnershipComponentQueries } from "../../target-model/records/callable-ownership.js";
+import { sealRustCallableOwnershipComponents } from "../program/records/callable-ownership.js";
 
 type Vertex = { readonly kind: "callable" | "slot"; readonly declaration: Node };
 type Owner = { readonly kind: "lexical" | "class"; readonly declaration: Node; readonly scope: Node };
@@ -511,14 +494,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
 
   function result(): RustCallableOwnershipComponentQueries {
     failure ??= storage.failureReason();
-    return Object.freeze({ components: Object.freeze(failure === undefined ? [...components] : []),
-      issues: Object.freeze([...issues]), failureReason: () => failure,
-      componentForCallable: (declaration: Node) => failure === undefined ? callableComponents.get(declaration) : undefined,
-      componentForSlot: (declaration: Node) => failure === undefined
-        ? slotComponents.get(canonicalSlots.get(declaration) ?? declaration) : undefined,
-      isCyclicCallable: (declaration: Node) => failure === undefined && cyclicCallables.has(declaration),
-      isCyclicSlot: (declaration: Node) => failure === undefined && cyclicSlots.has(canonicalSlots.get(declaration) ?? declaration),
-      isIndependentCallable: (declaration: Node) => failure === undefined && independentCallables.has(declaration),
-      instanceReceiverOwner: (receiver: Node) => failure === undefined ? receiverOwners.get(receiver) : undefined });
+    return sealRustCallableOwnershipComponents({ components, issues, failure, callableComponents, slotComponents,
+      canonicalSlots, cyclicCallables, cyclicSlots, independentCallables, receiverOwners });
   }
 }
