@@ -1,4 +1,9 @@
 import type { Node } from "@tsonic/tsts";
+export interface RustSelectedBindingProjection {
+  readonly projectedCarrier: TargetTypeRef;
+  readonly projection: Exclude<RustBindingProjection, { readonly kind: "omitted" }>;
+  readonly checkedArrayElement?: TargetTypeRef;
+}
 import type { RustBindingNormalization } from "../types/binding-normalization.js";
 export type { RustBindingNormalization } from "../types/binding-normalization.js";
 import type { TargetTypeRef } from "../types/model.js";

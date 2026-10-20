@@ -18,19 +18,16 @@ import {
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import type { RustBindingProjection } from "../../target-model/records/value-projections.js";
+import type { RustSelectedBindingProjection } from "../../target-model/records/value-projections.js";
+import { selectRustBindingPatternProjection } from "../../policy/types/objects/binding-projection-policy.js";
 import {
   isRustJsArrayCarrier,
   rustJsArrayLikeElementTargetType,
   isRustVecCarrier,
   rustFixedArrayCarrierValue,
-  rustFixedArrayTargetType,
-  rustTargetConstInteger,
-  rustOptionTargetType,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
   rustStructuralObjectTargetType,
-  rustTupleTargetType,
 } from "../../target-model/types/index.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import type {
@@ -114,7 +111,7 @@ export function recordRustBindingPatternFacts(
     }
     const initializer = Node_Initializer(context.ast, element);
     const selected = kind === KindArrayBindingPattern
-      ? selectArrayProjection(sourceCarrier, index, BindingElement_IsRest(context.ast, element), initializer !== undefined)
+      ? selectRustBindingPatternProjection(sourceCarrier, index, BindingElement_IsRest(context.ast, element), initializer !== undefined)
       : selectObjectProjection(
           element,
           sourceCarrier,
@@ -146,75 +143,13 @@ export function recordRustBindingPatternFacts(
   return recordedBindingPattern;
 }
 
-interface SelectedBindingProjection {
-  readonly projectedCarrier: TargetTypeRef;
-  readonly projection: Exclude<RustBindingProjection, { readonly kind: "omitted" }>;
-  readonly checkedArrayElement?: TargetTypeRef;
-}
-
-function selectArrayProjection(
-  sourceCarrier: TargetTypeRef,
-  index: number,
-  rest: boolean,
-  hasDefault: boolean,
-): SelectedBindingProjection | undefined {
-  if (rest) {
-    if (hasDefault) {
-      return undefined;
-    }
-    const projection: SelectedBindingProjection["projection"] | undefined = sourceCarrier.kind === "tuple"
-      ? { kind: "tuple-rest", start: index }
-      : rustFixedArrayCarrierValue(sourceCarrier) !== undefined
-        ? { kind: "fixed-array-rest", start: index }
-        : isRustVecCarrier(sourceCarrier)
-          ? { kind: "vec-rest", start: index }
-          : isRustJsArrayCarrier(sourceCarrier)
-            ? { kind: "js-array-rest", start: index }
-            : undefined;
-    const bindingCarrier = bindingCarrierForArrayRest(sourceCarrier, index);
-    return projection === undefined || bindingCarrier === undefined
-      ? undefined
-      : { projectedCarrier: bindingCarrier, projection };
-  }
-
-  let projectedCarrier: TargetTypeRef | undefined;
-  let projection: SelectedBindingProjection["projection"] | undefined;
-  if (sourceCarrier.kind === "tuple") {
-    projectedCarrier = sourceCarrier.elements[index];
-    projection = { kind: "tuple-element", index };
-  } else {
-    const fixed = rustFixedArrayCarrierValue(sourceCarrier);
-    const fixedLength = fixed === undefined
-      ? undefined
-      : rustTargetConstInteger(fixed.length);
-    if (fixed !== undefined && fixedLength !== undefined && BigInt(index) < fixedLength) {
-      projectedCarrier = fixed.element;
-      projection = { kind: "fixed-array-element", index };
-    } else if (isRustVecCarrier(sourceCarrier)) {
-      projectedCarrier = hasDefault
-        ? rustOptionTargetType(sourceCarrier.element)
-        : sourceCarrier.element;
-      projection = { kind: "vec-element", index, checked: hasDefault };
-    } else if (isRustJsArrayCarrier(sourceCarrier)) {
-      const elementCarrier = rustJsArrayLikeElementTargetType(sourceCarrier);
-      projectedCarrier = elementCarrier === undefined
-        ? undefined
-        : rustOptionTargetType(elementCarrier);
-      projection = { kind: "js-array-element", index };
-    }
-  }
-  return projectedCarrier === undefined || projection === undefined ? undefined
-    : { projectedCarrier, projection, ...(projection.kind === "js-array-element"
-      ? { checkedArrayElement: rustJsArrayLikeElementTargetType(sourceCarrier)! } : {}) };
-}
-
 function selectObjectProjection(
   element: Node,
   sourceCarrier: TargetTypeRef,
   hasDefault: boolean,
   extractedSourceNames: ReadonlySet<string>,
   context: RustBindingPatternFactContext,
-): SelectedBindingProjection | RustBindingPatternRejection | undefined {
+): RustSelectedBindingProjection | RustBindingPatternRejection | undefined {
   const sourceShape = resolveObjectBindingSource(sourceCarrier, context);
   if (sourceShape === undefined) {
     return undefined;
@@ -492,26 +427,4 @@ function bindingPropertySourceName(
       (kind !== KindIdentifier && kind !== KindStringLiteral && kind !== KindNumericLiteral)
     ? undefined
     : ast.text(propertyName);
-}
-
-function bindingCarrierForArrayRest(
-  sourceCarrier: TargetTypeRef,
-  start: number,
-): TargetTypeRef | undefined {
-  if (sourceCarrier.kind === "tuple") {
-    return rustTupleTargetType(sourceCarrier.elements.slice(start));
-  }
-  const fixed = rustFixedArrayCarrierValue(sourceCarrier);
-  const fixedLength = fixed === undefined
-    ? undefined
-    : rustTargetConstInteger(fixed.length);
-  if (fixed !== undefined && fixedLength !== undefined && BigInt(start) <= fixedLength) {
-    return rustFixedArrayTargetType(fixed.element, {
-      kind: "integer",
-      value: (fixedLength - BigInt(start)).toString(),
-    });
-  }
-  return isRustVecCarrier(sourceCarrier) || isRustJsArrayCarrier(sourceCarrier)
-    ? sourceCarrier
-    : undefined;
 }
