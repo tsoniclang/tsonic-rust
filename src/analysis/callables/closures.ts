@@ -34,7 +34,7 @@ import { finalizeValueConversion } from "../../policy/operations/members/abi/con
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { rustSourceClosureValueCarrier } from "./function-values.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
+import { selectRustCallableConversion } from "../../policy/conversions/callable.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 
 export function resolveFunctionExpressionSignature(

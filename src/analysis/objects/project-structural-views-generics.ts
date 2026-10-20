@@ -4,7 +4,7 @@ import { inferRustTargetGenericBindings, rustCallableProtocol, rustOptionElement
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustLifetimesEqual, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { rustCallableValueConversionMatches } from "../../target-model/conversions/callable.js";
+import { rustCallableValueConversionMatches } from "../../policy/conversions/callable.js";
 import type { RustTargetGenericBindings, RustTargetGenericParameterSet } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";

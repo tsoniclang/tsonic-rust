@@ -1,29 +1,15 @@
-import type { RustValueConversion } from "../operations/model.js";
-import type { TargetTypeRef } from "../types/model.js";
-import { isRustAbsenceCarrier, isRustUnitCarrier, rustCallableProtocol, rustCallableInputProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../types/index.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustOptionalStorageValue } from "../types/projections.js";
-import { rustValueConversionContract } from "./contracts.js";
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../metadata/closed-data.js";
+import type { RustValueConversion } from "../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { isRustAbsenceCarrier, isRustUnitCarrier, rustCallableProtocol, rustCallableInputProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustCallableInputMatches } from "./callable-input.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 
-export type RustCallableValueConversion =
-  | { readonly kind: "identity" }
-  | { readonly kind: "value"; readonly conversion: RustValueConversion | RustCallableConversion }
-  | { readonly kind: "borrow" }
-  | { readonly kind: "absence" }
-  | { readonly kind: "discard" };
-
-export interface RustCallableConversion {
-  readonly kind: "callable-adapter";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-  readonly parameters: readonly RustCallableValueConversion[];
-  readonly result: RustCallableValueConversion;
-}
-
+import type { RustCallableValueConversion, RustCallableConversion } from "../../target-model/conversions/callable.js";
 export function rustCallableValueConversionMatches(
   conversion: RustCallableValueConversion,
   source: TargetTypeRef,
