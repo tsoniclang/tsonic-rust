@@ -9,6 +9,23 @@ import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity
 export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
   const { ast } = program.source;
+  const borrowableField = (node: Node): boolean => {
+    const field = program.records.targetOperation.get(node);
+    if (field?.kind !== "source-field") return false;
+    const frame = field.declaration === undefined ? undefined : program.records.frameBindingDeclaration.get(field.declaration);
+    if (frame !== undefined) return frame.entry === undefined;
+    const captured = field.declaration === undefined ? undefined : program.records.capturedFieldStorage.get(field.declaration);
+    if (captured !== undefined) {
+      const representation = program.records.objectRepresentation.get(program.records.projectType.get(field.receiverCarrier));
+      return representation?.kind === "value" || representation !== undefined && field.dispatch === undefined &&
+        program.records.storedField.get(field.storage, field.receiverCarrier, field.storageIndex)?.path !== undefined;
+    }
+    if (program.records.structuralFieldStorage.get(field.receiverCarrier, field.storageIndex)?.field.storage === "bound") return false;
+    const projection = program.records.valueFieldProjection.get(node);
+    if (projection === undefined || program.records.targetOperation.get(projection.root)?.kind === "source-field") return false;
+    const root = program.records.directStorage.get(projection.root);
+    return root !== undefined && root.kind !== "unavailable";
+  };
   const unwrap = (node: Node): Node => {
     while (ast.is.IsParenthesizedExpression(node)) {
       const inner = Node_Expression(ast, node);
@@ -147,7 +164,7 @@ export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "r
       const value = scoped === undefined ? undefined : program.records.literalValue.get(scoped.literal);
       if (scoped !== undefined && (value?.form === "string" || value?.form === "template") &&
         rustBorrowValueIsUnprojected(scoped.field, program.records) && isRustStringCarrier(program.records.valueRead.get(scoped.field)?.value) &&
-        isRustStringCarrier(program.records.valueRead.get(scoped.literal)?.value) && program.records.fieldValueReceiver.get(scoped.field) === true)
+        isRustStringCarrier(program.records.valueRead.get(scoped.literal)?.value) && program.records.fieldValueReceiver.get(scoped.field) === true && borrowableField(scoped.field))
         selected = { kind: "scoped-string", field: scoped.field, value: value.text, reversed: scoped.reversed, operator: operation.operator };
     }
     producer.publish(node, selected);
