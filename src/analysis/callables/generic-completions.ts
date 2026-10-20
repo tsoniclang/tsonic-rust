@@ -1,5 +1,5 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustJsPromiseTargetId, rustSourceUnionTargetType } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";

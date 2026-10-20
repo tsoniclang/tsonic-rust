@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustProducerErrorReference, type RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";

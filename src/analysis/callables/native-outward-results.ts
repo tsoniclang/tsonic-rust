@@ -2,8 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { instantiateRustNativeCompletion, rustNativeCallableCompletion, rustNativeFutureOutputType }
-  from "../../target-model/types/callable-completions.js";
+import { instantiateRustNativeCompletion, rustNativeFutureOutputType } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";

@@ -9,7 +9,7 @@ import type { RustProducerErrorReference } from "../../target-model/types/carrie
 import { rustCallableProtocol, rustCallableInputProtocol, rustClosureTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";

@@ -1,9 +1,8 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "./model.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves, type RustAwaitSelection } from "./await.js";
+import { type RustAwaitSelection } from "./await.js";
 import type { RustTypeDefinitions } from "./source-union-definitions.js";
-import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "./source-union-definitions.js";
-import { rustFutureTargetId } from "./carriers/primitives.js";
-import { rustJsPromiseTargetId } from "./carriers/source-types.js";
+import { instantiateRustSourceUnionPayloads } from "./source-union-definitions.js";
+
 import { rustNamedTargetType } from "./carriers/native.js";
 import { rustTypeGenericArguments } from "./generic-arguments.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../metadata/closed-data.js";
@@ -21,25 +20,6 @@ export interface RustNativeCallableCompletion {
   readonly result: TargetTypeRef;
   readonly selection: RustAwaitSelection;
   readonly futures: readonly RustNativeCompletionFuture[];
-}
-
-export function rustNativeCallableCompletion(
-  result: TargetTypeRef,
-  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
-): RustNativeCallableCompletion | undefined {
-  const selection = rustAwaitSelection(result, definitions);
-  if (selection === undefined) return undefined;
-  const futures = new Map<string, RustNativeCompletionFuture>();
-  for (const leaf of rustAwaitSelectionLeaves(selection)) {
-    if (leaf.future === undefined) continue;
-    const carrier = leaf.future.futureCarrier;
-    if (carrier.kind !== "target-named" || carrier.id !== rustFutureTargetId && carrier.id !== rustJsPromiseTargetId) return undefined;
-    const identity = closedMetadataKey(carrier);
-    if (!futures.has(identity)) futures.set(identity, Object.freeze({ carrier,
-      output: leaf.future.outputCarrier, ordinal: futures.size }));
-  }
-  return futures.size === 0 ? undefined : snapshotClosedMetadata({ result, selection,
-    futures: [...futures.values()] });
 }
 
 export function instantiateRustNativeCompletion(

@@ -10,7 +10,7 @@ import type { RustNativeCallableCall } from "../../target-model/records/native-p
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import { rustNativeInputEffectsMatch } from "./native-protocol-emission.js";

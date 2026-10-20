@@ -18,7 +18,7 @@ import { rustStructuralFieldIsFallible } from "../../policy/operations/native-co
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 

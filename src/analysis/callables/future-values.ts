@@ -8,7 +8,7 @@ import { finalizedConversionIsValid, finalizeValueConversion } from "../../polic
 import { rustNativeRepresentationMatches } from "../../policy/conversions/native-representation.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { RustFutureValueFact, RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 

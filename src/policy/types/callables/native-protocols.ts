@@ -1,7 +1,8 @@
 import { type TargetTypeRef, type RustTargetGenericArgument } from "../../../target-model/types/model.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
 import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
-import { instantiateRustNativeCompletion, rustNativeCompletionFutureType, rustNativeCallableCompletion } from "../../../target-model/types/callable-completions.js";
+import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "./native-completion.js";
 import { type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";

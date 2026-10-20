@@ -16,7 +16,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { createRustNativeCallableProtocolRegistry } from "./native-protocols.js";
 import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
 import { rustNativeCallableErrorType } from "../../policy/types/callables/native-protocols.js";
-import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
