@@ -21,6 +21,8 @@ export interface RustNativeClassField {
 }
 
 export interface RustNativeClassEmission {
+  readonly abstract: boolean;
+  readonly constructorEnvironment: RustNamedClassEnvironment | undefined;
   readonly kind: "ordinary" | "polymorphic";
   readonly name: string;
   readonly definition: RustProjectTypeDefinition;

@@ -129,6 +129,8 @@ export function analyzeRustClassEmission(input: {
         references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimes.has(rustLifetimeKey(lifetime)));
     });
     input.producer.classDeclaration(declaration, { kind: polymorphic ? "polymorphic" : "ordinary", name, definition,
+      abstract: ast.hasModifierKind(declaration, "abstract"),
+      constructorEnvironment: environment?.instancesUseEnvironment || environment?.initializationUsesEnvironment ? environment : undefined,
       carrier: program.projectTypes.openCarrier(definition), representation, publiclyReachable,
       visibility: ast.hasModifierKind(declaration, "export") || publiclyReachable ? "public" : "crate",
       explicitWrapperTraits: representation.kind !== "value" && (typeIdentities.size !== 0 || hasStorageParameters),

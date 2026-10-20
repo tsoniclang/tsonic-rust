@@ -1,19 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
-import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustConstructionBody } from "../../declarations/classes/construction-body.js";
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
-import { diagnosticInput, rustErrorBoundaryForDeclaration, rustErrorType,
-  rustProjectTypeHasPublicImplementationAbi, type RustPlanContext } from "../../program/plan-context.js";
+import { rustErrorBoundaryForDeclaration, rustErrorType, type RustPlanContext } from "../../program/plan-context.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
-import { rustProjectConstructorDeadCodeDisposition } from "../../program/reachability-directives.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import type { ProjectClassStateLayer } from "./model.js";
@@ -28,13 +26,13 @@ export function planProjectClassConstructor(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): { readonly construct?: RustImplFunction } | undefined {
-  if (context.input.program.source.ast.hasModifierKind(definition.declaration, "abstract")) return {};
+  const native = context.input.program.records.nativeClass.get(definition.declaration);
+  if (native === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its native declaration plan.", definition.declaration);
+  if (native.abstract) return {};
   const plan = context.input.program.records.classConstruction.get(definition.declaration);
   const selected = plan?.layers[plan.layers.length - 1];
   if (plan === undefined || selected === undefined || wrapperType.kind !== "named" || rootType.kind !== "named") {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, definition.declaration),
-      "rust.backend.constructor-plan", "Polymorphic construction has no sealed readiness and native root plan."));
-    return undefined;
+    failRustPlannerInvariant("Polymorphic construction requires its sealed readiness and native root plan.", definition.declaration);
   }
   const constructor = selected.constructor;
   const safetyDeclaration = constructor ?? definition.declaration;
@@ -44,21 +42,17 @@ export function planProjectClassConstructor(
     for (const name of layerNames.reserved) syntheticNames.reserved.add(name);
   }
   const parameterPlan = constructor === undefined
-    ? planRustImplicitConstructorParameters(selected.signature, context.input.program.projectTypes.openCarrier(definition), context)
+    ? planRustImplicitConstructorParameters(selected.signature, native.carrier, context)
     : planRustCallableParameters(constructor, context, syntheticNames);
-  if (parameterPlan === undefined) return undefined;
-  const environmentSelection = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
-  const environment = environmentSelection?.instancesUseEnvironment || environmentSelection?.initializationUsesEnvironment
-    ? environmentSelection : undefined;
+  if (parameterPlan === undefined) failRustPlannerInvariant("An admitted native constructor requires its sealed parameters, environment and body.", definition.declaration);
+  const environment = native.constructorEnvironment;
   const environmentParameter = environment === undefined ? undefined
     : rustClassEnvironmentParameter(environment, context, "owned");
-  if (environment !== undefined && environmentParameter === undefined) return undefined;
+  if (environment !== undefined && environmentParameter === undefined) failRustPlannerInvariant("An admitted native constructor requires its sealed parameters, environment and body.", definition.declaration);
   const fallible = context.input.program.records.fallible.get(safetyDeclaration) !== undefined;
   const boundary = fallible ? rustErrorBoundaryForDeclaration(safetyDeclaration, context) : undefined;
   if (fallible && boundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, safetyDeclaration),
-      "rust.backend.constructor-error-boundary", "Native constructor has no exact finalized error boundary."));
-    return undefined;
+    failRustPlannerInvariant("Native construction requires its exact finalized error boundary.", safetyDeclaration);
   }
   const constructorContext: RustPlanContext = {
     ...(environment === undefined ? context : rustClassEnvironmentContext(environment,
@@ -71,13 +65,13 @@ export function planProjectClassConstructor(
     let state: RustExpr | undefined;
     for (const layer of layers) {
       const nativeState = rustProjectStateType(layer.carrier, constructorContext);
-      if (nativeState?.kind !== "named") throw new Error("Sealed construction lost its native state type.");
+      if (nativeState?.kind !== "named") failRustPlannerInvariant("Sealed construction lost its native state type.", layer.definition.declaration);
       state = { kind: "associated-call", owner: nativeState, method: "new", args: [
         ...(state === undefined ? [] : [state]),
         ...layer.fields.map(field => values.get(field.declaration)!),
       ] };
     }
-    if (state === undefined) throw new Error("Sealed construction lost its physical state lineage.");
+    if (state === undefined) failRustPlannerInvariant("Sealed construction lost its physical state lineage.", definition.declaration);
     return { kind: "block", body: { statements: [
       { kind: "let", name: "identity", mutable: false,
         init: retainedIdentity === undefined ? { kind: "call", path: "rt::ObjectIdentity::new", args: [] } : cloneExpression(retainedIdentity) },
@@ -97,18 +91,16 @@ export function planProjectClassConstructor(
   };
   const construction = planRustConstructionBody(plan, layers.flatMap(layer => layer.fields),
     wrapperType, materialize, constructorContext);
-  if (construction === undefined) return undefined;
+  if (construction === undefined) failRustPlannerInvariant("An admitted native constructor requires its sealed parameters, environment and body.", definition.declaration);
   const body = planRustConstructionLayers(plan, layers, parameterPlan, construction, constructorContext);
-  if (body === undefined) return undefined;
+  if (body === undefined) failRustPlannerInvariant("An admitted native constructor requires its sealed parameters, environment and body.", definition.declaration);
   const isUnsafe = rustDeclarationRequiresUnsafe(definition.declaration, "constructor", context.input, constructor);
   const attrs = rustSafetyAttributesForDeclaration(safetyDeclaration, isUnsafe, context.input);
-  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, definition.targetPath);
-  const deadCode = rustProjectConstructorDeadCodeDisposition(context, definition.declaration, safetyDeclaration, publiclyReachable);
+  const deadCode = native.constructorDeadCode;
   return { construct: { kind: "function", name: selected.signature.targetName, generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}), ...(attrs.length === 0 ? {} : { attrs }),
     ...(deadCode === undefined ? {} : { deadCode }),
-    visibility: constructor === undefined || !context.input.program.source.ast.hasModifierKind(constructor, "private") &&
-      !context.input.program.source.ast.hasModifierKind(constructor, "protected") ? "public" : "private",
+    visibility: native.constructorVisibility,
     params: [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params],
     ...(boundary === undefined ? {} : { errorType: rustErrorType(boundary) }), returnType: wrapperType,
     body: applyFallibleShape({ statements: [...construction.declarations, ...body, ...construction.finish()] },
