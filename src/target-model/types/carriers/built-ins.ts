@@ -1,7 +1,6 @@
 import { rustJsArrayEntriesTargetId } from "./array-entries.js";
 import { rustJsArrayValueTargetId } from "./array-values.js";
-import { rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId,
-  rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId } from "./source-error.js";
+import { rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId, rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId } from "./source-error.js";
 import * as nativeIds from "./source-types.js";
 
 export interface RustBuiltInCarrierDefinition {
