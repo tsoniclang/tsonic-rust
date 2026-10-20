@@ -13,7 +13,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import type { SourceProjectMemberImplementationResult } from "@tsonic/target-api/source";
 import type { RustExternalProjectBase } from "../../../target-model/types/external-project-types.js";
-import type { RustProjectTypePolicyHost } from "../../../policy/types/project/project-types.js";
+import type { RustProjectTypePolicyHost } from "../construction-model.js";
 import type { RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypeRelationship } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../source-declarations.js";

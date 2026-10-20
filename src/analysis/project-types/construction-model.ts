@@ -1,25 +1,13 @@
-import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
-import type {
-  AstReader,
-  Node,
-  SourceFile,
-  Type,
-} from "@tsonic/tsts";
-import type {
-  SourceDeclaredHeritageEdge,
-  SourceProgramNavigation,
-  SourceFileSemantics,
-} from "@tsonic/target-api/source";
-import type { RustExternalProjectBase } from "../../../target-model/types/external-project-types.js";
-import type { RustNamePlan } from "../../../target-model/names/model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type {
-  RustLifetimeIndex,
-  RustSourceGenericParameterContract,
-} from "../../../target-model/lifetimes/index.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import type { AstReader, Node, SourceFile, Type } from "@tsonic/tsts";
+import type { SourceDeclaredHeritageEdge, SourceProgramNavigation, SourceFileSemantics } from "@tsonic/target-api/source";
+import type { RustExternalProjectBase } from "../../target-model/types/external-project-types.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 
 export interface RustProjectTypePolicyHost {
-  collectImplicitInterfaces(): readonly import("../../../target-model/types/project-interfaces.js").RustImplicitInterfaceContract[];
+  collectImplicitInterfaces(): readonly import("../../target-model/types/project-interfaces.js").RustImplicitInterfaceContract[];
   readonly ast: AstReader;
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;

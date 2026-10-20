@@ -8,7 +8,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 
 import type { RustExternalProjectBase } from "../../target-model/types/external-project-types.js";
-import type { RustProjectTypePolicyHost } from "../../policy/types/project/project-types.js";
+import type { RustProjectTypePolicyHost } from "../project-types/construction-model.js";
 import type { RustProjectConstructorSignature, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";

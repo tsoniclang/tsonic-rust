@@ -1,7 +1,7 @@
 import { allocateRustGeneratedName as allocateGeneratedName } from "../../../target-model/names/generated.js";
 import { projectMemberNames } from "./helpers.js";
 
-import type { RustProjectTypePolicyHost } from "../../../policy/types/project/project-types.js";
+import type { RustProjectTypePolicyHost } from "../construction-model.js";
 import type { RustProjectConstructorSignature, RustProjectTypeDefinition, RustProjectTypeIssue } from "../../../target-model/types/project-types.js";
 
 export function analyzeRustProjectConstructors(
