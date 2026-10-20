@@ -8,6 +8,7 @@ import type { RustPhysicalErrorOwner } from "./error-regions.js";
 import type { RustErrorJoinDeclaration } from "./error-regions.js";
 import type { RustErrorRegionSelection } from "./error-regions.js";
 import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
+import type { Node } from "@tsonic/tsts";
 
 export interface RustSourceErrorRegionEmission {
   readonly operand: RustErrorRegionSelection;
@@ -37,6 +38,7 @@ export interface RustGenericCallableErrorEmission {
 }
 
 export interface RustErrorEmissionRecords {
+  readonly awaitErrorEdge: { readonly get: (node: Node, carrier: TargetTypeRef) => RustSourceErrorEffectEdge | undefined };
   readonly sourceErrorRegion: { readonly get: (edge: RustSourceErrorEffectEdge) => RustSourceErrorRegionEmission | undefined };
   readonly nativeErrorJoinDeclarations: { readonly get: (fileName: string) => readonly RustErrorJoinDeclaration[] | undefined };
   readonly errorDeclarationOwner: RustRecordFamily<string>;

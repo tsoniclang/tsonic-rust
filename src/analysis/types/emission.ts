@@ -8,7 +8,7 @@ import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../ta
 import { isRustAbsenceCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustOptionElementCarrier, rustOptionTargetType, rustAbsenceTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
-import { isRustNativeFutureCarrier } from "../../target-model/types/index.js";
+import { isRustNativeFutureCarrier, isRustNeverCarrier, rustJsPromiseTargetId } from "../../target-model/types/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceUnionPayloadArguments } from "../../target-model/types/source-union-definitions.js";
@@ -88,6 +88,8 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     if (union !== undefined && unionArguments === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
+      completion: isRustUnitCarrier(carrier) ? "unit" : isRustNeverCarrier(carrier) ? "never" : "value",
+      promiseObject: carrier.kind === "target-named" && carrier.id === rustJsPromiseTargetId,
       discard: isRustNativeFutureCarrier(optionalElement ?? carrier) ? "drop" : isRustUnitCarrier(carrier) ? "unit" : "value",
       optionalStorage: optionalStorage === undefined ? undefined : Object.freeze(optionalStorage), sourceOptional: Object.freeze(sourceOptional),
       emptyRecord: carrier.kind === "target-named" && carrier.id === rustEmptyObjectTargetId ? "native-empty"

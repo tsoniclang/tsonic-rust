@@ -19,6 +19,8 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly completion: "unit" | "never" | "value";
+  readonly promiseObject: boolean;
   readonly discard: "unit" | "value" | "drop";
   readonly emptyRecord: "native-empty" | "structural" | undefined;
   readonly optionalStorage: RustOptionalStorageEmission | undefined;

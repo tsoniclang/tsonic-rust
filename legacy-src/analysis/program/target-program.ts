@@ -599,7 +599,8 @@ export function analyzeRustTargetProgram(
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
   analyzeRustProjectMemberErrors(program, context.nativeNodes, context.records.errorEmissionPlans);
   analyzeRustDeclarationErrorOwners(program, context.nativeNodes, context.records.errorEmissionPlans);
-  analyzeRustSourceErrorRegions(program, context.nativeNodes, context.records.errorEmissionPlans);
+  const sourceRegionIssues = analyzeRustSourceErrorRegions(program, context.nativeNodes, context.records.errorEmissionPlans);
+  if (sourceRegionIssues.length !== 0) return rejectedTargetStage(sourceRegionIssues);
   analyzeRustSourceBindingEmission(program, context.nativeNodes, context.records.sourceBindingEmissionPlans);
   const providerMutableIssues = analyzeRustProviderMutableEmission(program, context.nativeNodes, context.records.providerEvaluationPlans);
   if (providerMutableIssues.length !== 0) return rejectedTargetStage(providerMutableIssues);

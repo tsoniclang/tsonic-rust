@@ -35,6 +35,7 @@ import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 import { admitRustThrowCompletion } from "../errors/throw-admission.js";
 import { admitRustProjectFieldDispatch } from "../errors/field-dispatch.js";
 import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chains.js";
+import { admitRustAwaitBoundary } from "../callables/await-admission.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
@@ -431,6 +432,10 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     }
     const operation = records.targetOperation.get(node);
     const compound = records.compoundWrite.get(node);
+    if (ast.is.IsAwaitExpression(node)) {
+      const issue = admitRustAwaitBoundary(ast, node, records.awaitValue.get(node), frame(node).fallible);
+      if (issue !== undefined) diagnostics.push(issue);
+    }
     const optional = records.optionalChain.get(node);
     if (optional !== undefined) {
       const fallible = analyzeRustOptionalChainBodyFallibility({ ast, records, structural: input.structuralShapes,
