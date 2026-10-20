@@ -1,11 +1,9 @@
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustExpr, RustItem, RustPattern, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
-import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
-import { rustTypeIsLegalInPosition } from "./type-observations.js";
-import { hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
-import { snapshotRustNativeErrorSources, type RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
+import type { RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
 
 export type RustNativeErrorJoinSource = RustNativeErrorSource<RustType>;
 
@@ -31,16 +29,9 @@ export function planRustNativeErrorJoin(input: {
   readonly sources: readonly RustNativeErrorJoinSource[];
   readonly clone?: boolean;
 }): RustNativeErrorJoinPlan | undefined {
-  const selectedSources = snapshotRustNativeErrorSources(input.sources, errorType => errorType !== undefined &&
-    errorType.kind !== "infer" && rustTypeIsLegalInPosition(errorType, "general"));
-  if (!hasExactObjectKeys(input, ["identity", "name", "visibility", "sources",
-      ...(input.referencePath === undefined ? [] : ["referencePath"]),
-      ...(input.clone === undefined ? [] : ["clone"])]) ||
-    input.clone !== undefined && typeof input.clone !== "boolean" ||
-    input.identity.length === 0 || !isValidRustIdentifier(input.name) ||
-    input.referencePath !== undefined && !input.referencePath.split("::").every(segment =>
-      segment === "crate" || segment === "self" || segment === "super" || isValidRustIdentifier(segment)) ||
-    selectedSources === undefined) return undefined;
+  const selectedSources = input.sources;
+  if (new Set(selectedSources.map(source => source.identity)).size !== selectedSources.length)
+    failRustPlannerInvariant("An admitted native error join requires its unique sealed source identities.");
   const sources = new Map(selectedSources.map(source => [source.identity, source]));
   const parameters = selectedSources.map((_source, index) => ({ kind: "type" as const, name: `Error${index}`, bounds: [] }));
   const arguments_ = selectedSources.map(source => ({ kind: "type" as const, type: source.errorType }));
@@ -55,7 +46,7 @@ export function planRustNativeErrorJoin(input: {
   }]);
   const select = (source: RustNativeErrorJoinSelection): RustNativeErrorJoinSource | undefined => {
     const selected = sources.get(source.identity);
-    return selected !== undefined && rustTypeEquals(selected.errorType, source.errorType) ? selected : undefined;
+    return selected;
   };
   const propagatedValue = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined => {
     const selected = select(source);
