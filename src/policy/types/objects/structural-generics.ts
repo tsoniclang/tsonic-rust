@@ -1,10 +1,10 @@
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
-import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
-import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
-import { rustOwnedStorageChild } from "../../policy/types/storage/owned-storage.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
+import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
+import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../target-model/types/carriers/callables.js";
+import { rustOwnedStorageChild } from "../storage/owned-storage.js";
 
 export interface RustStructuralGenericCarrierSelection {
   readonly carrier: TargetTypeRef;

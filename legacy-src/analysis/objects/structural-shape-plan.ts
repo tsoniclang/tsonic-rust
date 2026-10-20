@@ -28,7 +28,7 @@ import { visitRustTargetTypeParameters } from "../../target-model/types/carriers
 import { substituteRustTargetTypeParameters, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { rustStructuralGenericCarrier } from "./structural-generic-carrier.js";
+import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
 import type {
   RustSourceObjectShape,
   RustStructuralFieldImplementation,
