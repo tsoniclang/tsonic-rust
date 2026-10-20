@@ -43,7 +43,7 @@ export function rustArrayEntryBinding(walk: RustFactWalk, expression: Node): Nod
     const iterable = Node_Expression(ast, loop);
     const element = iterable === undefined ? undefined : rustJsArrayEntriesElementTargetType(records.runtimeCarrier.get(iterable)?.carrier);
     return iteration?.kind === "iteration" && iteration.iterationKind === "for-of" &&
-      iteration.lowering.kind === "receiver-method" && iteration.lowering.name === "clone" && element !== undefined &&
+      rustTargetTypeRefEquals(iteration.elementCarrier, projection.sourceCarrier) && element !== undefined &&
       rustTargetTypeRefEquals(element, rustOptionElementCarrier(projection.bindingCarrier))
       ? declaration : undefined;
   }
