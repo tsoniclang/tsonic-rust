@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -66,7 +67,7 @@ export function projectOwnerTypeSubstitutions(
   const value = rustSourceTypeCarrierValue(carrier);
   const typeArguments = rustTargetGenericTypeArguments(value?.genericArguments);
   if (typeArguments.length !== owner.typeParameterIdentities.length) {
-    throw new Error("Callable owner arguments do not match the sealed project type-parameter arity.");
+    failTargetAnalysisInvariant("tsonic-rust", "Callable owner arguments do not match the sealed project type-parameter arity.", owner.declaration);
   }
   return new Map(owner.typeParameterIdentities.map((name, index) =>
     [name, typeArguments[index]!] as const));
