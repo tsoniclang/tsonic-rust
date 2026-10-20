@@ -3,10 +3,11 @@ import type { RustRawLocationPlan } from "../../../target-model/records/native-m
 import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
 import type { RustNativePointerOperationSelection } from "../../../target-model/records/native-pointers.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustMemoryLayoutObservationFact } from "../../../target-model/records/analysis.js";
 
 export function selectRustNativePointerOperation(
   rawLocation: RustRawLocationPlan | undefined,
-  layout: { readonly value: number } | undefined,
+  layout: RustMemoryLayoutObservationFact | undefined,
   rawAddress: RustRawAddressPlan | undefined,
   operation: RustTargetOperationFact | undefined,
 ): RustNativePointerOperationSelection | undefined {
