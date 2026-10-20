@@ -31,6 +31,7 @@ export function rustHigherRankedNativeFunctionCarrier(
       kind: "function-pointer",
       args: Object.freeze(parameters.map((parameter) => parameter.parameterCarrier)),
       result,
+      abi: Object.freeze(["target-default"]),
       lifetimeBinder: contract.lifetimeBinder,
     });
   }
