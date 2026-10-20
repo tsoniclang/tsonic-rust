@@ -1,8 +1,8 @@
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType,
-  rustProgramErrorTargetType,
-  rustStructuralPropertyValueCarrier, rustUnitTargetType } from "../../../../target-model/types/index.js";
+import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
+import type { RustStructuralLiteralEmission } from "../../../../target-model/records/object-literal-emission.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField,
   type RustType } from "../../../target-ast/syntax/nodes.js";
@@ -32,18 +32,15 @@ export interface RustStructuralLiteralImplementation {
 }
 
 export function createStructuralLiteralImplementation(
-  expression: Node, carrier: TargetTypeRef, accessorFields: ReadonlySet<number>, context: RustPlanContext, names: RustSyntheticNameState,
+  expression: Node, emission: RustStructuralLiteralEmission, context: RustPlanContext, names: RustSyntheticNameState,
 ): RustStructuralLiteralImplementation | undefined {
-  const instance = context.input.program.structuralShapes.definitionForCarrier(carrier);
-  const shape = context.input.program.structuralShapes.definitions.find(candidate =>
-    candidate.targetName === instance?.targetName && candidate.componentId === instance.componentId);
-  if (shape?.dispatchName === undefined || shape.construction !== undefined) return undefined;
+  const { shape, carrier } = emission;
   const instantiatedWrapper = rustTypeFromCarrierInContext(carrier, context);
   context = rustStructuralShapeContext(shape, context);
   const wrapper = rustTypeFromCarrierInContext(shape.carrier, context);
   const trait = rustStructuralDispatchType(shape.carrier, context);
   const errorType = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-  if (wrapper?.kind !== "named" || instantiatedWrapper?.kind !== "named" || trait === undefined || errorType === undefined) return undefined;
+  if (wrapper?.kind !== "named" || instantiatedWrapper?.kind !== "named" || trait === undefined || errorType === undefined) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
   const stateName = allocateRustSyntheticTypeName(names, `${shape.targetName}Literal`);
   const generics = rustStructuralShapeGenerics(shape, context);
   const state: RustType = { kind: "named", path: stateName, genericArguments: wrapper.genericArguments };
@@ -64,20 +61,21 @@ export function createStructuralLiteralImplementation(
     fields.push({ name, type, visibility: "crate" });
     return true;
   };
-  for (const [storageIndex, field] of shape.fields.entries()) {
-    const accessor = accessorFields.has(storageIndex);
+  for (const [storageIndex, selectedField] of emission.fields.entries()) {
+    const { field } = selectedField;
+    const accessor = selectedField.accessor;
     const type = rustTypeFromCarrierInContext(field.carrier, context);
-    if (type === undefined || field.nativeLayout !== undefined || field.storage === "bound") return undefined;
-    if (field.method) {
-      const protocol = rustCallableProtocol(field.carrier);
-      const storage = field.methodStorageCarrier;
-      const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, context);
-      const params = protocol?.parameters.map((carrier, index) => {
+    if (type === undefined) failRustPlannerInvariant("An admitted structural literal field requires its exact native type.", expression);
+    if (selectedField.method !== undefined) {
+      const protocol = selectedField.method;
+      const storage = protocol.storage;
+      const result = rustTypeFromCarrierInContext(protocol.result, context);
+      const params = protocol.parameters.map((carrier, index) => {
         const type = rustTypeFromCarrierInContext(carrier, context);
         return type === undefined ? undefined : { name: `argument${index}`, type };
       });
-      if (protocol === undefined || storage === undefined || result === undefined || params === undefined ||
-        params.some(parameter => parameter === undefined) || !store(field.targetName, storageIndex, "value", storage)) return undefined;
+      if (result === undefined ||
+        params.some(parameter => parameter === undefined) || !store(field.targetName, storageIndex, "value", storage)) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
       functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"), params: params as NonNullable<typeof params[number]>[], returnType: result, errorType,
         body: { statements: [{ kind: "let", name: "callable", mutable: false, init: read(field.targetName) }, { kind: "tail", expr: {
@@ -87,40 +85,36 @@ export function createStructuralLiteralImplementation(
       continue;
     }
     const property = field.property;
-    if (property === undefined) return undefined;
+    if (property === undefined) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
     let getter: RustExpr;
     let setter: RustExpr | undefined;
-    if (accessor) {
-      const valueCarrier = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
-      if (valueCarrier === undefined || property.selfMode !== "rc" ||
-        !store(property.getterTargetName, storageIndex, "getter", rustCallableTargetType([shape.carrier], valueCarrier))) return undefined;
+    if (accessor !== undefined) {
+      if (!store(property.getterTargetName, storageIndex, "getter", accessor.getter)) failRustPlannerInvariant("An admitted structural literal requires its exact native getter storage.", expression);
       const call: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call",
         args: [{ kind: "tuple-literal", elements: [receiver] }] };
       getter = rustValueBlock([{ name: "callable", value: read(property.getterTargetName) }], field.presence === "required" ? call : {
         kind: "method-call", receiver: call, method: "map", args: [{ kind: "path", path: "Some" }],
       });
       if (property.setterTargetName !== undefined) {
-        if (field.presence !== "required" || !store(property.setterTargetName, storageIndex, "setter",
-          rustCallableTargetType([shape.carrier, valueCarrier], rustUnitTargetType()))) return undefined;
+        if (accessor.setter === undefined || !store(property.setterTargetName, storageIndex, "setter", accessor.setter)) failRustPlannerInvariant("An admitted structural literal requires its exact native setter storage.", expression);
         setter = rustValueBlock([{ name: "callable", value: read(property.setterTargetName) }], {
           kind: "method-call", receiver: { kind: "path", path: "callable" }, method: "call",
           args: [{ kind: "tuple-literal", elements: [receiver, { kind: "path", path: "value" }] }],
         });
       }
     } else {
-      if (!store(field.targetName, storageIndex, "value", field.carrier)) return undefined;
-      getter = { kind: "call", path: "Ok", args: [read(field.targetName, isRustCopyCarrier(field.carrier))] };
+      if (!store(field.targetName, storageIndex, "value", field.carrier)) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
+      getter = { kind: "call", path: "Ok", args: [read(field.targetName, selectedField.copy)] };
       if (property.setterTargetName !== undefined) {
         let write: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with_mut", args: [{
           kind: "closure-block", params: [{ name: "state", mutable: false }], move: false, async: false,
           body: { statements: [{ kind: "assign", target: selected(field.targetName), operator: "=", value: { kind: "path", path: "value" } }] },
         }] };
-        const freeze = context.input.program.frozenDataWrites.receiverFor("structural-object", carrier, storageIndex);
-        if (freeze !== undefined) {
+        if (selectedField.frozen) {
           const owner = rustCurrentErrorBoundary(context);
           const checked = owner === undefined ? undefined
             : checkRustDataWrite("receiver", { kind: "path", path: "self" }, write, rustPackageFallibleBoundary(owner));
-          if (checked === undefined) return undefined;
+          if (checked === undefined) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
           write = checked;
         }
         setter = { kind: "evaluate-then", effect: write, discard: "unit", value: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } };
@@ -130,7 +124,7 @@ export function createStructuralLiteralImplementation(
       selfParam: rustSelfParameter(property.selfMode), params: [], returnType: type, errorType,
       body: { statements: [{ kind: "tail", expr: getter }] } });
     if (property.setterTargetName !== undefined) {
-      if (setter === undefined) return undefined;
+      if (setter === undefined) failRustPlannerInvariant("An admitted structural literal requires its exact native storage and accessor emission.", expression);
       functions.push({ kind: "function", name: property.setterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter(property.selfMode), params: [{ name: "value", type }], returnType: { kind: "unit" }, errorType,
         body: { statements: [{ kind: "tail", expr: setter }] } });
@@ -152,7 +146,7 @@ export function constructRustStructuralLiteral(
       : initializer?.kind !== "accessor" ? undefined : slot.role === "getter" ? initializer.getter : initializer.setter;
     return value === undefined ? undefined : { name: slot.name, value };
   });
-  if (fields.some(field => field === undefined)) return undefined;
+  if (fields.some(field => field === undefined)) failRustPlannerInvariant("An admitted structural literal requires its exact native field initializers.", plan.expression);
   return { kind: "struct-literal", path: plan.wrapperPath, fields: [{ name: "dispatch", value: {
     kind: "method-call", receiver: { kind: "call", path: identity === undefined ? "rt::ObjectHandle::new" : "rt::ObjectHandle::with_identity", args: [{ kind: "struct-literal",
       path: plan.stateName, fields: fields as NonNullable<typeof fields[number]>[] }, ...(identity === undefined ? [] : [identity])] }, method: "into_shared", args: [],
