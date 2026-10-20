@@ -66,7 +66,7 @@ import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests
 import { assertRustNativeCallableProtocolResults } from "./native-protocols.js";
 import { analyzeRustNativeCallableGenerics } from "./native-inputs.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
-import type { RustRetainedCallableInputPlan } from "./retained-inputs.js";
+import type { RustRetainedCallableInputPlan } from "../../target-model/records/retained-inputs.js";
 
 export interface RustCallableValuePlan {
   readonly emissionContexts: RustCallableEmissionContexts;

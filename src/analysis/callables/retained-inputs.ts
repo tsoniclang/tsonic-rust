@@ -16,16 +16,6 @@ import type { RustNativeCallableInput } from "../../target-model/records/native-
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
-export interface RustRetainedCallableBoundary {
-  readonly inputs: readonly RustNativeCallableInput[];
-  readonly errorCarrier: TargetTypeRef;
-}
-
-export interface RustRetainedCallableInputPlan {
-  forInput(input: RustNativeCallableInput): readonly TargetTypeRef[];
-  forBoundary(call: Node, argumentIndex: number): RustRetainedCallableBoundary | undefined;
-}
-
 export function analyzeRustRetainedCallableInputs(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
@@ -44,7 +34,7 @@ export function analyzeRustRetainedCallableInputs(input: {
   const owned = new Set(input.native.inputs);
   const add = (selected: RustNativeCallableInput, error: TargetTypeRef): void => {
     budget.step();
-    if (!owned.has(selected)) throw new Error("Retained callable constraints require their owned native input.");
+    if (!owned.has(selected)) failTargetAnalysisInvariant("tsonic-rust", "Retained callable constraints require their owned native input.");
     const values = requirements.get(selected) ?? new Map<string, TargetTypeRef>();
     const key = closedMetadataKey(error);
     if (values.has(key)) return;
@@ -107,11 +97,9 @@ export function analyzeRustRetainedCallableInputs(input: {
   if (unresolved !== undefined) return rejectedTargetStage([{ code: "RUST_RETAINED_CALLBACK_INPUT_UNRESOLVED",
     category: "error", source: "tsonic-rust", sourceNode: unresolved.node, message: unresolved.reason,
     evidence: ["target.capability=rust.native-callable.retained-input"] }]);
-  const published = new Map([...requirements].map(([selected, errors]) =>
-    [selected, Object.freeze([...errors.values()])] as const));
-  const absent: readonly TargetTypeRef[] = Object.freeze([]);
-  return resolvedTargetStage(Object.freeze({
-    forInput: (selected: RustNativeCallableInput) => published.get(selected) ?? absent,
-    forBoundary: (call: Node, index: number) => boundaries.get(call)?.get(index),
-  }));
+  return resolvedTargetStage(sealRustRetainedCallableInputs(requirements, boundaries));
 }
+
+import type { RustRetainedCallableBoundary, RustRetainedCallableInputPlan } from "../../target-model/records/retained-inputs.js";
+import { sealRustRetainedCallableInputs } from "../program/records/retained-inputs.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
