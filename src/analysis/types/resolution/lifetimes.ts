@@ -1,45 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
-import {
-  rustSourceTypeExportIds,
-  rustSourceProviderVersion,
-  rustSourceVirtualModulesProviderId,
-  rustTypesModule,
-} from "../../../source/extension/identity.js";
-import type {
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
-import type { RustSourcePolicyContext } from "../../model/context.js";
-import { resolveProviderTypeIdentity } from "./providers.js";
-import type {
-  RustTargetTypeResolutionContext,
-  RustTargetTypeResolutionOptions,
-} from "./model.js";
+import { rustSourceProviderVersion, rustSourceVirtualModulesProviderId, rustTypesModule } from "../../../source/extension/identity.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
+import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 
-export type RustSourceLifetimeTypeContract =
-  | { readonly kind: "lifetime-kind" }
-  | { readonly kind: "static-lifetime" }
-  | { readonly kind: "placeholder-lifetime" }
-  | {
-      readonly kind: "shared-reference" | "mutable-reference";
-      readonly targetTypeNode: Node;
-      readonly lifetimeTypeNode?: Node;
-    }
-  | { readonly kind: "outlives" | "valid-for"; readonly lifetimeTypeNode: Node }
-  | {
-      readonly kind: "trait-object";
-      readonly traitTypeNode: Node;
-      readonly lifetimeTypeNode?: Node;
-    }
-  | { readonly kind: "capture-set"; readonly tupleTypeNode: Node }
-  | {
-      readonly kind: "opaque-type";
-      readonly boundTypeNode: Node;
-      readonly captureTypeNode?: Node;
-    }
-  | { readonly kind: "maybe-sized" };
-
+import { rustLifetimeTypeContractFor } from "../../../policy/types/lifetimes/source-contracts.js";
+import type { RustSourceLifetimeTypeContract } from "../../../target-model/records/source-lifetime-types.js";
 export function rustSourceLifetimeTypeContract(
   node: Node,
   context: Pick<RustSourcePolicyContext, "source" | "ast" | "records" | "semanticsFor">,
@@ -74,65 +42,6 @@ export function rustSourceLifetimeTypeContract(
     identity.exportId,
     rawArguments as readonly Node[],
   );
-}
-
-function rustLifetimeTypeContractFor(
-  exportId: string,
-  args: readonly Node[],
-): RustSourceLifetimeTypeContract | undefined {
-  switch (exportId) {
-    case rustSourceTypeExportIds.life:
-      return args.length === 0 ? { kind: "lifetime-kind" } : undefined;
-    case rustSourceTypeExportIds.staticLifetime:
-      return args.length === 0 ? { kind: "static-lifetime" } : undefined;
-    case rustSourceTypeExportIds.placeholderLifetime:
-      return args.length === 0 ? { kind: "placeholder-lifetime" } : undefined;
-    case rustSourceTypeExportIds.sharedReference:
-    case rustSourceTypeExportIds.mutableReference:
-      return args.length >= 1 && args.length <= 2 && args[0] !== undefined
-        ? {
-            kind: exportId === rustSourceTypeExportIds.sharedReference
-              ? "shared-reference"
-              : "mutable-reference",
-            targetTypeNode: args[0],
-            ...(args[1] === undefined ? {} : { lifetimeTypeNode: args[1] }),
-          }
-        : undefined;
-    case rustSourceTypeExportIds.outlives:
-    case rustSourceTypeExportIds.validFor:
-      return args.length === 1 && args[0] !== undefined
-        ? {
-            kind: exportId === rustSourceTypeExportIds.outlives
-              ? "outlives"
-              : "valid-for",
-            lifetimeTypeNode: args[0],
-          }
-        : undefined;
-    case rustSourceTypeExportIds.dynamicTrait:
-      return args.length >= 1 && args.length <= 2 && args[0] !== undefined
-        ? {
-            kind: "trait-object",
-            traitTypeNode: args[0],
-            ...(args[1] === undefined ? {} : { lifetimeTypeNode: args[1] }),
-          }
-        : undefined;
-    case rustSourceTypeExportIds.captureSet:
-      return args.length === 1 && args[0] !== undefined
-        ? { kind: "capture-set", tupleTypeNode: args[0] }
-        : undefined;
-    case rustSourceTypeExportIds.opaqueType:
-      return args.length >= 1 && args.length <= 2 && args[0] !== undefined
-        ? {
-            kind: "opaque-type",
-            boundTypeNode: args[0],
-            ...(args[1] === undefined ? {} : { captureTypeNode: args[1] }),
-          }
-        : undefined;
-    case rustSourceTypeExportIds.maybeSized:
-      return args.length === 0 ? { kind: "maybe-sized" } : undefined;
-    default:
-      return undefined;
-  }
 }
 
 export function resolveRustLifetimeSourceType(

@@ -19,7 +19,7 @@ import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";
 
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { resolveRustLifetimeSourceType, rustSourceLifetimeTypeContract } from "../../../policy/types/resolution/lifetimes.js";
+import { resolveRustLifetimeSourceType, rustSourceLifetimeTypeContract } from "./lifetimes.js";
 
 import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "../../../policy/operations/pointers/native-memory.js";
 
