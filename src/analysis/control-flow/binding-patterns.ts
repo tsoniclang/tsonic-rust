@@ -1,6 +1,6 @@
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { AstReader, Node } from "@tsonic/tsts";

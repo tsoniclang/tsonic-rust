@@ -4,11 +4,11 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import type { Node, Type } from "@tsonic/tsts";
 
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
-import type { RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
+import type { RustTargetTypeResolutionOptions } from "../types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../../policy/types/resolution/native-flow-refinement.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { resolveRustInstanceType } from "../types/resolution/instance-tests.js";

@@ -8,7 +8,7 @@ import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolut
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { applyRustRegExpReplacementCallbackConversion, finalizeRustRegExpReplacementCallbackContract } from "../../../../policy/operations/members/regexp-callbacks.js";
 import { rejectSelectedOperation } from "../result.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
 
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";

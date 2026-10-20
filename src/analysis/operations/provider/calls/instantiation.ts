@@ -14,7 +14,7 @@ import { KindCallExpression, KindNewExpression, sourceNodeIdentity, sourceConstr
 import { rejectSelectedOperation } from "../result.js";
 
 import { recordRustValueCarrierReconciliation } from "../../../program/records/value-carrier-admission.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
 
 import { rustArgumentPassingMode } from "../../../../policy/ownership/argument-passing.js";
 import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";

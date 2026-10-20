@@ -3,7 +3,7 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import { rustCallableProtocol, rustJsErrorTargetType, rustOptionElementCarrier, rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
 import { acceptSelectedCall, selectedCallReceiverValueCarrier } from "./calls/instantiation.js";
 import { selectRustOptionalCallResult } from "./calls/optional-results.js";
 import { selectedCallArgumentCarriers, selectedSourceValueCarrier } from "./operators.js";

@@ -3,7 +3,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { Node_Type, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 

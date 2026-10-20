@@ -9,7 +9,7 @@ import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedO
 import { acceptDeclarationOperation, elementProvenance } from "../program/records/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../expressions/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./provider/conversions.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { selectRustNativeIndex } from "../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../project-types/object-layout.js";
 

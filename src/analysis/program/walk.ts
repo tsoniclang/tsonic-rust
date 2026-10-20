@@ -21,7 +21,7 @@ import type { RustProviderOperationRow } from "../../target-model/identities/pro
 import type { RustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/index.js";
+import type { RustTargetTypeResolutionContext } from "../types/resolution/index.js";
 import type { RustSelectedTargetOperation, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCaptureStorage } from "../../target-model/records/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";

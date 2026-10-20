@@ -1,7 +1,7 @@
 import { inferRustTargetGenericBindings, inferRustTargetTypeParameterBindings, isRustNumericCarrier, rustOptionElementCarrier, rustJsArrayLikeElementTargetType, rustFixedArrayCarrierValue, rustTargetGenericBindingsForArguments, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { KindArrayLiteralExpression, KindObjectLiteralExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindSpreadElement, Node_Expression, Node_Type, ObjectLiteralProperty_Value, asSourceNode } from "@tsonic/target-api/source";
 import { rustOperationContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isUnannotatedRustNumericLiteral, selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";

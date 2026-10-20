@@ -10,7 +10,7 @@ import {
 } from "@tsonic/target-api/source";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveParameterAbi } from "../callables/parameter-facts.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 
 import { rustResolutionContext } from "../program/walk.js";

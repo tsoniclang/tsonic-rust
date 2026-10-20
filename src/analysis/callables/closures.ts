@@ -12,7 +12,7 @@ import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { rustResolutionContext } from "../program/walk.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

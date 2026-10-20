@@ -4,7 +4,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourceOptionalTargetType } from "../../target-model/types/index.js";

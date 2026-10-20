@@ -5,7 +5,7 @@ import { sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "./resolution/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {

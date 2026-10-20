@@ -9,8 +9,8 @@ import { rustTargetTypeRefEquals, rustTargetTypeRefEqualsWithinLifetimeBinders }
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
-import { resolveRustTargetTypeRef, rustParameterLaneTargetType } from "../../policy/types/resolution/index.js";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef, rustParameterLaneTargetType } from "../types/resolution/index.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../types/resolution/index.js";
 import { Node_Initializer, Node_Expression, Node_Type } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";

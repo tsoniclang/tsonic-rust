@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { Node_Type, sourceTypeSyntaxRoot } from "@tsonic/target-api/source";
 import { rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact } from "../operations/project-calls.js";

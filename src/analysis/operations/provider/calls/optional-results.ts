@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { rustCallableProtocol } from "../../../../target-model/types/index.js";
 
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
 
 import { selectedCallCalleeDeclaration } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";

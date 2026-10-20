@@ -4,7 +4,7 @@ import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
 import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
 import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType, rustSourceOptionalTargetType, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";

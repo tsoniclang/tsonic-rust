@@ -4,7 +4,7 @@ import { acceptRustMemberOperation, rejectSelectedOperation, sourceOperationId }
 
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isProjectAccessorDeclaration } from "./provider/structural-properties.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { resolveRustProjectAccessor } from "./provider/project-accessors.js";
 
 import { rustCallableProtocol } from "../../target-model/types/index.js";

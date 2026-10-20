@@ -3,7 +3,7 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import { sourceAbsenceUse } from "@tsonic/target-api/source";
 
-import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

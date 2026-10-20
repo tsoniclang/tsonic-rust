@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { RustProjectFieldSelection } from "../../../target-model/records/project-fields.js";
 import type { Node, Type } from "@tsonic/tsts";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

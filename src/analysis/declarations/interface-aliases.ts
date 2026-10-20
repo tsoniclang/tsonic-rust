@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { sourceCallableInterface, sourceInterfaceRepresentationBase } from "@tsonic/target-api/source";

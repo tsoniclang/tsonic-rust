@@ -9,7 +9,7 @@ import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, read
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { readRustReferenceOperation, resolvedRustReferenceOperationCarrier } from "../expressions/reference-operations.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 

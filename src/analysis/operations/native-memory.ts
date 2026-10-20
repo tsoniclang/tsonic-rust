@@ -3,7 +3,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { createTsonicClosedArrayStorageQueries } from "@tsonic/source-core/facts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
 import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/pointers/native-memory.js";
 
 import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";

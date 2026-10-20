@@ -21,7 +21,7 @@ import { substituteProviderOperationForm } from "../../../../policy/types/callab
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, rejectSelectedOperation } from "../result.js";
 import { providerOperationFact } from "../../../../policy/operations/members/provider-templates.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration } from "../operators.js";
