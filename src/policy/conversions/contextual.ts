@@ -7,7 +7,7 @@ import { rustProviderRecordCopyMatches } from "../../target-model/conversions/pr
 import { rustEmptyRecordConversionMatches } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableConversionMatches } from "./generic-callable.js";
-import { rustIntegerTruncationConversionMatches } from "../../target-model/conversions/integer-truncation.js";
+import { rustIntegerTruncationConversionMatches } from "./integer-truncation.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 
 import { rustCallableConversionMatches } from "./callable.js";

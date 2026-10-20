@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustIntegerTruncationProducer } from "../program/records/integer-truncation.js";
-import { rustIntegerTruncationConversionMatches } from "../../target-model/conversions/integer-truncation.js";
+import { rustIntegerTruncationConversionMatches } from "../../policy/conversions/integer-truncation.js";
 
 export function analyzeRustIntegerTruncation(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustIntegerTruncationProducer): readonly TargetDiagnostic[] {

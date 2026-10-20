@@ -1,10 +1,9 @@
-import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import {
-  rustIntegerTruncationConversionMatches,
-  type RustIntegerTruncationConversion,
-} from "../../target-model/conversions/integer-truncation.js";
+import { type AstReader, type Node } from "@tsonic/tsts";
+import { sourceIntegerLiteralValue, sourceIntegerTruncationFits } from "@tsonic/target-api/source";
+import { type TargetTypeRef } from "../../target-model/types/model.js";
+import { type RustIntegerTruncationConversion } from "../../target-model/conversions/integer-truncation.js";
+import { rustIntegerTruncationConversionMatches } from "./integer-truncation.js";
+import { isRustBigIntCarrier } from "../../target-model/types/index.js";
 
 const truncations = new Map([
   ["tsonic.rust.js.BigIntConstructor.asIntN.call.bigint", true],
@@ -31,4 +30,18 @@ export function selectRustIntegerTruncationConversion(
     kind: "integer-truncation", signed, width: Number(width),
   };
   return rustIntegerTruncationConversionMatches(source, target, conversion) ? conversion : undefined;
+}
+
+
+
+
+
+
+export function rustIntegerTruncationConversionMatches(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  conversion: RustIntegerTruncationConversion,
+): boolean {
+  return isRustBigIntCarrier(source) && target.kind === "source-primitive" &&
+    sourceIntegerTruncationFits(conversion.width, conversion.signed, target.name);
 }
