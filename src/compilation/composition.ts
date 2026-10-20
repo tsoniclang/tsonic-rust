@@ -1,20 +1,10 @@
-import type {
-  TargetProviderDescriptor,
-  TargetSurfaceImplementation,
-} from "@tsonic/target-api";
-import type {
-  TargetRuntimeContributionContext,
-} from "@tsonic/target-api/provider";
-import type {
-  TargetRuntimeContributions,
-} from "@tsonic/target-api/artifacts";
+import type { TargetProviderDescriptor, TargetSurfaceImplementation } from "@tsonic/target-api";
+import type { TargetRuntimeContributionContext } from "@tsonic/target-api/provider";
+import type { TargetRuntimeContributions } from "@tsonic/target-api/artifacts";
 import { rustCompilerProviderSpecifierPrefix } from "../providers/native/session.js";
 import { rustJsSurfaceSourceProfileContributions } from "../source/profiles/declarations.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
-import {
-  createJsSourceSemanticsExtension,
-  jsSourceSemanticsModules,
-} from "@tsonic/js-source-profile";
+import { createJsSourceSemanticsExtension, jsSourceSemanticsModules } from "@tsonic/js-source-profile";
 
 export const rustTargetProvider: TargetProviderDescriptor = Object.freeze({
   id: "rust-provider",
