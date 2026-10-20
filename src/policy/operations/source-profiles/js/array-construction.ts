@@ -1,9 +1,4 @@
-import {
-  isRustNumericCarrier,
-  rustJsArrayTargetType,
-  rustJsErrorTargetType,
-  rustCarrierSupportsTrait,
-} from "../../../../target-model/types/index.js";
+import { isRustNumericCarrier, rustJsArrayTargetType, rustJsErrorTargetType, rustCarrierSupportsTrait } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { JsOperationSelection } from "./model.js";
