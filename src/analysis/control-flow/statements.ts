@@ -55,7 +55,8 @@ import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from ".
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../program/walk.js";
 import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { resolveRustDeclaredBindingStorage } from "../declarations/binding-storage.js";
 import { recordBindingPatternFacts } from "./binding-patterns.js";
