@@ -5,13 +5,17 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustCarrierReadProducer } from "../program/records/carrier-reads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { isRustCopyCarrier, rustLocationTargetType, rustOptionTargetType, rustStructuralPropertyValueCarrier,
+import { isRustCopyCarrier, rustCarrierSupportsClone, rustLocationTargetType, rustOptionTargetType, rustStructuralPropertyValueCarrier,
   rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 
 export function analyzeRustCarrierReads(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustCarrierReadProducer): void {
   const pending: TargetTypeRef[] = [];
+  for (const context of program.physicalEmissionContexts.contexts) pending.push(...context.operands,
+    ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : []));
+  for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
+    ...(operand.destination === undefined ? [] : [operand.destination]));
   for (const node of nodes) {
     const carrier = program.records.runtimeCarrier.get(node)?.carrier;
     if (carrier !== undefined) pending.push(carrier);
@@ -58,7 +62,8 @@ export function analyzeRustCarrierReads(program: Omit<RustTargetProgram, "reacha
     const key = closedMetadataKey(carrier);
     if (seen.has(key)) continue;
     seen.add(key);
-    producer.carrier(carrier, { copy: isRustCopyCarrier(carrier, selected => program.callableValues.generic.definitionFor(selected)?.copy === true) });
+    producer.carrier(carrier, { copy: isRustCopyCarrier(carrier, selected => program.callableValues.generic.definitionFor(selected)?.copy === true),
+      clone: rustCarrierSupportsClone(carrier, program.typeDefinitions) });
     pending.push(...rustTargetTypeChildren(carrier));
   }
 }

@@ -25,6 +25,12 @@ export interface RustOptionalStorageRequirement {
 }
 
 export interface RustDeclarationGenericRequirementContract {
+  readonly uses: readonly {
+    readonly node: Node;
+    readonly carrier: TargetTypeRef;
+    readonly requirements: readonly RustGenericRequirement[];
+    readonly nativeStorageCarrier?: TargetTypeRef;
+  }[];
   readonly declaration: Node;
   readonly typeParameters: readonly RustDeclarationTypeParameterRequirements[];
   readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];

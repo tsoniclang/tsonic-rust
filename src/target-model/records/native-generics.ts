@@ -1,6 +1,15 @@
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustSourceGenericParameterContract, RustSourceGenericContract, RustLifetimeRef } from "../lifetimes/model.js";
 import type { RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
+import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { Node } from "@tsonic/tsts";
+
+export interface RustGenericRequirementEmissionRecords {
+  readonly declarationRequirements: { readonly get: (declaration: Node, body?: true) => RustDeclarationGenericRequirementContract | undefined };
+  readonly carrierClone: { readonly get: (carrier: TargetTypeRef, declaration: Node, body?: true) => boolean | undefined };
+  readonly genericRequirementUse: { readonly get: (declaration: Node, node: Node, carrier: TargetTypeRef,
+    requirements: readonly RustGenericRequirement[], body?: true) => true | undefined };
+}
 
 export interface RustNativeCallableGenericInput {
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;

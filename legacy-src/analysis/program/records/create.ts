@@ -236,6 +236,7 @@ export function createRustProgramRecordBuilder(
     nativeTypeFamilyImplementations: nativeDeclarations.implementations,
     declarationLiveness: nativeLiveness.declarations,
     nativeGenerics: nativeGenericPlans.records,
+    ...nativeGenericPlans.emission,
     lexicalValues: lexicalValuePlans.records,
     nativeProtocols: nativeProtocolPlans.inventories,
     nativeProtocol: nativeProtocolPlans.protocol,
