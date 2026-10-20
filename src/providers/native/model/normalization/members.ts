@@ -1,55 +1,14 @@
-import {
-  compareText,
-  hasInnerKind,
-  isRecord,
-  itemById,
-  requireArray,
-  requireInnerRecord,
-  requireRecord,
-  requireString,
-} from "../rustdoc-schema.js";
-import {
-  childNormalizationContext,
-  derivedNormalizationContext,
-  directImplementationGenericParameterPositions,
-  emptyRustCompilerSubstitutions,
-  normalizeGenericParameters,
-  normalizeTraitDispatch,
-  normalizeType,
-  normalizeTypeBounds,
-  rustCompilerDerivedIdentity,
-  rustCompilerNestedItemIdentity,
-  substituteRustCompilerTrait,
-} from "../rustdoc-types.js";
-import {
-  associatedTypeKey,
-  normalizeMemberType,
-  sourceImplementationRequirements,
-} from "./associated-types.js";
+import { compareText, hasInnerKind, isRecord, itemById, requireArray, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
+import { childNormalizationContext, derivedNormalizationContext, directImplementationGenericParameterPositions, emptyRustCompilerSubstitutions, normalizeGenericParameters, normalizeTraitDispatch, normalizeType, normalizeTypeBounds, rustCompilerDerivedIdentity, rustCompilerNestedItemIdentity, substituteRustCompilerTrait } from "../rustdoc-types.js";
+import { associatedTypeKey, normalizeMemberType, sourceImplementationRequirements } from "./associated-types.js";
 import { canonicalItemId } from "../rustdoc-items.js";
 import { normalizeFunction } from "./functions.js";
 import { selectedRustDefaultMethods } from "./default-methods.js";
 import { implementationSubstitutions } from "./implementation-bindings.js";
-import type {
-  RustCompilerAssociatedConstant,
-  RustCompilerAssociatedType,
-  RustCompilerDependency,
-  RustCompilerEnumVariant,
-  RustCompilerField,
-  RustCompilerFunction,
-  RustCompilerGenericParameter,
-  RustCompilerItemIdentity,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-  RustCompilerTypeParameter,
-  RustCompilerUnsupportedMember,
-} from "../model.js";
+import type { RustCompilerAssociatedConstant, RustCompilerAssociatedType, RustCompilerDependency, RustCompilerEnumVariant, RustCompilerField, RustCompilerFunction, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeParameter, RustCompilerUnsupportedMember } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type {
-  RustCompilerNormalizationContext,
-  RustCompilerSubstitutions,
-} from "../rustdoc-types.js";
+import type { RustCompilerNormalizationContext, RustCompilerSubstitutions } from "../rustdoc-types.js";
 
 export function normalizeEnumVariants(
   document: RustdocDocument,
