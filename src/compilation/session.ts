@@ -7,7 +7,7 @@ import { createRustSourceSemanticsExtension } from "../source/extension/source-e
 import { rustSourceSemanticsModules } from "../source/profiles/source-modules.js";
 import { createRustCompilerProviderSession } from "../providers/native/session.js";
 import { composeRustProviderSemantics, mergeRustProviderSemantics } from "../providers/packages/semantics.js";
-import { createRustTargetConfiguration } from "../options/rust-target-options.js";
+import { createRustTargetConfiguration } from "../options/target.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
 import { materializeRustRuntimeReferences } from "../providers/runtime/materialization.js";
 import type { RustEdition } from "../target-model/project/model.js";
