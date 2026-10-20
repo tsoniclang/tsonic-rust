@@ -64,6 +64,7 @@ import { admitRustUnionProjections } from "../operations/union-projections.js";
 import { analyzeRustUnionEquality } from "../operations/union-equality.js";
 import { analyzeRustOptionEquality } from "../operations/option-equality.js";
 import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
+import { analyzeRustStringComparisonViews } from "../expressions/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
 import { analyzeRustSourceAssertions } from "../conversions/source-assertions.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
@@ -649,6 +650,7 @@ export function analyzeRustTargetProgram(
   if (templateIssues.length !== 0) return rejectedTargetStage(templateIssues);
   const assertionIssues = analyzeRustSourceAssertions(program, context.nativeNodes, context.records.sourceAssertionPlans);
   if (assertionIssues.length !== 0) return rejectedTargetStage(assertionIssues);
+  analyzeRustStringComparisonViews(program, context.nativeNodes, context.records.stringComparisonPlans);
   const nativeLayoutTypes = analyzeRustNativeMemoryEmission(program, context.nativeNodes, context.records.nativeLayoutPlans);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans, nativeLayoutTypes);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);

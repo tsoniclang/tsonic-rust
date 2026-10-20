@@ -9,7 +9,7 @@ import { isRustClosedValueCarrier } from "../../target-model/types/carriers/clos
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
-import { rustBorrowPureOperation } from "../program/borrowed-element-purity.js";
+import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
 export function analyzeRustErrorFieldBorrows(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
@@ -43,7 +43,8 @@ export function analyzeRustErrorFieldBorrows(program: Omit<RustTargetProgram, "r
     const shared = operation.property !== "stack" && !rustTargetTypeRefEquals(operation.receiverCarrier, rustJsErrorTargetType());
     const value: RustErrorFieldEmission = Object.freeze({ kind: "property", expression, receiver, property: operation.property,
       receiverForm: !borrowed ? "direct" : isRustClosedValueCarrier(projection.sourceCarrier) ? "closed" : "program",
-      guarded: operation.property === "stack" || shared, shared });
+      guarded: operation.property === "stack" || shared, shared,
+      directRead: rustBorrowValueIsUnprojected(node, program.records) && program.records.optionalChain.get(node) === undefined });
     selected.set(node, value); producer.field(node, value);
   }
   const pure = new Map<Node, ReadonlySet<Node>>();

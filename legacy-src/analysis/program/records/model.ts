@@ -138,6 +138,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly closedTypeTestPlans: import("./type-tests.js").RustClosedTypeTestProducer;
   readonly optionEqualityPlans: import("./option-equality.js").RustOptionEqualityProducer;
   readonly errorFieldPlans: import("./error-field-borrows.js").RustErrorFieldProducer;
+  readonly stringComparisonPlans: import("./string-comparison-views.js").RustStringComparisonViewProducer;
   readonly nativeLayoutPlans: import("./native-layout-emission.js").RustNativeLayoutProducer;
   readonly providerEvaluationPlans: import("./provider-evaluation.js").RustProviderEvaluationProducer;
   readonly sourceAssertionPlans: import("./source-assertions.js").RustSourceAssertionProducer;
