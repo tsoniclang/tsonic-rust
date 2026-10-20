@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustBindingProjectionFact, RustBindingValueProjectionFact } from "../../../target-model/records/value-projections.js";
-import { rustBindingNormalizationContract } from "../../../target-model/types/binding-normalization.js";
+import { rustBindingNormalizationContract } from "../../../policy/types/storage/binding-normalization.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { createRustRecordFamily } from "./family.js";
