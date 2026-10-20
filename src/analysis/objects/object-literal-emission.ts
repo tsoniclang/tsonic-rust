@@ -5,7 +5,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustObjectLiteralEmissionProducer } from "../program/records/object-literal-emission.js";
 import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType, rustEmptyObjectTargetId, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { selectRustObjectLiteralDispatch } from "../../policy/objects/object-literal-emission.js";
 import { analyzeRustProjectLiteralEmission } from "./project-literal-emission.js";
 import { rustJsValueTargetType } from "../../target-model/types/index.js";
@@ -15,6 +15,52 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
   producer: RustObjectLiteralEmissionProducer, propertyName: (node: Node) => SourcePropertyNameSelection | undefined): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
+  const refuse = (node: Node, capability: string, message: string, unsupported = false): void => {
+    issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
+  };
+  for (const node of nodes) {
+    const fact = program.records.targetOperation.get(node);
+    const { ast } = program.source;
+    const properties = ast.properties(node);
+    if (fact?.kind === "empty-object-literal" && (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId || properties.length !== 0))
+      refuse(node, "rust.backend.empty-object", "Empty object construction requires exact finalized empty syntax and identity storage.");
+    if (fact?.kind === "provider-record-literal") {
+      if (properties.length !== fact.fields.length || fact.fields.some((field, index) => field.property !== properties[index]) ||
+        new Set([...fact.fields, ...fact.absentFields].map(field => field.targetName)).size !== fact.fields.length + fact.absentFields.length ||
+        fact.completion === "default" && fact.absentFields.length !== 0)
+        refuse(node, "rust.backend.provider-record-literal", "Provider object-literal syntax conflicts with its finalized native struct construction fact.");
+      if (fact.fields.some(field => !rustTargetTypeRefEquals(rustEffectiveValueCarrier(program.records, field.expression), field.storageCarrier)))
+        refuse(node, "rust.backend.provider-record-field", "Provider object-literal field values conflict with their finalized storage carriers.");
+    }
+    if (fact?.kind === "record-index-literal" && (properties.length !== fact.contributions.length || fact.contributions.some((part, index) => part.property !== properties[index])))
+      refuse(node, "rust.backend.record-index-literal-contract", "Index-backed object literal conflicts with its finalized interface, contribution order, or generated storage contract.");
+    if (fact?.kind !== "record-literal") continue;
+    if (properties.length !== fact.contributions.length || fact.contributions.some((part, index) => part.property !== properties[index]) ||
+      new Set(fact.fields.map(field => field.sourceName)).size !== fact.fields.length || new Set(fact.fields.map(field => field.storageIndex)).size !== fact.fields.length)
+      refuse(node, "rust.backend.record-fields", "Object literal syntax does not match its finalized ordered contribution fact.");
+    if (fact.storage === "project-object") {
+      const definition = program.projectTypes.definitionForCarrier(fact.resultCarrier);
+      if (definition === undefined || program.objectRepresentations.representationFor(definition) === undefined)
+        refuse(node, "rust.backend.record", "Object literal shape does not resolve to a generated Rust struct.", true);
+    }
+    for (const part of fact.contributions) {
+      if (part.kind === "spread" || part.kind === "method") continue;
+      const name = ast.name(part.property);
+      const selected = name !== undefined && (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)) ? propertyName(name) : undefined;
+      const sourceName = name === undefined ? undefined : ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)
+        ? selected?.kind === "resolved" ? selected.name : undefined : ast.text(name);
+      if (sourceName !== part.sourceName) refuse(part.property, "rust.backend.record-fields", "Object literal syntax does not match its finalized ordered contribution fact.");
+      if (part.kind !== "structural-method") continue;
+      const field = fact.fields.find(field => field.storageIndex === part.targetStorageIndex);
+      const physical = program.structuralShapes.field(fact.resultCarrier, part.targetStorageIndex);
+      const raw = field?.presence === "optional" ? rustOptionElementCarrier(physical?.methodStorageCarrier) : physical?.methodStorageCarrier;
+      const construction = physical?.methodConstructions?.find(selected => selected.object === node && selected.property === part.property &&
+        selected.expression === part.expression && selected.storageIndex === part.targetStorageIndex);
+      if (field?.method !== true || raw === undefined || construction === undefined || !rustTargetTypeRefEquals(construction.destinationCarrier, raw))
+        refuse(part.property, "rust.backend.record-fields", "Object literal syntax does not match its finalized ordered contribution fact.");
+    }
+  }
   for (const node of nodes) {
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "closed-record-literal") continue;

@@ -19,6 +19,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
+import { parseSourceIntegerLiteral } from "../../target-model/syntax/literals.js";
 
 export function analyzeRustIndexedRecords(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustIndexedRecordProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
@@ -39,8 +40,14 @@ export function analyzeRustIndexedRecords(program: Omit<RustTargetProgram, "reac
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "record-index-literal") {
       storage(node, operation.resultCarrier, operation.keyCarrier, operation.valueCarrier, operation.storage);
-      for (const contribution of operation.contributions) if (contribution.kind === "spread")
-        storage(contribution.property, contribution.sourceCarrier, operation.keyCarrier, operation.valueCarrier, contribution.sourceStorage);
+      for (const contribution of operation.contributions) {
+        if (contribution.kind === "spread") storage(contribution.property, contribution.sourceCarrier, operation.keyCarrier, operation.valueCarrier, contribution.sourceStorage);
+        else {
+          const integer = isRustIntegerCarrier(operation.keyCarrier) ? parseSourceIntegerLiteral(contribution.sourceName) : undefined;
+          if (!isRustStringCarrier(operation.keyCarrier) && integer === undefined) reject(contribution.property, "An indexed literal key requires its exact checked native string or integer value.");
+          else producer.literalKey(contribution.property, { kind: integer === undefined ? "string" : "integer", value: integer?.toString(10) ?? contribution.sourceName });
+        }
+      }
       continue;
     }
     if (operation?.kind !== "source-index-signature") continue;

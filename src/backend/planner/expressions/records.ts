@@ -9,61 +9,35 @@ import {
   createRustStructuralObjectFromCarrier,
   rustDirectProjectFieldStoragePath,
 } from "../objects/project-storage.js";
-import {
-  isRustIntegerCarrier,
-  rustEmptyObjectTargetId,
-  isRustStringCarrier,
-  rustOptionElementCarrier,
-  rustSourceTypeCarrierValue,
-} from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
-import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
-import { requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
+import { rustOperationFact } from "./fundamentals.js";
+import { planRustAbsentValue } from "./optional-storage.js";
+import { planRustCallableExpressionBody } from "./callable.js";
 import {
   KindSpreadAssignment,
   ObjectLiteralProperty_Value,
   SpreadAssignment_Expression,
 } from "@tsonic/target-api/source";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustProviderRecordAbsentFields } from "./provider-record-absence.js";
 import { planRustRecordSpread } from "./record-spreads.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { tupleRustClosureArguments } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { planRustClosedRecordLiteral } from "./closed-records.js";
-
-function recordContributionSourceName(name: Node | undefined, context: RustPlanContext): string | undefined {
-  if (name === undefined) return undefined;
-  const { ast, propertyNames } = context.input.program.source;
-  if (!ast.is.IsComputedPropertyName(name) && !ast.is.IsNumericLiteral(name)) return ast.text(name);
-  const selected = propertyNames.get(name);
-  return selected?.kind === "resolved" ? selected.name : undefined;
-}
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "closed-record-literal") return planRustClosedRecordLiteral(node, context);
   if (fact?.kind === "empty-object-literal") {
-    if (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId ||
-      context.input.program.source.ast.properties(node).length !== 0 ||
-      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.empty-object")) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.empty-object", "Empty object construction requires exact finalized empty syntax and identity storage."));
-      return undefined;
-    }
     return { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] };
   }
   if (fact?.kind === "provider-record-literal") {
@@ -73,26 +47,16 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     return planIndexedRecordLiteral(node, fact, context);
   }
   if (fact === undefined || fact.kind !== "record-literal") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record",
-      "Object literals require a finalized record shape fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Object literals require a finalized record shape fact.", node);
   }
-  if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.record-literal-carrier")) {
-    return undefined;
-  }
-  const value = fact.storage === "project-object"
-    ? rustSourceTypeCarrierValue(fact.resultCarrier)
-    : undefined;
-  const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+  const type = fact.storage === "project-object" ? rustTypeFromCarrierInContext(fact.resultCarrier, context) : undefined;
+  const typePath = type?.kind === "named" ? type.path : undefined;
   const projectDefinition = fact.storage === "project-object"
-    ? context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier)
+    ? context.input.program.records.projectType.get(fact.resultCarrier)
     : undefined;
   const projectRepresentation = projectDefinition === undefined
     ? undefined
-    : context.input.program.objectRepresentations.representationFor(projectDefinition);
+    : context.input.program.records.objectRepresentation.get(projectDefinition);
   const stateType = fact.storage === "project-object" && projectRepresentation?.kind !== "value"
     ? rustProjectStateType(fact.resultCarrier, context)
     : undefined;
@@ -103,12 +67,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   if (fact.storage === "project-object" &&
     (typePath === undefined || projectRepresentation === undefined ||
       projectRepresentation.kind !== "value" && statePath === undefined)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record",
-      "Object literal shape does not resolve to a generated Rust struct.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Object literal shape does not resolve to a generated Rust struct.", node);
   }
   const { ast } = context.input.program.source;
   const properties = ast.properties(node);
@@ -117,12 +76,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     fact.contributions.some((contribution, index) => contribution.property !== properties[index]) ||
     new Set(fact.fields.map((field) => field.sourceName)).size !== fact.fields.length ||
     new Set(fact.fields.map((field) => field.storageIndex)).size !== fact.fields.length) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record-fields",
-      "Object literal syntax does not match its finalized ordered contribution fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Object literal syntax does not match its finalized ordered contribution fact.", node);
   }
   const bindings: RustValueBlockEntry[] = [];
   const valuesByStorageIndex = new Map<number, RustExpr>();
@@ -139,22 +93,15 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     : undefined;
   const objectLiteralImplementation = implementationPlan?.kind === "project" ? implementationPlan : undefined;
   if (requiresObjectLiteralImplementation && implementationPlan === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.object-literal-method-implementation",
-      "Object literal methods require one exact finalized Rust dispatch implementation plan.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Object literal methods require one exact finalized Rust dispatch implementation plan.", node);
   }
   const methodValues = new Map<string, RustExpr>();
   for (const [contributionIndex, contribution] of fact.contributions.entries()) {
     if (contribution.kind === "property") {
-      const nameNode = ast.name(contribution.property);
-      const sourceName = recordContributionSourceName(nameNode, context);
       const initializer = ObjectLiteralProperty_Value(ast, contribution.property);
       const planned = initializer === undefined ? undefined : planExpression(initializer, context);
-      if (sourceName !== contribution.sourceName || planned === undefined) {
-        return undefined;
+      if (planned === undefined) {
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       const bindingName = allocateRustSyntheticName(
         context.syntheticNames,
@@ -172,26 +119,12 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       continue;
     }
     if (contribution.kind === "structural-method") {
-      const sourceNameNode = ast.name(contribution.property);
-      const sourceName = recordContributionSourceName(sourceNameNode, context);
       const planned = planExpression(contribution.expression, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
-      if (sourceName !== contribution.sourceName || planned === undefined ||
+      if (planned === undefined ||
         field?.method !== true) {
-        return undefined;
-      }
-      const physicalField = context.input.program.structuralShapes.field(fact.resultCarrier, field.storageIndex);
-      const storageCarrier = physicalField?.methodStorageCarrier;
-      const rawStorageCarrier = field.presence === "optional"
-        ? rustOptionElementCarrier(storageCarrier)
-        : storageCarrier;
-      const construction = physicalField?.methodConstructions?.find(selected => selected.object === node &&
-        selected.property === contribution.property && selected.expression === contribution.expression &&
-        selected.storageIndex === contribution.targetStorageIndex);
-      if (rawStorageCarrier === undefined || construction === undefined ||
-        !rustTargetTypeRefEquals(construction.destinationCarrier, rawStorageCarrier)) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       const bindingName = allocateRustSyntheticName(
         context.syntheticNames,
@@ -210,22 +143,17 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       continue;
     }
     if (contribution.kind === "accessor") {
-      const sourceNameNode = ast.name(contribution.property);
-      const sourceName = recordContributionSourceName(sourceNameNode, context);
       const planned = planExpression(contribution.property, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
       const plannedField = fact.storage === "structural-object"
-        ? context.input.program.structuralShapes.field(
-            fact.resultCarrier,
-            contribution.targetStorageIndex,
-          )
+        ? context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[contribution.targetStorageIndex]
         : undefined;
       const plannedAccessor = fact.storage === "project-object"
         ? objectLiteralImplementation?.accessors.find((candidate) =>
             candidate.storageIndex === contribution.targetStorageIndex)
         : undefined;
-      if (sourceName !== contribution.sourceName || planned === undefined ||
+      if (planned === undefined ||
         field === undefined ||
         (fact.storage === "structural-object" && (
           plannedField?.storage !== "property" ||
@@ -236,7 +164,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
           plannedAccessor === undefined ||
           contribution.role === "set" && plannedAccessor.setter === undefined
         ))) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       const bindingName = allocateRustSyntheticName(
         context.syntheticNames,
@@ -247,7 +175,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         contribution.targetStorageIndex,
       ) ?? {};
       if (existing[contribution.role === "get" ? "getter" : "setter"] !== undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       accessorValuesByStorageIndex.set(contribution.targetStorageIndex, {
         ...existing,
@@ -263,35 +191,18 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         implementation.kind === "authored" &&
           implementation.sourceCallable === contribution.expression) ?? [];
       if (implementations.length === 0) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       for (const implementation of implementations) {
         if (implementation.kind !== "authored") {
-          return undefined;
+          failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
         }
-        const closure = planExpression(contribution.expression, {
-          ...context,
-          typeParameterSubstitutions: new Map(implementation.typeParameterSubstitutions),
-        });
-        if (closure === undefined) {
-          return undefined;
-        }
-        const bindingName = allocateRustSyntheticName(
-          context.syntheticNames,
-          "record_method",
-        );
-        const argumentsName = allocateRustSyntheticName(
-          context.syntheticNames,
-          "method_arguments",
-        );
-        const tupledClosure = tupleRustClosureArguments(
-          closure,
-          argumentsName,
-          implementation.parameterCount + 1,
-        );
-        if (tupledClosure === undefined) {
-          return undefined;
-        }
+        const bindingName = allocateRustSyntheticName(context.syntheticNames, "record_method");
+        const argumentsName = allocateRustSyntheticName(context.syntheticNames, "method_arguments");
+        const tupledClosure = planRustCallableExpressionBody(contribution.expression, {
+          ...context, typeParameterSubstitutions: new Map(implementation.typeParameterSubstitutions),
+        }, "value", "producer", { name: argumentsName, arity: implementation.parameterCount + 1 })?.expression;
+        if (tupledClosure === undefined) failRustPlannerInvariant("An admitted object method requires its exact native tuple closure.", contribution.expression);
         bindings.push({
           name: bindingName,
           value: {
@@ -309,11 +220,11 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     const spreadEvidence = contributionEvidence.spreads.get(contribution);
     if (ast.kindName(contribution.property) !== KindSpreadAssignment ||
       spreadExpression !== contribution.expression || spreadEvidence === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     const plannedSpread = planExpression(spreadExpression, context);
     if (plannedSpread === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     const retainedFields = contribution.fields.filter(field => spreadEvidence.retained.has(field));
     const retainedMethods = objectLiteralImplementation?.implementations.filter((implementation) =>
@@ -321,7 +232,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         finalContributionByMethod.get(implementation.contractMethod) === contributionIndex) ?? [];
     const spread = planRustRecordSpread(contribution, plannedSpread, retainedFields, retainedMethods,
       valuesByStorageIndex, spreadEvidence, context);
-    if (spread === undefined) return undefined;
+    if (spread === undefined) failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     bindings.push(...spread.bindings);
     for (const [index, value] of spread.fields) valuesByStorageIndex.set(index, value);
     for (const [name, value] of spread.methods) methodValues.set(name, value);
@@ -332,19 +243,16 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
     if (fact.storage === "structural-object" &&
       field.storageIndex !== structuralInitializers.length) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     const accessor = accessorValuesByStorageIndex.get(field.storageIndex);
     if (accessor !== undefined) {
       if (fact.storage === "structural-object") {
-        const plannedField = context.input.program.structuralShapes.field(
-          fact.resultCarrier,
-          field.storageIndex,
-        );
+        const plannedField = context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[field.storageIndex];
         if (plannedField?.storage !== "property" || accessor.getter === undefined ||
           (accessor.setter !== undefined) !==
             (plannedField.property?.setterTargetName !== undefined)) {
-          return undefined;
+          failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
         }
         structuralInitializers.push({
           kind: "accessor",
@@ -356,7 +264,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
           candidate.storageIndex === field.storageIndex);
         if (plannedAccessor === undefined || accessor.getter === undefined ||
           (accessor.setter !== undefined) !== (plannedAccessor.setter !== undefined)) {
-          return undefined;
+          failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
         }
       }
       continue;
@@ -364,16 +272,10 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     let value = valuesByStorageIndex.get(field.storageIndex);
     if (value === undefined) {
       const storageCarrier = field.method === true
-        ? context.input.program.structuralShapes.field(fact.resultCarrier, field.storageIndex)?.methodStorageCarrier
-        : field.carrier;
-      const optionType = field.presence === "optional" &&
-          rustOptionElementCarrier(storageCarrier) !== undefined
-        ? rustTypeFromCarrierInContext(storageCarrier, context)
-        : undefined;
-      if (optionType === undefined) {
-        return undefined;
-      }
-      value = { kind: "none" };
+        ? context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[field.storageIndex]?.methodStorageCarrier : field.carrier;
+      if (field.presence !== "optional" || storageCarrier === undefined)
+        failRustPlannerInvariant("An admitted absent field requires its exact selected optional storage.", node);
+      value = planRustAbsentValue(storageCarrier, context);
       valuesByStorageIndex.set(field.storageIndex, value);
     }
     structuralInitializers.push({
@@ -387,7 +289,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         context,
       );
       if (storagePath?.length !== 1) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       projectFields.push({ name: storagePath[0]!, value });
     }
@@ -407,7 +309,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         objectLiteralImplementation.accessors.length !== fact.fields.length ||
       objectLiteralImplementation.implementations.some((implementation) =>
         !methodValues.has(implementation.fieldName))) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     const implementationFields = [...objectLiteralImplementation.stateFields]
       .sort((left, right) => left.storageIndex - right.storageIndex)
@@ -416,7 +318,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         value: valuesByStorageIndex.get(field.storageIndex),
       }));
     if (implementationFields.some((field) => field.value === undefined)) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     const identityName = allocateRustSyntheticName(context.syntheticNames, "record_identity");
     const rootName = allocateRustSyntheticName(context.syntheticNames, "record_root");
@@ -435,7 +337,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       },
     );
     if (accessorImplementationFields.some((field) => field.value === undefined)) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     bindings.push({
       name: identityName,
@@ -500,11 +402,11 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   } else {
     if (fact.storage === "project-object") {
       if (typePath === undefined || projectRepresentation === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       constructed = createRustProjectObject(
         typePath,
-        statePath ?? typePath,
+        projectRepresentation.kind === "value" ? typePath : statePath ?? failRustPlannerInvariant("An admitted project object requires its native state type.", node),
         projectFields,
         projectRepresentation,
       );
@@ -531,14 +433,6 @@ function planProviderRecordLiteral(
   >,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!requireExpressionCarrier(
-    node,
-    fact.resultCarrier,
-    context,
-    "rust.backend.provider-record-literal-carrier",
-  )) {
-    return undefined;
-  }
   const type = rustTypeFromCarrierInContext(fact.resultCarrier, context);
   const properties = context.input.program.source.ast.properties(node);
   if (
@@ -548,35 +442,17 @@ function planProviderRecordLiteral(
     new Set([...fact.fields, ...fact.absentFields].map((field) => field.targetName)).size !==
       fact.fields.length + fact.absentFields.length || fact.completion === "default" && fact.absentFields.length !== 0
   ) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.provider-record-literal",
-      "Provider object-literal syntax conflicts with its finalized native struct construction fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Provider object-literal syntax conflicts with its finalized native struct construction fact.", node);
   }
-  const fields = fact.fields.map((field) => {
-    const carrier = rustEffectiveValueCarrier(
-      context.input.program.records,
-      field.expression,
-    );
+  const fields = fact.fields.map(field => {
     const value = planExpression(field.expression, context);
-    return carrier === undefined ||
-        !rustTargetTypeRefEquals(carrier, field.storageCarrier) ||
-        value === undefined
-      ? undefined
-      : { name: field.targetName, value };
+    return value === undefined ? undefined : { name: field.targetName, value };
   });
   if (fields.some((field) => field === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.provider-record-field",
-      "Provider object-literal field values conflict with their finalized storage carriers.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Provider object-literal field values conflict with their finalized storage carriers.", node);
   }
   const absentFields = planRustProviderRecordAbsentFields(fact.absentFields, context);
-  if (absentFields === undefined) return undefined;
+  if (absentFields === undefined) failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
   if (fields.length === 0 && fact.completion === "default") {
     return { kind: "associated-call", owner: type,
       trait: { kind: "named", path: "core::default::Default" }, method: "default", args: [] };
@@ -605,25 +481,13 @@ function planIndexedRecordLiteral(
   fact: Extract<RustTargetOperationFact, { readonly kind: "record-index-literal" }>,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!requireExpressionCarrier(
-    node,
-    fact.resultCarrier,
-    context,
-    "rust.backend.record-index-literal-carrier",
-  ) || context.syntheticNames === undefined) {
-    return undefined;
-  }
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted indexed literal requires its native name scope.", node);
   const storage = planRustIndexedRecordStorage(fact.resultCarrier, fact.keyCarrier, fact.valueCarrier, fact.storage, context);
   const properties = context.input.program.source.ast.properties(node);
   if (storage === undefined ||
     properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index])) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record-index-literal-contract",
-      "Index-backed object literal conflicts with its finalized interface, contribution order, or generated storage contract.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Index-backed object literal conflicts with its finalized interface, contribution order, or generated storage contract.", node);
   }
   const entriesName = allocateRustSyntheticName(context.syntheticNames, "record_entries");
   const entries: RustExpr = { kind: "path", path: entriesName };
@@ -634,9 +498,12 @@ function planIndexedRecordLiteral(
       const value = initializer === contribution.expression
         ? planExpression(contribution.expression, context)
         : undefined;
-      const key = rustProjectIndexLiteralKey(contribution.sourceName, fact.keyCarrier);
+      const selectedKey = context.input.program.records.indexedRecordKey.get(contribution.property)
+        ?? failRustPlannerInvariant("An admitted indexed literal requires its exact native key recipe.", contribution.property);
+      const key: RustExpr = selectedKey.kind === "integer" ? { kind: "int-literal", text: selectedKey.value }
+        : { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: selectedKey.value }] };
       if (value === undefined || key === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
       }
       effects.push({ expression: { kind: "method-call", receiver: entries, receiverMode: "mut-ref", method: "insert", args: [key, value] },
         discard: "value" });
@@ -652,7 +519,7 @@ function planIndexedRecordLiteral(
     const sourceStorage = planRustIndexedRecordStorage(contribution.sourceCarrier, fact.keyCarrier, fact.valueCarrier,
       contribution.sourceStorage, context);
     if (spread === undefined || sourceStorage === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted record requires its exact native construction evidence.", node);
     }
     effects.push({ expression: sourceStorage.copyEntries(
       spread, entries,
@@ -673,22 +540,4 @@ function planIndexedRecordLiteral(
     } }], value);
 }
 
-function rustProjectIndexLiteralKey(
-  sourceName: string,
-  keyCarrier: TargetTypeRef,
-): RustExpr | undefined {
-  if (isRustStringCarrier(keyCarrier)) {
-    return {
-      kind: "call",
-      path: "String::from",
-      args: [{ kind: "str-literal", value: sourceName }],
-    };
-  }
-  if (isRustIntegerCarrier(keyCarrier)) {
-    const value = parseSourceIntegerLiteral(sourceName);
-    return value === undefined
-      ? undefined
-      : { kind: "int-literal", text: value.toString(10) };
-  }
-  return undefined;
-}
+

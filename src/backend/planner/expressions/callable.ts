@@ -68,6 +68,7 @@ export function planRustCallableExpressionBody(
   outerContext: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
   representation: "value" | "producer" = "value",
+  tuple?: { readonly name: string; readonly arity: number },
 ): RustCallableExpressionPlan | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
@@ -276,7 +277,17 @@ export function planRustCallableExpressionBody(
       })),
       ...closureFact.ignoredParameterCarriers.map(() => ({ name: "_", mutable: false })),
     ];
+    if (tuple !== undefined) {
+      if (closureParams.length !== tuple.arity) failRustPlannerInvariant("An admitted method closure requires its selected native tuple arity.", node);
+      for (const [index, parameter] of closureParams.entries()) {
+        const value: RustExpr = { kind: "field", receiver: { kind: "path", path: tuple.name }, name: String(index) };
+        bindingStatements.push({ kind: "let", name: parameter.name, mutable: parameter.mutable,
+          init: parameter.byRefCopy ? { kind: "dereference", pointer: value } : value });
+      }
+      closureParams = [{ name: tuple.name, mutable: false }];
+    }
   } else {
+    if (tuple !== undefined) failRustPlannerInvariant("An admitted native method tuple cannot carry a second runtime callable protocol.", node);
     const allocatedTupleName = allocateRustSyntheticName(
       context.syntheticNames!,
       "callable_arguments",

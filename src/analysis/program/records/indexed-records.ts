@@ -8,16 +8,24 @@ export interface RustIndexedRecordProducer {
   readonly records: RustIndexedRecordRecords;
   storage(carrier: TargetTypeRef, key: TargetTypeRef, value: TargetTypeRef, storage: RustIndexedRecordStorage, selected: RustIndexedRecordStorageEmission): void;
   access(node: Node, selected: RustIndexedRecordAccessEmission): void;
+  literalKey(property: Node, selected: { readonly kind: "string" | "integer"; readonly value: string }): void;
 }
 
 export function createRustIndexedRecordProducer(assertOpen: () => void): RustIndexedRecordProducer {
   const values = new Map<string, RustIndexedRecordStorageEmission>();
   const accesses = new WeakMap<Node, RustIndexedRecordAccessEmission>();
+  const keys = new WeakMap<Node, { readonly kind: "string" | "integer"; readonly value: string }>();
   const storageKey = (carrier: TargetTypeRef, key: TargetTypeRef, value: TargetTypeRef, storage: RustIndexedRecordStorage) => closedMetadataKey([carrier, key, value, storage]);
   return Object.freeze({ records: Object.freeze({
+    indexedRecordKey: Object.freeze({ get: (property: Node) => keys.get(property) }),
     indexedRecordStorage: Object.freeze({ get: (carrier: TargetTypeRef, key: TargetTypeRef, value: TargetTypeRef, storage: RustIndexedRecordStorage) => values.get(storageKey(carrier, key, value, storage)) }),
     indexedRecordAccess: Object.freeze({ get: (node: Node) => accesses.get(node) }),
   }),
+    literalKey(property: Node, selected: { readonly kind: "string" | "integer"; readonly value: string }): void {
+      assertOpen();
+      if (keys.has(property)) failTargetAnalysisInvariant("tsonic-rust", "An indexed literal key has one checked native emission owner.", property);
+      keys.set(property, Object.freeze(selected));
+    },
     storage(carrier: TargetTypeRef, key: TargetTypeRef, value: TargetTypeRef, storage: RustIndexedRecordStorage, selected: RustIndexedRecordStorageEmission): void {
       assertOpen();
       const identity = storageKey(carrier, key, value, storage);

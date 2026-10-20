@@ -14,6 +14,7 @@ export interface RustIndexedRecordAccessEmission {
 }
 
 export interface RustIndexedRecordRecords {
+  readonly indexedRecordKey: { readonly get: (property: Node) => { readonly kind: "string" | "integer"; readonly value: string } | undefined };
   readonly indexedRecordStorage: { readonly get: (carrier: TargetTypeRef, key: TargetTypeRef, value: TargetTypeRef, storage: RustIndexedRecordStorage) => RustIndexedRecordStorageEmission | undefined };
   readonly indexedRecordAccess: { readonly get: (node: Node) => RustIndexedRecordAccessEmission | undefined };
 }

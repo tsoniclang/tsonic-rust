@@ -109,6 +109,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly sourceCallArgument: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallArgumentEmission>;
   readonly sourceCallEvaluation: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallEvaluationEmission>;
   readonly sourceCall: import("./source-calls.js").RustSourceCallRecords["sourceCall"];
+  readonly indexedRecordKey: import("./indexed-records.js").RustIndexedRecordRecords["indexedRecordKey"];
   readonly expressionSyntax: import("./expression-syntax.js").RustExpressionSyntaxRecords["expressionSyntax"];
   readonly sourceCallSpecialization: import("./source-calls.js").RustSourceCallRecords["sourceCallSpecialization"];
   readonly sourceCallParameters: { readonly get: (fact: import("./source-call-arguments.js").RustSourceCallFact) => readonly import("./source-call-arguments.js").RustSourceParameterEmission[] | undefined };
