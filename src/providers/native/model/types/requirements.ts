@@ -1,51 +1,13 @@
-import {
-  compareText,
-  isRecord,
-  itemById,
-  requireArray,
-  requireInnerRecord,
-  requireRecord,
-} from "../rustdoc-schema.js";
-import {
-  canonicalCompilerTypePathKey,
-  canonicalPathKey,
-  mergeTypeParameterRequirements,
-  normalizeGenericParameters,
-  normalizeTraitDispatch,
-  rustCompilerTraitRequirement,
-  sourceVisibleTypeParameterCount,
-  standardTypePathKind,
-} from "./normalization.js";
-import {
-  normalizeType,
-} from "./rustdoc-type-normalization.js";
-import {
-  rustCompilerTypeSemanticKey,
-  substituteRustCompilerTrait,
-  typeRequirementKey,
-} from "./substitution.js";
+import { compareText, isRecord, itemById, requireArray, requireInnerRecord, requireRecord } from "../rustdoc-schema.js";
+import { canonicalCompilerTypePathKey, canonicalPathKey, mergeTypeParameterRequirements, normalizeGenericParameters, normalizeTraitDispatch, rustCompilerTraitRequirement, sourceVisibleTypeParameterCount, standardTypePathKind } from "./normalization.js";
+import { normalizeType } from "./rustdoc-type-normalization.js";
+import { rustCompilerTypeSemanticKey, substituteRustCompilerTrait, typeRequirementKey } from "./substitution.js";
 import { implementationSubstitutions } from "../normalization/implementation-bindings.js";
-import {
-  derivedNormalizationContext,
-} from "./normalization-context.js";
-import type {
-  RustCompilerDependency,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerItemIdentity,
-  RustCompilerTraitImplementation,
-  RustCompilerTraitRequirement,
-  RustCompilerType,
-  RustCompilerTypeParameter,
-  RustCompilerTypeRequirement,
-  RustCompilerTypeTraits,
-} from "../model.js";
+import { derivedNormalizationContext } from "./normalization-context.js";
+import type { RustCompilerDependency, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerTraitImplementation, RustCompilerTraitRequirement, RustCompilerType, RustCompilerTypeParameter, RustCompilerTypeRequirement, RustCompilerTypeTraits } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type {
-  RustCompilerNormalizationContext,
-  RustCompilerSubstitutions,
-} from "../rustdoc-types.js";
+import type { RustCompilerNormalizationContext, RustCompilerSubstitutions } from "../rustdoc-types.js";
 
 export function compilerTypeRequirementCanonicalPath(
   requirement: RustCompilerTypeRequirement,
@@ -648,7 +610,19 @@ function compilerTraitPath(requirement: RustCompilerTypeRequirement): string {
       : requirement.trait.identity.canonicalPath.join("::");
 }
 
+const nativeScalarPrimitives: ReadonlySet<string> = new Set([
+  "bool", "char", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64",
+  "i128", "u128", "isize", "usize", "f32", "f64",
+]);
+const nativeStringSliceTraits: ReadonlySet<string> = new Set([
+  "core::fmt::Debug", "core::cmp::PartialEq", "core::cmp::Eq",
+  "core::hash::Hash", "core::cmp::PartialOrd", "core::cmp::Ord",
+  "core::marker::Send", "core::marker::Sync", "core::marker::Unpin",
+]);
+
 function primitiveSupportsTrait(name: string, traitPath: string): boolean {
+  if (name === "str") return nativeStringSliceTraits.has(traitPath);
+  if (!nativeScalarPrimitives.has(name)) return false;
   if (traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone" ||
     traitPath === "core::fmt::Debug" || traitPath === "core::default::Default" ||
     traitPath === "core::cmp::PartialEq" || traitPath === "core::marker::Send" ||
