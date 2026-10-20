@@ -40,19 +40,19 @@ function recordCheckedCallSelection(
     "checked call", "recordCheckedCallSelection");
   const existing = hasSelectedSignature ? context.records.selectedCall.get(request.source.call) : undefined;
   if (existing !== undefined && !rustSelectedTargetSignatureEquals(existing, value.selectedSignature)) {
-    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.selectedCall' for one exact source subject.");
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.selectedCall' for one exact source subject.", request.source.call);
   }
   const guard = value.sourceGuard;
   if (guard !== undefined) requireRustRecord(context.requiredRecords, "runtimeCarrier", guard.guard,
     "checked call source guard", "recordCheckedCallSelection");
   const existingGuard = guard === undefined ? undefined : context.records.runtimeCarrier.get(guard.guard);
   if (guard !== undefined && existingGuard !== undefined && !rustTargetTypeRefEquals(existingGuard.carrier, guard.sourceGuardCarrier)) {
-    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.");
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.", request.source.call);
   }
   const admitted = admitRustOperationSelection(request.source.call, selection, context);
   if (admitted.kind !== "accept" || admitted.value.kind === "source" || admitted.value.kind === "deferred-callback") return admitted;
   if (guard !== undefined && context.records.runtimeCarriers.source(guard.guard, guard.sourceGuardCarrier) !== undefined) {
-    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.");
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.", request.source.call);
   }
   if (!hasSelectedSignature) return admitted;
   if (existing === undefined) context.records.selectedCalls.checked(request, admitted);
@@ -77,7 +77,7 @@ export function finalizeRustPreparedCheckedCall(
   if (completed !== undefined) {
     if (completed.prepared === undefined || completed.prepared.callbackFallible !== callbackFallible ||
       !preparedCallsEqual(completed.prepared.value, prepared)) {
-      failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust completed prepared call for one exact source subject.");
+      failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust completed prepared call for one exact source subject.", request.source.call);
     }
     return completed.selection;
   }
@@ -90,7 +90,7 @@ function completedCall(request: RustCheckedCallSelectionInput, context: RustOper
   const attempt = context.operationAttempts.get(request.source.call);
   if (attempt === undefined || attempt.kind === "attempted") return undefined;
   if (attempt.kind !== "checked-call" || attempt.options !== options || !rustCheckedCallRequestsEqual(attempt.request, request)) {
-    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.selectedCall' for one exact source subject.");
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.selectedCall' for one exact source subject.", request.source.call);
   }
   return attempt;
 }
