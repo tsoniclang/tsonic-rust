@@ -17,7 +17,7 @@ import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-parameter-contracts.js";
 import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
-import { bindRustSelectedCallTypeArguments } from "../../policy/types/resolution/generic-arguments.js";
+import { bindRustSelectedCallTypeArguments } from "../types/resolution/generic-arguments.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

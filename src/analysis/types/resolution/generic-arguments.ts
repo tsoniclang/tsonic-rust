@@ -3,13 +3,13 @@ import { TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeParameters } from "../../../target-model/names/type-parameters.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustTargetType } from "./target.js";
-import { resolveRustAuthoredTargetType } from "./tuples.js";
+import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustAuthoredTargetType } from "../../../policy/types/resolution/tuples.js";
 import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { bindRustExactTypeParameters } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
-import { resolveRustEnclosingGenericParameters } from "./generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "../../callables/generic-environment.js";
 
 export function rustSelectedCallTypeParameters(
   sourceArguments: NonNullable<RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"]>,
@@ -212,7 +212,7 @@ export function resolveRustSourceDeclarationArguments(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
   selectedType: Type | undefined,
-): import("./project.js").RustResolvedProjectGenericArguments | undefined {
+): import("../../../policy/types/resolution/project.js").RustResolvedProjectGenericArguments | undefined {
   if (argumentNodes.length > contract.parameters.length) return undefined;
   const values: import("../../../target-model/types/model.js").RustTargetGenericArgument[] = [];
   for (const [index, parameter] of contract.parameters.entries()) {

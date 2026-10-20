@@ -5,7 +5,7 @@ import { selectedRustCallSignature } from "../program/records/selected-call.js";
 import type { AstReader, Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "./selected-values.js";
-import { rustSelectedCallTypeParameters } from "../../policy/types/resolution/generic-arguments.js";
+import { rustSelectedCallTypeParameters } from "../types/resolution/generic-arguments.js";
 import { acceptRustPolicy, rejectRustPolicy } from "../../policy/operations/contracts.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 

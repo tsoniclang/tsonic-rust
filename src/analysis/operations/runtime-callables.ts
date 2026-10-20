@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { selectedRustCallSignature } from "../program/records/selected-call.js";
-import { rustSelectedCallTypeParameters } from "../../policy/types/resolution/generic-arguments.js";
+import { rustSelectedCallTypeParameters } from "../types/resolution/generic-arguments.js";
 
 import { rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 

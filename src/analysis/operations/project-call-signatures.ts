@@ -33,7 +33,7 @@ import { rustGenericCallableValueOwner } from "../../policy/types/callables/call
 
 import { selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { resolveRustTypeComponentEvidence } from "../../policy/types/resolution/source-evidence.js";
-import { bindRustSelectedCallTypeArguments } from "../../policy/types/resolution/generic-arguments.js";
+import { bindRustSelectedCallTypeArguments } from "../types/resolution/generic-arguments.js";
 import { bindRustSelectedReceiverContext } from "./provider/member-carriers.js";
 
 export function acceptProjectSourceCall(
