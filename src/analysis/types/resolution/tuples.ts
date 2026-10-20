@@ -1,21 +1,13 @@
-import {
-  Node_Initializer,
-  Node_Type,
-  TypeReferenceNode_TypeName,
-  TypeOperatorNode_Type,
-} from "@tsonic/target-api/source";
-import { resolveOwnedSourceProfileTypeNameForDeclaration } from "./providers.js";
-import { resolveRustTargetType } from "./target.js";
-import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "./source.js";
+import { Node_Initializer, Node_Type, TypeReferenceNode_TypeName, TypeOperatorNode_Type } from "@tsonic/target-api/source";
+import { resolveOwnedSourceProfileTypeNameForDeclaration } from "../../../policy/identities/source-types.js";
+import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "../../../policy/types/resolution/source.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
-import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
+import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-import {
-  sourceTransformedTypeFactEvidenceNodes,
-  sourceTupleElementTypeEvidenceNodes,
-} from "@tsonic/target-api/source";
+import { sourceTransformedTypeFactEvidenceNodes, sourceTupleElementTypeEvidenceNodes } from "@tsonic/target-api/source";
 import type { Node, TypeTupleElementInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";

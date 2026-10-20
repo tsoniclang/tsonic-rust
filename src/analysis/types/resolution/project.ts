@@ -18,7 +18,7 @@ import { Node_Type, sourceCallableInterface, sourceInterfaceRepresentationBase }
 import { resolveCallableType } from "./callables.js";
 import { bindRustSourceDeclarationArguments, resolveRustSelectedTypeArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
-import { resolveRustAuthoredTargetType } from "../../../policy/types/resolution/tuples.js";
+import { resolveRustAuthoredTargetType } from "./tuples.js";
 import { resolveRustSourceArrayCarrier } from "./providers.js";
 
 export interface RustResolvedProjectGenericArguments {

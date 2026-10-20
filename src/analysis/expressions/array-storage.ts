@@ -7,7 +7,7 @@ import { sourceEnclosingCallable, sourceExpressionCallArgument } from "@tsonic/t
 import { rustResolutionContext } from "../program/walk.js";
 import { isRustVecCarrier, rustFutureOutputCarrier, rustJsArrayLikeElementTargetType, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
-import { resolveRustAuthoredTargetType } from "../../policy/types/resolution/tuples.js";
+import { resolveRustAuthoredTargetType } from "../types/resolution/tuples.js";
 import { bindRustSelectedCallTypeArguments, bindRustSourceDeclarationArguments } from "../types/resolution/generic-arguments.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
