@@ -3,7 +3,7 @@ import type { RustTargetOperationFact } from "../../../../target-model/records/o
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTargetGenericTypeArguments, substituteRustTargetGenericArgument } from "../../../../target-model/types/index.js";
-import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
+import { rustMemberAccessReceiver } from "../../../../source/extension/expressions.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planExpression } from "../entry.js";
