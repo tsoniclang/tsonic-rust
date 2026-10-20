@@ -3,7 +3,11 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustTypeEmissionProducer } from "../program/records/type-emission.js";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
-import type { RustTypeEmission, RustTypePositions } from "../../target-model/records/type-emission.js";
+import type { RustTypeEmission, RustTypePositions, RustOptionalStorageEmission, RustSourceOptionalEmission } from "../../target-model/records/type-emission.js";
+import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
+import { isRustAbsenceCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustOptionElementCarrier, rustOptionTargetType, rustAbsenceTargetType } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceUnionPayloadArguments } from "../../target-model/types/source-union-definitions.js";
@@ -62,6 +66,20 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     const unionArguments = union === undefined ? undefined : rustSourceUnionPayloadArguments(carrier, program.typeDefinitions);
     const unionDefinition = union?.origin === "generated" ? program.structuralShapes.unionForCarrier(carrier) : undefined;
     const shape = union?.origin === "generated" ? undefined : program.structuralShapes.definitionForCarrier(carrier);
+    const optionalValue = rustOptionalStorageValue(carrier);
+    const optionalElement = rustOptionElementCarrier(carrier);
+    const optionalStorage: RustOptionalStorageEmission | undefined = isRustAbsenceCarrier(carrier) ? { kind: "unit" }
+      : optionalValue !== undefined ? { kind: "custom", element: optionalValue }
+      : optionalElement !== undefined ? { kind: "option", element: optionalElement }
+      : union === undefined ? undefined : { kind: "union", absence: rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, program.typeDefinitions)?.path };
+    const sourceStorage = rustSourceOptionalTargetType(carrier);
+    const sourceOptional: RustSourceOptionalEmission = rustTargetTypeRefEquals(sourceStorage, rustOptionTargetType(carrier)) ? { kind: "identity" }
+      : optionalElement !== undefined && rustTargetTypeRefEquals(sourceStorage, carrier)
+        ? { kind: optionalValue === undefined ? "flatten" : "custom-flatten" }
+      : isRustJsValueCarrier(carrier) ? { kind: "js-value" }
+      : isRustAbsenceCarrier(carrier) || isRustUnitCarrier(carrier) ? { kind: "unit" }
+      : { kind: "custom", storage: sourceStorage };
+    if (sourceOptional.kind === "custom") pending.push(sourceStorage);
     const error = rustProducerErrorReference(carrier);
     const producerError = error === undefined ? undefined : program.errorRegions.producerError(error);
     if (error !== undefined && producerError === undefined)
@@ -69,6 +87,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     if (union !== undefined && unionArguments === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
+      optionalStorage: optionalStorage === undefined ? undefined : Object.freeze(optionalStorage), sourceOptional: Object.freeze(sourceOptional),
       emptyRecord: carrier.kind === "target-named" && carrier.id === rustEmptyObjectTargetId ? "native-empty"
         : shape?.fields.length === 0 && rustStructuralObjectCarrierValue(carrier)?.representation === "value" ? "structural" : undefined,
       moduleCallableAlias: carrier.kind === "target-named" && carrier.id === rustCallableTargetId,

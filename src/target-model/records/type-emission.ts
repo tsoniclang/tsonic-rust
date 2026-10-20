@@ -1,4 +1,15 @@
 import type { TargetTypeRef, RustTargetGenericArgument } from "../types/model.js";
+import type { RustUnionPathStep } from "../types/union-relations.js";
+
+export type RustOptionalStorageEmission =
+  | { readonly kind: "unit" }
+  | { readonly kind: "option"; readonly element: TargetTypeRef }
+  | { readonly kind: "custom"; readonly element: TargetTypeRef }
+  | { readonly kind: "union"; readonly absence: readonly RustUnionPathStep[] | undefined };
+
+export type RustSourceOptionalEmission =
+  | { readonly kind: "identity" | "unit" | "flatten" | "custom-flatten" | "js-value" }
+  | { readonly kind: "custom"; readonly storage: TargetTypeRef };
 
 export interface RustTypePositions {
   readonly opaque: boolean;
@@ -9,6 +20,8 @@ export interface RustTypePositions {
 
 export interface RustTypeEmission {
   readonly emptyRecord: "native-empty" | "structural" | undefined;
+  readonly optionalStorage: RustOptionalStorageEmission | undefined;
+  readonly sourceOptional: RustSourceOptionalEmission;
   readonly moduleCallableAlias: boolean;
   readonly callArgumentInfer: boolean;
   readonly positions: RustTypePositions;
