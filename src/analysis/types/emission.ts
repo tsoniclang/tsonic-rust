@@ -3,7 +3,8 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustTypeEmissionProducer } from "../program/records/type-emission.js";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
-import type { RustTypeEmission, RustTypePositions, RustOptionalStorageEmission, RustSourceOptionalEmission } from "../../target-model/records/type-emission.js";
+import type { RustTypeEmission, RustTypePositions, RustOptionalStorageEmission, RustSourceOptionalEmission, RustOptionPayloadView } from "../../target-model/records/type-emission.js";
+import { isRustOptionCarrier, rustOptionValueCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustOptionElementCarrier, rustOptionTargetType, rustAbsenceTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -69,6 +70,9 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     const shape = union?.origin === "generated" ? undefined : program.structuralShapes.definitionForCarrier(carrier);
     const optionalValue = rustOptionalStorageValue(carrier);
     const optionalElement = rustOptionElementCarrier(carrier);
+    const payloadView = (string: boolean): RustOptionPayloadView => string && !isRustStringCarrier(rustOptionValueCarrier(carrier))
+      ? Object.freeze({ kind: "identity" }) : isRustOptionCarrier(optionalElement)
+        ? Object.freeze({ kind: "nested", element: optionalElement! }) : Object.freeze({ kind: "leaf", method: string ? "as_deref" : "as_ref" });
     const optionalStorage: RustOptionalStorageEmission | undefined = isRustAbsenceCarrier(carrier) ? { kind: "unit" }
       : optionalValue !== undefined ? { kind: "custom", element: optionalValue }
       : optionalElement !== undefined ? { kind: "option", element: optionalElement }
@@ -88,6 +92,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     if (union !== undefined && unionArguments === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
+      optionPayload: optionalElement === undefined ? undefined : Object.freeze({ str: payloadView(true), shared: payloadView(false) }),
       completion: isRustUnitCarrier(carrier) ? "unit" : isRustNeverCarrier(carrier) ? "never" : "value",
       promiseObject: carrier.kind === "target-named" && carrier.id === rustJsPromiseTargetId,
       discard: isRustNativeFutureCarrier(optionalElement ?? carrier) ? "drop" : isRustUnitCarrier(carrier) ? "unit" : "value",

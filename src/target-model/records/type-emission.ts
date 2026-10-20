@@ -11,6 +11,11 @@ export type RustSourceOptionalEmission =
   | { readonly kind: "identity" | "unit" | "flatten" | "custom-flatten" | "js-value" }
   | { readonly kind: "custom"; readonly storage: TargetTypeRef };
 
+export type RustOptionPayloadView =
+  | { readonly kind: "identity" }
+  | { readonly kind: "leaf"; readonly method: "as_ref" | "as_deref" }
+  | { readonly kind: "nested"; readonly element: TargetTypeRef };
+
 export interface RustTypePositions {
   readonly opaque: boolean;
   readonly general: boolean;
@@ -19,6 +24,7 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly optionPayload: Readonly<Record<"str" | "shared", RustOptionPayloadView>> | undefined;
   readonly completion: "unit" | "never" | "value";
   readonly promiseObject: boolean;
   readonly discard: "unit" | "value" | "drop";
