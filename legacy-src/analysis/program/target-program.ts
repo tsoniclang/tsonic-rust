@@ -129,6 +129,7 @@ import { analyzeRustReferenceOperations } from "../expressions/reference-operati
 import { analyzeRustNullishCoalescing } from "../expressions/nullish-coalescing.js";
 import { analyzeRustObjectReferenceEmission } from "../objects/object-reference-views.js";
 import { analyzeRustSourceCallArguments } from "../callables/source-call-arguments.js";
+import { analyzeRustBinaryEmission } from "../expressions/expression-binary.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
@@ -685,6 +686,8 @@ export function analyzeRustTargetProgram(
   const computedMemberIssues = admitRustComputedMembers(program, context.nativeNodes);
   if (computedMemberIssues.length !== 0) return rejectedTargetStage(computedMemberIssues);
   analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);
+  const binaryIssues = analyzeRustBinaryEmission(program, context.nativeNodes, context.records.binaryEmissionPlans);
+  if (binaryIssues.length !== 0) return rejectedTargetStage(binaryIssues);
   const literalIssues = analyzeRustLiteralEmission(program, context.nativeNodes, context.records.literalEmissionPlans);
   if (literalIssues.length !== 0) return rejectedTargetStage(literalIssues);
   const templateIssues = analyzeRustTemplateStrings(program, context.nativeNodes, context.records.templateStringPlans);

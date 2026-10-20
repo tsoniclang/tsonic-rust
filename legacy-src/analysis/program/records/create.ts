@@ -30,6 +30,7 @@ import { createRustReferenceOperationProducer } from "./reference-operations.js"
 import { createRustNullishCoalescingProducer } from "./nullish-coalescing.js";
 import { createRustObjectReferenceEmissionProducer } from "./object-reference-views.js";
 import { createRustSourceCallArgumentProducer } from "./source-call-arguments.js";
+import { createRustBinaryEmissionProducer } from "./expression-binary.js";
 import { createRustErrorFieldProducer } from "./error-field-borrows.js";
 import { createRustStringComparisonViewProducer } from "./string-comparison-views.js";
 import { createRustGenericCallableFlowProducer } from "./generic-callable-flow.js";
@@ -277,6 +278,7 @@ export function createRustProgramRecordBuilder(
   const nullishCoalescingPlans = createRustNullishCoalescingProducer(assertOpen);
   const objectReferenceEmissionPlans = createRustObjectReferenceEmissionProducer(assertOpen);
   const sourceCallArgumentPlans = createRustSourceCallArgumentProducer(assertOpen);
+  const binaryEmissionPlans = createRustBinaryEmissionProducer(assertOpen);
   const errorFieldPlans = createRustErrorFieldProducer(assertOpen);
   const stringComparisonPlans = createRustStringComparisonViewProducer(assertOpen);
   const genericFlowApplications = createRustGenericCallableFlowProducer(assertOpen);
@@ -364,6 +366,7 @@ export function createRustProgramRecordBuilder(
     ...nullishCoalescingPlans.records,
     ...objectReferenceEmissionPlans.records,
     ...sourceCallArgumentPlans.records,
+    ...binaryEmissionPlans.records,
     ...errorFieldPlans.records,
     ...stringComparisonPlans.records,
     ...genericFlowApplications.records,
@@ -514,6 +517,7 @@ export function createRustProgramRecordBuilder(
     nullishCoalescingPlans,
     objectReferenceEmissionPlans,
     sourceCallArgumentPlans,
+    binaryEmissionPlans,
     errorFieldPlans,
     stringComparisonPlans,
     genericFlowApplications,
