@@ -1,6 +1,6 @@
+import type { RustBorrowEffects } from "../../target-model/records/ownership-effects.js";
 import type { AstReader, Node, ReadonlySourceFactResolver } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand,
-  sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand, sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -20,13 +20,6 @@ import { rustCallArgumentMode } from "../callables/parameter-passing.js";
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
 import type { RustBorrowedFieldWrite } from "../../target-model/records/ownership.js";
-
-export interface RustBorrowEffects {
-  readonly pureValues: ReadonlySet<Node>;
-  readonly fieldWrites: ReadonlyMap<Node, RustBorrowedFieldWrite>;
-  readonly stableBindings: ReadonlySet<Node>;
-  readonly nativeWrites: ReadonlyMap<Node, readonly Node[]>;
-}
 
 export interface RustBorrowEffectsInput {
   readonly ast: AstReader;
@@ -147,7 +140,7 @@ export function analyzeRustBorrowEffects(
 export function selectRustBorrowRelationship(source: Node, later: Node,
   input: RustBorrowEffectsInput, effects: RustBorrowEffects): boolean {
   const visitedValues = new Set<Node>();
-  for (let depth = 0; depth < 256 && !visitedValues.has(source); depth += 1) {
+  while (!visitedValues.has(source)) {
     visitedValues.add(source);
     const inner = Node_Expression(input.ast, source);
     if (inner !== undefined && rustSourceValueWrapperContains(source, inner, input.ast)) {
