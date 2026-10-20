@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { sourceSafetyPositionIssue } from "@tsonic/target-api/analysis";
+import { sourceSafetyPositionIssue, createSourceExplicitUnsafeContextIndex } from "@tsonic/target-api/analysis";
 import type { RustSafetyApplication, RustSafetyOperation } from "../../target-model/records/safety.js";
 import type { RustSafetyPlacement, RustSafetyEmission } from "../../target-model/records/safety-emission.js";
 import type { RustTargetProgram } from "../program/model.js";
@@ -14,6 +14,8 @@ interface RustSafetyAnalysisInput {
 export function analyzeRustSafetyEmission(program: RustSafetyAnalysisInput["program"], producer: RustSafetyEmissionProducer): readonly TargetDiagnostic[] {
   const input: RustSafetyAnalysisInput = { program };
   const issues: TargetDiagnostic[] = [];
+  const explicit = createSourceExplicitUnsafeContextIndex(program.source.ast, program.sourceFiles,
+    node => program.safetyApplications.operationForExpression(node));
   for (const file of program.sourceFiles) diagnoseRustSafetyApplications(file, input, issues);
   const seen = new Map<Node, RustSafetyEmission>();
   const visit = (node: Node): RustSafetyEmission => {
@@ -21,6 +23,13 @@ export function analyzeRustSafetyEmission(program: RustSafetyAnalysisInput["prog
     if (previous !== undefined) return previous;
     const children = program.source.ast.children(node).filter((child): child is Node => child !== undefined);
     const summaries = children.map(child => ({ node: child, value: visit(child) }));
+    const pointer = program.records.targetOperation.get(node);
+    if (pointer?.kind === "native-pointer" && !explicit.has(node)) issues.push(targetDiagnostic(
+      "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", `Rust native-pointer '${pointer.operation}' requires an explicit unsafecontext() source region.`, node));
+    const handler = program.records.nativeHandler.get(node);
+    if (handler?.kind === "native-pointer" && handler.selection.kind === "raw-location" &&
+      handler.selection.plan.operation === "reinterpret" && !explicit.has(node)) issues.push(targetDiagnostic(
+        "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", "Raw memory reinterpretation requires an explicit unsafecontext() source region.", node));
     const operation = program.safetyApplications.operationForSubject(node);
     if (operation !== undefined) {
       const issue = sourceSafetyPositionIssue(program.source.ast, node, operation,
