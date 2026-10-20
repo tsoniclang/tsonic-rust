@@ -4,6 +4,7 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { createRustConversionProducer } from "./conversion.js";
+import { createRustTypeEmissionProducer } from "./type-emission.js";
 import { createRustBorrowedInitializerProducer } from "./borrowed-initializers.js";
 import { createRustCaptureStorageProducer } from "./capture-storage.js";
 import { createRustBindingEmissionProducer } from "./binding-emission.js";
@@ -215,6 +216,7 @@ export function createRustProgramRecordBuilder(
   const classEmissionPlans = createRustClassEmissionProducer(assertOpen);
   const projectEmissionPlans = createRustProjectEmissionProducer(assertOpen);
   const carrierReadPlans = createRustCarrierReadProducer(assertOpen);
+  const typeEmissionPlans = createRustTypeEmissionProducer(assertOpen);
   const indexedRecordPlans = createRustIndexedRecordProducer(assertOpen);
   const objectProjectionPlans = createRustObjectProjectionProducer(assertOpen);
   const structuralEmissionPlans = createRustStructuralEmissionProducer(assertOpen);
@@ -236,6 +238,7 @@ export function createRustProgramRecordBuilder(
     nativeTypeFamilyImplementations: nativeDeclarations.implementations,
     declarationLiveness: nativeLiveness.declarations,
     nativeGenerics: nativeGenericPlans.records,
+    ...typeEmissionPlans.records,
     ...nativeGenericPlans.emission,
     lexicalValues: lexicalValuePlans.records,
     nativeProtocols: nativeProtocolPlans.inventories,
@@ -374,6 +377,7 @@ export function createRustProgramRecordBuilder(
     classEmissionPlans,
     projectEmissionPlans,
     carrierReadPlans,
+    typeEmissionPlans,
     indexedRecordPlans,
     objectProjectionPlans,
     structuralEmissionPlans,

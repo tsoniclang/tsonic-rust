@@ -8,7 +8,9 @@ import { registerAliasFromPath, rustCurrentErrorBoundary, rustErrorType } from "
 import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "../program/source-package-errors.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
-import { rustTypeIsLegalInPosition, rustTypeContainsImplTrait, collectAliasesFromRustType } from "./type-observations.js";
+import { collectAliasesFromRustType } from "./type-observations.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
+import type { RustTypeEmission } from "../../../target-model/records/type-emission.js";
 import type {
   RustCallGenericArgument,
   RustGenericArgument,
@@ -650,10 +652,12 @@ export function rustTypeFromCarrierInContext(
     },
   };
   const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);
-  if (position === "inferred-call" && rendered !== undefined && rustTypeContainsImplTrait(rendered)) {
+  const nativePosition = selectedCarrier === undefined ? undefined : context.input.program.records.typeEmission.get(selectedCarrier)?.positions;
+  if (selectedCarrier !== undefined && nativePosition === undefined) failRustPlannerInvariant("An admitted native type requires its exact sealed position evidence.");
+  if (position === "inferred-call" && rendered !== undefined && nativePosition?.opaque === true) {
     return { kind: "infer" };
   }
-  if (!rustTypeIsLegalInPosition(rendered, position === "inferred-call" || position === "absence" ? "general" : position)) {
+  if (nativePosition !== undefined && !nativePosition[position === "inferred-call" || position === "absence" ? "general" : position]) {
     return undefined;
   }
   collectAliasesFromRustType(rendered, (path) => {
@@ -667,6 +671,14 @@ export function rustParameterTypeFromCarrierInContext(
   context: RustTypeRenderingContext,
 ): RustType | undefined {
   return rustTypeFromCarrierInContext(carrier, context, "parameter");
+}
+
+export function rustTypeEmissionInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): RustTypeEmission {
+  const instantiated = context.typeParameterSubstitutions === undefined && context.lifetimeSubstitutions === undefined ? carrier
+    : substituteRustTargetGenerics(carrier, context.typeParameterSubstitutions ?? new Map(), context.lifetimeSubstitutions ?? new Map());
+  const selected = context.input.program.records.typeEmission.get(instantiated);
+  if (selected === undefined) failRustPlannerInvariant("An admitted native type requires its exact sealed rendering metadata.");
+  return selected;
 }
 
 export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {

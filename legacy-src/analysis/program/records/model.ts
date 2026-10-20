@@ -146,6 +146,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly classEmissionPlans: RustClassEmissionProducer;
   readonly projectEmissionPlans: RustProjectEmissionProducer;
   readonly carrierReadPlans: RustCarrierReadProducer;
+  readonly typeEmissionPlans: import("./type-emission.js").RustTypeEmissionProducer;
   readonly indexedRecordPlans: RustIndexedRecordProducer;
   readonly objectProjectionPlans: RustObjectProjectionProducer;
   readonly structuralEmissionPlans: RustStructuralEmissionProducer;

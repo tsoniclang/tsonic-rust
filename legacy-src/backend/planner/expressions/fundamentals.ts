@@ -22,8 +22,7 @@ import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustTypeContainsImplTrait } from "../types/type-observations.js";
+import { isFloatCarrier, rustTypeFromCarrierInContext, rustTypeEmissionInContext } from "../types/render.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
@@ -47,9 +46,10 @@ export function rustCallableConstructionType(
   context: RustPlanContext,
 ): RustType | undefined {
   const type = rustTypeFromCarrierInContext(carrier, context, "return");
+  const selected = rustTypeEmissionInContext(carrier, context).constructionArguments;
   return type?.kind !== "named" || type.genericArguments === undefined ? type : {
     ...type,
-    genericArguments: type.genericArguments.map(argument => argument.kind === "type" && rustTypeContainsImplTrait(argument.type)
+    genericArguments: type.genericArguments.map((argument, index) => argument.kind === "type" && selected?.[index] === true
       ? { kind: "type", type: { kind: "infer" } } : argument),
   };
 }

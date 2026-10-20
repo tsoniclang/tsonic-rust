@@ -102,6 +102,7 @@ import { analyzeRustProjectClassLayouts } from "../project-types/class-layouts.j
 import { analyzeRustObjectLiteralEmission } from "../objects/object-literal-emission.js";
 import { analyzeRustProjectMemberErrors } from "../errors/member-emission.js";
 import { analyzeRustGenericRequirementEmission } from "../declarations/requirement-emission.js";
+import { analyzeRustTypeEmission } from "../types/emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -562,6 +563,7 @@ export function analyzeRustTargetProgram(
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
+  analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);
   analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>
     sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,

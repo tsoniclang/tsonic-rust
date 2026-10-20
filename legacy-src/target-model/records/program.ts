@@ -177,6 +177,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly nativeGenerics: RustRecordFamily<RustNativeCallableGenericContext>;
   readonly declarationRequirements: import("./native-generics.js").RustGenericRequirementEmissionRecords["declarationRequirements"];
   readonly carrierClone: import("./native-generics.js").RustGenericRequirementEmissionRecords["carrierClone"];
+  readonly typeEmission: import("./type-emission.js").RustTypeEmissionRecords["typeEmission"];
   readonly frameType: import("./frame-emission.js").RustFrameEmissionRecords["frameType"];
   readonly genericRequirementUse: import("./native-generics.js").RustGenericRequirementEmissionRecords["genericRequirementUse"];
   readonly lexicalValues: RustRecordFamily<readonly RustLexicalValueDeclaration[]>;
