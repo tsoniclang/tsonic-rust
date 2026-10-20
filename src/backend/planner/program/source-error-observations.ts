@@ -63,7 +63,7 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
     ],
   }));
   const jsError = named("tsonic_rust_runtime::JsError");
-  functions.push(observation("native_error_value", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: jsError }] }, {
+  functions.push(observation("native_error_value", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: jsError }] }, writable ? { kind: "none" } : {
     kind: "match", expression: method(path("self"), "as_transport"), arms: [
       { pattern: variant("ErrorTransport::Runtime", binding("error")), expression: call("Some", method(method(path("error"), "source_error"), "clone")) },
       { pattern: variant("ErrorTransport::SourceCreated", { kind: "wildcard" }), expression: { kind: "none" } },
@@ -76,10 +76,6 @@ export function planRustSourceErrorObservations(plan: RustErrorTransportPlan, wr
         expression: call("Some", method(path("source"), "clone")) },
     ],
   }));
-  if (writable) {
-    const native = functions.find(item => item.name === "native_error_value")!;
-    functions[functions.indexOf(native)] = observation("native_error_value", { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: jsError }] }, { kind: "none" });
-  }
   functions.push(observation("is_error_kind", boolean, { kind: "binary", operator: "==",
     left: method(path("self"), "kind"), right: path("kind") }, [{ name: "kind", type: named("tsonic_rust_runtime::JsErrorKind") }]));
   const other: RustType = { kind: "reference", mutable: false, referent: source };
