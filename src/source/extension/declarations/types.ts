@@ -1,12 +1,5 @@
-import type {
-  ProviderExportDeclaration,
-  ProviderTypeExpression,
-  ProviderTypeParameterDeclaration,
-} from "@tsonic/tsts";
-import {
-  rustSourceTypeExportIds,
-  rustTypesModule,
-} from "../identity.js";
+import type { ProviderExportDeclaration, ProviderTypeExpression, ProviderTypeParameterDeclaration } from "@tsonic/tsts";
+import { rustSourceTypeExportIds, rustTypesModule } from "../identity.js";
 
 const typeParameter = (name: string): ProviderTypeExpression => ({
   kind: "type-parameter",
