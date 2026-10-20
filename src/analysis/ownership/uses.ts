@@ -3,7 +3,8 @@ import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
-import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
+import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
+import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
 import { selectRustOperationReadUses, type RustReadUse } from "../../policy/ownership/read-use.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustCallArgumentMode } from "../callables/parameter-passing.js";

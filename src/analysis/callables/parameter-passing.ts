@@ -3,7 +3,7 @@ import type { RustArgumentMode } from "../../target-model/operations/model.js";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
-import { rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
+import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
 
 export function rustCallArgumentMode(argument: Node, ast: AstReader, records: RustProgramRecords): RustArgumentMode | undefined {
   const call = ast.parent(argument);
