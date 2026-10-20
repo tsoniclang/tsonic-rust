@@ -1,23 +1,15 @@
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { Node } from "@tsonic/tsts";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustRecordContributionProducer } from "../program/records/record-contributions.js";
+import type { RustRecordContributionFact, RustRecordSpreadContribution,
+  RustRecordSpreadEvidence, RustRecordContributionEvidence } from "../../target-model/records/record-contributions.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export type RustRecordContributionFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;
-export type RustRecordSpreadContribution = Extract<RustRecordContributionFact["contributions"][number], { readonly kind: "spread" }>;
 type RecordFact = RustRecordContributionFact;
 type Spread = RustRecordSpreadContribution;
-
-export interface RustRecordSpreadEvidence {
-  readonly retained: ReadonlySet<Spread["fields"][number]>;
-  readonly evaluated: ReadonlySet<Spread["fields"][number]>;
-}
-
-export interface RustRecordContributionEvidence {
-  readonly finalFields: ReadonlyMap<number, number>;
-  readonly finalMethods: ReadonlyMap<Node, number>;
-  readonly spreads: ReadonlyMap<Spread, RustRecordSpreadEvidence>;
-}
 
 export function analyzeRustRecordContributions(
   fact: RecordFact,
@@ -35,12 +27,32 @@ export function analyzeRustRecordContributions(
     const retained = new Set(contribution.fields.filter(field =>
       rustRecordSpreadRetainsField(contribution, field, index, finalFields)));
     spreads.set(contribution, Object.freeze({
+      optional: rustOptionElementCarrier(contribution.sourceCarrier) !== undefined,
+      absentFields: new Set(contribution.fields.filter(field => rustOptionElementCarrier(field.carrier) !== undefined)),
       retained,
       evaluated: new Set(contribution.fields.filter(field =>
         retained.has(field) || rustRecordSpreadReadIsObservable(contribution, field, shapes))),
     }));
   }
   return Object.freeze({ finalFields, finalMethods, spreads });
+}
+
+export function admitRustRecordContributions(program: Omit<RustTargetProgram, "reachability">,
+  values: ReadonlyMap<RustRecordContributionFact, RustRecordContributionEvidence>, producer: RustRecordContributionProducer): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  for (const [fact, value] of values) {
+    for (const [spread, evidence] of value.spreads) {
+      const source = rustOptionElementCarrier(spread.sourceCarrier) ?? spread.sourceCarrier;
+      const index = fact.contributions.indexOf(spread);
+      if (!rustTargetTypeRefEquals(source, spread.sourceValueCarrier) || evidence.optional &&
+        spread.methods.some(method => value.finalMethods.get(method.contractDeclaration) === index))
+        issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: spread.property,
+          message: `Record spread requires its exact native source carrier and non-optional retained method storage. Node kind: ${program.source.ast.kindName(spread.property)}.`,
+          evidence: ["target.capability=rust.backend.record-spread"] });
+    }
+    producer.publish(fact, value);
+  }
+  return Object.freeze(issues);
 }
 
 export function rustRecordFinalFieldContributions(fact: RecordFact): ReadonlyMap<number, number> {

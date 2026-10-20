@@ -153,6 +153,7 @@ import { analyzeRustIntegerTruncation } from "../expressions/integer-truncation.
 import { analyzeRustProviderForms } from "../operations/provider-forms.js";
 import { analyzeRustCallableEmission } from "../conversions/callable-emission.js";
 import { analyzeRustArgumentViews } from "../expressions/argument-views.js";
+import { admitRustRecordContributions } from "../reachability/record-contributions.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -590,6 +591,8 @@ export function analyzeRustTargetProgram(
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes, context.records.conversionEmissionPlans);
+  const recordContributionIssues = admitRustRecordContributions(program, reachability.recordContributions, context.records.recordContributionPlans);
+  if (recordContributionIssues.length !== 0) return rejectedTargetStage(recordContributionIssues);
   const facadeEmission = analyzeRustSourcePackageFacadeEmission(program, sourceOutputIdentities.identities);
   if (facadeEmission.plan === undefined) return rejectedTargetStage(facadeEmission.diagnostics);
   context.records.sourcePackageEmission.facades(facadeEmission.plan);

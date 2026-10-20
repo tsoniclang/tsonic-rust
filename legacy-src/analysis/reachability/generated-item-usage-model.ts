@@ -13,7 +13,7 @@ import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
-import type { RustRecordContributionEvidence, RustRecordContributionFact } from "./record-contributions.js";
+import type { RustRecordContributionEvidence, RustRecordContributionFact } from "../../target-model/records/record-contributions.js";
 
 export type RustGeneratedOperationAbi = Extract<
   RustTargetOperationFact,

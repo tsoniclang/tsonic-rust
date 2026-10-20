@@ -112,7 +112,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   }
   const { ast } = context.input.program.source;
   const properties = ast.properties(node);
-  const contributionEvidence = context.input.program.reachability.recordContributions.get(fact);
+  const contributionEvidence = context.input.program.records.recordContribution.get(fact);
   if (contributionEvidence === undefined || context.syntheticNames === undefined || properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index]) ||
     new Set(fact.fields.map((field) => field.sourceName)).size !== fact.fields.length ||

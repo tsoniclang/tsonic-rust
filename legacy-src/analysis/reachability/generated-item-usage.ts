@@ -1,5 +1,5 @@
 import { analyzeRustRecordContributions } from "./record-contributions.js";
-import type { RustRecordContributionEvidence, RustRecordContributionFact } from "./record-contributions.js";
+import type { RustRecordContributionEvidence, RustRecordContributionFact } from "../../target-model/records/record-contributions.js";
 
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
