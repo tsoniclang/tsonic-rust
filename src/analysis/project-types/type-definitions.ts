@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustNativeEnumDeclaration } from "../../target-model/records/native-value-declarations.js";
 import { rustTsValueTargetType } from "../../target-model/types/carriers/native.js";
@@ -23,7 +24,7 @@ export function createRustTypeDefinitionRegistry(
   selectedClosedValueCarrier: TargetTypeRef = rustTsValueTargetType(),
 ): RustTypeDefinitionRegistry {
   if (!isRustClosedValueCarrier(selectedClosedValueCarrier)) {
-    throw new Error("Rust type definitions require an exact closed value carrier.");
+    failTargetAnalysisInvariant("tsonic-rust", "Rust type definitions require an exact closed value carrier.");
   }
   const closedValueCarrier = snapshotClosedMetadata(selectedClosedValueCarrier);
   const definitions = new Map<string, RustSourceUnionDefinition>();
@@ -50,7 +51,7 @@ export function createRustTypeDefinitionRegistry(
     const identity = rustSourceUnionDefinitionIdentity(carrier);
     if (identity === undefined || sourceVariants(carrier) === undefined) return undefined;
     const existing = payloadTemplates.get(identity);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined || sealed) return existing;
     const definition = templates.get(identity);
     const template = definition === undefined ? undefined : createRustSourceUnionPayloadTemplate(definition, sourceVariants);
     if (template !== undefined) payloadTemplates.set(identity, template);
@@ -74,7 +75,7 @@ export function createRustTypeDefinitionRegistry(
     sourceUnionPayloadTemplate,
     programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined,
     registerSourceEnum(carrier: TargetTypeRef, definition: RustNativeEnumDeclaration) {
-      if (sealed) throw new Error("Rust type definitions are sealed.");
+      if (sealed) failTargetAnalysisInvariant("tsonic-rust", "Rust type definitions are sealed.");
       const source = rustSourceTypeCarrierValue(carrier);
       if (source?.shape !== "enum" || source.genericArguments.length !== 0 ||
         definition.kind !== "enum" || !Object.isFrozen(definition) || !Object.isFrozen(definition.variants) ||
@@ -87,7 +88,7 @@ export function createRustTypeDefinitionRegistry(
       return true;
     },
     registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin) {
-      if (sealed) throw new Error("Rust type definitions are sealed.");
+      if (sealed) failTargetAnalysisInvariant("tsonic-rust", "Rust type definitions are sealed.");
       if (!isRustTargetTypeRef(carrier) || !isClosedMetadata(origin) || origin === null || typeof origin !== "object" ||
         !(origin.kind === "provider" && hasExactObjectKeys(origin, ["kind"]) || origin.kind === "project" &&
           hasExactObjectKeys(origin, ["kind", "variant", "sourceError"]) && typeof origin.variant === "string" &&
@@ -103,7 +104,7 @@ export function createRustTypeDefinitionRegistry(
     generatedUnions: () => Object.freeze([...definitions.values()].filter(definition =>
       rustSourceUnionCarrierValue(definition.carrier)?.origin === "generated")),
     registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean) {
-      if (sealed) throw new Error("Rust type definitions are sealed.");
+      if (sealed) failTargetAnalysisInvariant("tsonic-rust", "Rust type definitions are sealed.");
       if (typeof template !== "boolean" || definition === null || typeof definition !== "object" || !isClosedMetadata(definition) ||
         !hasExactObjectKeys(definition, ["carrier", "variants"]) || !isRustTargetTypeRef(definition.carrier)) return false;
       const value = rustSourceUnionCarrierValue(definition.carrier);
@@ -134,13 +135,18 @@ export function createRustTypeDefinitionRegistry(
       return true;
     },
     seal() {
+      const visited = new Set<string>();
       const visit = (carrier: TargetTypeRef): void => {
+        const key = closedMetadataKey(carrier);
+        if (visited.has(key)) return;
+        visited.add(key);
         if (rustSourceUnionCarrierValue(carrier) !== undefined && sourceUnionVariants(carrier) === undefined) {
-          throw new Error("A Rust source union references an undefined or incompatible variant contract.");
+          failTargetAnalysisInvariant("tsonic-rust", "A Rust source union references an undefined or incompatible variant contract.");
         }
         for (const child of rustTargetTypeChildren(carrier)) visit(child);
       };
       for (const definition of definitions.values()) for (const variant of definition.variants) visit(variant.carrier);
+      for (const definition of templates.values()) sourceUnionPayloadTemplate(definition.carrier);
       sealed = true;
       return Object.freeze({closedValueCarrier, sourceEnumDefinition, sourceUnionVariants, sourceUnionPayloadTemplate,
         programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined});
