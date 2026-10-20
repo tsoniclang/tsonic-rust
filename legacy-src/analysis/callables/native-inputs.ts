@@ -18,7 +18,7 @@ import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding } fr
 import { rustNativeCallableErrorType } from "./native-protocols.js";
 import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
+import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";

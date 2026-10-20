@@ -34,7 +34,7 @@ import { asSourceNode } from "@tsonic/target-api/source";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
+import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings,
   rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan, type RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";

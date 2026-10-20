@@ -1,10 +1,10 @@
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustNativeCallableProtocolBinding } from "../../target-model/records/native-protocols.js";
-import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustNativeCallableProtocolBinding } from "../../../target-model/records/native-protocols.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function rustNativeCallableInvocationArguments(
   binding: RustNativeCallableProtocolBinding,
