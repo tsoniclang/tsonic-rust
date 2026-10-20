@@ -13,7 +13,7 @@ import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinal
 import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
-import { hasExactKeys, isRecord } from "./validation-records.js";
+import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";

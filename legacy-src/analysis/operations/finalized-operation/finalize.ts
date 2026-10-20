@@ -14,7 +14,7 @@ import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbi
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
-import { hasExactKeys, isRecord } from "./validation-records.js";
+import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
 
 const finalizationOptionKeys = new Set([
   "operationKind", "form", "sourceReceiver", "sourceArgumentCarriers", "spreadSourceArgumentIndexes",
