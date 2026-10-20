@@ -3,7 +3,7 @@ import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { isRustFinalizedSourceInput } from "./finalized-operation/conversions.js";
+import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation/validation.js";
 
 export function rustIndexedLocationContract(

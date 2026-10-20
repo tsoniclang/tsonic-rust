@@ -10,7 +10,7 @@ import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
-import { isRustFinalizedDispatchContextInput } from "../operations/finalized-operation/conversions.js";
+import { isRustFinalizedDispatchContextInput } from "../../target-model/operations/finalized-inputs.js";
 
 export function analyzeRustDispatchRootEmission(program: Omit<RustTargetProgram, "reachability">,
   errors: RustSourcePackageErrorPlan, nodes: readonly Node[], producer: RustDispatchContextEmissionProducer): readonly TargetDiagnostic[] {

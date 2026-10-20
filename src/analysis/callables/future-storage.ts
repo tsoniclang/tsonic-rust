@@ -10,7 +10,7 @@ import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import type { RustSourceErrorBindings, RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 import type { RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import { finalizedConversionIsValid } from "../operations/finalized-operation/conversions.js";
+import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustAwaitCarrier } from "../../target-model/types/index.js";

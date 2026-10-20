@@ -5,7 +5,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
 import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
-import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
+import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMember, RustLocationStorageRoot } from "../../target-model/records/direct-storage.js";
 
 export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reachability">,

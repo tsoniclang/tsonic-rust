@@ -5,7 +5,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustLocationStorageProducer } from "../program/records/location-storage.js";
 import type { RustLocationProjection } from "../../target-model/records/location-storage.js";
 import { rustIndexedLocationContract } from "../operations/indexed-location.js";
-import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
+import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 
 export function analyzeRustLocationStorage(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationStorageProducer,

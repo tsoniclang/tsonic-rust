@@ -1,6 +1,7 @@
 import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { carrierAfterMode, finalizedConversionIsValid, isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "./conversions.js";
+import { carrierAfterMode, finalizedConversionIsValid } from "../../../policy/operations/members/abi/conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../target-model/operations/finalized-inputs.js";
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";

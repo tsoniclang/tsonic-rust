@@ -5,7 +5,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetOperation } from "../../target-model/types/model.js";
 import type { Node } from "@tsonic/tsts";
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "./finalized-operation/conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";

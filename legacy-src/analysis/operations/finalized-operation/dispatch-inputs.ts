@@ -1,7 +1,7 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import type { RustResolvedDispatchContextInput } from "../../../target-model/operations/dispatch-contexts.js";
 import { isRustResolvedDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../policy/operations/dispatch-contexts.js";
-import { carrierAfterMode } from "./conversions.js";
+import { carrierAfterMode } from "../../../policy/operations/members/abi/conversions.js";
 import type { RustFinalizedOperationAbi, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
 
 export function insertRustDispatchContextInputs(

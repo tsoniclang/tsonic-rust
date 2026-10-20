@@ -3,7 +3,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_
   sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
-import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
+import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
 import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
 import { selectRustOperationReadUses, type RustReadUse } from "../../policy/ownership/read-use.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";

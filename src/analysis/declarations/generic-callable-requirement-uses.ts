@@ -26,7 +26,7 @@ import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-car
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../operations/finalized-operation/conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 import { getRustGeneratorProtocol, isRustCopyCarrier, rustClosureProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

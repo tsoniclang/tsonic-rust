@@ -5,7 +5,7 @@ import { isRustStringViewCarrier } from "../../target-model/types/carriers/nativ
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
-import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
+import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
 

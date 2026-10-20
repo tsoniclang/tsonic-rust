@@ -9,7 +9,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { finalizedConversionIsValid } from "../operations/finalized-operation/conversions.js";
+import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {

@@ -6,7 +6,7 @@ import { rustOptionElementCarrier, rustStringTargetType } from "../../target-mod
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { validateRustFinalizedOperationAbi } from "../operations/finalized-operation/validation.js";
-import { sourceInput } from "../operations/finalized-operation/conversions.js";
+import { sourceInput } from "../../policy/operations/members/abi/conversions.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../operations/target-operation.js";

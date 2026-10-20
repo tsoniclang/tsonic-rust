@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right,
   ElementAccessExpression_ArgumentExpression, asSourceNode } from "@tsonic/target-api/source";
-import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
+import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { providerSourceInputKey, providerSourceInputNode } from "../operations/provider-source-inputs.js";
 

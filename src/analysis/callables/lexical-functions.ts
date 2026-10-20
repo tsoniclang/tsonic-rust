@@ -3,7 +3,7 @@ import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChil
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
-import { rustFinalizedTargetInputMayMutateSource } from "../operations/finalized-operation/conversions.js";
+import { rustFinalizedTargetInputMayMutateSource } from "../../target-model/operations/finalized-inputs.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";

@@ -5,7 +5,7 @@ import type { RustCheckedCallSelectionInput } from "../../../../policy/operation
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
-import { isRustFinalizedSourceInput } from "../../finalized-operation/conversions.js";
+import { isRustFinalizedSourceInput } from "../../../../target-model/operations/finalized-inputs.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 
 export function selectReferenceReborrow(

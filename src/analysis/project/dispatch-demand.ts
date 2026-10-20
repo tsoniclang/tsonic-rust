@@ -6,7 +6,7 @@ import type { RustSourcePackageComponentClassifications } from "../program/sourc
 import type { AnalyzeRustDispatchContextResult, RustDispatchContextAccess, RustDispatchContextCatalog, RustDispatchContextComposition } from "./dispatch-contexts.js";
 import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import type { RustDispatchContextProjection } from "../../target-model/operations/dispatch-contexts.js";
-import { isRustFinalizedDispatchContextInput } from "../operations/finalized-operation/conversions.js";
+import { isRustFinalizedDispatchContextInput } from "../../target-model/operations/finalized-inputs.js";
 
 export interface RustDispatchContextInputSelection {
   readonly input: RustFinalizedDispatchContextInput;

@@ -29,7 +29,7 @@ import { selectRustInferredReturn } from "./inferred-return.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
+import { finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
 
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { rustSourceClosureValueCarrier } from "./function-values.js";

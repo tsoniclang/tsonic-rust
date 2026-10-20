@@ -4,7 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustProviderFormProducer } from "../program/records/provider-forms.js";
 import type { RustProviderFormEmission } from "../../target-model/records/provider-forms.js";
-import { isRustFinalizedSourceInput } from "./finalized-operation/conversions.js";
+import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 
 export function analyzeRustProviderForms(program: Omit<RustTargetProgram, "reachability">,
   producer: RustProviderFormProducer): readonly TargetDiagnostic[] {

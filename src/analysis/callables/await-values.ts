@@ -10,7 +10,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
-import { finalizedConversionIsValid, finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
+import { finalizedConversionIsValid, finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
 import { rustFutureValueMatchesCarrier } from "./future-values.js";
 
 import type { RustAwaitValueLeafFact, RustAwaitValueFact } from "../../target-model/records/await-values.js";

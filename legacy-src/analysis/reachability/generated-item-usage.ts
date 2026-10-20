@@ -9,7 +9,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../operations/finalized-operation/conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import {
   rustValueConversionContract,

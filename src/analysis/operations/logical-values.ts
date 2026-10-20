@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch } from "@tsonic/target-api/source";
-import { finalizeValueConversion } from "./finalized-operation/conversions.js";
+import { finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
