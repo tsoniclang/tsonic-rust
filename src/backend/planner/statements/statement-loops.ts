@@ -7,7 +7,6 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { finishProviderOperationExpression, planProviderOperationExpression } from "../expressions/conversions.js";
 import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resource-management.js";
 import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";

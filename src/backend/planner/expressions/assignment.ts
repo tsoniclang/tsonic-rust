@@ -25,7 +25,7 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
   const resultName = allocateRustSyntheticName(context.syntheticNames, "assignment_result");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "assignment_value");
   const result: RustExpr = { kind: "path", path: resultName };
-  const selected: RustExpr = { kind: "path", path: valueName };
+  const operand: RustExpr = { kind: "path", path: valueName };
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(right, {
     carrier,
@@ -34,10 +34,10 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
         kind: "evaluate-then",
         effect: {
           kind: "assignment", operator: "=", target: result,
-          value: copy ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
+          value: copy ? operand : { kind: "method-call", receiver: operand, method: "clone", args: [] },
         },
         discard: "unit",
-        value: selected,
+        value: operand,
       }),
   });
   const statements = planExpressionAsStatement(node, { ...context, expressionOverrides: overrides });

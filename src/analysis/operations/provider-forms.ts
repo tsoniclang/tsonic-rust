@@ -4,6 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustProviderFormProducer } from "../program/records/provider-forms.js";
 import type { RustProviderFormEmission } from "../../target-model/records/provider-forms.js";
+import { isRustFinalizedSourceInput } from "./finalized-operation/conversions.js";
 
 export function analyzeRustProviderForms(program: Omit<RustTargetProgram, "reachability">,
   producer: RustProviderFormProducer): readonly TargetDiagnostic[] {
@@ -27,7 +28,8 @@ export function analyzeRustProviderForms(program: Omit<RustTargetProgram, "reach
       const input = abi.targetArguments[argumentIndex];
       const fileName = ast.getFileName(construction.targetSourceFile);
       const entry = program.records.workerEntries.get()?.find(entry => entry.fileName === fileName);
-      if (input === undefined || input.source.kind !== "argument" || input.mode !== "ref" && input.mode !== "value" || entry === undefined)
+      if (input === undefined || !isRustFinalizedSourceInput(input) || input.source.kind !== "argument" ||
+        input.mode !== "ref" && input.mode !== "value" || entry === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted source-module constructor requires its worker identity and immutable source argument.", node);
       worker = Object.freeze({ fileName, argumentIndex, mode: input.mode });
     }

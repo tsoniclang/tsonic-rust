@@ -44,7 +44,8 @@ export function analyzeRustPropertyReads(program: Omit<RustTargetProgram, "reach
     producer.method(declaration, receiver, carrier, { method: name, dispatch: polymorphic,
       parameters: Object.freeze([...callable.parameters]), fallible: program.records.fallible.get(implementation) !== undefined || program.records.fallible.get(declaration) !== undefined });
   };
-  const accessor = (node: Node, fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>, receiver: TargetTypeRef | undefined): void => {
+  const accessor = (node: Node, fact: Pick<Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+    "receiver" | "dispatch" | "read" | "write">, receiver: TargetTypeRef | undefined): void => {
     if (fact.receiver.kind === "static") return;
     if (receiver === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted instance accessor requires its exact checked receiver carrier.", node);
     if (fact.dispatch === undefined) return;

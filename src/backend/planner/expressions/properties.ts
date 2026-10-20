@@ -27,7 +27,7 @@ import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { planRustBorrowedElementRead } from "./borrowed-element-reads.js";
 import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planRustUnionProperty } from "./union-properties.js";
-import { planRustIndexedFieldRead } from "./indexed-fields.js";
+import { planRustIndexedFieldRead } from "./indexed-locations.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const borrowed = context.input.program.records.borrowedElementRead.get(node);

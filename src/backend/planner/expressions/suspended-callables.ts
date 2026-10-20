@@ -7,7 +7,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustCallableConstructionType } from "./fundamentals.js";
+import { rustCallableConstructionType } from "../types/constructions.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planRustCaptureValue } from "./typed-locations.js";
 import { rustSuspendedCallableStateType } from "../types/suspended-callables.js";

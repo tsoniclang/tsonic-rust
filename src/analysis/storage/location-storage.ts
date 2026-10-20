@@ -5,9 +5,11 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustLocationStorageProducer } from "../program/records/location-storage.js";
 import type { RustLocationProjection } from "../../target-model/records/location-storage.js";
 import { rustIndexedLocationContract } from "../operations/indexed-location.js";
+import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
 
 export function analyzeRustLocationStorage(program: Omit<RustTargetProgram, "reachability">,
-  nodes: readonly Node[], producer: RustLocationStorageProducer): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustLocationStorageProducer,
+  analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const selected = new Map<Node, RustLocationProjection>();
@@ -59,7 +61,7 @@ export function analyzeRustLocationStorage(program: Omit<RustTargetProgram, "rea
       const index = ElementAccessExpression_ArgumentExpression(ast, node);
       const input = operation?.kind === "provider-operation" && operation.abi.operationKind === "indexer" &&
         operation.abi.target.form === "index" && operation.abi.targetArguments.length === 1 ? operation.abi.targetArguments[0] : undefined;
-      if (index !== undefined && input !== undefined) value = { kind: "index", receiver, index, input };
+      if (index !== undefined && input !== undefined && isRustFinalizedSourceInput(input)) value = { kind: "index", receiver, index, input };
       else reason = "The finalized Rust element storage is not one exact built-in index operation.";
     } else reason = "The finalized Rust storage path contains an unsupported projection.";
     active.delete(node);
@@ -95,7 +97,7 @@ export function analyzeRustLocationStorage(program: Omit<RustTargetProgram, "rea
     select(node);
   }
   for (const node of nodes) {
-    const location = program.records.typedLocationPlan.get(node);
+    const location = analysisRecords.typedLocationPlan.get(node);
     if (location?.operation === "address-of") admit(location.storageExpression);
     const operation = program.records.targetOperation.get(node);
     const left = ast.is.IsBinaryExpression(node) ? BinaryExpression_Left(ast, node) : undefined;

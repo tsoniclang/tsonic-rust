@@ -4,7 +4,8 @@ import type { RustTargetOperationFact } from "./operations.js";
 import type { TargetTypeRef } from "../types/model.js";
 
 export type RustLocationProjection =
-  | { readonly kind: "root" | "native-array" }
+  | { readonly kind: "root" }
+  | { readonly kind: "native-array" }
   | { readonly kind: "parenthesized"; readonly inner: Node }
   | { readonly kind: "structural-field"; readonly receiver: Node; readonly name: string; readonly carrier: TargetTypeRef }
   | { readonly kind: "indexed-method"; readonly receiver: Node; readonly index: Node; readonly input: RustFinalizedSourceInput; readonly method: string }

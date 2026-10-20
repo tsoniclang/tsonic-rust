@@ -330,7 +330,9 @@ export function planRustCallableExpressionBody(
         if (defaultValue === undefined) {
           return undefined;
         }
-        initializer = rustOptionDefaultValue(initializer, defaultValue, parameter.carrier, callableClosureContext, parameter.valueCarrier);
+        const retained = context.input.program.records.callableParameter.get(parameter.parameter)?.default?.retainStorage;
+        if (retained === undefined) failRustPlannerInvariant("An admitted callable default requires its selected native optional storage.", parameter.parameter);
+        initializer = rustOptionDefaultValue(initializer, defaultValue, parameter.carrier, callableClosureContext, retained);
       }
       bindingStatements.push({
         kind: "let",

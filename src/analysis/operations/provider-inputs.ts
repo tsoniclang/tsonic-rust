@@ -8,6 +8,7 @@ import { rustFinalizedCarrierTransitionMatches } from "./target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { isRustFinalizedSliceInput } from "./finalized-operation/conversions.js";
 
 export function analyzeRustProviderInputs(program: Omit<RustTargetProgram, "reachability">,
   producer: RustProviderInputProducer): readonly TargetDiagnostic[] {
@@ -43,7 +44,7 @@ export function analyzeRustProviderInputs(program: Omit<RustTargetProgram, "reac
       }
     }
     for (const input of occurrence.operation.abi.targetArguments) {
-      if (input.source.kind !== "argument-slice") continue;
+      if (!isRustFinalizedSliceInput(input)) continue;
       const literals = new Map<RustFinalizedSourceInput, string>();
       for (const element of input.elements) {
         const node = nodes.get(element);

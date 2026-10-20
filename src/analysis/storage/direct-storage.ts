@@ -9,7 +9,8 @@ import { isRustFinalizedSourceInput } from "../operations/finalized-operation/co
 import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMember, RustLocationStorageRoot } from "../../target-model/records/direct-storage.js";
 
 export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reachability">,
-  nodes: readonly Node[], producer: RustDirectStorageProducer): readonly TargetDiagnostic[] {
+  nodes: readonly Node[], producer: RustDirectStorageProducer,
+  analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const places = new Map<Node, RustDirectStorageEmission>();
   const identities = new Map<Node, RustDirectStorageIdentity>();
@@ -208,7 +209,7 @@ export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reach
       const receiver = Node_Expression(ast, node);
       if (receiver !== undefined) admitPlace(receiver);
     }
-    const location = program.records.typedLocationPlan.get(node);
+    const location = analysisRecords.typedLocationPlan.get(node);
     if (location?.operation === "address-of") {
       admitPlace(location.storageExpression);
       if (program.records.referenceObjectField.get(location.storageExpression) === true) {

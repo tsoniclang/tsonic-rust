@@ -38,7 +38,7 @@ export interface RustTypeRenderingContext {
     readonly lifetimeSubstitutions?: ReadonlyMap<string, RustLifetimeRef>;
     readonly input: {
       readonly program: {
-        readonly source: import("@tsonic/target-api/analysis").TargetSourceSyntaxProgram;
+        readonly source: Pick<import("@tsonic/target-api/analysis").TargetSourceSyntaxProgram, "ast">;
         readonly records: import("../../../target-model/records/program.js").RustProgramRecords;
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
       };

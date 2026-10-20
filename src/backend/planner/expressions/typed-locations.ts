@@ -505,13 +505,13 @@ export function planRustSourceLocationStorage(
       const owner = rustRecordFieldStorageType(field, context);
       if (receiver === undefined || owner === undefined) return undefined;
       const value = selected!.value;
-      const selected = value ? planRustSourceLocationStorage(receiver, rootExpression, context, planExpression)
+      const receiverValue = value ? planRustSourceLocationStorage(receiver, rootExpression, context, planExpression)
         : planExpression(receiver, context);
-      if (selected === undefined) return undefined;
+      if (receiverValue === undefined) return undefined;
       context.usedAliases?.add("rt");
       const result: RustExpr = { kind: "associated-call", owner,
         method: value ? "location_from_value" : "location_from_object", args: [
-          { kind: "reference", expr: selected },
+          { kind: "reference", expr: receiverValue },
           { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: operation.operationId }] },
           rustRecordFieldSelector(field, false), rustRecordFieldSelector(field, true),
         ] };

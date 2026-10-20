@@ -32,7 +32,10 @@ export interface RustNativeLambdaEmission {
 }
 
 export type RustLambdaEmission = RustNativeLambdaEmission | {
-  readonly construction: "frame" | "generic";
+  readonly construction: "frame";
+  readonly constructionCarrier: TargetTypeRef;
+} | {
+  readonly construction: "generic";
   readonly constructionCarrier: TargetTypeRef;
 };
 

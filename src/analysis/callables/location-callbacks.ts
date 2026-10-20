@@ -6,9 +6,10 @@ import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/ty
 import { rustNativeCallableOperand } from "./native-conversions.js";
 
 export function analyzeRustLocationCallbacks(program: Omit<RustTargetProgram, "reachability">,
-  nodes: readonly Node[], producer: RustLocationCallbackProducer): void {
+  nodes: readonly Node[], producer: RustLocationCallbackProducer,
+  analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): void {
   for (const node of nodes) {
-    const plan = program.records.typedLocationPlan.get(node);
+    const plan = analysisRecords.typedLocationPlan.get(node);
     if (plan?.operation !== "bind-pointer" && plan?.operation !== "view-pointer" && plan?.operation !== "project-pointer") continue;
     const selected = program.records.selectedCall.get(node);
     for (const index of [1, 2]) {

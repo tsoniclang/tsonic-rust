@@ -15,7 +15,7 @@ import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planPropertyAccess } from "./properties.js";
-import { planRustIndexedFieldRead } from "./indexed-fields.js";
+import { planRustIndexedFieldRead } from "./indexed-locations.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   if (context.input.program.records.selectedOperation.get(node)?.operationKind === "property") return planPropertyAccess(node, context);
