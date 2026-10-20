@@ -1,5 +1,3 @@
-
-
 import type { TargetTypeRef } from "../types/model.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 
