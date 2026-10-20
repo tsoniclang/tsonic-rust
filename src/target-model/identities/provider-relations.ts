@@ -1,12 +1,7 @@
 import type { ProviderDeclarationKind } from "@tsonic/tsts";
 import type { RustFallibleErrorBoundary } from "../operations/error-boundary.js";
 import type { RustDispatchContextInput } from "../operations/dispatch-contexts.js";
-import type {
-  RustProviderGenericParameter,
-  RustProviderOperationForm,
-  RustProviderTypeParameterRequirement,
-  RustValueConversion,
-} from "../operations/model.js";
+import type { RustProviderGenericParameter, RustProviderOperationForm, RustProviderTypeParameterRequirement, RustValueConversion } from "../operations/model.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 
 export type RustProviderOperationKind =
