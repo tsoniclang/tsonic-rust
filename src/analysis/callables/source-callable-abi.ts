@@ -18,7 +18,7 @@ import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } fro
 import { rustProviderArgumentBorrowsString } from "../../policy/ownership/provider-argument-borrow.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../policy/operations/source-profiles/error-source-profile.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
-import { rustSourceInputLifetime } from "../../policy/ownership/source-input-lifetimes.js";
+import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { closeRustRetainedParameter } from "./retained-values.js";
