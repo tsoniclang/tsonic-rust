@@ -11,7 +11,7 @@ import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 
 import { resolveRustExactNullishValueCarrier } from "../types/resolution/index.js";
-import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
+import { rustPolicyTargetDiagnostic } from "../program/policy-diagnostics.js";
 
 import { resolveRustDeclaredBindingStorage } from "../declarations/binding-storage.js";
 import { tryFlowMarkerCall } from "../operations/flow-markers.js";

@@ -8,7 +8,7 @@ import { selectRustCheckedDelete } from "../operations/member-access.js";
 import { isSharedSourceMarkerOperation } from "../operations/source-markers.js";
 import { resolveRegExpCreation } from "../expressions/regexp.js";
 
-import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
+import { rustPolicyTargetDiagnostic } from "./policy-diagnostics.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { checkedPropertySelectionInput } from "../operations/member-access.js";

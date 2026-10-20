@@ -25,7 +25,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
 import { prepareRustGenericCallableInvocation, type RustSourceGenericCallableInvocation } from "./generic-call-errors.js";
 import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
-import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
+import { rustPolicyTargetDiagnostic } from "../program/policy-diagnostics.js";
 
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { selectedDeclarationIsProjectSource } from "../storage/source-bindings.js";

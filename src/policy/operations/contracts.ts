@@ -1,17 +1,8 @@
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, ResolvedSourceIterationInfo, Symbol, Type, TypeIndexInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type {
-  RustSelectedTargetOperation,
-  RustSelectedTargetSignature,
-  RustTargetCallArgumentSlot,
-  RustTargetParameter,
-  TargetTypeRef,
-} from "../../target-model/types/model.js";
-import type {
-  RustCallbackOperationTemplate,
-  RustProviderOperationTemplate,
-} from "../../target-model/operations/model.js";
+
+import type { RustSelectedTargetOperation, RustSelectedTargetSignature, RustTargetCallArgumentSlot, RustTargetParameter, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustCallbackOperationTemplate, RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
 type ResolvedSourceCallInfo = NonNullable<
@@ -53,23 +44,6 @@ export function rejectRustPolicy<T>(
   diagnostic: RustPolicyDiagnostic,
 ): RustPolicySelection<T> {
   return { kind: "reject", diagnostic };
-}
-
-export function rustPolicyTargetDiagnostic(
-  diagnostic: RustPolicyDiagnostic,
-): TargetDiagnostic {
-  return {
-    code: diagnostic.extensionCode,
-    category: diagnostic.category,
-    source: "tsonic-rust",
-    message: diagnostic.message,
-    ...(diagnostic.nodeOrSpan === undefined
-      ? {}
-      : { sourceNode: diagnostic.nodeOrSpan as Node }),
-    ...(diagnostic.evidence === undefined
-      ? {}
-      : { evidence: diagnostic.evidence.map((entry) => entry.message) }),
-  };
 }
 
 export interface RustCheckedCallSelectionInput {
