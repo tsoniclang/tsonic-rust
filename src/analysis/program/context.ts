@@ -43,7 +43,7 @@ import { createRustErrorStorageDemandQuery } from "../objects/error-storage-dema
 import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
-import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
+import { createRustSourceProfileStorageEffects } from "../source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../callables/borrowed-returns.js";
 import { createRustRetainedEnvironmentQueries } from "../callables/retained-environment-shapes.js";
