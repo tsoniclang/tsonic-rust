@@ -1,12 +1,7 @@
 import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue, rustNamedTypeTraitContract } from "./native.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "./source-types.js";
 import { rustClassConstructorContract, rustClassConstructorTargetType } from "./class-constructors.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  RustTargetTraitRef,
-  TargetTypeRef,
-} from "../model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../model.js";
 import { rustLifetimeKey } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
