@@ -1,20 +1,9 @@
-import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import { rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
-
-export function rustArgumentPassingMode(mode: RustArgumentMode): Extract<ArgumentPassingMode, "by-value" | "borrow-shared" | "borrow-mut"> {
-  switch (mode) {
-    case "ref":
-      return "borrow-shared";
-    case "mut-ref":
-      return "borrow-mut";
-    case "value":
-      return "by-value";
-  }
-}
 
 export function rustCallArgumentMode(argument: Node, ast: AstReader, records: RustProgramRecords): RustArgumentMode | undefined {
   const call = ast.parent(argument);

@@ -29,7 +29,7 @@ import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-qu
 import { recordRustValueCarrierReconciliation } from "../../../program/records/value-carrier-admission.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 
-import { rustArgumentPassingMode } from "../../../callables/parameter-passing.js";
+import { rustArgumentPassingMode } from "../../../../policy/ownership/argument-passing.js";
 import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";
 
 import { rustTargetOperationText } from "../../../../target-model/operations/text.js";

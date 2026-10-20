@@ -13,7 +13,7 @@ import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/sou
 import { sourceCallSelectedMemberMatches } from "./source-call-evidence.js";
 import { rustSourceCallArgumentCarriers } from "./source-call-lifetimes.js";
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
-import { rustArgumentPassingMode } from "./parameter-passing.js";
+import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing.js";
 import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../target-model/records/source-call-arguments.js";
 
 export function analyzeRustSourceCallArguments(program: Omit<RustTargetProgram, "reachability">,

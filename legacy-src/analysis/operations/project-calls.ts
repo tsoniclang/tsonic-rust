@@ -23,7 +23,7 @@ import { validateFlowMarkerAgainstMode } from "./flow-markers.js";
 
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
-import { rustArgumentPassingMode } from "../callables/parameter-passing.js";
+import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
