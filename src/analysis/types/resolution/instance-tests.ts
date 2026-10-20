@@ -5,7 +5,7 @@ import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { resolveSelectedJsSourceExportName, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
-import { resolveRustConstructInstance } from "../../../policy/types/resolution/constructors.js";
+import { resolveRustConstructInstance } from "./constructors.js";
 
 export function resolveRustInstanceType(
   declaration: Node | undefined,
