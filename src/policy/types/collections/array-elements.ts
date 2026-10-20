@@ -2,10 +2,7 @@ import { sourceNumericLiteralIsExactlyRepresentableAsBinaryFloat, type SourceLit
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustIntegerCarrier, isRustNumericCarrier } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import {
-  rustIntegerKindIsExactlyRepresentableAsFloat64,
-  rustNumericValueConversionIsSupported,
-} from "../../../target-model/conversions/numeric-promotion.js";
+import { rustIntegerKindIsExactlyRepresentableAsFloat64, rustNumericValueConversionIsSupported } from "../../../target-model/conversions/numeric-promotion.js";
 import { selectedSourceLiteralIsRepresentable } from "../resolution/selected-numeric-literal.js";
 
 export interface RustInferredNumericArrayContribution {
