@@ -1,34 +1,7 @@
-import {
-  compilerTypeRequirementConditions,
-  contextWithParameters,
-  emptyRustCompilerSubstitutions,
-  mergeTypeParameterRequirements,
-  normalizeGenericParameters,
-  rootNormalizationContext,
-  rootNormalizationContextForIdentity,
-  rustCompilerItemIdentity,
-  rustCompilerLifetimeSemanticKey,
-} from "../rustdoc-types.js";
-import {
-  normalizeAbi,
-  requireArray,
-  requireBoolean,
-  requireInnerRecord,
-  requireRecord,
-  requireString,
-} from "../rustdoc-schema.js";
+import { contextWithParameters, emptyRustCompilerSubstitutions, mergeTypeParameterRequirements, normalizeGenericParameters, rootNormalizationContext, rootNormalizationContextForIdentity, rustCompilerItemIdentity } from "../rustdoc-types.js";
+import { normalizeAbi, requireArray, requireBoolean, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import { normalizeMemberType, substituteMemberParameter } from "./associated-types.js";
-import type {
-  RustCompilerDependency,
-  RustCompilerFunction,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerItemIdentity,
-  RustCompilerParameter,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-  RustCompilerTypeParameter,
-} from "../model.js";
+import type { RustCompilerDependency, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerParameter, RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeParameter } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 import type { RustCompilerSubstitutions } from "../rustdoc-types.js";
@@ -101,15 +74,7 @@ export function normalizeFunction(
   const result = signature.output === null
     ? Object.freeze({ kind: "unit" as const })
     : normalizeSelectedType(signature.output, "result");
-  const borrowed = borrowedResultProjection(
-    document,
-    dependency,
-    result,
-    receiver,
-    parameters,
-    options.resolveItem,
-  );
-  if (borrowed === undefined && !rustResultTypeHasClosedCarrier(result)) {
+  if (!rustResultTypeHasClosedCarrier(result)) {
     throw new Error(`Rust function '${name}' returns an unsized value with no closed target carrier.`);
   }
   const selectedGenerics = generics.parameters.map(parameter => parameter.kind !== "type" ? parameter
@@ -120,7 +85,6 @@ export function normalizeFunction(
     ...(options.inheritedRequirements ?? []),
     ...generics.contextualTypeRequirements,
     ...ownTypeParameters,
-    ...(borrowed?.typeRequirements ?? []),
   ].map(parameter => substituteMemberParameter(parameter, implementationBindings, associatedTypeBindings,
     options.traitDispatch)));
   return Object.freeze({
@@ -132,7 +96,6 @@ export function normalizeFunction(
     typeRequirements,
     ...(receiver === undefined ? {} : { receiver }),
     ...(options.traitDispatch === undefined ? {} : { traitDispatch: options.traitDispatch }),
-    ...(borrowed === undefined ? {} : { borrowedResult: borrowed.projection }),
     asynchronous: requireBoolean(header.is_async, `${name}.header.is_async`),
     unsafe: requireBoolean(header.is_unsafe, `${name}.header.is_unsafe`),
     abi: normalizeAbi(header.abi, `${name}.header.abi`),
@@ -242,121 +205,4 @@ function visitTrait(
     trait.associatedConstraints.some((constraint) => constraint.kind === "equality"
       ? visitCompilerType(constraint.type, predicate)
       : constraint.traits.some((selected) => visitTrait(selected, predicate)));
-}
-
-function borrowedResultProjection(
-  document: RustdocDocument,
-  dependency: RustCompilerDependency,
-  result: RustCompilerType,
-  receiver: RustCompilerFunction["receiver"],
-  parameters: readonly RustCompilerParameter[],
-  resolveItem?: RustdocItemResolver,
-): {
-  readonly projection: NonNullable<RustCompilerFunction["borrowedResult"]>;
-  readonly typeRequirements?: readonly RustCompilerTypeParameter[];
-} | undefined {
-  const selected = borrowedResultReference(result);
-  if (selected === undefined || selected.reference.mutable) return undefined;
-  const origin = borrowedResultOrigin(selected.reference, receiver, parameters);
-  if (origin === undefined) return undefined;
-  if (selected.reference.target.kind === "primitive" &&
-      selected.reference.target.name === "str") {
-    return {
-      projection: Object.freeze({
-        sourceType: selected.sourceType,
-        origin,
-        conversion: selected.optional ? "optional-owned-string" : "owned-string",
-      }),
-    };
-  }
-  const typeRequirements = compilerTypeRequirementConditions(
-    document,
-    dependency,
-    selected.reference.target,
-    "copy",
-    new Set(),
-    resolveItem,
-  );
-  if (typeRequirements === undefined) return undefined;
-  return {
-    projection: Object.freeze({
-      sourceType: selected.sourceType,
-      origin,
-      conversion: selected.optional ? "optional-copy" : "copy",
-    }),
-    ...(typeRequirements.length === 0 ? {} : { typeRequirements }),
-  };
-}
-
-function borrowedResultReference(
-  result: RustCompilerType,
-): {
-  readonly reference: Extract<RustCompilerType, { readonly kind: "reference" }>;
-  readonly sourceType: RustCompilerType;
-  readonly optional: boolean;
-} | undefined {
-  if (result.kind === "reference") {
-    return Object.freeze({
-      reference: result,
-      sourceType: result.target,
-      optional: false,
-    });
-  }
-  if (!isCoreOption(result)) return undefined;
-  const argument = result.genericArguments[0];
-  if (argument?.kind !== "type" || argument.type.kind !== "reference") {
-    return undefined;
-  }
-  return Object.freeze({
-    reference: argument.type,
-    sourceType: Object.freeze({
-      ...result,
-      genericArguments: Object.freeze([
-        Object.freeze({
-          kind: "type" as const,
-          type: argument.type.target,
-        }),
-      ]),
-    }),
-    optional: true,
-  });
-}
-
-function isCoreOption(
-  type: RustCompilerType,
-): type is Extract<RustCompilerType, { readonly kind: "path" }> {
-  return type.kind === "path" &&
-    type.identity.canonicalPath.length === 3 &&
-    type.identity.canonicalPath[0] === "core" &&
-    type.identity.canonicalPath[1] === "option" &&
-    type.identity.canonicalPath[2] === "Option" &&
-    type.genericArguments.length === 1;
-}
-
-function borrowedResultOrigin(
-  result: Extract<RustCompilerType, { readonly kind: "reference" }>,
-  receiver: RustCompilerFunction["receiver"],
-  parameters: readonly RustCompilerParameter[],
-): NonNullable<RustCompilerFunction["borrowedResult"]>["origin"] | undefined {
-  if (result.lifetime.kind === "static") return Object.freeze({ kind: "static" });
-  if (receiver?.kind === "shared" || receiver?.kind === "mutable") {
-    if (result.lifetime.kind === "elided" || lifetimesEqual(result.lifetime, receiver.lifetime)) {
-      return Object.freeze({ kind: "receiver" });
-    }
-  }
-  const candidates = parameters.flatMap((parameter, index) =>
-    parameter.type.kind === "reference" &&
-      (result.lifetime.kind === "elided" || lifetimesEqual(result.lifetime, parameter.type.lifetime))
-      ? [index]
-      : []);
-  return candidates.length === 1
-    ? Object.freeze({ kind: "parameter", index: candidates[0]! })
-    : undefined;
-}
-
-function lifetimesEqual(
-  left: import("../model.js").RustCompilerLifetime,
-  right: import("../model.js").RustCompilerLifetime,
-): boolean {
-  return rustCompilerLifetimeSemanticKey(left) === rustCompilerLifetimeSemanticKey(right);
 }
