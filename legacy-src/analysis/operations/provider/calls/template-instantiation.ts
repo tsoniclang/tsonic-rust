@@ -33,7 +33,7 @@ import type {
 import {
   rustBorrowedStringTypeParameterNames,
   rustProviderSourceArgumentMode,
-} from "./provider-argument-shape.js";
+} from "../../../../policy/types/callables/provider-argument-shape.js";
 
 export interface InstantiatedProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,

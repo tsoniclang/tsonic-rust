@@ -66,7 +66,7 @@ import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.j
 import {
   rustBorrowedStringTypeParameterNames,
   rustProviderSourceArgumentMode,
-} from "./provider-argument-shape.js";
+} from "../../../../policy/types/callables/provider-argument-shape.js";
 
 export function instantiateExactSelectedConstructionCarrier(
   definition: import("../../../../target-model/types/project-types.js").RustProjectTypeDefinition,
