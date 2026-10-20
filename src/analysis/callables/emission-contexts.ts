@@ -1,14 +1,13 @@
+import { sealRustCallableEmissionContexts } from "../program/records/physical-emission-contexts.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { targetUseSiteIdentity, targetUseSiteRef, type SourceStorageQueries, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
-import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustFinalizedOperationAbi, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import type { RustErrorRegionRecords, RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
-import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination,
-  RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin,
-  RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination, RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -29,9 +28,7 @@ import type { RustNativeCallableProducerPlan } from "../../target-model/records/
 import type { RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner,
-  type RustEmissionSourceRequest } from "./emission-source-origins.js";
-
+import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner, type RustEmissionSourceRequest } from "./emission-source-origins.js";
 
 export interface RustCallableEmissionPreparationInput {
   readonly ast: AstReader;
@@ -112,7 +109,7 @@ export function rustEmissionSourceIdentity(ast: AstReader, declaration: Node): s
 export function prepareRustCallableEmissionContexts(
   input: RustCallableEmissionPreparationInput,
 ): TargetStageResult<RustCallableEmissionPreparation> {
-  if (!Array.isArray(input.emissionRequests)) throw new Error("Physical emission requires its complete selecting-owner request vector.");
+  if (!Array.isArray(input.emissionRequests)) failTargetAnalysisInvariant("tsonic-rust", "Physical emission requires its complete selecting-owner request vector.");
   const requests: RustEmissionContextRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
   const byOwner = new Map<Node, RustPhysicalCallableEmissionRequest[]>();
@@ -319,8 +316,8 @@ export function prepareRustEmissionContextRequests(
     sourceIndex.set(occurrence.node, selected);
   }
   for (const request of requests) {
-    if (!Array.isArray(request.demands)) throw new Error("An emitted context requires its original selected demand rows, not a native-node inventory.");
-    if (request.source === undefined) throw new Error("An emitted context requires its original selected source owner.");
+    if (!Array.isArray(request.demands)) failTargetAnalysisInvariant("tsonic-rust", "An emitted context requires its original selected demand rows, not a native-node inventory.");
+    if (request.source === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted context requires its original selected source owner.");
   }
   const prepareSourceOrigins = createRustEmissionSourceOriginPreparation({ ...input, physical: input.generic.physical }, requests);
   for (const request of requests) {
@@ -452,12 +449,8 @@ export function prepareRustEmissionContextRequests(
   }
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   return resolvedTargetStage(Object.freeze({ physicalOperands: Object.freeze([...physicalOperands]),
-    contexts: Object.freeze({ contexts: Object.freeze(contexts), operands: Object.freeze(operands), sourceOccurrences: input.sourceOccurrences,
-      contextFor: (use: TargetUseSiteRef) => contextIndex.get(use),
-      operandFor: (use: TargetUseSiteRef) => operandIndex.get(use),
-      carrierFor: (use: TargetUseSiteRef, source: TargetTypeRef) => applications.get(use)?.get(source),
-      sourceOriginFor: (use: TargetUseSiteRef, occurrence: RustPhysicalEmissionSourceOccurrence) => sourceOrigins.get(use)?.get(occurrence),
-      sourceFor: (node: Node, operation: RustEmissionProviderOperation) => sourceIndex.get(node)?.get(operation) }) }));
+    contexts: sealRustCallableEmissionContexts({ contexts, operands, sourceOccurrences: input.sourceOccurrences,
+      contextIndex, operandIndex, applications, sourceOrigins, sourceIndex }) }));
 }
 
 export function emissionDiagnostic(node: Node, message: string): TargetDiagnostic {
