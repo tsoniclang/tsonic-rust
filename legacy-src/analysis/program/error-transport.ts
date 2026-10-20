@@ -5,29 +5,13 @@ import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/art
 import type { RustProjectTypePolicy, RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustValueConversion } from "../../target-model/operations/model.js";
+import type { RustErrorPayloadAdmission, RustErrorPayloadVariant, RustErrorTransportQueries } from "../../target-model/records/error-transport.js";
 import type { RustSourcePackageComponentClassifications } from "./source-package-components.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-
-export interface RustErrorPayloadAdmission {
-  readonly target: TargetTypeRef;
-  readonly conversion: RustValueConversion | null;
-}
-
-export type RustErrorPayloadVariant =
-  | { readonly kind: "project"; readonly name: string; readonly definition: RustProjectTypeDefinition;
-      readonly carrier: TargetTypeRef; readonly sourceError: boolean; readonly admissions: readonly RustErrorPayloadAdmission[] }
-  | { readonly kind: "closed"; readonly name: string; readonly carrier: TargetTypeRef;
-      readonly admissions: readonly RustErrorPayloadAdmission[] }
-  | { readonly kind: "retained"; readonly name: "Retained" };
-
-export interface RustErrorTransportQueries {
-  forComponent(componentId: string): readonly RustErrorPayloadVariant[] | undefined;
-}
 
 export function analyzeRustErrorTransport(input: {
   readonly ast: Pick<RustAnalysisContext["ast"], "getSourceFile" | "getFileName">;

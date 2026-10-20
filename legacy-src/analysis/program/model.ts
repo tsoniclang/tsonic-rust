@@ -105,7 +105,7 @@ export interface RustTargetProgram {
   readonly names: RustNamePlan;
   readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
-  readonly errorTransport: import("./error-transport.js").RustErrorTransportQueries;
+  readonly errorTransport: import("../../target-model/records/error-transport.js").RustErrorTransportQueries;
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
   readonly sourceModuleConstructions: RustSourceModuleConstructionIndex;
   readonly generatedDeclarationUses: readonly RustGeneratedDeclarationUse[];

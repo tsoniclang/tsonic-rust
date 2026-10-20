@@ -9,7 +9,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, registerAliasFromPath,
   type RustPlanContext } from "../program/plan-context.js";
 import { planRustBoundaryErrorVariants } from "../program/error-variants.js";
-import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
+import type { RustErrorPayloadVariant } from "../../../target-model/records/error-transport.js";
 import { resolveRustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
 import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
@@ -52,7 +52,7 @@ export function planRustProgramErrorClosedValue(
       return reject("Program-error value admission exceeds its bounded acyclic component graph.");
     }
     if (selected.errorDomain === "runtime") return error(expression);
-    const inventory = planRustBoundaryErrorVariants(context.input.program, context.sourcePackageErrors, selected);
+    const inventory = planRustBoundaryErrorVariants(context.input.program, selected);
     if (inventory === undefined) return reject(
       "Program-error value admission has no exact sealed transport variant inventory.");
     const { domain, variants } = inventory;

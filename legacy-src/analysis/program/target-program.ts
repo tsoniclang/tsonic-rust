@@ -47,6 +47,7 @@ import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries
 import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.js";
 import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
 import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
+import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -559,6 +560,8 @@ export function analyzeRustTargetProgram(
   const errorEmission = analyzeRustSourcePackageErrors(program, componentEmission.components);
   if (errorEmission.plan === undefined) return rejectedTargetStage(errorEmission.diagnostics);
   analyzeRustSourcePackageErrorBoundaries(program, errorEmission.plan, context.records.sourcePackageEmission);
+  const errorVariantIssues = analyzeRustErrorVariantEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
+  if (errorVariantIssues.length !== 0) return rejectedTargetStage(errorVariantIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);

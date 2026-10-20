@@ -34,7 +34,7 @@ export function planRustJsRejectionValue(node: Node, error: RustExpr, context: R
   if (region === undefined) return undefined;
   if (region.kind === "native") return rustInjectNativeError(region,
     { identity: rustJsRejectionErrorIdentity, errorType: rustJsRejectionErrorType }, error);
-  const inventory = planRustBoundaryErrorVariants(context.input.program, context.sourcePackageErrors, region.owner);
+  const inventory = planRustBoundaryErrorVariants(context.input.program, region.owner);
   const retained = inventory?.variants.find(variant => variant.kind === "retained");
   const closed = inventory?.variants.find(variant => variant.kind === "closed" &&
     rustTargetTypeRefEquals(variant.carrier, rustJsValueTargetType()));

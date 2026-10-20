@@ -74,6 +74,8 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly defaultExport: import("./source-file-emission.js").RustSourceFileEmissionRecords["defaultExport"];
   readonly errorDeclarationOwner: RustErrorEmissionRecords["errorDeclarationOwner"];
   readonly nativeErrorJoinDeclarations: RustErrorEmissionRecords["nativeErrorJoinDeclarations"];
+  readonly programErrorVariants: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorVariants"];
+  readonly boundaryErrorVariants: import("./error-transport.js").RustErrorTransportEmissionRecords["boundaryErrorVariants"];
   readonly errorMemberOwner: RustErrorEmissionRecords["errorMemberOwner"];
   readonly sourcePackageErrorBoundary: import("./source-package-errors.js").RustSourcePackageErrorRecords["sourcePackageErrorBoundary"];
   readonly physicalProgramErrorBoundary: import("./source-package-errors.js").RustSourcePackageErrorRecords["physicalProgramErrorBoundary"];
