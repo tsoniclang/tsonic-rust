@@ -5,57 +5,10 @@ import type { RustBinaryOperatorSelection } from "../../../target-model/operatio
 import { selectRustNumericConstraintComparison, selectRustNumericUnionComparison } from "../numeric/union.js";
 import { rustCarrierSupportsSourceNumeric } from "../../../target-model/types/carriers/source-numeric.js";
 import type { RustArgumentMode, RustValueConversion } from "../../../target-model/operations/model.js";
-import type {
-  RustAssignmentOperator,
-  RustBinaryOperator,
-  RustOperationSymbol,
-  RustOperatorToken,
-} from "../../../target-model/syntax/tokens.js";
+import type { RustAssignmentOperator, RustBinaryOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import {
-  KindAmpersandToken,
-  KindAmpersandAmpersandToken,
-  KindAsteriskEqualsToken,
-  KindMinusEqualsToken,
-  KindPercentEqualsToken,
-  KindPlusEqualsToken,
-  KindSlashEqualsToken,
-  KindAsteriskToken,
-  KindBarToken,
-  KindBarBarToken,
-  KindCaretToken,
-  KindEqualsToken,
-  KindQuestionQuestionEqualsToken,
-  KindEqualsEqualsEqualsToken,
-  KindExclamationEqualsEqualsToken,
-  KindGreaterThanEqualsToken,
-  KindGreaterThanGreaterThanGreaterThanToken,
-  KindGreaterThanGreaterThanToken,
-  KindGreaterThanToken,
-  KindInKeyword,
-  KindLessThanLessThanToken,
-  KindLessThanEqualsToken,
-  KindLessThanToken,
-  KindMinusToken,
-  KindPercentToken,
-  KindPlusToken,
-  KindSlashToken,
-} from "@tsonic/target-api/source";
-import {
-  isRustBigIntCarrier,
-  isRustBoolCarrier,
-  isRustIntegerCarrier,
-  isRustJsArrayCarrier,
-  isRustJsStrictEqualityCarrier,
-  isRustNumericCarrier,
-  isRustStringCarrier,
-  rustJsErrorTargetType,
-  rustCallableProtocol,
-  rustCarrierSupportsTrait,
-  rustSourcePrimitiveTargetType,
-  rustStructuralObjectCarrierValue,
-  sameRustPrimitiveCarrier,
-} from "../../../target-model/types/index.js";
+import { KindAmpersandToken, KindAmpersandAmpersandToken, KindAsteriskEqualsToken, KindMinusEqualsToken, KindPercentEqualsToken, KindPlusEqualsToken, KindSlashEqualsToken, KindAsteriskToken, KindBarToken, KindBarBarToken, KindCaretToken, KindEqualsToken, KindQuestionQuestionEqualsToken, KindEqualsEqualsEqualsToken, KindExclamationEqualsEqualsToken, KindGreaterThanEqualsToken, KindGreaterThanGreaterThanGreaterThanToken, KindGreaterThanGreaterThanToken, KindGreaterThanToken, KindInKeyword, KindLessThanLessThanToken, KindLessThanEqualsToken, KindLessThanToken, KindMinusToken, KindPercentToken, KindPlusToken, KindSlashToken } from "@tsonic/target-api/source";
+import { isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustJsArrayCarrier, isRustJsStrictEqualityCarrier, isRustNumericCarrier, isRustStringCarrier, rustJsErrorTargetType, rustCallableProtocol, rustCarrierSupportsTrait, rustSourcePrimitiveTargetType, rustStructuralObjectCarrierValue, sameRustPrimitiveCarrier } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustStringViewCarrier } from "../../../target-model/types/carriers/native.js";
 import { isRustMutableJsErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
@@ -63,11 +16,7 @@ import { rustGenericCallableValue } from "../../../target-model/types/carriers/g
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../../target-model/conversions/numeric-promotion.js";
-import {
-  rustNumericPromotionConversion,
-  selectRustNumericBinaryPromotion,
-  selectRustNumericComparisonPromotion,
-} from "../numeric/promotion.js";
+import { rustNumericPromotionConversion, selectRustNumericBinaryPromotion, selectRustNumericComparisonPromotion } from "../numeric/promotion.js";
 
 export type RustCompoundAssignmentSelection =
   | {
@@ -491,11 +440,25 @@ export function isRustAssignmentOperator(operatorKindOrText: string): boolean {
     compoundAssignmentTokens[operatorKind] !== undefined;
 }
 
+export function selectRustCompoundAssignmentPromotion(
+  operatorKindName: string,
+  left: TargetTypeRef | undefined,
+  right: TargetTypeRef | undefined,
+): RustBinaryOperatorSelection | undefined {
+  const operatorKind = operatorKindByText[operatorKindName] ?? operatorKindName;
+  const operator = compoundAssignmentTokens[operatorKind];
+  const binaryOperator = operator === undefined ? undefined : compoundBinaryOperator(operator);
+  if (binaryOperator === undefined || left === undefined || right === undefined ||
+    !isRustNumericCarrier(left) || !isRustNumericCarrier(right)) return undefined;
+  const selected = selectRustBinaryOperator(binaryOperator, left, right);
+  return selected?.kind === "string-concat" ? undefined : selected;
+}
+
 export function selectRustCompoundAssignment(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
-  acceptsPromotedResult?: (carrier: TargetTypeRef) => boolean,
+  promoted?: RustBinaryOperatorSelection,
 ): RustCompoundAssignmentSelection | undefined {
   operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   const operator = compoundAssignmentTokens[operatorKindName];
@@ -503,14 +466,10 @@ export function selectRustCompoundAssignment(
     return undefined;
   }
   const binaryOperator = compoundBinaryOperator(operator);
-  if (binaryOperator !== undefined && acceptsPromotedResult !== undefined &&
-    isRustNumericCarrier(left) && isRustNumericCarrier(right)) {
-    const binary = selectRustBinaryOperator(binaryOperator, left, right);
-    if (binary !== undefined && binary.kind !== "string-concat" && acceptsPromotedResult(binary.resultCarrier)) {
-      return binary.kind === "operator-token"
-        ? { ...binary, operator, operandModes: ["mut-ref", binary.operandModes[1]] }
-        : { ...binary, operator };
-    }
+  if (promoted !== undefined && promoted.kind !== "string-concat") {
+    return promoted.kind === "operator-token"
+      ? { ...promoted, operator, operandModes: ["mut-ref", promoted.operandModes[1]] }
+      : { ...promoted, operator };
   }
   if (operator === "+=" && isRustStringCarrier(left) && isRustStringCarrier(right)) {
     return { kind: "operator-token", operator, resultCarrier: left, operandModes: ["mut-ref", "ref"] };

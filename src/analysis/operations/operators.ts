@@ -1,3 +1,4 @@
+import { selectRustCompoundAssignmentPromotion } from "../../policy/operations/operators/rules.js";
 import { resolveBinaryOperandCarriers, assignmentTarget } from "./operator-inputs.js";
 import { selectRustAbsenceComparisonOperation, selectRustCoalesceOperation, selectRustNullishAssignmentOperation } from "../../policy/operations/operators/absence.js";
 import { requireRustRecord } from "../program/records/required-records.js";
@@ -117,8 +118,10 @@ export function resolvePostCheckBinaryCarrier(
       operandModes: ["mut-ref", "value"],
     };
   } else {
-    const compound = selectRustCompoundAssignment(operatorKind, left, right,
-      carrier => selectRustCompoundWrite(walk, leftNode, carrier) !== undefined);
+    const promoted = selectRustCompoundAssignmentPromotion(operatorKind, left, right);
+    const acceptedPromotion = promoted !== undefined && selectRustCompoundWrite(walk, leftNode, promoted.resultCarrier) !== undefined
+      ? promoted : undefined;
+    const compound = selectRustCompoundAssignment(operatorKind, left, right, acceptedPromotion);
     if (compound !== undefined && left !== undefined) {
       fact = compound.kind === "operator-call"
         ? {
