@@ -1,7 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustModuleBindingFact } from "../../../target-model/records/operation-selections.js";
-import { isRustStringCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import type { RustExpr, RustItem, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { planNativeModuleFunction } from "../declarations/callables/functions.js";
@@ -11,9 +9,8 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustModuleCell } from "../project/module-storage.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { normalizeRustBindingValue, planRustBindingProjection } from "../bindings/binding-patterns.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
-import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustSourceItemIsPubliclyReachable } from "./plan-context.js";
+import { isUpperSnakeName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "./reachability-directives.js";
 
@@ -41,41 +38,24 @@ export function planTopLevelVariableStatement(
   };
   visit(statement);
   if (declarations.length === 0) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      { ast, sourceFile: context.sourceFile, node: statement },
-      "rust.backend.module-binding",
-      "Top-level variable statements require at least one exact variable declaration.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted top-level variable statement requires its declarations.", statement);
   }
   const items: RustItem[] = [];
   const initialization: import("../../target-ast/syntax/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
     if (context.input.program.records.compileTimeSource.get(declaration)) continue;
-    const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
-    const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.program.records.moduleBinding.get(declaration);
     if (binding?.storage === "module-pattern") {
-      const pattern = planModuleBindingPattern(declaration, binding, statement, context);
+      const pattern = planModuleBindingPattern(declaration, binding, context);
       if (pattern === undefined) return undefined;
       items.push(...pattern.items);
       initialization.push(...pattern.initialization);
       continue;
     }
-    if (binding === undefined || !isValidRustIdentifier(name) ||
-      initializer === undefined && (binding.storage !== "module-cell" || binding.initialization !== "declaration") ||
-      initializer !== undefined && binding.storage === "module-cell" && binding.initialization !== "value") {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding",
-        "Top-level bindings require a plain Rust identifier and one finalized module-binding fact matching their initialization.",
-      ));
-      return undefined;
-    }
-    const visibility = ast.hasModifierKind(statement, "export") ||
-        rustSourceItemIsPubliclyReachable(context, name)
-      ? "public" as const
-      : "crate" as const;
+    const emission = context.input.program.records.moduleBindingEmission.get(declaration);
+    if (binding === undefined || emission === undefined)
+      failRustPlannerInvariant("An admitted module binding requires its exact native storage and emission plan.", declaration);
+    const { name, initializer, visibility } = emission;
     if (binding.storage === "native-callable") {
       const item = planNativeModuleFunction(
         declaration,
@@ -90,9 +70,7 @@ export function planTopLevelVariableStatement(
       items.push(item);
       const storage = context.input.program.records.moduleCallableStorage.get(declaration);
       if (binding.value !== undefined && storage === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
-          "rust.backend.module-callable-storage", "Module callable values require their finalized native storage selection."));
-        return undefined;
+        failRustPlannerInvariant("Module callable values require their finalized native storage selection.", declaration);
       }
       if (binding.value === undefined || storage?.kind === "inline") {
         continue;
@@ -106,24 +84,19 @@ export function planTopLevelVariableStatement(
         parameterCarriers: binding.value.parameterCarriers,
         resultCarrier: binding.value.resultCarrier,
       }, context);
-      const physical = context.input.program.callableValues.nativeProducers.physicalFor(binding.callableDeclaration, binding.value.carrier);
+      const physical = context.input.program.records.moduleHoistedCallable.get(declaration)?.carrier;
+      if (physical === undefined) failRustPlannerInvariant("An admitted observed module callable requires its sealed physical value carrier.", declaration);
       const rustType = rustTypeFromCarrierInContext(physical, context);
-      if (value === undefined || rustType === undefined ||
-        !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          { ast, sourceFile: context.sourceFile, node: declaration },
-          "rust.backend.module-callable-value",
-          "Observed module callable values require one exact renderable Clone-capable carrier.",
-        ));
-        return undefined;
-      }
+      if (value === undefined || rustType === undefined)
+        failRustPlannerInvariant("An admitted module callable requires its rendered native value and carrier.", declaration);
+      if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted module callable requires its native hygienic scope.", declaration);
       context.usedAliases?.add("rt");
       const planned = planRustModuleCell(
         binding.value.name,
         rustType,
         value,
         visibility,
-        context.syntheticNames!,
+        context.syntheticNames,
         [
           ...(isUpperSnakeName(binding.value.name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
         ],
@@ -134,19 +107,14 @@ export function planTopLevelVariableStatement(
     }
     const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
     if (rustType === undefined) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding-carrier",
-        "Top-level value binding has no finalized renderable Rust carrier.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("Top-level value binding has no finalized renderable Rust carrier.", declaration);
     }
     const value = initializer === undefined ? undefined : planExpression(initializer, context);
     if (initializer !== undefined && value === undefined) {
       return undefined;
     }
     if (binding.storage === "native-const") {
-      if (value === undefined) return undefined;
+      if (value === undefined) failRustPlannerInvariant("An admitted native constant requires its initializer.", declaration);
       const deadCode = rustAuthoredDeadCodeDisposition(context, declaration);
       const attrs = [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
@@ -157,30 +125,23 @@ export function planTopLevelVariableStatement(
         visibility,
         ...(attrs.length === 0 ? {} : { attrs }),
         ...(deadCode === undefined ? {} : { deadCode }),
-        type: isRustStringCarrier(binding.valueCarrier)
+        type: emission.staticString !== undefined
           ? { kind: "reference", referent: { kind: "str" }, mutable: false }
           : rustType,
-        value: isRustStringCarrier(binding.valueCarrier) && value.kind === "string-literal"
-          ? { kind: "str-literal", value: value.value }
+        value: emission.staticString !== undefined
+          ? { kind: "str-literal", value: emission.staticString }
           : value,
       });
       continue;
     }
-    if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding-carrier",
-        "Runtime module bindings require one exact Clone-capable Rust value carrier.",
-      ));
-      return undefined;
-    }
+    if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted module cell requires its native hygienic scope.", declaration);
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(
       name,
       rustType,
       value,
       visibility,
-      context.syntheticNames!,
+      context.syntheticNames,
       [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
       ],
@@ -193,7 +154,6 @@ export function planTopLevelVariableStatement(
 function planModuleBindingPattern(
   declaration: Node,
   binding: Extract<RustModuleBindingFact, { readonly storage: "module-pattern" }>,
-  statement: Node,
   context: RustPlanContext,
 ): PlannedTopLevelVariableStatement | undefined {
   if (context.syntheticNames === undefined) return failRustPlannerInvariant("Module binding patterns require a hygienic initializer scope.", declaration);
@@ -221,12 +181,11 @@ function planModuleBindingPattern(
     const leaf = context.input.program.records.moduleBinding.get(step.declaration);
     if (leaf?.storage !== "module-cell" || leaf.initialization !== "value") return failRustPlannerInvariant(
       "Module binding leaf has no sealed initialized native module storage.", step.declaration);
-    const name = context.input.program.names.nameForDeclaration(step.declaration);
+    const emission = context.input.program.records.moduleBindingEmission.get(step.declaration);
     const type = rustTypeFromCarrierInContext(leaf.valueCarrier, context);
-    if (name === undefined || !isValidRustIdentifier(name) || type === undefined) return failRustPlannerInvariant(
+    if (emission === undefined || type === undefined) return failRustPlannerInvariant(
       "Module binding leaf has no sealed native name and carrier.", step.declaration);
-    const visibility = context.input.program.source.ast.hasModifierKind(statement, "export") ||
-      rustSourceItemIsPubliclyReachable(context, name) ? "public" : "crate";
+    const { name, visibility } = emission;
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(name, type, normalized, visibility, context.syntheticNames,
       isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]);

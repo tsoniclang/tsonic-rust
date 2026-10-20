@@ -25,9 +25,17 @@ export interface RustDefaultExportEmission {
   readonly carrier: TargetTypeRef;
 }
 
+export interface RustModuleBindingEmission {
+  readonly name: string;
+  readonly visibility: "public" | "crate";
+  readonly initializer: Node | undefined;
+  readonly staticString: string | undefined;
+}
+
 export interface RustSourceFileEmissionRecords {
   readonly sourceFileEmission: RustRecordFamily<RustSourceFileEmission>;
   readonly moduleHoistedCallable: RustRecordFamily<{ readonly carrier: TargetTypeRef }>;
   readonly moduleTypeForm: RustRecordFamily<"ordinary" | "polymorphic">;
   readonly defaultExport: RustRecordFamily<RustDefaultExportEmission>;
+  readonly moduleBindingEmission: RustRecordFamily<RustModuleBindingEmission>;
 }

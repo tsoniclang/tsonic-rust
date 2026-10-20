@@ -2,8 +2,10 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustSourceFileEmissionProducer } from "../program/records/source-file-emission.js";
 import type { Node } from "@tsonic/tsts";
-import { rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { isRustStringCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { Node_Initializer } from "@tsonic/target-api/source";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
 export function analyzeRustSourceFileEmission(program: Omit<RustTargetProgram, "reachability">,
   producer: RustSourceFileEmissionProducer): readonly TargetDiagnostic[] {
@@ -38,6 +40,17 @@ export function analyzeRustSourceFileEmission(program: Omit<RustTargetProgram, "
     });
     for (const statement of ast.statements(file)) {
       if (statement === undefined) failTargetAnalysisInvariant("tsonic-rust", "A checked module requires its dense top-level statement inventory.", file);
+      if (ast.is.IsVariableStatement(statement)) {
+        const declarations: Node[] = [];
+        const visit = (node: Node): void => {
+          if (ast.kindName(node) === "KindVariableDeclaration") { declarations.push(node); return; }
+          ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+        };
+        visit(statement);
+        if (declarations.length === 0) refuse(statement, "rust.backend.module-binding",
+          "Top-level variable statements require at least one exact variable declaration.");
+        for (const declaration of declarations) admitBinding(declaration, statement);
+      }
       if (ast.is.IsExportAssignment(statement)) {
         const assignment = ast.as.AsExportAssignment(statement);
         const binding = program.records.moduleBinding.get(statement);
@@ -68,4 +81,53 @@ export function analyzeRustSourceFileEmission(program: Omit<RustTargetProgram, "
     }
   }
   return Object.freeze(issues);
+
+  function admitBinding(declaration: Node, statement: Node): void {
+    if (program.records.compileTimeSource.get(declaration)) return;
+    const binding = program.records.moduleBinding.get(declaration);
+    const initializer = Node_Initializer(ast, declaration);
+    if (binding?.storage === "module-pattern") {
+      for (const step of binding.steps) if (step.kind === "binding") admitBinding(step.declaration, statement);
+      return;
+    }
+    const name = program.names.nameForDeclaration(declaration);
+    const isPatternLeaf = ast.kindName(declaration) !== "KindVariableDeclaration";
+    if (binding === undefined || name === undefined || !isValidRustIdentifier(name) || !isPatternLeaf && (
+      initializer === undefined && (binding.storage !== "module-cell" || binding.initialization !== "declaration") ||
+      initializer !== undefined && binding.storage === "module-cell" && binding.initialization !== "value")) {
+      refuse(declaration, "rust.backend.module-binding",
+        "Top-level bindings require a plain Rust identifier and one finalized module-binding fact matching their initialization.");
+      return;
+    }
+    if (binding.storage === "native-callable" && binding.value !== undefined) {
+      const storage = program.records.moduleCallableStorage.get(declaration);
+      if (storage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Module callable values require their finalized native storage selection.", declaration);
+      if (storage.kind === "stored") {
+        const carrier = program.callableValues.nativeProducers.physicalFor(binding.callableDeclaration, binding.value.carrier);
+        if (carrier === undefined || !rustCarrierSupportsClone(binding.value.carrier, program.typeDefinitions)) {
+          refuse(declaration, "rust.backend.module-callable-value", "Observed module callable values require one exact renderable Clone-capable carrier.");
+          return;
+        }
+        producer.hoisted(declaration, carrier);
+      }
+    }
+    if (binding.storage === "module-cell" && !rustCarrierSupportsClone(binding.valueCarrier, program.typeDefinitions)) {
+      refuse(declaration, "rust.backend.module-binding-carrier", "Runtime module bindings require one exact Clone-capable Rust value carrier.");
+      return;
+    }
+    const literal = initializer === undefined ? undefined : program.records.literalValue.get(initializer);
+    const stringConstant = binding.storage === "native-const" && isRustStringCarrier(binding.valueCarrier);
+    if (stringConstant && literal?.form !== "string" && literal?.form !== "template")
+      failTargetAnalysisInvariant("tsonic-rust", "A native string constant requires its exact checked source literal.", declaration);
+    const file = ast.getSourceFile(declaration);
+    const fileName = file === undefined ? undefined : ast.getFileName(file);
+    const component = fileName === undefined ? undefined : program.records.sourcePackageComponents.get()?.find(
+      selected => selected.sourceFileNames.has(fileName));
+    if (component === undefined || fileName === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted module binding requires its exact source component.", declaration);
+    producer.binding(declaration, { name,
+      visibility: ast.hasModifierKind(statement, "export") || component.publishesImplementationAbi ||
+        component.publicImplementationItemIdentities.has(rustSourceItemIdentity(fileName, name)) ? "public" : "crate",
+      initializer, staticString: stringConstant ? literal?.text : undefined });
+  }
 }
