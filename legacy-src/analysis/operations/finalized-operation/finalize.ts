@@ -1,6 +1,6 @@
 import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
+import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "../../../policy/operations/members/abi/inputs.js";
 import { declaredCarriersMatch, finalizeValueConversion } from "../../../policy/operations/members/abi/conversions.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../target-model/operations/finalized-inputs.js";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";

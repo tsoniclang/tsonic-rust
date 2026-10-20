@@ -3,7 +3,7 @@ import type { RustTypeDefinitions } from "../../../target-model/types/source-uni
 import { carrierAfterMode, finalizedConversionIsValid } from "../../../policy/operations/members/abi/conversions.js";
 import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../target-model/operations/finalized-inputs.js";
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
+import { createInputFactory, finalizeTargetInputs } from "../../../policy/operations/members/abi/inputs.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import { isRustFallibleErrorBoundary, isRustOperationErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
