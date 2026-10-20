@@ -8,7 +8,7 @@ import { rustUnparenthesizedExpression } from "../../source/extension/expression
 import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustBigIntTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../target-model/types/index.js";
 import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation, type RustFactWalk, rustOperationContext } from "../program/walk.js";
-import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
+import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../source/extension/literals.js";
 import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveArrayLiteralCarrier } from "./array-literals.js";

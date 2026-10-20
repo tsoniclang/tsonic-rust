@@ -6,7 +6,7 @@ import type { RustExpressionSyntaxProducer } from "../program/records/expression
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier, getRustGeneratorProtocol } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
-import { sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
+import { sourceCharCodeUnit } from "../../source/extension/literals.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
 export function analyzeRustExpressionSyntax(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],

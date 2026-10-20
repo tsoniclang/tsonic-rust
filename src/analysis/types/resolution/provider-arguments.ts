@@ -7,7 +7,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { RustTargetConstArgument, RustTargetGenericArgument } from "../../../target-model/types/model.js";
 
-import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
+import { parseSourceIntegerLiteral } from "../../../source/extension/literals.js";
 
 export function resolveRustProviderGenericArguments(
   nodes: readonly Node[],

@@ -17,7 +17,7 @@ import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../..
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { parseSourceBigIntLiteral } from "../../target-model/syntax/literals.js";
+import { parseSourceBigIntLiteral } from "../../source/extension/literals.js";
 
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 

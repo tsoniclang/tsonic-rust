@@ -19,7 +19,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { parseSourceIntegerLiteral } from "../../target-model/syntax/literals.js";
+import { parseSourceIntegerLiteral } from "../../source/extension/literals.js";
 
 export function analyzeRustIndexedRecords(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustIndexedRecordProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
