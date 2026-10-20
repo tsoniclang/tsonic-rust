@@ -8,7 +8,7 @@ import { rustEmptyRecordConversionMatches } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableConversionMatches } from "../../target-model/conversions/generic-callable.js";
 import { rustIntegerTruncationConversionMatches } from "../../target-model/conversions/integer-truncation.js";
-import { rustExactIntegerConversionMatches } from "../../target-model/conversions/exact-integer.js";
+import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 
 import { rustCallableConversionMatches } from "./callable.js";
 import { rustProjectUnionMapConversionMatches, type RustProjectUpcastRelation } from "../../target-model/conversions/project-union.js";

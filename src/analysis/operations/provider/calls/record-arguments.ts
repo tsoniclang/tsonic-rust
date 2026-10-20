@@ -12,7 +12,7 @@ import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../.
 import { selectRustProviderRecordField } from "../../../../policy/operations/members/record-fields.js";
 import type { RustProviderRecordAbsentField } from "../../../../target-model/conversions/provider-record-absence.js";
 import { selectRustStructuralFieldProjection } from "../../../../policy/types/objects/structural-fields.js";
-import { selectRustExactIntegerConversion } from "../../../../target-model/conversions/exact-integer.js";
+import { selectRustExactIntegerConversion } from "../../../../policy/conversions/exact-integer.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
 
 export function selectProviderRecordArgument(

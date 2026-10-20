@@ -1,13 +1,8 @@
-import type { TargetTypeRef } from "../types/model.js";
-import { isRustIntegerCarrier, isRustNumericCarrier, rustOptionElementCarrier } from "../types/index.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { isRustIntegerCarrier, isRustNumericCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export interface RustExactIntegerConversion {
-  readonly kind: "exact-integer";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-}
-
+import type { RustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 export function selectRustExactIntegerConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,

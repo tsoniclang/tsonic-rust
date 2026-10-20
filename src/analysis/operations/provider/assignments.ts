@@ -20,7 +20,7 @@ import { recordRustValueCarrierReconciliation } from "../../program/records/valu
 import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
+import { selectRustExactIntegerConversion } from "../../../policy/conversions/exact-integer.js";
 
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 
