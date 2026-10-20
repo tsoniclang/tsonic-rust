@@ -1,14 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalCaptures,
-  sourceMayReadBeforeInitialization,
-  type TargetSourceProgram } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalCaptures, sourceMayReadBeforeInitialization, type TargetSourceProgram } from "@tsonic/target-api/source";
 
 export interface RustSourceLexicalCallableQueries {
   bindingFor(declaration: Node): Node | undefined;
   callsFor(binding: Node, implementation: Node): readonly Node[] | undefined;
 }
 
-export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram): RustSourceLexicalCallableQueries {
+export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram, nodes: readonly Node[]): RustSourceLexicalCallableQueries {
   const bindings = new WeakMap<Node, Node | null>();
   const calls = new WeakMap<Node, WeakMap<Node, readonly Node[] | null>>();
   const callsFor = (binding: Node, implementation: Node): readonly Node[] | undefined => {
@@ -20,16 +18,16 @@ export function createRustSourceLexicalCallableQueries(source: TargetSourceProgr
     calls.set(binding, implementations);
     return selected;
   };
-  return Object.freeze({
-    callsFor,
-    bindingFor(declaration: Node): Node | undefined {
-      if (!source.ast.is.IsArrowFunction(declaration)) return undefined;
-      const cached = bindings.get(declaration);
-      if (cached !== undefined) return cached ?? undefined;
+  for (const declaration of nodes) {
+    if (source.ast.is.IsFunctionDeclaration(declaration)) callsFor(declaration, declaration);
+    else if (source.ast.is.IsArrowFunction(declaration)) {
       const selected = selectDirectLexicalCallableBinding(declaration, source, callsFor);
       bindings.set(declaration, selected ?? null);
-      return selected;
-    },
+    }
+  }
+  return Object.freeze({
+    callsFor: (binding: Node, implementation: Node) => calls.get(binding)?.get(implementation) ?? undefined,
+    bindingFor: (declaration: Node) => bindings.get(declaration) ?? undefined,
   });
 }
 
@@ -67,9 +65,7 @@ function selectSourceDirectCalls(
     if (use.kind !== "direct-call" || use.role !== "call-target" || use.throughMember) return undefined;
     let callee = use.reference;
     let call = ast.parent(callee);
-    let depth = 0;
     while (call !== undefined && ast.is.IsParenthesizedExpression(call) && Node_Expression(ast, call) === callee) {
-      if (++depth > 256) return undefined;
       callee = call;
       call = ast.parent(callee);
     }
