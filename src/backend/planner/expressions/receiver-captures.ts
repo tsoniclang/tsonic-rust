@@ -1,60 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
-import { rustClosureCaptureEquals } from "../../../target-model/records/equality.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
-import { rustCapturedFieldLocation, rustCapturedFieldStorage, rustCapturedFieldType } from "../objects/captured-fields.js";
+import { rustCapturedFieldLocation, rustCapturedFieldType } from "../objects/captured-fields.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { diagnosticInput } from "../program/plan-context.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
-import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { planExpression } from "./entry.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-
-export function validateRustCapturedReceivers(
-  node: Node, receivers: RustClosureCaptureFact["receivers"], context: RustPlanContext,
-): boolean {
-  const selected = context.input.program.objectRepresentations.receiverCaptures.receiversFor(node);
-  const valid = selected.length === receivers.length && selected.every((source, index) => {
-    const capture = receivers[index];
-    const definition = capture === undefined ? undefined : context.input.program.projectTypes.definitionForCarrier(capture.carrier);
-    const representation = context.input.program.objectRepresentations.representationFor(definition);
-    return capture !== undefined && representation !== undefined && representation.kind !== "value" &&
-      source.owner === capture.owner && source.reference === capture.reference &&
-      source.references.length === capture.references.length && source.references.every((reference, offset) =>
-        reference === capture.references[offset] &&
-        rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(reference)?.carrier, capture.carrier));
-  });
-  if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-    "rust.backend.receiver-capture", "A retained native receiver differs from its sealed owner, source references or carrier."));
-  return valid;
-}
-
-export function validateRustRecursiveReceiverField(
-  node: Node, capture: RustClosureCaptureFact, carrier: TargetTypeRef,
-  context: RustPlanContext,
-): boolean {
-  const selected = context.input.program.objectRepresentations.receiverCaptures.fixedSelfFor(node);
-  const shapeValid = rustClosureCaptureEquals(capture, capture);
-  const field = shapeValid ? capture.recursiveField : undefined;
-  const valid = shapeValid && (selected === undefined ? field === undefined : field !== undefined &&
-    selected.declaration === field.declaration && capture.recursiveDeclaration === field.declaration &&
-    capture.invocationOwner === undefined && capture.captures.length === 0 && capture.receivers.length === 0 && capture.receiverFields.length === 0 &&
-    selected.reference === field.reference && selected.receiver === field.receiver &&
-    rustTargetTypeRefEquals(field.carrier, carrier) && selected.references.length === field.references.length &&
-    selected.references.every((reference, index) => reference === field.references[index] &&
-      rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(reference)?.carrier, field.carrier)));
-  if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-    "rust.backend.fixed-field-self", "A fixed field self differs from its sealed origin, source references or exact callable carrier."));
-  return valid;
-}
 
 export function rustRecursiveReceiverFieldContext(
   field: NonNullable<RustClosureCaptureFact["recursiveField"]>, owner: RustExpr, context: RustPlanContext,
@@ -71,7 +28,6 @@ export function planRustCapturedReceivers(
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
-  if (!validateRustCapturedReceivers(node, receivers, creation)) return undefined;
   return planRustReceiverOwners(node, receivers, creation, invocation, options);
 }
 
@@ -96,9 +52,7 @@ export function planRustReceiverOwners(
       creation.expressionOverrides?.has(capture.reference) === true ? source
       : planRustReceiverAlias(source, capture.carrier, capture.carrier, creation, true);
     if (value === undefined) {
-      creation.diagnostics.push(missingFactDiagnostic(diagnosticInput(creation, capture.reference),
-        "rust.backend.receiver-owner", "A lexical receiver capture lost its exact existing native ownership handle."));
-      return undefined;
+      failRustPlannerInvariant("An admitted lexical receiver capture requires its exact native ownership handle.", capture.reference);
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_receiver");
     bindings.push({ name, value });
@@ -126,33 +80,15 @@ export function rustCapturedReceiverFieldType(
   capture: RustClosureCaptureFact["receiverFields"][number], type: RustType, context: RustPlanContext,
 ): RustType {
   const owner = rustCapturedFieldType(capture.storage, type);
-  return context.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference)
+  return capturedFieldIdentity(capture.declaration, capture.reference, context)
     ? { kind: "tuple", elements: [{ kind: "named", path: "rt::ObjectIdentity" }, owner] } : owner;
 }
 
-export function validateRustCapturedReceiverFields(
-  node: Node, fields: RustClosureCaptureFact["receiverFields"], context: RustPlanContext,
-): boolean {
-  const selected = context.input.program.objectRepresentations.receiverCaptures.capturesFor(node);
-  const valid = selected.length === fields.length && selected.every((source, index) => {
-    const capture = fields[index];
-    return capture !== undefined && source.declaration === capture.declaration && source.receiver === capture.receiver &&
-      source.reference === capture.reference && source.references.length === capture.references.length &&
-      source.references.every((reference, offset) => reference === capture.references[offset] &&
-        rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(reference)?.carrier, capture.carrier)) &&
-      closedMetadataEquals(rustCapturedFieldStorage(capture.declaration, context), capture.storage);
-  });
-  if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-    "rust.backend.receiver-field-capture", "A live receiver field capture differs from its sealed source membership, carrier and physical storage."));
-  return valid;
-}
-
 export function planRustCapturedReceiverFields(
-  node: Node, fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
+  _node: Node, fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
-  if (!validateRustCapturedReceiverFields(node, fields, creation)) return undefined;
   return planRustReceiverFieldOwners(fields, creation, invocation, options);
 }
 
@@ -173,21 +109,17 @@ export function planRustReceiverFieldOwners(
     if (creation.syntheticNames === undefined) return undefined;
     const owner = planRustCapturedFieldOwner(capture.reference, creation);
     if (owner === undefined) {
-      creation.diagnostics.push(missingFactDiagnostic(diagnosticInput(creation, capture.reference),
-        "rust.backend.receiver-field-owner", "A live receiver field capture lost its exact initialized physical owner."));
-      return undefined;
+      failRustPlannerInvariant("An admitted live receiver field requires its exact initialized native owner.", capture.reference);
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_field");
-    const guarded = creation.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference);
+    const guarded = capturedFieldIdentity(capture.declaration, capture.reference, creation);
     const receiver = guarded && creation.capturedFieldIdentities?.get(capture.reference) === undefined
       ? planExpression(capture.receiver, creation) : undefined;
     const identity = creation.capturedFieldIdentities?.get(capture.reference) ?? (receiver === undefined ? undefined
       : { kind: "call" as const, path: "rt::ObjectIdentityCarrier::object_identity",
         args: [{ kind: "reference" as const, expr: receiver }] });
     if (guarded && identity === undefined) {
-      creation.diagnostics.push(missingFactDiagnostic(diagnosticInput(creation, capture.reference),
-        "rust.backend.receiver-field-identity", "A frozen retained field requires its exact live object identity owner."));
-      return undefined;
+      failRustPlannerInvariant("An admitted frozen retained field requires its exact live object identity owner.", capture.reference);
     }
     bindings.push({ name, value: guarded ? { kind: "tuple-literal", elements: [
       { kind: "method-call", receiver: identity!, method: "clone", args: [] }, owner,
@@ -206,7 +138,7 @@ export function rustCapturedReceiverFieldContext(
   const identities = new Map(context.capturedFieldIdentities ?? []);
   for (const [index, capture] of fields.entries()) {
     const retained = ownerFor(index);
-    const guarded = context.input.program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference);
+    const guarded = capturedFieldIdentity(capture.declaration, capture.reference, context);
     const identity: RustExpr = { kind: "field", receiver: retained, name: "0" };
     const owner: RustExpr = guarded ? { kind: "field", receiver: retained, name: "1" } : retained;
     const carrier = substituteRustTargetGenerics(capture.carrier, context.typeParameterSubstitutions ?? new Map(),
@@ -226,4 +158,9 @@ export function rustCapturedReceiverFieldContext(
     }
   }
   return { ...context, valueFieldLocations: locations, capturedFieldOwners: owners, capturedFieldIdentities: identities };
+}
+
+function capturedFieldIdentity(declaration: Node, reference: Node, context: RustPlanContext): boolean {
+  return context.input.program.records.capturedFieldIdentity.get(declaration, reference)
+    ?? failRustPlannerInvariant("An admitted retained field requires its selected native identity capture.", reference);
 }

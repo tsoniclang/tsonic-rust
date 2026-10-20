@@ -19,3 +19,7 @@ export interface RustReceiverCapture {
   readonly reference: Node;
   readonly references: readonly Node[];
 }
+
+export interface RustReceiverCaptureEmissionRecords {
+  readonly capturedFieldIdentity: { readonly get: (declaration: Node, reference: Node) => boolean | undefined };
+}

@@ -57,8 +57,7 @@ import { planRustParameterEntryConversion } from "../declarations/callables/para
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
 import { finalizedConversionIsValid } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
-import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext,
-  validateRustRecursiveReceiverField } from "./receiver-captures.js";
+import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext } from "./receiver-captures.js";
 import { planRustErrorRegion } from "../program/error-regions.js";
 
 function rustCallableCreationIsErased(node: Node, context: RustPlanContext): boolean {
@@ -115,7 +114,6 @@ export function planRustCallableExpressionBody(
     ));
     return undefined;
   }
-  if (!validateRustRecursiveReceiverField(node, captureFact, closureFact.resultCarrier, context)) return undefined;
   const independent = context.input.program.records.receiverIndependentMethod.get(node);
   const frameAlternative = rustIndependentFrameConstruction(node, closureFact.resultCarrier, context);
   const constructionCarrier = frameAlternative?.carrier ?? independent?.carrier ?? closureFact.resultCarrier;

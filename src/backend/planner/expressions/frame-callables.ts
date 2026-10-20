@@ -8,8 +8,7 @@ import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameO
 import { planRustCaptureValue } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { planRustReceiverFieldOwners, planRustReceiverOwners, validateRustCapturedReceiverFields,
-  validateRustCapturedReceivers } from "./receiver-captures.js";
+import { planRustReceiverFieldOwners, planRustReceiverOwners } from "./receiver-captures.js";
 
 function planFrameEntry(
   node: Node, carrier: TargetTypeRef, context: RustPlanContext,
@@ -31,8 +30,6 @@ function planFrameEntry(
     : projectRustFrameOwnerData(owner, data => ({ kind: "method-call",
       receiver: { kind: "field", receiver: data, name: counterName! }, method: "allocate", args: [] }));
   if (allocated === undefined) return undefined;
-  if (!validateRustCapturedReceiverFields(node, implementation.capture.receiverFields, context) ||
-    !validateRustCapturedReceivers(node, implementation.capture.receivers, context)) return undefined;
   const values = implementation.captures.map(capture => {
     const name = context.input.program.names.nameForDeclaration(capture.declaration);
     return name === undefined ? undefined : planRustCaptureValue(node, capture, name, capture.storage, context);
