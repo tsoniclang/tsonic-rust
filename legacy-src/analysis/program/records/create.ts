@@ -19,6 +19,7 @@ import { createRustUnionEqualityProducer } from "./union-equality.js";
 import { createRustClosedTypeTestProducer } from "./type-tests.js";
 import { createRustOptionEqualityProducer } from "./option-equality.js";
 import { createRustIndexedLocationProducer } from "./indexed-locations.js";
+import { createRustLocationCallbackProducer } from "./location-callbacks.js";
 import { createRustErrorFieldProducer } from "./error-field-borrows.js";
 import { createRustStringComparisonViewProducer } from "./string-comparison-views.js";
 import { createRustGenericCallableFlowProducer } from "./generic-callable-flow.js";
@@ -255,6 +256,7 @@ export function createRustProgramRecordBuilder(
   const closedTypeTestPlans = createRustClosedTypeTestProducer(assertOpen);
   const optionEqualityPlans = createRustOptionEqualityProducer(assertOpen);
   const indexedLocationPlans = createRustIndexedLocationProducer(assertOpen);
+  const locationCallbackPlans = createRustLocationCallbackProducer(assertOpen);
   const errorFieldPlans = createRustErrorFieldProducer(assertOpen);
   const stringComparisonPlans = createRustStringComparisonViewProducer(assertOpen);
   const genericFlowApplications = createRustGenericCallableFlowProducer(assertOpen);
@@ -329,6 +331,7 @@ export function createRustProgramRecordBuilder(
     ...closedTypeTestPlans.records,
     ...optionEqualityPlans.records,
     ...indexedLocationPlans.records,
+    ...locationCallbackPlans.records,
     ...errorFieldPlans.records,
     ...stringComparisonPlans.records,
     ...genericFlowApplications.records,
@@ -468,6 +471,7 @@ export function createRustProgramRecordBuilder(
     closedTypeTestPlans,
     optionEqualityPlans,
     indexedLocationPlans,
+    locationCallbackPlans,
     errorFieldPlans,
     stringComparisonPlans,
     genericFlowApplications,
