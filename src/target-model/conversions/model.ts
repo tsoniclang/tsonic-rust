@@ -1,7 +1,4 @@
-import type {
-  RustNonOptionValueConversion,
-  RustValueConversionId,
-} from "../operations/model.js";
+import type { RustNonOptionValueConversion, RustValueConversionId } from "../operations/model.js";
 
 function semanticConversion(
   id: RustValueConversionId,
