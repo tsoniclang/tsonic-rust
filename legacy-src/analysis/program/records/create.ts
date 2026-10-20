@@ -103,6 +103,7 @@ import { createRustObjectProjectionProducer } from "./object-projections.js";
 import { createRustStructuralEmissionProducer } from "./structural-emission.js";
 import { createRustStoredFieldProducer } from "./stored-fields.js";
 import { createRustProjectClassProducer } from "./project-classes.js";
+import { createRustObjectLiteralEmissionProducer } from "./object-literal-emission.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -219,6 +220,7 @@ export function createRustProgramRecordBuilder(
   const structuralEmissionPlans = createRustStructuralEmissionProducer(assertOpen);
   const storedFieldPlans = createRustStoredFieldProducer(assertOpen);
   const projectClassPlans = createRustProjectClassProducer(assertOpen);
+  const objectLiteralEmissionPlans = createRustObjectLiteralEmissionProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -263,6 +265,7 @@ export function createRustProgramRecordBuilder(
     ...structuralEmissionPlans.records,
     ...storedFieldPlans.records,
     ...projectClassPlans.records,
+    ...objectLiteralEmissionPlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -375,6 +378,7 @@ export function createRustProgramRecordBuilder(
     structuralEmissionPlans,
     storedFieldPlans,
     projectClassPlans,
+    objectLiteralEmissionPlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,

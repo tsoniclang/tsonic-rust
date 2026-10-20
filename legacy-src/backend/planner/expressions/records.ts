@@ -133,7 +133,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   const finalContributionByStorageIndex = contributionEvidence.finalFields;
   const finalContributionByMethod = contributionEvidence.finalMethods;
   const requiresObjectLiteralImplementation =
-    rustObjectLiteralRequiresDispatchImplementation(fact, context);
+    rustObjectLiteralRequiresDispatchImplementation(node, context);
   const implementationPlan = requiresObjectLiteralImplementation
     ? context.objectLiteralImplementations?.forExpression(node)
     : undefined;

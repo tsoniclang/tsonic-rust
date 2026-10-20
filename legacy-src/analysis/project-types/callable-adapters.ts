@@ -5,7 +5,7 @@ import { appendRustDiagnostic } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProjectTypeDefinition } from "./type-policy.js";
 import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
-import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
+import type { RustProjectMethodDispatchVariant } from "../../target-model/records/method-dispatch.js";
 import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
 
 import {

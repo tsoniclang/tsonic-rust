@@ -98,6 +98,8 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly admittedField: import("./stored-fields.js").RustStoredFieldRecords["admittedField"];
   readonly valueFieldProjection: import("./stored-fields.js").RustStoredFieldRecords["valueFieldProjection"];
   readonly projectClassMembers: import("./project-classes.js").RustProjectClassRecords["projectClassMembers"];
+  readonly objectLiteralEmission: import("./object-literal-emission.js").RustObjectLiteralEmissionRecords["objectLiteralEmission"];
+  readonly objectLiteralEmissions: import("./object-literal-emission.js").RustObjectLiteralEmissionRecords["objectLiteralEmissions"];
   readonly receiverAlias: import("./project-classes.js").RustProjectClassRecords["receiverAlias"];
   readonly projectClassAccessors: import("./project-classes.js").RustProjectClassRecords["projectClassAccessors"];
   readonly projectClassFields: import("./project-classes.js").RustProjectClassRecords["projectClassFields"];

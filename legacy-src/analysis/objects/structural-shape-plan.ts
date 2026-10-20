@@ -42,6 +42,7 @@ export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
   readonly instances: readonly RustStructuralShapeDefinition[];
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
+  templateForCarrier(carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined;
   sharesStorage(left: TargetTypeRef, right: TargetTypeRef): boolean;
   fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
   field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined;
@@ -137,6 +138,9 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     },
     definitionForCarrier(carrier: TargetTypeRef | undefined) {
       return requireCurrent().definitionForCarrier(carrier);
+    },
+    templateForCarrier(carrier: TargetTypeRef) {
+      return requireCurrent().templateForCarrier(carrier);
     },
     sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
       return requireCurrent().sharesStorage(left, right);
@@ -408,6 +412,7 @@ function createRustStructuralShapeConstruction(
           rustTargetGenericArgumentEquals(argument, rightDefinition.genericArguments[index]!));
     },
     definitionForCarrier: definitionFor,
+    templateForCarrier: (carrier: TargetTypeRef) => originsByKey.get(closedMetadataKey(carrier)),
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return Number.isSafeInteger(storageIndex) && storageIndex >= 0
         ? definitionFor(carrier)?.fields[storageIndex]?.targetName

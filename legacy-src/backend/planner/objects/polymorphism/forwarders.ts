@@ -28,7 +28,7 @@ import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../pro
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectDowncastRoute } from "../../../../analysis/project-types/type-policy.js";
-import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
+import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";

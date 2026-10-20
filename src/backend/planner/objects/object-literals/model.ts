@@ -5,7 +5,8 @@ import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
-import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
+import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";
 
@@ -98,65 +99,27 @@ export type RustRecordLiteralFact = Extract<
   { readonly kind: "record-literal" }
 >;
 
-export function rustObjectLiteralRequiresDispatchImplementation(
-  fact: RustRecordLiteralFact,
-  context: RustPlanContext,
-): boolean {
-  if (fact.storage !== "project-object") {
-    return context.input.program.structuralShapes.definitionForCarrier(fact.resultCarrier)?.dispatchName !== undefined;
-  }
-  if (fact.contributions.some((contribution) =>
-    contribution.kind === "method" || contribution.kind === "accessor" ||
-    contribution.kind === "spread" && contribution.methods.length > 0)) {
-    return true;
-  }
-  const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
-  return definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition);
+export function rustObjectLiteralRequiresDispatchImplementation(node: Node, context: RustPlanContext): boolean {
+  return context.input.program.records.objectLiteralEmission.get(node) !== undefined;
 }
 
 export function createRustObjectLiteralImplementationRegistry(
-  sourceFile: SourceFile,
-  context: RustPlanContext,
-  names: RustSyntheticNameState,
+  sourceFile: SourceFile, context: RustPlanContext, names: RustSyntheticNameState,
 ): RustObjectLiteralImplementationRegistry {
   const plans = new Map<Node, RustObjectLiteralImplementationPlan | RustStructuralLiteralImplementation>();
   const referenceViews = new Map<Node, RustStructuralLiteralImplementation>();
   const items: RustItem[] = [];
-  const visit = (node: Node): void => {
-    const fact = context.input.program.records.targetOperation.get(node);
-    if (fact?.kind === "record-literal" &&
-      rustObjectLiteralRequiresDispatchImplementation(fact, context)) {
-      const plan = fact.storage === "structural-object"
-        ? createStructuralLiteralImplementation(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
-          contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : [])), context, names)
-        : createImplementationPlan(node, fact, context, names);
-      if (plan !== undefined) {
-        plans.set(node, plan);
-        items.push(...plan.items);
-      }
-    }
-    const view = context.input.program.records.objectReferenceView.get(node);
-    if (view?.kind === "structural" && context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier)?.dispatchName !== undefined) {
-      const plan = createStructuralLiteralImplementation(node, view.targetCarrier, new Set(view.fields.map(field => field.destinationIndex)), context, names);
-      if (plan !== undefined) {
-        referenceViews.set(node, plan);
-        items.push(...plan.items);
-      }
-    }
-    context.input.program.source.ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(sourceFile);
-  return Object.freeze({
-    items: Object.freeze(items),
-    forExpression(expression: Node) {
-      return plans.get(expression);
-    },
-    forReferenceView(expression: Node) {
-      return referenceViews.get(expression);
-    },
-  });
+  for (const request of context.input.program.records.objectLiteralEmissions.get(sourceFile) ?? []) {
+    const plan = request.kind === "project" ? createImplementationPlan(request.node, request.fact, context, names)
+      : createStructuralLiteralImplementation(request.node, request.selection, context, names);
+    if (plan === undefined) failRustPlannerInvariant("An admitted object literal requires its exact native implementation.", request.node);
+    if (request.kind === "reference") {
+      if (plan.kind !== "structural") failRustPlannerInvariant("An admitted structural reference requires its native structural implementation.", request.node);
+      referenceViews.set(request.node, plan);
+    } else plans.set(request.node, plan);
+    items.push(...plan.items);
+  }
+  return Object.freeze({ items: Object.freeze(items),
+    forExpression: (expression: Node) => plans.get(expression),
+    forReferenceView: (expression: Node) => referenceViews.get(expression) });
 }

@@ -11,13 +11,7 @@ import type {
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/index.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
-export interface RustProjectMethodDispatchVariant {
-  readonly declaration: Node;
-  readonly sourceTypeParameterIdentities: readonly string[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
-  readonly virtualSlot: string;
-  readonly exactSlot: string;
-}
+import type { RustProjectMethodDispatchVariant } from "../../target-model/records/method-dispatch.js";
 
 export type RustProjectMethodDispatchRegistration =
   | { readonly kind: "accepted" }
