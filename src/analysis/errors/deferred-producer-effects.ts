@@ -15,7 +15,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustStoredFutureValues, type RustStoredFutureValue } from "./future-storage.js";
+import { rustStoredFutureValues, type RustStoredFutureValue } from "../callables/future-storage.js";
 import { createRustEffectsWorkBudget } from "./effects-work-budget.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import { requireRustRecord } from "../program/records/required-records.js";
