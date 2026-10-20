@@ -1,14 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import {
-  BinaryExpression_Left,
-  BinaryExpression_Right,
-  KindBinaryExpression,
-  KindPropertyAccessExpression,
-  Node_Expression,
-} from "@tsonic/target-api/source";
-import type {
-  RustValueConversionContract,
-} from "../../target-model/conversions/contracts.js";
+import { BinaryExpression_Left, BinaryExpression_Right, KindBinaryExpression, KindPropertyAccessExpression, Node_Expression } from "@tsonic/target-api/source";
+import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
