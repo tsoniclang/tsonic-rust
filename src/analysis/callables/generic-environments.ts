@@ -4,10 +4,9 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+
 import type { RustNativeCaptureSelection } from "./native-captures.js";
 import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
-import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 
 import type { RustGenericCallableEnvironment } from "../../target-model/records/generic-callables.js";
 
