@@ -13,7 +13,7 @@ import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustTailShape, retainRustCheckedCompletion } from "../../target-ast/normalization/block-flow.js";
+import { applyRustTailShape } from "../../target-ast/normalization/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
 import { rustOperationFact } from "./fundamentals.js";
 import { finishRuntimeCallableExpression } from "./lambda-creation.js";
@@ -380,12 +380,12 @@ export function planRustCallableExpressionBody(
   if (plannedBody === undefined) {
     return undefined;
   }
-  const block = retainRustCheckedCompletion({
+  const block: RustBlock = {
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
       ? [planRustReturnExit(planRustAbsentValue(bodyResultCarrier, bodyContext), bodyContext)]
       : generator !== undefined && emission.unitBody && context.input.program.records.callableDeclaration.get(node)?.canFallThrough === true
         ? [planRustReturnExit(undefined, bodyContext)] : [])],
-  }, !emission.unitBody && generator === undefined ? sourceReturn?.canFallThrough : undefined);
+  };
   const bodyWithBindings = { statements: [...bindingStatements, ...block.statements] };
   const bodyErrorType = suspended && fallible ? rustActiveErrorType(callableClosureContext) : invocationErrorType;
   const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(

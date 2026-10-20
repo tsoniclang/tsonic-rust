@@ -58,6 +58,7 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
     kind: "if",
     condition: planned,
     then: thenBlock,
+    ...(context.input.program.records.statementExit.get(node) === true ? { tailEligible: true as const } : {}),
     ...(elseBlock === undefined
       ? {}
       : {
