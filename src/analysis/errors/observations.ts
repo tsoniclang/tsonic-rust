@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
-import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../policy/constraints/error-protocols.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function admitRustErrorObservations(program: Omit<RustAnalysisProgram, "reachability">,

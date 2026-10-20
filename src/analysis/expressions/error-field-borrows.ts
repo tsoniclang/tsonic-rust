@@ -7,7 +7,7 @@ import type { RustErrorFieldEmission } from "../../target-model/records/error-fi
 import { rustJsErrorTargetType, isRustProgramErrorCarrier, rustSourceOptionalTargetType, rustStringTargetType } from "../../target-model/types/index.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../policy/constraints/error-protocols.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 

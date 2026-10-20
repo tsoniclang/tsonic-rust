@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import { rustSourceOptionalTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
-import { rustCarrierProvidesErrorMutation } from "../../../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorMutation } from "../../../constraints/error-protocols.js";
 
 export function selectRustBuiltinErrorPropertyForm(
   memberName: string, accessMode: Extract<RustTargetOperationFact, { readonly kind: "builtin-error-property" }>["accessMode"] | "delete",

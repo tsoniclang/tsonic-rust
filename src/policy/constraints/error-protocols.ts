@@ -1,11 +1,10 @@
-import type { TargetTypeRef } from "../model.js";
-import type { RustTypeDefinitions } from "../source-union-definitions.js";
-import { emptyRustTypeDefinitions } from "../source-union-definitions.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
-import { rustJsErrorTargetType } from "./js.js";
-import { rustCarrierSupportsTrait } from "./traits.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier,
-  isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "./source-error.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustJsErrorTargetType } from "../../target-model/types/carriers/js.js";
+import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/traits.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 
 export function rustCarrierProvidesErrorObservation(
   carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions,

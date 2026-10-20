@@ -12,7 +12,7 @@ import { rustValueConversionIsFallible } from "../conversions/contracts.js";
 import type { RustStructuralShapeField } from "../../target-model/records/structural-shapes.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { rustCarrierProvidesErrorMutation } from "../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorMutation } from "../constraints/error-protocols.js";
 
 export function rustSourceCallCallableStorageCarrier(
   fact: RustTargetOperationFact | undefined,

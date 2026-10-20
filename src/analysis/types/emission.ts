@@ -28,7 +28,7 @@ import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetai
   isRustWritableRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
-import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../policy/constraints/error-protocols.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {

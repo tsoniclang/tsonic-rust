@@ -9,7 +9,7 @@ import { isRustAbsenceCarrier, isRustJsArrayCarrier, isRustVecCarrier, isRustJsV
 import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { getRustTypeofRuntimeKind } from "../syntax/runtime-kind.js";
 import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
-import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../constraints/error-protocols.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 
 export function selectRustProjectTypeTestPlan(

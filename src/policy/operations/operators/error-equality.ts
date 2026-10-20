@@ -3,7 +3,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustProgramErrorCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../constraints/error-protocols.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 
 export function selectRustProgramErrorComparison(

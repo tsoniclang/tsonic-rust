@@ -10,7 +10,7 @@ import { acceptRustOperation } from "../../program/records/selected-operation-va
 import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints/error-protocols.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 
