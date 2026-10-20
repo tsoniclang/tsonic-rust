@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand, sourceExpressionResultUse } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { isRustCopyCarrier, isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -138,7 +138,7 @@ export function analyzeRustAssignmentWrites(input: {
       (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword");
     requireRustRecord(input.required, "assignmentWrite", node, "native assignment write", "analyzeRustAssignmentWrites");
     let valueResult: import("../../target-model/records/assignment-writes.js").RustAssignmentWriteCompletion["valueResult"];
-    if (assignment.operator === "=" && sourceExpressionResultUse(ast, node) === "consumed") {
+    if (assignment.operator === "=" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
       const carrier = rustValueCarrierBeforeContextualConversion(records, value);
       if (carrier === undefined || !rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(node)?.carrier)) {
         issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,

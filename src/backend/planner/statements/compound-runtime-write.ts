@@ -21,7 +21,7 @@ export function planRustCompoundRuntimeWrite(
   if (write === undefined || receiverNode === undefined || indexNode === undefined || context.syntheticNames === undefined) {
     failRustPlannerInvariant("An admitted compound index write lost its native setter, checked operands or name scope.", expression);
   }
-  const inputs = planRustRuntimeIndexInputs(receiverNode, indexNode, write.abi, expression, "write", context);
+  const inputs = planRustRuntimeIndexInputs(receiverNode, indexNode, write, expression, "write", context);
   if (inputs === undefined) failRustPlannerInvariant("An admitted compound write lost its native indexed input plan.", expression);
   const selected = inputs.context;
   const overrides = new Map(selected.expressionOverrides);
