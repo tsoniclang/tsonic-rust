@@ -16,7 +16,8 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
-import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";

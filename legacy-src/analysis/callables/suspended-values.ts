@@ -8,7 +8,8 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { rustCallableProtocol, rustLocationTargetType, rustTargetGenericReferences } from "../../target-model/types/index.js";
 
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";

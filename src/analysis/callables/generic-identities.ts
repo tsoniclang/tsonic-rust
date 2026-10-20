@@ -12,17 +12,10 @@ import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
-import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
-import type { RustGenericCallableIdentityPair, RustGenericCallableIdentitySelection,
-  RustGenericCallableIdentityComparison } from "../../target-model/records/generic-callables.js";
-
-export interface RustGenericCallableIdentityPlan {
-  readonly issues: readonly RustSourceCallableSpecializationIssue[];
-  forComparison(node: Node): RustGenericCallableIdentityComparison | undefined;
-  forDefinition(definition: RustGenericCallablePhysicalDefinition): RustGenericCallableIdentitySelection | undefined;
-}
+import type { RustGenericCallableIdentityPair, RustGenericCallableIdentitySelection, RustGenericCallableIdentityComparison } from "../../target-model/records/generic-callables.js";
 
 export function selectRustGenericCallableIdentity(
   leftCarrier: TargetTypeRef, rightCarrier: TargetTypeRef, physical: RustGenericCallablePhysicalPlan,
@@ -138,7 +131,7 @@ export function prepareRustGenericCallableIdentityRequests(input: {
   readonly sources: RustGenericCallableIdentitySources;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
 }): RustGenericCallableIdentityRequests {
-  if (input.sources === undefined) throw new Error("Native callable identity requires its exact selected source comparison inventory.");
+  if (input.sources === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native callable identity requires its exact selected source comparison inventory.");
   const operands = new Map<Node, RustGenericCallableIdentityOperandRequest>();
   const { comparisons, budget, failure, subject } = input.sources;
   if (failure === undefined) for (const source of comparisons) operands.set(source.node, Object.freeze({ source,
@@ -204,6 +197,9 @@ export function createRustGenericCallableIdentityPlan(input: {
   });
   if (failure !== undefined && subject !== undefined) issues.push(Object.freeze({ subject,
     message: `Native callable identity exhausted its finite analysis budget: ${failure.message}` }));
-  return Object.freeze({ issues: Object.freeze(issues), forComparison: (node: Node) => comparisons.get(node),
-    forDefinition: (definition: RustGenericCallablePhysicalDefinition) => definitions.get(definition) });
+  return sealRustGenericCallableIdentityPlan(comparisons, definitions, issues);
 }
+
+import type { RustGenericCallableIdentityPlan } from "../../target-model/records/generic-callable-identity.js";
+import { sealRustGenericCallableIdentityPlan } from "../program/records/generic-callable-identity.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

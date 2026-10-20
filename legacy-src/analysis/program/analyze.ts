@@ -56,7 +56,8 @@ import { createRustSourceProfileCallableAliasQuery } from "../../policy/operatio
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
 import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
-import type { RustSourceCallableSpecializationIssue } from "../callables/specializations.js";
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";

@@ -10,7 +10,8 @@ import type { RustCallableValueAdapter } from "../../target-model/records/callab
 
 import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
 import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
-import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
 
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
@@ -32,8 +33,8 @@ import { createRustNativeCapturePlan } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
   type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
-import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdentityRequests, prepareRustGenericCallableIdentitySources,
-  type RustGenericCallableIdentityPlan } from "./generic-identities.js";
+import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdentityRequests, prepareRustGenericCallableIdentitySources } from "./generic-identities.js";
+import type { RustGenericCallableIdentityPlan } from "../../target-model/records/generic-callable-identity.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { createRustNativeCallableDispatchPlan } from "./native-dispatch.js";

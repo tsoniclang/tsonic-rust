@@ -20,11 +20,6 @@ export interface RustProjectMethodSpecializationRequest {
   readonly targetTypeArguments: readonly TargetTypeRef[];
 }
 
-export interface RustSourceCallableSpecializationIssue {
-  readonly subject: Node;
-  readonly message: string;
-}
-
 export interface RustSourceCallableSpecializationPlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   readonly projectMethodRequests: readonly RustProjectMethodSpecializationRequest[];
@@ -576,3 +571,6 @@ function rejected(reason: string): RustSourceCallableSpecializationRegistration 
 }
 
 const accepted: RustSourceCallableSpecializationRegistration = Object.freeze({ kind: "accepted" });
+
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";

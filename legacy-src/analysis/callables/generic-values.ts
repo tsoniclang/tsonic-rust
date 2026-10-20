@@ -11,7 +11,8 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import type { RustNamePlan } from "../../target-model/names/model.js";
 
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";

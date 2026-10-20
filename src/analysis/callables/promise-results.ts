@@ -21,7 +21,8 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+
+import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
