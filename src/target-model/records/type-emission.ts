@@ -24,6 +24,7 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly errorStorage: { readonly kind: "source" | "retained"; readonly path: string; readonly writable: boolean } | undefined;
   readonly option: boolean;
   readonly string: boolean;
   readonly sharedStringReference: boolean;

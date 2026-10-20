@@ -43,6 +43,9 @@ export interface RustProjectEmissionRecords {
 export type RustCheckedProjectProjectionEmission = { readonly kind: "structural" | "project" | "excluded" };
 
 export interface RustProjectErrorEmission {
+  readonly sourceError: boolean;
+  readonly variant: string | undefined;
+  readonly carrier: TargetTypeRef;
   readonly superTrait: boolean;
   readonly inherited: boolean;
   readonly fields: readonly { readonly name: "name" | "message" | "stack"; readonly declaration: Node; readonly read: string | undefined; readonly write: string | undefined }[];

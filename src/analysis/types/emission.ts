@@ -23,6 +23,8 @@ import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contex
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue,
   rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustCallableInputTargetId, rustCallableTargetId, rustFutureTargetId, rustProgramErrorTargetType, rustUnitTargetType, rustEmptyObjectTargetId } from "../../target-model/types/index.js";
 import { selectRustTypePositions } from "../../policy/types/type-emission.js";
+import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier,
+  isRustWritableRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -92,6 +94,10 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     if (union !== undefined && unionArguments === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
+      errorStorage: isRustRetainedErrorCarrier(carrier) ? Object.freeze({ kind: "retained", writable: isRustWritableRetainedErrorCarrier(carrier),
+        path: isRustWritableRetainedErrorCarrier(carrier) ? "tsonic_rust_runtime::WritableRetainedError" : "tsonic_rust_runtime::RetainedError" })
+        : isRustSourceErrorCarrier(carrier) ? Object.freeze({ kind: "source", writable: isRustWritableSourceErrorCarrier(carrier),
+          path: isRustWritableSourceErrorCarrier(carrier) ? "rt::WritableSourceError" : "rt::SourceError" }) : undefined,
       option: isRustOptionCarrier(carrier), string: isRustStringCarrier(carrier),
       sharedStringReference: carrier.kind === "reference" && !carrier.mutable && isRustStringCarrier(carrier.referent),
       optionPayload: optionalElement === undefined ? undefined : Object.freeze({ str: payloadView(true), shared: payloadView(false) }),

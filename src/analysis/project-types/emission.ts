@@ -70,6 +70,8 @@ export function analyzeRustProjectEmission(input: {
     producer.definition(definition, representation);
     const inheritedError = program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base;
     producer.error(definition, { superTrait: program.projectTypes.externalBaseForDefinition(definition)?.programError === true,
+      sourceError: program.projectTypes.sourceErrorDefinitions.includes(definition), variant: program.projectTypes.programErrorVariant(definition),
+      carrier: program.projectTypes.openCarrier(definition),
       inherited: inheritedError?.programError === true, fields: inheritedError?.programError !== true ? Object.freeze([])
         : Object.freeze((["name", "message", "stack"] as const).map(name => {
           const field = inheritedError.fields.find(field => field.sourceName === name);
