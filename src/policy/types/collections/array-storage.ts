@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustBigIntCarrier, isRustNumericCarrier } from "../../../target-model/types/index.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../conversions/selection.js";
 
 export function selectRustArrayElementStorage(

@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier, rustCallableProtocol, rustCallableInputProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "./contracts.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustCallableInputMatches } from "./callable-input.js";

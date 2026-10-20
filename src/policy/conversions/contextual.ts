@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustValueConversionContract, rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract, rustValueConversionIsFallible } from "./contracts.js";
 import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/traits.js";

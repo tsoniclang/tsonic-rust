@@ -13,10 +13,8 @@ import type {
 } from "../../target-model/types/model.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
-import {
-  rustValueConversionContract,
-  type RustValueConversionContract,
-} from "../../target-model/conversions/contracts.js";
+import { type RustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import {
   rustFoundationForCarrier,
   rustFoundationForPath,

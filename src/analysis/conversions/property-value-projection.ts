@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustPropertyValueProjectionProducer } from "../program/records/property-value-projection.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 

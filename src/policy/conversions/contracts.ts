@@ -1,69 +1,27 @@
-import type { TargetTypeRef } from "../types/model.js";
-import { isRustValueConversion } from "./shape.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { isRustValueConversion } from "../../target-model/conversions/shape.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustCallableInputMatches } from "./callable-input.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
-import { rustProgramErrorConversionMatches, type RustProgramErrorRoute } from "./program-error.js";
+
+import { rustProgramErrorConversionMatches } from "./program-error.js";
 import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./closed-record.js";
-import { rustClosedValueRetainsError } from "../types/carriers/closed-values.js";
-import {
-  isRustTargetTypeRef,
-  rustTargetTypeRefEquals,
-} from "../types/equality.js";
-import type {
-  RustValueConversion,
-  RustValueConversionId,
-} from "../operations/model.js";
-import {
-  isRustAbsenceCarrier,
-  isRustNeverCarrier,
-  rustJsNumericTargetType,
-  rustJsStringNumberTargetType,
-  rustBigIntTargetType,
-  isRustNumericCarrier,
-  rustCallableProtocol,
-  rustClosureProtocol,
-  rustJsArrayTargetType,
-  rustJsStringTargetType,
-  rustJsSymbolTargetType,
-  rustNeverTargetType,
-  rustOptionTargetType,
-  rustSourceOptionalTargetType,
-  rustJsValueTargetType,
-  rustJsErrorTargetType,
-  rustEmptyObjectTargetType,
-  rustOptionElementCarrier,
-  rustPrimitiveTypeName,
-  rustSourcePrimitiveTargetType,
-  rustBorrowedStrTargetType,
-  rustStringTargetType,
-  rustStructuralObjectCarrierValue,
-  rustJsArrayLikeElementTargetType,
-  isRustJsArrayCarrier,
-  isRustJsArrayValueCarrier,
-  isRustJsValueCarrier,
-  rustAbsenceTargetType,
-  rustTargetGenericReferences,
-  rustCarrierSupportsClone,
-  rustCarrierCanEnterTsValue,
-  rustTsValueAdmission,
-  rustCarrierSupportsTrait,
-  rustJsClosedValueCarrierTraitPath,
-  rustTsValueTargetType,
-  rustProgramErrorTargetType,
-} from "../types/index.js";
-import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
+import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustValueConversion } from "../../target-model/operations/model.js";
+import { isRustAbsenceCarrier, isRustNeverCarrier, isRustNumericCarrier, rustCallableProtocol, rustClosureProtocol, rustJsArrayTargetType, rustJsStringTargetType, rustJsSymbolTargetType, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustEmptyObjectTargetType, rustOptionElementCarrier, rustPrimitiveTypeName, rustSourcePrimitiveTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustJsArrayLikeElementTargetType, isRustJsArrayCarrier, isRustJsArrayValueCarrier, isRustJsValueCarrier, rustAbsenceTargetType, rustTargetGenericReferences, rustCarrierSupportsClone, rustCarrierCanEnterTsValue, rustTsValueAdmission, rustCarrierSupportsTrait, rustJsClosedValueCarrierTraitPath, rustTsValueTargetType, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
-import { selectRustUnionMappingEmission, selectRustUnionProjectionEmission } from "../../policy/conversions/union-mappings.js";
-import type { RustUnionMappingEmission, RustUnionProjectionEmission } from "../records/union-mappings.js";
-import { rustUnsignedIntegerCounterpart } from "./integer-refinement.js";
-import { rustNumberBoxingSourceKind } from "./number-boxing.js";
-import { rustRestSequenceElements } from "../operations/rest-assembly.js";
-import { closedMetadataEquals, isClosedMetadata, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
-import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { selectRustUnionArmMapping, rustUnionLeaves, type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
+import { selectRustUnionMappingEmission, selectRustUnionProjectionEmission } from "./union-mappings.js";
+
+import { rustUnsignedIntegerCounterpart } from "../../target-model/conversions/integer-refinement.js";
+
+import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
+import { closedMetadataEquals, isClosedMetadata, isDenseDataArray, hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
+import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { selectRustUnionArmMapping, rustUnionLeaves } from "../../target-model/types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -80,126 +38,8 @@ const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();
 const absenceCarrier = rustAbsenceTargetType();
 
-interface RustValueConversionContractBase {
-  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "native-numeric-cast" | "ownership" | "projection";
-  readonly sourceMode: "value" | "ref";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-}
-
-type RustValueConversionEffect =
-  | { readonly fallible: false }
-  | { readonly fallible: true; readonly errorBoundary: "target-runtime" }
-  | { readonly fallible: true; readonly errorBoundary: "provider-native"; readonly errorCarrier: TargetTypeRef };
-
-export type RustValueConversionContract = RustValueConversionContractBase & RustValueConversionEffect & (
-  | { readonly lowering: "program-error"; readonly route: RustProgramErrorRoute }
-  | { readonly lowering: "program-error-closed-value" }
-  | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
-  | { readonly lowering: "js-array-backing"; readonly element: TargetTypeRef; readonly method: "cast" | "cast_array" }
-  | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
-  | { readonly lowering: "union-project"; readonly path: readonly RustUnionPathStep[]; readonly emission: RustUnionProjectionEmission }
-  | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[]; readonly emission: RustUnionMappingEmission }
-  | { readonly lowering: "exact-integer"; readonly targetElement: TargetTypeRef;
-      readonly optional: boolean; readonly lift: boolean }
-  | {
-      readonly lowering: "rest-sequence";
-      readonly collection: "vec" | "js-array" | "fixed-array" | "tuple" | "slice";
-      readonly elementConversions: readonly (RustValueConversionContract | null)[];
-      readonly cloneSources: readonly TargetTypeRef[];
-    }
-  | {
-      readonly lowering: "call";
-      readonly path: string;
-    }
-  | {
-      readonly lowering: "numeric-cast";
-      readonly targetType: RustPrimitiveTypeName;
-    }
-  | {
-      readonly lowering: "identity";
-    }
-  | {
-      readonly lowering: "source-union-variant";
-      readonly variantName: string;
-      readonly path: readonly RustUnionPathStep[];
-      readonly payloadCarrier: TargetTypeRef;
-      readonly payloadConversion: RustValueConversionContract | null;
-    }
-  | {
-      readonly lowering: "option-map";
-      readonly element: RustValueConversionContract;
-    }
-  | {
-      readonly lowering: "option-some";
-      readonly element: RustValueConversionContract | null;
-    }
-  | {
-      readonly lowering: "js-argument-vector-callback";
-      readonly lane: "native" | "exact";
-      readonly projections: readonly (
-        | "native-string"
-        | "exact-string"
-        | "value"
-        | "rest-values"
-      )[];
-      readonly sourceFallible: boolean;
-      readonly invocation: "invoke" | "call";
-    }
-  | {
-      readonly lowering: "owned-string-from-borrowed-str";
-    }
-  | {
-      readonly lowering: "borrowed-str-from-owned-string" | "borrowed-str-from-optional-string";
-    }
-  | {
-      readonly lowering: "copy-from-reference";
-    }
-  | {
-      readonly lowering: "closed-value-from-option";
-      readonly element: TargetTypeRef;
-      readonly elementConversion: RustValueConversionContract;
-    }
-  | {
-      readonly lowering: "js-value-from-array";
-      readonly element: TargetTypeRef;
-      readonly elementConversion: RustValueConversionContract;
-      readonly projection: "string" | "value" | "owned";
-    }
-  | {
-      readonly lowering: "union-fold";
-      readonly arms: readonly (RustUnionLeaf & {
-        readonly conversion: RustValueConversionContract;
-      })[];
-    }
-  | {
-      readonly lowering: "js-value-from-structural-to-json";
-      readonly storageIndex: number;
-      readonly resultCarrier: TargetTypeRef;
-      readonly passesPropertyKey: boolean;
-      readonly resultConversion: RustValueConversionContract;
-    }
-  | {
-      readonly lowering: "js-value-from-properties";
-      readonly fields: readonly {
-        readonly sourceName: string;
-        readonly sourceCarrier: TargetTypeRef;
-        readonly presence: "required" | "optional";
-        readonly conversion: RustValueConversionContract;
-      }[];
-    }
-  | {
-      readonly lowering: "js-value-from-structural-object";
-      readonly fields: readonly {
-        readonly sourceName: string;
-        readonly storageIndex: number;
-        readonly sourceCarrier: TargetTypeRef;
-        readonly presence: "required" | "optional";
-        readonly conversion: RustValueConversionContract;
-      }[];
-    }
-);
-
+import type { RustValueConversionContract, RustValueConversionEffect } from "../../target-model/conversions/contracts.js";
+import { selectRustIntrinsicConversionContract } from "./intrinsic-contracts.js";
 export function rustValueConversionContract(
   value: RustValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -698,107 +538,7 @@ export function rustValueConversionContract(
         }
       : undefined;
   }
-  const numberBoxingSource = rustNumberBoxingSourceKind(value.id);
-  if (numberBoxingSource !== undefined) {
-    return contract(value.id, "exact", "js_abi::JsValue::from", "value",
-      rustSourcePrimitiveTargetType(numberBoxingSource), jsValueCarrier, false);
-  }
-  switch (value.id) {
-    case "native-f64-to-f32":
-      return { category: "native-numeric-cast", sourceMode: "value", source: float64Carrier,
-        target: rustSourcePrimitiveTargetType("float32"), lowering: "numeric-cast", targetType: "f32", fallible: false };
-    case "js-numeric-from-number":
-      return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
-    case "js-string-number-from-string":
-      return contract(value.id, "exact", "js_abi::JsStringNumber::from_string", "value", stringCarrier, rustJsStringNumberTargetType(), false);
-    case "js-string-number-from-number":
-      return contract(value.id, "exact", "js_abi::JsStringNumber::from_number", "value", float64Carrier, rustJsStringNumberTargetType(), false);
-    case "js-string-number-from-int32":
-      return contract(value.id, "exact", "js_abi::JsStringNumber::from_int32", "value", int32Carrier, rustJsStringNumberTargetType(), false);
-    case "js-numeric-from-int32":
-      return contract(value.id, "exact", "js_abi::JsNumeric::from_int32", "value", int32Carrier, rustJsNumericTargetType(), false);
-    case "js-numeric-from-bigint":
-      return contract(value.id, "exact", "js_abi::JsNumeric::from_bigint", "ref", rustBigIntTargetType(), rustJsNumericTargetType(), false);
-    case "checked-i32-to-usize":
-      return contract(value.id, "checked-range", "rt::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
-    case "checked-i32-to-u8":
-      return contract(value.id, "checked-range", "rt::conversions::i32_to_u8", "value", int32Carrier, uint8Carrier, true);
-    case "checked-f64-to-u8-trunc":
-      return contract(value.id, "checked-range", "rt::conversions::f64_to_u8", "value", float64Carrier, uint8Carrier, true);
-    case "checked-usize-to-i32":
-      return contract(value.id, "checked-range", "rt::conversions::usize_to_i32", "value", usizeCarrier, int32Carrier, true);
-    case "checked-isize-to-i32":
-      return contract(value.id, "checked-range", "rt::conversions::isize_to_i32", "value", isizeCarrier, int32Carrier, true);
-    case "checked-u32-to-i32":
-      return contract(value.id, "checked-range", "rt::conversions::u32_to_i32", "value", uint32Carrier, int32Carrier, true);
-    case "exact-u8-to-i32":
-      return contract(value.id, "exact", "rt::conversions::u8_to_i32", "value", uint8Carrier, int32Carrier, false);
-    case "exact-i32-to-f64":
-      return contract(value.id, "exact", "rt::conversions::i32_to_f64", "value", int32Carrier, float64Carrier, false);
-    case "checked-f64-to-i32-trunc":
-      return contract(value.id, "checked-range", "rt::conversions::f64_to_i32", "value", float64Carrier, int32Carrier, true);
-    case "js-number-from-isize":
-      return contract(value.id, "js-number", "rt::conversions::isize_to_f64", "value", isizeCarrier, float64Carrier, false);
-    case "js-number-from-usize":
-      return contract(value.id, "js-number", "rt::conversions::usize_to_f64", "value", usizeCarrier, float64Carrier, false);
-    case "js-number-from-u64":
-      return contract(value.id, "js-number", "rt::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
-    case "js-value-from-bool":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
-    case "js-value-from-absence":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", absenceCarrier, jsValueCarrier, false);
-    case "js-value-from-string":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", stringCarrier, jsValueCarrier, false);
-    case "js-value-from-symbol":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
-    case "js-value-from-error":
-      return contract(value.id, "exact", "js_abi::JsValue::from_error", "value", rustJsErrorTargetType(), jsValueCarrier, false);
-    case "js-value-clone":
-      return contract(value.id, "exact", "js_abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
-    case "ts-value-clone":
-      return contract(value.id, "exact", "rt::clone_ts_value", "ref", tsValueCarrier, tsValueCarrier, false);
-    case "owned-string-from-borrowed-str":
-      return {
-        category: "ownership",
-        lowering: "owned-string-from-borrowed-str",
-        sourceMode: "value",
-        source: rustBorrowedStrTargetType(),
-        target: stringCarrier,
-        fallible: false,
-      };
-    case "borrowed-str-from-owned-string":
-      return {
-        category: "ownership",
-        lowering: "borrowed-str-from-owned-string",
-        sourceMode: "ref",
-        source: stringCarrier,
-        target: rustBorrowedStrTargetType(),
-        fallible: false,
-      };
-    case "borrowed-str-from-optional-string":
-      return {
-        category: "ownership",
-        lowering: "borrowed-str-from-optional-string",
-        sourceMode: "ref",
-        source: rustSourceOptionalTargetType(stringCarrier),
-        target: rustBorrowedStrTargetType(),
-        fallible: false,
-      };
-  }
-  return undefined;
-}
-
-function contract(
-  _id: RustValueConversionId,
-  category: RustValueConversionContract["category"],
-  path: string,
-  sourceMode: RustValueConversionContract["sourceMode"],
-  source: TargetTypeRef,
-  target: TargetTypeRef,
-  fallible: boolean,
-): RustValueConversionContract {
-  return { category, lowering: "call", path, sourceMode, source, target,
-    ...(fallible ? { fallible: true, errorBoundary: "target-runtime" } as const : { fallible: false } as const) };
+  return selectRustIntrinsicConversionContract(value.id);
 }
 
 function conversionEffect(value: RustValueConversionContract | null | undefined): RustValueConversionEffect {
@@ -811,64 +551,6 @@ function conversionEffect(value: RustValueConversionContract | null | undefined)
 export function rustValueConversionIsFallible(value: RustValueConversion | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
   return value !== undefined && rustValueConversionContract(value, definitions)?.fallible === true;
 }
-
-export function rustValueConversionIdentity(value: RustValueConversion): string {
-  if (value.kind === "callable-input") {
-    return `callable-input.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
-  }
-  if (value.kind === "program-error") return `program-error.${JSON.stringify(value)}`;
-  if (value.kind === "exact-integer") {
-    return `exact-integer.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
-  }
-  if (value.kind === "native-representation") {
-    return `native-representation.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
-  }
-  if (value.kind === "native-upcast") {
-    return `native-upcast.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.path}`;
-  }
-  if (value.kind === "rest-sequence") {
-    return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
-  }
-  if (value.kind === "union-map" || value.kind === "union-project") return `${value.kind}.${JSON.stringify(value)}`;
-  return value.kind === "semantic-conversion"
-    ? value.id
-    : value.kind === "numeric-promotion" || value.kind === "integer-refinement"
-      ? `${value.kind}.${value.source}.${value.target}`
-      : value.kind === "raw-pointer-mut-to-const"
-        ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
-        : value.kind === "copy-from-reference"
-          ? `copy-from-reference.${JSON.stringify(value.target)}`
-        : value.kind === "source-union-variant"
-          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${JSON.stringify(value.payloadCarrier)}.${value.payloadConversion === null ? "identity" : rustValueConversionIdentity(value.payloadConversion)}`
-          : value.kind === "bottom-coercion"
-            ? `bottom-coercion.${JSON.stringify(value.target)}`
-            : value.kind === "js-argument-vector-callback"
-              ? `js-argument-vector-callback.${value.lane}.${value.sourceFallible}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.projections.join(".")}`
-            : value.kind === "closed-value-from-option"
-              ? `closed-value-from-option.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
-            : value.kind === "js-value-from-array"
-              ? `js-value-from-array.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
-            : value.kind === "js-array-backing"
-              ? `js-array-backing.${JSON.stringify(value.source)}.${JSON.stringify(value.element)}`
-            : value.kind === "js-value-from-closed-carrier"
-              ? `js-value-from-closed-carrier.${JSON.stringify(value.source)}`
-            : value.kind === "ts-value-from-closed-carrier"
-              ? `ts-value-from-closed-carrier.${JSON.stringify(value.source)}`
-            : value.kind === "union-fold"
-              ? `union-fold.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.arms.map(arm => `${JSON.stringify({ carrier: arm.carrier, path: arm.path })}:${rustValueConversionIdentity(arm.conversion)}`).join("|")}`
-            : value.kind === "js-value-from-structural-to-json"
-              ? `js-value-from-structural-to-json.${JSON.stringify(value.source)}.${value.storageIndex}.${value.passesPropertyKey}.${rustValueConversionIdentity(value.resultConversion)}`
-            : value.kind === "js-value-from-properties"
-              ? `js-value-from-properties.${JSON.stringify(value.source)}.${value.fields.map(field => `${field.sourceName}:${field.presence}:${JSON.stringify(field.sourceCarrier)}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
-            : value.kind === "js-value-from-structural-object"
-              ? `js-value-from-structural-object.${JSON.stringify(value.source)}.${value.fields.map((field) => `${field.sourceName}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
-            : value.kind === "option-some"
-              ? `${value.kind}.${JSON.stringify(value.source)}.${JSON.stringify(value.element)}.${value.elementConversion === null ? "identity" : rustValueConversionIdentity(value.elementConversion)}`
-            : value.kind === "source-optional"
-              ? `${value.kind}.${JSON.stringify(value.element)}`
-            : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
-}
-
 
 function callbackProtocol(
   carrier: TargetTypeRef,

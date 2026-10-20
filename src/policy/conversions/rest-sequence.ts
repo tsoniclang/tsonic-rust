@@ -1,6 +1,6 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "./contracts.js";
 import { selectRustSourceValueConversion } from "./selection.js";
 import type { RustNonOptionValueConversion } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

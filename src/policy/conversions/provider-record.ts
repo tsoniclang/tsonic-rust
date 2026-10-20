@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "./contracts.js";
 
 import { rustProviderRecordAbsentFieldsMatch } from "../../target-model/conversions/provider-record-absence.js";
 

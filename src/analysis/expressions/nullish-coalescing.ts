@@ -6,7 +6,7 @@ import type { RustNullishCoalescingProducer } from "../program/records/nullish-c
 import { isRustNeverCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";

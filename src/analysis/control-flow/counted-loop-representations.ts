@@ -18,7 +18,7 @@ import {
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../policy/conversions/numeric-promotion.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustBorrowedElementReads } from "../storage/borrowed-element-reads.js";

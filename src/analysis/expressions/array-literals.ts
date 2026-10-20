@@ -4,7 +4,7 @@ import { type TargetDiagnostic, failTargetAnalysisInvariant } from "@tsonic/targ
 import { type RustAnalysisProgram } from "../program/model.js";
 import { type RustArrayLiteralProducer } from "../program/records/array-literals.js";
 import { type RustBorrowedSequenceEmission } from "../../target-model/records/array-literals.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustVecTargetType, isRustJsArrayCarrier, isRustNumericCarrier, rustJsArrayLikeElementTargetType, rustOptionElementCarrier, rustOptionTargetType, isRustVecCarrier, rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../target-model/types/index.js";
 import { rustArrayLiteralCarrier } from "../../policy/types/collections/array-literals.js";

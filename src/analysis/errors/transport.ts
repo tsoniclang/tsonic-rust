@@ -11,7 +11,7 @@ import type { RustSourcePackageComponentClassifications } from "../../target-mod
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 
 export function analyzeRustErrorTransport(input: {

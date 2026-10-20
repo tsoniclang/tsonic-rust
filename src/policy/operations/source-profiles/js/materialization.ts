@@ -1,7 +1,7 @@
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { isRustNumericCarrier, rustJsValueTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../conversions/contracts.js";
 import { selectRustProjectedValueConversion } from "../../../conversions/property-projection.js";
 import type { RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
 import { jsValueProjectionsAreValid, type JsOperationTarget, type JsValueProjection } from "./model.js";

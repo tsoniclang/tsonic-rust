@@ -1,7 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustValueConversionIsFallible } from "../../../../target-model/conversions/contracts.js";
+import { rustValueConversionIsFallible } from "../../../conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
 import { type RustSourceObjectField } from "../../../../target-model/records/source-types.js";
 import { type RustTargetOperationFact } from "../../../../target-model/records/operations.js";

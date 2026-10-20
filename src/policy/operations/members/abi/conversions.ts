@@ -2,7 +2,7 @@ import { emptyRustTypeDefinitions } from "../../../../target-model/types/source-
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";

@@ -11,7 +11,8 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { type RustCallableConversion } from "../../target-model/conversions/callable.js";
 import { rustCallableConversionMatches } from "./callable.js";
-import { rustValueConversionContract, type RustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { type RustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "./contracts.js";
 
 import { rustCallablePhysicalSignature, type RustCallablePhysicalConversion, type RustCallablePhysicalSignature, type RustCallablePhysicalValueConversion } from "../../target-model/conversions/callable-physical.js";
 export function rustCallableConversionPhysical(

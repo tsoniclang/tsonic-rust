@@ -11,7 +11,7 @@ import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { selectRustStructuralFieldProjection } from "../../policy/types/objects/structural-fields.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustProjectedValueConversion } from "../../policy/conversions/property-projection.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
 import { resolveRustProjectAccessor } from "../operations/provider/project-accessors.js";

@@ -1,5 +1,5 @@
 import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../conversions/contracts.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustStringViewCarrier } from "../../target-model/types/carriers/native.js";
 

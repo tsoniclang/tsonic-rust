@@ -1,5 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../conversions/contracts.js";
 import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
 
 export function rustProviderInputBorrowMode(input: RustFinalizedSourceInput): "ref" | "mut-ref" | undefined {

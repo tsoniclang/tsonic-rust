@@ -5,7 +5,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustEffectiveValueCarrier } from "./value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 

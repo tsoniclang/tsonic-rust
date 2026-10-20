@@ -25,7 +25,7 @@ import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindE
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 import { getRustGeneratorProtocol, isRustCopyCarrier, rustClosureProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
