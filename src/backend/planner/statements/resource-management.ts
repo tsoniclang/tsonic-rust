@@ -46,7 +46,7 @@ export function planResourceDeclarations(
   }
   const fact = resourceFactForPlanning(declaration, context);
   const initialization = planVariableStatement(declaration, context);
-  const resourceName = context.input.program.names.nameForDeclaration(declaration);
+  const resourceName = context.input.program.records.sourceName.get(declaration);
   if (resourceName === undefined) failRustPlannerInvariant("Admitted resource binding requires its sealed native name.", declaration);
   if (initialization === undefined) failRustPlannerInvariant("An admitted resource requires its native initialization plan.", declaration);
   const scope = planResourceManagedBody(

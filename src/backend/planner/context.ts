@@ -5,12 +5,11 @@ export interface RustPlanningContext {
   readonly program: {
     readonly source: Pick<RustTargetProgram["source"], "ast">;
     readonly records: RustTargetProgram["records"];
-    readonly names: RustTargetProgram["names"];
   };
 }
 
 export function createRustPlanningContext(program: RustTargetProgram): RustPlanningContext {
   return Object.freeze({ host: program.host, program: Object.freeze({
-    source: Object.freeze({ ast: program.source.ast }), records: program.records, names: program.names,
+    source: Object.freeze({ ast: program.source.ast }), records: program.records,
   }) });
 }

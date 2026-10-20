@@ -39,7 +39,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
     const { storage, owned } = capture;
     const mutable = storage === undefined && capture.mutable;
     if (owned) {
-      const name = context.input.program.names.nameForDeclaration(capture.declaration);
+      const name = context.input.program.records.sourceName.get(capture.declaration);
       if (name === undefined) failRustPlannerInvariant("An admitted lexical function requires its renderable native capture environment.", declaration);
       arguments_.push(planRustCaptureValue(declaration, capture, name, storage?.storage ?? "value", context, "invocation"));
       continue;
@@ -54,7 +54,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
         : { kind: "reference", expr: { kind: "dereference", pointer: captured.expression } });
       continue;
     }
-    const name = context.input.program.names.nameForDeclaration(capture.declaration);
+    const name = context.input.program.records.sourceName.get(capture.declaration);
     if (name === undefined) failRustPlannerInvariant("An admitted lexical function requires its renderable native capture environment.", declaration);
     const raw = captured?.expression ?? { kind: "path" as const, path: name };
     if (storage !== undefined) {

@@ -122,7 +122,7 @@ export function planRustCallableExpressionBody(
       failRustPlannerInvariant("Binding-pattern closure parameter requires a finalized hygienic-name scope.", parameter);
     }
     const parameterName = bindingPattern === undefined
-      ? context.input.program.names.nameForDeclaration(parameter) ?? ""
+      ? context.input.program.records.sourceName.get(parameter) ?? ""
       : allocateRustSyntheticName(context.syntheticNames!, "binding_parameter");
     if (!isValidRustIdentifier(parameterName)) {
       failRustPlannerInvariant("An admitted callable parameter requires its sealed native name.", parameter);

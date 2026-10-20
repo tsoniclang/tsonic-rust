@@ -37,7 +37,7 @@ export function planRustBindingPattern(
     if (name === undefined) failRustPlannerInvariant("An admitted binding projection requires its checked destination name.", element);
     const nameKind = ast.kindName(name);
     if (nameKind === KindIdentifier) {
-      const bindingName = context.input.program.names.nameForDeclaration(element);
+      const bindingName = context.input.program.records.sourceName.get(element);
       if (bindingName === undefined) failRustPlannerInvariant("An admitted binding leaf requires its sealed native name.", element);
       const bindingType = rustTypeFromCarrierInContext(fact.bindingCarrier, context);
       if (bindingType === undefined) failRustPlannerInvariant("Binding pattern leaf has no renderable finalized Rust carrier.", name);

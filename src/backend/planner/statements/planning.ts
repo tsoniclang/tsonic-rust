@@ -225,7 +225,7 @@ export function planStatementSequence(
     if (exits === undefined) failRustPlannerInvariant("Admitted statement requires its sealed completion.", child);
     if (!exits) {
       for (const read of sequenceContext.input.program.records.borrowedElementEnds.get(child) ?? []) {
-        const name = sequenceContext.input.program.names.nameForDeclaration(read.declaration);
+        const name = sequenceContext.input.program.records.sourceName.get(read.declaration);
         if (name === undefined) failRustPlannerInvariant("An admitted borrowed binding requires its authored native name.", read.declaration);
         statements.push({ kind: "expr", expr: { kind: "call", path: "core::mem::drop", args: [{ kind: "path", path: name }] } });
       }

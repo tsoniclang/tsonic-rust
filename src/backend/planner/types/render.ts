@@ -40,7 +40,6 @@ export interface RustTypeRenderingContext {
       readonly program: {
         readonly source: Pick<import("@tsonic/target-api/analysis").TargetSourceSyntaxProgram, "ast">;
         readonly records: import("../../../target-model/records/program.js").RustProgramRecords;
-        readonly names: import("../../../target-model/names/model.js").RustNamePlan;
       };
     };
 }

@@ -195,6 +195,7 @@ export function createRustAnalysisContext(
     sourceFiles,
     isNativeNode,
   });
+  records.sourceNamePlans.publish(nativeNodes, names);
   const lifetimes = analyzeRustLifetimes({
     source: input.source,
     ast,

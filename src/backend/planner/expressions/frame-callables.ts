@@ -31,7 +31,7 @@ function planFrameEntry(
       receiver: { kind: "field", receiver: data, name: counterName! }, method: "allocate", args: [] }));
   if (allocated === undefined) return undefined;
   const values = implementation.captures.map(capture => {
-    const name = context.input.program.names.nameForDeclaration(capture.declaration);
+    const name = context.input.program.records.sourceName.get(capture.declaration);
     return name === undefined ? undefined : planRustCaptureValue(node, capture, name, capture.storage, context);
   });
   if (values.some(value => value === undefined)) return undefined;

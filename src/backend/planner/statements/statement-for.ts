@@ -64,7 +64,7 @@ export function planForStatement(node: Node, context: RustPlanContext): readonly
 function planCountedForStatement(
   node: Node, counted: RustCountedLoopRepresentation, context: RustPlanContext,
 ): readonly RustStmt[] {
-  const binding = context.input.program.names.nameForDeclaration(counted.counterDeclaration);
+  const binding = context.input.program.records.sourceName.get(counted.counterDeclaration);
   const start = counted.kind === "native-counter" ? planExpression(counted.start, context)
     : planNumericLiteralWithCarrier(counted.start, counted.rangeCarrier, context);
   const bound = counted.kind === "native-counter" ? planExpression(counted.bound, context)

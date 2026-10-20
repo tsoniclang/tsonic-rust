@@ -36,7 +36,7 @@ export function planRustBorrowedElementLocal(
   local: RustBorrowedElementLocal,
   context: RustPlanContext,
 ): { readonly statements: readonly RustStmt[]; readonly context: RustPlanContext } | undefined {
-  const name = context.input.program.names.nameForDeclaration(local.declaration);
+  const name = context.input.program.records.sourceName.get(local.declaration);
   if (name === undefined) failRustPlannerInvariant("An admitted borrowed local requires its authored native name.", local.declaration);
   const bindings = borrowedElementBindings(local, name, context);
   if (bindings === undefined) failRustPlannerInvariant("An admitted borrowed local requires its native inputs.", local.declaration);

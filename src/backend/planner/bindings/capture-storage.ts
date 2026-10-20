@@ -12,7 +12,7 @@ export function planRustDeferredCaptureStorage(scope: Node, context: RustPlanCon
   for (const declaration of context.input.program.records.captureStorageScope.get(scope)?.deferred ?? []) {
     if (context.bindingLocations?.has(declaration)) continue;
     const fact = context.input.program.records.bindingStorage.get(declaration);
-    const name = context.input.program.names.nameForDeclaration(declaration);
+    const name = context.input.program.records.sourceName.get(declaration);
     const type = fact === undefined ? undefined : rustTypeFromCarrierInContext(rustLocationTargetType(fact.valueCarrier), context);
     if (name === undefined || type === undefined || fact?.storage !== "location" || fact.initialization !== "deferred") {
       failRustPlannerInvariant("Deferred capture storage requires its exact native location and declaration identity.", declaration);
@@ -29,7 +29,7 @@ export function planRustCaptureStorageRotation(scope: Node, context: RustPlanCon
   const statements: RustStmt[] = [];
   for (const declaration of context.input.program.records.captureStorageScope.get(scope)?.iterations ?? []) {
     const fact = context.input.program.records.bindingStorage.get(declaration);
-    const name = context.input.program.names.nameForDeclaration(declaration);
+    const name = context.input.program.records.sourceName.get(declaration);
     if (name === undefined || fact?.storage !== "location" || fact.iterationScope !== scope) {
       failRustPlannerInvariant("Iteration capture storage requires its exact native location and activation scope.", declaration);
     }

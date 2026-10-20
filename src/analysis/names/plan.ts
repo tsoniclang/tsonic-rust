@@ -102,6 +102,18 @@ export function createRustNamePlan(input: {
       sourceTypeNames.set(sourceTypeIdentity(fileName, rustSourceDeclarationTypeName(candidate.declaration, input.ast)), name);
     }
   }
+  for (const scoped of candidatesByScope.values()) {
+    const methods = scoped.filter(candidate => input.ast.is.IsMethodDeclaration(candidate.declaration));
+    for (const candidate of methods) {
+      if (!input.ast.hasModifierKind(candidate.declaration, "static")) continue;
+      const name = names.get(candidate.declaration);
+      if (name === undefined || !methods.some(other => !input.ast.hasModifierKind(other.declaration, "static") &&
+        names.get(other.declaration) === name)) continue;
+      diagnostics.push({ code: "RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE", category: "error", source: "tsonic-rust",
+        sourceNode: candidate.declaration,
+        message: `Authored static and instance methods '${candidate.sourceName}' require the same Rust inherent item name (E0592); their spelling cannot be changed.` });
+    }
+  }
   const localClassesByFile = new Map<SourceFile, RustNameCandidate[]>();
   const moduleNamesByFile = new Map<SourceFile, Set<string>>();
   for (const candidate of candidates) {

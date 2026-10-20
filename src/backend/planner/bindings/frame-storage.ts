@@ -231,7 +231,7 @@ export function prepareRustFrameScope(
     borrowed: false, data: { kind: "direct" } };
   const selected = rustFrameBindingContext(definition, owner, context);
   const fields = definition.bindings.map(binding => {
-    const parameter = binding.initialization === "ready" ? context.input.program.names.nameForDeclaration(binding.declaration) : undefined;
+    const parameter = binding.initialization === "ready" ? context.input.program.records.sourceName.get(binding.declaration) : undefined;
     const value: RustExpr | undefined = binding.initialization === "deferred"
       ? { kind: "call", path: "core::cell::OnceCell::new", args: [] }
       : parameter === undefined ? undefined : binding.storage === "value" || binding.storage === "location" ? { kind: "path", path: parameter }
