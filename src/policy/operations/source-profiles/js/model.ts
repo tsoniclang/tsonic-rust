@@ -1,11 +1,4 @@
-import type {
-  RustBorrowedIndexOperation,
-  RustCallbackOperationTemplate,
-  RustProviderOperationForm,
-  RustProviderOperationTemplate,
-  RustRuntimeSetTemplate,
-  RustValueConversion,
-} from "../../../../target-model/operations/model.js";
+import type { RustBorrowedIndexOperation, RustCallbackOperationTemplate, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetTemplate, RustValueConversion } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
