@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../types/model.js";
 import type { RustGenericCallableImplementation, RustGenericCallableEnvironment, RustGenericCallablePhysicalDefinition,
-  RustGenericCallablePhysicalMember, RustGenericCallableIdentitySelection } from "./generic-callables.js";
+  RustGenericCallablePhysicalMember, RustGenericCallableIdentitySelection, RustGenericCallableIdentityComparison } from "./generic-callables.js";
 import type { RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
 import type { RustSourceCallEffectsFact } from "./object-methods.js";
 
@@ -45,7 +45,15 @@ export interface RustGenericValueEmission {
   readonly marker: boolean;
 }
 
+export interface RustGenericIdentityEmission {
+  readonly comparison: RustGenericCallableIdentityComparison;
+  readonly stableLeft: boolean;
+  readonly stableRight: boolean;
+  readonly constant: boolean | undefined;
+}
+
 export interface RustGenericEmissionRecords {
+  readonly genericIdentity: { readonly get: (node: Node) => RustGenericIdentityEmission | undefined };
   readonly genericValue: { readonly get: (node: Node) => RustGenericValueEmission | undefined };
   readonly genericImplementation: { readonly get: (implementation: RustGenericCallableImplementation) => RustGenericImplementationEmission | undefined };
   readonly genericDefinition: { readonly get: (definition: RustGenericCallablePhysicalDefinition) => RustGenericDefinitionEmission | undefined };

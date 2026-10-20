@@ -31,6 +31,19 @@ export function analyzeRustGenericEmission(input: {
   }
   const physical = generic.physical.definitions();
   for (const node of input.nodes) {
+    const comparison = program.callableValues.genericIdentities.forComparison(node);
+    if (comparison !== undefined) {
+      const leftRead = program.ownership.reads.get(comparison.leftNode);
+      const rightRead = program.ownership.reads.get(comparison.rightNode);
+      if (leftRead === undefined || rightRead === undefined ||
+        program.records.selectedOperation.get(node)?.operationId !== comparison.operation.operationId)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted callable comparison requires its exact native ownership and selected identity operation.", node);
+      producer.identity(node, { comparison,
+        stableLeft: leftRead.stablePlace || leftRead.borrowedAcross.has(comparison.rightNode),
+        stableRight: rightRead.stablePlace || rightRead.borrowedAcross.has(comparison.rightNode),
+        constant: comparison.pairs.length === 0 || comparison.exhaustive && comparison.pairs.every(pair => pair.kind === "declaration")
+          ? (comparison.pairs.length !== 0) === (comparison.operation.operator === "==") : undefined });
+    }
     const implementation = generic.implementationFor(node);
     if (implementation === undefined) continue;
     const selected = program.callableValues.nativeStorage.operandFor(node);
