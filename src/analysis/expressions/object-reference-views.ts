@@ -1,4 +1,3 @@
-import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -10,60 +9,6 @@ import { selectRustStructuralFieldProjection } from "../../policy/types/objects/
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustClassValueView } from "../objects/class-values.js";
-import type { RustRecordFamily } from "../../target-model/records/program.js";
-import { rustProjectMemberSelectionEquals } from "../../target-model/records/operation-equality.js";
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-
-export type RustObjectReferenceViewQuery = (
-  walk: RustFactWalk,
-  expression: Node,
-  sourceCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
-) => RustObjectReferenceView | undefined;
-
-export function createRustObjectReferenceViewQuery(input: {
-  readonly assertOpen: () => void;
-  readonly records: RustRecordFamily<RustObjectReferenceView>;
-  readonly publish: (expression: Node, view: RustObjectReferenceView) => void;
-}): RustObjectReferenceViewQuery {
-  const completed = new WeakMap<Node, { readonly canonical: RustObjectReferenceView;
-    readonly walks: WeakSet<RustFactWalk> }>();
-  return (walk, expression, sourceCarrier, targetCarrier) => {
-    input.assertOpen();
-    const previous = input.records.get(expression);
-    const completion = completed.get(expression);
-    if (previous !== undefined && completion?.canonical === previous && completion.walks.has(walk) &&
-      rustTargetTypeRefEquals(previous.sourceCarrier, sourceCarrier) &&
-      rustTargetTypeRefEquals(previous.targetCarrier, targetCarrier)) return previous;
-    const selected = selectRustObjectReferenceView(walk, expression, sourceCarrier, targetCarrier);
-    if (selected === undefined) return undefined;
-    requireRustRecord(walk.context.requiredRecords, "objectReferenceView", expression, selected.kind, "createRustObjectReferenceViewQuery");
-    if (previous !== undefined && !rustObjectReferenceViewEquals(previous, selected)) {
-      failTargetAnalysisInvariant("tsonic-rust",
-        "Conflicting Rust semantic plan 'tsonic.rust.objectReferenceView' for one exact source subject.",
-      );
-    }
-    if (previous === undefined) input.publish(expression, selected);
-    const canonical = previous ?? input.records.get(expression)!;
-    const walks = completion?.canonical === canonical ? completion.walks : new WeakSet<RustFactWalk>();
-    walks.add(walk);
-    completed.set(expression, { canonical, walks });
-    return canonical;
-  };
-}
-
-export function rustObjectReferenceViewEquals(left: RustObjectReferenceView, right: RustObjectReferenceView): boolean {
-  return rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier) &&
-    left.kind === right.kind && (left.kind !== "structural" && right.kind !== "structural"
-      ? left.declaration === right.declaration
-      : left.kind === "structural" && right.kind === "structural" && left.fields.length === right.fields.length &&
-        left.fields.every((field, index) => {
-          const other = right.fields[index];
-          return other !== undefined && field.destinationIndex === other.destinationIndex &&
-            field.writable === other.writable && rustProjectMemberSelectionEquals(field.source, other.source);
-        }));
-}
 
 export function selectRustObjectReferenceView(
   walk: RustFactWalk, expression: Node, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
