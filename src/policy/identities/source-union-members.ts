@@ -1,11 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../analysis/types/resolution/model.js";
+import type { RustSourcePolicyContext } from "../model/context.js";
+import type { RustSourceProfileRegistry } from "../types/model/source-profile.js";
 import { resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "./selected-source.js";
 
 export function rustSourceUnionMemberDeclarationIsOwned(
   declaration: Node,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
+  context: RustSourcePolicyContext,
+  options: { readonly jsEnabled: boolean; readonly sourceProfiles: RustSourceProfileRegistry },
 ): boolean {
   return context.source.navigation.isProjectDeclaration(declaration) ||
     resolveSelectedProviderDeclaration(context, declaration).kind === "selected" ||
