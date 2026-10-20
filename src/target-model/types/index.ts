@@ -22,33 +22,7 @@ export {
   rustTypeGenericArguments,
 } from "./generic-arguments.js";
 export type { RustPrimitiveTypeName } from "../syntax/tokens.js";
-export {
-  getRustGeneratorProtocol,
-  getRustIteratorResultProtocol,
-  isRustCallableCarrier,
-  isRustLocationCarrier,
-  rustAsyncGeneratorTargetType,
-  rustCallableProtocol,
-  rustCallableTargetType,
-  rustCallableInputProtocol,
-  rustCallableInputTargetType,
-  rustClosureProtocol,
-  rustClosureTargetType,
-  rustGeneratorTargetType,
-  rustGeneratorStorageTargetType,
-  rustIteratorResultTargetType,
-  rustLocationPointeeCarrier,
-  rustLocationTargetType,
-  rustSourceLocationTargetType,
-  rustRawPointerTargetType,
-  rustNativeCallableProtocol,
-  rustOptionalLocationPointeeCarrier,
-  rustStructuralMethodCallableCarrier,
-  rustStructuralMethodStorageCarrier,
-  rustStructuralPropertyGetterStorageCarrier,
-  rustStructuralPropertySetterStorageCarrier,
-  rustStructuralPropertyValueCarrier,
-} from "./carriers/callables.js";
+export { getRustGeneratorProtocol, getRustIteratorResultProtocol, isRustCallableCarrier, isRustLocationCarrier, rustAsyncGeneratorTargetType, rustCallableProtocol, rustCallableTargetType, rustCallableInputProtocol, rustCallableInputTargetType, rustClosureProtocol, rustClosureTargetType, rustGeneratorTargetType, rustIteratorResultTargetType, rustLocationPointeeCarrier, rustLocationTargetType, rustSourceLocationTargetType, rustRawPointerTargetType, rustNativeCallableProtocol, rustOptionalLocationPointeeCarrier, rustStructuralMethodCallableCarrier, rustStructuralPropertyValueCarrier } from "./carriers/callables.js";
 export type { RustGeneratorProtocol, RustIteratorResultProtocol } from "./carriers/callables.js";
 export {
   getRustJsMapTargetTypes,
@@ -123,30 +97,7 @@ export {
   rustOptionValueCarrier,
   rustOptionTargetType,
 } from "./carriers/optional.js";
-export {
-  isRustAbsenceCarrier,
-  isRustNamedTypeTraitContract,
-  rustBigIntTargetType,
-  rustEmptyObjectTargetType,
-  rustObjectIdentityTargetType,
-  rustJsNumericTargetType,
-  rustJsStringNumberTargetType,
-  rustBorrowedStrTargetType,
-  rustFixedArrayCarrierValue,
-  rustFixedArrayTargetType,
-  rustMoveOnlyNamedTypeTraits,
-  rustNamedTargetType,
-  rustNamedTypeCarrierValue,
-  rustNeverTargetType,
-  rustAbsenceTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-  rustStrTargetType,
-  rustTsValueTargetType,
-  rustTupleTargetType,
-  rustUnitTargetType,
-  rustVecTargetType,
-} from "./carriers/native.js";
+export { isRustAbsenceCarrier, isRustNamedTypeTraitContract, rustBigIntTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustJsNumericTargetType, rustJsStringNumberTargetType, rustBorrowedStrTargetType, rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustMoveOnlyNamedTypeTraits, rustNamedTargetType, rustNamedTypeCarrierValue, rustNeverTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustStrTargetType, rustTsValueTargetType, rustUnitTargetType, rustVecTargetType } from "./carriers/native.js";
 export type {
   RustFixedArrayCarrierValue,
   RustNamedTypeCarrierValue,
@@ -285,19 +236,5 @@ export {
   substituteRustTargetGenerics,
   substituteRustTargetTypeParameters,
 } from "./carriers/substitution.js";
-export {
-  isRustCopyCarrier,
-  isRustJsStrictEqualityCarrier,
-  isRustSourceStringConvertibleCarrier,
-  rustCarrierCanEnterTsValue,
-  rustTsValueAdmission,
-  rustCarrierHasNativeValueView,
-  rustCarrierSupportsClone,
-  rustCarrierSatisfiesTraitRef,
-  rustCarrierReferentMutationRequiresMutableBinding,
-  rustCarrierSupportsJsEquality,
-  rustCarrierSupportsObjectIdentity,
-  rustCarrierSupportsTrait,
-  rustJsClosedValueCarrierTraitPath,
-} from "./carriers/traits.js";
-export { rustAwaitCarrier, type RustAwaitCarrier } from "./await.js";
+export { rustJsClosedValueCarrierTraitPath } from "./carriers/traits.js";
+export { type RustAwaitCarrier } from "./await.js";
