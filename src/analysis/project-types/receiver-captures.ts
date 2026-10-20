@@ -3,7 +3,7 @@ import type { AstReader, Node, SourceFile, Type } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { SourceProgramNavigation, SourceProgramSemantics } from "@tsonic/target-api/source";
 import { rustProjectObjectField } from "./object-layout.js";
-import type { RustProjectTypePolicy } from "./type-policy.js";
+import type { RustProjectTypePolicy } from "./index.js";
 
 export interface RustReceiverFieldCaptureQueries {
   readonly issues: readonly { readonly node: Node; readonly reason: string }[];
@@ -74,10 +74,10 @@ export function analyzeRustReceiverFieldCaptures(input: {
         for (const reference of receiver.references) {
           let expression = reference;
           let access = input.ast.parent(expression);
-          for (let depth = 0; access !== undefined && depth < 256 &&
+          while (access !== undefined &&
             (input.ast.is.IsParenthesizedExpression(access) || input.ast.is.IsAsExpression(access) ||
               input.ast.is.IsSatisfiesExpression(access) || input.ast.is.IsNonNullExpression(access) || input.ast.is.IsTypeAssertion(access)) &&
-            Node_Expression(input.ast, access) === expression; depth += 1) {
+            Node_Expression(input.ast, access) === expression) {
             expression = access;
             access = input.ast.parent(expression);
           }
