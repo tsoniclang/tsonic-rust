@@ -1,68 +1,18 @@
-import {
-  rustFixedArrayTargetType,
-  rustNamedTargetType,
-  rustNativeScalarTargetId,
-  rustNeverTargetType,
-  rustOptionTargetId,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-  rustUnitTargetType,
-} from "../../../target-model/types/index.js";
-import {
-  canonicalCompilerTypePathKey,
-  importedSourceType,
-  isRustOptionPath,
-  isRustStringPath,
-  requireCurrentType,
-  requireSourceGenericName,
-  rustCompilerTypeText,
-  standardSourceGenericArguments,
-  targetGenericArgumentsForApplication,
-  targetGenericDefaultsForApplication,
-} from "./utilities.js";
-import {
-  compilerAssociatedSourceExportName,
-} from "../model/rustdoc-items.js";
-import {
-  compilerModuleSpecifier,
-  compilerTargetTypeId,
-  providerFunctionPointerAbi,
-  recordCarrierPath,
-  rustPath,
-} from "./operations.js";
-import {
-  rustConstPointerExport,
-  rustMutPointerExport,
-} from "../../../source/extension/source-extension.js";
+import { rustNativeScalarTargetId, rustOptionTargetId } from "../../../target-model/types/index.js";
+import { rustFixedArrayTargetType, rustNamedTargetType, rustNeverTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustStrTargetType, rustUnitTargetType } from "../../../target-model/types/carriers/native.js";
+import { canonicalCompilerTypePathKey, importedSourceType, isRustOptionPath, isRustStringPath, requireCurrentType, requireSourceGenericName, rustCompilerTypeText, standardSourceGenericArguments, targetGenericArgumentsForApplication, targetGenericDefaultsForApplication } from "./utilities.js";
+import { compilerAssociatedSourceExportName } from "../model/rustdoc-items.js";
+import { compilerModuleSpecifier, compilerTargetTypeId, providerFunctionPointerAbi, recordCarrierPath, rustPath } from "./operations.js";
+import { rustConstPointerExport, rustMutPointerExport } from "../../../source/extension/source-extension.js";
 import { rustTypesModule } from "../../../source/profiles/source-modules.js";
 import { rustSourceTypeExportIds } from "../../../source/extension/identity.js";
 import { sourcePrimitiveByRustName } from "./model.js";
 import type { ProjectionContext } from "./model.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
-import type {
-  RustCompilerAssociatedConstraint,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-} from "../model/model.js";
-import type {
-  RustTargetAssociatedConstraint,
-  RustTargetTraitRef,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerTraitDispatch, RustCompilerType } from "../model/model.js";
+import type { RustTargetAssociatedConstraint, RustTargetTraitRef, TargetTypeRef } from "../../../target-model/types/model.js";
 import { isCompilerCallableTrait } from "./callable-generics.js";
-import {
-  compilerModuleSpecifierForIdentity,
-  providerGenericParametersFor,
-  requireTargetLifetimes,
-  sourceGenericArgumentFor,
-  sourceLifetimeFor,
-  targetConstFor,
-  targetGenericArgumentFor,
-  targetLifetimeBinderFor,
-  targetLifetimeFor,
-  targetPathForIdentity,
-  withCompilerLifetimeBinder,
-} from "./type-arguments.js";
+import { compilerModuleSpecifierForIdentity, providerGenericParametersFor, requireTargetLifetimes, sourceGenericArgumentFor, sourceLifetimeFor, targetConstFor, targetGenericArgumentFor, targetLifetimeBinderFor, targetLifetimeFor, targetPathForIdentity, withCompilerLifetimeBinder } from "./type-arguments.js";
 
 export function sourceTypeFor(
   type: RustCompilerType,
@@ -289,7 +239,7 @@ export function targetTypeFor(
     case "unit":
       return rustUnitTargetType();
     case "primitive": {
-      if (type.name === "str") return rustStringTargetType();
+      if (type.name === "str") return rustStrTargetType();
       if (type.name === "never") return rustNeverTargetType();
       if (type.name === "char") {
         recordCarrierPath(context.carrierPaths, rustNativeScalarTargetId, "char");
