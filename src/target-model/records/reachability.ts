@@ -46,3 +46,8 @@ export interface RustGeneratedItemUsage {
   readonly recordContributions: ReadonlyMap<RustRecordContributionFact, RustRecordContributionEvidence>;
   readonly projectThisReferences: ReadonlyMap<Node, ReadonlyMap<Node, readonly Node[]>>;
 }
+
+export interface RustReachability extends RustGeneratedItemUsage {
+  readonly externallyReachable: ReadonlySet<Node>;
+  readonly suppressedDeclarations: ReadonlySet<Node>;
+}

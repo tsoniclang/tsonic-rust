@@ -1,5 +1,5 @@
 import type { RustAnalysisProgram } from "../program/model.js";
-import type { RustReachability } from "./model.js";
+import type { RustReachability } from "../../target-model/records/reachability.js";
 import type { RustNativeLivenessProducer } from "../program/records/native-liveness.js";
 import type { RustDeadCodeDisposition, RustStructuralLivenessEmission } from "../../target-model/records/native-liveness.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

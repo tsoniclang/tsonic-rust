@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Initializer, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../../program/model.js";
-import type { RustReachability } from "../../reachability/model.js";
+import type { RustReachability } from "../../../target-model/records/reachability.js";
 import type { RustClassEmissionProducer } from "../../program/records/class-emission.js";
 import type { RustNativeClassField, RustNativeClassEmission } from "../../../target-model/records/class-emission.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";

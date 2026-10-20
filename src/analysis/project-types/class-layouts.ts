@@ -14,7 +14,7 @@ import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
 import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
-import type { RustReachability } from "../reachability/model.js";
+import type { RustReachability } from "../../target-model/records/reachability.js";
 import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
 import { analyzeRustProjectRootEmission } from "./root-emission.js";
 import { analyzeRustProjectDispatchEmission } from "./dispatch-emission.js";
