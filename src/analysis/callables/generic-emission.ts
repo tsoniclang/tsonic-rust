@@ -7,7 +7,7 @@ import type { RustGenericCallableImplementation, RustGenericCallablePhysicalMemb
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "../../policy/conversions/generic-callable.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";

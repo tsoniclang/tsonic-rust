@@ -4,7 +4,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../target-model/types/index.js";
 
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "../conversions/generic-callable.js";
 
 export function selectRustImmediateUnionCarrier(values: readonly TargetTypeRef[], jsEnabled: boolean): TargetTypeRef | undefined {
   const callable = values[0];

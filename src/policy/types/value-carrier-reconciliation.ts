@@ -13,7 +13,7 @@ import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetime
 import { rustEmptyRecordCarrier } from "../conversions/empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustProjectProjection } from "./project/project-projections.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "../conversions/generic-callable.js";
 import { selectRustCallableConversion } from "../conversions/callable.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";

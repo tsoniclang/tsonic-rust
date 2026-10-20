@@ -1,14 +1,9 @@
-import type { TargetTypeRef } from "../types/model.js";
-import { rustGenericCallableValue } from "../types/carriers/generic-callables.js";
-import { closedMetadataEquals } from "../metadata/closed-data.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export interface RustGenericCallableConversion {
-  readonly kind: "generic-callable-flow";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-}
-
+import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 export function rustGenericCallableSignaturesMatch(source: TargetTypeRef, target: TargetTypeRef): boolean {
   const left = rustGenericCallableValue(source);
   const right = rustGenericCallableValue(target);

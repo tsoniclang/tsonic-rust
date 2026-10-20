@@ -2,7 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
+import { type RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableConversionMatches } from "../../policy/conversions/generic-callable.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 

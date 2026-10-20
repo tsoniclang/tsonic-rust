@@ -4,7 +4,7 @@ import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals, closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "../../policy/conversions/generic-callable.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableStorageMember } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

@@ -6,7 +6,7 @@ import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/trai
 import { rustProviderRecordCopyMatches } from "../../target-model/conversions/provider-record.js";
 import { rustEmptyRecordConversionMatches } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { rustGenericCallableConversionMatches } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableConversionMatches } from "./generic-callable.js";
 import { rustIntegerTruncationConversionMatches } from "../../target-model/conversions/integer-truncation.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 

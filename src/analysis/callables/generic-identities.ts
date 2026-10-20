@@ -3,7 +3,7 @@ import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-ap
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "../../policy/conversions/generic-callable.js";
 import { isRustBoolCarrier } from "../../target-model/types/index.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 

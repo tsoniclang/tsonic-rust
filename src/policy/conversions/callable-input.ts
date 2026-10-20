@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCallableCarrier, rustCallableInputProtocol, rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "./generic-callable.js";
 
 export function rustCallableInvocationSignaturesMatch(source: TargetTypeRef, target: TargetTypeRef): boolean {
   if (rustGenericCallableValue(source) !== undefined || rustGenericCallableValue(target) !== undefined)

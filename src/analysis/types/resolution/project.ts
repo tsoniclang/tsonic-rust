@@ -17,7 +17,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { Node_Type, sourceCallableInterface, sourceInterfaceRepresentationBase } from "@tsonic/target-api/source";
 import { resolveCallableType } from "./callables.js";
 import { bindRustSourceDeclarationArguments, resolveRustSelectedTypeArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
-import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableSignaturesMatch } from "../../../policy/conversions/generic-callable.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
 import { resolveRustSourceArrayCarrier } from "./providers.js";
 
