@@ -11,7 +11,7 @@ import type { RustBorrowedElementRead } from "../../target-model/records/borrowe
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
 
-import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
+import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "./provider-borrows.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
 

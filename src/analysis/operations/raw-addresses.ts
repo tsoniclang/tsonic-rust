@@ -12,7 +12,7 @@ import type { RustRawAddressPlan } from "../../target-model/records/raw-addresse
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
 import { rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";
-import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 
 export function resolveRustRawPointerIdentityCarrier(
   walk: RustFactWalk, expression: Node, sourceFile: SourceFile,

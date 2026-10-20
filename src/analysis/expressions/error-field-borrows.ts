@@ -9,7 +9,7 @@ import { isRustClosedValueCarrier } from "../../target-model/types/carriers/clos
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
-import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 
 export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];

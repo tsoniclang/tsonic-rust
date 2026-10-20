@@ -4,7 +4,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
 import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
-import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 
 export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {

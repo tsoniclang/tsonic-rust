@@ -8,7 +8,7 @@ import { rustStructuralObjectCarrierValue } from "../../target-model/types/index
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../storage/native-paths.js";

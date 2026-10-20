@@ -5,7 +5,7 @@ import type { RustStringComparisonView } from "../../target-model/records/string
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustStringComparisonViewProducer): void {

@@ -7,7 +7,7 @@ import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-q
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
-import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 
 export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "reachability">,

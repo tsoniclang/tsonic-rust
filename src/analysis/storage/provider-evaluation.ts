@@ -11,7 +11,7 @@ import { rustContextualRuntimeConversionContract } from "../../target-model/conv
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsErrorTargetType } from "../../target-model/types/index.js";
-import { rustBorrowPureOperation } from "../program/borrowed-element-purity.js";
+import { rustBorrowPureOperation } from "./borrowed-element-purity.js";
 
 export function analyzeRustProviderEvaluation(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustProviderEvaluationProducer): readonly TargetDiagnostic[] {
