@@ -1,48 +1,18 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
-import {
-  rustCallableProtocol,
-  rustJsErrorTargetType,
-  rustOptionElementCarrier,
-  rustStructuralMethodCallableCarrier,
-  rustStructuralObjectCarrierValue,
-} from "../../../target-model/types/index.js";
+
+import { rustCallableProtocol, rustJsErrorTargetType, rustOptionElementCarrier, rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import {
-  acceptSelectedCall,
-  selectedCallReceiverValueCarrier,
-  selectRustOptionalCallResult,
-} from "./calls/instantiation.js";
-import {
-  selectedCallArgumentCarriers,
-  selectedSourceValueCarrier,
-} from "./operators.js";
+import { acceptSelectedCall, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./calls/instantiation.js";
+import { selectedCallArgumentCarriers, selectedSourceValueCarrier } from "./operators.js";
 import { rejectSelectedOperation } from "./result.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustSourceObjectField } from "../../project-types/source-type-registry.js";
-import type {
-  RustArgumentMode,
-  RustProviderConstantArgument,
-  RustValueConversion,
-} from "../../../target-model/operations/model.js";
-import type { TargetTypeRef } from "../../../target-model/types/index.js";
+import type { RustProviderConstantArgument } from "../../../target-model/operations/model.js";
 
-type RegExpProtocolSymbol = "match" | "match-all" | "replace" | "search" | "split";
-
-interface RegExpProtocolSelection {
-  readonly operation: "match" | "matchAll" | "replace" | "replaceAll" | "search" | "split";
-  readonly symbol: RegExpProtocolSymbol;
-}
-
-interface ProtocolArgumentPlan {
-  readonly sourceCarrier: TargetTypeRef;
-  readonly mode: RustArgumentMode;
-  readonly conversion?: RustValueConversion;
-}
-
+import { selectedRegExpProtocol, selectProtocolArgument, type ProtocolArgumentPlan, type RegExpProtocolSymbol } from "../../../policy/operations/source-profiles/js/regexp-protocols.js";
 export function mapSelectedStringRegExpProtocolCall(
   request: RustCheckedCallSelectionInput,
   ownerName: string,
@@ -217,46 +187,4 @@ function fieldSelectsProtocolSymbol(
     return name !== undefined && context.ast.is.IsComputedPropertyName(name) &&
       context.semanticsFor(declaration).operations.wellKnownSymbol(name)?.kind === symbol;
   });
-}
-
-function selectedRegExpProtocol(
-  ownerName: string,
-  memberName: string,
-): RegExpProtocolSelection | undefined {
-  if (ownerName !== jsRegExpSourceProfileIdentity.owners.string) {
-    return undefined;
-  }
-  switch (memberName) {
-    case "match": return { operation: "match", symbol: "match" };
-    case "matchAll": return { operation: "matchAll", symbol: "match-all" };
-    case "replace": return { operation: "replace", symbol: "replace" };
-    case "replaceAll": return { operation: "replaceAll", symbol: "replace" };
-    case "search": return { operation: "search", symbol: "search" };
-    case "split": return { operation: "split", symbol: "split" };
-    default: return undefined;
-  }
-}
-
-function selectProtocolArgument(
-  sourceCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
-): ProtocolArgumentPlan | undefined {
-  if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
-    return { sourceCarrier, mode: "value" };
-  }
-  if (targetCarrier.kind === "reference" &&
-    rustTargetTypeRefEquals(sourceCarrier, targetCarrier.referent)) {
-    return {
-      sourceCarrier,
-      mode: targetCarrier.mutable ? "mut-ref" : "ref",
-    };
-  }
-  const optionalElement = rustOptionElementCarrier(targetCarrier);
-  return optionalElement !== undefined && rustTargetTypeRefEquals(sourceCarrier, optionalElement)
-    ? {
-        sourceCarrier,
-        mode: "value",
-        conversion: { kind: "option-some", source: sourceCarrier, element: sourceCarrier, elementConversion: null },
-      }
-    : undefined;
 }
