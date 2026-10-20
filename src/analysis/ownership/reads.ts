@@ -16,7 +16,7 @@ import { selectRustValueReadOwnership } from "../../policy/ownership/value-read.
 import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { analyzeRustReadUses } from "./uses.js";
-import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
+import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;

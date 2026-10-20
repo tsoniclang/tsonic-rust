@@ -7,7 +7,7 @@ import type { RustProviderEvaluationEmission } from "../../target-model/records/
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
-import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
+import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsErrorTargetType } from "../../target-model/types/index.js";

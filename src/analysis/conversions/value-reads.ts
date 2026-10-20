@@ -9,7 +9,7 @@ import type { RustProjectUpcastFact } from "../../target-model/records/value-pro
 import type { RustValueProjection } from "../../target-model/records/value-projection.js";
 import { isRustOptionCarrier, isRustUnitCarrier, isRustNeverCarrier, rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
-import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
+import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectUpcastSourceMatches } from "./value-carrier-queries.js";
 import { admitRustConversionEmission } from "./emission.js";

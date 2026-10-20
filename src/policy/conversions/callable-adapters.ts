@@ -11,7 +11,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { isRustCopyCarrier, isRustStringCarrier, isRustUnitCarrier, rustCarrierSupportsClone,
   rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
-import { rustContextualRuntimeConversionContract, rustCompilerOwnedContextualConversionMatches } from "../../target-model/conversions/contextual.js";
+import { rustContextualRuntimeConversionContract, rustCompilerOwnedContextualConversionMatches } from "./contextual.js";
 import { rustProjectUnionUpcastRelation } from "../../target-model/conversions/project-union-relations.js";
 import { selectRustValueCarrierReconciliation } from "../types/value-carrier-reconciliation.js";
 

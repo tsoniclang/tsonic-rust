@@ -27,7 +27,7 @@ import { prepareRustGenericCallableInvocation, type RustSourceGenericCallableInv
 import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
 import { rustPolicyTargetDiagnostic } from "../program/policy-diagnostics.js";
 
-import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
+import { rustContextualValueConversionIsFallible } from "../../policy/conversions/contextual.js";
 import { selectedDeclarationIsProjectSource } from "../storage/source-bindings.js";
 import { selectRustResourceManagement } from "../control-flow/resource-management.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

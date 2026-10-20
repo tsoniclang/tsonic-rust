@@ -1,37 +1,19 @@
-import type { RustValueConversion } from "../operations/model.js";
-import type { TargetTypeRef } from "../types/model.js";
-import { rustValueConversionContract, rustValueConversionIsFallible } from "./contracts.js";
-import type { RustValueConversionContract } from "./contracts.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustCarrierSupportsTrait } from "../types/carriers/traits.js";
-import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./provider-record.js";
-import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from "./empty-record.js";
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "./generic-callable.js";
-import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConversion } from "./integer-truncation.js";
-import { rustExactIntegerConversionMatches } from "./exact-integer.js";
-import { rustCallableConversionMatches, type RustCallableConversion } from "./callable.js";
-import { rustProjectUnionMapConversionMatches, type RustProjectUnionMapConversion, type RustProjectUpcastRelation } from "./project-union.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustValueConversionContract, rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
+import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/traits.js";
+import { rustProviderRecordCopyMatches } from "../../target-model/conversions/provider-record.js";
+import { rustEmptyRecordConversionMatches } from "../../target-model/conversions/empty-record.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustGenericCallableConversionMatches } from "../../target-model/conversions/generic-callable.js";
+import { rustIntegerTruncationConversionMatches } from "../../target-model/conversions/integer-truncation.js";
+import { rustExactIntegerConversionMatches } from "../../target-model/conversions/exact-integer.js";
 
-export type RustContextualValueConversion =
-  | RustValueConversion
-  | RustProviderRecordCopy
-  | RustEmptyRecordConversion
-  | RustGenericCallableConversion
-  | RustIntegerTruncationConversion
-  | RustCallableConversion
-  | RustProjectUnionMapConversion
-  | {
-      readonly kind: "native-trait-object-upcast";
-      readonly source: TargetTypeRef;
-      readonly target: Extract<TargetTypeRef, { readonly kind: "trait-object" }>;
-    }
-  | {
-      readonly kind: "reference-reborrow";
-      readonly source: Extract<TargetTypeRef, { readonly kind: "reference" }>;
-      readonly target: TargetTypeRef;
-    };
+import { rustCallableConversionMatches } from "./callable.js";
+import { rustProjectUnionMapConversionMatches, type RustProjectUpcastRelation } from "../../target-model/conversions/project-union.js";
 
+import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 export function rustContextualRuntimeConversionContract(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,

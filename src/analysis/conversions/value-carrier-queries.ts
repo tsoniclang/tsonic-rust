@@ -4,7 +4,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustOptionCarrier } from "../../target-model/types/carriers/optional.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../target-model/conversions/contextual.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../policy/conversions/contextual.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

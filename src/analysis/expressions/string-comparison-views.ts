@@ -3,7 +3,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStringComparisonViewProducer } from "../program/records/string-comparison-views.js";
 import type { RustStringComparisonView } from "../../target-model/records/string-comparison-views.js";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
-import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
+import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
