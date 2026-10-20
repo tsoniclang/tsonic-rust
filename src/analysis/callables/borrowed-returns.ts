@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import { forEachSourceImmediateEvaluationChild, sourceBindingHasMutableExposure, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { createRustSourceLexicalCallableQueries, type RustSourceLexicalCallableQueries } from "./lexical-bindings.js";
+import { createRustSourceLexicalCallableQueries } from "./lexical-bindings.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
-import type { RustSourceCallableQueries } from "../../target-model/records/source-callables.js";
+import type { RustSourceCallableQueries, RustSourceLexicalCallableQueries } from "../../target-model/records/source-callables.js";
 
 export function createRustSourceCallableQueries(sourceStorage: SourceStorageQueries): RustSourceCallableQueries {
   const source = sourceStorage.source;

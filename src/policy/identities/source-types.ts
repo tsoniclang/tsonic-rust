@@ -1,4 +1,4 @@
-import type { Node, Symbol } from "@tsonic/tsts";
+import type { Symbol } from "@tsonic/tsts";
 
 import type { RustSourceProfileRegistry } from "../types/model/source-profile.js";
 
