@@ -12,7 +12,7 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
-import { rustCallableConversionPhysical } from "../../target-model/conversions/callable-physical.js";
+import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { substituteRustCallableConversion } from "../../target-model/conversions/substitution.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";

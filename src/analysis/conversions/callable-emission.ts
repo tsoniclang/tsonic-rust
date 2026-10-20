@@ -5,7 +5,8 @@ import type { RustCallableConversionProducer } from "../program/records/callable
 import type { RustCallableOperandEmission, RustCallableConversionEmission, RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
-import { rustCallableConversionPhysical, type RustCallablePhysicalConversion } from "../../target-model/conversions/callable-physical.js";
+import { type RustCallablePhysicalConversion } from "../../target-model/conversions/callable-physical.js";
+import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
 

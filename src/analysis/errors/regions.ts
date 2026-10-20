@@ -7,7 +7,7 @@ import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionS
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
-import { rustCallableConversionErrorArities } from "../../target-model/conversions/callable-physical.js";
+import { rustCallableConversionErrorArities } from "../../policy/conversions/callable-physical.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
 import type { RustCallableValuePlan } from "../callables/value-plan.js";
