@@ -128,6 +128,7 @@ import { analyzeRustSourceCallableEmission } from "../callables/source-callable-
 import { analyzeRustReferenceOperations } from "../expressions/reference-operations.js";
 import { analyzeRustNullishCoalescing } from "../expressions/nullish-coalescing.js";
 import { analyzeRustObjectReferenceEmission } from "../objects/object-reference-views.js";
+import { analyzeRustSourceCallArguments } from "../callables/source-call-arguments.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
@@ -676,6 +677,7 @@ export function analyzeRustTargetProgram(
   analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans);
+  analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
   const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans);
   if (directStorageIssues.length !== 0) return rejectedTargetStage(directStorageIssues);
   const unaryIssues = analyzeRustUnaryEmission(program, context.nativeNodes, context.records.unaryEmissionPlans);

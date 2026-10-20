@@ -206,7 +206,7 @@ export function planRustSourceCallArgumentEvaluation(
       ? Node_Expression(context.input.program.source.ast, argument)
       : argument;
     return source === undefined ? undefined : hasSpread ? planExpression(source, selectedContext)
-      : planRustSourceCallArgumentValue(source, index, argumentNodes, fact, selectedContext, borrowedInputs);
+      : planRustSourceCallArgumentValue(source, selectedContext, borrowedInputs);
   });
   if (planned.some((argument) => argument === undefined)) {
     return undefined;
@@ -273,8 +273,7 @@ export function planRustSelectedSourceCallArguments(
   const argumentNodes = rawArguments as readonly Node[];
   const borrowedInputs = new Map<Node, RustExpr>();
   const arguments_ = planRustCallArguments(call, context, (argument, current) => {
-    const index = argumentNodes.indexOf(argument);
-    return planRustSourceCallArgumentValue(argument, index, argumentNodes, fact, current, borrowedInputs);
+    return planRustSourceCallArgumentValue(argument, current, borrowedInputs);
   });
   return arguments_ === undefined
     ? undefined

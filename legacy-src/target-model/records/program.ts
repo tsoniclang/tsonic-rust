@@ -93,6 +93,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly referenceOperation: RustRecordFamily<import("./reference-operations.js").RustReferenceOperationEmission>;
   readonly nullishCoalescing: RustRecordFamily<import("./nullish-coalescing.js").RustNullishCoalescingEmission>;
   readonly objectReferenceEmission: RustRecordFamily<import("./object-reference-views.js").RustObjectReferenceEmission>;
+  readonly sourceCallArgument: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallArgumentEmission>;
   readonly updateProjection: { readonly get: (operand: import("@tsonic/tsts").Node, field: import("@tsonic/tsts").Node) => readonly import("./direct-storage.js").RustUpdateProjectionArgument[] | undefined };
   readonly errorFieldEmission: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldEmission"];
   readonly errorFieldSnapshot: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldSnapshot"];
