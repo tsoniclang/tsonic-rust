@@ -1,4 +1,4 @@
-import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import {
   rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract,
