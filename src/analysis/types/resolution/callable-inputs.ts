@@ -3,10 +3,10 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCallableInputTargetType, rustCallableProtocol, rustNativeCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { rustNativeCallableResultMatches } from "../../ownership/callable-result-contract.js";
-import { selectRustParameterEntryConversion } from "../../ownership/parameter-entry-conversion.js";
+import { rustNativeCallableResultMatches } from "../../../policy/ownership/callable-result-contract.js";
+import { selectRustParameterEntryConversion } from "../../../policy/ownership/parameter-entry-conversion.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
-import { rustSourceInputLifetime } from "../../ownership/source-input-lifetimes.js";
+import { rustSourceInputLifetime } from "../../callables/source-input-lifetimes.js";
 
 export function resolveRustCallableInputCarrier(
   subject: SourceStorageSubject,
