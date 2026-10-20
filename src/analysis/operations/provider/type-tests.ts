@@ -14,7 +14,7 @@ import { selectedValueCarrier } from "../selected-values.js";
 
 import { selectedRustCallSignature } from "../../program/records/selected-call.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import { selectRustArrayTypeGuard } from "../../../policy/operations/source-profiles/js/type-tests.js";
+import { selectRustArrayTypeGuard } from "../../source-profiles/js/type-tests.js";
 
 export function selectRustArrayTypeTest(
   request: RustCheckedCallSelectionInput,

@@ -1,11 +1,11 @@
 import type { SourceNativeGuard } from "@tsonic/target-api/source";
 import type { Node, ResolvedSourceCallInfo } from "@tsonic/tsts";
 import { selectSourceNativeValueGuard } from "@tsonic/target-api/source";
-import type { RustClosedTypePredicate } from "../../../../target-model/operations/type-tests.js";
-import type { RustSourcePolicyContext } from "../../../model/context.js";
-import type { RustSourceProfileRegistry } from "../../../types/model/source-profile.js";
-import { asNode, resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember, type RustSelectedSourceMemberIdentity } from "../../../identities/selected-source.js";
-import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
+import type { RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
+import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
+import type { RustSourceProfileRegistry } from "../../../policy/types/model/source-profile.js";
+import { asNode, resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember, type RustSelectedSourceMemberIdentity } from "../../../policy/identities/selected-source.js";
+import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
 
 export function selectRustErrorTypePredicate(
   context: RustSourcePolicyContext,
@@ -15,7 +15,7 @@ export function selectRustErrorTypePredicate(
   const selectedDeclaration = asNode(declaration, context);
   const profile = selectedDeclaration === undefined ? undefined : profiles.profileForNode(selectedDeclaration, context.ast);
   const name = resolveSelectedJsSourceExportName(context, declaration, profiles) ??
-    (profile === "native" ? context.ast.text(context.ast.name(selectedDeclaration)) : undefined);
+    (selectedDeclaration !== undefined && profiles.errorForDeclaration(selectedDeclaration) !== undefined ? "Error" : undefined);
   const selected = rustSourceErrorConstructors.find(entry => entry.sourceName === name &&
     (entry.sourceName === "Error" || profile === "js"));
   return selected === undefined ? undefined : Object.freeze({ kind: "error", errorKind: selected.errorKind });
