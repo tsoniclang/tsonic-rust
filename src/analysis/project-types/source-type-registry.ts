@@ -1,6 +1,6 @@
 import { closedStringUnionVariants, denseNodes, freezeSourceObjectShape, structuralCarrierKey, freezeSourceUnion, sourceObjectTargetContractEquals, appendStructuralProjection, selectStructuralProjection, sourceObjectShapeEquals, sourceUnionTargetContractEquals, nodeListsEqual } from "./source-shape-contracts.js";
 import type { Node, Symbol, Type } from "@tsonic/tsts";
-import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
+import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "./source-declarations.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

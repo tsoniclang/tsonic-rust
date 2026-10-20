@@ -41,7 +41,7 @@ import { collectRustMutableProjectStorageRequirements } from "../project-types/m
 
 import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../errors/thrown-values.js";
-import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
+import { rustSourceTypeDeclarations } from "../project-types/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";

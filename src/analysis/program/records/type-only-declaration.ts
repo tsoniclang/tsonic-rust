@@ -2,7 +2,7 @@ import { requireRustRecord } from "./required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import { rustSourceTypeDeclarations } from "../../../policy/types/model/source-declarations.js";
+import { rustSourceTypeDeclarations } from "../../project-types/source-declarations.js";
 import { selectRustInterfaceRepresentationAlias } from "../../declarations/interface-aliases.js";
 import { checkRustAmbientVariableUses, rustAmbientVariableDeclarations, selectRustTypeOnlyDeclaration } from "../../declarations/type-only.js";
 import { setCarrierFact } from "../../operations/project-calls.js";

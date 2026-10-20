@@ -16,7 +16,7 @@ import type { RustExternalProjectBase } from "../../../target-model/types/extern
 import type { RustProjectTypePolicyHost } from "../../../policy/types/project/project-types.js";
 import type { RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypeRelationship } from "../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustSourceTypeDeclarations } from "../../../policy/types/model/source-declarations.js";
+import { rustSourceTypeDeclarations } from "../source-declarations.js";
 import { rustLocalClassIssue } from "../local-classes.js";
 import { projectGenericSubstitutions } from "../../../policy/types/project/generic-substitutions.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
