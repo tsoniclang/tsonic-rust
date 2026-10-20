@@ -11,7 +11,7 @@ import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
 import { selectJsSurfaceMemberWrite } from "../../../policy/operations/source-profiles/js/member-reads.js";
 import { ElementAccessExpression_ArgumentExpression } from "@tsonic/target-api/source";
 import { finalizeRustProviderOperationAbi } from "../../../policy/operations/members/abi/finalize.js";
-import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { providerFormRequiresSourceReceiver } from "../../../policy/operations/members/call-inputs.js";
 import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";

@@ -5,7 +5,7 @@ import { acceptRustOperation } from "../../program/records/selected-operation-va
 import { sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/identities/selected-source.js";
-import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { providerFormRequiresSourceReceiver } from "../../../policy/operations/members/call-inputs.js";
 import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
 import { finalizeProviderOperationFact } from "../../program/records/provider-operations.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";

@@ -1,6 +1,7 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
+import { acceptSelectedCall, mapSelectedTargetTypeArguments } from "./instantiation.js";
+import { selectRustOptionalCallResult } from "./optional-results.js";
 import { defaultValueFactKey, fieldFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation, replaceRustInferCarrier, rustCallbackProtocol } from "../../../../policy/operations/members/callbacks.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";

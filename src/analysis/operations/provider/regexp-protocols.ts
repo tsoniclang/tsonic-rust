@@ -4,7 +4,8 @@ import { rustCallableProtocol, rustJsErrorTargetType, rustOptionElementCarrier, 
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import { acceptSelectedCall, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./calls/instantiation.js";
+import { acceptSelectedCall, selectedCallReceiverValueCarrier } from "./calls/instantiation.js";
+import { selectRustOptionalCallResult } from "./calls/optional-results.js";
 import { selectedCallArgumentCarriers, selectedSourceValueCarrier } from "./operators.js";
 import { rejectSelectedOperation } from "./result.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
