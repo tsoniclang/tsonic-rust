@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
-import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
 import type { RustGenericCallableMemberErrorEmission } from "../../target-model/records/error-emission.js";

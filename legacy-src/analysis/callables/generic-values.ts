@@ -22,8 +22,8 @@ import type { RustGenericCallableConversion } from "../../target-model/conversio
 
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
-import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalConstruction,
-  type RustGenericCallablePhysicalInput, type RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalConstruction, type RustGenericCallablePhysicalInput } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 
 import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
 

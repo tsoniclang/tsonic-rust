@@ -7,7 +7,7 @@ import { closedMetadataEquals, closedMetadataKey, snapshotClosedMetadata } from 
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableStorageMember } from "../../target-model/types/carriers/generic-callable-storage.js";
-import { failTargetAnalysisInvariant, failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustGenericCallableEnvironment } from "./generic-environments.js";
 import { type RustGenericCallableEnvironment } from "../../target-model/records/generic-callables.js";
 import type { RustNativeCaptureConstruction } from "./native-captures.js";
@@ -19,22 +19,12 @@ import { substituteRustTargetTypeParameters } from "../../target-model/types/car
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
-import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+
 import { rustGenericCallableMemberBindings } from "./generic-bindings.js";
 import { snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 
-import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition,
-  RustGenericCallablePhysicalSelection, RustGenericCallablePhysicalConversion } from "../../target-model/records/generic-callables.js";
-
-export interface RustGenericCallablePhysicalPlan {
-  definitions(): readonly RustGenericCallablePhysicalDefinition[];
-  environmentFor(implementation: RustGenericCallableImplementation): RustGenericCallableEnvironment | undefined;
-  definitionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalDefinition | undefined;
-  argumentsFor(carrier: TargetTypeRef): readonly RustTargetGenericArgument[] | undefined;
-  conversionFor(source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined;
-  existingSelectionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalSelection | undefined;
-}
+import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalSelection, RustGenericCallablePhysicalConversion } from "../../target-model/records/generic-callables.js";
 
 export type RustGenericCallablePhysicalCarrierSelector = (carrier: TargetTypeRef, ownerFileName: string,
   subject: SourceStorageSubject, bindings: SourceStorageBindings, producers: readonly SourceStorageProducer[]) =>
@@ -71,11 +61,10 @@ export function createRustGenericCallablePhysicalPlan(
   const environments = new Map<RustGenericCallableImplementation, RustGenericCallableEnvironment | undefined>();
   const activeEnvironments = new Set<RustGenericCallableImplementation>();
   const definitions = new Map<string, RustGenericCallablePhysicalDefinition>();
-  const ownedDomains = new Map<string, RustGenericCallableDefinition>();
   let inventory: readonly RustGenericCallablePhysicalDefinition[] | undefined;
   let published = false;
   let closedKeys: RustGenericCallablePhysicalPlan | undefined;
-  let closedSelection: ((carrier: TargetTypeRef, required: boolean) => RustGenericCallablePhysicalSelection | undefined) | undefined;
+  let closedSelection: ((carrier: TargetTypeRef) => RustGenericCallablePhysicalSelection | undefined) | undefined;
   let openCarriers: Map<string, RustGenericCallablePhysicalSelection> | undefined = new Map();
   const selectedCarriers: ReadonlyMap<string, RustGenericCallablePhysicalSelection> = openCarriers;
   const conversions = new Map<string, Map<string, RustGenericCallablePhysicalConversion | undefined>>();
@@ -113,11 +102,10 @@ export function createRustGenericCallablePhysicalPlan(
     }
   };
   const select = (carrier: TargetTypeRef, mode: "admit" | "prepare" | "link" | "inspect"): RustGenericCallablePhysicalSelection | undefined => {
-    if (closedSelection !== undefined) return closedSelection(carrier, mode !== "inspect");
+    if (closedSelection !== undefined) return closedSelection(carrier);
     const value = rustGenericCallableValue(carrier);
     const family = value === undefined ? undefined : familyFor(carrier);
     if (value === undefined || family === undefined) return undefined;
-    ownedDomains.set(closedMetadataKey([value.origin, value.signature]), family);
     const cacheKey = closedMetadataKey(carrier);
     const cached = selectedCarriers.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -156,7 +144,7 @@ export function createRustGenericCallablePhysicalPlan(
     let definition = definitions.get(identity);
     if (definition === undefined) {
       if (physical === undefined || mode === "inspect") return undefined;
-      if (inventory !== undefined) (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
+      if (inventory !== undefined) failTargetAnalysisInvariant("tsonic-rust",
         "A physical generic callable family was requested after family admission closed; its selected source root is missing.");
       if (mode === "link") failTargetAnalysisInvariant("tsonic-rust",
         "A physical generic callable shape was read before construction admitted its family; its selected source root is missing.");
@@ -183,7 +171,7 @@ export function createRustGenericCallablePhysicalPlan(
     return result;
   };
   const prepareConversion = (source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined => {
-    if (closedKeys !== undefined) throw new Error("Generic callable conversions are prepared only before key closure.");
+    if (closedKeys !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable conversions are prepared only before key closure.");
     const sourceKey = closedMetadataKey(source);
     const targetKey = closedMetadataKey(target);
     const existing = conversions.get(sourceKey);
@@ -218,7 +206,7 @@ export function createRustGenericCallablePhysicalPlan(
   };
   const plan: RustGenericCallablePhysicalPlan = Object.freeze({
     definitions(): readonly RustGenericCallablePhysicalDefinition[] {
-      if (inventory === undefined) throw new Error("Generic callable physical families are read only after their admission closes.");
+      if (inventory === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical families are read only after their admission closes.");
       return inventory;
     },
     environmentFor,
@@ -232,8 +220,8 @@ export function createRustGenericCallablePhysicalPlan(
     plan,
     carrierFor(carrier: TargetTypeRef, ownerFileName: string, subject: SourceStorageSubject,
       bindings: SourceStorageBindings, producers: readonly SourceStorageProducer[]) {
-      if (!Array.isArray(producers)) throw new Error("Generic callable physical selection requires its original source subject, bindings and producer vector.");
-      if (closedKeys !== undefined) (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
+      if (!Array.isArray(producers)) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical selection requires its original source subject, bindings and producer vector.");
+      if (closedKeys !== undefined) failTargetAnalysisInvariant("tsonic-rust",
         "Generic callable physical construction cannot run after key closure.");
       const value = rustGenericCallableValue(carrier);
       const family = value === undefined ? undefined : familyFor(carrier);
@@ -304,14 +292,14 @@ export function createRustGenericCallablePhysicalPlan(
           ...nestedSources]) });
     },
     closeAdmission(): void {
-      if (inventory !== undefined) throw new Error("Generic callable physical family admission closes exactly once.");
+      if (inventory !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical family admission closes exactly once.");
       for (const family of families) for (const implementation of family.implementations) constructEnvironment(implementation, true);
       for (const definition of [...definitions.values()]) select(definition.carrier, "admit");
       inventory = Object.freeze([...definitions.values()]);
     },
     prepare(carrier: TargetTypeRef): void {
       if (inventory === undefined || closedKeys !== undefined)
-        throw new Error("Generic callable keys are prepared after family admission and before key closure.");
+        failTargetAnalysisInvariant("tsonic-rust", "Generic callable keys are prepared after family admission and before key closure.");
       const visited = new Set<TargetTypeRef>();
       const visit = (current: TargetTypeRef): void => {
         if (visited.has(current)) return;
@@ -324,46 +312,21 @@ export function createRustGenericCallablePhysicalPlan(
     prepareConversion,
     closeKeys(): RustGenericCallablePhysicalPlan {
       if (inventory === undefined || closedKeys !== undefined)
-        throw new Error("Generic callable physical keys close exactly once after family admission.");
+        failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical keys close exactly once after family admission.");
       for (const definition of inventory) prepareConversion(definition.carrier, definition.carrier);
-      const read = (carrier: TargetTypeRef, required: boolean): RustGenericCallablePhysicalSelection | undefined => {
-        const selected = selectedCarriers.get(closedMetadataKey(carrier));
-        const value = selected === undefined && required ? rustGenericCallableValue(carrier) : undefined;
-        const family = value === undefined ? undefined : ownedDomains.get(closedMetadataKey([value.origin, value.signature]));
-        if (family !== undefined && value?.physical !== undefined && sourceFiles.has(value.physical.ownerFileName) &&
-          value.physical.members.every(member => {
-          const implementation = byOrigin.get(closedMetadataKey(member.origin));
-          const environment = implementation === undefined ? undefined : environments.get(implementation);
-          return implementation !== undefined && family.implementations.includes(implementation) && environment !== undefined &&
-            (value.physical!.members.length !== 1 || value.physical!.ownerFileName === implementation.sourceFileName) &&
-            environment.parameters.length === member.arguments.length &&
-            environment.parameters.every((parameter, index) =>
-              parameter.kind === value.physical!.arguments[member.arguments[index]!]!.kind);
-        }))
-          (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
-            "A physical generic callable key was not prepared before publication; its selected contextual root is missing.");
-        return selected;
-      };
-      const finalInventory = inventory;
-      closedSelection = read;
-      closedKeys = Object.freeze({
-        definitions: () => finalInventory,
-        environmentFor,
-        definitionFor: (carrier: TargetTypeRef) => read(carrier, true)?.definition,
-        argumentsFor: (carrier: TargetTypeRef) => read(carrier, true)?.arguments,
-        existingSelectionFor: (carrier: TargetTypeRef) => read(carrier, false),
-        conversionFor(source: TargetTypeRef, target: TargetTypeRef) {
-          if (read(source, true) === undefined || read(target, true) === undefined) return undefined;
-          return conversions.get(closedMetadataKey(source))?.get(closedMetadataKey(target));
-        },
-      });
+      closedKeys = createRustGenericCallablePhysicalRecords({ inventory, environments,
+        selectedCarriers, conversions });
+      closedSelection = closedKeys.existingSelectionFor;
       openCarriers = undefined;
       return closedKeys;
     },
     publish(): void {
-      if (closedKeys === undefined) throw new Error("Generic callable physical families publish only after their keys close.");
-      if (published) throw new Error("Generic callable physical families publish exactly once.");
+      if (closedKeys === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical families publish only after their keys close.");
+      if (published) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical families publish exactly once.");
       published = true;
     },
   });
 }
+
+import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
+import { createRustGenericCallablePhysicalRecords } from "../program/records/generic-callable-physical.js";

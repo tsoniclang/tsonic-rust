@@ -6,7 +6,7 @@ import { rustTypeGenericArguments } from "../../target-model/types/generic-argum
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
-import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 
 export interface RustGenericCallableBindingContext {

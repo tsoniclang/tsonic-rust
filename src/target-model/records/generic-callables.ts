@@ -6,6 +6,22 @@ import type { RustClosureCaptureFact } from "./operation-selections.js";
 import type { RustNativeCallableInput } from "./native-protocols.js";
 import type { RustTargetOperationFact } from "./operations.js";
 
+export interface RustGenericCallablePhysicalPlan {
+  definitions(): readonly RustGenericCallablePhysicalDefinition[];
+  environmentFor(implementation: RustGenericCallableImplementation): RustGenericCallableEnvironment | undefined;
+  definitionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalDefinition | undefined;
+  argumentsFor(carrier: TargetTypeRef): readonly RustTargetGenericArgument[] | undefined;
+  conversionFor(source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined;
+  existingSelectionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalSelection | undefined;
+}
+
+export interface RustGenericCallablePhysicalRecordInput {
+  readonly inventory: readonly RustGenericCallablePhysicalDefinition[];
+  readonly environments: ReadonlyMap<RustGenericCallableImplementation, RustGenericCallableEnvironment | undefined>;
+  readonly selectedCarriers: ReadonlyMap<string, RustGenericCallablePhysicalSelection>;
+  readonly conversions: ReadonlyMap<string, ReadonlyMap<string, RustGenericCallablePhysicalConversion | undefined>>;
+}
+
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
   readonly carrier: TargetTypeRef;

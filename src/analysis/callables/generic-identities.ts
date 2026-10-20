@@ -8,7 +8,7 @@ import { isRustBoolCarrier } from "../../target-model/types/index.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
