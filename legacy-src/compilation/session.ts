@@ -31,6 +31,7 @@ import {
   createRustTargetConfiguration,
 } from "../options/rust-target-options.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
+import { materializeRustRuntimeReferences } from "../providers/runtime/materialization.js";
 import type { RustEdition } from "../target-model/project/model.js";
 
 type RustCompilationSessionState =
@@ -101,6 +102,7 @@ export function createRustCompilationSession(
       state = "compiled";
       return formatResult(compileRequest(Object.freeze({
         input,
+        runtimeCrates: materializeRustRuntimeReferences(input.runtimeReferences),
         configuration,
         providerSemantics: mergeRustProviderSemantics(
           capturedProviderSemantics,

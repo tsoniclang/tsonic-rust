@@ -190,6 +190,7 @@ export function analyzeRustTargetProgram(
   const runtimeReferences = analyzeRustRuntimeReferences(
     input.runtimeReferences,
     configuration.foundation,
+    request.runtimeCrates,
   );
   if (runtimeReferences.kind === "rejected") {
     return rejectedTargetStage(runtimeReferences.diagnostics);

@@ -1,9 +1,22 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
+import type { TargetRuntimeReference } from "@tsonic/target-api/artifacts";
+import type { MaterializedCargoCrate, RustRuntimeCrateAcquisitions } from "../model/runtime-crates.js";
+import { cargoCrateAttributeName, cargoPathReferenceKind } from "../../target-model/project/cargo-reference.js";
 
-export type MaterializedCargoCrate =
-  | { readonly path: string }
-  | { readonly reason: string; readonly details: readonly string[] };
+export function materializeRustRuntimeReferences(references: readonly TargetRuntimeReference[]): RustRuntimeCrateAcquisitions {
+  const acquired = new Map<TargetRuntimeReference, MaterializedCargoCrate>();
+  for (const reference of references) {
+    if (reference === undefined || typeof reference !== "object" || reference.kind !== cargoPathReferenceKind ||
+      typeof reference.include !== "string" || reference.include.length === 0) continue;
+    const attributes = reference.attributes;
+    if (attributes === undefined || attributes === null || typeof attributes !== "object" || Array.isArray(attributes)) continue;
+    const crateName = attributes[cargoCrateAttributeName];
+    if (typeof crateName !== "string") continue;
+    acquired.set(reference, Object.freeze(materializeCargoCrate(reference.include, crateName)));
+  }
+  return acquired;
+}
 
 export function materializeCargoCrate(include: string, crateName: string): MaterializedCargoCrate {
   if (!isAbsolute(include) || normalize(include) !== include) {

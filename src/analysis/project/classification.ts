@@ -17,7 +17,8 @@ import {
 import {
   isValidRustIdentifier,
 } from "../../target-model/names/identifiers.js";
-import { materializeCargoCrate } from "../../providers/runtime/materialization.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { RustRuntimeCrateAcquisitions } from "../../providers/model/runtime-crates.js";
 import {
   isRustFoundation,
   rustFoundationIncludes,
@@ -44,6 +45,7 @@ export type RustRuntimeReferenceAnalysisResult =
 export function analyzeRustRuntimeReferences(
   runtimeReferences: readonly TargetRuntimeReference[],
   foundation: RustFoundation,
+  acquiredCrates: RustRuntimeCrateAcquisitions,
 ): RustRuntimeReferenceAnalysisResult {
   const diagnostics: TargetDiagnostic[] = [];
   const dependenciesByName = new Map<string, RustCargoDependency>();
@@ -167,7 +169,10 @@ export function analyzeRustRuntimeReferences(
       ));
       continue;
     }
-    const materialized = materializeCargoCrate(reference.include, crateName);
+    const materialized = acquiredCrates.get(reference);
+    if (materialized === undefined) {
+      failTargetAnalysisInvariant("tsonic-rust", "A Cargo runtime reference requires its acquired provider data before analysis.");
+    }
     if ("reason" in materialized) {
       diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
         reference.include,

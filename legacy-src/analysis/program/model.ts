@@ -44,6 +44,7 @@ import type { RustProjectConstructionQueries } from "../project-types/constructi
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
+  readonly runtimeCrates: import("../../providers/model/runtime-crates.js").RustRuntimeCrateAcquisitions;
   readonly configuration: RustTargetConfiguration;
   readonly providerSemantics: RustProviderSemantics;
   readonly jsEnabled: boolean;
