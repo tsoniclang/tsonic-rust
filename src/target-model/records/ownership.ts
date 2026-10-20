@@ -16,6 +16,13 @@ export interface RustBorrowedFieldWrite {
   readonly location: "captured-field" | "stored-field";
 }
 
+export interface RustReadUse {
+  readonly mode: "value" | "shared" | "mutable" | "move";
+  readonly later: readonly Node[];
+  readonly laterStart: number;
+  readonly stableAcrossEffects: boolean;
+}
+
 export interface RustReadOwnershipFact {
   readonly carrier: TargetTypeRef;
   readonly source: RustValueReadOwnership;

@@ -5,7 +5,8 @@ import type { RustAnalysisRecords } from "../../target-model/records/analysis.js
 import { rustFinalizedSourceInputs } from "../../target-model/operations/finalized-inputs.js";
 import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { rustProviderInputBorrowMode } from "../../policy/operations/members/input-borrows.js";
-import { selectRustOperationReadUses, type RustReadUse } from "../../policy/ownership/read-use.js";
+import { selectRustOperationReadUses } from "../../policy/ownership/read-use.js";
+import { type RustReadUse } from "../../target-model/records/ownership.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustCallArgumentMode } from "../callables/parameter-passing.js";
 

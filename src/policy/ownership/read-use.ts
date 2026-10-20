@@ -1,16 +1,10 @@
+import type { RustReadUse } from "../../target-model/records/ownership.js";
 import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
 import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import type { RustComputedMemberFact } from "../../target-model/records/operation-selections.js";
-
-export interface RustReadUse {
-  readonly mode: "value" | "shared" | "mutable" | "move";
-  readonly later: readonly Node[];
-  readonly laterStart: number;
-  readonly stableAcrossEffects: boolean;
-}
 
 export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
   readonly operation: RustTargetOperationFact | undefined;
