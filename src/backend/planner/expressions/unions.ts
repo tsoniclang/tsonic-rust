@@ -1,6 +1,5 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
@@ -11,6 +10,7 @@ import { planRustProjectFieldDispatchRole, planRustProjectFieldDispatchRoles } f
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustNativeUnionProjection } from "./union-projections.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export type RustSourceUnionFieldFact = Extract<
   RustTargetOperationFact,
@@ -21,29 +21,27 @@ export type RustSelectedSourceUnionField = NonNullable<
   RustSourceUnionFieldFact["variants"][number]["field"]
 >;
 
-function unionFieldDispatch(field: RustSelectedSourceUnionField, carrier: TargetTypeRef, context: RustPlanContext) {
-  const definition = field.declaration === undefined ? undefined : context.input.program.projectTypes.definitionContainingDeclaration(field.declaration);
-  const relationship = definition === undefined ? undefined : context.input.program.projectTypes.relationship(carrier, definition);
-  const plan = field.declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(field.declaration);
-  return field.dispatch === undefined || relationship?.kind !== "related" ||
-    !rustTargetTypeRefEquals(relationship.targetType, field.dispatch.ownerCarrier) || plan === undefined
-    ? undefined : plan;
+function unionFieldDispatch(field: RustSelectedSourceUnionField, context: RustPlanContext) {
+  return (field.declaration === undefined ? undefined : context.input.program.records.projectFieldDispatch.get(field.declaration))
+    ?? failRustPlannerInvariant("An admitted union field requires its native dispatch plan.", field.declaration ?? context.callableDeclaration ?? context.sourceFile);
 }
 
 export function readRustUnionField(field: RustSelectedSourceUnionField, carrier: TargetTypeRef,
   receiver: RustExpr, resultCarrier: TargetTypeRef, context: RustPlanContext): RustExpr | undefined {
   if (field.dispatch === undefined) return readRustStoredObjectField(field.storage, carrier, receiver, field.storageIndex, resultCarrier, context);
-  const plan = unionFieldDispatch(field, carrier, context);
-  const read = plan === undefined ? undefined : planRustProjectFieldDispatchRole(plan, "read", context);
-  return read === undefined ? undefined : readRustProjectDispatchedField(receiver, field.dispatch.read, read);
+  const plan = unionFieldDispatch(field, context);
+  const read = planRustProjectFieldDispatchRole(plan, "read", context)
+    ?? failRustPlannerInvariant("An admitted union field requires its native read role.", field.declaration ?? context.sourceFile);
+  return readRustProjectDispatchedField(receiver, field.dispatch.read, read);
 }
 
 export function writeRustUnionField(field: RustSelectedSourceUnionField, carrier: TargetTypeRef,
   receiver: RustExpr, operator: RustAssignmentOperator, value: RustExpr, context: RustPlanContext): RustExpr | undefined {
   if (field.dispatch === undefined) return writeRustStoredObjectField(field.storage, carrier, receiver, field.storageIndex, operator, value, context);
-  const plan = unionFieldDispatch(field, carrier, context);
-  const roles = plan === undefined ? undefined : planRustProjectFieldDispatchRoles(plan, context);
-  if (roles?.write === undefined || context.syntheticNames === undefined) return undefined;
+  const plan = unionFieldDispatch(field, context);
+  const roles = planRustProjectFieldDispatchRoles(plan, context);
+  if (roles?.write === undefined || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted union field write requires its native roles and hygienic binding scope.", field.declaration ?? context.sourceFile);
   return writeRustProjectDispatchedField(receiver, allocateRustSyntheticName(context.syntheticNames, "union_receiver"),
     field.dispatch.read, field.dispatch.write, operator, value, { read: roles.read, write: roles.write });
 }
@@ -52,7 +50,7 @@ export function mutateRustUnionField(field: RustSelectedSourceUnionField, carrie
   receiver: RustExpr, resultCarrier: TargetTypeRef, mutate: (value: RustExpr) => RustExpr | undefined,
   context: RustPlanContext): RustExpr | undefined {
   if (field.dispatch === undefined) return mutateRustStoredObjectField(field.storage, carrier, receiver, field.storageIndex, mutate, context);
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted union field mutation requires its native binding scope.", field.declaration ?? context.sourceFile);
   const currentName = allocateRustSyntheticName(context.syntheticNames, "union_current");
   const resultName = allocateRustSyntheticName(context.syntheticNames, "union_result");
   const current: RustExpr = { kind: "path", path: currentName };

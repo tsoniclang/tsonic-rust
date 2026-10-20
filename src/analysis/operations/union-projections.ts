@@ -18,7 +18,17 @@ export function admitRustUnionProjections(program: Omit<RustTargetProgram, "reac
       if (declaration === undefined || declaration.name !== variant.name || !rustTargetTypeRefEquals(declaration.carrier, variant.carrier) ||
         selected.has(index) !== (selection !== undefined))
         failTargetAnalysisInvariant("tsonic-rust", "Native union projection conflicts with its finalized variant contract.", node);
-      if (fact.kind !== "union-property") continue;
+      if (fact.kind === "source-union-field") {
+        const field = fact.variants[index]!.field;
+        if (field?.dispatch !== undefined) {
+          const definition = field.declaration === undefined ? undefined : program.projectTypes.definitionContainingDeclaration(field.declaration);
+          const relationship = definition === undefined ? undefined : program.projectTypes.relationship(variant.carrier, definition);
+          const dispatch = field.declaration === undefined ? undefined : program.records.projectFieldDispatch.get(field.declaration);
+          if (relationship?.kind !== "related" || !rustTargetTypeRefEquals(relationship.targetType, field.dispatch.ownerCarrier) || dispatch === undefined)
+            failTargetAnalysisInvariant("tsonic-rust", "A native union field requires its exact admitted project dispatch relationship.", node);
+        }
+        continue;
+      }
       const operation = fact.variants[index]!.operation;
       if (operation !== undefined && (operation.abi.operationKind !== "property" || operation.abi.sourceArguments.length !== 0 ||
         operation.abi.sourceReceiver.kind !== "receiver" || !rustTargetTypeRefEquals(operation.abi.sourceReceiver.carrier, variant.carrier) ||
