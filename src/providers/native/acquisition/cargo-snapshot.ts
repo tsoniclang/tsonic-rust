@@ -5,13 +5,7 @@ import { spawnSync } from "node:child_process";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import { isDeclaredCacheDirectory } from "./cache-directory.js";
 import { snapshotStandardMetadataArtifacts } from "./standard-metadata.js";
-import type {
-  RustCompilerCargoProjectSnapshot,
-  RustCompilerDependency,
-  RustCompilerPackageSource,
-  RustCompilerProjectSnapshot,
-  RustCompilerStandardLibrarySnapshot,
-} from "../model/model.js";
+import type { RustCompilerCargoProjectSnapshot, RustCompilerDependency, RustCompilerPackageSource, RustCompilerProjectSnapshot, RustCompilerStandardLibrarySnapshot } from "../model/model.js";
 
 const sourcePackageFileLimit = 100_000;
 const sourcePackageByteLimit = 1_073_741_824;
