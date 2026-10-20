@@ -20,6 +20,8 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly optionalStorageTypeArguments: { readonly get: (carrier: TargetTypeRef, indexes?: readonly number[]) => readonly TargetTypeRef[] | undefined };
+  readonly optionalStorageCallArguments: { readonly get: (node: Node) => readonly TargetTypeRef[] | undefined };
   readonly sourceTypeIdentity: { readonly get: (fileName: string, typeName: string) => { readonly targetName: string; readonly native: boolean } | undefined };
   readonly projectError: { readonly get: (definition: RustProjectTypeDefinition) => RustProjectErrorEmission | undefined };
   readonly projectMemberSlot: { readonly get: (declaration: Node, role: RustProjectMemberSlotRole) => string | undefined };

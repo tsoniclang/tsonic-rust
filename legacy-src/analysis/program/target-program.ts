@@ -91,6 +91,7 @@ import { analyzeRustConstructionEmission } from "../project-types/construction-e
 import { analyzeRustClassEmission } from "../declarations/classes/planning.js";
 import { analyzeRustNativeMemberVisibility } from "../names/native-member-names.js";
 import { analyzeRustProjectEmission } from "../project-types/emission.js";
+import { analyzeRustOptionalStorageEmission } from "../project-types/optional-storage-emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
@@ -533,6 +534,7 @@ export function analyzeRustTargetProgram(
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
+  analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
   if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);

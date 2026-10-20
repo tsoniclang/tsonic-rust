@@ -16,6 +16,8 @@ import type { RustProjectProjectionImplementation } from "../../../target-model/
 import type { RustProjectErrorEmission } from "../../../target-model/records/project-emission.js";
 
 export interface RustProjectEmissionProducer {
+  optionalType(carrier: TargetTypeRef, indexes: readonly number[] | undefined, values: readonly TargetTypeRef[]): void;
+  optionalCall(node: Node, values: readonly TargetTypeRef[]): void;
   sourceType(fileName: string, typeName: string, value: { readonly targetName: string; readonly native: boolean }): void;
   error(definition: RustProjectTypeDefinition, value: RustProjectErrorEmission): void;
   memberSlots(declaration: Node, values: ReadonlyMap<RustProjectMemberSlotRole, string>): void;
@@ -50,9 +52,13 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
   const slots = new WeakMap<Node, ReadonlyMap<RustProjectMemberSlotRole, string>>();
   const errors = new WeakMap<RustProjectTypeDefinition, RustProjectErrorEmission>();
   const sourceTypes = new Map<string, Map<string, { readonly targetName: string; readonly native: boolean }>>();
+  const optionalTypes = new Map<string, readonly TargetTypeRef[]>();
+  const optionalCalls = new WeakMap<Node, readonly TargetTypeRef[]>();
   const genericKey = (indexes: readonly number[], outlives: readonly RustLifetimeRef[], body: true | undefined): string =>
     JSON.stringify([indexes, outlives.map(rustLifetimeKey), body === true]);
   return Object.freeze({ records: Object.freeze({
+    optionalStorageTypeArguments: Object.freeze({ get: (carrier: TargetTypeRef, indexes?: readonly number[]) => optionalTypes.get(closedMetadataKey([carrier, indexes ?? null])) }),
+    optionalStorageCallArguments: Object.freeze({ get: (node: Node) => optionalCalls.get(node) }),
     sourceTypeIdentity: Object.freeze({ get: (fileName: string, typeName: string) => sourceTypes.get(fileName)?.get(typeName) }),
     projectError: Object.freeze({ get: (definition: RustProjectTypeDefinition) => errors.get(definition) }),
     projectMemberSlot: Object.freeze({ get: (declaration: Node, role: RustProjectMemberSlotRole) => slots.get(declaration)?.get(role) }),
@@ -74,6 +80,17 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
     projectGenerics: Object.freeze({ get: (definition: RustProjectTypeDefinition, indexes?: readonly number[], outlives: readonly RustLifetimeRef[] = [], body?: true) =>
       generics.get(definition)?.get(genericKey(indexes ?? definition.genericParameters.map((_, index) => index), outlives, body)) }),
   }),
+    optionalType(carrier: TargetTypeRef, indexes: readonly number[] | undefined, values: readonly TargetTypeRef[]): void {
+      assertOpen();
+      const key = closedMetadataKey([carrier, indexes ?? null]);
+      if (optionalTypes.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native optional storage type argument set has one exact owner.");
+      optionalTypes.set(key, Object.freeze(values));
+    },
+    optionalCall(node: Node, values: readonly TargetTypeRef[]): void {
+      assertOpen();
+      if (optionalCalls.has(node)) failTargetAnalysisInvariant("tsonic-rust", "A native optional storage call argument set has one exact owner.", node);
+      optionalCalls.set(node, Object.freeze(values));
+    },
     sourceType(fileName: string, typeName: string, value: { readonly targetName: string; readonly native: boolean }): void {
       assertOpen();
       const selected = sourceTypes.get(fileName) ?? new Map<string, { readonly targetName: string; readonly native: boolean }>();
