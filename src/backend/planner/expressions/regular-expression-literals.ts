@@ -15,5 +15,5 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     kind: "call", path: "js_abi::regexp_new_native", args: [
       { kind: "str-literal", value: fact.pattern }, { kind: "str-literal", value: fact.flags },
     ],
-  });
+  }) ?? failRustPlannerInvariant("An admitted RegExp construction requires its exact error propagation syntax.", node);
 }
