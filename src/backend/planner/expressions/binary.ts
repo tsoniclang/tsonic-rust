@@ -84,7 +84,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   if (fact.kind === "union-equality") return planRustUnionEquality(node, fact, context);
   if (fact.kind === "closed-type-test") return planRustClosedTypeTest(node, fact, context);
   if (fact.kind === "project-type-test") return planSelectedRustProjectTypeTest(node, context)?.test;
-  if (fact.kind === "nullish-assignment") return planNullishAssignment(node, fact, context, resultUse);
+  if (fact.kind === "nullish-assignment") return planNullishAssignment(node, context, resultUse);
   if (fact.kind === "option-coalesce") return planNullishCoalescing(node, context);
   if (fact.kind === "nullish-identity") return planExpression(leftNode, context);
   if (fact.kind === "option-equality") return planRustOptionEquality(node, fact, context);
