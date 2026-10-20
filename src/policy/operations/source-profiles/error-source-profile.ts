@@ -34,8 +34,7 @@ export function rustSourceErrorConstructorOperation(
   return {
     kind: "provider-operation", operationId: constructor.operationId, operationKind: "constructor",
     target: {
-      form: "call", path: writable ? `rt::MutableJsError::${constructor.sourceName === "Error" ? "error"
-        : constructor.sourceName === "RangeError" ? "range_error" : constructor.sourceName === "TypeError" ? "type_error" : "uri_error"}` : constructor.path,
+      form: "call", path: writable ? constructor.mutablePath : constructor.path,
       argModes: arguments_.length === 0 ? [] : [optionalMessage ? "value" : "ref"],
       ...(optionalMessage ? { argConversions: [rustOptionalStringToBorrowedStrValueConversion] } : {}),
       ...(arguments_.length === 0 ? { trailingArguments: [{ kind: "string", value: "" } as const] } : {}),
