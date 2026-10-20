@@ -10,7 +10,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
-import { rustSourceAbsenceReadCarrier } from "../expressions/absence-use.js";
+import { rustSourceAbsenceReadCarrier } from "../../policy/operations/flow/absence-use.js";
 import { rustOptionElementCarrier, rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 
 export function selectedValueCarrier(

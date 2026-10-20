@@ -1,7 +1,7 @@
 import type { SourceAbsenceUse } from "@tsonic/target-api/source";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
+import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 
 export function rustSourceAbsenceReadCarrier(
   source: TargetTypeRef | undefined,
