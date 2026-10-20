@@ -1,7 +1,7 @@
 import type { Node, Type } from "@tsonic/tsts";
 import { TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustSourceTypeParameters } from "../../../target-model/names/type-parameters.js";
+import { rustSourceTypeParameters } from "../../../source/extension/type-parameters.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";

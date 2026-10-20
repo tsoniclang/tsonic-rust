@@ -6,7 +6,7 @@ import { resolveRustTargetType } from "./target.js";
 import { resolveRustInferredUnion } from "./inferred-unions.js";
 import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
-import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
+import { rustSourceTypeParameter } from "../../../source/extension/type-parameters.js";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import type { ExtensionFactSubject, Node, Symbol, Type } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
