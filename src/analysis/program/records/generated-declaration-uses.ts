@@ -1,10 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 
-export interface RustGeneratedDeclarationUse {
-  readonly reference: Node;
-  readonly declaration: Node;
-}
-
+import type { RustGeneratedDeclarationUse } from "../../../target-model/records/generated-declaration-uses.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 export interface RustGeneratedDeclarationUseRegistry {
   record(reference: Node, declarations: readonly Node[]): void;
   seal(): readonly RustGeneratedDeclarationUse[];
@@ -18,7 +15,7 @@ export function createRustGeneratedDeclarationUseRegistry(): RustGeneratedDeclar
   return Object.freeze({
     record(reference: Node, declarations: readonly Node[]): void {
       if (sealed) {
-        throw new Error("Rust generated declaration uses cannot be recorded after analysis is sealed.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust generated declaration uses cannot be recorded after analysis is sealed.", reference);
       }
       const existing = declarationsByReference.get(reference) ?? new Set<Node>();
       for (const declaration of declarations) {
@@ -30,7 +27,7 @@ export function createRustGeneratedDeclarationUseRegistry(): RustGeneratedDeclar
     },
     seal(): readonly RustGeneratedDeclarationUse[] {
       if (sealed) {
-        throw new Error("Rust generated declaration uses can be sealed only once.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust generated declaration uses can be sealed only once.");
       }
       sealed = true;
       return Object.freeze([...uses]);

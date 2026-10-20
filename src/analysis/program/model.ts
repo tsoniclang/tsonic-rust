@@ -29,7 +29,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
 import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
-import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
+import type { RustGeneratedDeclarationUse } from "../../target-model/records/generated-declaration-uses.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 import type { RustLocalStorageAliasPlan } from "../storage/local-aliases.js";
 import type { RustProjectConstructionQueries } from "../project-types/construction-plan.js";
