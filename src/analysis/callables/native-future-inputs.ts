@@ -13,22 +13,8 @@ import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 
-export interface RustNativeFutureInput {
-  readonly owner: Node;
-  readonly subject: SourceStorageSubject;
-  readonly carrier: TargetTypeRef;
-  readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
-}
-
-export type RustNativeFutureEnvironmentSelection =
-  | { readonly kind: "resolved"; readonly inputs: readonly RustNativeFutureInput[];
-      readonly captures: readonly RustNativeFutureInput[] }
-  | { readonly kind: "unresolved"; readonly reason: string };
-
-export interface RustNativeFutureInputPlan {
-  forDeclaration(declaration: Node): RustNativeFutureEnvironmentSelection;
-  forSubject(subject: SourceStorageSubject): readonly RustNativeFutureInput[];
-}
+import type { RustNativeFutureInput, RustNativeFutureEnvironmentSelection, RustNativeFutureInputPlan } from "../../target-model/records/native-future-inputs.js";
+import { sealRustNativeFutureInputs } from "../program/records/native-future-inputs.js";
 
 export function createRustNativeFutureInputPlan(input: {
   readonly ast: AstReader;
@@ -71,24 +57,19 @@ export function createRustNativeFutureInputPlan(input: {
     return value;
   };
   const inspect = (owner: Node, carrier: TargetTypeRef, subject: SourceStorageSubject, formal: boolean): void => {
-    let remaining = 4096;
     const bindings = formal ? undefined : input.bindingsFor(owner);
-    const visit = (current: TargetTypeRef, selected: SourceStorageSubject, depth: number,
+    const visit = (current: TargetTypeRef, selected: SourceStorageSubject,
       ancestors: ReadonlySet<string>): void => {
-      if (remaining-- <= 0 || depth > 128) {
-        fail(owner, "Native Future input discovery exceeds its bounded carrier projection budget.");
-        return;
-      }
       const identity = closedMetadataKey(current);
       if (ancestors.has(identity)) return;
       const next = new Set([...ancestors, identity]);
       const optional = rustOptionElementCarrier(current);
       if (optional !== undefined) {
-        visit(optional, selected, depth + 1, next);
+        visit(optional, selected, next);
         return;
       }
       if (current.kind === "reference") {
-        visit(current.referent, selected, depth + 1, next);
+        visit(current.referent, selected, next);
         return;
       }
       if (isRustNativeFutureCarrier(current)) {
@@ -104,10 +85,6 @@ export function createRustNativeFutureInputPlan(input: {
         const origins = input.storage.boundOriginsFor(selected, bindings);
         if (origins.kind === "unresolved") { fail(owner, origins.reason); return; }
         for (const origin of origins.subjects) {
-          if (remaining-- <= 0) {
-            fail(owner, "Native Future input discovery exceeds its bounded carrier projection budget.");
-            return;
-          }
           const checked = input.storage.typeFor(origin);
           if (checked.kind === "unresolved") { fail(owner, checked.reason); return; }
           if (origin.kind !== "input") continue;
@@ -125,19 +102,19 @@ export function createRustNativeFutureInputPlan(input: {
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {
-        for (const variant of variants) visit(variant.carrier, selected, depth + 1, next);
+        for (const variant of variants) visit(variant.carrier, selected, next);
         return;
       }
       const project = (component: SourceStorageSubject["projection"][number], child: TargetTypeRef): void => {
         const result = input.storage.subject(selected.node, selected.kind, [...selected.projection, component]);
-        if (result.kind === "resolved") visit(child, result.subject, depth + 1, next);
+        if (result.kind === "resolved") visit(child, result.subject, next);
         else fail(owner, result.reason);
       };
       if (current.kind === "array" || current.kind === "slice") project({ kind: "array-element" }, current.element);
       else if (current.kind === "tuple")
         for (const [index, element] of current.elements.entries()) project({ kind: "tuple-element", index }, element);
     };
-    visit(carrier, subject, 0, new Set());
+    visit(carrier, subject, new Set());
   };
   for (const node of input.nativeNodes) {
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
@@ -171,11 +148,8 @@ export function createRustNativeFutureInputPlan(input: {
       else fail(declaration, subject.reason);
     }
   }
-  const empty: readonly RustNativeFutureInput[] = Object.freeze([]);
   const inputsBySubject = new Map([...subjects].map(([subject, values]) => [subject, Object.freeze([...values.values()])]));
   const environments = new Map<Node, RustNativeFutureEnvironmentSelection>();
-  const unavailable: RustNativeFutureEnvironmentSelection = Object.freeze({ kind: "unresolved",
-    reason: "Native Future environment requires an owned callable declaration." });
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(input.ast, declaration) &&
       !input.ast.is.IsMethodSignatureDeclaration(declaration) && !input.ast.is.IsCallSignatureDeclaration(declaration) &&
@@ -188,8 +162,5 @@ export function createRustNativeFutureInputPlan(input: {
       : Object.freeze({ kind: "unresolved", reason });
     environments.set(declaration, selected);
   }
-  return Object.freeze({
-    forDeclaration: (declaration: Node) => environments.get(declaration) ?? unavailable,
-    forSubject: (subject: SourceStorageSubject) => inputsBySubject.get(subject) ?? empty,
-  });
+  return sealRustNativeFutureInputs(environments, inputsBySubject);
 }

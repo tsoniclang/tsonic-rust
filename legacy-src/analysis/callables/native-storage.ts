@@ -38,7 +38,8 @@ import type { RustSourceCallableSpecializationIssue } from "../../target-model/r
 import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings,
   rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
-import { createRustNativeFutureInputPlan, type RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";
+import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
+import { type RustNativeFutureEnvironmentSelection } from "../../target-model/records/native-future-inputs.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
