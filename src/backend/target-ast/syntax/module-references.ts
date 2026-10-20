@@ -12,8 +12,8 @@ import type {
   RustGenerics,
   RustTypeBound,
   RustConstArgument,
-} from "../syntax/nodes.js";
-import type { RustAttributeArgument } from "../syntax/attributes.js";
+} from "./nodes.js";
+import type { RustAttributeArgument } from "./attributes.js";
 
 function rustAttributeReferencesModuleAlias(attribute: RustAttributeArgument, alias: string): boolean {
   switch (attribute.kind) {
@@ -250,6 +250,9 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
       return rustOptionalTypeReferencesModuleAlias(statement.type, alias) ||
         (statement.init !== undefined &&
           rustExpressionReferencesModuleAlias(statement.init, alias));
+    case "let-pattern":
+      return rustPatternReferencesModuleAlias(statement.pattern, alias) ||
+        rustExpressionReferencesModuleAlias(statement.init, alias);
     case "expr":
     case "tail":
       return rustExpressionReferencesModuleAlias(statement.expr, alias);
@@ -459,6 +462,7 @@ function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): 
     case "path":
       return rustPathReferencesModuleAlias(pattern.path, alias);
     case "tuple":
+    case "slice":
       return pattern.elements.some((element) =>
         rustPatternReferencesModuleAlias(element, alias));
     case "or":

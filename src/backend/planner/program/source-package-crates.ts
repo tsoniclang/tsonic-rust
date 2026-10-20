@@ -25,7 +25,7 @@ import type {
 import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
-import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../target-ast/syntax/module-references.js";
 import { rustRuntimeAliasImports, rustRuntimeAliasUseItems } from "./plan-context.js";
 
 export interface RustSourcePackageCrateContentPlan {

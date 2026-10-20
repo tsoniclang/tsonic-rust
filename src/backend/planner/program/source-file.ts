@@ -22,7 +22,7 @@ import {
   createRustSourceFile,
   emptyRustGenerics,
 } from "../../target-ast/syntax/nodes.js";
-import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../target-ast/syntax/module-references.js";
 import type {
   RustItem,
   RustSourceFileModel,

@@ -1,6 +1,6 @@
 import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustItem } from "../syntax/nodes.js";
-import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../syntax/module-references.js";
 
 export function completeRustAuthoredStructScopes(
   items: readonly RustItem[],
