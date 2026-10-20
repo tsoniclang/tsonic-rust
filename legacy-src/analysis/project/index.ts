@@ -20,4 +20,4 @@ export type {
 } from "./references.js";
 export type {
   RustBinaryHookPlan,
-} from "./hooks.js";
+} from "../../target-model/records/binary-execution.js";

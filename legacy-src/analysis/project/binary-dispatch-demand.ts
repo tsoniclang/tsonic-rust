@@ -1,5 +1,5 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustBinaryHookPlan } from "./hooks.js";
+import type { RustBinaryHookPlan } from "../../target-model/records/binary-execution.js";
 import type { RustDispatchContextDemandPlan } from "./dispatch-demand.js";
 import type { AnalyzeRustDispatchContextResult, RustDispatchContextAccess, RustDispatchContextCatalog } from "./dispatch-contexts.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";

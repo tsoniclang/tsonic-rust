@@ -1,11 +1,6 @@
 import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { RustBinaryHookPlan } from "./hooks.js";
-
-export type RustBinaryExecution =
-  | { readonly kind: "library" }
-  | { readonly kind: "native"; readonly executor: RustBinaryHookPlan | undefined }
-  | { readonly kind: "owned"; readonly execution: "entry" | "future"; readonly owner: RustBinaryHookPlan };
+import type { RustBinaryHookPlan, RustBinaryExecution } from "../../target-model/records/binary-execution.js";
 
 export function analyzeRustBinaryExecution(input: {
   readonly hooks: readonly RustBinaryHookPlan[];

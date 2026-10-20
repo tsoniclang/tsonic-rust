@@ -1,34 +1,6 @@
 import type { RustProviderBinaryHookRow } from "../../target-model/metadata/provider-metadata.js";
-import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustBinaryHookPlan } from "../../target-model/records/binary-execution.js";
 import type { RustDispatchContextGroupInput } from "../../target-model/operations/dispatch-contexts.js";
-
-interface RustBinaryHookPlanBase {
-  readonly id: string;
-  readonly phase: import("../../target-model/operations/binary-hooks.js").RustBinaryHookPhase;
-  readonly path: string;
-  readonly dispatchGroups: readonly RustDispatchContextGroupInput[];
-}
-
-export type RustBinaryHookPlan =
-  & RustBinaryHookPlanBase
-  & (
-    | {
-        readonly isFallible: true;
-        readonly errorBoundary: "provider-native";
-        readonly errorCarrier: TargetTypeRef;
-      }
-    | {
-        readonly isFallible: true;
-        readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
-        readonly errorCarrier?: never;
-      }
-    | {
-        readonly isFallible: false;
-        readonly errorBoundary?: never;
-        readonly errorCarrier?: never;
-      }
-  );
 
 export function analyzeRustBinaryHooks(
   providerRows: readonly RustProviderBinaryHookRow[],
