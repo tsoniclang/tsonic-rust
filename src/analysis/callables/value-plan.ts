@@ -23,7 +23,7 @@ import { createRustFrameCallablePlan, type RustFrameCallablePlanRegistry } from 
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeStorageQueries, type RustNativeStorageConstruction, type RustNativeStoragePlan } from "./native-storage.js";

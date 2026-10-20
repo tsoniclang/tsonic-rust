@@ -8,7 +8,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeParameterIdentities, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { RustSourceCallableSpecializationVariant } from "../../target-model/records/callable-emission.js";

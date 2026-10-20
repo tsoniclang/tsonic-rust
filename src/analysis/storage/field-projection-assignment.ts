@@ -4,7 +4,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustFieldProjectionAssignmentProducer } from "../program/records/field-projection-assignment.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 

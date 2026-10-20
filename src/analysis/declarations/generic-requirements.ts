@@ -5,14 +5,14 @@ import type { Node } from "@tsonic/tsts";
 import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
 
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { analyzeRustShapeGenericRequirements } from "./generic-shape-requirements.js";
 import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProjectProjectionImplementation } from "../../target-model/records/project-projections.js";
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
-import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../project-types/index.js";
 import { createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";

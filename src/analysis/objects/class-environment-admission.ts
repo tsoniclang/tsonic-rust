@@ -6,7 +6,7 @@ import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from ".
 
 import type { RustFactWalk } from "../program/walk.js";
 
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 
 export function recordRustProgramClassEnvironments(walk: RustFactWalk, projectTypes: RustProjectTypePolicy): void {
   const context = walk.context;

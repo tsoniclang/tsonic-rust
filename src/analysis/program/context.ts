@@ -17,8 +17,8 @@ import { createRustClassValueRegistry, type RustClassValueRegistry } from "./rec
 import { createRustProgramRecordBuilder } from "./records/create.js";
 import type { RustRequiredRecord } from "./records/required-records.js";
 import type { RustProgramRecordBuilder } from "./records/model.js";
-import { createRustProjectTypePolicyRegistry } from "../project-types/type-policy.js";
-import type { RustProjectTypePolicyRegistry } from "../project-types/type-policy.js";
+import { createRustProjectTypePolicyRegistry } from "../project-types/index.js";
+import type { RustProjectTypePolicyRegistry } from "../project-types/index.js";
 import { createRustProjectMethodDispatchPlanRegistry } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodDispatchPlanRegistry } from "../project-types/method-dispatch.js";
 import { createRustProjectMethodPropertyPlanRegistry } from "../project-types/method-properties.js";

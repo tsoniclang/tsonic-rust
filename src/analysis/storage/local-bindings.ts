@@ -8,7 +8,7 @@ import { rustOptionElementCarrier, rustCallableProtocol } from "../../target-mod
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustLocalStorageAliasPlan } from "./local-aliases.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
 import type { RustLocalBindingProducer } from "../program/records/local-bindings.js";

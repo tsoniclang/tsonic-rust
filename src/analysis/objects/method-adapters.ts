@@ -10,7 +10,7 @@ import type { RustCallableParameterAbi } from "../../target-model/records/callab
 import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParameter, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../project-types/method-dispatch.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions } from "../callables/adapters.js";

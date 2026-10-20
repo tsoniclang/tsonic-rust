@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustDeclarationGenericRequirementContract, RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { Node } from "@tsonic/tsts";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";

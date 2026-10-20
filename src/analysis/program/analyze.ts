@@ -31,7 +31,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";

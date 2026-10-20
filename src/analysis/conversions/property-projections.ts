@@ -17,7 +17,7 @@ import { resolveRustProjectAccessor } from "../operations/provider/project-acces
 import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
 
 import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../target-model/records/property-projections.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import { rustPropertyProjectionFactEquals } from "../../target-model/records/operation-equality.js";
 

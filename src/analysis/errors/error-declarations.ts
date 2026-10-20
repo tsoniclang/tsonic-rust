@@ -5,7 +5,7 @@ import type { RustFactWalk } from "../program/walk.js";
 
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
-import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
+import { rustInheritedProjectConstructor } from "../project-types/index.js";
 
 export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFiles: readonly SourceFile[]) {
   const { ast } = walk.context;

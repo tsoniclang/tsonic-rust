@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableParameterAbi } from "../../target-model/records/callable-adapters.js";
 
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
-import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../project-types/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 

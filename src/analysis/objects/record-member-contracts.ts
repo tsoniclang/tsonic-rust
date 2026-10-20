@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../project-types/index.js";
 
 export function projectRecordMemberImplementation(
   walk: RustFactWalk,

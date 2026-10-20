@@ -8,7 +8,7 @@ import type { RustFrameCallablePlan } from "../../target-model/records/frame-cal
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../target-model/records/frame-callables.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";

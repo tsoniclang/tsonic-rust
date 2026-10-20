@@ -7,7 +7,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { type RustErrorTypeContext } from "../errors/error-types.js";
 
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 

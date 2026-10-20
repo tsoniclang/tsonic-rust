@@ -14,7 +14,7 @@ import type { RustDeclarationGenericRequirementIndex } from "../declarations/gen
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
