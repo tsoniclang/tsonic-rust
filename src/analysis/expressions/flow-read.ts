@@ -35,7 +35,7 @@ import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values
 import { recordBindingWrite } from "../ownership/source-writes.js";
 import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
-import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";
+import { rustClosedValueCategoryProjection } from "../../policy/conversions/closed-values.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { selectRustClosedArrayView } from "../../policy/types/collections/closed-array-views.js";
 import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";

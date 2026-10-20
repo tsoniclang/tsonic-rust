@@ -1,10 +1,10 @@
 import type { TargetTypeRef } from "../model.js";
 import type { RustRuntimeUnionVariant } from "./runtime-unions.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
-import { getRustTypeofRuntimeKind } from "../runtime-kind.js";
+
 import { emptyRustTypeDefinitions } from "../source-union-definitions.js";
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
-import { isRustJsValueCarrier, rustJsErrorTargetType, rustJsStringTargetType, rustJsSymbolTargetType } from "./js.js";
+import { rustJsErrorTargetType, rustJsStringTargetType, rustJsSymbolTargetType } from "./js.js";
 import { rustJsArrayValueTargetType } from "./array-values.js";
 import { isRustMutableJsErrorCarrier, isRustRetainedErrorCarrier, isRustSourceErrorCarrier } from "./source-error.js";
 import type { RustTypeDefinitions } from "../source-union-definitions.js";
@@ -18,7 +18,7 @@ export function rustClosedValueRetainsError(
     origin?.kind === "project" && origin.sourceError;
 }
 
-const payloads: readonly { readonly carrier: TargetTypeRef; readonly variant: RustRuntimeUnionVariant }[] = Object.freeze([
+export const rustClosedValuePayloads: readonly { readonly carrier: TargetTypeRef; readonly variant: RustRuntimeUnionVariant }[] = Object.freeze([
   { carrier: rustSourcePrimitiveTargetType("bool"), variant: { kind: "payload", name: "Bool" } },
   { carrier: rustSourcePrimitiveTargetType("int8"), variant: { kind: "payload", name: "Int8" } },
   { carrier: rustSourcePrimitiveTargetType("uint8"), variant: { kind: "payload", name: "Uint8" } },
@@ -37,16 +37,3 @@ const payloads: readonly { readonly carrier: TargetTypeRef; readonly variant: Ru
   { carrier: rustJsSymbolTargetType(), variant: { kind: "payload", name: "Symbol" } },
   { carrier: rustJsArrayValueTargetType(), variant: { kind: "payload", name: "Array" } },
 ]);
-
-export function rustClosedValuePayloadProjection(source: TargetTypeRef, selected: TargetTypeRef): RustRuntimeUnionVariant | undefined {
-  return !isRustJsValueCarrier(source) ? undefined : payloads.find(payload =>
-    rustTargetTypeRefEquals(payload.carrier, selected))?.variant;
-}
-
-export function rustClosedValueCategoryProjection(selected: TargetTypeRef): boolean {
-  const category = getRustTypeofRuntimeKind(selected, emptyRustTypeDefinitions);
-  if (typeof category !== "string" || category === "object") return false;
-  const candidates = payloads.filter(payload =>
-    getRustTypeofRuntimeKind(payload.carrier, emptyRustTypeDefinitions) === category);
-  return candidates.length === 1 && rustTargetTypeRefEquals(candidates[0]!.carrier, selected);
-}
