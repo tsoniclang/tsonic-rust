@@ -6,6 +6,17 @@ import type { RustGenericCallableEffectsFact } from "./generic-callable-effects.
 import type { RustRecordFamily } from "./program.js";
 import type { RustPhysicalErrorOwner } from "./error-regions.js";
 import type { RustErrorJoinDeclaration } from "./error-regions.js";
+import type { RustErrorRegionSelection } from "./error-regions.js";
+import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
+
+export interface RustSourceErrorRegionEmission {
+  readonly operand: RustErrorRegionSelection;
+  readonly channels: ReadonlyMap<string, {
+    readonly targetIdentity: string;
+    readonly uninhabited: boolean;
+    readonly jsRejection: boolean;
+  }>;
+}
 
 export interface RustProjectMemberError {
   readonly carrier: TargetTypeRef;
@@ -26,6 +37,7 @@ export interface RustGenericCallableErrorEmission {
 }
 
 export interface RustErrorEmissionRecords {
+  readonly sourceErrorRegion: { readonly get: (edge: RustSourceErrorEffectEdge) => RustSourceErrorRegionEmission | undefined };
   readonly nativeErrorJoinDeclarations: { readonly get: (fileName: string) => readonly RustErrorJoinDeclaration[] | undefined };
   readonly errorDeclarationOwner: RustRecordFamily<string>;
   readonly errorMemberOwner: RustRecordFamily<RustPhysicalErrorOwner>;

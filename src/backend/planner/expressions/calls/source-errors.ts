@@ -2,15 +2,12 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
 
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
 import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustErrorType,
   rustPropagateLocalError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
-import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
-import { rustJsRejectionErrorIdentity } from "../../../../target-model/records/error-effects.js";
-import { rustJsRejectionErrorType } from "../../types/error-boundary.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planRustJsRejectionValue } from "../js-rejection.js";
 
 export function planRustSourceErrorPropagation(
@@ -19,9 +16,9 @@ export function planRustSourceErrorPropagation(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const selection = context.input.program.errorRegions.sourceFor(edge);
+  const selection = context.input.program.records.sourceErrorRegion.get(edge);
   if (selection === undefined) return reject(node, context);
-  const channels = new Map(selection.channels.map(channel => [channel.sourceIdentity, channel]));
+  const channels = selection.channels;
   const planned = planRustSelectedErrorRegion(selection.operand, context);
   if (planned === undefined) return reject(node, context);
   const operand = planned.boundary;
@@ -37,7 +34,7 @@ export function planRustSourceErrorPropagation(
       const owner = rustLocalErrorOwner(active);
       if (owner === undefined) return undefined;
       const targetType = rustErrorType(owner);
-      const imported: RustExpr = rustTypeEquals(selected.errorType, targetType) ? payload : {
+      const imported: RustExpr = {
         kind: "associated-call", owner: targetType, method: "from", args: [payload],
       };
       return rustInjectLocalError(active, imported);
@@ -45,16 +42,13 @@ export function planRustSourceErrorPropagation(
     const channel = channels.get(selected.identity);
     if (channel?.uninhabited === true)
       return { kind: "match", expression: payload, arms: [] };
-    if (channel?.targetIdentity === rustJsRejectionErrorIdentity && rustTypeEquals(selected.errorType, rustJsRejectionErrorType))
+    if (channel?.jsRejection === true)
       return planRustJsRejectionValue(node, payload, context);
     return channel === undefined ? undefined : rustInjectNativeError(active,
       { identity: channel.targetIdentity, errorType: selected.errorType }, payload);
   }) ?? reject(node, context);
 }
 
-function reject(node: Node, context: RustPlanContext): undefined {
-  context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-    "rust.backend.source-call-error-correspondence",
-    "A source invocation requires exact declaration-to-caller error channels in the active region."));
-  return undefined;
+function reject(node: Node, _context: RustPlanContext): never {
+  return failRustPlannerInvariant("An admitted source invocation requires its declaration-to-caller error channels in the active region.", node);
 }

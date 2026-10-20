@@ -45,6 +45,7 @@ import { analyzeRustSourcePackageComponentEmission } from "../source-modules/pac
 import { analyzeRustSourcePackageInitializers } from "../source-modules/package-initializers.js";
 import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries } from "../errors/source-packages.js";
 import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.js";
+import { analyzeRustSourceErrorRegions } from "../errors/source-regions.js";
 import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
 import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import { analyzeRustWorkerEntries } from "../source-modules/worker-entries.js";
@@ -593,6 +594,7 @@ export function analyzeRustTargetProgram(
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
   analyzeRustProjectMemberErrors(program, context.nativeNodes, context.records.errorEmissionPlans);
   analyzeRustDeclarationErrorOwners(program, context.nativeNodes, context.records.errorEmissionPlans);
+  analyzeRustSourceErrorRegions(program, context.nativeNodes, context.records.errorEmissionPlans);
   analyzeRustSourceBindingEmission(program, context.nativeNodes, context.records.sourceBindingEmissionPlans);
   const providerMutableIssues = analyzeRustProviderMutableEmission(program, context.nativeNodes, context.records.providerEvaluationPlans);
   if (providerMutableIssues.length !== 0) return rejectedTargetStage(providerMutableIssues);

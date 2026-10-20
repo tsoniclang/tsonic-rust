@@ -8,8 +8,11 @@ import { createRustRecordFamily } from "./family.js";
 import type { RustProjectMemberError } from "../../../target-model/records/error-emission.js";
 import type { RustPhysicalErrorOwner } from "../../../target-model/records/error-regions.js";
 import type { RustErrorJoinDeclaration } from "../../../target-model/records/error-regions.js";
+import type { RustSourceErrorEffectEdge } from "../../../target-model/records/source-error-effects.js";
+import type { RustSourceErrorRegionEmission } from "../../../target-model/records/error-emission.js";
 
 export interface RustErrorEmissionProducer {
+  sourceRegion(edge: RustSourceErrorEffectEdge, value: RustSourceErrorRegionEmission): void;
   declarationOwner(node: Node, component: string): void;
   memberOwner(node: Node, owner: RustPhysicalErrorOwner): void;
   member(declaration: Node, value: RustProjectMemberError): void;
@@ -24,11 +27,13 @@ export function createRustErrorEmissionProducer(assertOpen: () => void): RustErr
   const generics = new WeakMap<RustGenericCallablePhysicalDefinition, RustGenericCallableErrorEmission>();
   const names = new Map<string, Map<number, string>>();
   const declarations = new Map<string, readonly RustErrorJoinDeclaration[]>();
+  const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionEmission>();
   const regions = createRustRecordFamily<RustErrorRegionSelection>({ id: "tsonic.rust.nativeErrorRegion", equals: (left, right) => left === right }, assertOpen);
   const members = createRustRecordFamily<RustProjectMemberError>({ id: "tsonic.rust.projectMemberError", equals: (left, right) => left === right }, assertOpen);
   const declarationOwners = createRustRecordFamily<string>({ id: "tsonic.rust.errorDeclarationOwner", equals: (left, right) => left === right }, assertOpen);
   const memberOwners = createRustRecordFamily<RustPhysicalErrorOwner>({ id: "tsonic.rust.errorMemberOwner", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ regions: regions.reader, records: Object.freeze({
+    sourceErrorRegion: Object.freeze({ get: (edge: RustSourceErrorEffectEdge) => sourceRegions.get(edge) }),
     nativeErrorJoinDeclarations: Object.freeze({ get: (fileName: string) => declarations.get(fileName) }),
     errorDeclarationOwner: declarationOwners.reader,
     errorMemberOwner: memberOwners.reader,
@@ -36,6 +41,11 @@ export function createRustErrorEmissionProducer(assertOpen: () => void): RustErr
     genericCallableErrors: Object.freeze({ get: (definition: RustGenericCallablePhysicalDefinition) => generics.get(definition) }),
     nativeErrorJoinName: Object.freeze({ get: (fileName: string, arity: number) => names.get(fileName)?.get(arity) }),
   }),
+    sourceRegion(edge: RustSourceErrorEffectEdge, value: RustSourceErrorRegionEmission): void {
+      assertOpen();
+      if (sourceRegions.has(edge)) failTargetAnalysisInvariant("tsonic-rust", "A source error edge has one exact emission owner.", edge.declaration);
+      sourceRegions.set(edge, Object.freeze(value));
+    },
     declarationOwner: (node: Node, component: string): void => declarationOwners.writer.set(node, component),
     memberOwner: (node: Node, owner: RustPhysicalErrorOwner): void => memberOwners.writer.set(node, Object.freeze(owner)),
     member: (declaration: Node, value: RustProjectMemberError): void => members.writer.set(declaration, Object.freeze(value)),
