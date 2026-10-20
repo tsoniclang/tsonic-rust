@@ -18,7 +18,7 @@ import { checkedPropertySelectionInput } from "../operations/member-access.js";
 import { selectRustCheckedPropertyAccess } from "../operations/selected-members.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
-import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
+import { resolveRustBranchUnion } from "../types/resolution/branch-unions.js";
 import { finalizeRustCallableSignature } from "./signature-query.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";

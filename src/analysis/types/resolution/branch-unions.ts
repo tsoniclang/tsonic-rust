@@ -2,10 +2,10 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustAbsenceCarrier, isRustNeverCarrier, isRustUnitCarrier, rustAbsenceTargetType } from "../../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
-import { resolveRustInferredUnion } from "./inferred-unions.js";
-import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
+import { resolveRustInferredUnion } from "../../../policy/types/resolution/inferred-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../../policy/types/resolution/source-unions.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustContextualLiteralCarrier } from "./contextual-literals.js";
+import { resolveRustContextualLiteralCarrier } from "../../../policy/types/collections/literal-construction.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function resolveRustBranchUnion(

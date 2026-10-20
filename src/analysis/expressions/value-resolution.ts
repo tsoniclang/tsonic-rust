@@ -22,7 +22,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/conversions/literals.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
-import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
+import { resolveRustBranchUnion } from "../types/resolution/branch-unions.js";
 import { type Node, type SourceFile } from "@tsonic/tsts";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../target-model/types/await.js";
