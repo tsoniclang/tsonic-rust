@@ -66,6 +66,7 @@ import { analyzeRustOptionEquality } from "../operations/option-equality.js";
 import { analyzeRustIndexedLocations } from "../storage/indexed-locations.js";
 import { admitRustComputedMembers } from "../operations/computed-members.js";
 import { analyzeRustLocationCallbacks } from "../callables/location-callbacks.js";
+import { analyzeRustDirectStorage } from "../storage/direct-storage.js";
 import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
 import { analyzeRustStringComparisonViews } from "../expressions/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
@@ -648,6 +649,8 @@ export function analyzeRustTargetProgram(
   analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans);
+  const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans);
+  if (directStorageIssues.length !== 0) return rejectedTargetStage(directStorageIssues);
   const computedMemberIssues = admitRustComputedMembers(program, context.nativeNodes);
   if (computedMemberIssues.length !== 0) return rejectedTargetStage(computedMemberIssues);
   analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);
