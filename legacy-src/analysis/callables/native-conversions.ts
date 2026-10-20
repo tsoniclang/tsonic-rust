@@ -14,7 +14,8 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
-import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
 import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";

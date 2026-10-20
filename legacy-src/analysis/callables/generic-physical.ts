@@ -13,7 +13,7 @@ import { type RustGenericCallableEnvironment } from "../../target-model/records/
 import type { RustNativeCaptureConstruction } from "./native-captures.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
-import type { RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";

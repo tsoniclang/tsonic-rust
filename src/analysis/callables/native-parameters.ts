@@ -1,7 +1,8 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustNativeStorageConstruction, RustNativeStorageQueries, RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeStorageConstruction, RustNativeStorageQueries } from "./native-storage.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 
 export function finalizeRustNativeParameterStorage(input: {
   readonly ast: AstReader;
@@ -10,8 +11,6 @@ export function finalizeRustNativeParameterStorage(input: {
   readonly records: RustProgramRecords;
 }, queries: RustNativeStorageQueries): RustNativeStorageConstruction {
   const parameters = new Map<Node, RustNativeStorageSelection>();
-  const unavailable: RustNativeStorageSelection = Object.freeze({ kind: "unresolved",
-    reason: "Native parameter storage requires its exact owned formal parameter." });
   for (const node of input.nativeNodes) {
     const abi = input.records.sourceParameterAbi.get(node);
     if (abi === undefined || !input.ast.is.IsParameterDeclaration(node)) continue;
@@ -22,5 +21,7 @@ export function finalizeRustNativeParameterStorage(input: {
       : queries.subjectFor(subject.subject, abi.parameterCarrier, owner));
   }
   return Object.freeze({ ...queries,
-    parameterFor: (parameter: Node): RustNativeStorageSelection => parameters.get(parameter) ?? unavailable });
+    parameterFor: sealRustNativeParameterStorage(parameters).get });
 }
+
+import { sealRustNativeParameterStorage } from "../program/records/native-parameters.js";

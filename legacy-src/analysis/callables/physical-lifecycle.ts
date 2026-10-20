@@ -26,7 +26,8 @@ import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup 
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustGenericCallablePhysicalConstruction } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
-import type { RustNativeStorageConstruction, RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeStorageConstruction, RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import type { RustNativeCallableProducerConstruction, RustNativeCallableProducerPlan } from "./native-producers.js";
 import { rustEmissionSourceIdentity } from "./emission-contexts.js";
 

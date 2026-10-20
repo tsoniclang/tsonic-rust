@@ -52,13 +52,6 @@ import { selectRustSourceCallableInvocationBindings } from "./native-storage-gen
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 
-export type RustNativeStorageSelection =
-  | { readonly kind: "identity"; readonly carrier: TargetTypeRef;
-      readonly sources: readonly RustPhysicalCallableSourceSelection[] }
-  | { readonly kind: "selected"; readonly carrier: TargetTypeRef; readonly inputs: readonly RustNativeCallableInput[];
-      readonly sources: readonly RustPhysicalCallableSourceSelection[] }
-  | { readonly kind: "unresolved"; readonly reason: string };
-
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   logicalCarrierFor(subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined;
@@ -619,3 +612,5 @@ function callableValueCarrier(carrier: TargetTypeRef): TargetTypeRef | undefined
   }
   return undefined;
 }
+
+import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";

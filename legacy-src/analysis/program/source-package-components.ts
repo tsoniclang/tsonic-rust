@@ -15,7 +15,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedErrorTransportDemand } from "../errors/closed-errors.js";
 import type { RustClosedErrorTransportDemand } from "../errors/closed-errors.js";
-import type { RustNativeStorageSelection } from "../callables/native-storage.js";
+import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
 
