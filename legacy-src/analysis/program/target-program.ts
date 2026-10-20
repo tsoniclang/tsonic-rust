@@ -146,6 +146,7 @@ import { analyzeRustClassValueEmission } from "../objects/class-value-emission.j
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustProviderMutableEmission } from "../storage/provider-mutable-emission.js";
 import { analyzeRustProviderEvaluation } from "../storage/provider-evaluation.js";
+import { analyzeRustProviderInputs } from "../operations/provider-inputs.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -662,6 +663,8 @@ export function analyzeRustTargetProgram(
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
+  const providerInputIssues = analyzeRustProviderInputs(program, context.records.providerInputPlans);
+  if (providerInputIssues.length !== 0) return rejectedTargetStage(providerInputIssues);
   const referenceOperationIssues = analyzeRustReferenceOperations(program, context.nativeNodes, context.records.referenceOperationPlans);
   if (referenceOperationIssues.length !== 0) return rejectedTargetStage(referenceOperationIssues);
   const nullishCoalescingIssues = analyzeRustNullishCoalescing(program, context.nativeNodes, context.records.nullishCoalescingPlans);

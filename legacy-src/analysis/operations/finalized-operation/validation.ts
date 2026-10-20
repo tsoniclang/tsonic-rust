@@ -310,9 +310,10 @@ function isTargetInput(value: unknown): value is RustFinalizedTargetInput {
 }
 
 function isSourceInput(value: unknown): value is RustFinalizedSourceInput {
-  if (!isRecord(value) || !hasExactKeys(value, ["source", "sourceCarrier", "conversion", "mode", "parameterCarrier"]) ||
+  if (!isRecord(value) || !hasExactKeys(value, ["source", "sourceCarrier", "conversion", "mode", "parameterCarrier", "sharedConversion", "elementView"]) ||
     !isRecord(value.source) || !isRustTargetTypeRef(value.sourceCarrier) || !isFinalizedConversion(value.conversion) ||
-    !argumentModes.has(value.mode) || !isRustTargetTypeRef(value.parameterCarrier)) {
+    !argumentModes.has(value.mode) || !isRustTargetTypeRef(value.parameterCarrier) || typeof value.sharedConversion !== "boolean" ||
+    (value.elementView !== "value" && value.elementView !== "str")) {
     return false;
   }
   return value.source.kind === "receiver"

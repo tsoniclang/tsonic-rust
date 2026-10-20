@@ -453,6 +453,10 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch }, node, operation);
       if (issue !== undefined) diagnostics.push(issue);
     }
+    if ((operation?.kind === "provider-operation" || operation?.kind === "runtime-set") && operation.abi.effects.invocation === "fallible" && !frame(node).fallible)
+      diagnostics.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
+        message: `Fallible operations require a finalized fallible lowering context. Node kind: ${ast.kindName(node)}.`,
+        evidence: ["target.capability=rust.error.call"] });
     if (compound !== undefined) setter(node, compound);
     else if (operation?.kind === "runtime-set") setter(node, operation);
     if (operation?.kind === "operator-token" || operation?.kind === "operator-call") assignment(node, operation);

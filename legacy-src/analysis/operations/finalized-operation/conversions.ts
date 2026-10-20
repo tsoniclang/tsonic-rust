@@ -74,12 +74,16 @@ export function sourceInput(
   const finalized = sourceConversion === undefined || targetConversion === undefined
     ? undefined : composeFinalizedValueConversions(sourceConversion, targetConversion);
   const parameterCarrier = finalized === undefined ? undefined : carrierAfterMode(finalized.targetCarrier, mode);
+  const first = finalized?.kind === "sequence" ? finalized.steps[0] : finalized;
   return finalized === undefined || parameterCarrier === undefined ? undefined : {
     source,
     sourceCarrier,
     conversion: finalized,
     mode,
     parameterCarrier,
+    sharedConversion: first?.kind === "semantic" && rustValueConversionContract(first.conversion, definitions)?.sourceMode === "ref",
+    elementView: parameterCarrier.kind === "reference" && parameterCarrier.referent.kind === "target-named" &&
+      parameterCarrier.referent.id === "rust.std.String" ? "str" : "value",
   };
 }
 

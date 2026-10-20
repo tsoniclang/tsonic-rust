@@ -51,6 +51,8 @@ export interface RustFinalizedSourceInput {
   readonly conversion: RustFinalizedValueConversion;
   readonly mode: RustArgumentMode;
   readonly parameterCarrier: TargetTypeRef;
+  readonly sharedConversion: boolean;
+  readonly elementView: "value" | "str";
 }
 
 export interface RustFinalizedSliceInput {
