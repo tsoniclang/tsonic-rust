@@ -4,7 +4,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
-import { rustSourceStorageProjectedCarrier } from "../../../policy/types/objects/value-domain-carrier.js";
+import { rustSourceStorageProjectedCarrier } from "../../objects/value-domain-carriers.js";
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,

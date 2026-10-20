@@ -1,11 +1,11 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustJsArrayLikeElementTargetType } from "../../../target-model/types/carriers/js.js";
-import { rustFixedArrayCarrierValue } from "../../../target-model/types/carriers/native.js";
-import type { RustTargetTypeResolutionOptions } from "../resolution/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
+import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
+import type { RustTargetTypeResolutionOptions } from "../types/resolution/model.js";
 
 export interface RustValueDomainCarrierHost {
   readonly sourceStorage?: SourceStorageQueries;

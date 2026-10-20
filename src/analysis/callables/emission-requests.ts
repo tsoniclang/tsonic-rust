@@ -14,7 +14,7 @@ import type { RustGenericCallableConversion } from "../../target-model/conversio
 import { type RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import type { RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
-import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
+import type { RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";

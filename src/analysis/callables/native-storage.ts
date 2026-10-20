@@ -48,7 +48,7 @@ import type { RustLexicalFunctionEnvironments } from "../../target-model/records
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
-import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
+import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";

@@ -11,7 +11,7 @@ import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { rustCallScopedElisionLifetime, rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import { rustSourceStorageProjectedCarrier } from "../../policy/types/objects/value-domain-carrier.js";
+import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carriers.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 
 export function rustRetainedCallLifetimes(

@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import { resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustValueDomainHasTargetType } from "../../../../policy/types/objects/value-domain-carrier.js";
+import { rustValueDomainHasTargetType } from "../../../objects/value-domain-carriers.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes } from "../operators.js";
 import { selectedArgumentMatchScore } from "../result.js";
 import { selectedCallReceiverValueCarrier } from "./instantiation.js";
