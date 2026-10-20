@@ -43,7 +43,7 @@ import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
-import { analyzeRustErrorTransport } from "./error-transport.js";
+import { analyzeRustErrorTransport } from "../errors/transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";

@@ -1,3 +1,4 @@
+import type { RustErrorPayloadVariant, RustErrorTransportQueries } from "../../../target-model/records/error-transport.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustBoundaryErrorVariants, RustErrorTransportEmissionRecords, RustPlannedErrorVariant } from "../../../target-model/records/error-transport.js";
 import type { RustProgramErrorModuleEmission } from "../../../target-model/records/error-transport.js";
@@ -48,3 +49,8 @@ export function createRustErrorTransportEmissionProducer(assertOpen: () => void)
 }
 
 export type RustErrorTransportEmissionProducer = ReturnType<typeof createRustErrorTransportEmissionProducer>;
+
+
+export function sealRustErrorTransportQueries(components: ReadonlyMap<string, readonly RustErrorPayloadVariant[]>): RustErrorTransportQueries {
+  return Object.freeze({ forComponent: (componentId: string) => components.get(componentId) });
+}
