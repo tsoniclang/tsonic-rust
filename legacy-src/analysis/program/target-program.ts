@@ -68,6 +68,7 @@ import { admitRustComputedMembers } from "../operations/computed-members.js";
 import { analyzeRustLocationCallbacks } from "../callables/location-callbacks.js";
 import { analyzeRustDirectStorage } from "../storage/direct-storage.js";
 import { analyzeRustUnaryEmission } from "../expressions/expression-unary.js";
+import { analyzeRustFlowReadEmission } from "../control-flow/flow-read-emission.js";
 import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
 import { analyzeRustStringComparisonViews } from "../expressions/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
@@ -642,6 +643,8 @@ export function analyzeRustTargetProgram(
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
+  const flowReadEmissionIssues = analyzeRustFlowReadEmission(program, context.nativeNodes, context.records.flowReadEmissionPlans);
+  if (flowReadEmissionIssues.length !== 0) return rejectedTargetStage(flowReadEmissionIssues);
   const errorFieldIssues = analyzeRustErrorFieldBorrows(program, context.nativeNodes, context.records.errorFieldPlans);
   if (errorFieldIssues.length !== 0) return rejectedTargetStage(errorFieldIssues);
   admitRustUnionProjections(program, context.nativeNodes);

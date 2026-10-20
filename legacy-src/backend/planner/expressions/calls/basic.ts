@@ -30,7 +30,7 @@ import type { RustTargetOperationFact } from "../../../../target-model/records/o
 import { planRustReferenceOperationCall } from "../reference-operations.js";
 import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
 import { planRustNativeControl } from "../native-controls.js";
-import { planRustValueProjection } from "../flow-reads.js";
+import { planRustValueProjection } from "../flow-read-projections.js";
 import { planRustClosedTypeTest } from "../type-tests.js";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { planRustComputedMemberExpression } from "../computed-members.js";

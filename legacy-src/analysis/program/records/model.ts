@@ -141,6 +141,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly locationCallbackPlans: import("./location-callbacks.js").RustLocationCallbackProducer;
   readonly directStoragePlans: import("./direct-storage.js").RustDirectStorageProducer;
   readonly unaryEmissionPlans: import("./expression-unary.js").RustUnaryEmissionProducer;
+  readonly flowReadEmissionPlans: import("./flow-read-emission.js").RustFlowReadEmissionProducer;
   readonly errorFieldPlans: import("./error-field-borrows.js").RustErrorFieldProducer;
   readonly stringComparisonPlans: import("./string-comparison-views.js").RustStringComparisonViewProducer;
   readonly genericFlowApplications: import("./generic-callable-flow.js").RustGenericCallableFlowProducer;

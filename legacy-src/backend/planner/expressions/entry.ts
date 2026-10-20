@@ -27,7 +27,7 @@ import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpressionInner } from "./dispatch.js";
-import { planRustFlowReadProjection } from "./flow-reads.js";
+import { planRustFlowReadProjection } from "./flow-read-projections.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
