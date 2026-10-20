@@ -1,14 +1,14 @@
+import { createRustCallbackEffectAnalysis } from "./callback-effects.js";
+import { createRustIntrinsicErrorEffectsPublication } from "../program/records/intrinsic-error-effects.js";
 import {
   KindCallExpression,
   KindElementAccessExpression,
   KindFunctionDeclaration,
   KindFunctionExpression,
   KindNewExpression,
-  KindParenthesizedExpression,
   KindPropertyAccessExpression,
   KindVariableDeclaration,
   Node_Expression,
-  Node_Initializer,
   asSourceNode,
   sourceEnclosingCallable,
 } from "@tsonic/target-api/source";
@@ -16,7 +16,6 @@ import {
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
-import { rustCallbackProtocol } from "../operations/provider/callbacks.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
@@ -30,18 +29,17 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { selectedDeclarationIsProjectSource } from "../expressions/references.js";
-import { selectRustResourceManagement } from "./management.js";
+import { selectRustResourceManagement } from "../control-flow/resource-management.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustPropertyProjectionGetters } from "../conversions/property-projections.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 
 import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../callables/future-values.js";
-import { rustFutureValueForStoredBranch } from "./future-storage.js";
+import { rustFutureValueForStoredBranch } from "../callables/future-storage.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
-import { collectRustErrorRegionEffects } from "./error-regions.js";
+import { collectRustErrorRegionEffects } from "./region-effects.js";
 import { collectRustErrorDeclarations } from "./error-declarations.js";
-import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "../errors/error-effects.js";
+import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
@@ -265,91 +263,8 @@ function collectFallibilityFacts(
     ].filter((declaration): declaration is Node => declaration !== undefined);
   };
 
-  const callbackExpression = (
-    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
-  ): Node | undefined => pending.request.source.sourceArguments[
-    pending.prepared.callback.sourceArgumentIndex
-  ]?.expression;
-  const callbackValueExpression = (expression: Node | undefined): Node | undefined => {
-    let current = expression;
-    while (current !== undefined && ast.kindName(current) === KindParenthesizedExpression) {
-      budget.step();
-      current = Node_Expression(ast, current);
-    }
-    return current;
-  };
-  interface CallbackValueAnalysis {
-    readonly fallible: boolean;
-    readonly implementationFallible: boolean;
-    readonly implementationEffects: RustErrorEffectsFact;
-    readonly subjects: readonly Node[];
-  }
-  const callbackExpressionIsFallible = (
-    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
-  ): boolean => callbackValueAnalysis(callbackExpression(pending), new Set())?.fallible === true;
-  const callbackValueAnalysis = (
-    expression: Node | undefined,
-    resolving: Set<Node>,
-  ): CallbackValueAnalysis | undefined => {
-    budget.step();
-    const value = callbackValueExpression(expression);
-    if (value === undefined || resolving.has(value)) {
-      return undefined;
-    }
-    resolving.add(value);
-    try {
-      const carrier = walk.context.records.runtimeCarrier.get(value)?.carrier;
-      const invocationFallible = rustCallbackProtocol(carrier)?.fallible === true;
-      const body = ast.body(value);
-      if (body !== undefined) {
-        const implementationEffects = expressionRegionEffects(body);
-        if (implementationEffects === undefined) return undefined;
-        const implementationFallible = rustErrorEffectsAreFallible(implementationEffects);
-        return {
-          fallible: invocationFallible || implementationFallible,
-          implementationFallible,
-          implementationEffects,
-          subjects: [value],
-        };
-      }
-      const declaration = walk.context.source.navigation.sourceReferenceFor(value)?.declaration;
-      if (declaration === undefined) {
-        return undefined;
-      }
-      if (isFallible(declaration)) {
-        return { fallible: true, implementationFallible: true, implementationEffects: declarationEffects(declaration), subjects: [value, declaration] };
-      }
-      const declarationBody = ast.body(declaration);
-      if (declarationBody !== undefined) {
-        const implementationEffects = expressionRegionEffects(declarationBody);
-        if (implementationEffects === undefined) return undefined;
-        const implementationFallible = rustErrorEffectsAreFallible(implementationEffects);
-        return {
-          fallible: invocationFallible || implementationFallible,
-          implementationFallible,
-          implementationEffects,
-          subjects: [value, declaration],
-        };
-      }
-      const initialized = callbackValueAnalysis(Node_Initializer(ast, declaration), resolving);
-      return initialized === undefined
-        ? undefined
-        : {
-            fallible: invocationFallible || initialized.fallible,
-            implementationFallible: initialized.implementationFallible,
-            implementationEffects: initialized.implementationEffects,
-            subjects: [value, declaration, ...initialized.subjects],
-          };
-    } finally {
-      resolving.delete(value);
-    }
-  };
-  const preparedCallbackOperationIsFallible = (node: Node): boolean => {
-    const pending = walk.preparedCallbackCalls.get(node);
-    return pending !== undefined && (
-      pending.prepared.template.isFallible || callbackExpressionIsFallible(pending)
-    );
-  };
+  const { callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationIsFallible } =
+    createRustCallbackEffectAnalysis({ walk, budget, isFallible, declarationEffects, expressionRegionEffects });
   function expressionRegionEffects(root: Node): RustErrorEffectsFact | undefined {
     budget.step();
     const effects = collectRustErrorRegionEffects(root, ast, directEffects, (node, effects) => {
@@ -730,87 +645,9 @@ function collectFallibilityFacts(
       intrinsicEffects.set(subject, effects);
     }
   }
-  let published = false;
   return Object.freeze({ sourceErrors: selectSourceErrors, effectsFor: (subject: Node) => intrinsicEffects.get(subject),
-    complete() {
-      if (published) throw new Error("Rust intrinsic error applications publish exactly once after physical binding.");
-      const failure = budget.run(() => {
-        const physical = walk.context.callableValues.nativeStorage;
-        const completeError = (error: RustErrorEffectsFact["nativeErrors"][number]) => selectSourceErrors.complete(error, physical);
-        const completedEdges = new Map<RustSourceErrorEffectEdge, RustSourceErrorEffectEdge>();
-        const completeEffects = (effects: RustErrorEffectsFact): RustErrorEffectsFact => {
-          const errors = effects.nativeErrors.map(completeError);
-          const selected = errors.some(error => error === undefined) ? undefined : mergeEffects([{ localErrors: effects.localErrors,
-            nativeErrors: errors as RustErrorEffectsFact["nativeErrors"] }]);
-          if (selected === undefined) throw new Error("Rust pending intrinsic effects lost their exact physical payload correspondence.");
-          return selected;
-        };
-        const completeEdge = (edge: RustSourceErrorEffectEdge): RustSourceErrorEffectEdge => {
-          const previous = completedEdges.get(edge);
-          if (previous !== undefined) return previous;
-          const errors = edge.nativeErrors.map(channel => ({ source: completeError(channel.source), target: completeError(channel.target) }));
-          if (errors.some(channel => channel.source === undefined || channel.target === undefined))
-            throw new Error("Rust pending source error edge lost its exact physical payload correspondence.");
-          const channels = new Map<string, RustSourceErrorEffectEdge["nativeErrors"][number]>();
-          for (const channel of errors as RustSourceErrorEffectEdge["nativeErrors"]) {
-            const previous = channels.get(channel.source.identity);
-            if (previous !== undefined && (!rustTargetTypeRefEquals(previous.source.errorType, channel.source.errorType) ||
-              previous.target.identity !== channel.target.identity || !rustTargetTypeRefEquals(previous.target.errorType, channel.target.errorType)))
-              throw new Error("Rust final source error channels require one exact source-to-target correspondence.");
-            channels.set(channel.source.identity, channel);
-          }
-          const selected = Object.freeze({ ...edge, effects: completeEffects(edge.effects), nativeErrors: Object.freeze([...channels.values()]) });
-          completedEdges.set(edge, selected);
-          return selected;
-        };
-        for (const [declaration, effects] of effectsByDeclaration) {
-          requireRustRecord(walk.context.requiredRecords, "errorEffects", declaration, "source-callable", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(declaration, completeEffects(effects));
-        }
-        for (const [sourceFile, effects] of effectsByModule) {
-          requireRustRecord(walk.context.requiredRecords, "errorEffects", sourceFile, "module", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(sourceFile, completeEffects(effects));
-        }
-        for (const [region, effects] of effectsByRegion) {
-          budget.metadata(effects);
-          requireRustRecord(walk.context.requiredRecords, "errorEffects", region,
-            "error-region", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(region, completeEffects(effects));
-        }
-        for (const [node, invocation] of genericInvocations) {
-          if (!completedInvocations.has(node)) completedInvocations.set(node, invocation.complete(walk.context));
-          const selected = completedInvocations.get(node)?.selection;
-          if (selected === undefined) throw new Error("Rust generic invocation publication requires its final physical application.");
-          budget.metadata(selected);
-          requireRustRecord(walk.context.requiredRecords, "genericCallableInvocation", node,
-            "generic-invocation", "recordFallibilityFacts");
-          walk.context.records.genericCallableInvocations.selected(node, selected);
-        }
-        for (const [node, effects] of effectsByExpression) {
-          budget.metadata(effects);
-          requireRustRecord(walk.context.requiredRecords, "errorEffects", node,
-            "expression", "recordFallibilityFacts");
-          walk.context.records.errorEffectPlans.selected(node, completeEffects(effects));
-        }
-        for (const [node, edges] of sourceErrorEdges) {
-          budget.step();
-          for (const edge of edges) {
-            budget.metadata(edge.effects);
-            budget.metadata(edge.nativeErrors);
-          }
-          requireRustRecord(walk.context.requiredRecords, "sourceErrorEffects", node,
-            "source-invocation", "recordFallibilityFacts");
-          walk.context.records.sourceErrorEdges.invocation(node, Object.freeze(edges.map(completeEdge)));
-        }
-        for (const [node, branches] of awaitSourceEdges) {
-          requireRustRecord(walk.context.requiredRecords, "awaitSourceErrorEffects", node,
-            "await", "recordFallibilityFacts");
-          walk.context.records.awaitSourceErrors.selected(node, Object.freeze(branches.map(branch => Object.freeze({ ...branch, edge: completeEdge(branch.edge) }))));
-        }
-      });
-      if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,
-        ["target.capability=rust.native-error.bounded-effects"]);
-      published = true;
-    },
+    complete: createRustIntrinsicErrorEffectsPublication({ walk, budget, selectSourceErrors, effectsByDeclaration,
+      effectsByModule, effectsByRegion, effectsByExpression, genericInvocations, completedInvocations,
+      sourceErrorEdges, awaitSourceEdges, mergeEffects }),
   });
 }
