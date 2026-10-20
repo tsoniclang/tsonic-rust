@@ -41,7 +41,7 @@ const runtimeJsErrorType: RustType = {
 const unitType: RustType = { kind: "unit" };
 const typeParameterT: RustType = { kind: "named", path: "T" };
 const typeParameterNormal: RustType = { kind: "named", path: "TNormal" };
-function namedType(path: string, typeArguments?: readonly RustType[]): RustType {
+function namedType(path: string, typeArguments?: readonly RustType[]): Extract<RustType, { readonly kind: "named" }> {
   return {
     kind: "named",
     path,
