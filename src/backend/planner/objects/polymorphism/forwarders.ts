@@ -3,33 +3,29 @@ import {
   projectCallableShape,
   projectLifetimeSubstitutions,
   projectTypeSubstitutions,
-  rustFunctionTypesMatch,
 } from "./model.js";
 import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import {
-  diagnosticInput,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
-  sourceTypePath,
 } from "../../program/plan-context.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
+import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { planProjectMethod } from "../../declarations/index.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
 import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./names.js";
-import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { planRootCallableForwarder } from "./callable-adapters.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
-import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { RustProjectDowncastRoute } from "../../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
+import type { RustProjectDowncastRoute } from "../../../../target-model/types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
-import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
 
@@ -37,19 +33,9 @@ export function planProjectFieldAccessorCall(
   rootType: RustType,
   helper: RustImplFunction | undefined,
   value: RustExpr | undefined,
-  valueType: RustType,
 ): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
-  const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
-  if (helper === undefined || helper.selfParam?.kind !== "rc" || helper.isAsync === true ||
-    helper.isUnsafe === true || !rustFunctionTypesMatch(
-      helper.params,
-      helper.returnType,
-      expectedParameters,
-      read ? valueType : undefined,
-    )) {
-    return undefined;
-  }
+  if (helper === undefined) failRustPlannerInvariant("An admitted native field accessor requires its exact helper.");
   return {
     expression: {
       kind: "associated-call",
@@ -67,7 +53,7 @@ export function projectDowncastReturnType(
 ): RustType | undefined {
   const dispatchObject = rustProjectDispatchObjectType(route.targetCarrier, context);
   return dispatchObject === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted project downcast requires its exact native dispatch type.", route.target.declaration)
     : {
         kind: "named",
         path: "Option",
@@ -92,7 +78,7 @@ export function planProjectDowncastRouteImplementation(
 ): RustImplFunction | undefined {
   const returnType = projectDowncastReturnType(route, context);
   return returnType === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted project downcast requires its finalized native result type.", route.target.declaration)
     : {
         kind: "function",
         name: route.slot,
@@ -118,16 +104,14 @@ export function planRootMethodImplementation(
   variant: RustProjectMethodDispatchVariant,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
-    implementation, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
-  );
-  if (targetTypeArguments === undefined) return undefined;
+  const targetTypeArguments = context.input.program.records.projectMethodArguments.get(implementation, variant.targetTypeArguments, concreteCarrier);
+  if (targetTypeArguments === undefined) failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   const specialization = rustCallableSpecialization(
     variant.sourceTypeParameterIdentities,
     targetTypeArguments,
   );
   return specialization === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted native method requires its exact specialization bindings.", implementation)
     : planRootCallableImplementation(
         concreteCarrier,
         implementation,
@@ -145,9 +129,9 @@ export function planRootAccessorImplementation(
   role: "read" | "write",
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const targetName = context.input.program.projectTypes.memberSlotName(accessor, role);
+  const targetName = context.input.program.records.projectMemberSlot.get(accessor, role);
   return targetName === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted root accessor requires its exact native slot.", accessor)
     : planRootCallableImplementation(
         concreteCarrier,
         accessor,
@@ -170,7 +154,9 @@ export function planRootAccessorForwarder(
   contractShape: ProjectCallableShape,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
+  const forwarding = context.input.program.records.projectForwarder.get(contractAccessor, implementation);
+  if (forwarding === undefined) failRustPlannerInvariant("An admitted native accessor requires its sealed error-forwarding mode.", implementation);
+  if (forwarding === "adapter") {
     return planRootCallableForwarder(
       concreteCarrier,
       contractAccessor,
@@ -188,7 +174,7 @@ export function planRootAccessorForwarder(
     : rustErrorBoundaryForProjectMember(contractAccessor, context);
   if (fallibleBoundary === undefined ||
     !rustTypeEquals(rustErrorType(fallibleBoundary), contractShape.errorType)) {
-    return rejectRootContractErrorAbi(implementation, context);
+    return rejectRootContractErrorAbi(implementation);
   }
   const planned = planRootCallableImplementation(
     concreteCarrier,
@@ -200,9 +186,8 @@ export function planRootAccessorForwarder(
       fallibleBoundary,
     },
   );
-  return planned !== undefined && rootCallableMatchesShape(planned, contractShape)
-    ? planned
-    : rejectRootContractErrorAbi(implementation, context);
+  if (planned === undefined) return rejectRootContractErrorAbi(implementation);
+  return planned;
 }
 
 function planRootCallableImplementation(
@@ -216,29 +201,29 @@ function planRootCallableImplementation(
     readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
-  const owner = context.input.program.projectTypes.definitionContainingDeclaration(implementation);
+  const owner = context.input.program.records.projectMemberOwner.get(implementation);
   if (owner === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   }
-  const ownerRelation = context.input.program.projectTypes.relationship(concreteCarrier, owner);
-  if (ownerRelation.kind !== "related") {
-    return undefined;
+  const ownerCarrier = context.input.program.records.projectRelationship.get(concreteCarrier, owner);
+  if (ownerCarrier === undefined) {
+    failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   }
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, implementation, []);
   const thisBindingName = allocateRustSyntheticName(syntheticNames, "project_this");
   const thisPlan = projectThisOverrides(
     implementation,
     owner.declaration,
-    ownerRelation.targetType,
+    ownerCarrier,
     thisBindingName,
     context,
   );
-  if (thisPlan === undefined) return undefined;
+  if (thisPlan === undefined) failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   const planned = planProjectMethod(implementation, {
     ...context,
     syntheticNames,
-    typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType, context),
-    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType, context),
+    typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerCarrier, context),
+    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerCarrier, context),
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
   }, {
@@ -254,7 +239,7 @@ function planRootCallableImplementation(
       : { fallibleBoundary: options.fallibleBoundary }),
   });
   if (planned === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   }
   return {
     ...planned,
@@ -286,30 +271,30 @@ export function planRootMethodForwarder(
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const contractOwner = context.input.program.projectTypes.definitionContainingDeclaration(contractMember);
+  const contractOwner = context.input.program.records.projectMemberOwner.get(contractMember);
   if (contractOwner === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   }
-  const contractRelation = context.input.program.projectTypes.relationship(concreteCarrier, contractOwner);
-  const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
-    contractMember, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
-  );
-  if (targetTypeArguments === undefined) return undefined;
+  const contractCarrier = context.input.program.records.projectRelationship.get(concreteCarrier, contractOwner);
+  const targetTypeArguments = context.input.program.records.projectMethodArguments.get(contractMember, variant.targetTypeArguments, concreteCarrier);
+  if (targetTypeArguments === undefined) failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   const specialization = rustCallableSpecialization(
     variant.sourceTypeParameterIdentities,
     targetTypeArguments,
   );
-  const contractShape = contractRelation.kind === "related" && specialization !== undefined
+  const contractShape = contractCarrier !== undefined && specialization !== undefined
     ? projectCallableShape(contractMember, {
         ...context,
-        typeParameterSubstitutions: projectTypeSubstitutions(contractOwner, contractRelation.targetType, context),
-        lifetimeSubstitutions: projectLifetimeSubstitutions(contractOwner, contractRelation.targetType, context),
+        typeParameterSubstitutions: projectTypeSubstitutions(contractOwner, contractCarrier, context),
+        lifetimeSubstitutions: projectLifetimeSubstitutions(contractOwner, contractCarrier, context),
       }, { methodTypeArgumentSubstitutions: specialization })
     : undefined;
   if (contractShape === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   }
-  if (helper.errorType === undefined || rustTypeEquals(helper.errorType, contractShape.errorType)) {
+  const forwarding = context.input.program.records.projectForwarder.get(contractMember, implementation);
+  if (forwarding === undefined) failRustPlannerInvariant("An admitted native method requires its sealed error-forwarding mode.", implementation);
+  if (forwarding === "adapter") {
     return planRootCallableForwarder(
         concreteCarrier,
         contractMember,
@@ -327,7 +312,7 @@ export function planRootMethodForwarder(
     : rustErrorBoundaryForProjectMember(contractMember, context);
   if (fallibleBoundary === undefined ||
     !rustTypeEquals(rustErrorType(fallibleBoundary), contractShape.errorType)) {
-    return rejectRootContractErrorAbi(implementation, context);
+    return rejectRootContractErrorAbi(implementation);
   }
   const direct = planRootCallableImplementation(
     concreteCarrier,
@@ -339,8 +324,8 @@ export function planRootMethodForwarder(
       fallibleBoundary,
     },
   );
-  if (direct === undefined || !rootCallableMatchesShape(direct, contractShape)) {
-    return rejectRootContractErrorAbi(implementation, context);
+  if (direct === undefined) {
+    return rejectRootContractErrorAbi(implementation);
   }
   return applyRootMethodOverride(
     implementation,
@@ -348,20 +333,6 @@ export function planRootMethodForwarder(
     overrideStoragePath,
     context,
   );
-}
-
-function rootCallableMatchesShape(
-  callable: RustImplFunction,
-  shape: ProjectCallableShape,
-): boolean {
-  return rustTypeEquals(callable.errorType, shape.errorType) &&
-    (callable.isUnsafe === true) === shape.isUnsafe &&
-    rustFunctionTypesMatch(
-      callable.params,
-      callable.returnType,
-      shape.params,
-      shape.returnType,
-    );
 }
 
 function applyRootMethodOverride(
@@ -373,11 +344,9 @@ function applyRootMethodOverride(
   if (overrideStoragePath === undefined) {
     return callable;
   }
-  const representation = context.input.program.objectRepresentations.representationFor(
-    context.input.program.projectTypes.definitionContainingDeclaration(implementation),
-  );
+  const representation = context.input.program.records.objectRepresentation.get(context.input.program.records.projectMemberOwner.get(implementation));
   if (representation === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   }
   const overrideName = allocateRustLocalName(
     new Set(callable.params.map((parameter) => parameter.name)),
@@ -412,16 +381,8 @@ function applyRootMethodOverride(
   };
 }
 
-function rejectRootContractErrorAbi(
-  implementation: Node,
-  context: RustPlanContext,
-): undefined {
-  context.diagnostics.push(missingFactDiagnostic(
-    diagnosticInput(context, implementation),
-    "rust.backend.project-dispatch-error-abi",
-    "Selected project member implementation cannot be planned under the exact contract-owned Rust error ABI.",
-  ));
-  return undefined;
+function rejectRootContractErrorAbi(implementation: Node): never {
+  return failRustPlannerInvariant("An admitted project member requires its exact contract-owned native error ABI.", implementation);
 }
 
 export function projectAccessorCallableShape(
@@ -441,12 +402,7 @@ export function projectAccessorCallableShape(
     { safetyPlacement: role === "read" ? "getter" : "setter" },
   );
   if (shape === undefined || shape.params.length !== (role === "read" ? 0 : 1)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.project-accessor-signature",
-      "Project accessor does not preserve one exact getter or setter Rust ABI.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted project accessor requires its exact getter or setter native ABI.", declaration);
   }
   return shape;
 }
@@ -473,15 +429,14 @@ function projectThisOverrides(
   readonly binding?: RustExpr;
 } | undefined {
   const overrides = new Map<Node, RustEffectiveExpressionOverride>();
-  const ownerValue = rustSourceTypeCarrierValue(ownerCarrier);
-  const wrapperPath = ownerValue === undefined ? undefined : sourceTypePath(context, ownerValue);
+  const wrapper = rustTypeFromCarrierInContext(ownerCarrier, context);
+  const wrapperPath = wrapper?.kind === "named" ? wrapper.path : undefined;
   const dispatchType = rustProjectDispatchTraitType(ownerCarrier, context);
   if (wrapperPath === undefined || dispatchType === undefined) {
-    return { overrides };
+    failRustPlannerInvariant("An admitted native receiver requires its exact wrapper and dispatch types.", method);
   }
-  const program = context.input.program;
-  const references = program.reachability.projectThisReferences.get(method);
-  if (references === undefined) return undefined;
+  const references = context.input.program.records.projectThisReferences.get(method);
+  if (references === undefined) failRustPlannerInvariant("An admitted native root forwarder requires its sealed owner, specialization and callable plan.", context.sourceFile);
   for (const node of references.get(ownerDeclaration) ?? []) {
     overrides.set(node, {
       carrier: ownerCarrier,

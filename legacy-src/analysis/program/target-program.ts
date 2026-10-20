@@ -551,7 +551,7 @@ export function analyzeRustTargetProgram(
   const classEmissionIssues = analyzeRustClassEmission({ program, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
-  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans);
+  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);

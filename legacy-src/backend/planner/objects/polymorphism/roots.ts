@@ -280,7 +280,6 @@ function planRootContractFunctions(
             rootType,
             readHelper,
             undefined,
-            field.type,
           )
         : undefined;
     if (dispatch === undefined || implementation === undefined || read === undefined ||
@@ -378,7 +377,6 @@ function planRootContractFunctions(
                 rootType,
                 helper,
                 { kind: "path", path: "value" },
-                field.type,
               );
             })();
       if (writeValue === undefined ||

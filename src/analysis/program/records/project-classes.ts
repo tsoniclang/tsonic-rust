@@ -7,6 +7,10 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustProjectCallableAdapterIndex } from "../../../target-model/records/project-classes.js";
 
 export interface RustProjectClassProducer {
+  relationship(receiver: TargetTypeRef, owner: RustProjectTypeDefinition, value: TargetTypeRef): void;
+  arguments(member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef, values: readonly TargetTypeRef[]): void;
+  thisReferences(method: Node, values: ReadonlyMap<Node, readonly Node[]>): void;
+  forwarder(contract: Node, implementation: Node, value: "adapter" | "direct"): void;
   adapters(concrete: Node, values: RustProjectCallableAdapterIndex): void;
   contracts(carrier: TargetTypeRef, values: readonly RustProjectInstanceContract[]): void;
   alias(source: TargetTypeRef, target: TargetTypeRef, value: { readonly same: boolean; readonly polymorphic: boolean }): void;
@@ -32,7 +36,15 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
   const aliases = new Map<string, { readonly same: boolean; readonly polymorphic: boolean }>();
   const contracts = new Map<string, readonly RustProjectInstanceContract[]>();
   const adapters = new WeakMap<Node, RustProjectCallableAdapterIndex>();
+  const relationships = new WeakMap<RustProjectTypeDefinition, Map<string, TargetTypeRef>>();
+  const arguments_ = new WeakMap<Node, Map<string, readonly TargetTypeRef[]>>();
+  const thisReferences = new WeakMap<Node, ReadonlyMap<Node, readonly Node[]>>();
+  const forwarders = new WeakMap<Node, WeakMap<Node, "adapter" | "direct">>();
   return Object.freeze({ records: Object.freeze({
+    projectRelationship: Object.freeze({ get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => relationships.get(owner)?.get(closedMetadataKey(receiver)) }),
+    projectMethodArguments: Object.freeze({ get: (member: Node, selected: readonly TargetTypeRef[], receiver: TargetTypeRef) => arguments_.get(member)?.get(closedMetadataKey([selected, receiver])) }),
+    projectThisReferences: Object.freeze({ get: (method: Node) => thisReferences.get(method) }),
+    projectForwarder: Object.freeze({ get: (contract: Node, implementation: Node) => forwarders.get(contract)?.get(implementation) }),
     projectCallableAdapter: Object.freeze({ get: (concrete: Node, contract: Node, implementation: Node, slot: string) => adapters.get(concrete)?.get(contract)?.get(implementation)?.get(slot) }),
     projectInstanceContracts: Object.freeze({ get: (carrier: TargetTypeRef) => contracts.get(closedMetadataKey(carrier)) }),
     receiverAlias: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => aliases.get(closedMetadataKey([source, target])) }),
@@ -46,6 +58,34 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
     projectMemberImplementation: Object.freeze({ get: (definition: RustProjectTypeDefinition, member: Node) => implementations.get(definition)?.get(member) }),
     projectCallableSignature: Object.freeze({ get: (member: Node) => callables.get(member) }),
   }),
+    relationship(receiver: TargetTypeRef, owner: RustProjectTypeDefinition, value: TargetTypeRef): void {
+      assertOpen();
+      let instances = relationships.get(owner);
+      if (instances === undefined) { instances = new Map(); relationships.set(owner, instances); }
+      const key = closedMetadataKey(receiver);
+      if (instances.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native receiver has one exact instantiated owner relationship.", owner.declaration);
+      instances.set(key, value);
+    },
+    arguments(member: Node, selected: readonly TargetTypeRef[], receiver: TargetTypeRef, values: readonly TargetTypeRef[]): void {
+      assertOpen();
+      let requests = arguments_.get(member);
+      if (requests === undefined) { requests = new Map(); arguments_.set(member, requests); }
+      const key = closedMetadataKey([selected, receiver]);
+      if (requests.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native method specialization has one exact receiver instantiation owner.", member);
+      requests.set(key, Object.freeze(values));
+    },
+    thisReferences(method: Node, values: ReadonlyMap<Node, readonly Node[]>): void {
+      assertOpen();
+      if (thisReferences.has(method)) failTargetAnalysisInvariant("tsonic-rust", "A native method has one exact receiver-reference owner.", method);
+      thisReferences.set(method, values);
+    },
+    forwarder(contract: Node, implementation: Node, value: "adapter" | "direct"): void {
+      assertOpen();
+      let implementations = forwarders.get(contract);
+      if (implementations === undefined) { implementations = new WeakMap(); forwarders.set(contract, implementations); }
+      if (implementations.has(implementation)) failTargetAnalysisInvariant("tsonic-rust", "A native contract implementation has one error-forwarding owner.", implementation);
+      implementations.set(implementation, value);
+    },
     adapters(concrete: Node, values: RustProjectCallableAdapterIndex): void {
       assertOpen();
       if (adapters.has(concrete)) failTargetAnalysisInvariant("tsonic-rust", "A concrete native class has one exact callable-adapter index owner.", concrete);

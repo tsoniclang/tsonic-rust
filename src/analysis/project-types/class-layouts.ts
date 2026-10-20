@@ -10,17 +10,20 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustNeverCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "../callables/results.js";
-import { selectRustProjectCallableSignature } from "../../policy/objects/project-dispatch-callables.js";
+import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/objects/project-dispatch-callables.js";
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
 import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
+import type { RustReachability } from "../reachability/model.js";
+import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
 
-export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer): readonly TargetDiagnostic[] {
+export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const members = new Map<RustProjectTypeDefinition, readonly Node[]>();
   const callableDeclarations = new Set<Node>();
+  for (const [method, references] of reachability.projectThisReferences) producer.thisReferences(method, references);
   const instanceCache = new WeakMap<RustProjectTypeDefinition, Map<string, { readonly fields: readonly RustProjectFieldEmission[]; readonly properties: readonly RustProjectMethodPropertyEmission[] }>>();
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class" && definition.kind !== "interface") continue;
@@ -142,6 +145,18 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
   }
   const seen = new Set<string>();
   const aliases = new Set<string>();
+  const methodArguments = new WeakMap<Node, Set<string>>();
+  const forwarders = new WeakMap<Node, Set<Node>>();
+  const methodRequest = (member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef): void => {
+    let requests = methodArguments.get(member);
+    if (requests === undefined) { requests = new Set(); methodArguments.set(member, requests); }
+    const key = closedMetadataKey([arguments_, receiver]);
+    if (requests.has(key)) return;
+    requests.add(key);
+    const selected = instantiateRustProjectMethodDispatchArguments(member, arguments_, receiver, program.projectTypes);
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native method requires its exact receiver-instantiated type arguments.", member);
+    producer.arguments(member, arguments_, receiver, selected);
+  };
   for (let index = 0; index < pending.length; index++) {
     const carrier = pending[index]!;
     const key = closedMetadataKey(carrier);
@@ -153,6 +168,34 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     const contracts = rustProjectInstanceContracts(program.projectTypes, definition, carrier);
     if (contracts === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native instance requires its exact checked contract graph.", definition.declaration);
     producer.contracts(carrier, contracts);
+    for (const contract of contracts) {
+      producer.relationship(carrier, contract.definition, contract.carrier);
+      for (const member of members.get(contract.definition) ?? []) {
+        if (ast.hasModifierKind(member, "static") || !ast.is.IsMethodDeclaration(member) && ast.kindName(member) !== "KindMethodSignature" &&
+          ast.kindName(member) !== "KindGetAccessor" && ast.kindName(member) !== "KindSetAccessor") continue;
+        const implementation = definition.kind === "class" ? program.projectTypes.memberImplementation(definition, member) : undefined;
+        const selectedImplementation = implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
+        const exact = contract.definition.kind === "class" && !ast.hasModifierKind(member, "abstract")
+          ? program.projectTypes.memberImplementation(contract.definition, member) : undefined;
+        const implementations = new Set([...(selectedImplementation === undefined ? [] : [selectedImplementation]),
+          ...(exact?.kind === "resolved" ? [exact.implementation.declaration] : [])]);
+        for (const variant of program.projectMethodDispatch.variantsForMember(member)) {
+          methodRequest(member, variant.targetTypeArguments, carrier);
+          for (const selected of implementations) methodRequest(selected, variant.targetTypeArguments, carrier);
+        }
+        for (const selectedImplementation of implementations) {
+          let selected = forwarders.get(member);
+          if (selected === undefined) { selected = new Set(); forwarders.set(member, selected); }
+          if (selected.has(selectedImplementation)) continue;
+          selected.add(selectedImplementation);
+          const source = producer.records.projectCallableSignature.get(selectedImplementation);
+          const target = producer.records.projectCallableSignature.get(member);
+          if (source === undefined || target === undefined) continue;
+          const accessor = ast.kindName(member) === "KindGetAccessor" || ast.kindName(member) === "KindSetAccessor";
+          producer.forwarder(member, selectedImplementation, selectRustProjectForwarder(source.errorCarrier, target.errorCarrier, accessor));
+        }
+      }
+    }
     const ancestors = [carrier];
     const visitedAncestors = new Set<string>();
     for (let ancestorIndex = 0; ancestorIndex < ancestors.length; ancestorIndex++) {

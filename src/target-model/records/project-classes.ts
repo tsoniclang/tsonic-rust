@@ -41,6 +41,10 @@ export interface RustProjectCallableSignature {
 }
 
 export interface RustProjectClassRecords {
+  readonly projectRelationship: { readonly get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => TargetTypeRef | undefined };
+  readonly projectMethodArguments: { readonly get: (member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef) => readonly TargetTypeRef[] | undefined };
+  readonly projectThisReferences: { readonly get: (method: Node) => ReadonlyMap<Node, readonly Node[]> | undefined };
+  readonly projectForwarder: { readonly get: (contract: Node, implementation: Node) => "adapter" | "direct" | undefined };
   readonly projectCallableAdapter: { readonly get: (concrete: Node, contract: Node, implementation: Node, slot: string) => RustProjectCallableAdapter | undefined };
   readonly projectInstanceContracts: { readonly get: (carrier: TargetTypeRef) => readonly RustProjectInstanceContract[] | undefined };
   readonly receiverAlias: { readonly get: (source: TargetTypeRef, target: TargetTypeRef) => { readonly same: boolean; readonly polymorphic: boolean } | undefined };
