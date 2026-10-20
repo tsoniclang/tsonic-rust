@@ -30,7 +30,7 @@ import type { RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustStructuralShapeField } from "../../target-model/records/structural-shapes.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
+import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";

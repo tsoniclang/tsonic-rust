@@ -10,7 +10,7 @@ import { selectedCallArgumentCarriers, selectedSourceValueCarrier } from "./oper
 import { rejectSelectedOperation } from "./result.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustSourceObjectField } from "../../project-types/source-type-registry.js";
+import type { RustSourceObjectField } from "../../../target-model/records/source-types.js";
 import type { RustProviderConstantArgument } from "../../../target-model/operations/model.js";
 
 import { selectedRegExpProtocol, selectProtocolArgument, type ProtocolArgumentPlan, type RegExpProtocolSymbol } from "../../../policy/operations/source-profiles/js/regexp-protocols.js";

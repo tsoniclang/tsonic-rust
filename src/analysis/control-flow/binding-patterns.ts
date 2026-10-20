@@ -15,7 +15,8 @@ import type { RustSelectedBindingProjection } from "../../target-model/records/v
 import { selectRustBindingPatternProjection } from "../../policy/types/objects/binding-projection-policy.js";
 import { isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/index.js";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustSourceObjectField, RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
+import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
+import type { RustSourceObjectField } from "../../target-model/records/source-types.js";
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/objects/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";

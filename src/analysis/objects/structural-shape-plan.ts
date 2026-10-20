@@ -4,7 +4,7 @@ import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStruc
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
-import type { RustStructuralInstantiation } from "../../policy/types/model/source-type-registry.js";
+import type { RustStructuralInstantiation } from "../../target-model/records/source-types.js";
 import type { RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
@@ -18,7 +18,7 @@ import { rustCallablePhysicalSignature } from "../../target-model/conversions/ca
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
-import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../project-types/source-type-registry.js";
+import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../target-model/records/source-types.js";
 
 
 export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {

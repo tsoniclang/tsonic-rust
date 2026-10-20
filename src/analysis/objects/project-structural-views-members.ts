@@ -13,7 +13,7 @@ import { resolveRustProjectAccessor } from "../operations/provider/project-acces
 import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
+import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";
 import { instantiateRustSelectedMemberCarrier } from "../operations/provider/member-carriers.js";
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 

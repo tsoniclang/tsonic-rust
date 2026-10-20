@@ -63,7 +63,7 @@ import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carri
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
-import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
+import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
 
 interface RustSourceStageOutput {
   readonly lexicalFunctions: RustLexicalFunctionQueries;

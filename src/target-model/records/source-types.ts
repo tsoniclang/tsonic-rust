@@ -1,14 +1,7 @@
-import type {
-  AstReader,
-  Node,
-  SourceFile,
-  Symbol,
-  TypeSignatureInfo,
-  Type,
-} from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourceTypeFamilyRegistry } from "../../../target-model/types/type-families.js";
-import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { AstReader, Node, Symbol, TypeSignatureInfo, Type } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../types/model.js";
+import type { RustSourceTypeFamilyRegistry } from "../types/type-families.js";
+import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 
 export interface RustSourceEnumVariant {
@@ -79,20 +72,13 @@ export interface RustStructuralInstantiation {
   readonly instance: TargetTypeRef;
 }
 
-export interface RustSourceTypeRegistry extends RustTypeDefinitions {
+export interface RustSourceTypeQueries extends RustTypeDefinitions {
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
-  registerSourceFile(sourceFile: SourceFile, ast: AstReader, isNativeNode: (node: Node) => boolean): void;
-  registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
-  registerRepresentationAlias(declaration: Node, carrier: TargetTypeRef): boolean;
   carrierForDeclaration(declaration: Node): TargetTypeRef | undefined;
   declarationForCarrier(carrier: TargetTypeRef): Node | undefined;
   propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader, semanticsFor: (node: Node) => SourceFileSemantics): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
-  registerStructuralObject(shape: RustSourceObjectShape, template?: TargetTypeRef): boolean;
-  registerStructuralFieldImplementation(
-    implementation: RustStructuralFieldImplementation,
-  ): boolean;
   structuralObjects(): readonly RustSourceObjectShape[];
   structuralObjectForCarrier(carrier: TargetTypeRef): RustSourceObjectShape | undefined;
   structuralFieldImplementations(): readonly RustStructuralFieldImplementation[];
@@ -110,8 +96,6 @@ export interface RustSourceTypeRegistry extends RustTypeDefinitions {
     receiverCarrier: TargetTypeRef,
   ): RustStructuralFieldRegistration | undefined;
   declarationsForSelectedSymbol(symbol: Symbol): readonly Node[] | undefined;
-  registerSourceUnion(union: RustSourceUnion): boolean;
-  reserveSourceUnion(declaration: Node, carrier: TargetTypeRef): boolean;
   pendingSourceUnions(): readonly Node[];
   generatedSourceUnions(): readonly RustSourceUnion[];
   generatedUnionCarrierForVariants(carriers: readonly TargetTypeRef[]): TargetTypeRef | undefined;

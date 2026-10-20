@@ -7,7 +7,7 @@ import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js
 import { rustCallableValueConversionMatches } from "../../target-model/conversions/callable.js";
 import type { RustTargetGenericBindings, RustTargetGenericParameterSet } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
+import type { RustSourceObjectShape } from "../../target-model/records/source-types.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { callableRestElement } from "../../target-model/records/callable-adapters.js";
 import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
