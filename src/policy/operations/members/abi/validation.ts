@@ -15,7 +15,7 @@ import { rustLengthEmptinessContractIsValid } from "../../../../target-model/ope
 import { isFinalizedConversion } from "./conversion-shape.js";
 import { hasExactKeys, isRecord } from "./validation-records.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
-import { isRustResolvedDispatchContextInput } from "../../dispatch-contexts.js";
+import { isRustResolvedDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isRustNativeErrorCarriers } from "../../../../target-model/operations/native-error-carriers.js";
 
 export function validateRustFinalizedOperationAbi(

@@ -2,7 +2,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustProviderDispatchContextRow } from "../../target-model/metadata/provider-metadata.js";
 import type { RustDispatchContextProjection, RustResolvedDispatchContextInput } from "../../target-model/operations/dispatch-contexts.js";
-import { isRustDispatchContextInput } from "../../policy/operations/dispatch-contexts.js";
+import { isRustDispatchContextInput } from "../../target-model/operations/dispatch-contexts.js";
 
 export interface RustDispatchContextAccess {
   readonly rootContextId: string;

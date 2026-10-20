@@ -1,22 +1,11 @@
-import {
-  rustFixedArrayCarrierValue,
-  isRustBuiltInTargetCarrierId,
-  rustNamedTypeCarrierValue,
-  rustPrimitiveTypeName,
-  isRustNeverCarrier,
-  rustOptionElementCarrier,
-  rustTargetGenericReferences,
-} from "../../../target-model/types/index.js";
+import { isRustBuiltInTargetCarrierId, rustPrimitiveTypeName, isRustNeverCarrier, rustOptionElementCarrier, rustTargetGenericReferences } from "../../../target-model/types/index.js";
+import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { rustIdentifierPattern, rustPathPattern } from "./model.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { Fail } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
-import type {
-  RustTargetTypeRef,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
+import type { RustTargetTypeRef, TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { isRustUnionArmMappings, isRustUnionPath } from "../../../target-model/types/union-relations.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
@@ -442,7 +431,7 @@ export function validateValueConversion(
   } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);
   }
-  const contract = rustValueConversionContract(conversion);
+  const contract = fail.contracts.conversion(conversion);
   if (contract === undefined) {
     fail(`${where} is not a supported Rust value conversion`);
   }

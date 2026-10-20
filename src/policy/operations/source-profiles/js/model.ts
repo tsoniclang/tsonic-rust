@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
 import type { RustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
-import { isRustDispatchContextInput } from "../../dispatch-contexts.js";
+import { isRustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isClosedMetadata, isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 
 export interface JsValueProjection {
