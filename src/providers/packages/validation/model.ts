@@ -1,6 +1,7 @@
+import type { RustProviderContractValidation } from "../../model/contract-validation.js";
 import type { ProviderExportDeclaration, ProviderMemberDeclaration, ProviderSignatureDeclaration } from "@tsonic/tsts";
 
-export type Fail = (message: string) => never;
+export type Fail = ((message: string) => never) & { readonly contracts: RustProviderContractValidation };
 
 export interface ExportRecord {
   readonly moduleSpecifier: string;
