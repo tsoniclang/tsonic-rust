@@ -14,6 +14,7 @@ import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTarge
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
+import { rustRuntimeNativeArrayTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 
 export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: Node, file: SourceFile) {
   walk.context.records.assertOpen();
@@ -101,7 +102,8 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
         if (valid) for (const [selectedSubject, kind] of subjects) {
           requireRustRecord(context.requiredRecords, "nativeArrayStorage", selectedSubject, kind, "recordRustNativeBacking");
         }
-        if (!valid || !context.records.nativeArrays.promote(subjects, component.declarations[0]!, layout, descriptor.stride)) {
+        if (!valid || !context.records.nativeArrays.promote(subjects, component.declarations[0]!, layout, descriptor.stride,
+          rustRuntimeNativeArrayTargetType(layout.pointeeCarrier))) {
           reject(origin.call, "Native array aliases require one exact element carrier, stride and layout.");
           continue;
         }

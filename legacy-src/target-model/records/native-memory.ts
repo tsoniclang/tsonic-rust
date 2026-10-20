@@ -3,6 +3,7 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 
 export type RustNativeArrayStorage = {
+  readonly runtimeCarrier: TargetTypeRef;
   readonly layout: RustNativeMemoryLayout;
   readonly stride: number;
 } & ({ readonly kind: "element"; readonly declaration: Node } |

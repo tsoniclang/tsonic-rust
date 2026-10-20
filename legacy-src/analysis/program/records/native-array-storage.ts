@@ -4,6 +4,8 @@ import { rustNativeMemoryLayoutsEqual, type RustNativeMemoryLayout } from "../..
 import type { RustNativeArrayStorage } from "../../../target-model/records/native-memory.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { createRustRecordFamily } from "./family.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export interface RustNativeArrayStorageProducer {
   readonly records: RustRecordFamily<RustNativeArrayStorage>;
@@ -12,6 +14,7 @@ export interface RustNativeArrayStorageProducer {
     declaration: Node,
     layout: RustNativeMemoryLayout,
     stride: number,
+    runtimeCarrier: TargetTypeRef,
   ): boolean;
 }
 
@@ -27,13 +30,14 @@ export function createRustNativeArrayStorageProducer(
       declaration: Node,
       layout: RustNativeMemoryLayout,
       stride: number,
+      runtimeCarrier: TargetTypeRef,
     ): boolean {
       assertOpen();
       const candidates = new Map<Node, RustNativeArrayStorage>();
       let conflictingSubject: Node | undefined;
       for (const [subject, kind] of subjects) {
         const candidate = Object.freeze(kind === "element"
-          ? { kind, declaration, layout, stride } : { kind, layout, stride });
+          ? { kind, declaration, layout, stride, runtimeCarrier } : { kind, layout, stride, runtimeCarrier });
         const previous = candidates.get(subject);
         if (previous !== undefined && !nativeArrayStorageEquals(previous, candidate)) {
           conflictingSubject ??= subject;
@@ -64,6 +68,7 @@ export function createRustNativeArrayStorageProducer(
 
 function nativeArrayStorageEquals(left: RustNativeArrayStorage, right: RustNativeArrayStorage): boolean {
   return left.kind === right.kind &&
+    rustTargetTypeRefEquals(left.runtimeCarrier, right.runtimeCarrier) &&
     (left.kind !== "element" || right.kind === "element" && left.declaration === right.declaration) &&
     left.stride === right.stride && rustNativeMemoryLayoutsEqual(left.layout, right.layout);
 }

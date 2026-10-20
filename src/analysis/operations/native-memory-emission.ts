@@ -11,6 +11,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 export function analyzeRustNativeMemoryEmission(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeLayoutProducer): readonly TargetTypeRef[] {
   const pending: RustNativeMemoryLayout[] = [];
+  const carriers: TargetTypeRef[] = [];
   for (const shape of program.structuralShapes.instances) for (const field of shape.fields)
     if (field.nativeLayout !== undefined) pending.push(field.nativeLayout);
   for (const node of nodes) {
@@ -18,11 +19,10 @@ export function analyzeRustNativeMemoryEmission(program: Omit<RustTargetProgram,
     const array = program.records.nativeArrayStorage.get(node);
     const handler = program.records.nativeHandler.get(node);
     if (backing !== undefined) pending.push(backing);
-    if (array !== undefined) pending.push(array.layout);
+    if (array !== undefined) { pending.push(array.layout); carriers.push(array.runtimeCarrier); }
     if (handler?.kind === "native-pointer" && handler.selection.kind === "raw-location") pending.push(handler.selection.plan.layout);
   }
   const active = new Set<RustNativeMemoryLayout>();
-  const carriers: TargetTypeRef[] = [];
   const visit = (layout: RustNativeMemoryLayout): boolean => {
     const previous = producer.records.nativeLayoutEmission.get(layout);
     if (previous !== undefined) return previous.hasWrites;
