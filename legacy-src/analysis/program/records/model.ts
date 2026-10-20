@@ -133,6 +133,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly valueReadPlans: import("./value-read.js").RustValueReadProducer;
   readonly literalEmissionPlans: import("./literal-emission.js").RustLiteralEmissionProducer;
   readonly templateStringPlans: import("./template-strings.js").RustTemplateStringProducer;
+  readonly nativeComparisonPlans: import("./native-comparisons.js").RustNativeComparisonProducer;
   readonly sourceAssertionPlans: import("./source-assertions.js").RustSourceAssertionProducer;
   readonly statementExits: RustStatementExitProducer;
   readonly statementCompletions: RustStatementCompletionProducer;

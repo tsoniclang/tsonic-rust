@@ -58,6 +58,7 @@ import { analyzeRustOptionalChainEmission } from "../expressions/optional-chains
 import { analyzeRustValueReads } from "../conversions/value-reads.js";
 import { analyzeRustLiteralEmission } from "../expressions/literals.js";
 import { analyzeRustTemplateStrings } from "../expressions/template-strings.js";
+import { analyzeRustNativeComparisons } from "../expressions/native-comparisons.js";
 import { analyzeRustSourceAssertions } from "../conversions/source-assertions.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
 import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
@@ -629,6 +630,7 @@ export function analyzeRustTargetProgram(
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
+  analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);
   const literalIssues = analyzeRustLiteralEmission(program, context.nativeNodes, context.records.literalEmissionPlans);
   if (literalIssues.length !== 0) return rejectedTargetStage(literalIssues);
   const templateIssues = analyzeRustTemplateStrings(program, context.nativeNodes, context.records.templateStringPlans);
