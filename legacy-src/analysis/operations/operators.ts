@@ -1,5 +1,5 @@
 import { requireRustRecord } from "../program/records/required-records.js";
-import { selectedOptionNullishRelationship } from "./nullish-comparisons.js";
+import { selectedOptionNullishRelationship } from "../../policy/operations/operators/nullish-comparisons.js";
 import {
   sourceIntegerConstantValue,
   BinaryExpression_Left,

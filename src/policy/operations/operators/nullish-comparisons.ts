@@ -1,11 +1,7 @@
-import {
-  isRustAbsenceCarrier,
-  isRustOptionCarrier,
-  rustOptionElementCarrier,
-} from "../../target-model/types/index.js";
-import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
+import { isRustAbsenceCarrier, isRustOptionCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 
 export function selectedOptionNullishRelationship(
   leftCarrier: TargetTypeRef | undefined,
