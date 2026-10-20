@@ -15,7 +15,7 @@ import type {
 } from "../../../target-model/names/source-output-identities.js";
 import type {
   RustSourcePackageFacadePlan,
-} from "./source-package-facades.js";
+} from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 

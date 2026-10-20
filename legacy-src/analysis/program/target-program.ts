@@ -40,6 +40,7 @@ import {
 import {
   analyzeRustSourcePackageFacades,
 } from "./source-package-facades.js";
+import { analyzeRustSourcePackageFacadeEmission } from "../source-modules/package-facades.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -535,6 +536,9 @@ export function analyzeRustTargetProgram(
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
+  const facadeEmission = analyzeRustSourcePackageFacadeEmission(program, sourceOutputIdentities.identities);
+  if (facadeEmission.plan === undefined) return rejectedTargetStage(facadeEmission.diagnostics);
+  context.records.sourcePackageEmission.facades(facadeEmission.plan);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);

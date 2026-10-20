@@ -14,7 +14,7 @@ import {
   type RustSourcePackageErrorBoundary,
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
-import { rustSourceItemIdentity } from "./source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 export { rustErrorType } from "./fallible-boundaries.js";
 import type { RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";

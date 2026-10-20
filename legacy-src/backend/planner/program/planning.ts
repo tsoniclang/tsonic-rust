@@ -64,15 +64,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       .filter(([, identity]) => identity.externalCrateName !== undefined)
       .map(([fileName, identity]) => [fileName, identity.externalCrateName!] as const),
   );
-  const facadeResult = materializeRustSourcePackageFacades(
-    input,
-    identities,
-  );
-  diagnostics.push(...facadeResult.diagnostics);
-  if (facadeResult.plan === undefined || diagnostics.length > 0) {
-    return rejectedTargetStage(diagnostics);
-  }
-  const facadePlan = facadeResult.plan;
+  const facadePlan = materializeRustSourcePackageFacades(input);
   const componentResult = planRustSourcePackageComponents(
     input,
     identities,

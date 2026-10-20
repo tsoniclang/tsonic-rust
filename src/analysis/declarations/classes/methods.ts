@@ -5,7 +5,7 @@ import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../../program/model.js";
 import type { RustMethodEmissionProducer } from "../../program/records/method-emission.js";
 import type { RustMethodEmissionVariant } from "../../../target-model/records/method-emission.js";
-import { rustSourceItemIdentity } from "../../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 
 export function analyzeRustMethodEmission(input: {

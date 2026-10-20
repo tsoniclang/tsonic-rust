@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustSourcePackageFacadeExportContract } from "../../target-model/records/source-packages.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
 import type {
   TargetSourcePackage,
@@ -16,17 +18,6 @@ import {
 import type {
   RustAnalysisContext,
 } from "./context.js";
-
-export interface RustSourcePackageFacadeExportContract {
-  readonly packageId: string;
-  readonly componentId: string;
-  readonly sourceModuleFileName: string;
-  readonly declaration: Node;
-  readonly implementationFileName: string;
-  readonly implementationName: string;
-  readonly facadeModuleSegments: readonly string[];
-  readonly facadeName: string;
-}
 
 export interface RustSourcePackageFacadeClassifications {
   readonly rootComponentId: string;
@@ -212,13 +203,6 @@ export function analyzeRustSourcePackageFacades(
 const emptyExports: readonly RustSourcePackageFacadeExportContract[] =
   Object.freeze([]);
 const emptyNames: readonly string[] = Object.freeze([]);
-
-export function rustSourceItemIdentity(
-  fileName: string,
-  itemName: string,
-): string {
-  return `${fileName.length}:${fileName}${itemName.length}:${itemName}`;
-}
 
 function rustDeclarationItemNames(
   context: RustAnalysisContext,

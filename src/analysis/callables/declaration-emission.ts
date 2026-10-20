@@ -4,7 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustReachability } from "../reachability/model.js";
 import type { RustCallableDeclarationProducer } from "../program/records/callable-emission.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import { isRustUnitCarrier } from "../../target-model/types/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

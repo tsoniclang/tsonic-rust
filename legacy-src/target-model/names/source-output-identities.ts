@@ -1,4 +1,7 @@
 import { rustModuleSegmentName } from "./identifiers.js";
+export function rustSourceItemIdentity(fileName: string, itemName: string): string {
+  return `${fileName.length}:${fileName}${itemName.length}:${itemName}`;
+}
 
 export interface RustSourceFileOutputIdentity {
   readonly fileName: string;

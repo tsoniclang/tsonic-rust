@@ -4,7 +4,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustReachability } from "./model.js";
 import type { RustNativeDeclarationLiveness, RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
 import type { RustNativeLivenessProducer } from "../program/records/native-liveness.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export function analyzeRustDeclarationLiveness(input: {

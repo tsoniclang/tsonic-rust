@@ -6,7 +6,7 @@ import type { RustReachability } from "../../reachability/model.js";
 import type { RustClassEmissionProducer } from "../../program/records/class-emission.js";
 import type { RustNativeClassField, RustNativeClassEmission } from "../../../target-model/records/class-emission.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
-import { rustSourceItemIdentity } from "../../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import { rustProjectMemberIsPrivate } from "../../project-types/member-privacy.js";
 import { validatedRustCapturedFieldStorageFact } from "../../storage/receiver-captures.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";

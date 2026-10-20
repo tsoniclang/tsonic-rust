@@ -1,56 +1,17 @@
-import type {
-  TargetDiagnostic,
-} from "@tsonic/target-api/artifacts";
-import {
-  rustSourceItemIdentity,
-} from "../../../analysis/program/source-package-facades.js";
-import type {
-  RustSourcePackageFacadeExportContract,
-} from "../../../analysis/program/source-package-facades.js";
-import type {
-  RustPlanningContext,
-} from "../context.js";
-import type {
-  RustSourceFileOutputIdentity,
-} from "../../../target-model/names/source-output-identities.js";
-
-export { rustSourceItemIdentity };
-
-export interface RustSourcePackageFacadeExport
-  extends RustSourcePackageFacadeExportContract {
-  readonly implementationModuleName: string;
-}
-
-export interface RustSourcePackageFacadePlan {
-  readonly rootComponentId: string;
-  readonly rootExports: readonly RustSourcePackageFacadeExport[];
-  readonly exportsByComponentId: ReadonlyMap<
-    string,
-    readonly RustSourcePackageFacadeExport[]
-  >;
-  readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
-  readonly publicTopLevelModules: ReadonlySet<string>;
-  readonly publicModuleNames: ReadonlySet<string>;
-  readonly publicImplementationItemIdentities: ReadonlySet<string>;
-  readonly publicModuleNamesByComponent: ReadonlyMap<
-    string,
-    ReadonlySet<string>
-  >;
-  readonly publicImplementationItemIdentitiesByComponent: ReadonlyMap<
-    string,
-    ReadonlySet<string>
-  >;
-}
-
-export function materializeRustSourcePackageFacades(
-  input: RustPlanningContext,
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustSourcePackageFacadePlan, RustSourcePackageFacadeExport, RustSourcePackageFacadeExportContract } from "../../target-model/records/source-packages.js";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
+export function analyzeRustSourcePackageFacadeEmission(
+  program: Pick<RustTargetProgram, "sourcePackageFacades">,
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): {
   readonly plan?: RustSourcePackageFacadePlan;
   readonly diagnostics: readonly TargetDiagnostic[];
 } {
   const diagnostics: TargetDiagnostic[] = [];
-  const classifications = input.program.sourcePackageFacades;
+  const classifications = program.sourcePackageFacades;
   const exports: RustSourcePackageFacadeExport[] = [];
   for (const componentId of classifications.componentIds) {
     const contract = classifications.exportsForComponent(componentId);

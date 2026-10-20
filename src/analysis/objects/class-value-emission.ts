@@ -3,7 +3,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 import { analyzeRustClassImplementations } from "./class-implementations.js";
 

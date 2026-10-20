@@ -4,6 +4,7 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { createRustConversionProducer } from "./conversion.js";
+import { createRustSourcePackageEmissionProducer } from "./source-packages.js";
 import { createRustTypeEmissionProducer } from "./type-emission.js";
 import { createRustBorrowedInitializerProducer } from "./borrowed-initializers.js";
 import { createRustCaptureStorageProducer } from "./capture-storage.js";
@@ -215,6 +216,7 @@ export function createRustProgramRecordBuilder(
   const constructionPlans = createRustConstructionProducer(assertOpen);
   const classEmissionPlans = createRustClassEmissionProducer(assertOpen);
   const projectEmissionPlans = createRustProjectEmissionProducer(assertOpen);
+  const sourcePackageEmission = createRustSourcePackageEmissionProducer(assertOpen);
   const carrierReadPlans = createRustCarrierReadProducer(assertOpen);
   const typeEmissionPlans = createRustTypeEmissionProducer(assertOpen);
   const indexedRecordPlans = createRustIndexedRecordProducer(assertOpen);
@@ -263,6 +265,7 @@ export function createRustProgramRecordBuilder(
     ...classEmissionPlans.forwarderRecords,
     ...classEmissionPlans.implementationRecords,
     ...projectEmissionPlans.records,
+    ...sourcePackageEmission.records,
     ...carrierReadPlans.records,
     ...indexedRecordPlans.records,
     ...objectProjectionPlans.records,
@@ -377,6 +380,7 @@ export function createRustProgramRecordBuilder(
     constructionPlans,
     classEmissionPlans,
     projectEmissionPlans,
+    sourcePackageEmission,
     carrierReadPlans,
     typeEmissionPlans,
     indexedRecordPlans,

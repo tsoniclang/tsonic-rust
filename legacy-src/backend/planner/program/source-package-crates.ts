@@ -19,7 +19,7 @@ import { createRustSourcePackageTypeRenderingContext, type RustSourcePackageComp
 import type {
   RustSourcePackageFacadeExport,
   RustSourcePackageFacadePlan,
-} from "./source-package-facades.js";
+} from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";

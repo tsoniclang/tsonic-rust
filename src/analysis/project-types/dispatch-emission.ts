@@ -7,7 +7,7 @@ import type { RustProjectClassProducer } from "../program/records/project-classe
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { RustProjectDispatchEmission } from "../../target-model/records/project-classes.js";
 import type { RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
-import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
 export function analyzeRustProjectDispatchEmission(program: Omit<RustTargetProgram, "reachability">,
   definition: RustProjectTypeDefinition, reachability: RustReachability, producer: RustProjectClassProducer): void {
