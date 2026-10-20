@@ -9,8 +9,9 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { isRustCopyCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustLocationTargetType } from "../../target-model/types/index.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
-import type { RustOwnershipFlow } from "./flow.js";
-import { selectRustBorrowRelationship, type RustBorrowEffects, type RustBorrowEffectsInput } from "./effects.js";
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import { selectRustBorrowRelationship, type RustBorrowEffectsInput } from "./effects.js";
+import { type RustBorrowEffects } from "../../target-model/records/ownership-effects.js";
 import { selectRustValueReadOwnership } from "../../policy/ownership/value-read.js";
 import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
