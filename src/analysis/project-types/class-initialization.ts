@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { ClassStaticBlock_Body, Node_Initializer } from "@tsonic/target-api/source";
 import { rustProjectStaticFieldStorage } from "./object-layout.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClassInitializationEntry } from "../../target-model/records/class-initialization.js";
 import type { RustClassInitializationProducer } from "../program/records/class-initialization.js";

@@ -3,7 +3,8 @@ import type { RustSourceParameterAbiFact } from "../../target-model/records/call
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
 import type { Node } from "@tsonic/tsts";
-import { isRustVecCarrier, isRustStringCarrier, isRustCopyCarrier, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol } from "../../target-model/types/index.js";
+import { isRustVecCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals, rustTargetTypeRefEqualsWithinLifetimeBinders } from "../../target-model/types/equality.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";

@@ -27,7 +27,8 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
-import { getRustGeneratorProtocol, isRustCopyCarrier, rustClosureProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { getRustGeneratorProtocol, rustClosureProtocol, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/binding-normalization.js";

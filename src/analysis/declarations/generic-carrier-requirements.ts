@@ -15,10 +15,9 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
-import { rustCarrierSatisfiesTraitRef } from "../../target-model/types/carriers/traits.js";
-import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
-  rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue,
-  rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustCarrierSatisfiesTraitRef } from "../../policy/constraints/native-traits.js";
+import { isRustNeverCarrier, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustCarrierSupportsTrait } from "../../policy/constraints/native-traits.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustClassConstructorContract } from "../../target-model/types/carriers/class-constructors.js";

@@ -1,63 +1,31 @@
-import { isRustBigIntCarrier, isRustJsStringCarrier, isRustStringCarrier, isRustUnitCarrier } from "./js.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId,
-  rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId, isRustRetainedErrorCarrier } from "./source-error.js";
-import { isRustAbsenceCarrier, isRustStringViewCarrier } from "./native.js";
-import { rustJsArrayValueTargetId } from "./array-values.js";
-import { isRustIntegerCarrier, isRustNumericCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
-import { rustRawPointerTargetId } from "./source-types.js";
-import { rustGenericCallableValue } from "./generic-callables.js";
-import { rustFrameCallableValue } from "./frame-callables.js";
-import { rustClassConstructorInstance } from "./class-constructors.js";
-import { isRustClosedValueCarrier } from "./closed-value-kind.js";
-import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../source-union-definitions.js";
-import { closedMetadataKey } from "../../metadata/closed-data.js";
-import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustAbsenceTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId} from "./source-types.js";
-import { rustJsArrayEntriesTargetId } from "./array-entries.js";
-import {
-  rustJsArrayBufferTargetId,
-  rustJsDataViewTargetId,
-  rustJsFloat32ArrayTargetId,
-  rustJsFloat64ArrayTargetId,
-  rustJsInt16ArrayTargetId,
-  rustJsInt32ArrayTargetId,
-  rustJsInt8ArrayTargetId,
-  rustJsIntlCollatorTargetId,
-  rustJsIntlDateTimeFormatTargetId,
-  rustJsIntlNumberFormatTargetId,
-  rustJsIntlNumberFormatPartTargetId,
-  rustJsIntlGroupingTargetId,
-  rustJsPromiseFulfilledResultTargetId,
-  rustJsPromiseRejectedResultTargetId,
-  rustJsPromiseSettledResultTargetId,
-  rustJsPromiseTargetId,
-  rustJsPromiseResolutionTargetId,
-  rustJsSymbolTargetId,
-  rustJsUint16ArrayTargetId,
-  rustJsUint32ArrayTargetId,
-  rustJsUint8ArrayTargetId,
-  rustJsUint8ClampedArrayTargetId,
-  rustJsWeakMapTargetId,
-  rustJsWeakSetTargetId,
-} from "./source-types.js";
-import { rustFixedArrayCarrierValue, rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef, rustNativeTraitRefEquals } from "./native.js";
-import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
-import { rustTargetGenericReferences } from "./generic-references.js";
-import type { RustNamedTypeCarrierValue } from "./native.js";
-import type { TargetTypeRef } from "../model.js";
-import type { RustTargetTraitRef } from "../model.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, rustMutableJsErrorTargetId, rustSourceErrorTargetId, rustWritableSourceErrorTargetId, rustRetainedErrorTargetId, rustWritableRetainedErrorTargetId, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+
+import { rustJsArrayValueTargetId } from "../../target-model/types/carriers/array-values.js";
+import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";
+import { rustRawPointerTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+
+import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustAbsenceTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustJsArrayEntriesTargetId } from "../../target-model/types/carriers/array-entries.js";
+import { rustJsArrayBufferTargetId, rustJsDataViewTargetId, rustJsFloat32ArrayTargetId, rustJsFloat64ArrayTargetId, rustJsInt16ArrayTargetId, rustJsInt32ArrayTargetId, rustJsInt8ArrayTargetId, rustJsIntlCollatorTargetId, rustJsIntlDateTimeFormatTargetId, rustJsIntlNumberFormatTargetId, rustJsIntlNumberFormatPartTargetId, rustJsIntlGroupingTargetId, rustJsPromiseFulfilledResultTargetId, rustJsPromiseRejectedResultTargetId, rustJsPromiseSettledResultTargetId, rustJsPromiseTargetId, rustJsPromiseResolutionTargetId, rustJsSymbolTargetId, rustJsUint16ArrayTargetId, rustJsUint32ArrayTargetId, rustJsUint8ArrayTargetId, rustJsUint8ClampedArrayTargetId, rustJsWeakMapTargetId, rustJsWeakSetTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustFixedArrayCarrierValue, rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef, rustNativeTraitRefEquals } from "../../target-model/types/carriers/native.js";
+import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "../../target-model/types/carriers/source-types.js";
+
+import type { RustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetTraitRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierSupportsAsRef } from "./as-ref.js";
-import { rustOptionElementCarrier } from "./optional.js";
-import { rustRuntimeErrorTargetType } from "../../operations/error-boundary.js";
-import { rustProgramErrorOwner } from "./program-errors.js";
-import {
-  rustOnlyTypeGenericArguments,
-  rustTargetGenericTypeArguments,
-} from "../generic-arguments.js";
 
-export const rustJsClosedValueCarrierTraitPath =
-  "tsonic_rust_js::value::JsClosedValueCarrier";
+import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
+import { rustOnlyTypeGenericArguments, rustTargetGenericTypeArguments } from "../../target-model/types/generic-arguments.js";
 
+import { rustJsClosedValueCarrierTraitPath } from "../../target-model/types/carriers/traits.js";
 export function isRustCopyCarrier(
   carrier: TargetTypeRef | undefined,
   selectedCopy: (carrier: TargetTypeRef) => boolean = () => false,
@@ -100,10 +68,6 @@ export function isRustCopyCarrier(
 const rustUnconditionallyCopyTargetIds: ReadonlySet<string> = new Set([
   rustAbsenceTargetId,
 ]);
-
-export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
-}
 
 export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
   return supportsCloneWithContracts(carrier, () => false, () => false, definitions);
@@ -187,55 +151,6 @@ function supportsCloneWithContracts(
   }
   return carrier.kind === "target-specific" &&
     carrier.target === "rust" && carrier.name === "source-type";
-}
-
-export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
-  if (!rustCarrierSupportsClone(carrier, definitions) || carrier === undefined) {
-    return false;
-  }
-  const references = rustTargetGenericReferences(carrier);
-  return references.typeIdentities.length === 0 && references.lifetimeIdentities.length === 0 &&
-    references.callScopedElisions.length === 0 && !references.hasUnnameableLifetime;
-}
-
-export type RustTsValueAdmission =
-  | { readonly kind: "call"; readonly path: string }
-  | { readonly kind: "project-object" };
-
-export function rustTsValueAdmission(carrier: TargetTypeRef, definitions: RustTypeDefinitions): RustTsValueAdmission | undefined {
-  if (carrier.kind === "target-named" && (carrier.id === rustJsValueTargetId || carrier.id === rustTsValueTargetId) &&
-    !isRustClosedValueCarrier(carrier)) return undefined;
-  if (!rustCarrierCanEnterTsValue(carrier, definitions) || rustOptionElementCarrier(carrier) !== undefined ||
-    rustSourceUnionCarrierValue(carrier) !== undefined) return undefined;
-  if (carrier.kind === "source-primitive" || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
-    isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
-    carrier.kind === "target-named" && (carrier.id === rustEmptyObjectTargetId || carrier.id === rustObjectIdentityTargetId) ||
-    rustStructuralObjectCarrierValue(carrier)?.representation === "reference") {
-    return { kind: "call", path: "rt::TsValue::from" };
-  }
-  if (rustSourceTypeCarrierValue(carrier)?.shape === "object") return { kind: "project-object" };
-  return { kind: "call", path: rustCarrierSupportsObjectIdentity(carrier)
-    ? "rt::TsValue::from_identity" : "rt::TsValue::from_closed" };
-}
-
-export function rustCarrierHasNativeValueView(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "source-primitive" || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
-    isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
-    carrier?.kind === "target-named" && carrier.id === rustTsValueTargetId;
-}
-
-export function rustCarrierReferentMutationRequiresMutableBinding(
-  carrier: TargetTypeRef | undefined,
-  isSharedObject: (carrier: TargetTypeRef) => boolean = () => false,
-): boolean {
-  const element = rustOptionElementCarrier(carrier);
-  if (element !== undefined) return rustCarrierReferentMutationRequiresMutableBinding(element, isSharedObject);
-  if (isRustClosedValueCarrier(carrier)) return false;
-  if (isRustMutableJsErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier)) return false;
-  if (carrier !== undefined && isSharedObject(carrier)) return false;
-  const structural = rustStructuralObjectCarrierValue(carrier);
-  return (structural === undefined || structural.representation === "value") &&
-    rustSourceUnionCarrierValue(carrier) === undefined;
 }
 
 const rustEqHashTraitPaths: ReadonlySet<string> = new Set([
@@ -467,81 +382,6 @@ function rustNamedTypeSatisfiesTraitRef(
     }));
 }
 
-export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "source-primitive" || isRustStringCarrier(carrier) ||
-    isRustJsStringCarrier(carrier) ||
-    isRustBigIntCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
-    isRustJsStrictEqualityCarrier(carrier);
-}
-
-export function rustCarrierSupportsObjectIdentity(carrier: TargetTypeRef | undefined): boolean {
-  if (rustClassConstructorInstance(carrier) !== undefined) return true;
-  const structural = rustStructuralObjectCarrierValue(carrier);
-  return structural !== undefined ? structural.representation !== "value"
-    : carrier?.kind === "target-named" && rustObjectIdentityTargetIds.has(carrier.id);
-}
-
-const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
-  rustJsArrayValueTargetId,
-  rustEmptyObjectTargetId,
-  rustObjectIdentityTargetId,
-  rustJsArrayTargetId,
-  rustJsMapTargetId,
-  rustJsSetTargetId,
-  rustJsWeakMapTargetId,
-  rustJsWeakSetTargetId,
-  rustJsDateTargetId,
-  rustJsArrayEntriesTargetId,
-  rustJsPromiseTargetId,
-  rustJsArrayBufferTargetId,
-  rustJsDataViewTargetId,
-  rustJsInt8ArrayTargetId,
-  rustJsUint8ArrayTargetId,
-  rustJsUint8ClampedArrayTargetId,
-  rustJsInt16ArrayTargetId,
-  rustJsUint16ArrayTargetId,
-  rustJsInt32ArrayTargetId,
-  rustJsUint32ArrayTargetId,
-  rustJsFloat32ArrayTargetId,
-  rustJsFloat64ArrayTargetId,
-  rustJsIntlDateTimeFormatTargetId,
-  rustJsIntlNumberFormatTargetId,
-  rustJsIntlCollatorTargetId,
-  rustJsRegExpTargetId,
-]);
-
-const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
-  rustJsArrayValueTargetId,
-  rustEmptyObjectTargetId,
-  rustObjectIdentityTargetId,
-  rustAbsenceTargetId,
-  rustJsValueTargetId,
-  rustJsArrayTargetId,
-  rustJsMapTargetId,
-  rustJsSetTargetId,
-  rustJsDateTargetId,
-  rustJsPromiseTargetId,
-  rustJsSymbolTargetId,
-  rustJsWeakMapTargetId,
-  rustJsWeakSetTargetId,
-  rustJsArrayEntriesTargetId,
-  rustJsArrayBufferTargetId,
-  rustJsDataViewTargetId,
-  rustJsInt8ArrayTargetId,
-  rustJsUint8ArrayTargetId,
-  rustJsUint8ClampedArrayTargetId,
-  rustJsInt16ArrayTargetId,
-  rustJsUint16ArrayTargetId,
-  rustJsInt32ArrayTargetId,
-  rustJsUint32ArrayTargetId,
-  rustJsFloat32ArrayTargetId,
-  rustJsFloat64ArrayTargetId,
-  rustJsIntlDateTimeFormatTargetId,
-  rustJsIntlNumberFormatTargetId,
-  rustJsIntlCollatorTargetId,
-  rustJsRegExpTargetId,
-]);
-
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsArrayValueTargetId,
   rustJsArrayEntriesTargetId,
@@ -617,23 +457,3 @@ const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
 ]);
-
-export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
-  const optional = rustOptionElementCarrier(carrier);
-  if (optional !== undefined) return isRustSourceStringConvertibleCarrier(optional);
-  return isRustStringViewCarrier(carrier) || isRustUnitCarrier(carrier) ||
-    isRustAbsenceCarrier(carrier) ||
-    isRustBigIntCarrier(carrier) ||
-    (carrier?.kind === "target-named" && (carrier.id === rustProgramErrorTargetId || carrier.id === rustSourceErrorTargetId ||
-      carrier.id === rustWritableSourceErrorTargetId || carrier.id === rustMutableJsErrorTargetId)) || isRustRetainedErrorCarrier(carrier) ||
-    (carrier?.kind === "source-primitive" && carrier.name !== "char");
-}
-
-export function isRustSourceNumberConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
-  const optional = rustOptionElementCarrier(carrier);
-  if (optional !== undefined) return isRustSourceNumberConvertibleCarrier(optional);
-  return carrier?.kind === "source-primitive" && carrier.name === "bool" ||
-    isRustNumericCarrier(carrier) || isRustStringViewCarrier(carrier) || isRustBigIntCarrier(carrier) ||
-    isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
-    carrier?.kind === "target-named" && (carrier.id === rustJsValueTargetId || carrier.id === rustJsNumericTargetId);
-}

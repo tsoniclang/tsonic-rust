@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustCarrierHasNativeValueView } from "../../../target-model/types/carriers/traits.js";
+import { rustCarrierHasNativeValueView } from "../js-values/carrier-protocols.js";
 import { rustTsValueTargetId } from "../../../target-model/types/carriers/source-types.js";
 import type { RustBinaryOperatorSelection } from "../../../target-model/operations/binary.js";
 import { selectRustNumericConstraintComparison, selectRustNumericUnionComparison } from "../numeric/union.js";
@@ -8,7 +8,9 @@ import type { RustArgumentMode, RustValueConversion } from "../../../target-mode
 import type { RustAssignmentOperator, RustBinaryOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import { KindAmpersandToken, KindAmpersandAmpersandToken, KindAsteriskEqualsToken, KindMinusEqualsToken, KindPercentEqualsToken, KindPlusEqualsToken, KindSlashEqualsToken, KindAsteriskToken, KindBarToken, KindBarBarToken, KindCaretToken, KindEqualsToken, KindQuestionQuestionEqualsToken, KindEqualsEqualsEqualsToken, KindExclamationEqualsEqualsToken, KindGreaterThanEqualsToken, KindGreaterThanGreaterThanGreaterThanToken, KindGreaterThanGreaterThanToken, KindGreaterThanToken, KindInKeyword, KindLessThanLessThanToken, KindLessThanEqualsToken, KindLessThanToken, KindMinusToken, KindPercentToken, KindPlusToken, KindSlashToken } from "@tsonic/target-api/source";
-import { isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustJsArrayCarrier, isRustJsStrictEqualityCarrier, isRustNumericCarrier, isRustStringCarrier, rustJsErrorTargetType, rustCallableProtocol, rustCarrierSupportsTrait, rustSourcePrimitiveTargetType, rustStructuralObjectCarrierValue, sameRustPrimitiveCarrier } from "../../../target-model/types/index.js";
+import { isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustJsArrayCarrier, isRustNumericCarrier, isRustStringCarrier, rustJsErrorTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType, rustStructuralObjectCarrierValue, sameRustPrimitiveCarrier } from "../../../target-model/types/index.js";
+import { isRustJsStrictEqualityCarrier } from "../js-values/carrier-protocols.js";
+import { rustCarrierSupportsTrait } from "../../constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustStringViewCarrier } from "../../../target-model/types/carriers/native.js";
 import { isRustMutableJsErrorCarrier } from "../../../target-model/types/carriers/source-error.js";

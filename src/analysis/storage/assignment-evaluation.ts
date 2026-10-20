@@ -4,7 +4,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Element
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustAssignmentEvaluationProducer } from "../program/records/assignment-evaluation.js";
 import type { RustAssignmentEvaluation } from "../../target-model/records/assignment-evaluation.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";

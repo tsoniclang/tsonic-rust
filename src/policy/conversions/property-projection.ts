@@ -2,7 +2,8 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 
-import { isRustJsArrayCarrier, isRustAbsenceCarrier, rustCarrierSupportsClone, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustOptionElementCarrier, rustStringTargetType, rustStructuralObjectCarrierValue, rustCallableProtocol, rustTargetGenericReferences } from "../../target-model/types/index.js";
+import { isRustJsArrayCarrier, isRustAbsenceCarrier, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustOptionElementCarrier, rustStringTargetType, rustStructuralObjectCarrierValue, rustCallableProtocol, rustTargetGenericReferences } from "../../target-model/types/index.js";
+import { rustCarrierSupportsClone } from "../constraints/native-traits.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 

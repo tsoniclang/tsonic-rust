@@ -2,7 +2,8 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceFileEmissionProducer } from "../program/records/source-file-emission.js";
 import type { Node } from "@tsonic/tsts";
-import { isRustStringCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";

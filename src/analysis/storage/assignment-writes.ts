@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { isRustCopyCarrier, isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustStringAppendPart } from "../../target-model/records/assignment-writes.js";
 import type { RustAnalysisProgram } from "../program/model.js";

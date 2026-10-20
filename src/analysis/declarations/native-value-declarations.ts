@@ -14,13 +14,8 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import {
-  isRustIntegerCarrier,
-  isRustStringCarrier,
-  rustCarrierSupportsClone,
-  rustOptionElementCarrier,
-  rustSourceUnionCarrierValue,
-} from "../../target-model/types/index.js";
+import { isRustIntegerCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 
 export interface RustNativeValueDeclarationInput {
   readonly ast: AstReader;

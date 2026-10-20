@@ -4,7 +4,7 @@ import { rustStringTargetType } from "../../target-model/types/carriers/native.j
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
-import { rustTsValueAdmission } from "../../target-model/types/carriers/traits.js";
+import { rustTsValueAdmission } from "../operations/js-values/carrier-protocols.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export function rustJsSharedObjectValueAdmission(source: TargetTypeRef, definitions: RustTypeDefinitions): boolean {

@@ -15,7 +15,8 @@ import { Node_Expression, Node_Type, sourceDeclarationIsModuleScoped } from "@ts
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustTypedLocationOperands } from "../../target-model/records/typed-location-operands.js";
-import { rustSourceLocationTargetType, rustOptionalLocationPointeeCarrier, rustCallableProtocol, rustClosureProtocol, rustCarrierSupportsObjectIdentity, rustOptionElementCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
+import { rustSourceLocationTargetType, rustOptionalLocationPointeeCarrier, rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
+import { rustCarrierSupportsObjectIdentity } from "../../policy/operations/js-values/carrier-protocols.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { RustOperationsProviderOptions } from "./provider/model.js";

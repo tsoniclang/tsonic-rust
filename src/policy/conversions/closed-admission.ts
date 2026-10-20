@@ -5,7 +5,9 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
 import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./closed-record.js";
 import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
-import { isRustAbsenceCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait, rustEmptyObjectTargetType, rustJsClosedValueCarrierTraitPath, rustJsErrorTargetType, rustJsSymbolTargetType, rustJsValueTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueAdmission, rustTsValueTargetType } from "../../target-model/types/index.js";
+import { isRustAbsenceCarrier, rustEmptyObjectTargetType, rustJsClosedValueCarrierTraitPath, rustJsErrorTargetType, rustJsSymbolTargetType, rustJsValueTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
+import { rustTsValueAdmission } from "../operations/js-values/carrier-protocols.js";
+import { rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../constraints/native-traits.js";
 import { rustAbsenceToJsValueConversion, rustBoolToJsValueConversion, rustJsValueCloneConversion, rustStringToJsValueConversion, rustSymbolToJsValueConversion, rustTsValueCloneConversion } from "../../target-model/conversions/model.js";
 
 import type { RustClosedValueAdmissionConversion } from "../../target-model/conversions/closed-admission.js";

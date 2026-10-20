@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFrameCallableBinding, RustFrameCallableEntryDefinition } from "../../target-model/records/frame-callables.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../constraints/native-traits.js";
 
 export function selectRustFrameBindingStorage(input: {
   readonly entry: Pick<RustFrameCallableEntryDefinition, "copy"> | undefined;

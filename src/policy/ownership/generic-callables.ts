@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
 import { rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../constraints/native-traits.js";
 
 export function selectRustGenericCallableStorage(input: {
   readonly identityObserved: boolean;

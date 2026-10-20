@@ -3,7 +3,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsErrorTargetType } from "../../target-model/types/carriers/js.js";
-import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/traits.js";
+import { rustCarrierSupportsTrait } from "./native-traits.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 
 export function rustCarrierProvidesErrorObservation(

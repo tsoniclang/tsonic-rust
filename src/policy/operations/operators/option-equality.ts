@@ -1,7 +1,7 @@
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustBorrowedStrTargetType, isRustStringViewCarrier } from "../../../target-model/types/carriers/native.js";
 import { isRustOptionCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../../target-model/types/carriers/optional.js";
-import { isRustCopyCarrier } from "../../../target-model/types/carriers/traits.js";
+import { isRustCopyCarrier } from "../../constraints/native-traits.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import type { RustOptionEqualityContract, RustOptionEqualityView } from "../../../target-model/operations/option-equality.js";

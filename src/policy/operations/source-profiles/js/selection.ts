@@ -1,10 +1,12 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { selectRustNumberArrayUnionOperation } from "./number-array-unions.js";
-import { isRustSourceNumberConvertibleCarrier } from "../../../../target-model/types/carriers/traits.js";
+import { isRustSourceNumberConvertibleCarrier } from "../../js-values/carrier-protocols.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
 import { selectRustNumericRestCarrier } from "./numeric-rest.js";
 
-import { rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustCarrierSupportsJsEquality, rustCarrierSupportsObjectIdentity, isRustIntegerCarrier, rustJsArrayLikeElementTargetType, isRustSourceStringConvertibleCarrier, rustJsErrorTargetType, rustStringTargetId, isRustNumericCarrier, rustFutureOutputCarrier, isRustCallableCarrier, rustCallableProtocol, rustClosureProtocol, rustAbsenceTargetType, rustSourceOptionalTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
+import { rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustStructuralObjectCarrierValue, isRustIntegerCarrier, rustJsArrayLikeElementTargetType, rustJsErrorTargetType, rustStringTargetId, isRustNumericCarrier, rustFutureOutputCarrier, isRustCallableCarrier, rustCallableProtocol, rustClosureProtocol, rustAbsenceTargetType, rustSourceOptionalTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
+import { rustCarrierSupportsJsEquality, rustCarrierSupportsObjectIdentity, isRustSourceStringConvertibleCarrier } from "../../js-values/carrier-protocols.js";
+import { rustCarrierSupportsClone } from "../../../constraints/native-traits.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { isRustJsPromiseContinuation, selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";

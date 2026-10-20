@@ -1,5 +1,6 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
-import { rustFixedArrayCarrierValue, rustJsArrayBufferTargetType, rustJsDataViewTargetType, rustJsDateTargetType, rustJsErrorTargetType, rustJsIntlCollatorTargetType, rustJsIntlDateTimeFormatTargetType, rustJsIntlNumberFormatTargetType, rustJsMapTargetType, rustJsRegExpTargetType, rustJsSetTargetType, rustJsTypedArrayTargetType, rustJsWeakMapTargetType, rustJsWeakSetTargetType, rustCarrierSupportsObjectIdentity } from "../../../../target-model/types/index.js";
+import { rustFixedArrayCarrierValue, rustJsArrayBufferTargetType, rustJsDataViewTargetType, rustJsDateTargetType, rustJsErrorTargetType, rustJsIntlCollatorTargetType, rustJsIntlDateTimeFormatTargetType, rustJsIntlNumberFormatTargetType, rustJsMapTargetType, rustJsRegExpTargetType, rustJsSetTargetType, rustJsTypedArrayTargetType, rustJsWeakMapTargetType, rustJsWeakSetTargetType } from "../../../../target-model/types/index.js";
+import { rustCarrierSupportsObjectIdentity } from "../../js-values/carrier-protocols.js";
 import { resolveCarrierRef } from "./carrier-references.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { selectRustJsPromiseConstructor } from "./promises.js";

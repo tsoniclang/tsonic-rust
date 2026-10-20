@@ -1,6 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustProviderTypeParameterRequirement, RustProviderTypeRequirement } from "../../target-model/operations/model.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSatisfiesTraitRef, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSatisfiesTraitRef } from "./native-traits.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

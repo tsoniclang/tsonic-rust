@@ -4,7 +4,7 @@ import { elementProvenance } from "../program/records/selected-operation-values.
 
 import { finalizeProviderOperationFromSubjects } from "./provider/conversions.js";
 
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType, rustTargetConstInteger } from "../../target-model/types/index.js";
 import { selectRustNativeIndex } from "../../policy/operations/native-indices.js";
 

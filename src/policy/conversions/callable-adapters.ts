@@ -8,8 +8,8 @@ import { callableRestElement } from "../../target-model/records/callable-adapter
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustCopyCarrier, isRustStringCarrier, isRustUnitCarrier, rustCarrierSupportsClone,
-  rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
+import { isRustStringCarrier, isRustUnitCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../constraints/native-traits.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
 import { rustContextualRuntimeConversionContract, rustCompilerOwnedContextualConversionMatches } from "./contextual.js";
 import { rustProjectUnionUpcastRelation } from "../model/project-union-relations.js";

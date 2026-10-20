@@ -6,7 +6,8 @@ import type { RustFinalizedSourceInput } from "../../target-model/records/finali
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 import { isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 

@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustValueConversionContract, rustValueConversionIsFallible } from "./contracts.js";
 import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/traits.js";
+import { rustCarrierSupportsTrait } from "../constraints/native-traits.js";
 import { rustProviderRecordCopyMatches } from "./provider-record.js";
 import { rustEmptyRecordConversionMatches } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";

@@ -5,7 +5,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 
 import { rustCallArgumentIsOwned } from "./parameter-passing.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";

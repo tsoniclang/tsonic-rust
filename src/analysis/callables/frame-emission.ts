@@ -4,7 +4,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustFrameEmissionProducer } from "../program/records/frame-emission.js";
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

@@ -6,7 +6,7 @@ import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType, isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
-import { rustTsValueAdmission } from "../../target-model/types/carriers/traits.js";
+import { rustTsValueAdmission } from "../operations/js-values/carrier-protocols.js";
 
 import { rustClosedValueAdmissionConversion } from "./closed-admission.js";
 

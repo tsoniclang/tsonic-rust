@@ -4,7 +4,7 @@ import { rustUnionPathsMatching, type RustUnionLeaf } from "../../target-model/t
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { isRustJsValueCarrier } from "../../target-model/types/carriers/js.js";
 import { rustTsValueTargetId } from "../../target-model/types/carriers/source-types.js";
-import { rustTsValueAdmission } from "../../target-model/types/carriers/traits.js";
+import { rustTsValueAdmission } from "../operations/js-values/carrier-protocols.js";
 import { selectRustProgramErrorConversion } from "./program-error.js";
 
 export function rustUnionPayloadAdmission(

@@ -53,7 +53,7 @@ import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-model/types/index.js";
+import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 

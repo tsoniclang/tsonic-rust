@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue, rustNamedTypeCarrierValue } from "../../target-model/types/index.js";
+import { rustCarrierSupportsClone } from "../constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustValueConversionContract } from "./contracts.js";

@@ -11,7 +11,8 @@ import { rustProjectMemberIsPrivate } from "../../project-types/member-privacy.j
 import { validatedRustCapturedFieldStorageFact } from "../../storage/receiver-captures.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
+import { rustLocationTargetType } from "../../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 
 export function analyzeRustClassEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;

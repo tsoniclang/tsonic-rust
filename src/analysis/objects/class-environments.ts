@@ -6,7 +6,7 @@ import { collectRustLexicalCaptures } from "../callables/closures.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
 import { Node_Initializer, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";

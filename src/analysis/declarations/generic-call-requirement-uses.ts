@@ -14,7 +14,8 @@ import { substituteRustTargetTypeParameters } from "../../target-model/types/car
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import { isRustCopyCarrier, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

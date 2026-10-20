@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { requirementUseHasValidStorage } from "./generic-requirement-contract.js";

@@ -1,7 +1,8 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStructuralEmissionProducer } from "../program/records/structural-emission.js";
-import { rustCarrierSupportsTrait, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustCarrierSupportsTrait } from "../../policy/constraints/native-traits.js";
 import { selectRustStructuralEmission } from "../../policy/objects/structural-emission.js";
 
 export function analyzeRustStructuralEmission(program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer): readonly TargetDiagnostic[] {

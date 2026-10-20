@@ -8,7 +8,8 @@ import { resolveRustFixedArrayTargetType } from "../../types/resolution/target.j
 import { providerCarrierFromRelations } from "../../../policy/types/project/provider-instantiation.js";
 import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";
 import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "../../../policy/operations/provider-selection.js";
-import { isRustCopyCarrier, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
+import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 type RustNativeMemorySelection = RustNativeMemoryLayout | {

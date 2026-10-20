@@ -2,7 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./provider/result.js";

@@ -9,7 +9,7 @@ import type { RustCallableOrigin, RustCallableSignature } from "../../target-mod
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 

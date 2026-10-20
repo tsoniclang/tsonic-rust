@@ -3,7 +3,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableParameterProducer } from "../program/records/parameter-emission.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-model/types/index.js";
+import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { selectRustOptionalDefaultStorage } from "../../policy/conversions/optional-storage.js";

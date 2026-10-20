@@ -23,7 +23,8 @@ import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustCarrierSupportsTrait, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustCarrierSupportsTrait } from "../../policy/constraints/native-traits.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 

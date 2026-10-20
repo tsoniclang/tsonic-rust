@@ -6,7 +6,8 @@ import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipF
 import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustCopyCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustStringCarrier, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
