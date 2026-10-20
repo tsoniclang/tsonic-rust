@@ -17,7 +17,7 @@ import { rustCallableSignatureBinding } from "../../../target-model/types/carrie
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
-import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
+import { bindRustCallableInputLifetimes } from "./input-lifetimes.js";
 
 export function selectRustNativeCallableOutlivesBounds(method: Pick<RustNativeCallableProtocol["method"], "parameters" | "binder">): readonly RustNativeCallableOutlivesBound[] {
   const lifetimes = new Set(method.binder.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)));

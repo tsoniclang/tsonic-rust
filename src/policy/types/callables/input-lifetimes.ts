@@ -1,9 +1,9 @@
-import type { TargetTypeRef } from "../model.js";
-import type { RustLifetimeBinder, RustLifetimeRef } from "../../lifetimes/index.js";
-import { rustLifetimeKey } from "../../lifetimes/index.js";
-import { rustTargetGenericReferences } from "./generic-references.js";
-import { mapRustTargetTypes } from "./substitution.js";
-import { substituteElidedLifetime } from "./lifetime-elision.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustLifetimeBinder, RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
+import { substituteElidedLifetime } from "../../../target-model/types/carriers/lifetime-elision.js";
 
 export function bindRustCallableInputLifetimes(
   parameters: readonly TargetTypeRef[], result: TargetTypeRef,
