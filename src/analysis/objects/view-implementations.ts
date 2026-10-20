@@ -1,10 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { inferRustTargetGenericBindings, rustStructuralObjectCarrierValue, rustTargetGenericReferences,
-  substituteRustTargetGenerics } from "../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences } from "../../target-model/types/index.js";
+
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 
 interface RustProjectView {
   readonly declaration: Node;
@@ -13,29 +11,8 @@ interface RustProjectView {
   readonly fields: readonly { readonly declaration: Node; readonly storageIndex: number }[];
 }
 
-export function rustProjectViewMatches(
-  view: Pick<RustProjectView, "sourceCarrier" | "targetCarrier">,
-  sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
-): boolean {
-  return rustProjectViewBindings(view, sourceCarrier, targetCarrier) !== undefined;
-}
-
-export function rustProjectViewBindings(
-  view: Pick<RustProjectView, "sourceCarrier" | "targetCarrier">,
-  sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
-): RustTargetGenericBindings | undefined {
-  const parameters = rustTargetGenericReferences(view.sourceCarrier);
-  const bindings = inferRustTargetGenericBindings(view.sourceCarrier, sourceCarrier, {
-    typeIdentities: new Set(parameters.typeIdentities), lifetimeIdentities: new Set(parameters.lifetimeIdentities),
-    constIdentities: new Set(parameters.constIdentities),
-  });
-  return bindings !== undefined && bindings.types.size === parameters.typeIdentities.length &&
-    bindings.lifetimes.size === parameters.lifetimeIdentities.length && bindings.consts.size === parameters.constIdentities.length &&
-    rustTargetTypeRefEquals(substituteRustTargetGenerics(view.sourceCarrier, bindings.types, bindings.lifetimes, bindings.consts), sourceCarrier) &&
-    rustTargetTypeRefEquals(substituteRustTargetGenerics(view.targetCarrier, bindings.types, bindings.lifetimes, bindings.consts), targetCarrier)
-    ? bindings : undefined;
-}
-
+import { rustProjectViewMatches } from "../../policy/types/objects/project-view-bindings.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 export function selectRustProjectViewImplementations<View extends RustProjectView>(
   views: readonly View[], context: RustAnalysisContext,
 ): readonly (View & { readonly ownerFileName: string })[] {
@@ -59,7 +36,7 @@ export function selectRustProjectViewImplementations<View extends RustProjectVie
     const sourceFile = context.ast.getFileName(context.ast.getSourceFile(view.declaration));
     const targetFile = rustStructuralObjectCarrierValue(view.targetCarrier)?.ownerFileName;
     if (targetFile === undefined || !components.has(sourceFile) || !components.has(targetFile)) {
-      throw new Error("A native project view implementation requires exact source and destination package owners.");
+      failTargetAnalysisInvariant("tsonic-rust", "A native project view implementation requires exact source and destination package owners.", view.declaration);
     }
     return Object.freeze({ ...view, ownerFileName: components.get(sourceFile) === components.get(targetFile) ? sourceFile : targetFile });
   }));

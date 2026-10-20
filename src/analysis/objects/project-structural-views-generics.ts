@@ -14,7 +14,7 @@ import { selectRustCallableValueAdapter } from "../../policy/conversions/callabl
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources,
   type RustProjectStructuralViewSource } from "./project-structural-views-members.js";
-import { rustProjectViewMatches } from "./view-implementations.js";
+import { rustProjectViewMatches } from "../../policy/types/objects/project-view-bindings.js";
 
 interface RustStructuralViewBindings extends RustTargetGenericBindings {
   readonly types: Map<string, TargetTypeRef>;

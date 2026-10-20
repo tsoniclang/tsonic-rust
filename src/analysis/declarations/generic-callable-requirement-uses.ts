@@ -37,7 +37,7 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
 
-import { rustProjectViewBindings } from "../objects/view-implementations.js";
+import { rustProjectViewBindings } from "../../policy/types/objects/project-view-bindings.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 
 interface CallableRequirementVisitState {
