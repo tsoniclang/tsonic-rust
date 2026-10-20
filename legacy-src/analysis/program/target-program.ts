@@ -68,6 +68,7 @@ import { rustJsAsyncExecutor, rustJsEntryOwner } from "../../providers/model/js-
 import { analyzeRustBinaryExecution } from "../project/binary-execution.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
+import { finalizeRustFoundation } from "../foundation/finalization.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
@@ -624,8 +625,11 @@ export function analyzeRustTargetProgram(
   const safetyEmissionIssues = analyzeRustSafetyEmission(program, context.records.safetyEmissionPlans);
   if (safetyEmissionIssues.length !== 0) return rejectedTargetStage(safetyEmissionIssues);
   context.callableValues.publish();
+  const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());
+  if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({ ...program,
+    foundation: finalFoundation.plan,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
     reachability }));
 }
