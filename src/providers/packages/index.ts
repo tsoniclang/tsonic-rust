@@ -1,4 +1,4 @@
-export { materializeProviderCarrier } from "./materialization.js";
+export { materializeProviderCarrier } from "./materialization/carriers.js";
 export { rustProviderPolicyContributionKind } from "./model.js";
 export type {
   RustProviderBinaryHookDefinition,
