@@ -3,30 +3,9 @@ import { rustTypeParameterFromSourceContract } from "../../target-model/names/ty
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
-import {
-  KindFunctionExpression,
-  KindFunctionDeclaration,
-  KindNonNullExpression,
-  KindParenthesizedExpression,
-  KindSatisfiesExpression,
-  KindVariableDeclaration,
-  KindVariableStatement,
-  Node_Expression,
-  Node_Initializer,
-  Node_Type,
-  VariableDeclarationList_Declarations,
-  VariableStatement_DeclarationList,
-  sourceDeclarationIsModuleScoped,
-} from "@tsonic/target-api/source";
+import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Type, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 
-import {
-  isRustUnitCarrier,
-  isRustNeverCarrier,
-  rustOptionElementCarrier,
-  rustSourceOptionalTargetType,
-  rustCallableProtocol,
-  rustClosureProtocol,
-} from "../../target-model/types/index.js";
+import { isRustUnitCarrier, isRustNeverCarrier, rustOptionElementCarrier, rustSourceOptionalTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/index.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
