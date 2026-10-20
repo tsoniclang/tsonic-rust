@@ -1,4 +1,4 @@
-import { printRustBlockStatements, printRustElseBranch } from "../blocks.js";
+import { printRustBlockStatements, printRustElseBranch } from "../statements.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
 import { printRustConstArgument, printRustType } from "../types.js";
 import {
@@ -14,7 +14,7 @@ import {
   expressionNeedsParentheses,
   operatorPrecedence,
   RustPrecedence,
-} from "./precedence.js";
+} from "../precedence.js";
 import type { RustExpr } from "../../../backend/target-ast/syntax/nodes.js";
 
 export function printRustExpr(expression: RustExpr): string {
