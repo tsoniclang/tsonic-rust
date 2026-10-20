@@ -18,7 +18,7 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 import { providerSourceInputKey } from "../operations/provider-source-inputs.js";
-import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
+import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustFrameCallablePlan } from "./frame-values.js";
 import type { RustSuspendedCallablePlan } from "./suspended-values.js";

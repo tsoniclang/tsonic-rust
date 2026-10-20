@@ -21,7 +21,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustPhysicalCallableSourceActivations } from "../../target-model/records/physical-emission-contexts.js";
-import { snapshotRustCallableBindings } from "./generic-bindings.js";
+import { snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 
 type RustNativeStorageTargetBindingsSelection =
   | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings }

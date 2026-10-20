@@ -1,35 +1,18 @@
 import type { AstReader } from "@tsonic/tsts";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
-import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import { rustTargetGenericBindingsForArguments, rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
 import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
-import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 export interface RustGenericCallableBindingContext {
   readonly ast: AstReader;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly physical: RustGenericCallablePhysicalPlan;
-}
-
-export function rustGenericCallablePhysicalBindings(
-  parameters: readonly RustTargetGenericArgument[], arguments_: readonly RustTargetGenericArgument[],
-): RustTargetGenericBindings | undefined {
-  const selected: RustTargetGenericParameter[] = [];
-  for (const argument of parameters) {
-    if (argument.kind === "type" && argument.type.kind === "type-parameter")
-      selected.push({ kind: "type", sourceName: argument.type.name, targetIdentity: argument.type.identity });
-    else if (argument.kind === "lifetime" && (argument.lifetime.kind === "parameter" || argument.lifetime.kind === "bound"))
-      selected.push({ kind: "lifetime", sourceName: argument.lifetime.name, targetIdentity: rustLifetimeKey(argument.lifetime) });
-    else if (argument.kind === "const" && argument.value.kind === "parameter")
-      selected.push({ kind: "const", sourceName: argument.value.name, targetIdentity: argument.value.identity });
-    else return undefined;
-  }
-  return rustTargetGenericBindingsForArguments(selected, arguments_);
 }
 
 export function rustGenericCallableMemberBindings(
@@ -59,29 +42,6 @@ export function rustGenericCallableMemberBindings(
   const consts = new Map([...environment.substitutions.consts].map(([identity, value]) =>
     [identity, value.kind === "parameter" ? selected.consts.get(value.identity) ?? value : value]));
   return snapshotRustCallableBindings({ types, lifetimes, consts });
-}
-
-export function snapshotRustCallableBindings(bindings: RustTargetGenericBindings): RustTargetGenericBindings {
-  return Object.freeze({ types: readonlyMap(bindings.types), lifetimes: readonlyMap(bindings.lifetimes),
-    consts: readonlyMap(bindings.consts) });
-}
-
-function readonlyMap<Key, Value>(entries: ReadonlyMap<Key, Value>): ReadonlyMap<Key, Value> {
-  const values = new Map([...entries].map(([key, value]) => [key, snapshotClosedMetadata(value)]));
-  const view: ReadonlyMap<Key, Value> = Object.freeze({
-    size: values.size,
-    get: (key: Key) => values.get(key),
-    has: (key: Key) => values.has(key),
-    entries: () => values.entries(),
-    keys: () => values.keys(),
-    values: () => values.values(),
-    [Symbol.iterator]: () => values[Symbol.iterator](),
-    [Symbol.toStringTag]: "ReadonlyMap",
-    forEach(callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) {
-      values.forEach((value, key) => callback.call(thisArg, value, key, view));
-    },
-  });
-  return view;
 }
 
 export function rustGenericCallableInvocationBindings(
@@ -116,3 +76,5 @@ export function rustGenericCallableMemberInvocationBindings(
       [identity, value.kind === "parameter" ? invocation.consts.get(value.identity) ?? value : value])),
   });
 }
+
+import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";

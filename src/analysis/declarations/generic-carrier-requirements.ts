@@ -25,7 +25,7 @@ import { rustProgramErrorOwner } from "../../target-model/types/carriers/program
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
-import { rustGenericCallablePhysicalBindings } from "../callables/generic-bindings.js";
+import { rustGenericCallablePhysicalBindings } from "../../policy/types/callables/generic-bindings.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";

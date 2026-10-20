@@ -20,7 +20,8 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import { rustGenericCallableMemberBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
+import { rustGenericCallableMemberBindings } from "./generic-bindings.js";
+import { snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 
 import type { RustGenericCallablePhysicalMember, RustGenericCallablePhysicalDefinition,
