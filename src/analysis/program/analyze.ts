@@ -49,7 +49,7 @@ import { recordRustInterfaceRepresentationAliases } from "../declarations/interf
 import { collectRustImplicitInterfaceContracts } from "../project-types/implicit-interfaces.js";
 
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
-import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
+import { createRustSourceProfileCallableAliasQuery } from "../source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
 import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { type RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
