@@ -1,9 +1,7 @@
 import type { RustBlock, RustExpr, RustPattern, RustStmt, RustType } from "../syntax/nodes.js";
 import { mapRustExpressionChildren } from "../syntax/expression-children.js";
-import { rustTypeEquals } from "../inspection/type-equality.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { applyRustTailShape } from "./block-flow.js";
-import { rustBlockBreaksToLabel, rustBlockReferencesPath } from "../inspection/source-usage.js";
-import { closeRustCompletionBindings } from "./completion-bindings.js";
 import { rustLintAttributes } from "./lint-policy.js";
 
 type CompletionScope = Extract<RustStmt, { readonly kind: "try-scope" | "resource-scope" }>;
@@ -18,7 +16,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
   if (!("errorType" in scope) || scope.kind === "try-scope" &&
     (!("bodyErrorType" in scope) || scope.catchClause !== undefined && !("errorType" in scope.catchClause) ||
       scope.finallyClause !== undefined && !("errorType" in scope.finallyClause))) {
-    throw new Error("Completion regions require explicit exact error types or explicit pure contracts.");
+    failRustPlannerInvariant("Completion regions require explicit exact error types or explicit pure contracts.");
   }
   const normalBindings = scope.kind === "try-scope" ? scope.normalBindings ?? [] : [];
   const normalType: RustType = normalBindings.length === 0 ? { kind: "unit" }
@@ -36,7 +34,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     normal: RustExpr = call("rt::Completion::Normal", unit()),
     bindings: readonly Extract<RustStmt, { readonly kind: "let" }>[] = []): RustStmt => {
     const ownedBody = { ...body, statements: [
-      ...bindings.filter(declaration => !terminates || rustBlockReferencesPath(body, declaration.name)),
+      ...bindings,
       ...body.statements] };
     const region = { ...ownedBody, statements: [
       ...lowerRegion(ownedBody, scope.asynchronous ? undefined : name).statements,
@@ -49,10 +47,10 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
   const statements: RustStmt[] = [];
   if (scope.kind === "try-scope") {
     statements.push(capture(scope.bodyName, scope.body, scope.bodyErrorType, scope.bodyTerminates,
-      completionType, normal(), normalBindings));
+      completionType, normal(), scope.bodyBindings ?? []));
     const caught = scope.catchClause;
     if (caught !== undefined && scope.bodyErrorType === undefined) {
-      throw new Error("A catch completion requires an exact body error type.");
+      failRustPlannerInvariant("A catch completion requires an exact body error type.");
     }
     let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
@@ -63,16 +61,13 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
           ? path("completion") : call("Ok", path("completion")) },
         { pattern: variant("Err", binding(caught.binding)), expression: {
           kind: "block", body: { statements: [capture(scope.flowName, caught.body, caught.errorType, caught.terminates,
-            completionType, normal(), normalBindings),
+            completionType, normal(), caught.bindings ?? []),
             { kind: "tail", expr: path(scope.flowName) }] },
         } },
       ] } });
     const finalized = scope.finallyClause;
     if (finalized !== undefined) {
-      if (scope.finallyName === undefined) throw new Error("Finalized completion requires its exact hygienic capture identity.");
-      if (errorType !== undefined && finalized.errorType !== undefined && !rustTypeEquals(errorType, finalized.errorType)) {
-        throw new Error("Finally completion requires one exact joined error type.");
-      }
+      if (scope.finallyName === undefined) failRustPlannerInvariant("Finalized completion requires its exact hygienic capture identity.");
       const joinedErrorType = errorType ?? finalized.errorType;
       statements.push(capture(scope.finallyName, finalized.body, finalized.errorType, finalized.terminates, unitCompletionType));
       statements.push({ kind: "let", name: scope.flowName, mutable: false,
@@ -87,9 +82,6 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
       errorType = joinedErrorType;
     }
     if (errorType !== undefined) {
-      if (!rustTypeEquals(errorType, scope.errorType)) {
-        throw new Error("Completion propagation requires the exact enclosing error type.");
-      }
       statements.push(unwrap(scope.flowName, errorType));
     }
   } else {
@@ -157,7 +149,7 @@ function abruptVariants(fallible: boolean): Extract<RustExpr, { readonly kind: "
 function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
   const exit = (expr: RustExpr | undefined): RustExpr => {
     if (label === undefined) return { kind: "return-expression", ...(expr === undefined ? {} : { expr }) };
-    if (expr !== undefined && rustBlockBreaksToLabel({ statements: [{ kind: "tail", expr }] }, label)) {
+    if (expr !== undefined) {
       return { kind: "block", body: { statements: [
         { kind: "let", name: label, mutable: false, init: expr },
         { kind: "tail", expr: { kind: "break-expression", label, expr: path(label) } },
@@ -170,16 +162,15 @@ function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
     const mapped = mapRustExpressionChildren(value, expression, block);
     if (mapped.kind === "return-expression") return exit(mapped.expr);
     if (mapped.kind !== "try" || label === undefined) return mapped;
-    const error = rustTypeEquals(mapped.operandErrorType, mapped.resultErrorType) ? path("error")
-      : { kind: "associated-call" as const, owner: mapped.resultErrorType, method: "from", args: [path("error")] };
-    const matched: RustExpr = { kind: "match", expression: mapped.expr.kind === "block" ? path(label) : mapped.expr, arms: [
+    const error: RustExpr = { kind: "associated-call", owner: mapped.resultErrorType, method: "from", args: [path("error")] };
+    const matched: RustExpr = { kind: "match", expression: path(label), arms: [
       { pattern: variant("Ok", binding("value")), expression: path("value") },
       { pattern: variant("Err", binding("error")), expression: exit(call("Err", error)) },
     ] };
-    return mapped.expr.kind === "block" ? { kind: "block", body: { statements: [
+    return { kind: "block", body: { statements: [
       { kind: "let", name: label, mutable: false, init: mapped.expr },
       { kind: "tail", expr: matched },
-    ] } } : matched;
+    ] } };
   };
   const statement = (value: RustStmt): RustStmt => {
     switch (value.kind) {
@@ -199,6 +190,7 @@ function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
         ? { kind: value.tail ? "tail" : "return", expr: call("Err", expression(value.error)) }
         : { kind: value.tail ? "tail" : "expr", expr: exit(call("Err", expression(value.error))) };
       case "let": return value.init === undefined ? value : { ...value, init: expression(value.init) };
+      case "let-pattern": return { ...value, init: expression(value.init) };
       case "expr":
       case "tail": return { ...value, expr: expression(value.expr) };
       case "assign": return { ...value, target: expression(value.target), value: expression(value.value) };
@@ -218,6 +210,6 @@ function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
       case "continue": return value;
     }
   };
-  const block = (value: RustBlock): RustBlock => ({ ...value, statements: closeRustCompletionBindings(value).statements.map(statement) });
+  const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(statement) });
   return block(body);
 }
