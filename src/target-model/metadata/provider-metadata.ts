@@ -1,13 +1,6 @@
-import type {
-  RustProviderExportRow,
-  RustProviderOperationRow,
-  RustProviderTypeRow,
-} from "../identities/provider-relations.js";
+import type { RustProviderExportRow, RustProviderOperationRow, RustProviderTypeRow } from "../identities/provider-relations.js";
 import type { RustFallibleErrorBoundary } from "../operations/error-boundary.js";
-import type {
-  RustDispatchContextDefinition,
-  RustDispatchContextGroupInput,
-} from "../operations/dispatch-contexts.js";
+import type { RustDispatchContextDefinition, RustDispatchContextGroupInput } from "../operations/dispatch-contexts.js";
 import type { RustNamedTypeTraitContract, TargetTypeRef } from "../types/model.js";
 
 export interface RustProviderSemantics {
