@@ -1,13 +1,12 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
-
 import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueConversionIsFallible } from "../../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
-
-import type { RustSourceObjectField } from "../../../types/model/source-type-registry.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { type RustSourceObjectField } from "../../../types/model/source-type-registry.js";
+import { type RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import { type TargetTypeRef } from "../../../../target-model/types/model.js";
+import { selectObjectAssignmentFields, selectObjectShapeProjectionFields, type SelectedObjectShapeProjection } from "../../../../analysis/operations/provider/object-shape-fields.js";
 
 export interface SelectedObjectShapeProjection {
   readonly projection: Extract<
@@ -197,4 +196,51 @@ function projectIdentityField(
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
   };
+}
+
+export function selectedObjectShapeProjection(
+  ownerName: string,
+  memberName: string,
+): SelectedObjectShapeProjection | undefined {
+  if (ownerName === "ObjectConstructor") {
+    if (memberName === "assign") {
+      return {
+        projection: "assign",
+        sourceName: memberName,
+        sourceValue: "first-argument",
+        assignmentSourceArgumentIndex: 1,
+        expectedArgumentCount: 2,
+        static: true,
+      };
+    }
+    if (memberName === "keys" || memberName === "values" || memberName === "entries") {
+      return {
+        projection: memberName,
+        sourceName: memberName,
+        sourceValue: "first-argument",
+        expectedArgumentCount: 1,
+        static: true,
+      };
+    }
+    if (memberName === "hasOwn") {
+      return {
+        projection: "has-own",
+        sourceName: memberName,
+        sourceValue: "first-argument",
+        keyArgumentIndex: 1,
+        expectedArgumentCount: 2,
+        static: true,
+      };
+    }
+  }
+  return ownerName === "Object" && memberName === "hasOwnProperty"
+    ? {
+        projection: "has-own",
+        sourceName: memberName,
+        sourceValue: "receiver",
+        keyArgumentIndex: 0,
+        expectedArgumentCount: 1,
+        static: false,
+      }
+    : undefined;
 }

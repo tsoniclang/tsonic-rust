@@ -19,14 +19,12 @@ export function incompatibleRustProviderSourceArgument(form: RustProviderOperati
   }
   if (form.form === "call-value-slice" || form.form === "call-value-array" ||
     form.form === "receiver-value-array") {
-    const form = form;
     if (actual.length < form.leadingArguments.length) {
       return actual.length;
     }
     return undefined;
   }
   if (form.form === "receiver-tagged-array") {
-    const form = form;
     if (actual.length < form.leadingArguments.length) {
       return actual.length;
     }
@@ -51,7 +49,6 @@ export function incompatibleRustProviderSourceArgument(form: RustProviderOperati
       ? undefined : incompatible;
   }
   if (form.form === "call-c-variadic") {
-    const form = form;
     if (actual.length < form.fixedArgumentModes.length) {
       return actual.length;
     }
