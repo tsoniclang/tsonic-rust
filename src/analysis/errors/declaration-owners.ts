@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 
 export function analyzeRustDeclarationErrorOwners(
-  program: Omit<RustTargetProgram, "reachability">,
+  program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[],
   producer: RustErrorEmissionProducer,
 ): void {

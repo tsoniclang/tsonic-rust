@@ -1,10 +1,10 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStructuralEmissionProducer } from "../program/records/structural-emission.js";
 import { rustCarrierSupportsTrait, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { selectRustStructuralEmission } from "../../policy/objects/structural-emission.js";
 
-export function analyzeRustStructuralEmission(program: Omit<RustTargetProgram, "reachability">, producer: RustStructuralEmissionProducer): readonly TargetDiagnostic[] {
+export function analyzeRustStructuralEmission(program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {
     const value = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";

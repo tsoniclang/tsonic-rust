@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustFrameEmissionProducer } from "../program/records/frame-emission.js";
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -14,7 +14,7 @@ import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 
 export function analyzeRustFrameEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustFrameEmissionProducer;

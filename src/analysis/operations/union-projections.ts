@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export function admitRustUnionProjections(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[]): void {
+export function admitRustUnionProjections(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[]): void {
   for (const node of nodes) {
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "source-union-field" && fact?.kind !== "union-property") continue;

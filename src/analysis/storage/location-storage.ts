@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand, sourceEnclosingCallable } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLocationStorageProducer } from "../program/records/location-storage.js";
 import type { RustLocationProjection } from "../../target-model/records/location-storage.js";
 import { rustIndexedLocationContract } from "../../policy/operations/members/abi/indexed-location.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 
-export function analyzeRustLocationStorage(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationStorageProducer,
   analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
   const { ast } = program.source;

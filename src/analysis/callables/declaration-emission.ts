@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustReachability } from "../reachability/model.js";
 import type { RustCallableDeclarationProducer } from "../program/records/callable-emission.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
@@ -11,7 +11,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly reachability: RustReachability;
   readonly producer: RustCallableDeclarationProducer;

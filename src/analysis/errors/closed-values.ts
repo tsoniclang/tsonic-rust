@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary } from "../../target-model/records/source-package-errors.js";
 import type { RustClosedErrorValueEmission, RustClosedErrorPayloadEmission, RustClosedErrorValueSelection } from "../../target-model/records/error-transport.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -12,7 +12,7 @@ import { rustTsValueTargetType, rustJsValueTargetType } from "../../target-model
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
 
-export function analyzeRustClosedErrorValues(program: Omit<RustTargetProgram, "reachability">, errors: RustSourcePackageErrorPlan,
+export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, "reachability">, errors: RustSourcePackageErrorPlan,
   nodes: readonly Node[], producer: RustErrorTransportEmissionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   for (const component of errors.domainsByComponentId.keys()) {

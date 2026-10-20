@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustGenericEmissionProducer } from "../program/records/generic-emission.js";
 import type { RustGenericMemberEmission } from "../../target-model/records/generic-emission.js";
 import type { RustGenericCallableImplementation, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
@@ -13,7 +13,7 @@ import type { RustSourceCallableValueFact } from "../../target-model/records/ope
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 export function analyzeRustGenericEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustGenericEmissionProducer;

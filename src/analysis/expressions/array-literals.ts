@@ -1,7 +1,7 @@
 import { type Node, type SourceFile, type Type } from "@tsonic/tsts";
 import { isSourceCallableBodyBoundary, sourceBoundTypeRelationship, KindOmittedExpression, Node_Expression, type SourceLiteralValue } from "@tsonic/target-api/source";
 import { type TargetDiagnostic, failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { type RustTargetProgram } from "../program/model.js";
+import { type RustAnalysisProgram } from "../program/model.js";
 import { type RustArrayLiteralProducer } from "../program/records/array-literals.js";
 import { type RustBorrowedSequenceEmission } from "../../target-model/records/array-literals.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
@@ -24,7 +24,7 @@ import { collectRustArrayElementStorageDemands } from "../expressions/array-stor
 import { selectRustInferredNumericArrayElement } from "../../policy/types/collections/array-elements.js";
 import { selectRustArrayElementStorage } from "../../policy/types/collections/array-storage.js";
 
-export function analyzeRustArrayLiterals(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustArrayLiterals(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustArrayLiteralProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   for (const node of nodes) {

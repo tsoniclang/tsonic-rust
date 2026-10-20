@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustUnionCallProducer } from "../program/records/union-calls.js";
 import type { RustConversionEmissionProducer } from "../program/records/conversion-emission.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
@@ -10,7 +10,7 @@ import { substituteRustValueConversion } from "../../target-model/conversions/su
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { admitRustConversionEmission } from "../conversions/emission.js";
 
-export function analyzeRustUnionCalls(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
+export function analyzeRustUnionCalls(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustUnionCallProducer, conversions: RustConversionEmissionProducer): void {
   for (const node of nodes) {
     const fact = program.records.targetOperation.get(node);

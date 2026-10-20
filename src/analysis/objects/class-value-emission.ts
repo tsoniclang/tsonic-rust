@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
@@ -8,7 +8,7 @@ import type { RustClassValueCallable } from "../../target-model/records/class-va
 import { analyzeRustClassImplementations } from "./class-implementations.js";
 
 export function analyzeRustClassValueEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustClassEmissionProducer;
 }): void {

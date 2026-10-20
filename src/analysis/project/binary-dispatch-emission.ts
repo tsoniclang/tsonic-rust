@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDispatchContextEmissionProducer } from "../program/records/dispatch-contexts.js";
 import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
 import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
@@ -14,7 +14,7 @@ import { rustBinaryHookInputCount } from "../../target-model/operations/binary-h
 import { rustTargetIdentifier } from "../../target-model/names/identifiers.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
 
-export function analyzeRustBinaryDispatchEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustBinaryDispatchEmission(program: Omit<RustAnalysisProgram, "reachability">,
   errors: RustSourcePackageErrorPlan, producer: RustDispatchContextEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (message: string): void => {

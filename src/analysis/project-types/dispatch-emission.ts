@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustReachability } from "../reachability/model.js";
 import type { RustDispatchMemberRole } from "../reachability/generated-item-usage-model.js";
 import type { RustProjectClassProducer } from "../program/records/project-classes.js";
@@ -9,7 +9,7 @@ import type { RustProjectDispatchEmission } from "../../target-model/records/pro
 import type { RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
-export function analyzeRustProjectDispatchEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProjectDispatchEmission(program: Omit<RustAnalysisProgram, "reachability">,
   definition: RustProjectTypeDefinition, reachability: RustReachability, producer: RustProjectClassProducer): void {
   const component = program.sourcePackageComponents.componentForFile(definition.fileName);
   if (component === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native project dispatch trait requires its exact source component.", definition.declaration);

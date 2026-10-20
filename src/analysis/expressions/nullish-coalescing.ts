@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNullishCoalescingProducer } from "../program/records/nullish-coalescing.js";
 import { isRustNeverCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
@@ -11,7 +11,7 @@ import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 
-export function analyzeRustNullishCoalescing(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustNullishCoalescing(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNullishCoalescingProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

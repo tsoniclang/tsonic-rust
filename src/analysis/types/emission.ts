@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustTypeEmissionProducer } from "../program/records/type-emission.js";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
 import type { RustTypeEmission, RustTypePositions, RustOptionalStorageEmission, RustSourceOptionalEmission, RustOptionPayloadView } from "../../target-model/records/type-emission.js";
@@ -30,7 +30,7 @@ import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
 
-export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(...program.providerErrorCarriers);

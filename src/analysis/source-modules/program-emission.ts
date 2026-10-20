@@ -1,12 +1,12 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
 import { allocateRustComponentSupportModuleName } from "../../policy/names/support-modules.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
 
-export function analyzeRustProgramEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProgramEmission(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustSourcePackageEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const components = program.records.sourcePackageComponents.get();

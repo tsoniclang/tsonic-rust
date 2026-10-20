@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right, forEachSourceImmediateEvaluationChild } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustErrorFieldProducer } from "../program/records/error-field-borrows.js";
 import type { RustErrorFieldEmission } from "../../target-model/records/error-field-borrows.js";
 import { rustJsErrorTargetType, isRustProgramErrorCarrier, rustSourceOptionalTargetType, rustStringTargetType } from "../../target-model/types/index.js";
@@ -11,7 +11,7 @@ import { rustCarrierProvidesErrorObservation } from "../../target-model/types/ca
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
-export function analyzeRustErrorFieldBorrows(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer): readonly TargetDiagnostic[] {
+export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   const unwrap = (input: Node): Node => {

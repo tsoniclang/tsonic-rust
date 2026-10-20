@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
 import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
-export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
   const { ast } = program.source;
   const borrowableField = (node: Node): boolean => {

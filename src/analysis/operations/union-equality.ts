@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustUnionEqualityProducer } from "../program/records/union-equality.js";
 import type { RustUnionEqualityOperand, RustUnionEqualityEmission } from "../../target-model/records/union-equality.js";
 import { isRustUnitCarrier, isRustBoolCarrier } from "../../target-model/types/index.js";
@@ -9,7 +9,7 @@ import { rustSourceOptionalElementCarrier } from "../../target-model/types/carri
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustUnionEqualityFactMatches } from "./contracts/union-equality.js";
 
-export function analyzeRustUnionEquality(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustUnionEqualityProducer): void {
+export function analyzeRustUnionEquality(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustUnionEqualityProducer): void {
   for (const node of nodes) {
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "union-equality") continue;

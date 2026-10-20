@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStringTargetType } from "../../target-model/types/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
-export function admitRustCalls(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[]): readonly TargetDiagnostic[] {
+export function admitRustCalls(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[]): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {
     issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,

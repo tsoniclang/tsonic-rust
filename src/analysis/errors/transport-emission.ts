@@ -1,12 +1,12 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
 import type { RustPlannedErrorVariant } from "../../target-model/records/error-transport.js";
 import type { RustErrorTransportEmissionProducer } from "../program/records/error-transport.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export function analyzeRustErrorVariantEmission(program: Pick<RustTargetProgram, "errorTransport">,
+export function analyzeRustErrorVariantEmission(program: Pick<RustAnalysisProgram, "errorTransport">,
   errors: RustSourcePackageErrorPlan, producer: RustErrorTransportEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   for (const domain of errors.domainsByComponentId.values()) {

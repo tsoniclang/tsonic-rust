@@ -1,11 +1,11 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
 import type { RustWorkerEntryEmission } from "../../target-model/records/source-packages.js";
 import type { SourceFile } from "@tsonic/tsts";
 
-export function analyzeRustWorkerEntries(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustWorkerEntries(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustSourcePackageEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (code: string, message: string, sourceNode: SourceFile): void => {

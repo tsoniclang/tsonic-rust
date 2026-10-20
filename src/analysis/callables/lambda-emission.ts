@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLambdaEmissionProducer } from "../program/records/lambda-emission.js";
 import type { RustLambdaParameterEmission } from "../../target-model/records/lambda-emission.js";
 import { rustCallableProtocol, rustClosureProtocol, isRustUnitCarrier } from "../../target-model/types/index.js";
@@ -11,7 +11,7 @@ import { rustCallablePhysicalSignature } from "../../target-model/conversions/ca
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
 
-export function analyzeRustLambdaEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];

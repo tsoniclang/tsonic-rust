@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeLayoutProducer } from "../program/records/native-layout-emission.js";
 import type { RustNativeMemoryLayout } from "../../target-model/operations/native-memory.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -8,7 +8,7 @@ import { rustRuntimeNativeLayoutTargetType } from "../../target-model/types/carr
 import { rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export function analyzeRustNativeMemoryEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustNativeMemoryEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeLayoutProducer): readonly TargetTypeRef[] {
   const pending: RustNativeMemoryLayout[] = [];
   const carriers: TargetTypeRef[] = [];

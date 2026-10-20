@@ -1,11 +1,9 @@
+import type { RustTargetProgram } from "../../target-model/program.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import type { RustNumericRepresentations } from "../../target-model/records/numeric.js";
 import type { TargetCompileInput } from "@tsonic/target-api";
-import type {
-  TargetPlanningSourceNavigation,
-  TargetSourceSyntaxProgram,
-} from "@tsonic/target-api/analysis";
+import type { TargetPlanningSourceNavigation, TargetSourceSyntaxProgram } from "@tsonic/target-api/analysis";
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
@@ -24,15 +22,9 @@ import type { RustModuleInitializationPlan } from "../../target-model/records/mo
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustRuntimeReferencePlan } from "../project/index.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
-import type {
-  RustSourcePackageFacadeClassifications,
-} from "./source-package-facades.js";
-import type {
-  RustSourcePackageComponentClassifications,
-} from "./source-package-components.js";
-import type {
-  RustProviderSemantics,
-} from "../../target-model/metadata/provider-metadata.js";
+import type { RustSourcePackageFacadeClassifications } from "./source-package-facades.js";
+import type { RustSourcePackageComponentClassifications } from "./source-package-components.js";
+import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
 import type { RustFoundationPlan } from "../foundation/plan.js";
@@ -57,7 +49,7 @@ export interface RustPlanningHost {
   readonly sourcePackages: TargetCompileInput["sourcePackages"];
 }
 
-export interface RustTargetProgram {
+export interface RustAnalysisProgram {
   readonly physicalEmissionContexts: import("../../target-model/records/physical-emission-contexts.js").RustCallableEmissionContexts;
   readonly reachability: import("../reachability/model.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;

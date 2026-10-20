@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLocationCallbackProducer } from "../program/records/location-callbacks.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "./native-conversions.js";
 
-export function analyzeRustLocationCallbacks(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustLocationCallbacks(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationCallbackProducer,
   analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): void {
   for (const node of nodes) {

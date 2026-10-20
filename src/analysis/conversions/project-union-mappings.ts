@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectUnionMappingProducer } from "../program/records/project-union-mappings.js";
 import { rustProjectUnionMapConversionMatches } from "../../target-model/conversions/project-union.js";
 import { rustProjectUnionUpcastRelation } from "../../target-model/conversions/project-union-relations.js";
@@ -10,7 +10,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { selectRustUnionMappingEmission } from "../../policy/conversions/union-mappings.js";
 
-export function analyzeRustProjectUnionMappings(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProjectUnionMappings(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustProjectUnionMappingProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const relation = rustProjectUnionUpcastRelation(program.projectTypes);

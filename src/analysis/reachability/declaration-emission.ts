@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustReachability } from "./model.js";
 import type { RustNativeDeclarationLiveness, RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
 import type { RustNativeLivenessProducer } from "../program/records/native-liveness.js";
@@ -8,7 +8,7 @@ import { rustSourceItemIdentity } from "../../target-model/names/source-output-i
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export function analyzeRustDeclarationLiveness(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "sourcePackageComponents" | "sourcePackageFacades">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "sourcePackageComponents" | "sourcePackageFacades">;
   readonly reachability: RustReachability;
   readonly nodes: readonly Node[];
   readonly producer: RustNativeLivenessProducer;

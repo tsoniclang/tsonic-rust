@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceCallableEmissionProducer } from "../program/records/source-callable-emission.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -10,7 +10,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
-export function analyzeRustSourceCallableEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSourceCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceCallableEmissionProducer) {
   const issues: TargetDiagnostic[] = [];
   const types: TargetTypeRef[] = [];

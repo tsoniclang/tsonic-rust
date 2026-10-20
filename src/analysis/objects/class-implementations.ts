@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClassEmissionProducer } from "../program/records/class-emission.js";
 import type { RustClassConstructorViewEmission, RustClassImplementationContext } from "../../target-model/records/class-implementations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -16,7 +16,7 @@ import { rustClassConstructorTargetType } from "../../target-model/types/carrier
 import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
-export function analyzeRustClassImplementations(program: Omit<RustTargetProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {
+export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {
   const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
   const genericCarriers = new Set<string>();
   const contextFor = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext => {

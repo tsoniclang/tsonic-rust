@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
@@ -8,7 +8,7 @@ import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../t
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
-export function analyzeRustSignatureVisibility(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSignatureVisibility(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourcePackageEmissionProducer): void {
   const components = program.records.sourcePackageComponents.get();
   if (components === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native signature closure requires its exact source components.");

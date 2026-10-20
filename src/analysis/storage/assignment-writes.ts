@@ -4,13 +4,13 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import { isRustCopyCarrier, isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustStringAppendPart } from "../../target-model/records/assignment-writes.js";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustAssignmentWriteProducer } from "../program/records/assignment-writes.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustAssignmentWrites(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "sourceNavigation" | "records" | "projectTypes" | "objectRepresentations" | "callableValues" | "names">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "sourceNavigation" | "records" | "projectTypes" | "objectRepresentations" | "callableValues" | "names">;
   readonly nodes: readonly Node[];
   readonly producer: RustAssignmentWriteProducer;
   readonly required: RustRequiredRecord[];

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals, hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
 import { isRustCapturedFieldStorage } from "../../target-model/types/field-storage.js";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 import type { RustCapturedFieldStorageFact } from "../../target-model/records/receiver-captures.js";
@@ -13,7 +13,7 @@ import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
 export function validatedRustCapturedFieldStorageFact(
   declaration: Node,
-  program: Pick<RustTargetProgram, "objectRepresentations"> & { readonly records: RustProgramRecords },
+  program: Pick<RustAnalysisProgram, "objectRepresentations"> & { readonly records: RustProgramRecords },
 ): RustCapturedFieldStorageFact | undefined {
   const fact = program.records.capturedFieldStorage.get(declaration);
   const captures = program.objectRepresentations.receiverCaptures;
@@ -26,7 +26,7 @@ export function validatedRustCapturedFieldStorageFact(
       captures.storageReadonly(declaration), captures.isDeferred(declaration), captures.storageImmutable(declaration)), fact.storage) ? fact : undefined;
 }
 
-export function analyzeRustReceiverCaptureEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustReceiverCaptureEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustReceiverCaptureEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {

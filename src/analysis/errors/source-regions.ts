@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
@@ -9,7 +9,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-export function analyzeRustSourceErrorRegions(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSourceErrorRegions(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustErrorEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const published = new Set<RustSourceErrorEffectEdge>();

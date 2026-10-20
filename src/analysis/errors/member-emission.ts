@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/index.js";
 
-export function analyzeRustProjectMemberErrors(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustErrorEmissionProducer): void {
+export function analyzeRustProjectMemberErrors(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustErrorEmissionProducer): void {
   const { ast } = program.source;
   const declarations = new Set([...nodes, ...program.projectTypes.definitions.flatMap(definition => ast.members(definition.declaration)
     .filter((member): member is Node => member !== undefined))]);

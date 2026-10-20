@@ -17,7 +17,7 @@ import { createRustAnalysisContext } from "./context.js";
 import type {
   AnalyzeRustTargetProgramResult,
   RustTargetAnalysisRequest,
-  RustTargetProgram,
+  RustAnalysisProgram,
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 import { analyzeRustLocationStorage } from "../storage/location-storage.js";
@@ -508,7 +508,7 @@ export function analyzeRustTargetProgram(
     representations: objectRepresentations, projectTypes, nativeStorage: callableValues.value.nativeStorage,
     lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords });
   if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
-  const program: Omit<RustTargetProgram, "reachability" | "records"> & {
+  const program: Omit<RustAnalysisProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
     sourceOutputIdentities: sourceOutputIdentities.identities,
@@ -781,5 +781,5 @@ export function analyzeRustTargetProgram(
 export type {
   AnalyzeRustTargetProgramResult,
   RustTargetAnalysisRequest,
-  RustTargetProgram,
+  RustAnalysisProgram,
 } from "./model.js";

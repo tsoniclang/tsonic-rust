@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../../program/model.js";
+import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustMethodEmissionProducer } from "../../program/records/method-emission.js";
 import type { RustMethodEmissionVariant } from "../../../target-model/records/method-emission.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../../project-types/method-dispatch.js";
@@ -10,7 +10,7 @@ import { rustSourceItemIdentity } from "../../../target-model/names/source-outpu
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 
 export function analyzeRustMethodEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustMethodEmissionProducer;
 }): readonly TargetDiagnostic[] {

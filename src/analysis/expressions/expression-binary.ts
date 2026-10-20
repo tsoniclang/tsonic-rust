@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch, sourceEnclosingCallable } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustBinaryEmissionProducer } from "../program/records/expression-binary.js";
 import type { RustBinaryEmission } from "../../target-model/records/expression-binary.js";
 import { isRustBoolCarrier, isRustNeverCarrier, isRustUnitCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
@@ -14,7 +14,7 @@ import { finalizedConversionIsValid } from "../../policy/operations/members/abi/
 import { rustProjectTypeTestMatches } from "../operations/contracts/type-tests.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
-export function analyzeRustBinaryEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustBinaryEmissionProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];

@@ -1,6 +1,6 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramErrorModuleEmission } from "../../target-model/records/error-transport.js";
 import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
 import type { RustErrorTransportEmissionProducer } from "../program/records/error-transport.js";
@@ -11,7 +11,7 @@ import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/erro
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
 
-export function analyzeRustProgramErrorModuleEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProgramErrorModuleEmission(program: Omit<RustAnalysisProgram, "reachability">,
   errors: RustSourcePackageErrorPlan, producer: RustErrorTransportEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const providers = new Map<string, TargetTypeRef>();

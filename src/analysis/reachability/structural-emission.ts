@@ -1,10 +1,10 @@
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustReachability } from "./model.js";
 import type { RustNativeLivenessProducer } from "../program/records/native-liveness.js";
 import type { RustDeadCodeDisposition, RustStructuralLivenessEmission } from "../../target-model/records/native-liveness.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-export function analyzeRustStructuralLivenessEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustStructuralLivenessEmission(program: Omit<RustAnalysisProgram, "reachability">,
   reachability: RustReachability, producer: RustNativeLivenessProducer): void {
   const groups = new Map<readonly TargetTypeRef[], { readonly variants: Set<string>; fields: number }>();
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances])) {

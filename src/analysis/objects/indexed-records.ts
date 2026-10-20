@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustIndexedRecordProducer } from "../program/records/indexed-records.js";
 import type { RustIndexedRecordStorage } from "../../target-model/records/indexed-records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -21,7 +21,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { parseSourceIntegerLiteral } from "../../target-model/syntax/literals.js";
 
-export function analyzeRustIndexedRecords(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustIndexedRecordProducer): readonly TargetDiagnostic[] {
+export function analyzeRustIndexedRecords(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustIndexedRecordProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const selectedStorage = new Set<string>();
   const reject = (node: Node, message: string): void => { issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,

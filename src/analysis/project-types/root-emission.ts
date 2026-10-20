@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectClassProducer } from "../program/records/project-classes.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -9,7 +9,7 @@ import type { RustProjectMethodDispatchVariant } from "../../target-model/record
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 
-export function analyzeRustProjectRootEmission(program: Omit<RustTargetProgram, "reachability">, concrete: RustProjectTypeDefinition,
+export function analyzeRustProjectRootEmission(program: Omit<RustAnalysisProgram, "reachability">, concrete: RustProjectTypeDefinition,
   carrier: TargetTypeRef, producer: RustProjectClassProducer,
   requestArguments: (member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef) => void): void {
   const contracts = program.projectTypes.contractsForClass(concrete);

@@ -6,7 +6,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
@@ -27,11 +27,11 @@ export interface RustBorrowEffectsInput {
   readonly nodes: readonly Node[];
   readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
-  readonly projectTypes: RustTargetProgram["projectTypes"];
-  readonly objectRepresentations: RustTargetProgram["objectRepresentations"];
-  readonly frozenDataWrites: RustTargetProgram["frozenDataWrites"];
-  readonly structuralShapes: RustTargetProgram["structuralShapes"];
-  readonly navigation: RustTargetProgram["sourceNavigation"];
+  readonly projectTypes: RustAnalysisProgram["projectTypes"];
+  readonly objectRepresentations: RustAnalysisProgram["objectRepresentations"];
+  readonly frozenDataWrites: RustAnalysisProgram["frozenDataWrites"];
+  readonly structuralShapes: RustAnalysisProgram["structuralShapes"];
+  readonly navigation: RustAnalysisProgram["sourceNavigation"];
 }
 
 export type AnalyzeRustBorrowEffectsResult =

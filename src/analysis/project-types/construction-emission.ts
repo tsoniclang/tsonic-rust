@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustConstructionProducer } from "../program/records/construction.js";
 import type { RustConstructionPreparationSelection, RustConstructionProjection } from "../../target-model/records/construction.js";
 import type { RustProjectConstructorSignature } from "../../target-model/types/project-types.js";
@@ -11,7 +11,7 @@ import { rustSourceOptionalTargetType, rustStringTargetType } from "../../target
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustConstructionEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly producer: RustConstructionProducer;
 }): readonly TargetDiagnostic[] {
   const { program } = input;

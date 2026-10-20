@@ -1,12 +1,12 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
 import type { CargoDependency, CargoManifestPlan } from "../../target-model/project/cargo.js";
 import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
 import type { RustSourcePackageCargoPlan } from "../../target-model/records/source-package-crates.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
-export function analyzeRustPackageCargo(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustPackageCargo(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustSourcePackageEmissionProducer): readonly TargetDiagnostic[] {
   if (program.configuration.project.kind === "user-owned") {
     producer.cargo({ kind: "user-owned", manifestPath: program.configuration.project.manifestPath });

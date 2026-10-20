@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustPropertyReadProducer } from "../program/records/property-reads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -9,7 +9,7 @@ import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../target-m
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
-export function analyzeRustPropertyReads(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustPropertyReads(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustPropertyReadProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

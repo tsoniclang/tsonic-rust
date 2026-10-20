@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLexicalValueProducer } from "../program/records/lexical-values.js";
 import type { RustLexicalValueDeclaration } from "../../target-model/records/lexical-values.js";
 import { rustSourceCallableValueEquals } from "../../target-model/records/equality.js";
 
 export function analyzeRustLexicalValues(input: {
-  readonly program: Pick<RustTargetProgram, "sourceNavigation" | "lexicalFunctions" | "names" | "records">;
+  readonly program: Pick<RustAnalysisProgram, "sourceNavigation" | "lexicalFunctions" | "names" | "records">;
   readonly nodes: readonly Node[];
   readonly producer: RustLexicalValueProducer;
 }): void {

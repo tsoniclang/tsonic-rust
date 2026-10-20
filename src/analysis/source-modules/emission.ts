@@ -1,5 +1,5 @@
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceFileEmissionProducer } from "../program/records/source-file-emission.js";
 import type { Node } from "@tsonic/tsts";
 import { isRustStringCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
@@ -7,7 +7,7 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
-export function analyzeRustSourceFileEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSourceFileEmission(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustSourceFileEmissionProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];

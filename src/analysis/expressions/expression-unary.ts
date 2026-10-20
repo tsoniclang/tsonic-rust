@@ -1,14 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Operand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustUnaryEmissionProducer } from "../program/records/expression-unary.js";
 import type { RustUnaryUpdateEmission } from "../../target-model/records/expression-unary.js";
 import { isRustBigIntCarrier, isRustBoolCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
 
-export function analyzeRustUnaryEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustUnaryEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustUnaryEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

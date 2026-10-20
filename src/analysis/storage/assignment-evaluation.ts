@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, ElementAccessExpression_ArgumentExpression } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustAssignmentEvaluationProducer } from "../program/records/assignment-evaluation.js";
 import type { RustAssignmentEvaluation } from "../../target-model/records/assignment-evaluation.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
@@ -11,7 +11,7 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
-export function analyzeRustAssignmentEvaluation(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustAssignmentEvaluation(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustAssignmentEvaluationProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

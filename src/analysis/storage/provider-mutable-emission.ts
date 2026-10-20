@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, ElementAccessExpression_ArgumentExpression, type SourceExpressionEffects } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderEvaluationProducer } from "../program/records/provider-evaluation.js";
 import type { RustMutableProviderStorage } from "../../target-model/records/provider-evaluation.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
@@ -10,7 +10,7 @@ import { rustNativeStorageRoot } from "./native-paths.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { selectRustProviderMutableInputs } from "./provider-mutable-inputs.js";
 
-export function analyzeRustProviderMutableEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProviderMutableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustProviderEvaluationProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const context = { ast, records: program.records, navigation: program.sourceNavigation };

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCarrierReadProducer } from "../program/records/carrier-reads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -10,7 +10,7 @@ import { isRustCopyCarrier, rustCarrierSupportsClone, rustLocationTargetType, ru
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 
-export function analyzeRustCarrierReads(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustCarrierReadProducer): void {
+export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustCarrierReadProducer): void {
   const pending: TargetTypeRef[] = [];
   for (const context of program.physicalEmissionContexts.contexts) pending.push(...context.operands,
     ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : []));

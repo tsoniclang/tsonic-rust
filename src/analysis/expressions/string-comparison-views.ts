@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStringComparisonViewProducer } from "../program/records/string-comparison-views.js";
 import type { RustStringComparisonView } from "../../target-model/records/string-comparison-views.js";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
@@ -8,7 +8,7 @@ import { rustValueConversionContract } from "../../target-model/conversions/cont
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 
-export function analyzeRustStringComparisonViews(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustStringComparisonViewProducer): void {
+export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustStringComparisonViewProducer): void {
   for (const node of nodes) {
     let selected: RustStringComparisonView = { kind: "value" };
     let value = node;

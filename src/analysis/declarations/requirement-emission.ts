@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCarrierSupportsClone } from "../../target-model/types/index.js";
@@ -9,7 +9,7 @@ import { requirementUseHasValidStorage } from "./generic-requirement-contract.js
 import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-export function analyzeRustGenericRequirementEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustGenericRequirementEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeGenericProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const carriers = new Map<Node, Map<string, TargetTypeRef>>();

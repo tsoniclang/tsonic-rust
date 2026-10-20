@@ -1,6 +1,6 @@
 import { type Node, type ProviderDeclarationIdentity, type SourceFile, type Type } from "@tsonic/tsts";
 import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { type RustTargetProgram } from "../program/model.js";
+import { type RustAnalysisProgram } from "../program/model.js";
 import { type RustReferenceOperationProducer } from "../program/records/reference-operations.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -19,7 +19,7 @@ import { readRustLanguageCall } from "./native-language-call.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
 
-export function analyzeRustReferenceOperations(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustReferenceOperations(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustReferenceOperationProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
@@ -8,7 +8,7 @@ import { isRustClosedValueCarrier } from "../../target-model/types/carriers/clos
 import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export function admitRustErrorObservations(program: Omit<RustTargetProgram, "reachability">,
+export function admitRustErrorObservations(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[]): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const validRoute = (source: TargetTypeRef, target: TargetTypeRef, variant: string): boolean => {

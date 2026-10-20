@@ -1,10 +1,10 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageComponentPlan, RustSourcePackageFacadePlan } from "../../target-model/records/source-packages.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
 import { allocateRustComponentSupportModuleName } from "../../policy/names/support-modules.js";
 export function analyzeRustSourcePackageComponentEmission(
-  program: Pick<RustTargetProgram, "sourcePackageComponents" | "sourceModuleConstructions" | "source">,
+  program: Pick<RustAnalysisProgram, "sourcePackageComponents" | "sourceModuleConstructions" | "source">,
   identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   facades: RustSourcePackageFacadePlan,
 ):

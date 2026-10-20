@@ -1,14 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustOptionEqualityProducer } from "../program/records/option-equality.js";
 import { rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
 import { rustOptionEqualityContract } from "../../target-model/operations/option-equality.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustOptionCarrier } from "../../target-model/types/index.js";
 
-export function analyzeRustOptionEquality(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustOptionEqualityProducer): void {
+export function analyzeRustOptionEquality(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustOptionEqualityProducer): void {
   for (const node of nodes) {
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "option-equality") continue;

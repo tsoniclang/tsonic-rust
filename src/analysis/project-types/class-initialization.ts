@@ -3,12 +3,12 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import { ClassStaticBlock_Body, Node_Initializer } from "@tsonic/target-api/source";
 import { rustProjectStaticFieldStorage } from "./object-layout.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClassInitializationEntry } from "../../target-model/records/class-initialization.js";
 import type { RustClassInitializationProducer } from "../program/records/class-initialization.js";
 
 export function analyzeRustClassInitialization(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "projectTypes" | "typeDefinitions" | "classValues">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "projectTypes" | "typeDefinitions" | "classValues">;
   readonly nodes: readonly Node[];
   readonly producer: RustClassInitializationProducer;
 }): readonly TargetDiagnostic[] {

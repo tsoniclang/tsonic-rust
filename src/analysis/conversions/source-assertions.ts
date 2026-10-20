@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression, Node_Operand } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceAssertionProducer } from "../program/records/source-assertions.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 
-export function analyzeRustSourceAssertions(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSourceAssertions(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceAssertionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

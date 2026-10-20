@@ -1,10 +1,10 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageFacadePlan, RustSourcePackageFacadeExport, RustSourcePackageFacadeExportContract } from "../../target-model/records/source-packages.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 export function analyzeRustSourcePackageFacadeEmission(
-  program: Pick<RustTargetProgram, "sourcePackageFacades">,
+  program: Pick<RustAnalysisProgram, "sourcePackageFacades">,
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): {
   readonly plan?: RustSourcePackageFacadePlan;

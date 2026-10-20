@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustClosedTypeTestProducer } from "../program/records/type-tests.js";
 import type { RustClosedTypeTestEmission } from "../../target-model/records/type-tests.js";
 import type { RustClosedTypeTestPlan, RustClosedTypePredicate } from "../../target-model/operations/type-tests.js";
@@ -10,7 +10,7 @@ import { rustClosedTypeTestConstant } from "../../target-model/operations/type-t
 import { rustClosedTypeTestMatches } from "../operations/contracts/type-tests.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export function analyzeRustClosedTypeTests(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustClosedTypeTestProducer): void {
+export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustClosedTypeTestProducer): void {
   const select = (carrier: TargetTypeRef, test: RustClosedTypeTestPlan, predicate: RustClosedTypePredicate, node: Node): RustClosedTypeTestEmission => {
     const constant = rustClosedTypeTestConstant(test);
     if (constant !== undefined) return Object.freeze({ kind: "constant", value: constant });

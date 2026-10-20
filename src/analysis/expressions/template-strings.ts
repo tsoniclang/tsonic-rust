@@ -1,7 +1,7 @@
 import { type Node, type SourceFile } from "@tsonic/tsts";
 import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { TemplateExpression_Head, TemplateExpression_TemplateSpans, TemplateSpan_Expression, TemplateSpan_Literal } from "@tsonic/target-api/source";
-import { type RustTargetProgram } from "../program/model.js";
+import { type RustAnalysisProgram } from "../program/model.js";
 import { type RustTemplateStringProducer } from "../program/records/template-strings.js";
 import { type RustTemplateStringEmission } from "../../target-model/records/template-strings.js";
 import { isRustStringCarrier, isRustSourceStringConvertibleCarrier, rustStringTargetType } from "../../target-model/types/index.js";
@@ -13,7 +13,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 
-export function analyzeRustTemplateStrings(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustTemplateStrings(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTemplateStringProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

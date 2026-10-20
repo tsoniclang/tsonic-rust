@@ -1,5 +1,5 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan, RustExternalSourcePackageError, RustProgramErrorRoute } from "../../target-model/records/source-package-errors.js";
@@ -19,7 +19,7 @@ export function rustSourcePackageErrorTypeIdentity(
 }
 
 export function analyzeRustSourcePackageErrors(
-  program: Pick<RustTargetProgram, "projectTypes" | "sourcePackageComponents" | "errorStorageDemands" | "source">,
+  program: Pick<RustAnalysisProgram, "projectTypes" | "sourcePackageComponents" | "errorStorageDemands" | "source">,
   components: readonly RustSourcePackageComponentPlan[],
 ): {
   readonly plan?: RustSourcePackageErrorPlan;
@@ -285,7 +285,7 @@ function errorPlanDiagnostic(
 }
 
 export function analyzeRustSourcePackageErrorBoundaries(
-  program: Pick<RustTargetProgram, "projectTypes">,
+  program: Pick<RustAnalysisProgram, "projectTypes">,
   plan: RustSourcePackageErrorPlan,
   producer: RustSourcePackageEmissionProducer,
 ): void {

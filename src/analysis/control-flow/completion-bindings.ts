@@ -2,13 +2,13 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right, ConditionalExpression_Condition,
   ConditionalExpression_WhenTrue, ConditionalExpression_WhenFalse, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCompletionBindingProducer } from "../program/records/completion-bindings.js";
 import type { RustCompletionBinding } from "../../target-model/records/completion-bindings.js";
 
 type Access = "read" | "write" | "none" | "exit";
 
-export function analyzeRustCompletionBindings(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
+export function analyzeRustCompletionBindings(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustCompletionBindingProducer): void {
   const { ast } = program.source;
   const selected = new Map<Node, RustCompletionBinding[]>();

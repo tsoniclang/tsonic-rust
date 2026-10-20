@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustObjectProjectionProducer } from "../program/records/object-projections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
@@ -13,7 +13,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
 import { selectRustClosedNativeProjection } from "../../policy/objects/closed-native-values.js";
 
-export function analyzeRustObjectProjections(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustObjectProjectionProducer): void {
+export function analyzeRustObjectProjections(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustObjectProjectionProducer): void {
   const closed = new WeakMap<Node, Set<string>>();
   const projects = new WeakMap<Node, Map<string, RustProjectProjectionEmission>>();
   const carriers: TargetTypeRef[] = program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition));

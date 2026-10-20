@@ -2,12 +2,12 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustFieldWriteProducer } from "../program/records/field-writes.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export function analyzeRustFieldWrites(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "ownership" | "projectFieldDispatch" | "projectTypes" | "objectRepresentations" | "frozenDataWrites">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "ownership" | "projectFieldDispatch" | "projectTypes" | "objectRepresentations" | "frozenDataWrites">;
   readonly nodes: readonly Node[];
   readonly producer: RustFieldWriteProducer;
   readonly required: RustRequiredRecord[];

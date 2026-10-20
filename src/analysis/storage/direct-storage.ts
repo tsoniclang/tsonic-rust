@@ -1,14 +1,14 @@
 import type { Node, Symbol } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMember, RustLocationStorageRoot } from "../../target-model/records/direct-storage.js";
 
-export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustDirectStorageProducer,
   analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
   const { ast } = program.source;

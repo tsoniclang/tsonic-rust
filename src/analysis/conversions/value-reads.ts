@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustValueReadProducer } from "../program/records/value-read.js";
 import type { RustValueProjectionProducer } from "../program/records/value-projection.js";
 import type { RustConversionEmissionProducer } from "../program/records/conversion-emission.js";
@@ -18,7 +18,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 
-export function analyzeRustValueReads(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
+export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustValueReadProducer, projections: RustValueProjectionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string): void => {

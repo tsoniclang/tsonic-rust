@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { forEachSourceImmediateEvaluationChild, Node_Expression, type SourceExpressionEffects } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderEvaluationProducer } from "../program/records/provider-evaluation.js";
 import type { RustProviderEvaluationEmission } from "../../target-model/records/provider-evaluation.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
@@ -13,7 +13,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsErrorTargetType } from "../../target-model/types/index.js";
 import { rustBorrowPureOperation } from "../program/borrowed-element-purity.js";
 
-export function analyzeRustProviderEvaluation(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProviderEvaluation(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustProviderEvaluationProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

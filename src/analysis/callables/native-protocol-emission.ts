@@ -1,7 +1,7 @@
 import type { SourceFile } from "@tsonic/tsts";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustNativeProtocolProducer } from "../program/records/native-protocol-emission.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { analyzeRustNativeProducerBridge } from "./native-producer-bridges.js";
@@ -21,7 +21,7 @@ export function rustNativeInputEffectsMatch(call: RustNativeCallableCall, effect
 }
 
 export function analyzeRustNativeProtocolEmission(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "errorRegions" | "callableValues" | "typeDefinitions" | "sourcePackageComponents">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "errorRegions" | "callableValues" | "typeDefinitions" | "sourcePackageComponents">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustNativeProtocolProducer;
 }): readonly TargetDiagnostic[] {

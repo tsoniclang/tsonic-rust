@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustGeneratedItemUsage } from "./generated-item-usage-model.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
 
@@ -8,7 +8,7 @@ export interface RustReachability extends RustGeneratedItemUsage {
   readonly suppressedDeclarations: ReadonlySet<Node>;
 }
 
-export type RustReachabilityInput = Pick<RustTargetProgram,
+export type RustReachabilityInput = Pick<RustAnalysisProgram,
   | "source" | "sourceFiles" | "sourceNavigation" | "projectTypes"
   | "moduleInitialization" | "sourcePackageFacades" | "sourcePackageComponents"
   | "classValues" | "sourceCallableSpecializations" | "declarationGenericRequirements"

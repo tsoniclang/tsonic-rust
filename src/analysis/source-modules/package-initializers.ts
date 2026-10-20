@@ -1,14 +1,14 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageComponentPlan, RustSourcePackageInitializerPlan, RustSourcePackageModuleInitializer } from "../../target-model/records/source-packages.js";
 import { allocateRustComponentSupportModuleName } from "../../policy/names/support-modules.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustTargetIdentifier } from "../../target-model/names/identifiers.js";
 export function analyzeRustSourcePackageInitializers(
-  program: Pick<RustTargetProgram, "source" | "sourceFiles" | "sourcePackageComponents" | "moduleInitialization" | "errorRegions">,
+  program: Pick<RustAnalysisProgram, "source" | "sourceFiles" | "sourcePackageComponents" | "moduleInitialization" | "errorRegions">,
   components: readonly RustSourcePackageComponentPlan[],
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): {

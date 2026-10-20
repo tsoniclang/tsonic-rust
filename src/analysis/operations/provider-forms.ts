@@ -1,12 +1,12 @@
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderFormProducer } from "../program/records/provider-forms.js";
 import type { RustProviderFormEmission } from "../../target-model/records/provider-forms.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 
-export function analyzeRustProviderForms(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustProviderFormProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

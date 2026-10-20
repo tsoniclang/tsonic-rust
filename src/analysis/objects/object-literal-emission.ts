@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustObjectLiteralEmissionProducer } from "../program/records/object-literal-emission.js";
 import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -12,7 +12,7 @@ import { rustJsValueTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
-export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
+export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustObjectLiteralEmissionProducer, propertyName: (node: Node) => SourcePropertyNameSelection | undefined): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string, unsupported = false): void => {

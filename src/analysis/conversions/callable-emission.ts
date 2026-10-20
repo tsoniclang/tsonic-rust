@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableConversionProducer } from "../program/records/callable-conversions.js";
 import type { RustCallableOperandEmission, RustCallableConversionEmission, RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -9,7 +9,7 @@ import { rustCallableConversionPhysical, type RustCallablePhysicalConversion } f
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
 
-export function analyzeRustCallableEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustCallableConversionProducer): void {
   const operand = (node: Node, source: TargetTypeRef | undefined): RustCallableOperandEmission | undefined => {
     if (source === undefined) return undefined;

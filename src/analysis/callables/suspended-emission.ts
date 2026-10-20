@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { SourceFile } from "@tsonic/tsts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSuspendedCallableProducer } from "../program/records/suspended-callables.js";
 import { rustCallableProtocol, rustLocationTargetType } from "../../target-model/types/index.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
@@ -10,7 +10,7 @@ import { rustCallablePhysicalSignature } from "../../target-model/conversions/ca
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 
 export function analyzeRustSuspendedCallableEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustSuspendedCallableProducer;
 }): void {

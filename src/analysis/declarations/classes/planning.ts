@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Initializer, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../../program/model.js";
+import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustReachability } from "../../reachability/model.js";
 import type { RustClassEmissionProducer } from "../../program/records/class-emission.js";
 import type { RustNativeClassField, RustNativeClassEmission } from "../../../target-model/records/class-emission.js";
@@ -14,7 +14,7 @@ import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
 
 export function analyzeRustClassEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly reachability: RustReachability;
   readonly producer: RustClassEmissionProducer;
 }): readonly TargetDiagnostic[] {

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableParameterProducer } from "../program/records/parameter-emission.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../target-model/types/index.js";
@@ -9,7 +9,7 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 import { selectRustOptionalDefaultStorage } from "../../policy/conversions/optional-storage.js";
 
 export function analyzeRustCallableParameterEmission(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "callableValues" | "projectTypes" | "objectRepresentations" | "names">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "callableValues" | "projectTypes" | "objectRepresentations" | "names">;
   readonly nodes: readonly Node[];
   readonly producer: RustCallableParameterProducer;
   readonly required: RustRequiredRecord[];

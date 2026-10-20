@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Operand } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLiteralEmissionProducer } from "../program/records/literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustIntegerCarrier, isRustBigIntCarrier, rustPrimitiveTypeName } from "../../target-model/types/index.js";
 
-export function analyzeRustLiteralEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLiteralEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustFlowReadEmissionProducer } from "../program/records/flow-read-emission.js";
 import type { RustFlowReadProjectionFact } from "../../target-model/records/value-projections.js";
 import { rustFlowReadProjectionMatches } from "./flow-read-projections.js";
@@ -12,7 +12,7 @@ import { isRustClosedValueCarrier } from "../../target-model/types/carriers/clos
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier, isRustWritableSourceErrorCarrier,
   isRustWritableRetainedErrorCarrier, isRustMutableJsErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 
-export function analyzeRustFlowReadEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustFlowReadEmissionProducer): readonly TargetDiagnostic[] {
   const seen = new Set<RustFlowReadProjectionFact>();
   const issues: TargetDiagnostic[] = [];

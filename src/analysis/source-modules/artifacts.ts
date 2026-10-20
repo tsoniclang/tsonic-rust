@@ -2,11 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import { analyzeSourceArtifactFiles } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceArtifactProducer } from "../program/records/artifacts.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
-export function analyzeRustSourceArtifacts(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSourceArtifacts(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceArtifactProducer): readonly TargetDiagnostic[] {
   const selected = analyzeSourceArtifactFiles({ ast: program.source.ast, sourceFiles: program.sourceFiles,
     navigation: program.sourceNavigation, constructions: program.sourceModuleConstructions.entries() });

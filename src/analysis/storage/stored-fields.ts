@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStoredFieldProducer } from "../program/records/stored-fields.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -12,7 +12,7 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustValueFieldProjectionStep } from "../../target-model/records/stored-fields.js";
 
-export function analyzeRustStoredFields(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustStoredFieldProducer): void {
+export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustStoredFieldProducer): void {
   const pending = [...program.structuralShapes.instances.map(shape => shape.carrier),
     ...program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition)),
     ...program.classValues.instanceViewImplementations.flatMap(view => [view.sourceCarrier, view.targetCarrier]),

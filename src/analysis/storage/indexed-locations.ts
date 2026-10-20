@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustIndexedLocationProducer } from "../program/records/indexed-locations.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/index.js";
 
-export function analyzeRustIndexedLocations(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustIndexedLocations(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustIndexedLocationProducer): void {
   for (const node of nodes) {
     const fact = program.records.targetOperation.get(node);

@@ -1,5 +1,5 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
 import type { RustDispatchRootEmission } from "../../target-model/records/dispatch-contexts.js";
 import type { RustDispatchContextEmissionProducer } from "../program/records/dispatch-contexts.js";
@@ -12,7 +12,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { isRustFinalizedDispatchContextInput } from "../../target-model/operations/finalized-inputs.js";
 
-export function analyzeRustDispatchRootEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustDispatchRootEmission(program: Omit<RustAnalysisProgram, "reachability">,
   errors: RustSourcePackageErrorPlan, nodes: readonly Node[], producer: RustDispatchContextEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (message: string): void => {

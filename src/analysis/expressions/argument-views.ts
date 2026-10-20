@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustArgumentViewProducer } from "../program/records/argument-views.js";
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
-export function analyzeRustArgumentViews(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustArgumentViews(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustArgumentViewProducer): void {
   for (const node of nodes) {
     const operation = program.records.targetOperation.get(node);

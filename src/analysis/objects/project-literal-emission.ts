@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectLiteralEmission, RustProjectLiteralImplementation, RustProjectLiteralMethodEmission, RustRecordLiteralFact } from "../../target-model/records/object-literal-emission.js";
 import { rustCallableProtocol, rustProgramErrorTargetType, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -9,7 +9,7 @@ import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import { sourceCallableParameterAbis, sourceCallableReturnCarrier, projectOwnerTypeSubstitutions } from "../callables/adapters.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-export function analyzeRustProjectLiteralEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,
   node: Node, fact: RustRecordLiteralFact): RustProjectLiteralEmission {
   const definition = program.projectTypes.definitionForCarrier(fact.resultCarrier);
   const contracts = program.records.projectInstanceContracts.get(fact.resultCarrier);

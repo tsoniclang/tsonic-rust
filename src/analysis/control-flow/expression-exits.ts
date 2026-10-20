@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, Node_Operand, ObjectLiteralProperty_Value, SpreadAssignment_Expression,
   BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, ConditionalExpression_Condition } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustExpressionExitProducer } from "../program/records/expression-exits.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
-export function analyzeRustExpressionExits(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
+export function analyzeRustExpressionExits(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustExpressionExitProducer): void {
   const { ast } = program.source;
   const exits = new Map<Node, boolean>();

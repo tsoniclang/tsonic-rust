@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustBindingEmissionProducer } from "../program/records/binding-emission.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustFixedArrayCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -9,7 +9,7 @@ import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { selectRustBindingProjectionEmission } from "../../policy/control-flow/binding-projections.js";
 
 export function analyzeRustBindingProjectionEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustBindingEmissionProducer;
 }): readonly TargetDiagnostic[] {

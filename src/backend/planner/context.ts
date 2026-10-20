@@ -1,4 +1,4 @@
-import type { RustTargetProgram } from "../../analysis/program/model.js";
+import type { RustTargetProgram } from "../../target-model/program.js";
 
 export interface RustPlanningContext {
   readonly host: RustTargetProgram["host"];

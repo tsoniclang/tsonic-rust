@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Initializer, Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectClassProducer } from "../program/records/project-classes.js";
 import type { RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../target-model/records/project-classes.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
@@ -20,7 +20,7 @@ import { analyzeRustProjectRootEmission } from "./root-emission.js";
 import { analyzeRustProjectDispatchEmission } from "./dispatch-emission.js";
 import { analyzeRustProjectPolymorphicEmission } from "./polymorphism-emission.js";
 
-export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
+export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const members = new Map<RustProjectTypeDefinition, readonly Node[]>();

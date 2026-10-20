@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -9,7 +9,7 @@ import { rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteR
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
 
-export function analyzeRustOptionalStorageEmission(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustOptionalStorageEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustProjectEmissionProducer): void {
   const argumentsFor = (declaration: Node, substitutions: ReadonlyMap<string, TargetTypeRef>, identities?: ReadonlySet<string>): readonly TargetTypeRef[] => {
     const contract = program.declarationGenericRequirements.contractFor(declaration);

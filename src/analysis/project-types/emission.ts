@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectEmissionProducer } from "../program/records/project-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
@@ -14,7 +14,7 @@ import { rustSourceItemIdentity } from "../../target-model/names/source-output-i
 import type { RustProjectMemberSlotRole } from "../../target-model/types/project-types.js";
 
 export function analyzeRustProjectEmission(input: {
-  readonly program: Omit<RustTargetProgram, "reachability">;
+  readonly program: Omit<RustAnalysisProgram, "reachability">;
   readonly nodes: readonly Node[];
   readonly producer: RustProjectEmissionProducer;
 }): void {

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderInputProducer } from "../program/records/provider-inputs.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
@@ -10,7 +10,7 @@ import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 import { isRustFinalizedSliceInput } from "../../target-model/operations/finalized-inputs.js";
 
-export function analyzeRustProviderInputs(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustProviderInputProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const seen = new WeakMap<Node, Set<object>>();

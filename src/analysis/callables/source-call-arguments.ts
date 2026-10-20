@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceCallArgumentProducer } from "../program/records/source-call-arguments.js";
 import { rustSliceElementCarrier, isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -16,7 +16,7 @@ import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing.js";
 import type { RustSourceCallInputEmission, RustSourceParameterEmission, RustSourceCallEvaluationEmission } from "../../target-model/records/source-call-arguments.js";
 
-export function analyzeRustSourceCallArguments(program: Omit<RustTargetProgram, "reachability">,
+export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceCallArgumentProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string, unsupported = false): void => {

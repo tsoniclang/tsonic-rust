@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustTargetProgram } from "../program/model.js";
+import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDeclarationEmissionProducer } from "../program/records/declaration-emission.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustDeclarationEmission(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "sourceFiles" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "sourceFiles" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications">;
   readonly nodes: readonly Node[];
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
