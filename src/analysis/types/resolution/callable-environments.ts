@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustTargetType } from "./target.js";
+import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
-import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carrier.js";
+import { rustSourceStorageProjectedCarrier } from "../../../policy/types/objects/value-domain-carrier.js";
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
