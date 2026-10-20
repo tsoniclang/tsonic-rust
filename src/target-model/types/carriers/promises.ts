@@ -1,12 +1,6 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustTypeGenericArguments } from "../generic-arguments.js";
-import {
-  rustJsPromiseFulfilledResultTargetId,
-  rustJsPromiseRejectedResultTargetId,
-  rustJsPromiseResolutionTargetId,
-  rustJsPromiseSettledResultTargetId,
-  rustJsPromiseTargetId,
-} from "./source-types.js";
+import { rustJsPromiseFulfilledResultTargetId, rustJsPromiseRejectedResultTargetId, rustJsPromiseResolutionTargetId, rustJsPromiseSettledResultTargetId, rustJsPromiseTargetId } from "./source-types.js";
 
 export function rustJsPromiseTargetType(output: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustJsPromiseTargetId, genericArguments: rustTypeGenericArguments([output]) };
