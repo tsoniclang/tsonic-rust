@@ -1,15 +1,8 @@
-import {
-  rustJsValueTargetType,
-  rustTsValueTargetType,
-} from "../../../target-model/types/index.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-export function rustBroadSourceValueTargetType(jsEnabled: boolean): TargetTypeRef {
-  return jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType();
-}
-
+import { rustBroadSourceValueTargetType } from "../../../policy/types/broad-values.js";
 export function resolveRustAuthoredBroadSourceValueTargetType(
   authoredTypeNode: Node,
   context: RustTargetTypeResolutionContext,
