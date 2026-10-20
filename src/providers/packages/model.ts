@@ -1,14 +1,8 @@
 import type { ProviderExportDeclaration } from "@tsonic/tsts";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
-import type {
-  RustProviderOperationDefinition,
-  RustProviderTypeDefinition,
-} from "../../target-model/identities/provider-relations.js";
+import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../target-model/identities/provider-relations.js";
 import type { RustProviderBinaryHookDefinition } from "../../target-model/metadata/provider-metadata.js";
-import type {
-  TargetCapabilityContribution,
-  TargetCapabilityImplementation,
-} from "@tsonic/target-api/provider";
+import type { TargetCapabilityContribution, TargetCapabilityImplementation } from "@tsonic/target-api/provider";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
 import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
 
