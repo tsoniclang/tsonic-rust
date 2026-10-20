@@ -10,7 +10,7 @@ import { recordProjectSourceBinding } from "../storage/source-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
-import { rustSelectedAssignmentValueCarrier } from "./operators.js";
+import { rustSelectedAssignmentValueCarrier } from "../../policy/operations/operators/assignment-values.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustCheckedIteration } from "./provider/index.js";
 import { setCarrierFact } from "./project-calls.js";
