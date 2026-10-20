@@ -11,7 +11,7 @@ import { rustUnionAlternatives } from "../../target-model/types/union-relations.
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 
-import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 
 import type { RustNativeFutureInput, RustNativeFutureEnvironmentSelection, RustNativeFutureInputPlan } from "../../target-model/records/native-future-inputs.js";
 import { sealRustNativeFutureInputs } from "../program/records/native-future-inputs.js";

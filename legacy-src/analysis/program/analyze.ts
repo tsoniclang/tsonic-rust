@@ -54,7 +54,8 @@ import { collectRustImplicitInterfaceContracts } from "../project-types/implicit
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
-import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries } from "../callables/lexical-functions.js";
+import { type RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
 import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";

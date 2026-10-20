@@ -2,7 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
-import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 
 import { rustCapturedBindingStorage } from "./capture-storage.js";

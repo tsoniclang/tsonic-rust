@@ -1,7 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped,
-  sourceLexicalEnvironment, sourceLexicalFunctionValueCreation, sourceLexicalFunctionValueOrder,
-  type TargetSourceProgram } from "@tsonic/target-api/source";
+import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalEnvironment, sourceLexicalFunctionValueCreation, sourceLexicalFunctionValueOrder, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
@@ -18,38 +16,8 @@ import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes
 import type { RustNativeStorageConstruction } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
-export interface RustLexicalFunctionCapture {
-  readonly declaration: Node;
-  readonly reference: Node;
-  readonly mutable: boolean;
-}
-
-export type RustLexicalFunctionEnvironmentSelection =
-  | { readonly kind: "resolved"; readonly captures: readonly RustLexicalFunctionCapture[];
-      readonly valueObserved: boolean;
-      readonly inlineValueReference?: Node;
-      readonly singleInvocation: boolean; readonly captureRoots: readonly Node[] }
-  | { readonly kind: "unresolved"; readonly reason: string };
-
-export type RustLexicalFunctionSelection =
-  | (Extract<RustLexicalFunctionEnvironmentSelection, { readonly kind: "resolved" }> & {
-      readonly genericParameters: readonly RustSourceGenericParameterContract[] })
-  | Extract<RustLexicalFunctionEnvironmentSelection, { readonly kind: "unresolved" }>;
-
-export interface RustLexicalFunctionEnvironments {
-  forDeclaration(declaration: Node): RustLexicalFunctionEnvironmentSelection | undefined;
-  valueDeclarationsAt(statement: Node): readonly Node[];
-}
-
-export interface RustLexicalFunctionEnvironmentPlan extends RustLexicalFunctionEnvironments {
-  readonly declarations: readonly Node[];
-  genericNodesFor(declaration: Node): readonly Node[];
-  calleesFor(declaration: Node): readonly Node[];
-}
-
-export interface RustLexicalFunctionQueries extends RustLexicalFunctionEnvironments {
-  forDeclaration(declaration: Node): RustLexicalFunctionSelection | undefined;
-}
+import type { RustLexicalFunctionCapture, RustLexicalFunctionEnvironmentSelection, RustLexicalFunctionSelection, RustLexicalFunctionEnvironmentPlan, RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
+import { sealRustLexicalFunctionEnvironments, sealRustLexicalFunctionQueries } from "../program/records/lexical-functions.js";
 
 const maximumLexicalFunctions = 65_536;
 const maximumLexicalCaptureRows = 262_144;
@@ -179,7 +147,6 @@ export function createRustLexicalFunctionEnvironmentPlan(
             ? { inlineValueReference: creation.inlineReference } : {}),
           singleInvocation: singleInvocation(declaration), captureRoots: Object.freeze([...roots]) }));
   }
-  const empty: readonly Node[] = Object.freeze([]);
   const scheduled = new Map<Node, readonly Node[]>();
   for (const [statement, values] of valueDeclarations) {
     const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation, "source",
@@ -188,20 +155,17 @@ export function createRustLexicalFunctionEnvironmentPlan(
     if (ordered.kind === "resolved") scheduled.set(statement, ordered.declarations);
     else for (const declaration of values) selections.set(declaration, Object.freeze(ordered));
   }
-  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration),
-    valueDeclarationsAt: (statement: Node) => scheduled.get(statement) ?? empty,
-    declarations: Object.freeze(declarations), genericNodesFor: (declaration: Node) => genericNodes.get(declaration) ?? empty,
-    calleesFor: (declaration: Node) => callees.get(declaration) ?? empty });
+  return sealRustLexicalFunctionEnvironments(declarations, selections, scheduled, genericNodes, callees);
 
   function exhausted(reason = "Lexical function capture analysis exceeded its finite resource budget."): RustLexicalFunctionEnvironmentPlan {
     const selection: RustLexicalFunctionEnvironmentSelection = Object.freeze({
       kind: "unresolved", reason,
     });
-    return Object.freeze({ forDeclaration: (declaration: Node) =>
+    const failures = new Map<Node, RustLexicalFunctionEnvironmentSelection>();
+    for (const declaration of nativeNodes) if (
       ast.is.IsFunctionDeclaration(declaration) && !sourceDeclarationIsModuleScoped(declaration, ast) ||
-        sourceCallables.directLexicalBinding(declaration) !== undefined ? selection : undefined,
-      valueDeclarationsAt: () => Object.freeze([]), declarations: Object.freeze([]),
-      genericNodesFor: () => Object.freeze([]), calleesFor: () => Object.freeze([]) });
+      sourceCallables.directLexicalBinding(declaration) !== undefined) failures.set(declaration, selection);
+    return sealRustLexicalFunctionEnvironments([], failures, new Map(), new Map(), new Map());
   }
 }
 
@@ -257,6 +221,10 @@ export function finalizeRustLexicalFunctionQueries(
     }
   }
   const selections = new Map<Node, RustLexicalFunctionSelection>();
+  for (const declaration of environments.subjects) {
+    const selected = environments.forDeclaration(declaration);
+    if (selected?.kind === "unresolved") selections.set(declaration, selected);
+  }
   for (const declaration of environments.declarations) {
     const environment = environments.forDeclaration(declaration);
     if (environment === undefined) continue;
@@ -270,17 +238,11 @@ export function finalizeRustLexicalFunctionQueries(
       ? Object.freeze({ kind: "unresolved", reason: failure ?? "A lexical function lost its exact enclosing generic or lifetime declarations." })
       : Object.freeze({ ...environment, genericParameters: parameters }));
   }
-  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration) ??
-    unresolvedEnvironment(declaration), valueDeclarationsAt: environments.valueDeclarationsAt });
-
-  function unresolvedEnvironment(declaration: Node): Extract<RustLexicalFunctionSelection, { readonly kind: "unresolved" }> | undefined {
-    const environment = environments.forDeclaration(declaration);
-    return environment?.kind === "unresolved" ? environment : undefined;
-  }
+  return sealRustLexicalFunctionQueries(selections, environments.valueDeclarationsAt);
 
   function exhausted(): RustLexicalFunctionQueries {
     const selection = Object.freeze({ kind: "unresolved" as const, reason: "Lexical physical generic selection exceeds its finite work budget." });
-    return Object.freeze({ forDeclaration: (declaration: Node) => environments.forDeclaration(declaration) === undefined ? undefined : selection,
-      valueDeclarationsAt: environments.valueDeclarationsAt });
+    return sealRustLexicalFunctionQueries(new Map(environments.subjects.map(declaration => [declaration, selection])),
+      environments.valueDeclarationsAt);
   }
 }

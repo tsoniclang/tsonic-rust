@@ -44,7 +44,7 @@ import type { RustNativeCallableInput } from "../../target-model/records/native-
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
-import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
 import type { RustStructuralStorageLookup } from "../operations/target-operation.js";

@@ -21,7 +21,7 @@ import type { RustFrameCallablePlan } from "../../target-model/records/frame-cal
 import type { RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
-import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
+import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import type { RustGenericCallableIdentitySources } from "./generic-identities.js";
 import { emissionDiagnostic, rustEmissionIdentityBindings, rustEmissionSourceIdentity,
