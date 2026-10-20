@@ -17,6 +17,7 @@ import { createRustTemplateStringProducer } from "./template-strings.js";
 import { createRustNativeComparisonProducer } from "./native-comparisons.js";
 import { createRustUnionEqualityProducer } from "./union-equality.js";
 import { createRustClosedTypeTestProducer } from "./type-tests.js";
+import { createRustOptionEqualityProducer } from "./option-equality.js";
 import { createRustNativeLayoutProducer } from "./native-layout-emission.js";
 import { createRustSourceAssertionProducer } from "./source-assertions.js";
 import { createRustSourceBindingEmissionProducer } from "./binding-paths.js";
@@ -248,6 +249,7 @@ export function createRustProgramRecordBuilder(
   const nativeComparisonPlans = createRustNativeComparisonProducer(assertOpen);
   const unionEqualityPlans = createRustUnionEqualityProducer(assertOpen);
   const closedTypeTestPlans = createRustClosedTypeTestProducer(assertOpen);
+  const optionEqualityPlans = createRustOptionEqualityProducer(assertOpen);
   const nativeLayoutPlans = createRustNativeLayoutProducer(assertOpen);
   const sourceAssertionPlans = createRustSourceAssertionProducer(assertOpen);
   const sourceBindingEmissionPlans = createRustSourceBindingEmissionProducer(assertOpen);
@@ -317,6 +319,7 @@ export function createRustProgramRecordBuilder(
     ...nativeComparisonPlans.records,
     ...unionEqualityPlans.records,
     ...closedTypeTestPlans.records,
+    ...optionEqualityPlans.records,
     ...nativeLayoutPlans.records,
     ...sourceAssertionPlans.records,
     ...sourceBindingEmissionPlans.records,
@@ -451,6 +454,7 @@ export function createRustProgramRecordBuilder(
     nativeComparisonPlans,
     unionEqualityPlans,
     closedTypeTestPlans,
+    optionEqualityPlans,
     nativeLayoutPlans,
     sourceAssertionPlans,
     sourceBindingEmissionPlans,
