@@ -1,17 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type {
-  RustProviderTypeParameterRequirement,
-  RustProviderTypeRequirement,
-} from "../../target-model/operations/model.js";
-import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
-  rustCarrierSatisfiesTraitRef,
-  substituteRustTargetGenerics,
-} from "../../target-model/types/index.js";
-import type {
-  RustTargetGenericBindings,
-} from "../../target-model/types/index.js";
+import type { RustProviderTypeParameterRequirement, RustProviderTypeRequirement } from "../../target-model/operations/model.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSatisfiesTraitRef, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function rustProviderGenericRequirementsAreSatisfied(
@@ -64,7 +54,6 @@ function rustProviderTypeRequirementIsSatisfied(
   const trait = substituteProviderTraitRequirement(requirement, bindings);
   return trait !== undefined && rustCarrierSatisfiesTraitRef(carrier, trait, undefined, definitions);
 }
-
 
 function substituteProviderTraitRequirement(
   requirement: Extract<RustProviderTypeRequirement, { readonly kind: "trait" }>,
