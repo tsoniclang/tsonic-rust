@@ -2,7 +2,7 @@ import type { RustTypeDefinitions } from "../../../../target-model/types/source-
 import { isRustNumericCarrier, rustJsValueTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
-import { selectRustProjectedValueConversion } from "../../../../analysis/conversions/property-selection.js";
+import { selectRustProjectedValueConversion } from "../../../conversions/property-projection.js";
 import type { RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
 import { jsValueProjectionsAreValid, type JsOperationTarget, type JsValueProjection } from "./model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";

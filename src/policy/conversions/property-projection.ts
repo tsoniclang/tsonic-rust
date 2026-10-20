@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-import { selectRustSourceValueConversion, selectRustUnionFoldConversion, selectRustStructuralObjectConversionFields } from "../../policy/conversions/selection.js";
+import { selectRustSourceValueConversion, selectRustUnionFoldConversion, selectRustStructuralObjectConversionFields } from "./selection.js";
 const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
