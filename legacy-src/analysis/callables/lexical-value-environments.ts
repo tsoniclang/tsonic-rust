@@ -7,7 +7,7 @@ import type { RustClosureCaptureFact } from "../../target-model/records/operatio
 
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { rustRetainedCallableStorage } from "./results.js";
+import { rustRetainedCallableStorage } from "../../policy/types/callables/return-contexts.js";
 
 export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionEnvironments): void {
   const { ast, source, records } = walk.context;

@@ -9,7 +9,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
-import { rustCallableInvocationResult } from "../callables/results.js";
+import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/objects/project-dispatch-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";

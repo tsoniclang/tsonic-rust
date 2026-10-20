@@ -11,7 +11,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals, rustSourceCallableReturnFactEquals } from "../../target-model/records/equality.js";
 import { rustCallableTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
-import { rustCallableInvocationResult } from "./results.js";
+import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { recordCallableParameterInputFacts, recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { setCarrierFact } from "../operations/project-calls.js";

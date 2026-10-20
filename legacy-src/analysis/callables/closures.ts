@@ -53,7 +53,7 @@ import { recordCallableParameterSignatureFacts } from "./parameter-signature.js"
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
 
-import { rustCallableInvocationResult } from "./results.js";
+import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { rustSourceClosureValueCarrier } from "./function-values.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";

@@ -5,7 +5,7 @@ import type { RustLexicalFunctionProducer } from "../program/records/lexical-fun
 import type { RustLexicalCaptureEmission } from "../../target-model/records/lexical-functions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
-import { rustRetainedCallableStorage } from "./results.js";
+import { rustRetainedCallableStorage } from "../../policy/types/callables/return-contexts.js";
 import { rustLocationTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 

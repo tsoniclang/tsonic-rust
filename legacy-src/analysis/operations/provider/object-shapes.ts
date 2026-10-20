@@ -18,7 +18,7 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index
 
 import { rustProjectCallableTargetName } from "../../names/source-member-name.js";
 
-import { rustCallableInvocationResult } from "../../callables/results.js";
+import { rustCallableInvocationResult } from "../../../policy/types/callables/return-contexts.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";

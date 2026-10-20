@@ -22,7 +22,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceFunctionValueCarrier } from "../callables/function-values.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 
-import { rustCallableInvocationResult } from "../callables/results.js";
+import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { resolveRustModuleBindingValue } from "../program/module-declarations.js";
 
 import { recordProjectSourceBinding, selectedDeclarationIsProjectSource } from "../storage/source-bindings.js";

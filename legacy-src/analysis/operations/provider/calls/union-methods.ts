@@ -10,7 +10,7 @@ import type { RustSelectedUnionMethod, RustSelectedUnionMethodIdentity, RustTarg
 import { rustProjectCallableTargetName } from "../../../names/source-member-name.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import { selectedCallCalleeSymbol } from "../operators.js";
-import { rustCallableInvocationResult } from "../../../callables/results.js";
+import { rustCallableInvocationResult } from "../../../../policy/types/callables/return-contexts.js";
 
 export function selectRustUnionMethods(
   request: RustCheckedCallSelectionInput,
