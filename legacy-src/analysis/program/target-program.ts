@@ -20,6 +20,7 @@ import type {
   RustTargetProgram,
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
+import { analyzeRustLocationStorage } from "../storage/location-storage.js";
 import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
@@ -686,6 +687,8 @@ export function analyzeRustTargetProgram(
   if (assignmentEvaluationIssues.length !== 0) return rejectedTargetStage(assignmentEvaluationIssues);
   const unaryIssues = analyzeRustUnaryEmission(program, context.nativeNodes, context.records.unaryEmissionPlans);
   if (unaryIssues.length !== 0) return rejectedTargetStage(unaryIssues);
+  const locationStorageIssues = analyzeRustLocationStorage(program, context.nativeNodes, context.records.locationStoragePlans);
+  if (locationStorageIssues.length !== 0) return rejectedTargetStage(locationStorageIssues);
   const computedMemberIssues = admitRustComputedMembers(program, context.nativeNodes);
   if (computedMemberIssues.length !== 0) return rejectedTargetStage(computedMemberIssues);
   analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);

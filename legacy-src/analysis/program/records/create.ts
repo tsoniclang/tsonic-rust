@@ -32,6 +32,7 @@ import { createRustObjectReferenceEmissionProducer } from "./object-reference-vi
 import { createRustSourceCallArgumentProducer } from "./source-call-arguments.js";
 import { createRustBinaryEmissionProducer } from "./expression-binary.js";
 import { createRustAssignmentEvaluationProducer } from "./assignment-evaluation.js";
+import { createRustLocationStorageProducer } from "./location-storage.js";
 import { createRustErrorFieldProducer } from "./error-field-borrows.js";
 import { createRustStringComparisonViewProducer } from "./string-comparison-views.js";
 import { createRustGenericCallableFlowProducer } from "./generic-callable-flow.js";
@@ -281,6 +282,7 @@ export function createRustProgramRecordBuilder(
   const sourceCallArgumentPlans = createRustSourceCallArgumentProducer(assertOpen);
   const binaryEmissionPlans = createRustBinaryEmissionProducer(assertOpen);
   const assignmentEvaluationPlans = createRustAssignmentEvaluationProducer(assertOpen);
+  const locationStoragePlans = createRustLocationStorageProducer(assertOpen);
   const errorFieldPlans = createRustErrorFieldProducer(assertOpen);
   const stringComparisonPlans = createRustStringComparisonViewProducer(assertOpen);
   const genericFlowApplications = createRustGenericCallableFlowProducer(assertOpen);
@@ -359,6 +361,7 @@ export function createRustProgramRecordBuilder(
     ...indexedLocationPlans.records,
     ...locationCallbackPlans.records,
     ...directStoragePlans.records,
+    ...locationStoragePlans.records,
     ...unaryEmissionPlans.records,
     ...flowReadEmissionPlans.records,
     ...projectUnionMappingPlans.records,
@@ -511,6 +514,7 @@ export function createRustProgramRecordBuilder(
     indexedLocationPlans,
     locationCallbackPlans,
     directStoragePlans,
+    locationStoragePlans,
     unaryEmissionPlans,
     flowReadEmissionPlans,
     projectUnionMappingPlans,

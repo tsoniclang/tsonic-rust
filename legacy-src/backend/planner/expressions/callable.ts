@@ -404,6 +404,7 @@ export function planRustCallableExpressionBody(
       ? allocateRustSyntheticName(context.syntheticNames, "recursive_callable") : undefined;
     capturedBindings.push({
       declaration: captureFact.recursiveDeclaration,
+      referent: undefined,
       expression: ownedStateName === undefined ? { kind: "path", path: recursiveName! } : {
         kind: "associated-call", owner: callableType!,
         method: "from_shared", args: [{

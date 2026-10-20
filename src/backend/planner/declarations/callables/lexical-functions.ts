@@ -21,6 +21,7 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
     if (parameterType === undefined) failRustPlannerInvariant("An admitted lexical function requires its renderable native capture environment.", declaration);
     parameters.push({ name, type: parameterType });
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },
+      referent: undefined,
       storage: storage?.storage ?? "value", valueCarrier: carrier,
       ...(borrowedCarrier === undefined ? {} : { borrowedCarrier }),
       ...(owned ? {} : { borrowed: storage === undefined && capture.mutable ? "mutable" as const : "shared" as const }) });

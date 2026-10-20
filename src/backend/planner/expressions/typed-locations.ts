@@ -9,25 +9,18 @@ import type {
   RustBinaryOperator,
 } from "../../../target-model/syntax/tokens.js";
 import {
-  ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustIndexedLocationContract } from "../../../analysis/operations/indexed-location.js";
 import { planFinalizedTargetInput } from "./conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import {
-  isRustStringCarrier,
-  rustLocationTargetType,
   rustProgramErrorTargetType,
-  rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import {
-  diagnosticInput,
   rustSourceBindingPath,
   rustCurrentErrorBoundary,
   rustErrorType,
@@ -64,7 +57,7 @@ export type RustExpressionPlanner = (
 export function fallibleLocationAccess(node: Node, expression: RustExpr, context: RustPlanContext): RustExpr | undefined {
   const operandBoundary = rustCurrentErrorBoundary(context);
   if (operandBoundary === undefined || context.fallibleBoundary === undefined) {
-    return rejectLocationStorage(node, context, "A source pointer access requires its exact retained callback error boundary.");
+    failRustPlannerInvariant("An admitted source pointer access requires its exact retained callback error boundary.", node);
   }
   return rustPropagateLocalError(context.fallibleBoundary, rustErrorType(operandBoundary), expression);
 }
@@ -80,7 +73,7 @@ export function planRustIdentifierValue(
   const binding = context.input.program.records.sourceBinding.get(node);
   const module = binding === undefined ? undefined
     : context.input.program.records.moduleBinding.get(binding.sourceDeclaration);
-  if (module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier)) {
+  if (module?.storage === "native-const" && context.input.program.records.typeEmission.get(module.valueCarrier)?.string === true) {
     const value: RustExpr = { kind: "path", path };
     return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
   }
@@ -95,7 +88,7 @@ export function planRustIdentifierValue(
     : storage?.storage === "module-cell" ? undefined : storage?.storage;
   if (bindingStorage !== undefined) {
     const operations = rustBindingStorageOperations(bindingStorage);
-    const receiver = value.kind === "reference" ? value.expr : value;
+    const receiver = captured?.referent ?? value;
     return bindingStorage === "borrow-cell" && access !== "value"
       ? { kind: "dereference", pointer: operations.borrowedRead(receiver) }
       : operations.read(receiver);
@@ -104,9 +97,9 @@ export function planRustIdentifierValue(
     return rustModuleCellAccess(value, "load", []);
   }
   if (captured?.borrowed !== undefined) {
-    const referent = value.kind === "reference" ? value.expr : undefined;
+    const referent = captured.referent;
     const borrowed = captured.borrowedCarrier;
-    if (borrowed?.kind === "reference" && !borrowed.mutable && isRustStringCarrier(borrowed.referent)) {
+    if (borrowed !== undefined && context.input.program.records.typeEmission.get(borrowed)?.sharedStringReference === true) {
       return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
     }
     if (access !== "value") return referent ?? { kind: "dereference", pointer: value };
@@ -126,14 +119,14 @@ export function planRustValueRead(
 }
 
 export function requireRustReadOwnership(node: Node, context: RustPlanContext): RustReadOwnershipFact {
-  const selected = context.input.program.ownership.reads.get(node);
+  const selected = context.input.program.records.readOwnership.get(node);
   if (selected === undefined) return failRustPlannerInvariant(
     "A value read has no selected ownership record at the sealed-program boundary.", node);
   return selected;
 }
 
 export function requireRustCaptureOwnership(owner: Node, declaration: Node, context: RustPlanContext): RustCaptureReadOwnership {
-  const selected = context.input.program.ownership.captures.get(owner)?.find(capture => capture.declaration === declaration);
+  const selected = context.input.program.records.captureOwnership.get(owner)?.find(capture => capture.declaration === declaration);
   if (selected === undefined) return failRustPlannerInvariant(
     "A capture read has no selected ownership record at the sealed-program boundary.", owner);
   return selected;
@@ -150,7 +143,7 @@ export function planRustCaptureValue(
   const node = capture.reference;
   const captured = rustCapturedBinding(node, context);
   const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path };
-  const capturedValue = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
+  const capturedValue = captured?.referent ?? selectedValue;
   if (storage === "cell" || storage === "borrow-cell") return capturedValue;
   const selected = requireRustCaptureOwnership(owner, capture.declaration, context);
   const read = captured?.borrowed === undefined ? selected[use] : selected.borrowed;
@@ -177,10 +170,10 @@ export function planRustSharedReceiver(
   const captured = rustCapturedBinding(node, context);
   if (captured?.storage === "value" && captured.borrowed !== undefined) {
     return captured.borrowed === "shared"
-      ? captured.expression.kind === "reference" ? { kind: "reference", expr: value } : value
+      ? captured.referent !== undefined ? { kind: "reference", expr: value } : value
       : { kind: "reference", expr: { kind: "dereference", pointer: value } };
   }
-  if (context.input.program.ownership.reads.get(node)?.sharedReference === true) return value;
+  if (context.input.program.records.readOwnership.get(node)?.sharedReference === true) return value;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")
@@ -278,7 +271,7 @@ export function rustRawLocationRoot(
   const sourcePath = captured === undefined ? rustSourceBindingPath(context, binding) : undefined;
   if (captured === undefined && sourcePath === undefined) return undefined;
   const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path: sourcePath! };
-  const value = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
+  const value = captured?.referent ?? selectedValue;
   return storage.storage === "module-cell" ? rustModuleCellAccess(value, "location", [])
     : cloneRoot && storage.storage === "local-location" ? cloneRustExpression(value) : value;
 }
@@ -311,7 +304,7 @@ export function rustCapturedBinding(
   context: RustPlanContext,
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
   const declaration = context.input.program.records.sourceBinding.get(node)
-    ?.sourceDeclaration ?? context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
+    ?.sourceDeclaration ?? context.input.program.records.sourceReferenceDeclaration.get(node);
   return declaration === undefined
     ? undefined
     : rustCapturedBindingForDeclaration(declaration, context);
@@ -324,11 +317,7 @@ function rustCapturedBindingForDeclaration(
   const bindings = context.capturedBindings ?? [];
   for (let index = bindings.length - 1; index >= 0; index -= 1) {
     const binding = bindings[index]!;
-    if (binding.declaration === declaration ||
-      (context.input.program.source.ast.getSourceFile(binding.declaration) === context.input.program.source.ast.getSourceFile(declaration) &&
-        context.input.program.source.ast.kind(binding.declaration) === context.input.program.source.ast.kind(declaration) &&
-        context.input.program.source.ast.pos(binding.declaration) === context.input.program.source.ast.pos(declaration) &&
-        context.input.program.source.ast.end(binding.declaration) === context.input.program.source.ast.end(declaration))) {
+    if (binding.declaration === declaration) {
       return binding;
     }
   }
@@ -489,7 +478,7 @@ function assignmentBinaryOperator(
 export function rustExpressionHasBoundRecordField(expression: Node, context: RustPlanContext): boolean {
   const operation = context.input.program.records.targetOperation.get(expression);
   return operation?.kind === "source-field" && operation.storage === "structural-object" &&
-    context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex)?.storage === "bound";
+    context.input.program.records.structuralFieldStorage.get(operation.receiverCarrier, operation.storageIndex)?.field.storage === "bound";
 }
 
 export function planRustSourceLocationStorage(
@@ -509,12 +498,13 @@ export function planRustSourceLocationStorage(
     return planRustReferenceObjectFieldLocation(expression, context, planExpression);
   }
   if (operation?.kind === "source-field" && operation.storage === "structural-object") {
-    const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
+    const selected = context.input.program.records.structuralFieldStorage.get(operation.receiverCarrier, operation.storageIndex);
+    const field = selected?.field;
     if (field?.storage === "bound") {
       const receiver = Node_Expression(context.input.program.source.ast, expression);
       const owner = rustRecordFieldStorageType(field, context);
       if (receiver === undefined || owner === undefined) return undefined;
-      const value = rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value";
+      const value = selected!.value;
       const selected = value ? planRustSourceLocationStorage(receiver, rootExpression, context, planExpression)
         : planExpression(receiver, context);
       if (selected === undefined) return undefined;
@@ -541,68 +531,32 @@ export function planRustLocationStorage(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
-  if (context.input.program.records.nativeArrayStorage.get(expression)?.kind === "element") {
+  const selected = context.input.program.records.locationProjection.get(expression);
+  if (selected === undefined) failRustPlannerInvariant("An admitted native location requires its exact source projection plan.", expression);
+  if (selected.kind === "native-array") {
     return planNativeRustArrayAccess(expression, context, planExpression, "location_at");
   }
-  const fieldOperation = context.input.program.records.targetOperation.get(expression);
-  if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "structural-object") {
-    const field = context.input.program.structuralShapes.field(fieldOperation.receiverCarrier, fieldOperation.storageIndex);
-    if (field?.nativeLayout !== undefined) {
-      const receiver = Node_Expression(context.input.program.source.ast, expression);
-      const value = receiver === undefined ? undefined : planExpression(receiver, context);
-      return value === undefined ? undefined
-        : readRustStructuralObjectField(value, field.targetName, rustLocationTargetType(field.carrier), context);
-    }
+  if (selected.kind === "structural-field") {
+    const value = planExpression(selected.receiver, context);
+    return value === undefined ? undefined : readRustStructuralObjectField(value, selected.name, selected.carrier, context);
   }
   if (expression === rootExpression) {
     const root = rustRawLocationRoot(expression, context, cloneRoot);
-    return root === undefined
-      ? rejectLocationStorage(
-          expression,
-          context,
-          "The finalized local storage root did not emit a canonical Rust location.",
-        )
-      : ["cell", "borrow-cell"].includes(rustLocationStorageForReference(expression, context)?.storage ?? "")
+    if (root === undefined) failRustPlannerInvariant("An admitted local storage root requires its canonical Rust location.", expression);
+    return ["cell", "borrow-cell"].includes(rustLocationStorageForReference(expression, context)?.storage ?? "")
         ? { kind: "reference", expr: root }
         : root;
   }
-  if (context.input.program.source.ast.kindName(expression) === "KindParenthesizedExpression") {
-    const inner = Node_Expression(context.input.program.source.ast, expression);
-    return inner === undefined
-      ? rejectLocationStorage(
-          expression,
-          context,
-          "The finalized parenthesized storage has no inner expression.",
-        )
-      : planRustLocationStorage(
-          inner,
-          rootExpression,
-          cloneRoot,
-          context,
-          planExpression,
-        );
+  if (selected.kind === "parenthesized") {
+    return planRustLocationStorage(selected.inner, rootExpression, cloneRoot, context, planExpression);
   }
-  const receiverNode = Node_Expression(context.input.program.source.ast, expression);
-  if (receiverNode === undefined) {
-    return rejectLocationStorage(
-      expression,
-      context,
-      "The finalized projected storage has no exact receiver expression.",
-    );
-  }
-  const kind = context.input.program.source.ast.kindName(expression);
-  const operation = context.input.program.records.targetOperation.get(expression);
-  if (kind === "KindElementAccessExpression" && operation?.kind === "provider-operation" &&
-      operation.indexedLocationMethod !== undefined) {
-    const contract = rustIndexedLocationContract(operation, context.input.program.typeDefinitions);
-    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
-    if (contract === undefined || indexNode === undefined) {
-      return rejectLocationStorage(expression, context, "The selected index location has no exact finalized receiver, value and index input contract.");
-    }
+  if (selected.kind === "root") failRustPlannerInvariant("An admitted projected location requires its exact root identity.", expression);
+  const receiverNode = selected.receiver;
+  if (selected.kind === "indexed-method") {
     const receiver = planExpression(receiverNode, context);
-    const index = planFinalizedTargetInput(context, contract.index, receiverNode, [indexNode], expression);
+    const index = planFinalizedTargetInput(context, selected.input, receiverNode, [selected.index], expression);
     return receiver === undefined || index === undefined ? undefined : {
-      kind: "method-call", receiver, method: contract.method, args: [index],
+      kind: "method-call", receiver, method: selected.method, args: [index],
     };
   }
   const receiverLocation = planRustLocationStorage(
@@ -615,32 +569,23 @@ export function planRustLocationStorage(
   if (receiverLocation === undefined) {
     return undefined;
   }
-  if (kind === "KindPropertyAccessExpression" &&
-    operation?.kind === "source-field" &&
-    operation.valueSemantics.kind === "stored") {
+  if (selected.kind === "member") {
+    const operation = selected.operation;
     const dispatchPlan = operation.dispatch === undefined
       ? undefined
       : operation.declaration === undefined
         ? undefined
-        : context.input.program.projectFieldDispatch.planFor(operation.declaration);
+        : context.input.program.records.projectFieldDispatch.get(operation.declaration);
     if (operation.dispatch !== undefined &&
       (dispatchPlan?.write === undefined ||
         dispatchPlan.read.fallible || dispatchPlan.write.fallible)) {
-      return rejectLocationStorage(
-        expression,
-        context,
-        "A typed location cannot expose a project field whose dynamic dispatch may execute a fallible accessor.",
-      );
+      failRustPlannerInvariant("An admitted typed location requires its infallible physical field dispatch.", expression);
     }
     const dispatchRoles = dispatchPlan === undefined
       ? undefined
       : planRustProjectFieldDispatchRoles(dispatchPlan, context);
     if (dispatchPlan !== undefined && dispatchRoles?.write === undefined) {
-      return rejectLocationStorage(
-        expression,
-        context,
-        "The finalized projected member has no exact Rust dispatch ABI.",
-      );
+      failRustPlannerInvariant("An admitted projected member requires its exact Rust dispatch ABI.", expression);
     }
     const ownerName = "location_owner";
     const valueName = "location_value";
@@ -678,11 +623,7 @@ export function planRustLocationStorage(
           },
         );
     if (read === undefined || write === undefined) {
-      return rejectLocationStorage(
-        expression,
-        context,
-        "The finalized projected member has no exact Rust storage path.",
-      );
+      failRustPlannerInvariant("An admitted projected member requires its exact Rust storage path.", expression);
     }
     return {
       kind: "method-call",
@@ -706,19 +647,8 @@ export function planRustLocationStorage(
       ],
     };
   }
-  if (kind === "KindElementAccessExpression") {
-    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
-    const indexInput = operation?.kind === "provider-operation" &&
-      operation.abi.operationKind === "indexer" && operation.abi.target.form === "index" &&
-      operation.abi.targetArguments.length === 1 ? operation.abi.targetArguments[0] : undefined;
-    if (indexInput === undefined || indexNode === undefined) {
-      return rejectLocationStorage(
-        expression,
-        context,
-        "The finalized Rust element storage is not one exact built-in index operation.",
-      );
-    }
-    const index = planFinalizedTargetInput(context, indexInput, receiverNode, [indexNode], expression);
+  if (selected.kind === "index") {
+    const index = planFinalizedTargetInput(context, selected.input, receiverNode, [selected.index], expression);
     if (index === undefined) return undefined;
     return {
       kind: "method-call",
@@ -727,11 +657,7 @@ export function planRustLocationStorage(
       args: [index],
     };
   }
-  return rejectLocationStorage(
-    expression,
-    context,
-    "The finalized Rust storage path contains an unsupported projection.",
-  );
+  return failRustPlannerInvariant("An admitted Rust location requires a supported sealed projection.", expression);
 }
 
 function rustPromotedStorageMethods(node: Node, context: RustPlanContext): RustBindingStorageOperations {
@@ -743,41 +669,9 @@ export function findRustLocationStorageRoot(
   expression: Node,
   context: RustPlanContext,
 ): { readonly expression: Node; readonly declaration: Node } | undefined {
-  let root = expression;
-  while (true) {
-    const native = context.input.program.records.nativeArrayStorage.get(root);
-    if (native?.kind === "element") return { expression: root, declaration: native.declaration };
-    if (native !== undefined) return undefined;
-    const kind = context.input.program.source.ast.kindName(root);
-    if (kind !== "KindPropertyAccessExpression" &&
-      kind !== "KindElementAccessExpression" &&
-      kind !== "KindParenthesizedExpression") {
-      break;
-    }
-    const receiver = Node_Expression(context.input.program.source.ast, root);
-    if (receiver === undefined) {
-      return undefined;
-    }
-    root = receiver;
-  }
-  if (context.input.program.source.ast.kindName(root) !== "KindIdentifier") {
-    return undefined;
-  }
-  const storage = rustLocationStorageForReference(root, context);
-  return storage === undefined
-    ? undefined
-    : { expression: root, declaration: storage.declaration };
-}
-
-function rejectLocationStorage(
-  node: Node,
-  context: RustPlanContext,
-  message: string,
-): undefined {
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.typed-location-storage",
-    message,
-  ));
-  return undefined;
+  const root = context.input.program.records.locationStorageRoot.get(expression);
+  if (root === undefined) failRustPlannerInvariant("An admitted source location requires its exact root classification.", expression);
+  if (root === null) return undefined;
+  const captured = rustCapturedBindingForDeclaration(root.declaration, context);
+  return captured?.storage === "value" ? undefined : root;
 }

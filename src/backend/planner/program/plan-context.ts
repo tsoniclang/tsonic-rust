@@ -36,6 +36,7 @@ export interface RustFlowReadOverride {
 export interface RustCapturedBinding {
   readonly declaration: Node;
   readonly expression: RustExpr;
+  readonly referent: RustExpr | undefined;
   readonly storage: "value" | "location" | "cell" | "borrow-cell";
   readonly valueCarrier: import("../../../target-model/types/model.js").TargetTypeRef;
   readonly borrowed?: "shared" | "mutable";

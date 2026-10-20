@@ -29,7 +29,7 @@ export function rustCallablePayloadContext(
   const field = (index: number): RustExpr => ({ kind: "field", receiver: owner, name: `capture_${index}` });
   const fields = rustCapturedReceiverFieldContext(payload.receiverFields, { ...context,
     capturedBindings: payload.captures.map((capture, index) => ({
-      declaration: capture.declaration, expression: { kind: "reference", expr: field(index) },
+      declaration: capture.declaration, expression: { kind: "reference", expr: field(index) }, referent: field(index),
       storage: capture.storage, valueCarrier: capture.storageCarrier, borrowed: "shared",
     })),
   }, index => field(payload.captures.length + index));

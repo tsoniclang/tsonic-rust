@@ -151,6 +151,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly sourceCallArgumentPlans: import("./source-call-arguments.js").RustSourceCallArgumentProducer;
   readonly binaryEmissionPlans: import("./expression-binary.js").RustBinaryEmissionProducer;
   readonly assignmentEvaluationPlans: import("./assignment-evaluation.js").RustAssignmentEvaluationProducer;
+  readonly locationStoragePlans: import("./location-storage.js").RustLocationStorageProducer;
   readonly errorFieldPlans: import("./error-field-borrows.js").RustErrorFieldProducer;
   readonly stringComparisonPlans: import("./string-comparison-views.js").RustStringComparisonViewProducer;
   readonly genericFlowApplications: import("./generic-callable-flow.js").RustGenericCallableFlowProducer;

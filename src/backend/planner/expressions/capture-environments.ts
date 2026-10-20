@@ -35,18 +35,20 @@ export function planRustCapturedEnvironment(
         failRustPlannerInvariant("An admitted mutable capture requires its exact owning native callable contract.", owner);
       }
       capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: sourcePath },
-        storage: "value", valueCarrier: capture.carrier });
+        referent: undefined, storage: "value", valueCarrier: capture.carrier });
       continue;
     }
     const name = allocateRustSyntheticName(context.syntheticNames, `capture_${sourceName}`);
     if (options.sharedStateName === undefined)
       bindings.push({ name, value: planRustCaptureValue(owner, capture, sourcePath, capture.storage, context) });
-    capturedBindings.push({ declaration: capture.declaration,
-      expression: options.sharedStateName === undefined ? { kind: "path", path: name } : {
-        kind: "reference", expr: { kind: "field", receiver: {
+    const referent: RustExpr | undefined = options.sharedStateName === undefined ? undefined : {
+      kind: "field", receiver: {
           kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state",
-        }, name: String(index) },
-      }, storage: capture.storage, valueCarrier: capture.carrier,
+        }, name: String(index),
+    };
+    capturedBindings.push({ declaration: capture.declaration, referent,
+      expression: referent === undefined ? { kind: "path", path: name } : { kind: "reference", expr: referent },
+      storage: capture.storage, valueCarrier: capture.carrier,
       ...(options.sharedStateName === undefined ? {} : { borrowed: "shared" as const }) });
   }
   return { bindings, capturedBindings };

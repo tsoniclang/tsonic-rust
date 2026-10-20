@@ -149,6 +149,7 @@ export function rustClassEnvironmentContext(
         expression: { kind: "reference" as const, expr: {
           kind: "field" as const, receiver: value, name: capture.fieldName,
         } },
+        referent: { kind: "field" as const, receiver: value, name: capture.fieldName },
         storage: capture.storage,
         valueCarrier: capture.carrier,
         borrowed: "shared" as const,

@@ -96,6 +96,8 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly sourceCallArgument: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallArgumentEmission>;
   readonly binaryEmission: RustRecordFamily<import("./expression-binary.js").RustBinaryEmission>;
   readonly assignmentEvaluation: RustRecordFamily<import("./assignment-evaluation.js").RustAssignmentEvaluation>;
+  readonly locationProjection: import("./location-storage.js").RustLocationStorageRecords["locationProjection"];
+  readonly sourceReferenceDeclaration: import("./location-storage.js").RustLocationStorageRecords["sourceReferenceDeclaration"];
   readonly updateProjection: { readonly get: (operand: import("@tsonic/tsts").Node, field: import("@tsonic/tsts").Node) => readonly import("./direct-storage.js").RustUpdateProjectionArgument[] | undefined };
   readonly errorFieldEmission: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldEmission"];
   readonly errorFieldSnapshot: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldSnapshot"];
