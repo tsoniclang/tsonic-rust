@@ -1,11 +1,5 @@
-import {
-  canonicalizeProviderOperationRow,
-  materializeProviderBinaryHookRow,
-  materializeProviderDispatchContextRow,
-  materializeProviderCarrier,
-  materializeProviderGenericParameter,
-  materializeProviderOperationRow,
-} from "./materialization.js";
+import type { RustProviderContractValidation } from "../model/contract-validation.js";
+import { canonicalizeProviderOperationRow, materializeProviderBinaryHookRow, materializeProviderDispatchContextRow, materializeProviderCarrier, materializeProviderGenericParameter, materializeProviderOperationRow } from "./materialization.js";
 import { rustProviderBindingProviderId } from "./source-provider.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -19,6 +13,7 @@ import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/p
 
 export function rustProviderPolicyContributionsOf(
   capabilities: readonly SelectedTargetCapabilityContributions[],
+  contracts: RustProviderContractValidation,
 ): readonly RustProviderPolicyContribution[] {
   const contributions: RustProviderPolicyContribution[] = [];
   for (const capability of capabilities) {
@@ -35,7 +30,7 @@ export function rustProviderPolicyContributionsOf(
       if (candidate.definition.id !== capability.capabilityId) {
         throw new Error(`Rust capability '${capability.capabilityId}' contributed provider metadata owned by '${candidate.definition.id}'.`);
       }
-      validateProviderPackageDefinition(candidate.definition);
+      validateProviderPackageDefinition(candidate.definition, contracts);
       contributions.push(snapshotClosedMetadata(candidate));
     }
   }
@@ -85,25 +80,28 @@ export function providerBinaryHookIdentity(row: RustProviderBinaryHookRow): stri
 
 export function collectRustProviderSemantics(
   capabilities: readonly SelectedTargetCapabilityContributions[],
+  contracts: RustProviderContractValidation,
 ): RustProviderSemantics {
   return collectRustProviderSemanticsFromDefinitions(
-    rustProviderPolicyContributionsOf(capabilities).map((contribution) => contribution.definition),
+    rustProviderPolicyContributionsOf(capabilities, contracts).map((contribution) => contribution.definition), contracts,
   );
 }
 
 export function composeRustProviderSemantics(
   capabilities: readonly SelectedTargetCapabilityContributions[],
+  contracts: RustProviderContractValidation,
   compilerProviderSemantics?: RustProviderSemantics,
 ): RustProviderSemantics {
   return mergeRustProviderSemantics(
     rustBuiltInSourceTypeSemantics(),
-    collectRustProviderSemantics(capabilities),
+    collectRustProviderSemantics(capabilities, contracts),
     ...(compilerProviderSemantics === undefined ? [] : [compilerProviderSemantics]),
   );
 }
 
 export function collectRustProviderSemanticsFromDefinitions(
   definitions: readonly RustProviderPackageDefinition[],
+  contracts: RustProviderContractValidation,
 ): RustProviderSemantics {
   const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
@@ -113,7 +111,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   const binaryHooks: RustProviderBinaryHookRow[] = [];
   const dispatchContexts: RustProviderDispatchContextRow[] = [];
   for (const definition of definitions) {
-    validateProviderPackageDefinition(definition);
+    validateProviderPackageDefinition(definition, contracts);
     const providerId = rustProviderBindingProviderId(definition.id);
     const moduleByExportId = new Map(definition.modules.flatMap((module) =>
       module.exports.map((exported) => [exported.id, { module, exported }] as const)));
