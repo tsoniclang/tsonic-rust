@@ -465,7 +465,7 @@ function planModuleItems(
 }
 
 function requireTopLevelNativeItems(
-  context: RustPlanContext,
+  _context: RustPlanContext,
   statement: Node,
   construct: string,
 ): void {
