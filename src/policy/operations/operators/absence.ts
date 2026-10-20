@@ -7,7 +7,7 @@ import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../..
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import { rustOptionEqualityContract } from "../../../target-model/operations/option-equality.js";
+import { rustOptionEqualityContract } from "./option-equality.js";
 import { selectedIntegerLiteralJoin } from "../../conversions/literals.js";
 import { rustNumericPromotionConversion } from "../numeric/promotion.js";
 import type { selectedOptionNullishRelationship } from "./nullish-comparisons.js";

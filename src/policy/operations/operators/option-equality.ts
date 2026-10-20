@@ -1,20 +1,10 @@
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustBorrowedStrTargetType, isRustStringViewCarrier } from "../types/carriers/native.js";
-import { isRustOptionCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../types/carriers/optional.js";
-import { isRustCopyCarrier } from "../types/carriers/traits.js";
-import type { TargetTypeRef } from "../types/model.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustBorrowedStrTargetType, isRustStringViewCarrier } from "../../../target-model/types/carriers/native.js";
+import { isRustOptionCarrier, rustOptionElementCarrier, rustOptionTargetType } from "../../../target-model/types/carriers/optional.js";
+import { isRustCopyCarrier } from "../../../target-model/types/carriers/traits.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-export type RustOptionEqualityView = "value" | "str" | "shared";
-
-export interface RustOptionEqualityContract {
-  readonly leftCarrier: TargetTypeRef;
-  readonly rightCarrier: TargetTypeRef;
-  readonly comparisonCarrier: TargetTypeRef;
-  readonly leftLiftDepth: number;
-  readonly rightLiftDepth: number;
-  readonly view: RustOptionEqualityView;
-}
-
+import type { RustOptionEqualityContract, RustOptionEqualityView } from "../../../target-model/operations/option-equality.js";
 function optionPayload(carrier: TargetTypeRef): { readonly depth: number; readonly carrier: TargetTypeRef } | undefined {
   let current = carrier;
   let depth = 0;
