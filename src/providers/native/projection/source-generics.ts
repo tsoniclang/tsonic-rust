@@ -1,13 +1,4 @@
-import type {
-  RustCompilerAssociatedConstraint,
-  RustCompilerConstArgument,
-  RustCompilerFunction,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerLifetime,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-} from "../model/model.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerConstArgument, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerTraitDispatch, RustCompilerType } from "../model/model.js";
 
 export function referencedCallableOwnerGenericParameters(
   ownerParameters: readonly RustCompilerGenericParameter[],
@@ -21,7 +12,6 @@ export function referencedCallableOwnerGenericParameters(
   fn.parameters.forEach(({ type }) => visitType(type, selected));
   visitType(fn.result, selected);
   if (fn.receiver?.kind === "custom") visitType(fn.receiver.type, selected);
-  if (fn.borrowedResult !== undefined) visitType(fn.borrowedResult.sourceType, selected);
   if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch, selected);
   fn.genericParameters.forEach((parameter) =>
     parameterDependencies(parameter, declared).forEach((identity) => selected.add(identity)));
@@ -52,7 +42,6 @@ function callableUsesOwnerType(fn: RustCompilerFunction): boolean {
   return fn.parameters.some(({ type }) => typeContainsSelf(type)) ||
     typeContainsSelf(fn.result) ||
     (fn.receiver?.kind === "custom" && typeContainsSelf(fn.receiver.type)) ||
-    (fn.borrowedResult !== undefined && typeContainsSelf(fn.borrowedResult.sourceType)) ||
     fn.traitDispatch !== undefined ||
     fn.genericParameters.some(genericParameterContainsSelf) ||
     fn.typeRequirements.some(genericParameterContainsSelf);
