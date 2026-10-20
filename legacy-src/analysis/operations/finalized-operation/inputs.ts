@@ -1,6 +1,6 @@
 import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { isRustCVariadicArgumentCarrier } from "../c-variadic.js";
+import { isRustCVariadicArgumentCarrier } from "../../../policy/operations/callables/c-variadic.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput, sourceInput } from "./conversions.js";
 import { rustSliceRefTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

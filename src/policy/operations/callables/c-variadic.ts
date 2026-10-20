@@ -1,4 +1,4 @@
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 const cVariadicSourcePrimitives = new Set([
   "int32",

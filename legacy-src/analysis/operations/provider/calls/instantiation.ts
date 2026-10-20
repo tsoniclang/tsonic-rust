@@ -16,7 +16,7 @@ import { selectedRustCallSignature } from "../../../program/records/selected-cal
 import { asNode } from "../../../../policy/identities/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
 import { materializeRustOmittedCallArguments } from "../../../../policy/types/callables/omitted-arguments.js";
-import { isRustCVariadicArgumentCarrier } from "../../c-variadic.js";
+import { isRustCVariadicArgumentCarrier } from "../../../../policy/operations/callables/c-variadic.js";
 import {
   KindCallExpression,
   KindNewExpression,
