@@ -9,45 +9,12 @@ import { rustValueConversionContract } from "../../target-model/conversions/cont
 import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { rustClosedValueAdmissionConversion } from "../../target-model/conversions/closed-admission.js";
-import {
-  isRustJsArrayCarrier,
-  isRustJsArrayValueCarrier,
-  isRustJsValueCarrier,
-  isRustBigIntCarrier,
-  rustJsNumericTargetType,
-  rustJsStringNumberTargetType,
-  isRustNeverCarrier,
-  isRustAbsenceCarrier,
-  rustCarrierSupportsClone,
-  rustCarrierCanEnterTsValue,
-  rustJsArrayLikeElementTargetType,
-  rustJsValueTargetType,
-  rustOptionElementCarrier,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-  rustBorrowedStrTargetType,
-  rustStructuralObjectCarrierValue,
-  rustCallableProtocol,
-  rustTargetGenericReferences,
-  rustTsValueTargetType,
-} from "../../target-model/types/index.js";
+import { isRustJsArrayCarrier, isRustJsArrayValueCarrier, isRustJsValueCarrier, isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType, isRustNeverCarrier, isRustAbsenceCarrier, rustCarrierCanEnterTsValue, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStringTargetType, rustBorrowedStrTargetType, rustStructuralObjectCarrierValue, rustTsValueTargetType } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import {
-  rustFloat64ToInt32ValueConversion,
-  rustFloat64ToUint8ValueConversion,
-  rustInt32ToFloat64ValueConversion,
-  rustInt32ToUint8ValueConversion,
-  rustIsizeToInt32ValueConversion,
-  rustUint32ToInt32ValueConversion,
-  rustUint64ToFloat64ValueConversion,
-  rustUint8ToInt32ValueConversion,
-  rustUsizeToInt32ValueConversion,
-  rustBorrowedStrToStringValueConversion,
-  rustStringToBorrowedStrValueConversion,
-} from "../../target-model/conversions/model.js";
+import { rustFloat64ToInt32ValueConversion, rustFloat64ToUint8ValueConversion, rustInt32ToFloat64ValueConversion, rustInt32ToUint8ValueConversion, rustIsizeToInt32ValueConversion, rustUint32ToInt32ValueConversion, rustUint64ToFloat64ValueConversion, rustUint8ToInt32ValueConversion, rustUsizeToInt32ValueConversion, rustBorrowedStrToStringValueConversion, rustStringToBorrowedStrValueConversion } from "../../target-model/conversions/model.js";
 
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
 const float64Carrier = rustSourcePrimitiveTargetType("float64");
@@ -187,8 +154,8 @@ export function selectRustSourceValueConversion(
         };
     }
     const leaves = rustUnionLeaves(source, definitions);
-    if (leaves !== undefined) return selectUnionFold(source, target, leaves, carrier =>
-      selectRustSourceValueConversion(carrier, target, definitions, nextAncestors));
+    if (leaves !== undefined) return selectRustUnionFoldConversion(source, target, leaves, leaves.map(leaf =>
+      selectRustSourceValueConversion(leaf.carrier, target, definitions, nextAncestors)));
     return rustClosedValueAdmissionConversion(source, target, definitions);
   }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {
@@ -234,14 +201,17 @@ export function selectRustSourceValueConversion(
     }
     const unionLeaves = rustUnionLeaves(source, definitions);
     if (unionLeaves !== undefined) {
-      return selectUnionFold(source, jsValueCarrier, unionLeaves, carrier =>
-        selectRustSourceValueConversion(carrier, jsValueCarrier, definitions, nextAncestors));
+      return selectRustUnionFoldConversion(source, jsValueCarrier, unionLeaves, unionLeaves.map(leaf =>
+        selectRustSourceValueConversion(leaf.carrier, jsValueCarrier, definitions, nextAncestors)));
     }
     const structural = rustStructuralObjectCarrierValue(source);
     if (structural !== undefined) {
-      const fields = selectStructuralObjectConversionFields(
+      const fields = selectRustStructuralObjectConversionFields(
         structural,
-        (sourceCarrier) => selectRustSourceValueConversion(sourceCarrier, jsValueCarrier, definitions, nextAncestors),
+        new Map(structural.fields.map(field => {
+          const carrier = field.presence === "optional" ? rustOptionElementCarrier(field.type) : field.type;
+          return [field.type, carrier === undefined ? undefined : selectRustSourceValueConversion(carrier, jsValueCarrier, definitions, nextAncestors)] as const;
+        })),
       );
       return fields === undefined ? undefined : Object.freeze({
         kind: "js-value-from-structural-object" as const,
@@ -304,140 +274,16 @@ export function selectRustSourceAssertionConversion(
   return conversion ?? selectRustExactIntegerConversion(source, target);
 }
 
-export function selectRustProjectedValueConversion(
-  source: TargetTypeRef,
-  projection: "json" | "properties",
-  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
-  properties?: (source: TargetTypeRef) => RustValueConversion | undefined,
-): RustValueConversion | undefined {
-  if (projection !== "json" && projection !== "properties") return undefined;
-  return selectProjectedValueConversion(source, projection, projection === "json", [], definitions, properties);
-}
-
-function selectProjectedValueConversion(
-  source: TargetTypeRef,
-  projection: "json" | "properties",
-  applySelectedToJson: boolean,
-  ancestors: readonly TargetTypeRef[],
-  definitions: RustTypeDefinitions,
-  properties?: (source: TargetTypeRef) => RustValueConversion | undefined,
-): RustValueConversion | undefined {
-  if (ancestors.some((ancestor) => rustTargetTypeRefEquals(ancestor, source))) {
-    return undefined;
-  }
-  const nextAncestors = [...ancestors, source];
-  const structural = rustStructuralObjectCarrierValue(source);
-  const toJsonMethods = structural?.fields.flatMap((field, storageIndex) =>
-    field.method === true && field.sourceName === "toJSON"
-      ? [{ field, storageIndex }]
-      : []) ?? [];
-  if (applySelectedToJson && toJsonMethods.length === 1) {
-    const toJsonMethod = toJsonMethods[0]!;
-    const callable = toJsonMethod.field.presence === "required"
-      ? rustCallableProtocol(toJsonMethod.field.type)
-      : undefined;
-    const passesPropertyKey = callable?.parameters.length === 1 &&
-      rustTargetTypeRefEquals(callable.parameters[0], stringCarrier);
-    const validParameters = callable?.parameters.length === 0 || passesPropertyKey;
-    const resultConversion = callable === undefined ||
-        rustTargetTypeRefEquals(callable.result, source)
-      ? undefined
-      : selectProjectedValueConversion(callable.result, projection, false, nextAncestors, definitions);
-    if (callable === undefined || !validParameters || resultConversion === undefined ||
-        resultConversion.kind === "option-map" ||
-        resultConversion.kind === "option-some" ||
-        rustTargetGenericReferences(source).lifetimeIdentities.length !== 0) {
-      return undefined;
-    }
-    return Object.freeze({
-      kind: "js-value-from-structural-to-json" as const,
-      source,
-      storageIndex: toJsonMethod.storageIndex,
-      resultCarrier: callable.result,
-      passesPropertyKey,
-      resultConversion,
-    });
-  }
-  if (applySelectedToJson && toJsonMethods.length > 1) {
-    return undefined;
-  }
-  const optionElement = rustOptionElementCarrier(source);
-  if (optionElement !== undefined) {
-    const elementConversion = selectProjectedValueConversion(
-      optionElement,
-      projection,
-      applySelectedToJson,
-      nextAncestors,
-      definitions,
-      properties,
-    );
-    return elementConversion === undefined ||
-        elementConversion.kind === "option-map" ||
-        elementConversion.kind === "option-some"
-      ? undefined
-      : Object.freeze({
-          kind: "closed-value-from-option" as const,
-          source,
-          element: optionElement,
-          elementConversion,
-        });
-  }
-  const arrayElement = isRustJsArrayCarrier(source)
-    ? rustJsArrayLikeElementTargetType(source)
-    : undefined;
-  if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement, definitions)) {
-    const elementConversion = selectProjectedValueConversion(
-      arrayElement,
-      projection,
-      projection === "json",
-      nextAncestors,
-      definitions,
-      properties,
-    );
-    return elementConversion === undefined ||
-        elementConversion.kind === "option-map" ||
-        elementConversion.kind === "option-some"
-      ? undefined
-      : Object.freeze({
-          kind: "js-value-from-array" as const,
-          source,
-          element: arrayElement,
-          elementConversion,
-        });
-  }
-  const unionLeaves = rustUnionLeaves(source, definitions);
-  if (unionLeaves !== undefined) {
-    return selectUnionFold(source, jsValueCarrier, unionLeaves, carrier =>
-      selectProjectedValueConversion(carrier, projection, applySelectedToJson, nextAncestors, definitions, properties));
-  }
-  if (projection === "properties") {
-    return isRustAbsenceCarrier(source)
-      ? selectRustSourceValueConversion(source, jsValueCarrier, definitions)
-      : properties?.(source);
-  }
-  if (structural !== undefined) {
-    const fields = selectStructuralObjectConversionFields(
-      structural,
-      (sourceCarrier) => selectProjectedValueConversion(sourceCarrier, projection, projection === "json", nextAncestors, definitions),
-    );
-    return fields === undefined ? undefined : Object.freeze({
-      kind: "js-value-from-structural-object" as const,
-      source,
-      fields,
-    });
-  }
-  return selectRustSourceValueConversion(source, jsValueCarrier, definitions);
-}
-
-function selectUnionFold(
+export function selectRustUnionFoldConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
   leaves: readonly RustUnionLeaf[],
-  select: (carrier: TargetTypeRef) => RustValueConversion | undefined,
+  conversions: readonly (RustValueConversion | undefined)[],
 ): Extract<RustValueConversion, { readonly kind: "union-fold" }> | undefined {
   const arms: Extract<RustValueConversion, { readonly kind: "union-fold" }>["arms"][number][] = [];
-  for (const leaf of leaves) {
-    const conversion = select(leaf.carrier);
+  if (leaves.length !== conversions.length) return undefined;
+  for (const [index, leaf] of leaves.entries()) {
+    const conversion = conversions[index];
     if (conversion === undefined || conversion.kind === "option-map" || conversion.kind === "option-some") return undefined;
     arms.push(Object.freeze({ ...leaf, conversion }));
   }
@@ -449,9 +295,9 @@ type StructuralObjectConversion = Extract<
   { readonly kind: "js-value-from-structural-object" }
 >;
 
-function selectStructuralObjectConversionFields(
+export function selectRustStructuralObjectConversionFields(
   structural: NonNullable<ReturnType<typeof rustStructuralObjectCarrierValue>>,
-  select: (sourceCarrier: TargetTypeRef) => RustValueConversion | undefined,
+  conversions: ReadonlyMap<TargetTypeRef, RustValueConversion | undefined>,
 ): StructuralObjectConversion["fields"] | undefined {
   const fields: StructuralObjectConversion["fields"][number][] = [];
   for (const [storageIndex, field] of structural.fields.entries()) {
@@ -461,7 +307,7 @@ function selectStructuralObjectConversionFields(
       ? rustOptionElementCarrier(field.type)
       : field.type;
     if (sourceCarrier === undefined) return undefined;
-    const conversion = select(sourceCarrier);
+    const conversion = conversions.get(field.type);
     if (conversion === undefined || conversion.kind === "option-map" ||
       conversion.kind === "option-some") {
       return undefined;
