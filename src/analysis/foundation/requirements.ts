@@ -23,6 +23,7 @@ import {
   type RustFoundation,
 } from "../../target-model/foundation/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNativeRootFoundations, rustRuntimeExportFoundations } from "../../target-model/foundation/native-paths.js";
 
@@ -86,12 +87,10 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         current.genericArguments?.forEach(visitArgument);
         return;
       case "opaque":
-        require("std");
         return;
       case "target-specific": {
         const callable = rustGenericCallableValue(current);
         if (callable !== undefined) {
-          require("alloc");
           callable.environment.forEach(visit);
           callable.signature.parameters.forEach(visit);
           visit(callable.signature.result);
@@ -121,13 +120,11 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         }
         const structural = rustStructuralObjectCarrierValue(current);
         if (structural !== undefined) {
-          require("alloc");
+          if (structural.representation === "reference") require("alloc");
           structural.fields.forEach((field) => visit(field.type));
           return;
         }
-        if (current.name !== "never") {
-          require("std");
-        }
+        rustTargetTypeChildren(current).forEach(visit);
         return;
       }
     }
@@ -150,7 +147,7 @@ function rustFoundationForTargetNamedCarrier(id: string): RustFoundation {
   if (id === rustFutureTargetId || id === rustNativeScalarTargetId) {
     return "core";
   }
-  return "std";
+  return "core";
 }
 
 export function rustFoundationForSelectedCall(
@@ -196,10 +193,11 @@ export function rustFoundationForSelectedOperation(
 
 export function rustFoundationForPath(path: string): RustFoundation {
   const [root = path, member] = path.split("::", 2);
-  const native = rustNativeRootFoundations[root];
+  const native = Object.prototype.hasOwnProperty.call(rustNativeRootFoundations, root) ? rustNativeRootFoundations[root] : undefined;
   if (native !== undefined) return native;
   if (root === "rt" || root === "tsonic_rust_runtime") {
-    const selected = member === undefined ? undefined : rustRuntimeExportFoundations[member];
+    const selected = member === undefined || !Object.prototype.hasOwnProperty.call(rustRuntimeExportFoundations, member)
+      ? undefined : rustRuntimeExportFoundations[member];
     if (selected === undefined) return failTargetAnalysisInvariant("tsonic-rust",
       "A selected runtime path requires its registered native feature requirement.");
     return selected;

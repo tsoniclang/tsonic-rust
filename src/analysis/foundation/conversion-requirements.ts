@@ -152,7 +152,6 @@ function rustFoundationForConversionContract(
       break;
     case "numeric-cast":
     case "identity":
-    case "option-some":
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":
     case "borrowed-str-from-owned-string":

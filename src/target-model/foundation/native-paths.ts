@@ -18,6 +18,7 @@ export const rustRuntimeExportFoundations: Readonly<Record<string, RustFoundatio
   RawPointer: "alloc", finish_resource: "alloc", BigInt: "alloc", Callable: "alloc", CallableImplementation: "alloc",
   EmptyObject: "alloc", ErrorField: "alloc", ErrorObject: "alloc", ErrorStack: "alloc", JsError: "alloc", JsErrorKind: "alloc",
   MutableJsError: "alloc", TsonicError: "alloc", TsonicResult: "alloc", WritableErrorObject: "alloc",
+  SourceError: "alloc", WritableSourceError: "alloc",
   FrameCallable: "alloc", FrameCallableEntry: "alloc", FrameEntryCounter: "alloc", FrameCallableFamily: "alloc", FrameCallableFamilyEntry: "alloc",
   AsyncGenerator: "alloc", BorrowedAsyncGenerator: "alloc", BorrowedGenerator: "alloc", Generator: "alloc",
   GeneratorController: "alloc", GeneratorResume: "alloc", IteratorResult: "alloc", IteratorValue: "alloc", YieldPoint: "alloc",
