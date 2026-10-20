@@ -116,4 +116,5 @@ export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef,
     case "impl-trait":
     case "target-specific": return undefined;
   }
+  return undefined;
 }
