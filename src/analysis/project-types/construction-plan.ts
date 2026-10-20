@@ -4,8 +4,7 @@ import { Node_Expression, Node_Initializer, sourceParameterIsProperty } from "@t
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
-import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, type RustProjectTypeDefinition,
-  type RustProjectTypePolicy } from "./type-policy.js";
+import { rustInheritedProjectConstructor, type RustProjectTypeDefinition, type RustProjectTypePolicy } from "./index.js";
 import type { RustObjectRepresentationPlan } from "./object-representation.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
@@ -13,7 +12,7 @@ import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captu
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
-import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/construction.js";
+
 import { selectRustExternalInitialization } from "./external-initialization.js";
 import type { RustExternalInitialization } from "../../target-model/records/construction.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -24,7 +23,6 @@ export interface RustConstructionIssue {
   readonly node: Node;
   readonly reason: string;
 }
-
 
 export interface RustConstructionEmissionPlan {
   readonly frame: RustFrameCallableDefinition | undefined;
@@ -69,9 +67,9 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
     const lineage = input.projectTypes.classLineage(definition);
     const layers: RustConstructionLayer[] = [];
     const issues: RustConstructionIssue[] = [];
-    if (lineage === undefined || lineage.length > 256) {
+    if (lineage === undefined) {
       issues.push(Object.freeze({ node: definition.declaration,
-        reason: "Native construction requires one bounded exact source class lineage." }));
+        reason: "Native construction requires one exact source class lineage." }));
     } else {
       let selected = input.projectTypes.constructorsForDefinition(definition)[0];
       if (selected === undefined) issues.push(Object.freeze({ node: definition.declaration,
