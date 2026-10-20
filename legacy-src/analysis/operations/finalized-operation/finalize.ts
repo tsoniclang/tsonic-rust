@@ -12,7 +12,7 @@ import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../target-m
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
-import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+import { insertRustDispatchContextInputs } from "../../../policy/operations/members/abi/dispatch-inputs.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
 

@@ -14,7 +14,7 @@ import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderO
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 import { isFinalizedConversion } from "../../../policy/operations/members/abi/conversion-shape.js";
 import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
-import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+import { insertRustDispatchContextInputs } from "../../../policy/operations/members/abi/dispatch-inputs.js";
 import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 
