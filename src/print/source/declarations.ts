@@ -1,6 +1,7 @@
 import { printRustBlockStatements } from "./blocks.js";
 import { printRustExpr } from "./expressions/core.js";
 import { printRustAttribute, printRustAttributes as printAttributes } from "./attributes.js";
+import { failRustSyntaxInvariant } from "./invariants.js";
 import {
   indentText,
   printRustConstArgument,
@@ -118,7 +119,7 @@ export function printRustItem(item: RustItem): string {
     }
     case "impl": {
       if (item.trait === undefined && item.members.some(member => member.kind === "type")) {
-        throw new Error("Associated type definitions require an exact trait implementation.");
+        return failRustSyntaxInvariant(item, "associated type without trait implementation");
       }
       const generics = printRustGenerics(item.generics);
       const target = printRustType(item.target);
