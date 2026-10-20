@@ -59,7 +59,7 @@ import type { RustClassValuePlan } from "../../target-model/records/class-values
 import type { RustCallableEmissionContexts, RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
-import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
+import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
 import { prepareRustProviderSourceOccurrences } from "../operations/provider-source-inputs.js";
 import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";

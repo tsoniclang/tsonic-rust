@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
+import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
 import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
@@ -29,7 +29,7 @@ export function analyzeRustGenericErrorEmission(input: {
     if (selected === undefined) continue;
     const members = new Map<RustGenericCallablePhysicalMember, RustGenericCallableMemberErrorEmission>();
     for (const member of definition.members) {
-      const value = selected.forMember(member);
+      const value = selected.members.get(member);
       if (value === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted generic callable requires its exact native member error channels.", member.implementation.declaration);
       members.set(member, value);
     }

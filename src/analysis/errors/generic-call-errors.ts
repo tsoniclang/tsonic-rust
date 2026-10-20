@@ -156,7 +156,7 @@ function resolveRustGenericCallableInvocation(
         ? conversion.members.filter(mapping => mapping.source === sourceMember) : undefined;
       const member = conversion?.kind === "identity" ? sourceMember
         : mappings?.length === 1 ? mappings[0]!.target : undefined;
-      const error = member === undefined || !definition.members.includes(member) ? undefined : selected.forMember(member)?.[channel];
+      const error = member === undefined || !definition.members.includes(member) ? undefined : selected.members.get(member)?.[channel];
       return error === undefined ? undefined : instantiateOne(error);
     },
   });

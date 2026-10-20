@@ -26,7 +26,7 @@ import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallableCompletionPlan } from "./generic-completions.js";
-import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
+import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner,
   type RustEmissionSourceRequest } from "./emission-source-origins.js";
@@ -216,7 +216,7 @@ export function prepareRustCallableEmissionContexts(
     for (const member of definition.members) {
       const environment = input.generic.physical.environmentFor(member.implementation);
       const selectedCompletion = completion.kind === "direct" ? completion.result : completion.forMember(member)?.result;
-      const selectedErrors = errors?.forMember(member);
+      const selectedErrors = errors?.members.get(member);
       if (environment === undefined || selectedCompletion === undefined || selectedErrors === undefined) {
         diagnostics.push(emissionDiagnostic(member.implementation.declaration,
           "An emitted physical member has no selected environment or completion payload."));

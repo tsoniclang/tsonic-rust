@@ -3,16 +3,12 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
 import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
-import type { RustGenericCallableEffectsFact } from "../../target-model/records/generic-callable-effects.js";
+
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallableBindingContext } from "./generic-bindings.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
-
-export interface RustGenericCallableErrorIndex {
-  forDefinition(definition: RustGenericCallablePhysicalDefinition): RustGenericCallableErrorSelection | undefined;
-}
 
 export function analyzeRustGenericCallableErrors(
   input: Parameters<typeof selectRustGenericCallableErrors>[1],
@@ -30,22 +26,7 @@ export function analyzeRustGenericCallableErrors(
       }
     }
   });
-  return failure === undefined ? resolvedTargetStage(Object.freeze({
-    forDefinition: (definition: RustGenericCallablePhysicalDefinition) => selections.get(definition),
-  })) : rejectedTargetStage([{ ...failure, category: "error", source: "tsonic-rust" }]);
-}
-
-export interface RustGenericCallableMemberErrors {
-  readonly effects: RustSourceCallEffectsFact;
-  readonly invocation: RustNativeErrorSource<TargetTypeRef> | undefined;
-  readonly awaiting: RustNativeErrorSource<TargetTypeRef> | undefined;
-}
-
-export interface RustGenericCallableErrorSelection {
-  readonly effects: RustGenericCallableEffectsFact;
-  readonly invocation: readonly RustNativeErrorSource<TargetTypeRef>[];
-  readonly awaiting: readonly RustNativeErrorSource<TargetTypeRef>[];
-  forMember(member: RustGenericCallablePhysicalMember): RustGenericCallableMemberErrors | undefined;
+  return failure === undefined ? resolvedTargetStage(sealRustGenericCallableErrorIndex(selections)) : rejectedTargetStage([{ ...failure, category: "error", source: "tsonic-rust" }]);
 }
 
 export function selectRustGenericCallableErrors(
@@ -79,10 +60,13 @@ export function selectRustGenericCallableErrors(
     }
     selections.set(member, Object.freeze({ effects, ...selected }));
   }
-  return Object.freeze({ invocation: Object.freeze(invocation), awaiting: Object.freeze(awaiting),
+  return sealRustGenericCallableErrorSelection({ invocation: Object.freeze(invocation), awaiting: Object.freeze(awaiting),
     effects: Object.freeze({ invocation: invocation.length > 0 ? "fallible" : "infallible",
       awaiting: awaiting.length > 0 ? "fallible" : [...selections.values()].some(value => value.effects.awaiting !== "not-applicable")
         ? "infallible" : "not-applicable" }),
-    forMember: (member: RustGenericCallablePhysicalMember) => selections.get(member),
+    members: selections,
   });
 }
+
+import type { RustGenericCallableErrorIndex, RustGenericCallableErrorSelection, RustGenericCallableMemberErrors } from "../../target-model/records/generic-callable-errors.js";
+import { sealRustGenericCallableErrorIndex, sealRustGenericCallableErrorSelection } from "../program/records/generic-callable-errors.js";
