@@ -1,9 +1,9 @@
-import type { TargetTypeRef } from "../model.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
-import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
-import { rustCallableProtocol, rustCallableTargetType, rustCallableInputProtocol, rustCallableInputTargetType } from "./callables.js";
-import { rustFrameCallableTargetType, rustFrameCallableValue } from "./frame-callables.js";
-import { rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
+import { rustCallableProtocol, rustCallableTargetType, rustCallableInputProtocol, rustCallableInputTargetType } from "../../../target-model/types/carriers/callables.js";
+import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
+import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 
 export function rebindRustCallableCarrier(
   carrier: TargetTypeRef,

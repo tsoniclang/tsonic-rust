@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustOperationContext } from "../program/walk.js";
 import { rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
-import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
+import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectedRustCheckedCallInputCarrier } from "../operations/provider/calls/input-contract.js";

@@ -21,7 +21,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
+import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
 import { selectedSourceCallableReturn } from "./signatures.js";
 import { finalizeRustCallableSignature } from "./signature-query.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";

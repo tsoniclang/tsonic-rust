@@ -24,7 +24,7 @@ import { selectRustPointerReturnContract } from "./pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
-import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
+import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
 import { resolveRustRetainedResult } from "../types/resolution/retained-results.js";
 
 import { selectRustInferredReturn, selectRustRetainedReturn } from "./inferred-return.js";
