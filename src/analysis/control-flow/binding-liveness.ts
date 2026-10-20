@@ -5,9 +5,10 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustOwnershipFlow } from "../ownership/flow.js";
 import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
 
 export function analyzeRustBindingLiveness(
-  source: TargetSourceProgram, flow: RustOwnershipFlow, records: RustProgramRecords,
+  source: TargetSourceProgram, flow: RustOwnershipFlow, records: RustProgramRecords, names: RustNamePlan,
   producer: RustBindingLivenessProducer,
 ): readonly TargetDiagnostic[] {
   const writesBySource = new Map<Node, boolean>();
@@ -34,8 +35,10 @@ export function analyzeRustBindingLiveness(
     for (const binding of graph.bindings) {
       if (sourceEnclosingCallable(binding, source.ast) !== graph.declaration) continue;
       const previous = bindings.get(binding);
-      bindings.set(binding, { unused: (previous?.unused ?? true) && !reads.has(binding),
-        unusedInitializer: (previous?.unusedInitializer ?? true) && initialWrites.get(binding) === true,
+      bindings.set(binding, { unused: (previous?.unused ?? true) && !reads.has(binding) &&
+          names.nameForDeclaration(binding)?.startsWith("_") !== true,
+        unusedInitializer: (previous?.unusedInitializer ?? true) && initialWrites.get(binding) === true &&
+          names.nameForDeclaration(binding)?.startsWith("_") !== true,
         multipleWrites: previous?.multipleWrites === true || (writes.maximum.get(binding) ?? 0) > 1 });
     }
   }

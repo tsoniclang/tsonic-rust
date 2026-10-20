@@ -185,11 +185,11 @@ function printRustFunction(
 
 function printRustParameters(
   selfParam: RustSelfParam | undefined,
-  parameters: readonly { readonly name: string; readonly mutable?: boolean; readonly type: RustType }[],
+  parameters: readonly import("../../backend/target-ast/syntax/nodes.js").RustFunctionParam[],
 ): string {
   const self = printRustSelfParam(selfParam);
   const rest = parameters.map((parameter) =>
-    `${parameter.mutable === true ? "mut " : ""}${parameter.name}: ${printRustType(parameter.type)}`);
+    `${(parameter.attrs ?? []).map(attribute => `${printRustAttribute(attribute)} `).join("")}${parameter.mutable === true ? "mut " : ""}${parameter.name}: ${printRustType(parameter.type)}`);
   return [...(self === undefined ? [] : [self]), ...rest].join(", ");
 }
 

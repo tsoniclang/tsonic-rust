@@ -1,5 +1,4 @@
-import type { Node } from "@tsonic/tsts";
-import type { RustRecordFamily } from "./reader.js";
+import type { RustRecordFamily } from "./program.js";
 
 export interface RustBindingLiveness {
   readonly unused: boolean;

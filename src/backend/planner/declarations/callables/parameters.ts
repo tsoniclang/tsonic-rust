@@ -10,6 +10,7 @@ import { allocateRustSyntheticName, type RustSyntheticNameState } from "../../na
 import { planRustNativeAllocation } from "../../expressions/native-memory.js";
 import { rustOptionDefaultValue } from "../../expressions/option-default.js";
 import { planRustParameterEntryConversion } from "./parameter-entry-conversion.js";
+import { rustBindingLivenessAttributes } from "../../bindings/liveness.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
@@ -32,7 +33,10 @@ export function planRustCallableParameters(callable: Node, context: RustPlanCont
     const parameterType = rustParameterTypeFromCarrierInContext(selected.carrier, context);
     const name = selected.pattern === undefined ? selected.name : allocateRustSyntheticName(syntheticNames, "binding_parameter");
     if (name === undefined || parameterType === undefined) failRustPlannerInvariant("An admitted callable parameter requires its native name and storage type.", parameter);
-    params.push({ name, type: parameterType, mutable: selected.parameterMutable });
+    params.push({ name, type: parameterType, mutable: selected.parameterMutable,
+      ...(selected.pattern !== undefined || selected.default !== undefined || selected.storage !== undefined ||
+        context.input.program.records.sourceParameterAbi.get(parameter)?.entryConversion !== undefined ? {}
+        : { attrs: rustBindingLivenessAttributes(parameter, selected.parameterMutable, context) }) });
     prelude.push(...planRustParameterEntryConversion(parameter, name, selected.mutable, context)
       .map(statement => ({ kind: "statement" as const, statement })));
     if (selected.default !== undefined) prelude.push({ kind: "default", initializer: selected.default.initializer,

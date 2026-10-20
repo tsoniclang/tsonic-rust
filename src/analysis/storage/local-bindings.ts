@@ -82,9 +82,11 @@ export function analyzeRustLocalBindings(input: {
     }
     const summary = input.navigation.declarationUseSummary(node);
     const representation = input.representations.representationFor(input.projectTypes.definitionForCarrier(carrier));
+    const liveness = input.records.bindingLiveness.get(node);
     const resource = input.records.resourceManagement.get(node);
     const mutable = nativeArray !== undefined ? summary.bindingWritten : storage?.iterationScope !== undefined || storage === undefined &&
-      (input.aliases.requiresMutableOwner(node) || summary.bindingWritten || input.records.mutatedBinding.get(node) !== undefined ||
+      (input.aliases.requiresMutableOwner(node) || (initializer !== undefined || absenceInitializer ||
+        liveness?.multipleWrites !== false) && (summary.bindingWritten || input.records.mutatedBinding.get(node) !== undefined) ||
         representation?.kind === "value" && representation.mutable && summary.memberWritten ||
         carrier.kind !== "pointer" && carrier.kind !== "reference" && input.records.mutatedReferentBinding.get(node) !== undefined ||
         resource?.disposal.target.receiverMode === "mut-ref");

@@ -13,6 +13,7 @@ import { nativeRustArrayType } from "../expressions/native-arrays.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueDestinationContext } from "../expressions/value-destinations.js";
 import { planNativeModuleFunction } from "../declarations/callables/functions.js";
+import { rustBindingLivenessAttributes } from "./liveness.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const declarations = collectVariableDeclarations(node, context);
@@ -52,6 +53,7 @@ function planVariableDeclaration(declaration: Node, context: RustPlanContext): r
   if (binding.initializer !== undefined && storage.value === undefined)
     failRustPlannerInvariant("An admitted local requires its stored native initializer.", declaration);
   return [...initializer?.statements ?? [], { kind: "let", name: binding.name, mutable: binding.mutable,
+    attrs: rustBindingLivenessAttributes(declaration, binding.mutable && storage.value !== undefined, context),
     ...(storage.type === undefined || binding.selfTypedCallable ? {} : { type: storage.type }),
     ...(storage.value === undefined ? {} : { init: storage.value }) }];
 }

@@ -379,6 +379,7 @@ export interface RustFunctionParam {
   readonly name: string;
   readonly type: RustType;
   readonly mutable?: boolean;
+  readonly attrs?: readonly RustAttribute[];
 }
 
 export type RustSelfParam =
