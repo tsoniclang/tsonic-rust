@@ -1,8 +1,9 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { Node_Initializer, sourceParameterIsProperty, selectSourceNativeGuardResult } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import type { RustReceiverStorageInput } from "./receiver-storage.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
-import type { RustProjectTypeDefinition } from "./type-policy.js";
+import type { RustProjectTypeDefinition } from "./index.js";
 import { analyzeRustConstructionReadiness, type RustConstructionReadinessField,
   type RustConstructionReadinessInput } from "./construction-readiness.js";
 
@@ -13,7 +14,7 @@ export function analyzeRustConstructionEffects(
 ): { readonly publishedFieldWrites: readonly Node[]; readonly deferredCaptureFields: readonly Node[] } {
   if (definition.kind !== "class") return { publishedFieldWrites: [], deferredCaptureFields: [] };
   const lineage = input.projectTypes.classLineage(definition);
-  if (lineage === undefined || lineage.length > 256) throw new Error("Constructor effects require one bounded exact source lineage.");
+  if (lineage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Constructor effects require one exact source lineage.", definition.declaration);
   const layers: RustConstructionReadinessInput["layers"][number][] = [];
   for (const owner of lineage) {
     const fields: RustConstructionReadinessField[] = [];
