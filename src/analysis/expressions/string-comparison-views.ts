@@ -6,6 +6,7 @@ import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "
 import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustStringComparisonViews(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustStringComparisonViewProducer): void {
   for (const node of nodes) {
@@ -17,7 +18,7 @@ export function analyzeRustStringComparisonViews(program: Omit<RustTargetProgram
       value = inner;
     }
     const literal = program.records.literalValue.get(value);
-    if ((literal?.form === "string" || literal?.form === "template") && rustBorrowValueIsUnprojected(node, program.records))
+    if ((literal?.form === "string" || literal?.form === "template") && isRustStringCarrier(program.records.valueRead.get(node)?.value) && rustBorrowValueIsUnprojected(node, program.records))
       selected = { kind: "literal", value: literal.text };
     const field = program.records.errorFieldEmission.get(node);
     if (field?.kind === "property" && field.directRead && field.property !== "stack") selected = { kind: "error" };

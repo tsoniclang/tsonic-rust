@@ -4,7 +4,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircui
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustBinaryEmissionProducer } from "../program/records/expression-binary.js";
 import type { RustBinaryEmission } from "../../target-model/records/expression-binary.js";
-import { isRustBoolCarrier, isRustNeverCarrier, isRustUnitCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
+import { isRustBoolCarrier, isRustNeverCarrier, isRustUnitCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
@@ -150,9 +150,10 @@ export function analyzeRustBinaryEmission(program: Omit<RustTargetProgram, "reac
     producer.publish(node, { fact, left, right, leftUnit: isRustUnitCarrier(leftCarrier), rightUnit: isRustUnitCarrier(rightCarrier),
       leftNever: isRustNeverCarrier(leftCarrier), leftShared: comparison && fact.leftConversion === undefined, rightShared: comparison && fact.rightConversion === undefined,
       int32Remainder: program.numericRepresentations.usesInt32Remainder(node),
+      compound: (fact.kind === "operator-token" || fact.kind === "operator-call") && fact.operator !== "=" && isRustAssignmentOperator(fact.operator),
       operator: fact.kind === "operator-token" && isRustBinaryOperator(fact.operator) ? fact.operator : undefined,
-      leftLiteral: comparison && fact.leftConversion === undefined ? literal(left) : undefined,
-      rightLiteral: comparison && fact.rightConversion === undefined ? literal(right) : undefined,
+      leftLiteral: comparison && fact.leftConversion === undefined && isRustStringCarrier(leftCarrier) ? literal(left) : undefined,
+      rightLiteral: comparison && fact.rightConversion === undefined && isRustStringCarrier(rightCarrier) ? literal(right) : undefined,
       selectionTest: fact.kind === "project-type-test" && fact.lowering.kind === "dispatch" && rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier),
       constantLeftEffect: effect(left), constantRightEffect: effect(right), concatParts: concatParts === undefined ? undefined : Object.freeze(concatParts), optionCheck });
   }

@@ -12,6 +12,7 @@ export interface RustBinaryEmission {
   readonly leftShared: boolean;
   readonly rightShared: boolean;
   readonly int32Remainder: boolean;
+  readonly compound: boolean;
   readonly operator: RustBinaryOperator | undefined;
   readonly leftLiteral: string | undefined;
   readonly rightLiteral: string | undefined;
