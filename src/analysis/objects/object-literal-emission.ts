@@ -1,5 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustObjectLiteralEmissionProducer } from "../program/records/object-literal-emission.js";
 import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
@@ -7,8 +8,36 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType } from "../../target-model/types/index.js";
 import { selectRustObjectLiteralDispatch } from "../../policy/objects/object-literal-emission.js";
 import { analyzeRustProjectLiteralEmission } from "./project-literal-emission.js";
+import { rustJsValueTargetType } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
-export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustObjectLiteralEmissionProducer): void {
+export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
+  producer: RustObjectLiteralEmissionProducer, propertyName: (node: Node) => SourcePropertyNameSelection | undefined): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  for (const node of nodes) {
+    const fact = program.records.targetOperation.get(node);
+    if (fact?.kind !== "closed-record-literal") continue;
+    const { ast } = program.source;
+    const properties = ast.properties(node);
+    const valid = rustTargetTypeRefEquals(fact.resultCarrier, rustJsValueTargetType()) &&
+      rustTargetTypeRefEquals(program.records.runtimeCarrier.get(node)?.carrier, fact.resultCarrier) && properties.length !== 0 &&
+      properties.length === fact.fields.length && new Set(fact.fields.map(field => field.sourceName)).size === fact.fields.length &&
+      fact.fields.every((field, index) => {
+        const property = properties[index];
+        const name = property === undefined ? undefined : ast.name(property);
+        const selected = name !== undefined && (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)) ? propertyName(name) : undefined;
+        const sourceName = name === undefined ? undefined : ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)
+          ? selected?.kind === "resolved" ? selected.name : undefined : ast.text(name);
+        return property !== undefined && property === field.property && (ast.is.IsPropertyAssignment(property) || ast.is.IsShorthandPropertyAssignment(property)) &&
+          sourceName === field.sourceName && ObjectLiteralProperty_Value(ast, property) === field.expression &&
+          rustTargetTypeRefEquals(rustEffectiveValueCarrier(program.records, field.expression), fact.resultCarrier);
+      });
+    if (valid) producer.closed(node, fact);
+    else issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `Closed record construction requires exact ordered data-property and carrier facts. Node kind: ${ast.kindName(node)}.`,
+      evidence: ["target.capability=rust.backend.closed-record"] });
+  }
   const modules = new Map<SourceFile, RustObjectLiteralEmissionRequest[]>();
   const structural = (node: Node, carrier: TargetTypeRef, accessorFields: ReadonlySet<number>): RustStructuralLiteralEmission => {
     const shape = program.structuralShapes.templateForCarrier(carrier);
@@ -63,4 +92,5 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram
   };
   for (const file of program.sourceFiles) visit(file);
   for (const [file, requests] of modules) producer.module(file, Object.freeze(requests));
+  return Object.freeze(issues);
 }

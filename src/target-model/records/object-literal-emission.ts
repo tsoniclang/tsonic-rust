@@ -30,6 +30,7 @@ export type RustObjectLiteralEmissionRequest = RustObjectLiteralEmission |
   { readonly kind: "reference"; readonly node: Node; readonly selection: RustStructuralLiteralEmission };
 
 export interface RustObjectLiteralEmissionRecords {
+  readonly closedRecord: { readonly get: (node: Node) => Extract<RustTargetOperationFact, { readonly kind: "closed-record-literal" }> | undefined };
   readonly objectLiteralEmission: { readonly get: (node: Node) => RustObjectLiteralEmission | undefined };
   readonly objectLiteralEmissions: { readonly get: (file: SourceFile) => readonly RustObjectLiteralEmissionRequest[] | undefined };
 }

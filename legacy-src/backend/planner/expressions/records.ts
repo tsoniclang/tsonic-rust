@@ -55,7 +55,7 @@ function recordContributionSourceName(name: Node | undefined, context: RustPlanC
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
-  if (fact?.kind === "closed-record-literal") return planRustClosedRecordLiteral(node, fact, context);
+  if (fact?.kind === "closed-record-literal") return planRustClosedRecordLiteral(node, context);
   if (fact?.kind === "empty-object-literal") {
     if (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId ||
       context.input.program.source.ast.properties(node).length !== 0 ||
