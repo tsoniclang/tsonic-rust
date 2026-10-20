@@ -3,7 +3,7 @@ import type { RustTypeDefinitions } from "../../../target-model/types/source-uni
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { selectRustProjectUnionMapConversion } from "../../conversions/project-union.js";
 
-import { rustProjectUnionUpcastRelation } from "../../../target-model/conversions/project-union-relations.js";
+import { rustProjectUnionUpcastRelation } from "../../../analysis/conversions/project-union-relations.js";
 
 export function selectRustProjectUnionMapping(
   source: TargetTypeRef,

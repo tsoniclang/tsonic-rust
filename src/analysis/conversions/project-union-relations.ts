@@ -1,6 +1,6 @@
-import type { RustProjectTypePolicy } from "../types/project-types.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
-import type { RustProjectUpcastRelation } from "./project-union.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustProjectUpcastRelation } from "../../target-model/conversions/project-union.js";
 
 export function rustProjectUnionUpcastRelation(projectTypes: RustProjectTypePolicy): RustProjectUpcastRelation {
   return (source, target) => {
