@@ -3,7 +3,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSuspendedCallableStorage } from "../../target-model/records/callables-and-resources.js";
 import { selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
-import { rustLifetimeOutlives, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
 import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";

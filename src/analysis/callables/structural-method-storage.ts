@@ -5,7 +5,8 @@ import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
-import { rustLifetimeKey, rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";

@@ -2,7 +2,8 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 import type { RustSourceGenericContract, RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../target-model/records/frame-callables.js";
