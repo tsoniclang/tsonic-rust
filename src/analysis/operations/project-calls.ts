@@ -23,7 +23,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 
-import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
+import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
 import { rustRetainedEnvironment } from "../callables/retained-values.js";

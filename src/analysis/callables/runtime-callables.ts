@@ -26,7 +26,7 @@ import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-mo
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
-import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
+import { retainRustSelectedSourceCallResultStorage } from "../types/resolution/call-results.js";
 import { callableRestElement } from "../../target-model/records/callable-adapters.js";
 
 export function applySelectedRuntimeCallableCall(

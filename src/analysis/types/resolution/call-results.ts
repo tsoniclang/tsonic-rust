@@ -3,15 +3,15 @@ import type { RustFlowReadProjectionFact } from "../../../target-model/records/v
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustNativeRepresentationMatches } from "../../../target-model/conversions/native-representation.js";
-import { selectRustProjectProjection } from "../project/project-projections.js";
-import { selectRustFlowReadProjection } from "./value-carrier-reconciliation.js";
+import { selectRustProjectProjection } from "../../../policy/types/project/project-projections.js";
+import { selectRustFlowReadProjection } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { isRustJsValueCarrier, rustOptionElementCarrier, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { bindRustCallableResultTypeParameters, bindRustCallableTypeParameters, bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
 
-import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
+import { retainRustStructuralInstantiation } from "../../../policy/types/resolution/structural-instantiations.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 
