@@ -26,13 +26,7 @@ export {
 export {
   finishRustSourceAccessorCall,
   planRustSourceAccessorCall,
-  sourceAccessorSelectedOperationMatches,
-  sourceMethodPropertySelectedOperationMatches,
-  sourceStaticFieldSelectedOperationMatches,
 } from "./properties.js";
 export {
   planArrayLiteral,
 } from "./array-literals/planning.js";
-export {
-  sourceUnionFieldSelectedOperationMatches,
-} from "./properties.js";

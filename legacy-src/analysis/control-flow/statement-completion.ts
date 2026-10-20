@@ -450,8 +450,8 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       message: `Fallible calls require a fallible lowering context (a throwing function or a try block). Node kind: ${ast.kindName(node)}.`,
       evidence: ["target.capability=rust.error.call"],
     });
-    if (operation?.kind === "source-field" || operation?.kind === "source-union-field") {
-      const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch }, node, operation);
+    if (operation?.kind === "source-field" || operation?.kind === "source-union-field" || operation?.kind === "source-accessor") {
+      const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch, records }, node, operation);
       if (issue !== undefined) diagnostics.push(issue);
     }
     if ((operation?.kind === "provider-operation" || operation?.kind === "runtime-set") && operation.abi.effects.invocation === "fallible" && !frame(node).fallible)

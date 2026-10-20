@@ -124,7 +124,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
           if (selected === undefined) failRustPlannerInvariant("A structural accessor requires its admitted native access role.", member.declaration);
           const arguments_: RustExpr[] = role === "read" ? [] : [{ kind: "path", path: "value" }];
           let call = dispatchOwner === undefined ? planRustSourceAccessorCall(member.declaration, accessor, role,
-            arguments_, local, instance, view.sourceCarrier) : { kind: "associated-call" as const, owner: dispatchOwner,
+            arguments_, local, instance) : { kind: "associated-call" as const, owner: dispatchOwner,
             method: selected.method, args: [root, ...arguments_] };
           if (call === undefined) failRustPlannerInvariant("A structural accessor requires its admitted native invocation.", member.declaration);
           if (context.input.program.records.fallible.get(selected.declaration) !== undefined) {

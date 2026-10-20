@@ -49,6 +49,7 @@ import { createRustCallableConversionProducer } from "./callable-conversions.js"
 import { createRustArgumentViewProducer } from "./argument-views.js";
 import { createRustRecordContributionProducer } from "./record-contributions.js";
 import { createRustUnionCallProducer } from "./union-calls.js";
+import { createRustPropertyReadProducer } from "./property-reads.js";
 import { createRustConversionEmissionProducer } from "./conversion-emission.js";
 import { createRustErrorTransportEmissionProducer } from "./error-transport.js";
 import { createRustDispatchContextEmissionProducer } from "./dispatch-contexts.js";
@@ -308,6 +309,7 @@ export function createRustProgramRecordBuilder(
   const argumentViewPlans = createRustArgumentViewProducer(assertOpen);
   const recordContributionPlans = createRustRecordContributionProducer(assertOpen);
   const unionCallPlans = createRustUnionCallProducer(assertOpen);
+  const propertyReadPlans = createRustPropertyReadProducer(assertOpen);
   const conversionEmissionPlans = createRustConversionEmissionProducer(assertOpen);
   const errorTransportEmissionPlans = createRustErrorTransportEmissionProducer(assertOpen);
   const dispatchContextEmissionPlans = createRustDispatchContextEmissionProducer(assertOpen);
@@ -407,6 +409,7 @@ export function createRustProgramRecordBuilder(
     ...argumentViewPlans.records,
     ...recordContributionPlans.records,
     ...unionCallPlans.records,
+    ...propertyReadPlans.records,
     ...conversionEmissionPlans.records,
     ...errorTransportEmissionPlans.records,
     ...dispatchContextEmissionPlans.records,
@@ -569,6 +572,7 @@ export function createRustProgramRecordBuilder(
     argumentViewPlans,
     recordContributionPlans,
     unionCallPlans,
+    propertyReadPlans,
     conversionEmissionPlans,
     errorTransportEmissionPlans,
     dispatchContextEmissionPlans,

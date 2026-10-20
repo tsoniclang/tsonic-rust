@@ -156,6 +156,7 @@ import { analyzeRustArgumentViews } from "../expressions/argument-views.js";
 import { admitRustRecordContributions } from "../reachability/record-contributions.js";
 import { admitRustErrorObservations } from "../errors/observations.js";
 import { analyzeRustUnionCalls } from "../callables/union-calls.js";
+import { analyzeRustPropertyReads } from "../expressions/property-reads.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -679,6 +680,8 @@ export function analyzeRustTargetProgram(
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
+  const propertyReadIssues = analyzeRustPropertyReads(program, context.nativeNodes, context.records.propertyReadPlans);
+  if (propertyReadIssues.length !== 0) return rejectedTargetStage(propertyReadIssues);
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);
   if (lambdaEmissionIssues.length !== 0) return rejectedTargetStage(lambdaEmissionIssues);
   analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);

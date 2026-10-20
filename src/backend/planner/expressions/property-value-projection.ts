@@ -33,7 +33,7 @@ export function planRustPropertyValueProjection(
     if (read.kind === "source-accessor") {
       const selectedRead = read.read;
       const raw = selectedRead === undefined ? undefined
-        : planRustSourceAccessorCall(node, read, "read", [], context, receiver, contract.source);
+        : planRustSourceAccessorCall(node, read, "read", [], context, receiver);
       value = raw === undefined || selectedRead === undefined ? undefined
         : finishRustSourceAccessorEffect(node, selectedRead.declaration, raw, context,
           context.input.program.records.fallible.get(selectedRead.declaration)?.fallible === true ? "fallible" : "infallible");
