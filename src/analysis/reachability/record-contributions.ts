@@ -2,8 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustRecordContributionProducer } from "../program/records/record-contributions.js";
-import type { RustRecordContributionFact, RustRecordSpreadContribution,
-  RustRecordSpreadEvidence, RustRecordContributionEvidence } from "../../target-model/records/record-contributions.js";
+import type { RustRecordContributionFact, RustRecordSpreadContribution, RustRecordSpreadEvidence, RustRecordContributionEvidence } from "../../target-model/records/record-contributions.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
