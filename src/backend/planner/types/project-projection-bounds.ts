@@ -1,5 +1,5 @@
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustProjectProjectionRequirement } from "../../../target-model/types/project-projections.js";
-import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
 import type { RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 
@@ -8,10 +8,9 @@ export function rustProjectProjectionPredicates(
 ): readonly RustWherePredicate[] {
   return Object.freeze(requirements.flatMap(requirement => {
     if (!requirement.requiresBound) return [];
-    if ([requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterIdentities).length === 0) return [];
     const source = rustTypeFromCarrierInContext(requirement.sourceCarrier, context);
     const target = rustTypeFromCarrierInContext(requirement.targetCarrier, context);
-    if (source === undefined || target === undefined) throw new Error("A finalized project projection bound lost its native type.");
+    if (source === undefined || target === undefined) failRustPlannerInvariant("A finalized project projection bound lost its native type.");
     return [{ kind: "type" as const, type: target, bounds: [{ kind: "trait-type" as const, reference: {
       trait: { kind: "named" as const, path: "core::convert::TryFrom", genericArguments: [
         { kind: "type" as const, type: source },
