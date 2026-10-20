@@ -27,7 +27,7 @@ import type { RustSourceErrorEffectEdge } from "../../target-model/records/sourc
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
-import { selectRustJsRejectionRegion } from "./js-rejection.js";
+import { selectRustJsRejectionRegion } from "../../policy/errors/js-rejection.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
