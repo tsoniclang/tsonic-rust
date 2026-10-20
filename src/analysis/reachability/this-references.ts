@@ -1,5 +1,6 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
@@ -15,7 +16,7 @@ export function rustProjectRootThisCarrier(
   const owner = projectTypes.definitionContainingDeclaration(declaration);
   if (owner === undefined || !projectTypes.isPolymorphic(owner)) return undefined;
   const selected = references.get(declaration);
-  if (selected === undefined) throw new Error("A polymorphic source method requires sealed receiver-reference evidence.");
+  if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "A polymorphic source method requires sealed receiver-reference evidence.");
   const carrier = projectTypes.openCarrier(owner);
   return (selected.get(owner.declaration)?.length ?? 0) > 0
     ? carrier : undefined;
