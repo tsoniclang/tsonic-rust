@@ -1,25 +1,5 @@
-import {
-  inferRustTargetGenericBindings,
-  inferRustTargetTypeParameterBindings,
-  isRustNumericCarrier,
-  rustOptionElementCarrier,
-  rustJsArrayLikeElementTargetType,
-  rustFixedArrayCarrierValue,
-  rustTargetGenericBindingsForArguments,
-  rustTargetGenericReferences,
-  substituteRustTargetGenerics,
-} from "../../target-model/types/index.js";
-import {
-  KindArrayLiteralExpression,
-  KindObjectLiteralExpression,
-  KindParenthesizedExpression,
-  KindSatisfiesExpression,
-  KindSpreadElement,
-  Node_Expression,
-  Node_Type,
-  ObjectLiteralProperty_Value,
-  asSourceNode,
-} from "@tsonic/target-api/source";
+import { inferRustTargetGenericBindings, inferRustTargetTypeParameterBindings, isRustNumericCarrier, rustOptionElementCarrier, rustJsArrayLikeElementTargetType, rustFixedArrayCarrierValue, rustTargetGenericBindingsForArguments, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { KindArrayLiteralExpression, KindObjectLiteralExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindSpreadElement, Node_Expression, Node_Type, ObjectLiteralProperty_Value, asSourceNode } from "@tsonic/target-api/source";
 import { rustOperationContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -39,15 +19,8 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type {
-  RustTargetGenericBindings,
-} from "../../target-model/types/index.js";
-import type {
-  RustSelectedTargetSignature,
-  RustTargetGenericArgument,
-  RustTargetMember,
-  TargetTypeRef,
-} from "../../target-model/types/model.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
+import type { RustSelectedTargetSignature, RustTargetGenericArgument, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface FinalizedProjectSourceGenericArguments {
   readonly targetGenericArguments: readonly RustTargetGenericArgument[];
@@ -72,13 +45,18 @@ export function finalizeProjectSourceGenericArguments(
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
   const parameters = selected.member.genericParameters ?? [];
   const selectedTargets = selected.targetGenericArguments ?? [];
-  if (sourceArguments.length !== parameters.length ||
-    parameters.length !== selectedTargets.length ||
-    parameters.some((parameter, index) =>
-      parameter.kind !== selectedTargets[index]?.kind ||
-      parameter.sourceName !== sourceArguments[index]?.typeParameterName)) {
-    return undefined;
-  }
+  const identitySubject = callArguments[0] ?? asSourceNode(selected.sourceDeclaration, walk.context.ast);
+  if (sourceArguments.length !== parameters.length || parameters.length !== selectedTargets.length ||
+    parameters.some((parameter, index) => {
+      const argument = sourceArguments[index];
+      if (argument === undefined || identitySubject === undefined || parameter.kind !== selectedTargets[index]?.kind) return true;
+      const declarations = walk.context.semanticsFor(identitySubject).declarations;
+      const symbol = declarations.typeSymbol(argument.typeParameter);
+      const declaration = symbol === undefined ? undefined : declarations.primarySymbolDeclaration(symbol);
+      const contract = declaration === undefined ? undefined : walk.context.sourceLifetimes.parameterFor(declaration);
+      return contract === undefined || contract.kind !== parameter.kind || parameter.targetIdentity !==
+        (contract.kind === "type" ? contract.identity : rustLifetimeKey(contract.lifetime));
+    })) return undefined;
   const finalized = [...selectedTargets];
   if (!selectRustIndexedCallKeys(walk, selected, callArguments, finalized)) return undefined;
   const initialSubstitutions = rustTargetGenericBindingsForArguments(
