@@ -73,10 +73,11 @@ export function planRustFinalizedOperationForm(
       };
     }
     case "call": {
-      registerAliasFromPath(context, form.path);
+      const path = context.input.program.records.integerTruncation.get(operationNode)?.path ?? form.path;
+      registerAliasFromPath(context, path);
       return applyProviderOperationChain({
         kind: "call",
-        path: form.path,
+        path,
         args,
         ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
       }, form.chain);

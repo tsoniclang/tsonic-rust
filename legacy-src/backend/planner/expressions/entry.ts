@@ -441,7 +441,7 @@ function applyRustContextualValueConversion(
       ? planRustCallableConversion(fact.conversion, expression, node, context) : undefined;
   }
   if (fact.conversion.kind === "integer-truncation") {
-    const selected = planRustIntegerTruncation(expression, fact, context);
+    const selected = planRustIntegerTruncation(expression, context, node);
     if (selected === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.integer-truncation", "Native integer truncation requires its exact classified call and range proof."));
