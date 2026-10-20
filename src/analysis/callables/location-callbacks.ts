@@ -7,7 +7,7 @@ import { rustNativeCallableOperand } from "./native-conversions.js";
 
 export function analyzeRustLocationCallbacks(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationCallbackProducer,
-  analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): void {
+  analysisRecords: Pick<import("../../target-model/records/analysis.js").RustAnalysisRecords, "typedLocationPlan">): void {
   for (const node of nodes) {
     const plan = analysisRecords.typedLocationPlan.get(node);
     if (plan?.operation !== "bind-pointer" && plan?.operation !== "view-pointer" && plan?.operation !== "project-pointer") continue;

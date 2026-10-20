@@ -13,7 +13,7 @@ import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } fro
 import { ObjectLiteralProperty_SourceName, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import type { RustSourceEnumVariant, RustSourceObjectField, RustSourceObjectShape, RustSourceTypeRegistry, RustSourceUnion, RustStructuralFieldImplementation, RustStructuralFieldRegistration, RustStructuralInstantiation } from "../../policy/types/model/source-type-registry.js";
+import type { RustSourceEnumVariant, RustSourceObjectShape, RustSourceTypeRegistry, RustSourceUnion, RustStructuralFieldImplementation, RustStructuralFieldRegistration, RustStructuralInstantiation } from "../../policy/types/model/source-type-registry.js";
 export type {
   RustSourceEnumVariant,
   RustSourceObjectField,

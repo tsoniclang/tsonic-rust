@@ -1,9 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 
-import type { RustTargetOperationFact } from "./operations.js";
-
-type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
-
 import type { RustBorrowedFieldWrite } from "./ownership.js";
 
 export interface RustBorrowEffects {

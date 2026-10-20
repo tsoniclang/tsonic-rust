@@ -51,7 +51,7 @@ export interface RustPlanningHost {
 
 export interface RustAnalysisProgram {
   readonly physicalEmissionContexts: import("../../target-model/records/physical-emission-contexts.js").RustCallableEmissionContexts;
-  readonly reachability: import("../reachability/model.js").RustReachability;
+  readonly reachability: import("../../target-model/records/reachability.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
   readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;
   readonly lexicalFunctions: import("../../target-model/records/lexical-functions.js").RustLexicalFunctionQueries;

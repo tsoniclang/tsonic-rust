@@ -9,7 +9,7 @@ import { isRustFinalizedSourceInput } from "../../target-model/operations/finali
 
 export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationStorageProducer,
-  analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
+  analysisRecords: Pick<import("../../target-model/records/analysis.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const selected = new Map<Node, RustLocationProjection>();

@@ -10,7 +10,7 @@ import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMe
 
 export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustDirectStorageProducer,
-  analysisRecords: Pick<import("../program/records/model.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
+  analysisRecords: Pick<import("../../target-model/records/analysis.js").RustAnalysisRecords, "typedLocationPlan">): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const places = new Map<Node, RustDirectStorageEmission>();
   const identities = new Map<Node, RustDirectStorageIdentity>();
