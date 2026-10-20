@@ -1,29 +1,16 @@
-import {
-  cargoCrateAttributeName,
-  cargoDefaultFeaturesAttributeName,
-  cargoFeaturesAttributeName,
-  cargoPathReferenceKind,
-  cargoRegistryPatchAttributeName,
-  encodeCargoFeatures,
-  rustMinimumFoundationAttributeName,
-} from "../../target-model/project/cargo-reference.js";
-import { collectRustProviderSemantics } from "./semantics.js";
-import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId } from "./source-provider.js";
-import { rustProviderPolicyContributionKind } from "./model.js";
-import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { validateProviderPackageDefinition } from "./validation.js";
-import { rustProviderGlobalDeclarations } from "../../source/profiles/provider-globals.js";
-import type {
-  SelectedTargetCapabilityContributions,
-  TargetRuntimeContributionContext,
-} from "@tsonic/target-api/provider";
-import type {
-  TargetRuntimeContributions,
-  TargetRuntimeReference,
-} from "@tsonic/target-api/artifacts";
+import { rustProviderContractValidation } from "./provider-contracts.js";
+import { cargoCrateAttributeName, cargoDefaultFeaturesAttributeName, cargoFeaturesAttributeName, cargoPathReferenceKind, cargoRegistryPatchAttributeName, encodeCargoFeatures, rustMinimumFoundationAttributeName } from "../target-model/project/cargo-reference.js";
+import { collectRustProviderSemantics } from "../providers/packages/semantics.js";
+import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId } from "../providers/packages/source-provider.js";
+import { rustProviderPolicyContributionKind } from "../providers/packages/model.js";
+import { snapshotClosedMetadata } from "../target-model/metadata/closed-data.js";
+import { validateProviderPackageDefinition } from "../providers/packages/validation.js";
+import { rustProviderGlobalDeclarations } from "../source/profiles/provider-globals.js";
+import type { SelectedTargetCapabilityContributions, TargetRuntimeContributionContext } from "@tsonic/target-api/provider";
+import type { TargetRuntimeContributions, TargetRuntimeReference } from "@tsonic/target-api/artifacts";
 import type { CompilerExtension } from "@tsonic/tsts";
-import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
-import type { RustProviderPackageDefinition, RustProviderPackageImplementation, RustProviderPolicyContribution } from "./model.js";
+import type { RustProviderOperationRow } from "../target-model/identities/provider-relations.js";
+import type { RustProviderPackageDefinition, RustProviderPackageImplementation, RustProviderPolicyContribution } from "../providers/packages/model.js";
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {
   let closedDefinition: RustProviderPackageDefinition;
@@ -32,7 +19,7 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
   } catch (error) {
     throw new Error(`Provider package '${String(definition.id)}': ${error instanceof Error ? error.message : String(error)}`);
   }
-  validateProviderPackageDefinition(closedDefinition);
+  validateProviderPackageDefinition(closedDefinition, rustProviderContractValidation);
   const bindingProviderId = rustProviderBindingProviderId(closedDefinition.id);
   return Object.freeze({
     kind: "target-capability",
@@ -87,5 +74,5 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
 export function collectRustProviderOperationRows(
   capabilities: readonly SelectedTargetCapabilityContributions[],
 ): readonly RustProviderOperationRow[] {
-  return collectRustProviderSemantics(capabilities).operations;
+  return collectRustProviderSemantics(capabilities, rustProviderContractValidation).operations;
 }
