@@ -69,7 +69,6 @@ export function resolveObjectLiteralMethodCarrier(
   walk: RustFactWalk,
   method: Node,
   selectedType: Type,
-  implementationType: Type,
 ): TargetTypeRef | undefined {
   const typeParameters = requireDenseSourceNodes(
     walk,
@@ -95,16 +94,8 @@ export function resolveObjectLiteralMethodCarrier(
       );
     }
   }
-  const selected = resolveRustTargetTypeRef(
-    sourcePresentCallableType(selectedType, walk.context.semanticsFor(method)) ?? selectedType,
-    rustResolutionContext(walk, method),
-    walk.operationOptions,
-  );
-  if (selected !== undefined) {
-    return selected;
-  }
   return resolveRustTargetTypeRef(
-    implementationType,
+    sourcePresentCallableType(selectedType, walk.context.semanticsFor(method)) ?? selectedType,
     rustResolutionContext(walk, method),
     walk.operationOptions,
   );

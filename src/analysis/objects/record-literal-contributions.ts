@@ -238,7 +238,6 @@ export function collectRustRecordLiteralContributions(
             walk,
             property,
             selectedElement.sourceSelectedType,
-            selectedElement.sourceElementType,
           );
       const selectedCallableCarrier = rustOptionElementCarrier(selectedMemberCarrier) ??
         selectedMemberCarrier;
@@ -372,7 +371,6 @@ export function collectRustRecordLiteralContributions(
             walk,
             initializer,
             selectedElement.sourceSelectedType,
-            selectedElement.sourceElementType,
           );
       const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
       const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
