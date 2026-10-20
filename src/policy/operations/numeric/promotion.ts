@@ -1,11 +1,7 @@
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
-import {
-  isRustIntegerCarrier,
-  isRustNumericCarrier,
-  rustSourcePrimitiveTargetType,
-} from "../../../target-model/types/index.js";
+import { isRustIntegerCarrier, isRustNumericCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustNumericPromotionKind } from "../../../target-model/conversions/numeric-promotion.js";
 
