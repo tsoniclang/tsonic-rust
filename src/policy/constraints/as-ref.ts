@@ -1,6 +1,6 @@
-import type { TargetTypeRef } from "../model.js";
-import { rustNamedTypeCarrierValue } from "./native.js";
-import { rustStringTargetId, rustStrTargetId } from "./source-types.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustStringTargetId, rustStrTargetId } from "../../target-model/types/carriers/source-types.js";
 
 const stringReferencePaths: ReadonlySet<string> = new Set([
   "std::path::Path",
