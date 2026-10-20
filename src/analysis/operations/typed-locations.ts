@@ -20,8 +20,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import type { RustTargetTypeResolutionOptions } from "../types/resolution/index.js";
-import { selectRustTypedLocationSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
-import type { RustTypedLocationSourceFact } from "../../policy/operations/typed-locations/source-typed-locations.js";
+import { selectRustTypedLocationSourceOperation } from "../../source/extension/typed-locations.js";
+import type { RustTypedLocationSourceFact } from "../../source/extension/typed-locations.js";
 
 function typedLocationCallArguments(
   request: RustCheckedCallSelectionInput,

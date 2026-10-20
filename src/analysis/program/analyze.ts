@@ -34,7 +34,7 @@ import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
-import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
+import { selectRustAddressOfSourceOperation } from "../../source/extension/typed-locations.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
 

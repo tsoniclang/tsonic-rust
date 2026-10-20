@@ -1,5 +1,5 @@
 import { flowStateFactKey } from "@tsonic/tsts";
-import { selectRustAddressOfSourceOperation, selectRustBindPointerSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
+import { selectRustAddressOfSourceOperation, selectRustBindPointerSourceOperation } from "../../source/extension/typed-locations.js";
 import { KindCallExpression, KindElementAccessExpression, KindNewExpression, KindPropertyAccessExpression, Node_Expression } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
 import { rustProviderOperationSourceArgumentMayMutate, rustProviderOperationSourceReceiverMayMutate } from "../../policy/operations/forms.js";

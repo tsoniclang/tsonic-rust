@@ -1,11 +1,5 @@
-import {
-  pointerOperationFactKey,
-} from "@tsonic/tsts";
-import type {
-  ExtensionFactSubject,
-  PointerOperationFact,
-  SourceCallMarkerKind,
-} from "@tsonic/tsts";
+import { pointerOperationFactKey } from "@tsonic/tsts";
+import type { ExtensionFactSubject, PointerOperationFact, SourceCallMarkerKind } from "@tsonic/tsts";
 
 export type RustTypedLocationSourceSelection =
   | { readonly kind: "not-typed-location" }
@@ -45,12 +39,11 @@ export function selectRustTypedLocationSourceOperation(
   subject: ExtensionFactSubject,
   marker: SourceCallMarkerKind,
   resolveFact: RustTypedLocationFactLookup,
-  getFact: RustTypedLocationFactLookup,
 ): RustTypedLocationSourceSelection {
   if (!isRustTypedLocationOperation(marker)) {
     return { kind: "not-typed-location" };
   }
-  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact, getFact);
+  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact);
   return sourceOperation !== undefined &&
       isRustTypedLocationSourceFact(sourceOperation) &&
       sourceOperation.operation === marker &&
@@ -62,9 +55,8 @@ export function selectRustTypedLocationSourceOperation(
 export function selectRustAddressOfSourceOperation(
   subject: ExtensionFactSubject,
   resolveFact: RustTypedLocationFactLookup,
-  getFact: RustTypedLocationFactLookup,
 ): RustAddressOfSourceFact | undefined {
-  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact, getFact);
+  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact);
   return sourceOperation?.operation === "address-of" && sourceOperation.call === subject
     ? sourceOperation
     : undefined;
@@ -73,9 +65,8 @@ export function selectRustAddressOfSourceOperation(
 export function selectRustBindPointerSourceOperation(
   subject: ExtensionFactSubject,
   resolveFact: RustTypedLocationFactLookup,
-  getFact: RustTypedLocationFactLookup,
 ): Extract<RustTypedLocationSourceFact, { readonly operation: "bind-pointer" }> | undefined {
-  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact, getFact);
+  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact);
   return sourceOperation?.operation === "bind-pointer" && sourceOperation.call === subject
     ? sourceOperation
     : undefined;
@@ -84,10 +75,8 @@ export function selectRustBindPointerSourceOperation(
 function rustTypedLocationSourceFact(
   subject: ExtensionFactSubject,
   resolveFact: RustTypedLocationFactLookup,
-  getFact: RustTypedLocationFactLookup,
 ): RustTypedLocationSourceFact | undefined {
-  const sourceOperation = resolveFact(subject, pointerOperationFactKey) ??
-    getFact(subject, pointerOperationFactKey);
+  const sourceOperation = resolveFact(subject, pointerOperationFactKey);
   return sourceOperation !== undefined && isRustTypedLocationSourceFact(sourceOperation)
     ? sourceOperation
     : undefined;
