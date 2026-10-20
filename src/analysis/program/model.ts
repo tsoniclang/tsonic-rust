@@ -26,7 +26,7 @@ import type { RustSourcePackageFacadeClassifications } from "../../target-model/
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
-import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
+import type { RustSourceModuleConstructionIndex } from "../../target-model/records/source-modules.js";
 import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
 import type { RustGeneratedDeclarationUse } from "../../target-model/records/generated-declaration-uses.js";

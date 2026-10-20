@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustFallibleErrorBoundary } from "../operations/error-boundary.js";
+import type { TargetTypeRef } from "../types/model.js";
 
 export interface RustSourceModuleBootstrap {
   readonly id: string;
