@@ -7,6 +7,7 @@ import type { RustFrameCallableEntryDefinition } from "./frame-callables.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 
 export interface RustFrameTypeEmission {
+  readonly independentCarrier: TargetTypeRef | undefined;
   readonly definition: RustFrameCallableDefinition;
   readonly entry: RustFrameCallableEntryDefinition;
   readonly environment: readonly TargetTypeRef[];

@@ -112,6 +112,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
       ...(unionArguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(value.generic?.arguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(program.records.frameType.get(carrier)?.environment ?? []),
+      ...(program.records.frameType.get(carrier)?.independentCarrier === undefined ? [] : [program.records.frameType.get(carrier)!.independentCarrier!]),
       ...(program.records.optionalStorageTypeArguments.get(carrier) ?? [])];
     selections.set(key, { carrier, value, children });
     pending.push(...children);

@@ -11,6 +11,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -142,6 +143,10 @@ export function analyzeRustFrameEmission(input: {
       owner = Object.freeze({ instance, representation,
         environment: program.classValues.forDeclaration(selected.declaration)?.environment?.instancesUseEnvironment === true });
     }
-    input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner });
+    const protocol = entry.hasIndependent ? rustCallableProtocol(carrier) : undefined;
+    if (entry.hasIndependent && protocol === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted independent frame entry requires its native callable protocol.");
+    input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner,
+      independentCarrier: protocol === undefined ? undefined : rustCallableTargetType(protocol.parameters, protocol.result) });
   }
 }
