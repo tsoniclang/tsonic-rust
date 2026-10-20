@@ -8,7 +8,8 @@ import { rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustOption
 import { resolveSelectedProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { rustProviderOperationOwnerMatches } from "../../../../policy/operations/provider-selection.js";
 import { providerCarrierFromRelations } from "../../../../policy/types/project/provider-instantiation.js";
-import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../../../../target-model/conversions/provider-record.js";
+import { type RustProviderRecordCopy } from "../../../../target-model/conversions/provider-record.js";
+import { rustProviderRecordCopyMatches } from "../../../../policy/conversions/provider-record.js";
 import { selectRustProviderRecordField } from "../../../../policy/operations/members/record-fields.js";
 import type { RustProviderRecordAbsentField } from "../../../../target-model/conversions/provider-record-absence.js";
 import { selectRustStructuralFieldProjection } from "../../../../policy/types/objects/structural-fields.js";

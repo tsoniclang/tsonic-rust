@@ -1,26 +1,12 @@
-import type { TargetTypeRef } from "../types/model.js";
-import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../types/index.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustValueConversionContract } from "./contracts.js";
-import type { RustValueConversion } from "../operations/model.js";
-import { rustProviderRecordAbsentFieldsMatch, type RustProviderRecordAbsentField } from "./provider-record-absence.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 
-export interface RustProviderRecordCopy {
-  readonly kind: "provider-record-copy";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-  readonly completion: "complete" | "default";
-  readonly absentFields: readonly RustProviderRecordAbsentField[];
-  readonly fields: readonly {
-    readonly storageIndex: number;
-    readonly sourceCarrier: TargetTypeRef;
-    readonly carrier: TargetTypeRef;
-    readonly targetName: string;
-    readonly conversion?: RustValueConversion;
-  }[];
-}
+import { rustProviderRecordAbsentFieldsMatch } from "../../target-model/conversions/provider-record-absence.js";
 
+import type { RustProviderRecordCopy } from "../../target-model/conversions/provider-record.js";
 export function rustProviderRecordCopyMatches(
   conversion: RustProviderRecordCopy,
   source: TargetTypeRef,
