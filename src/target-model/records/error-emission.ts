@@ -25,6 +25,8 @@ export interface RustGenericCallableErrorEmission {
 }
 
 export interface RustErrorEmissionRecords {
+  readonly errorDeclarationOwner: RustRecordFamily<string>;
+  readonly errorMemberOwner: RustRecordFamily<RustPhysicalErrorOwner>;
   readonly optionalChainBodyFallible: RustRecordFamily<boolean>;
   readonly projectMemberError: RustRecordFamily<RustProjectMemberError>;
   readonly genericCallableErrors: { readonly get: (definition: RustGenericCallablePhysicalDefinition) => RustGenericCallableErrorEmission | undefined };

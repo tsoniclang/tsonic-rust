@@ -43,6 +43,8 @@ import {
 import { analyzeRustSourcePackageFacadeEmission } from "../source-modules/package-facades.js";
 import { analyzeRustSourcePackageComponentEmission } from "../source-modules/package-components.js";
 import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries } from "../errors/source-packages.js";
+import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.js";
+import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -575,6 +577,8 @@ export function analyzeRustTargetProgram(
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
   analyzeRustProjectMemberErrors(program, context.nativeNodes, context.records.errorEmissionPlans);
+  analyzeRustDeclarationErrorOwners(program, context.nativeNodes, context.records.errorEmissionPlans);
+  analyzeRustSourceBindingEmission(program, context.nativeNodes, context.records.sourceBindingEmissionPlans);
   const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans);

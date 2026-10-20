@@ -152,52 +152,18 @@ export function rustErrorBoundaryForDeclaration(
       readonly records: import("../../../target-model/records/program.js").RustProgramRecords } };
   },
 ): RustSourcePackageErrorBoundary | undefined {
-  const sourceFile = context.input.program.source.ast.getSourceFile(declaration);
-  const fileName = sourceFile === undefined
-    ? undefined
-    : context.input.program.source.ast.getFileName(sourceFile);
-  const ownerComponentId = fileName === undefined
-    ? undefined
-    : context.sourcePackageErrors.componentIdByFileName.get(fileName);
-  return ownerComponentId === undefined
-    ? undefined
-    : resolveRustSourcePackageErrorBoundary(
-        context.input.program.records,
-        context.sourcePackageComponentId,
-        ownerComponentId,
-      );
+  const owner = context.input.program.records.errorDeclarationOwner.get(declaration);
+  return owner === undefined ? undefined
+    : context.input.program.records.sourcePackageErrorBoundary.get(context.sourcePackageComponentId, owner);
 }
 
 export function rustErrorBoundaryForProjectMember(
   declaration: Node,
   context: RustPlanContext,
 ): RustSourcePackageErrorBoundary | undefined {
-  const parent = context.input.program.source.ast.parent(declaration);
-  const kind = context.input.program.source.ast.kindName(declaration);
-  const projectMember = parent !== undefined &&
-    (context.input.program.source.ast.is.IsClassDeclaration(parent) ||
-      context.input.program.source.ast.is.IsInterfaceDeclaration(parent)) &&
-    !context.input.program.source.ast.hasModifierKind(declaration, "static") &&
-    (kind === "KindMethodDeclaration" || kind === "KindMethodSignature" ||
-      kind === "KindGetAccessor" || kind === "KindSetAccessor" ||
-      kind === "KindPropertyDeclaration" || kind === "KindPropertySignature");
-  if (!projectMember) {
-    return rustErrorBoundaryForDeclaration(declaration, context);
-  }
-  const contracts = context.input.program.sourceNavigation.memberContracts(declaration);
-  if (contracts.kind === "unresolved") {
-    return undefined;
-  }
-  const owners = contracts.contracts.length === 0
-    ? [declaration]
-    : contracts.contracts;
-  const boundaries = owners.map((owner) =>
-    rustErrorBoundaryForDeclaration(owner, context));
-  const first = boundaries[0];
-  return first !== undefined && boundaries.every((boundary) =>
-    boundary?.errorTypeIdentity === first.errorTypeIdentity)
-    ? first
-    : undefined;
+  const owner = context.input.program.records.errorMemberOwner.get(declaration);
+  return owner === undefined ? undefined
+    : context.input.program.records.physicalProgramErrorBoundary.get(context.sourcePackageComponentId, owner);
 }
 
 export function rustCurrentErrorBoundary(
@@ -278,22 +244,9 @@ export function rustSourceBindingPath(
   context: RustPlanContext,
   binding: RustSourceBindingFact,
 ): string | undefined {
-  const storageDeclaration = binding.scope === "lexical"
-    ? context.input.program.localStorageAliases.owner(binding.sourceDeclaration) ?? binding.sourceDeclaration
-    : binding.sourceDeclaration;
-  const moduleBinding = binding.scope === "module"
-    ? context.input.program.records.moduleBinding.get(binding.sourceDeclaration)
-    : undefined;
-  const name = moduleBinding?.storage === "native-callable" && moduleBinding.value !== undefined
-    ? moduleBinding.value.name
-    : context.input.program.names.nameForDeclaration(storageDeclaration);
-  if (name === undefined || !isValidRustIdentifier(name)) {
-    return undefined;
-  }
-  if (binding.scope === "lexical") {
-    return name;
-  }
-  return sourceModuleItemPath(context, binding.fileName, name);
+  const selected = context.input.program.records.sourceBindingEmission.get(binding.sourceDeclaration);
+  if (selected === undefined) return undefined;
+  return selected.scope === "lexical" ? selected.name : sourceModuleItemPath(context, selected.fileName, selected.name);
 }
 
 export function isUpperSnakeName(name: string): boolean {
@@ -309,7 +262,7 @@ export function sourceTypePath(
   value: { readonly fileName: string; readonly typeName: string },
 ): string | undefined {
   const moduleName = context.moduleNameByFileName.get(value.fileName);
-  const typeName = context.input.program.names.nameForSourceType(value.fileName, value.typeName);
+  const typeName = context.input.program.records.sourceTypeIdentity.get(value.fileName, value.typeName)?.targetName;
   if (moduleName === undefined || typeName === undefined ||
     !typeName.split("::").every(isValidRustIdentifier)) {
     return undefined;
