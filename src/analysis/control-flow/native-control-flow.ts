@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceNodeIsNativeUnreachable } from "@tsonic/target-api/source";
 
-import { selectRustNativeGuardResult } from "../../policy/types/resolution/native-flow-refinement.js";
+import { selectRustNativeGuardResult } from "../types/resolution/native-flow-refinement.js";
 
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";

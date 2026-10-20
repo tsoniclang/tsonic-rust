@@ -43,7 +43,7 @@ import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedEr
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
 import { rustSourceAbsenceReadCarrier } from "../../policy/operations/flow/absence-use.js";
-import { resolveRustNativeFlowCarrier } from "../../policy/types/resolution/native-flow-refinement.js";
+import { resolveRustNativeFlowCarrier } from "../types/resolution/native-flow-refinement.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,
