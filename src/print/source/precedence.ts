@@ -1,4 +1,5 @@
-import type { RustExpr } from "../../../backend/target-ast/syntax/nodes.js";
+import type { RustExpr } from "../../backend/target-ast/syntax/nodes.js";
+import { failRustSyntaxInvariant } from "./invariants.js";
 
 export const enum RustPrecedence {
   Assignment = 0,
@@ -42,8 +43,11 @@ export function operatorPrecedence(operator: string): RustPrecedence {
     case "+":
     case "-":
       return RustPrecedence.Additive;
-    default:
+    case "*":
+    case "/":
+    case "%":
       return RustPrecedence.Multiplicative;
+    default: return failRustSyntaxInvariant({ kind: operator }, "binary operator precedence");
   }
 }
 
