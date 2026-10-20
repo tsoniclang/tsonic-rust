@@ -3,24 +3,20 @@ import type { RustGenericCallableConversion } from "../../../target-model/conver
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustGenericCallableFlow(
   node: Node, conversion: RustGenericCallableConversion, expression: RustExpr, context: RustPlanContext,
 ): RustExpr | undefined {
   const demanded = context.valueDestinations?.get(node);
-  const application = context.input.program.callableValues.flowApplications.forNode(node, conversion, demanded);
-  if (application.kind === "unavailable") return undefined;
-  if (application.kind === "missing-destination") {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.generic-callable-destination",
-      "A generic callable conversion requires the exact payload of its finalized physical value destination."));
-    return undefined;
-  }
+  const application = context.input.program.records.genericCallableFlow.get(node, conversion, demanded);
+  if (application === undefined || application.kind === "unavailable" || application.kind === "missing-destination")
+    failRustPlannerInvariant("An admitted generic callable flow requires its exact physical destination application.", node);
   if (application.kind === "identity") return expression;
   const source = rustTypeFromCarrierInContext(application.source, context);
   const target = rustTypeFromCarrierInContext(application.destination, context);
-  if (source?.kind !== "named" || target?.kind !== "named") return undefined;
+  if (source?.kind !== "named" || target?.kind !== "named")
+    failRustPlannerInvariant("An admitted generic callable flow requires its exact native variant type identities.", node);
   return { kind: "match", expression, arms: application.members.map(member => ({
     pattern: { kind: "tuple-variant", path: `${source.path}::${member.source}`,
       elements: [{ kind: "binding", name: "environment" }] },

@@ -41,7 +41,7 @@ import { createRustGenericCallableCompletionPlan, type RustGenericCallableComple
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle,
   type RustPhysicalCallableEmissionRequest, type RustPhysicalCallableStorage } from "./physical-lifecycle.js";
-import type { RustPhysicalCallableFlowApplications } from "../../target-model/records/physical-callables.js";
+import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
 import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
@@ -81,10 +81,9 @@ export interface RustCallableValuePlan {
   readonly nativeDispatch: RustNativeCallableDispatchPlan;
   readonly genericCompletions: RustGenericCallableCompletionPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
-  readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
 
-export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts"> & {
+export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "emissionContexts"> & {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStorageConstruction;
 };
@@ -100,6 +99,7 @@ export interface RustCallableValueSealInput {
 }
 
 export interface RustCallableValuePlanInput {
+  readonly flowApplications: RustGenericCallableFlowProducer;
   readonly ast: AstReader;
   readonly nativeNodes: readonly Node[];
   readonly isNativeNode: (node: Node) => boolean;
@@ -379,7 +379,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         return requests;
       }
       emissionRequests = requests.value;
-      physicalLifecycle = createRustPhysicalCallableLifecycle({ ast: input.ast, records: input.records,
+      physicalLifecycle = createRustPhysicalCallableLifecycle({ ast: input.ast, records: input.records, flowApplications: input.flowApplications,
         sourceStorage: input.sourceStorage, requests: emissionRequests, sourceOccurrences, typeDefinitions: input.typeDefinitions,
         lexicalFunctions: input.lexicalFunctions, structuralShapes: input.structuralShapes,
         nativeStorage, nativeProducers, adapterFlows: flows });

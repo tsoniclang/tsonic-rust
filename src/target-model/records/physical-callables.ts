@@ -9,7 +9,7 @@ export type RustPhysicalCallableFlowApplication =
   | { readonly kind: "missing-destination" }
   | { readonly kind: "unavailable" };
 
-export interface RustPhysicalCallableFlowApplications {
-  forNode(node: Node, conversion: RustGenericCallableConversion,
-    destination: TargetTypeRef | undefined): RustPhysicalCallableFlowApplication;
+export interface RustPhysicalCallableFlowRecords {
+  readonly genericCallableFlow: { readonly get: (node: Node, conversion: RustGenericCallableConversion,
+    destination: TargetTypeRef | undefined) => RustPhysicalCallableFlowApplication | undefined };
 }

@@ -20,6 +20,7 @@ import { createRustClosedTypeTestProducer } from "./type-tests.js";
 import { createRustOptionEqualityProducer } from "./option-equality.js";
 import { createRustErrorFieldProducer } from "./error-field-borrows.js";
 import { createRustStringComparisonViewProducer } from "./string-comparison-views.js";
+import { createRustGenericCallableFlowProducer } from "./generic-callable-flow.js";
 import { createRustNativeLayoutProducer } from "./native-layout-emission.js";
 import { createRustSourceAssertionProducer } from "./source-assertions.js";
 import { createRustSourceBindingEmissionProducer } from "./binding-paths.js";
@@ -254,6 +255,7 @@ export function createRustProgramRecordBuilder(
   const optionEqualityPlans = createRustOptionEqualityProducer(assertOpen);
   const errorFieldPlans = createRustErrorFieldProducer(assertOpen);
   const stringComparisonPlans = createRustStringComparisonViewProducer(assertOpen);
+  const genericFlowApplications = createRustGenericCallableFlowProducer(assertOpen);
   const nativeLayoutPlans = createRustNativeLayoutProducer(assertOpen);
   const sourceAssertionPlans = createRustSourceAssertionProducer(assertOpen);
   const sourceBindingEmissionPlans = createRustSourceBindingEmissionProducer(assertOpen);
@@ -326,6 +328,7 @@ export function createRustProgramRecordBuilder(
     ...optionEqualityPlans.records,
     ...errorFieldPlans.records,
     ...stringComparisonPlans.records,
+    ...genericFlowApplications.records,
     ...nativeLayoutPlans.records,
     ...sourceAssertionPlans.records,
     ...sourceBindingEmissionPlans.records,
@@ -463,6 +466,7 @@ export function createRustProgramRecordBuilder(
     optionEqualityPlans,
     errorFieldPlans,
     stringComparisonPlans,
+    genericFlowApplications,
     nativeLayoutPlans,
     sourceAssertionPlans,
     sourceBindingEmissionPlans,

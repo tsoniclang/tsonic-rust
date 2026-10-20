@@ -79,6 +79,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly errorFieldEmission: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldEmission"];
   readonly errorFieldSnapshot: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldSnapshot"];
   readonly stringComparisonView: RustRecordFamily<import("./string-comparison-views.js").RustStringComparisonView>;
+  readonly genericCallableFlow: import("./physical-callables.js").RustPhysicalCallableFlowRecords["genericCallableFlow"];
   readonly nativeLayoutEmission: import("./native-layout-emission.js").RustNativeLayoutRecords["nativeLayoutEmission"];
   readonly literalEmission: import("./literal-emission.js").RustLiteralEmissionRecords["literalEmission"];
   readonly templateString: import("./template-strings.js").RustTemplateStringRecords["templateString"];

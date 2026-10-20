@@ -1,15 +1,15 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries, TargetUseSiteRef } from "@tsonic/target-api/analysis";
-import { failTargetAnalysisInvariant, failTargetPlannerInvariant, rejectedTargetStage, resolvedTargetStage,
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage,
   type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue,
   Node_Expression, Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot }
   from "../../target-model/records/physical-emission-contexts.js";
-import type { RustPhysicalCallableFlowApplication, RustPhysicalCallableFlowApplications }
+import type { RustPhysicalCallableFlowApplication }
   from "../../target-model/records/physical-callables.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
 import { rustGenericCallableConversionMatches, type RustGenericCallableConversion }
   from "../../target-model/conversions/generic-callable.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
@@ -37,7 +37,6 @@ export type RustPhysicalCallableStorage = Pick<RustNativeStoragePlan,
 export interface RustPhysicalCallablePublication {
   readonly nativeStorage: RustPhysicalCallableStorage;
   readonly nativeProducers: RustNativeCallableProducerPlan;
-  readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
 
 export interface RustPhysicalCallableLifecycle {
@@ -59,6 +58,7 @@ export type RustPhysicalCallableEmissionRequest = RustPhysicalCallableEmissionUs
 );
 
 interface RustPhysicalCallableLifecycleInput {
+  readonly flowApplications: RustGenericCallableFlowProducer;
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly sourceStorage: SourceStorageQueries;
@@ -302,9 +302,6 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         };
         prepare(logical);
       }
-      const applications = new Map<Node, Map<string, RustPhysicalCallableFlowApplication>>();
-      const applicationKey = (conversion: RustGenericCallableConversion, destination: TargetTypeRef | undefined): string =>
-        closedMetadataKey([conversion, destination]);
       const selectApplication = (node: Node, conversion: RustGenericCallableConversion,
         demanded: TargetTypeRef | undefined): RustPhysicalCallableFlowApplication => {
         const source = operands.get(node)!;
@@ -325,31 +322,25 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       };
       for (const flow of flows) {
         if (!rustGenericCallableConversionMatches(flow.conversion, flow.conversion.source, flow.conversion.target)) continue;
-        const selected = applications.get(flow.node) ?? new Map<string, RustPhysicalCallableFlowApplication>();
-        applications.set(flow.node, selected);
         for (const destination of [undefined, destinations.get(flow.node)]) {
-          const key = applicationKey(flow.conversion, destination);
-          if (!selected.has(key)) selected.set(key, selectApplication(flow.node, flow.conversion, destination));
+          if (input.flowApplications.records.genericCallableFlow.get(flow.node, flow.conversion, destination) === undefined)
+            input.flowApplications.publish(flow.node, flow.conversion, destination, selectApplication(flow.node, flow.conversion, destination));
         }
+        const application = input.flowApplications.records.genericCallableFlow.get(flow.node, flow.conversion, destinations.get(flow.node));
+        if (application?.kind === "missing-destination" || application?.kind === "unavailable") diagnostics.push(Object.freeze({
+          code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: flow.node,
+          message: `A generic callable conversion requires the exact payload of its finalized physical value destination. Node kind: ${input.ast.kindName(flow.node)}.`,
+          evidence: Object.freeze(["target.capability=rust.backend.generic-callable-destination"]),
+        }));
       }
-      const flowApplications: RustPhysicalCallableFlowApplications = Object.freeze({
-        forNode(node: Node, conversion: RustGenericCallableConversion, destination: TargetTypeRef | undefined) {
-          const entries = applications.get(node);
-          if (entries === undefined) return failTargetPlannerInvariant("tsonic-rust",
-            "A generic callable flow has no prepared source application.", node);
-          const selected = entries.get(applicationKey(conversion, destination));
-          if (selected === undefined) return failTargetPlannerInvariant("tsonic-rust",
-            "A generic callable flow has no prepared physical destination application.", node);
-          return selected;
-        },
-      });
+      if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
       const nativeStorage: RustPhysicalCallableStorage = Object.freeze({ ...prepared, issues: queries.issues,
         parameterFor: queries.parameterFor,
         futureEnvironmentFor: queries.futureEnvironmentFor,
         invocationWitnessFor: queries.invocationWitnessFor,
         invocationArgumentWitnessFor: queries.invocationArgumentWitnessFor,
       });
-      return resolvedTargetStage(Object.freeze({ nativeStorage, nativeProducers, flowApplications }));
+      return resolvedTargetStage(Object.freeze({ nativeStorage, nativeProducers }));
     },
   });
 }

@@ -590,6 +590,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
+    flowApplications: context.records.genericFlowApplications,
     nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
