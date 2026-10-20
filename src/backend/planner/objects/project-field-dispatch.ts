@@ -1,9 +1,8 @@
 import type { RustProjectFieldDispatchPlan } from "../../../target-model/records/field-writes.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
 import { rustLocalErrorOwner, type RustFallibleBoundary } from "../program/fallible-boundaries.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import {
-  diagnosticInput,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
   type RustPlanContext,
@@ -46,21 +45,11 @@ export function planRustProjectFieldDispatchRole(
   if (!selected.fallible) return { selfMode: selected.selfMode, fallible: false };
   const region = context.fallibleBoundary;
   if (region === undefined || rustLocalErrorOwner(region) === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, plan.declaration),
-      "rust.error.project-field-dispatch",
-      "A fallible project field dispatch requires an exact enclosing error ABI.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted fallible project field dispatch requires its exact enclosing error ABI.", plan.declaration);
   }
   const operandBoundary = rustErrorBoundaryForProjectMember(plan.declaration, context);
   if (operandBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, plan.declaration),
-      "rust.backend.project-field-dispatch-error-boundary",
-      "A fallible project field dispatch has no exact declaration-owned error ABI.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted fallible project field dispatch requires its exact declaration-owned error ABI.", plan.declaration);
   }
   const operandErrorType = rustErrorType(operandBoundary);
   return {

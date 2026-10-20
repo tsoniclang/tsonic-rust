@@ -33,6 +33,8 @@ import type { RustCountedLoopRepresentation } from "../../target-model/records/c
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 import { admitRustThrowCompletion } from "../errors/throw-admission.js";
+import { admitRustProjectFieldDispatch } from "../errors/field-dispatch.js";
+import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
 import type { RustAssignmentValueSelection } from "../../target-model/records/operator-selection.js";
@@ -56,6 +58,7 @@ export interface RustStatementCompletionInput {
   readonly components: RustSourcePackageComponentClassifications;
   readonly ownership: RustOwnershipRecords;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
 }
 
 export type RustStatementCompletionSelection =
@@ -425,6 +428,10 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     }
     const operation = records.targetOperation.get(node);
     const compound = records.compoundWrite.get(node);
+    if (operation?.kind === "source-field" || operation?.kind === "source-union-field") {
+      const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch }, node, operation);
+      if (issue !== undefined) diagnostics.push(issue);
+    }
     if (compound !== undefined) setter(node, compound);
     else if (operation?.kind === "runtime-set") setter(node, operation);
     if (operation?.kind === "operator-token" || operation?.kind === "operator-call") assignment(node, operation);
