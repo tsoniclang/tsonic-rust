@@ -1,8 +1,5 @@
-import { rustLifetimeKey, rustLifetimesEqual } from "./identity.js";
-import type {
-  RustLifetimeRef,
-  RustSourceGenericContract,
-} from "./model.js";
+import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/identity.js";
+import type { RustLifetimeRef, RustSourceGenericContract } from "../../target-model/lifetimes/model.js";
 
 export function rustLifetimeOutlives(
   source: RustLifetimeRef,
