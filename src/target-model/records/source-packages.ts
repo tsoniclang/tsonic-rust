@@ -74,7 +74,17 @@ export interface RustSourcePackageFacadePlan {
 }
 
 export interface RustSourcePackageEmissionRecords extends RustSourcePackageErrorRecords {
+  readonly workerEntries: { readonly get: () => readonly RustWorkerEntryEmission[] | undefined };
   readonly sourcePackageInitializers: { readonly get: () => RustSourcePackageInitializerPlan | undefined };
   readonly sourcePackageComponents: { readonly get: () => readonly RustSourcePackageComponentPlan[] | undefined };
   readonly sourcePackageFacades: { readonly get: () => RustSourcePackageFacadePlan | undefined };
+}
+
+export interface RustWorkerEntryEmission {
+  readonly outputIdentity: import("../names/source-output-identities.js").RustSourceFileOutputIdentity;
+  readonly sourceFile: import("@tsonic/tsts").SourceFile;
+  readonly fileName: string;
+  readonly identity: string;
+  readonly componentId: string;
+  readonly initializer: import("./error-regions.js").RustInitializerSelection;
 }

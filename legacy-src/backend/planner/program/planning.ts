@@ -44,7 +44,6 @@ import {
 } from "./source-package-crates.js";
 import {
   planRustWorkerEntries,
-  rustWorkerEntryIdentity,
   type RustWorkerEntryPlan,
 } from "./worker-entries.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
@@ -93,29 +92,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           `${identity.externalCrateName}::${component.structuralShapesModuleName}`] as const];
     }),
   );
-  const workerEntryIdentityByFileName = new Map<string, string>();
-  for (const sourceFile of input.program.sourceModuleConstructions.targets()) {
-    const fileName = input.program.source.ast.getFileName(sourceFile);
-    const identity = identities.get(fileName);
-    if (identity === undefined) {
-      diagnostics.push({
-        code: "RUST_WORKER_ENTRY_OUTPUT_IDENTITY_MISSING",
-        category: "error",
-        source: "tsonic-rust",
-        message: `Worker source module '${fileName}' has no exact generated output identity.`,
-        sourceNode: sourceFile,
-        evidence: ["target.capability=rust.backend.source-module-construction"],
-      });
-    } else {
-      workerEntryIdentityByFileName.set(
-        fileName,
-        rustWorkerEntryIdentity(identity),
-      );
-    }
-  }
-  if (diagnostics.length > 0) {
-    return rejectedTargetStage(diagnostics);
-  }
+  const workerEntryEmission = input.program.records.workerEntries.get();
+  if (workerEntryEmission === undefined) failRustPlannerInvariant("An admitted program requires its closed worker entry inventory.");
+  const workerEntryIdentityByFileName = new Map(workerEntryEmission.map(entry => [entry.fileName, entry.identity]));
   const programModuleName = rootComponentPlan.programModuleName;
   const initializerFacadeModuleName = packageInitializers.facadeModuleNameByComponent.get(
     facadePlan.rootComponentId,
@@ -255,7 +234,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   };
   const workerEntries = planRustWorkerEntries({
     planning: input,
-    identities: identities,
     components: componentPlans,
     contentByComponentId: crateContentByComponentId,
     packageInitializers,
@@ -264,7 +242,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     rootCrateName: input.program.configuration.crateName,
     rootErrorType: rootCrateErrorType,
     typeRenderingContextFor,
-    diagnostics,
   });
   if (workerEntries === undefined || diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);

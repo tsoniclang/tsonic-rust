@@ -1,9 +1,7 @@
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
@@ -36,15 +34,8 @@ export interface RustWorkerEntryPlans {
   readonly itemsByComponentId: ReadonlyMap<string, readonly RustItem[]>;
 }
 
-export function rustWorkerEntryIdentity(
-  identity: RustSourceFileOutputIdentity,
-): string {
-  return `${identity.componentId.length}:${identity.componentId}:${identity.moduleName}`;
-}
-
 export function planRustWorkerEntries(input: {
   readonly planning: RustPlanningContext;
-  readonly identities: ReadonlyMap<string, RustSourceFileOutputIdentity>;
   readonly components: readonly RustSourcePackageComponentPlan[];
   readonly contentByComponentId: ReadonlyMap<string, RustSourcePackageCrateContentPlan>;
   readonly packageInitializers: RustSourcePackageInitializerPlan;
@@ -53,55 +44,30 @@ export function planRustWorkerEntries(input: {
   readonly rootCrateName: string;
   readonly rootErrorType: RustType;
   readonly typeRenderingContextFor: (component: RustSourcePackageComponentPlan) => RustTypeRenderingContext;
-  readonly diagnostics: TargetDiagnostic[];
-}): RustWorkerEntryPlans | undefined {
+}): RustWorkerEntryPlans {
   const componentById = new Map(input.components.map((component) =>
     [component.componentId, component] as const));
-  const sourceFileByName = new Map(input.planning.program.sourceFiles.map((sourceFile) =>
-    [input.planning.program.source.ast.getFileName(sourceFile), sourceFile] as const));
   const occupiedNamesByComponent = new Map<string, Set<string>>();
   const itemsByComponentId = new Map<string, RustItem[]>();
   const entries: RustWorkerEntryPlan[] = [];
 
-  const targets = [...input.planning.program.sourceModuleConstructions.targets()]
-    .map((sourceFile) => ({
-      sourceFile,
-      fileName: input.planning.program.source.ast.getFileName(sourceFile),
-    }))
-    .sort((left, right) => left.fileName.localeCompare(right.fileName, "en"));
+  const targets = input.planning.program.records.workerEntries.get();
+  if (targets === undefined) failRustPlannerInvariant("Worker entries require their admitted exact source inventory.");
   for (const target of targets) {
-    const identity = input.identities.get(target.fileName);
-    const component = identity === undefined
-      ? undefined
-      : componentById.get(identity.componentId);
+    const identity = target.outputIdentity;
+    const component = componentById.get(target.componentId);
     const content = component === undefined
       ? undefined
       : input.contentByComponentId.get(component.componentId);
-    if (identity === undefined || component === undefined || content === undefined ||
-      sourceFileByName.get(target.fileName) !== target.sourceFile) {
-      input.diagnostics.push(workerDiagnostic(
-        "RUST_WORKER_ENTRY_OUTPUT_IDENTITY_MISSING",
-        `Worker source module '${target.fileName}' has no exact generated crate/module identity.`,
-        target.sourceFile,
-      ));
-      continue;
-    }
+    if (identity === undefined || component === undefined || content === undefined)
+      failRustPlannerInvariant("An admitted worker entry requires its component source artifact.", target.sourceFile);
     const componentErrorDomain = input.sourcePackageErrors.domainsByComponentId.get(
       component.componentId,
     );
     if (componentErrorDomain === undefined) {
-      input.diagnostics.push(workerDiagnostic(
-        "RUST_WORKER_ENTRY_ERROR_DOMAIN_MISSING",
-        `Worker source module '${target.fileName}' has no exact source-package error domain.`,
-        target.sourceFile,
-      ));
-      continue;
+      failRustPlannerInvariant("An admitted worker entry requires its component error domain.", target.sourceFile);
     }
-    const selection = input.planning.program.errorRegions.initialization.workerFor(target.sourceFile);
-    if (selection === undefined) {
-      failRustPlannerInvariant(
-        "A worker initializer has no completed exact error composition.", target.sourceFile);
-    }
+    const selection = target.initializer;
     const initializers = planRustModuleInitializers(
       selection,
       input.packageInitializers,
@@ -149,16 +115,11 @@ export function planRustWorkerEntries(input: {
           component.componentId,
         );
     if (initializer?.errorType !== undefined && !nativeError && errorBoundary === undefined) {
-      input.diagnostics.push(workerDiagnostic(
-        "RUST_WORKER_ENTRY_ERROR_BOUNDARY_MISSING",
-        `Worker source module '${target.fileName}' has no exact error conversion into the root executable.`,
-        target.sourceFile,
-      ));
-      continue;
+      failRustPlannerInvariant("An admitted worker entry requires its exact root error conversion.", target.sourceFile);
     }
     entries.push(Object.freeze({
       sourceFile: target.sourceFile,
-      identity: rustWorkerEntryIdentity(identity),
+      identity: target.identity,
       componentId: component.componentId,
       functionName,
       callPath: component.root
@@ -184,25 +145,9 @@ export function planRustWorkerEntries(input: {
           }),
     }));
   }
-  if (input.diagnostics.length > 0) return undefined;
   return Object.freeze({
     entries: Object.freeze(entries),
     itemsByComponentId: new Map([...itemsByComponentId].map(([componentId, items]) =>
       [componentId, Object.freeze(items)] as const)),
   });
-}
-
-function workerDiagnostic(
-  code: string,
-  message: string,
-  sourceNode: SourceFile,
-): TargetDiagnostic {
-  return {
-    code,
-    category: "error",
-    source: "tsonic-rust",
-    message,
-    sourceNode,
-    evidence: ["target.capability=rust.backend.source-module-construction"],
-  };
 }

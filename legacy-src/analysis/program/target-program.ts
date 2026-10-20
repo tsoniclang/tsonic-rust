@@ -47,6 +47,7 @@ import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries
 import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.js";
 import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
 import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
+import { analyzeRustWorkerEntries } from "../source-modules/worker-entries.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
 import { analyzeRustProgramErrorModuleEmission } from "../errors/module-emission.js";
 import { analyzeRustDispatchRootEmission } from "../project/dispatch-emission.js";
@@ -564,6 +565,8 @@ export function analyzeRustTargetProgram(
   const errorEmission = analyzeRustSourcePackageErrors(program, componentEmission.components);
   if (errorEmission.plan === undefined) return rejectedTargetStage(errorEmission.diagnostics);
   analyzeRustSourcePackageErrorBoundaries(program, errorEmission.plan, context.records.sourcePackageEmission);
+  const workerEntryIssues = analyzeRustWorkerEntries(program, context.records.sourcePackageEmission);
+  if (workerEntryIssues.length !== 0) return rejectedTargetStage(workerEntryIssues);
   const errorVariantIssues = analyzeRustErrorVariantEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorVariantIssues.length !== 0) return rejectedTargetStage(errorVariantIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
