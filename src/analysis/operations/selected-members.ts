@@ -31,7 +31,7 @@ function selectMember(input:
       ? attempt.kind === "property" && rustCheckedPropertyRequestsEqual(attempt.request, input.request)
       : attempt.kind === "element" && rustCheckedElementRequestsEqual(attempt.request, input.request);
     if (!matches || attempt.options !== options || attempt.kind === "checked-call") {
-      failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust checked member request for one exact source subject.");
+      failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust checked member request for one exact source subject.", input.request.expression);
     }
     return attempt.selection;
   }
