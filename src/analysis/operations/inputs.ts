@@ -12,7 +12,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { rustSelectedAssignmentValueCarrier } from "../../policy/operations/operators/assignment-values.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustCheckedIteration } from "./provider/index.js";
+import { selectRustCheckedIteration } from "./iteration.js";
 import { setCarrierFact } from "./project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

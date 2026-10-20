@@ -3,7 +3,7 @@ import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionRes
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { rustCheckedElementRequestsEqual, rustCheckedPropertyRequestsEqual } from "./call-request-correspondence.js";
 import { admitRustOperationSelection } from "./operation-admission.js";
-import { resolveRustCheckedElementAccess } from "./provider/elements-and-iteration.js";
+import { resolveRustCheckedElementAccess } from "./element-access.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import { resolveRustCheckedPropertyAccess } from "./member-access.js";
 

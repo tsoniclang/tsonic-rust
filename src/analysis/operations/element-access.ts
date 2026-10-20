@@ -1,58 +1,37 @@
-import { requireRustRecord } from "../../program/records/required-records.js";
-import { rustIterableTargetPolicy, selectRustIterationLowering } from "../../../policy/operations/iteration/index.js";
-import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import {
-  isProjectSourceDeclaration,
-  resolveSelectedProviderDeclaration,
-} from "../../../policy/identities/selected-source.js";
-import {
-  isRustCopyCarrier,
-  isRustJsArrayLikeCarrier,
-  isRustStringCarrier,
-} from "../../../target-model/types/index.js";
-import {
-  KindArrayLiteralExpression,
-  KindCallExpression,
-  KindNewExpression,
-  KindNonNullExpression,
-  KindParenthesizedExpression,
-  KindSatisfiesExpression,
-  Node_Expression,
-  Node_Type,
-  sourceParameterIsProperty,
-} from "@tsonic/target-api/source";
-import {
-  rustFixedArrayCarrierValue,
-  rustSourcePrimitiveTargetType,
-} from "../../../target-model/types/index.js";
-import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
-import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
-import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
-import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectedValueCarrier } from "../selected-values.js";
-import { canRequireSourceClone } from "./clone-requirements.js";
-import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
-import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
-import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
-import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
-import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+import { isProjectSourceDeclaration, resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
+import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
+import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./provider/result.js";
+import { acceptDeclarationOperation, elementProvenance } from "../program/records/selected-operation-values.js";
+import { normalizeSelectedLiteralCarrier } from "../expressions/selected-literals.js";
+import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./provider/conversions.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { selectRustNativeIndex } from "../../policy/operations/native-indices.js";
+import { rustProjectObjectIndexSignature } from "../project-types/object-layout.js";
+
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { selectedValueCarrier } from "./selected-values.js";
+import { canRequireSourceClone } from "./provider/clone-requirements.js";
+
+import { selectJsSurfaceMemberRead } from "../../policy/operations/source-profiles/js/member-reads.js";
+import { selectRustSourceProfileIndexMembers } from "./provider/selected-members.js";
+import { selectRustFixedArrayElementAccess } from "./fixed-arrays.js";
+import { isIntrinsicSourceQualifier } from "./provider/source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
-import type { RustCheckedElementSelectionInput, RustCheckedIterationSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
-import type { Node } from "@tsonic/tsts";
-import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
-import { selectedRustForInKeys } from "./for-in-keys.js";
-import { resolveRustCheckedPropertyAccess } from "./properties.js";
-import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
-import { selectRustRecordElement } from "./records.js";
-import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+
+import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
+
+import { selectRustNumberArrayUnionMember } from "./provider/number-array-unions.js";
+
+import { resolveRustCheckedPropertyAccess } from "./member-access.js";
+import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
+import { selectRustRecordElement } from "./provider/records.js";
 
 export function resolveRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -328,125 +307,4 @@ export function resolveRustCheckedElementAccess(
     return acceptDeclarationOperation("indexer");
   }
   return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked element access has no selected provider, source-profile, tuple, or fixed-array evidence.");
-}
-
-export function selectRustCheckedIteration(
-  request: RustCheckedIterationSelectionInput,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const source = request.source;
-  if (source.iterationKind === "for-in") {
-    const iterable = rustEffectiveValueCarrier(context.records, request.expression) ??
-      resolveRustTargetTypeRef(request.expression, context, options);
-    const elementCarrier = resolveRustTargetTypeRef(source.sourceElementType, context, options);
-    if (elementCarrier === undefined || !isRustStringCarrier(elementCarrier)) {
-      return rejectSelectedOperation(
-        request.statement,
-        context,
-        "RUST_ITERATION_KEY_CARRIER_UNSUPPORTED",
-        "Rust property-key iteration requires the exact checked source key to map to String.",
-      );
-    }
-    const lowering = rustPropertyKeyIterationLowering(iterable, request.expression, context, options);
-    if (iterable === undefined || lowering === undefined) {
-      return rejectSelectedOperation(
-        request.statement,
-        context,
-        "RUST_ITERATION_CARRIER_UNSUPPORTED",
-        "The selected Rust receiver carrier has no closed property-key iteration policy.",
-      );
-    }
-    const fact: RustTargetOperationFact = {
-      kind: "iteration",
-      operationId: `tsonic.rust.iteration.for-in.${lowering.kind}`,
-      iterationKind: "for-in",
-      iterableCarrier: iterable,
-      elementCarrier,
-      lowering,
-    };
-    return acceptRustOperation(fact, {
-      sourceExpression: request.expression,
-      sourceResultType: source.sourceElementType,
-    }, elementCarrier);
-  }
-  const iterable = rustEffectiveValueCarrier(context.records, request.expression) ??
-    resolveRustTargetTypeRef(request.expression, context, options);
-  const targetIteration = rustIterableTargetPolicy(iterable, context.typeDefinitions);
-  if (targetIteration === undefined) {
-    return rejectSelectedOperation(
-      request.statement,
-      context,
-      "RUST_ITERATION_CARRIER_UNSUPPORTED",
-      `Selected ${source.iterationKind} iteration receiver is not a finalized supported Rust iterable carrier.`,
-    );
-  }
-  const lowering = selectRustIterationLowering(
-    source,
-    targetIteration,
-    isFreshRustIterationValue(request.expression, context.ast),
-  );
-  if (lowering === undefined) {
-    return rejectSelectedOperation(
-      request.statement,
-      context,
-      "RUST_ITERATION_MECHANISM_UNSUPPORTED",
-      `Selected ${source.iterationKind} mechanism is incompatible with the finalized Rust iterable carrier.`,
-    );
-  }
-  const fact: RustTargetOperationFact = {
-    kind: "iteration",
-    operationId: `tsonic.rust.iteration.${source.iterationKind}.${lowering.kind}${lowering.kind === "receiver-method" ? `.${lowering.name}` : ""}`,
-    iterationKind: source.iterationKind,
-    elementCarrier: targetIteration.elementCarrier,
-    lowering,
-  };
-  return acceptRustOperation(fact, {
-    sourceExpression: request.expression,
-    sourceResultType: source.sourceElementType,
-  }, targetIteration.elementCarrier);
-}
-
-type RustPropertyKeyIterationLowering = Extract<
-  RustTargetOperationFact,
-  { readonly kind: "iteration"; readonly iterationKind: "for-in" }
->["lowering"];
-
-function rustPropertyKeyIterationLowering(
-  iterable: TargetTypeRef | undefined,
-  expression: Node,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): RustPropertyKeyIterationLowering | undefined {
-  if (iterable?.kind === "array" ||
-    (iterable?.kind === "reference" && iterable.referent.kind === "slice") ||
-    rustFixedArrayCarrierValue(iterable) !== undefined) {
-    return { kind: "dense-index-keys" };
-  }
-  if (isRustJsArrayLikeCarrier(iterable)) {
-    return { kind: "js-array-index-keys" };
-  }
-  if (isRustStringCarrier(rustRecordCarrierValue(iterable)?.key)) return { kind: "record-keys" };
-  const keys = iterable === undefined
-    ? undefined
-    : selectedRustForInKeys(expression, iterable, context, options);
-  return keys === undefined ? undefined : { kind: "static-keys", keys };
-}
-
-
-function isFreshRustIterationValue(
-  expression: Node,
-  ast: import("@tsonic/tsts").AstReader,
-): boolean {
-  const kind = ast.kindName(expression);
-  if (kind === KindCallExpression || kind === KindNewExpression || kind === KindArrayLiteralExpression) {
-    return true;
-  }
-  if (kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
-    kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
-    kind !== "KindTypeAssertionExpression" && kind !== "KindAwaitExpression") {
-    return false;
-  }
-  const inner = Node_Expression(ast, expression);
-  return inner !== undefined && isFreshRustIterationValue(inner, ast);
 }
