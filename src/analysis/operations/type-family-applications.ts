@@ -4,7 +4,7 @@ import { rustResolutionContext } from "../program/walk.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/type-families.js";
+import { resolveRustTypeFamilyApplication } from "../types/resolution/type-families.js";
 
 export function realizeRustSelectedTypeFamilies(
   walk: RustFactWalk,

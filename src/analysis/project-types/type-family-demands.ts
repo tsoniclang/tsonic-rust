@@ -6,7 +6,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/type-families.js";
+import { resolveRustTypeFamilyApplication } from "../types/resolution/type-families.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "./type-family-normalization.js";
