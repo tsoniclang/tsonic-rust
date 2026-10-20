@@ -1,7 +1,7 @@
 import type { Node, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustProjectTypePolicy } from "./type-policy.js";
+import type { RustProjectTypePolicy } from "./index.js";
 
 export function createRustStructuralStorageCollector(
   context: RustAnalysisContext,
