@@ -2,10 +2,7 @@ import type { TargetTypeRef } from "../model.js";
 import { hasExactObjectKeys, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
 import { rustSourceTypeCarrierValue } from "./source-types.js";
-import {
-  isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol,
-  type RustCallableOrigin, type RustCallableSignature,
-} from "./callable-signatures.js";
+import { isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol, type RustCallableOrigin, type RustCallableSignature } from "./callable-signatures.js";
 
 export type RustFrameCallableOwner =
   | { readonly kind: "lexical"; readonly origin: RustCallableOrigin }
