@@ -61,7 +61,8 @@ import { propagateRustBottomOperand } from "../bottom-operands.js";
 import { rustOptionalStorageCallArguments } from "../../types/type-projections.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
-import { planRustNativeInputInvocation, planRustNativeInputPropagation, rustNativeInputEffectsMatch } from "./native-input.js";
+import { planRustNativeInputInvocation, planRustNativeInputPropagation } from "./native-input.js";
+import { rustNativeInputEffectsMatch } from "../../../../analysis/callables/native-protocol-emission.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 
 import { planRustSourceErrorPropagation } from "./source-errors.js";
@@ -74,7 +75,7 @@ export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: import("../../../../target-model/records/object-methods.js").RustSourceCallEffectsFact | undefined,
   definitions: RustTypeDefinitions,
-  nativeInput?: import("../../../../analysis/callables/native-inputs.js").RustNativeCallableCall,
+  nativeInput?: import("../../../../target-model/records/native-protocols.js").RustNativeCallableCall,
 ): boolean {
   if (effects === undefined ||
     (effects.invocation !== "infallible" && effects.invocation !== "fallible") ||

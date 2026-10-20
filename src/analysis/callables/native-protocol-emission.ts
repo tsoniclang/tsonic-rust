@@ -1,4 +1,5 @@
 import type { SourceFile } from "@tsonic/tsts";
+import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustNativeProtocolProducer } from "../program/records/native-protocol-emission.js";
@@ -8,13 +9,40 @@ import { rustNativeFutureCallableResult } from "../../target-model/types/carrier
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import type { RustNativeGenericProducerBridge } from "../../target-model/records/native-protocol-emission.js";
 import { emissionDiagnostic } from "./emission-contexts.js";
+import type { RustNativeCallableCall } from "../../target-model/records/native-protocols.js";
+import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+
+export function rustNativeInputEffectsMatch(call: RustNativeCallableCall, effects: RustSourceCallEffectsFact): boolean {
+  return effects.invocation === "fallible" && effects.awaiting === (call.completion === undefined ? "not-applicable" : "fallible") &&
+    closedMetadataEquals(effects.nativeInput, { invocationError: call.invocationError, invocationErrorSource: call.invocationErrorSource,
+      awaitErrors: call.awaitErrors, awaitErrorSources: call.awaitErrorSources });
+}
 
 export function analyzeRustNativeProtocolEmission(input: {
-  readonly program: Pick<RustTargetProgram, "callableValues" | "typeDefinitions" | "sourcePackageComponents">;
+  readonly program: Pick<RustTargetProgram, "source" | "records" | "errorRegions" | "callableValues" | "typeDefinitions" | "sourcePackageComponents">;
   readonly sourceFiles: readonly SourceFile[];
   readonly producer: RustNativeProtocolProducer;
 }): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
+  for (const selected of input.program.callableValues.native.inputs) input.producer.input(selected);
+  for (const call of input.program.callableValues.native.calls) {
+    const program = input.program;
+    const callee = Node_Expression(program.source.ast, call.node);
+    const carrier = callee === undefined ? undefined : rustEffectiveValueCarrier(program.records, callee);
+    const effects = program.records.sourceCallEffects.get(call.node);
+    const owner = sourceEnclosingCallable(call.node, program.source.ast);
+    const file = program.source.ast.getSourceFile(call.node);
+    const region = owner === undefined ? file === undefined ? undefined : program.errorRegions.initialization.moduleFor(file)?.region : program.errorRegions.get(owner);
+    if (callee === undefined || carrier === undefined || effects === undefined || !rustNativeInputEffectsMatch(call, effects) || region === undefined || region.kind === "infallible") {
+      issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: call.node,
+        message: `Native callable invocation requires its exact selected error channel in the active region. Node kind: ${program.source.ast.kindName(call.node)}.`,
+        evidence: ["target.capability=rust.backend.native-callable-error-channel"] });
+      continue;
+    }
+    input.producer.call(call.node, { call, callee, reference: carrier.kind === "reference" });
+  }
   const protocols = Object.freeze([...input.program.callableValues.native.protocols]);
   const selections = input.program.callableValues.nativeGenericProducers;
   for (const selected of selections.unresolved) issues.push(emissionDiagnostic(selected.invocation, selected.reason));

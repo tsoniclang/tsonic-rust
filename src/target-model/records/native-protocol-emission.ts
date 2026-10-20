@@ -1,4 +1,5 @@
-import type { RustNativeCallableProtocol } from "./native-protocols.js";
+import type { RustNativeCallableProtocol, RustNativeCallableCall } from "./native-protocols.js";
+import type { Node } from "@tsonic/tsts";
 import type { RustNativeCallableCompletion } from "../types/callable-completions.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-callables.js";
@@ -38,4 +39,10 @@ export interface RustNativeProtocolEmission {
 
 export interface RustNativeProtocolReader {
   readonly get: (protocol: RustNativeCallableProtocol) => RustNativeProtocolEmission | undefined;
+}
+
+export interface RustNativeInputInvocationEmission {
+  readonly call: RustNativeCallableCall;
+  readonly callee: Node;
+  readonly reference: boolean;
 }

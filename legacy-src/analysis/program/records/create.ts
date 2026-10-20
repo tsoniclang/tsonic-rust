@@ -314,6 +314,8 @@ export function createRustProgramRecordBuilder(
     lexicalValues: lexicalValuePlans.records,
     nativeProtocols: nativeProtocolPlans.inventories,
     nativeProtocol: nativeProtocolPlans.protocol,
+    nativeProtocolInput: nativeProtocolPlans.inputs,
+    nativeInputInvocation: nativeProtocolPlans.calls,
     ...errorEmissionPlans.records,
     nativeErrorRegion: errorEmissionPlans.regions,
     classInitialization: classInitializationPlans.classes,

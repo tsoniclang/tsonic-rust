@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { RustSourceCallEffectsFact } from "../../../target-model/records/object-methods.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import type { RustNativeCallableCall } from "../../callables/native-inputs.js";
+import type { RustNativeCallableCall } from "../../../target-model/records/native-protocols.js";
 import { createRustRecordFamily } from "./family.js";
 
 export interface RustSourceCallEffectsProducer {

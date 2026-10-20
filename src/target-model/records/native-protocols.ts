@@ -12,6 +12,16 @@ export interface RustNativeCallableInput extends RustNativeCallableProtocolBindi
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
 }
 
+export interface RustNativeCallableCall {
+  readonly node: Node;
+  readonly input: RustNativeCallableInput;
+  readonly invocationError: TargetTypeRef;
+  readonly invocationErrorSource: string;
+  readonly completion?: RustNativeCallableCompletion;
+  readonly awaitErrors: readonly TargetTypeRef[];
+  readonly awaitErrorSources: readonly string[];
+}
+
 export interface RustNativeCallableOutlivesBound {
   readonly carrier: TargetTypeRef;
   readonly lifetime: RustLifetimeRef;

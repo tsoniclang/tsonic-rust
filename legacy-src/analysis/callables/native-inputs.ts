@@ -35,7 +35,7 @@ import { emissionDiagnostic } from "./emission-contexts.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
-import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
+import type { RustNativeCallableInput, RustNativeCallableCall } from "../../target-model/records/native-protocols.js";
 
 import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput } from "../../target-model/records/native-generics.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
@@ -44,16 +44,6 @@ export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
       readonly implementations: readonly SourceStorageSubject[] }
   | { readonly kind: "unresolved"; readonly reason: string };
-
-export interface RustNativeCallableCall {
-  readonly node: Node;
-  readonly input: RustNativeCallableInput;
-  readonly invocationError: TargetTypeRef;
-  readonly invocationErrorSource: string;
-  readonly completion?: RustNativeCallableCompletion;
-  readonly awaitErrors: readonly TargetTypeRef[];
-  readonly awaitErrorSources: readonly string[];
-}
 
 export interface RustNativeCallableInputPlan {
   readonly inputs: readonly RustNativeCallableInput[];
