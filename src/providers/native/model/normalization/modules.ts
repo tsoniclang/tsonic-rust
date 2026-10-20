@@ -1,61 +1,10 @@
-import {
-  authoredPublicCanonicalPath,
-  authoredPublicIdentity,
-  authoredPublicKind,
-  authoredPublicName,
-  canonicalItemId,
-  canonicalItemPath,
-  expandedPublicModuleItems,
-  compilerAssociatedSourceExportName,
-  isCompilerAssociatedSourceExportName,
-  isGlobUse,
-  resolveLocalRustdocItem,
-} from "../rustdoc-items.js";
-import {
-  canonicalPathKey,
-  normalizeGenericParameters,
-  normalizeTraitBounds,
-  normalizeType,
-  normalizeTypeTraits,
-  rootNormalizationContext,
-  rustCompilerDerivedIdentity,
-  rustCompilerItemIdentity,
-  rustStaticValueCanBeCopied,
-} from "../rustdoc-types.js";
-import {
-  compareText,
-  hasInnerKind,
-  itemById,
-  requireArray,
-  requireBoolean,
-  requireInnerRecord,
-  requireRecord,
-  requireString,
-} from "../rustdoc-schema.js";
-import {
-  normalizeEnumVariants,
-  normalizeFields,
-  normalizePublicFields,
-  normalizeTraitMembers,
-  normalizeTypeMembers,
-} from "./members.js";
+import { authoredPublicCanonicalPath, authoredPublicIdentity, authoredPublicKind, authoredPublicName, canonicalItemId, canonicalItemPath, expandedPublicModuleItems, compilerAssociatedSourceExportName, isGlobUse, resolveLocalRustdocItem } from "../rustdoc-items.js";
+import { canonicalPathKey, normalizeGenericParameters, normalizeTraitBounds, normalizeType, normalizeTypeTraits, rootNormalizationContext, rustCompilerDerivedIdentity, rustCompilerItemIdentity, rustStaticValueCanBeCopied } from "../rustdoc-types.js";
+import { compareText, hasInnerKind, itemById, requireArray, requireBoolean, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
+import { normalizeEnumVariants, normalizeFields, normalizePublicFields, normalizeTraitMembers, normalizeTypeMembers } from "./members.js";
 import { normalizeFunction } from "./functions.js";
 import { rustCompilerProviderProtocolVersion } from "../model.js";
-import type {
-  RustCompilerAssociatedConstraint,
-  RustCompilerDependency,
-  RustCompilerExport,
-  RustCompilerFunction,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerModuleModel,
-  RustCompilerProjectSnapshot,
-  RustCompilerStandardTypeLocation,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-  RustCompilerUnsupportedExport,
-  RustCompilerUnsupportedMember,
-} from "../model.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerDependency, RustCompilerExport, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerModuleModel, RustCompilerProjectSnapshot, RustCompilerStandardTypeLocation, RustCompilerTraitDispatch, RustCompilerType, RustCompilerUnsupportedExport, RustCompilerUnsupportedMember } from "../model.js";
 import type { ResolvedRustdocItem, RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 
@@ -133,14 +82,9 @@ export function normalizeModule(
     }
     const authored = publicItemsByName.get(name);
     if (authored === undefined) {
-      const associatedOwner = isCompilerAssociatedSourceExportName(name)
-        ? associatedTypeOwnerName(
-            name,
-            publicItemsByName,
-            publicResolutionErrors,
-            resolveItem,
-          )
-        : undefined;
+      const associatedOwner = associatedTypeOwnerName(
+        name, publicItemsByName, publicResolutionErrors, resolveItem,
+      );
       if (associatedOwner !== undefined) {
         if (!visited.has(associatedOwner)) pending.push(associatedOwner);
         pending.sort(compareText);
@@ -655,6 +599,6 @@ function mergeUnsupported(
   left: readonly RustCompilerUnsupportedMember[],
   right: readonly RustCompilerUnsupportedMember[],
 ): readonly RustCompilerUnsupportedMember[] {
-  return Object.freeze([...left, ...right].sort((a, b) =>
-    compareText(`${a.kind}\0${a.name}`, `${b.kind}\0${b.name}`)));
+  return Object.freeze([...left, ...right].sort((left, right) =>
+    compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`)));
 }
