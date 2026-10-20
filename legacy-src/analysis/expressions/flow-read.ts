@@ -32,7 +32,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
-import { recordBindingWrite } from "../declarations/types-and-bindings.js";
+import { recordBindingWrite } from "../ownership/source-writes.js";
 import { selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";

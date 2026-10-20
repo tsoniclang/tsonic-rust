@@ -40,7 +40,9 @@ import {
 } from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { recordBindingPatternFacts, recordBindingWrite, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts } from "../control-flow/binding-patterns.js";
+import { recordBindingWrite } from "../ownership/source-writes.js";
+import { validateFlowMarkerAgainstMode } from "./flow-markers.js";
 import { recordProjectSourceBinding } from "../expressions/references.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";

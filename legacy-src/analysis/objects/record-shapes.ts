@@ -9,9 +9,9 @@ import {
   sourcePresentCallableType,
 } from "@tsonic/target-api/source";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
+import { resolveParameterAbi } from "../callables/parameter-facts.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
+import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 
 import { rustResolutionContext } from "../program/walk.js";
 

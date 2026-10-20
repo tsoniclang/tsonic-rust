@@ -12,7 +12,7 @@ import {
   sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
 
-import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
+import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustFactWalk } from "./walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

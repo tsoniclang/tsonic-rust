@@ -1,7 +1,8 @@
+import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustLifetimeKey,
@@ -12,7 +13,7 @@ import { rustNativeFutureCallableResult } from "../../target-model/types/carrier
 export function rustHigherRankedNativeFunctionCarrier(
   walk: RustFactWalk,
   declaration: Node,
-  parameters: readonly RustSourceParameterAbi[],
+  parameters: readonly RustSourceParameterAbiFact[],
   result: TargetTypeRef,
 ): TargetTypeRef | undefined {
   if (rustNativeFutureCallableResult(result) !== undefined) return undefined;

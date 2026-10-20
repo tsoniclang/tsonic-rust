@@ -1,5 +1,5 @@
+import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
-import type { RustParameterEntryConversion } from "../../target-model/records/callables-and-resources.js";
 import { selectRustParameterEntryConversion } from "./parameter-entry-conversion.js";
 import type { Node } from "@tsonic/tsts";
 import {
@@ -50,7 +50,6 @@ import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
 import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
-import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { closeRustRetainedParameter } from "./retained-environments.js";
 
 export interface RustSourceCallableAbiResolver {
@@ -64,20 +63,12 @@ export interface RustSourceCallableAbiResolver {
     context: RustTargetTypeResolutionContext,
     options: RustTargetTypeResolutionOptions,
     contextualValueCarrier?: TargetTypeRef,
-  ): RustSourceParameterAbi | undefined;
+  ): RustSourceParameterAbiFact | undefined;
 }
 
-export interface RustSourceParameterAbi {
-  readonly form: "required" | "optional" | "default" | "rest";
-  readonly valueCarrier: TargetTypeRef;
-  readonly parameterCarrier: TargetTypeRef;
-  readonly mode: RustArgumentMode;
-  readonly inputLifetime?: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
-  readonly entryConversion?: RustParameterEntryConversion;
-}
 
 export function rustSourceParameterContractCarrier(
-  abi: RustSourceParameterAbi,
+  abi: RustSourceParameterAbiFact,
 ): TargetTypeRef {
   return abi.parameterCarrier.kind === "reference"
     ? abi.parameterCarrier.referent
@@ -85,7 +76,7 @@ export function rustSourceParameterContractCarrier(
 }
 
 export function instantiateRustSourceParameterValueCarrier(
-  abi: RustSourceParameterAbi,
+  abi: RustSourceParameterAbiFact,
   selectedParameterCarrier: TargetTypeRef,
   selectedBindings: RustTargetGenericBindings,
   normalize: (carrier: TargetTypeRef) => TargetTypeRef,
@@ -121,9 +112,9 @@ export function instantiateRustSourceParameterValueCarrier(
 
 export function createRustSourceCallableAbiResolver(input: {
   readonly isNativeCallableExpression: (expression: Node) => boolean;
-  readonly parameterAbiFor: (parameter: Node) => RustSourceParameterAbi | undefined;
+  readonly parameterAbiFor: (parameter: Node) => RustSourceParameterAbiFact | undefined;
 }): RustSourceCallableAbiResolver {
-  const cache = new WeakMap<object, RustSourceParameterAbi | null>();
+  const cache = new WeakMap<object, RustSourceParameterAbiFact | null>();
 
   return {
     canUseSharedBorrow(parameter, context, options) {
@@ -237,7 +228,7 @@ export function resolveRustContextualParameterAbi(
     readonly selected: RustLifetimeBinder;
   },
   contextualValueCarrier?: TargetTypeRef,
-): RustSourceParameterAbi | undefined {
+): RustSourceParameterAbiFact | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
     return undefined;
@@ -315,9 +306,9 @@ export function resolveRustContextualParameterAbi(
 
 function finalizeRustSourceParameterStorage(
   parameter: Node,
-  abi: RustSourceParameterAbi,
+  abi: RustSourceParameterAbiFact,
   context: RustTargetTypeResolutionContext,
-): RustSourceParameterAbi | undefined {
+): RustSourceParameterAbiFact | undefined {
   const owner = context.ast.parent(parameter);
   if (abi.form === "required" && abi.entryConversion === undefined && owner !== undefined &&
     !isRustCopyCarrier(abi.valueCarrier) && context.sourceCallables.borrowedReturnParameter(owner) === parameter &&

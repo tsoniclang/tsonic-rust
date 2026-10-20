@@ -4,7 +4,7 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import type { RustTypeAliasDeclarationFact } from "../../../target-model/records/callables-and-resources.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectRustTypeAliasDeclaration } from "../../declarations/types-and-bindings.js";
+import { selectRustTypeAliasDeclaration } from "../../declarations/type-aliases.js";
 import type { RustFactWalk } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
 import { requireRustRecord } from "./required-records.js";

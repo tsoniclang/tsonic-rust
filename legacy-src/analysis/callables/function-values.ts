@@ -1,6 +1,7 @@
+import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableTargetType, rustCallableProtocol, rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
@@ -28,7 +29,7 @@ export function rustSourceClosureValueCarrier(
 }
 
 export function rustSourceFunctionValueCarrier(
-  walk: RustFactWalk, declaration: Node, parameters: readonly RustSourceParameterAbi[], result: TargetTypeRef,
+  walk: RustFactWalk, declaration: Node, parameters: readonly RustSourceParameterAbiFact[], result: TargetTypeRef,
 ): TargetTypeRef | undefined {
   const contract = walk.context.sourceLifetimes.contractFor(declaration);
   const quantified = contract?.parameters.filter(parameter => parameter.kind === "type") ?? [];

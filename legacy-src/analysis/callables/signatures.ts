@@ -29,7 +29,7 @@ import {
 } from "../../target-model/types/index.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -286,7 +286,7 @@ function recordCallableValueSignatureFacts(
     selectedReturnCarrier === undefined || parameters.length > parameterCarriers.length) {
     return;
   }
-  const parameterAbis: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi[] = [];
+  const parameterAbis: import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
   for (const [index, parameter] of parameters.entries()) {
     const sourceParameterCarrier = parameterCarriers[index];
     if (parameter === undefined || sourceParameterCarrier === undefined) {

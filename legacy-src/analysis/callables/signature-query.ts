@@ -6,14 +6,14 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustAsyncFunctionFact, RustGeneratorFact, RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
-import type { RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals, rustSourceCallableReturnFactEquals } from "../../target-model/records/equality.js";
 import { rustCallableTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "./results.js";
 import { recordCallableParameterInputFacts, recordCallableParameterSignatureFacts } from "./parameter-signature.js";
-import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { selectRustCallableSuspension } from "./suspension.js";
@@ -22,7 +22,7 @@ import { selectRustCallableLogicalReturn } from "./signatures.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 
 export interface RustCallableSignatureRequest {
-  readonly parameterAbis?: readonly RustSourceParameterAbi[];
+  readonly parameterAbis?: readonly RustSourceParameterAbiFact[];
   readonly selectedReturn?: TargetTypeRef;
   readonly contextualResult?: TargetTypeRef;
   readonly ownedReceiver?: TargetTypeRef;

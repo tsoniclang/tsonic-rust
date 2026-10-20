@@ -31,7 +31,7 @@ import { selectRustIndexedCallKeys } from "./indexed-call-keys.js";
 
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
-import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
+import { resolveParameterAbi } from "../callables/parameter-facts.js";
 import { resolveFunctionExpressionSignature } from "../callables/closures.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { recordCallableParameterSignatureFacts } from "../callables/parameter-signature.js";

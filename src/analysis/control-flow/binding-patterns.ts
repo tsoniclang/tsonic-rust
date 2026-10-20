@@ -1,3 +1,8 @@
+import type { RustFactWalk } from "../program/walk.js";
+import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
@@ -427,4 +432,49 @@ function bindingPropertySourceName(
       (kind !== KindIdentifier && kind !== KindStringLiteral && kind !== KindNumericLiteral)
     ? undefined
     : ast.text(propertyName);
+}
+
+export function recordBindingPatternFacts(
+  walk: RustFactWalk,
+  pattern: Node,
+  sourceCarrier: TargetTypeRef,
+): boolean {
+  const admission = recordRustBindingPatternFacts(pattern, sourceCarrier, {
+    ast: walk.context.ast,
+    records: walk.context.records,
+    requiredRecords: walk.context.requiredRecords,
+    navigation: walk.context.source.navigation,
+    semanticsFor: walk.context.semanticsFor,
+    sourceTypes: walk.sourceTypes,
+    resolveCarrier: (subject) => resolveRustTargetTypeRef(
+      subject,
+      rustResolutionContext(walk, subject),
+      walk.operationOptions,
+    ),
+    resolveProjectFieldCarrier: (declaration, receiverCarrier) => {
+      const declaredCarrier = resolveRustTargetTypeRef(
+        declaration,
+        rustResolutionContext(walk, declaration),
+        walk.operationOptions,
+      );
+      return declaredCarrier === undefined
+        ? undefined
+        : walk.context.projectTypes.instantiateMemberCarrier(
+            declaration,
+            receiverCarrier,
+            declaredCarrier,
+          );
+    },
+    resolveExpressionCarrier: (expression, expected) => resolveExpressionCarrier(
+      walk,
+      expression,
+      walk.context.semanticsFor(expression).sourceFile,
+      expected,
+    ),
+    setCarrier: (subject, carrier) => {
+      setCarrierFact(walk, subject, carrier);
+    },
+  });
+  if (admission.kind === "rejected") appendRustDiagnostic(walk, admission.code, admission.reason, admission.node, []);
+  return admission.kind === "recorded";
 }

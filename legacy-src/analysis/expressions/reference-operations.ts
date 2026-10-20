@@ -11,7 +11,7 @@ import { appendRustDiagnostic } from "../program/walk.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { recordBindingWrite } from "../declarations/types-and-bindings.js";
+import { recordBindingWrite } from "../ownership/source-writes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustEquivalentAssignment } from "../../policy/operations/operators/rules.js";
 import {

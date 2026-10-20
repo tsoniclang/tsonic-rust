@@ -2,7 +2,7 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";

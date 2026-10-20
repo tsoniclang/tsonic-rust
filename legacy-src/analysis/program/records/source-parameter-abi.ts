@@ -8,12 +8,12 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
 import { rustFoundationForCarrier } from "../../foundation/requirements.js";
-import type { RustSourceParameterAbi } from "../../../policy/ownership/source-callable-abi.js";
+
 import { createRustRecordFamily } from "./family.js";
 
 export interface RustSourceParameterAbiProducer {
   readonly records: RustRecordFamily<RustSourceParameterAbiFact>;
-  parameter(parameter: Node, selected: RustSourceParameterAbi): void;
+  parameter(parameter: Node, selected: RustSourceParameterAbiFact): void;
   use(expression: Node, source: Node): void;
 }
 
@@ -33,7 +33,7 @@ export function createRustSourceParameterAbiProducer(
   });
   return Object.freeze({
     records: family.reader,
-    parameter(parameter: Node, selected: RustSourceParameterAbi): void {
+    parameter(parameter: Node, selected: RustSourceParameterAbiFact): void {
       assertOpen();
       family.writer.set(parameter, Object.freeze({
         form: selected.form, valueCarrier: selected.valueCarrier, parameterCarrier: selected.parameterCarrier,

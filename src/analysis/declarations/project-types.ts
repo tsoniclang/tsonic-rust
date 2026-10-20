@@ -14,9 +14,9 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 
 import { finalizeRustCallableSignature } from "../callables/signature-query.js";
-import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "./types-and-bindings.js";
+import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "../callables/parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
-import { resolveTypeNodeCarrier } from "./types-and-bindings.js";
+import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 

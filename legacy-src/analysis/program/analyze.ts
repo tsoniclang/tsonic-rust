@@ -19,7 +19,7 @@ import {
   KindFunctionDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
+import { reserveTypeAliasUnion } from "../declarations/type-aliases.js";
 import { recordEnumFacts } from "../declarations/enum-facts.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../resources/fallibility.js";

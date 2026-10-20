@@ -28,7 +28,7 @@ import {
   rustClosureProtocol,
   rustUnitTargetType,
 } from "../../target-model/types/index.js";
-import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -193,7 +193,7 @@ export function resolveFunctionExpressionCarrier(
     parameters.length !== resolvedSourceCallable.parameters.length) {
     return undefined;
   }
-  const parameterAbis: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi[] = [];
+  const parameterAbis: import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[] = [];
   const byRefCopyParams: boolean[] = [];
   for (const [index, parameter] of parameters.entries()) {
     if (parameter === undefined) {

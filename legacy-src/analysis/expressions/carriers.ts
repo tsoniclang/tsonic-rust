@@ -54,7 +54,7 @@ import { selectProviderRecordArgument } from "../operations/provider/calls/recor
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { selectRustGuardedIntegerConversion } from "../../policy/conversions/integer-refinement.js";
 import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operators/rules.js";
-import { recordAssignmentWrite } from "../declarations/types-and-bindings.js";
+import { recordAssignmentWrite } from "../ownership/source-writes.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { resolveBinaryOperandCarriers } from "../operations/operators.js";
 import { resolveExpressionCarrierUncached } from "./value-resolution.js";

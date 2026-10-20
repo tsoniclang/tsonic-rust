@@ -17,7 +17,9 @@ import {
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
+import { recordBindingWrite } from "../ownership/source-writes.js";
+import { resolveParameterAbi } from "../callables/parameter-facts.js";
+import { validateFlowMarkerAgainstMode } from "./flow-markers.js";
 
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
