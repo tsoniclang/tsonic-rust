@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { createRustProjectTypePolicy } from "./resolution.js";
 import type { RustProjectTypePolicyRegistry } from "../../../policy/types/project/project-types.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
@@ -8,7 +9,7 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
   let sourceErrorCarrier: TargetTypeRef | undefined;
   const requireCurrent = (): RustProjectTypePolicy => {
     if (current === undefined) {
-      throw new Error("Rust project type policy was read before source analysis initialized it.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust project type policy was read before source analysis initialized it.");
     }
     return current;
   };
@@ -21,10 +22,10 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     },
     initialize(host) {
       if (current !== undefined) {
-        throw new Error("Rust project type policy can be initialized only once.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust project type policy can be initialized only once.");
       }
       current = createRustProjectTypePolicy(host, carrier => {
-        if (sourceErrorCarrier !== undefined) throw new Error("Rust source Error carrier classification can be published only once.");
+        if (sourceErrorCarrier !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Rust source Error carrier classification can be published only once.");
         sourceErrorCarrier = carrier;
       });
       return current;
@@ -69,7 +70,7 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
       return requireCurrent().sourceCreatedErrorOrigins;
     },
     sourceErrorCarrier() {
-      if (sourceErrorCarrier === undefined) throw new Error("Rust source Error carrier was read before declaration-level heritage classification.");
+      if (sourceErrorCarrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "Rust source Error carrier was read before declaration-level heritage classification.");
       return sourceErrorCarrier;
     },
     programErrorVariant(definition) {
