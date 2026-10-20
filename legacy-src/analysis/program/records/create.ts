@@ -42,6 +42,7 @@ import { createRustSourceBindingEmissionProducer } from "./binding-paths.js";
 import { createRustSourceFileEmissionProducer } from "./source-file-emission.js";
 import { createRustProviderEvaluationProducer } from "./provider-evaluation.js";
 import { createRustProviderInputProducer } from "./provider-inputs.js";
+import { createRustLambdaEmissionProducer } from "./lambda-emission.js";
 import { createRustConversionEmissionProducer } from "./conversion-emission.js";
 import { createRustErrorTransportEmissionProducer } from "./error-transport.js";
 import { createRustDispatchContextEmissionProducer } from "./dispatch-contexts.js";
@@ -294,6 +295,7 @@ export function createRustProgramRecordBuilder(
   const sourceFileEmissionPlans = createRustSourceFileEmissionProducer(assertOpen);
   const providerEvaluationPlans = createRustProviderEvaluationProducer(assertOpen);
   const providerInputPlans = createRustProviderInputProducer(assertOpen);
+  const lambdaEmissionPlans = createRustLambdaEmissionProducer(assertOpen);
   const conversionEmissionPlans = createRustConversionEmissionProducer(assertOpen);
   const errorTransportEmissionPlans = createRustErrorTransportEmissionProducer(assertOpen);
   const dispatchContextEmissionPlans = createRustDispatchContextEmissionProducer(assertOpen);
@@ -386,6 +388,7 @@ export function createRustProgramRecordBuilder(
     ...sourceFileEmissionPlans.records,
     ...providerEvaluationPlans.records,
     ...providerInputPlans.records,
+    ...lambdaEmissionPlans.records,
     ...conversionEmissionPlans.records,
     ...errorTransportEmissionPlans.records,
     ...dispatchContextEmissionPlans.records,
@@ -541,6 +544,7 @@ export function createRustProgramRecordBuilder(
     sourceFileEmissionPlans,
     providerEvaluationPlans,
     providerInputPlans,
+    lambdaEmissionPlans,
     conversionEmissionPlans,
     errorTransportEmissionPlans,
     dispatchContextEmissionPlans,

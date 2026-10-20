@@ -119,6 +119,7 @@ export interface RustAnalysisRecords extends RustProgramRecords {
 }
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
+  readonly lambdaEmissionPlans: import("./lambda-emission.js").RustLambdaEmissionProducer;
   readonly providerInputPlans: import("./provider-inputs.js").RustProviderInputProducer;
   readonly conversionEmissionPlans: import("./conversion-emission.js").RustConversionEmissionProducer;
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;

@@ -64,6 +64,7 @@ export interface RustRecordFamily<T> {
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly providerSlice: import("./provider-inputs.js").RustProviderInputRecords["providerSlice"];
+  readonly lambdaBody: import("./lambda-emission.js").RustLambdaEmissionRecords["lambdaBody"];
   readonly conversionContract: import("./conversion-emission.js").RustConversionEmissionRecords["conversionContract"];
   readonly programErrorClosedValue: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorClosedValue"];
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
