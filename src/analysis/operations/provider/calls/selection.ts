@@ -31,7 +31,7 @@ import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } fro
 import { selectRustGeneratorSourceCall } from "../../../../policy/operations/source-profiles/generator-source-profile.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../../../policy/operations/source-profiles/error-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
-import { selectRustProviderPointerResult } from "../../../../policy/operations/pointers/provider-result.js";
+import { selectRustProviderPointerResult } from "../../pointers/provider-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../../../../source/profiles/call-markers.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
