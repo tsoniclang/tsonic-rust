@@ -10,7 +10,7 @@ import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "./type-family-normalization.js";
-import { resolveRustIndexedField, resolveRustIndexedProperty } from "../../policy/types/resolution/indexed-fields.js";
+import { resolveRustIndexedField, resolveRustIndexedProperty } from "../types/resolution/indexed-fields.js";
 import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 
 interface FamilyDemandContext {

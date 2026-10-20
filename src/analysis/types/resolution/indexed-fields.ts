@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import type { Symbol, Type, TypePropertyInfo } from "@tsonic/tsts";
 import { sourcePropertyTypeEvidenceNodes } from "@tsonic/target-api/source";
-import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
+import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../target-model/types/carriers/indexed-fields.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustTargetType } from "./target.js";
+import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
 
 export interface RustIndexedFieldSelection {
   readonly key: TargetTypeRef;

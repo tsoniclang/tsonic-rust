@@ -6,7 +6,7 @@ import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
+import { resolveRustIndexedField } from "../types/resolution/indexed-fields.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";

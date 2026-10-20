@@ -30,7 +30,7 @@ import { selectRustRecordProperty } from "./provider/records.js";
 import { selectRustUnionProperty } from "./union-properties.js";
 import { selectRustGuardedSourceValueTypes } from "./native-flow-refinement.js";
 import { selectJsSurfaceMemberRead } from "../../policy/operations/source-profiles/js/member-reads.js";
-import { resolveRustIndexedProperty } from "../../policy/types/resolution/indexed-fields.js";
+import { resolveRustIndexedProperty } from "../types/resolution/indexed-fields.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationAnalysisContext,

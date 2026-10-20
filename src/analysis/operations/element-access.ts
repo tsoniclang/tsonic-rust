@@ -30,7 +30,7 @@ import type { RustProviderOperationTemplate } from "../../target-model/operation
 import { selectRustNumberArrayUnionMember } from "./provider/number-array-unions.js";
 
 import { resolveRustCheckedPropertyAccess } from "./member-access.js";
-import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
+import { resolveRustIndexedField } from "../types/resolution/indexed-fields.js";
 import { selectRustRecordElement } from "./provider/records.js";
 
 export function resolveRustCheckedElementAccess(
