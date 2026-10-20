@@ -1,9 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage,
-  VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
-  sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
+import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -24,8 +22,7 @@ import type { RustNativeCallableProducerPlan } from "../../target-model/records/
 import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import type { RustGenericCallableIdentitySources } from "./generic-identities.js";
-import { emissionDiagnostic, rustEmissionIdentityBindings, rustEmissionSourceIdentity,
-  rustPhysicalEmissionOperationCarriers, rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
+import { emissionDiagnostic, rustEmissionIdentityBindings, rustEmissionSourceIdentity, rustPhysicalEmissionOperationCarriers, rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 
 export interface RustPhysicalCallableEmissionRequestInput {
   readonly ast: AstReader;
