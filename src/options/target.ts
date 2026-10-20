@@ -2,7 +2,7 @@ import type { TargetSelection } from "@tsonic/target-api";
 import type { RustTargetConfiguration } from "../target-model/configuration/model.js";
 import type { RustEdition, RustOutputType } from "../target-model/project/model.js";
 import type { RustFoundation } from "../target-model/foundation/model.js";
-import { resolveRustProjectConfiguration } from "./rust-user-project.js";
+import { resolveRustProjectConfiguration } from "./user-project.js";
 
 export type { RustTargetConfiguration } from "../target-model/configuration/model.js";
 export type { RustEdition, RustOutputType } from "../target-model/project/model.js";
