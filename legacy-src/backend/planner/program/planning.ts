@@ -376,14 +376,13 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       binaryExecution.kind === "owned" ? { kind: "await", expr: future }
       : planRustAsyncExecution(executor === undefined
         ? { kind: "call", path: "tsonic_rust_runtime::block_on", args: [future] }
-        : hookCalls.get(executor)!.call([future]), executor, (execution, selected) => errors.lifecycle(execution,
-          rustErrorBoundaryOperandType(selected.errorBoundary, lifecycleErrorType, hookErrorTypes.get(selected))));
+        : hookCalls.get(executor)!.call([future]), executor, execution => errors.lifecycle(execution));
     const completionType: import("../../target-ast/syntax/nodes.js").RustType = { kind: "unit" };
     const successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr = {
       kind: "path", path: "()",
     };
     const propagateInitialization = (expression: import("../../target-ast/syntax/nodes.js").RustExpr) =>
-      initializerError === undefined ? errors.lifecycle(expression, lifecycleErrorType)
+      initializerError === undefined ? errors.lifecycle(expression)
         : errors.propagate(initializerError, expression);
     const initializationStatements = crateInitializer === undefined
       ? []
@@ -420,12 +419,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }
       return {
         kind: "expr" as const,
-        expr: errors.lifecycle(call, rustErrorBoundaryOperandType(
-          epilogue.errorBoundary, lifecycleErrorType,
-          epilogue.errorBoundary === "provider-native"
-            ? hookErrorTypes.get(epilogue)
-            : undefined,
-        )),
+        expr: errors.lifecycle(call),
       };
     };
     const startupStatements = activeHooks.filter(hook => hook.phase === "before-initialization").map(planHook);
@@ -463,8 +457,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       : [];
     const mainBody = binaryExecution.kind === "owned" ? planRustOwnedBinaryEntry({ execution: binaryExecution,
       hook: hookCalls.get(binaryExecution.owner)!, errors, fallible: mainFallible,
-      ownerErrorType: binaryExecution.owner.isFallible ? rustErrorBoundaryOperandType(
-        binaryExecution.owner.errorBoundary, lifecycleErrorType, hookErrorTypes.get(binaryExecution.owner)) : lifecycleErrorType,
       afterEntry: epilogueStatements,
       body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...completionStatements] } })
       : { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...epilogueStatements, ...completionStatements] };
@@ -577,7 +569,6 @@ function planRustWorkerDispatch(
     const entryName = `worker_entry_selection_${bootstrapIndex + 1}`;
     const bootstrapCall = errors.lifecycle(
       { kind: "call", path: bootstrap.path, args: [] },
-      rustErrorBoundaryOperandType(bootstrap.errorBoundary, lifecycleErrorType, providerErrorType),
     );
     const unsupportedWorkerEntryError = {
       kind: "call" as const,
@@ -587,7 +578,7 @@ function planRustWorkerDispatch(
         value: "Worker process selected an entry absent from the closed generated dispatch table.",
       }],
     };
-    const workerEntryError = errors.lifecycleError(unsupportedWorkerEntryError, rustTargetRuntimeErrorType);
+    const workerEntryError = errors.lifecycleError(unsupportedWorkerEntryError);
     statements.push({
       kind: "let",
       name: entryName,
@@ -607,7 +598,7 @@ function planRustWorkerDispatch(
             const invoke = entry.operandErrorType === undefined
               ? execution
               : entry.nativeError ? errors.propagate({ identity: entry.errorIdentity, errorType: entry.operandErrorType }, execution)
-                : errors.lifecycle(execution, entry.operandErrorType);
+                : errors.lifecycle(execution);
             return {
               kind: "if",
               condition: {

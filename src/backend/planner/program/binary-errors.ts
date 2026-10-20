@@ -1,14 +1,13 @@
 import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustBinaryErrorSelection } from "../../../target-model/records/error-regions.js";
 
 export interface RustBinaryErrorPlan {
   readonly errorType: RustType;
   readonly items: readonly RustItem[];
-  lifecycle(result: RustExpr, operandErrorType: RustType): RustExpr;
-  lifecycleError(error: RustExpr, operandErrorType: RustType): RustExpr;
+  lifecycle(result: RustExpr): RustExpr;
+  lifecycleError(error: RustExpr): RustExpr;
   propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr;
 }
 
@@ -35,16 +34,15 @@ export function planRustBinaryErrors(
     return selected;
   };
   return Object.freeze({ errorType: join.errorType, items: join.items, propagate,
-    lifecycle(result: RustExpr, operandErrorType: RustType): RustExpr {
-      const converted: RustExpr = rustTypeEquals(operandErrorType, lifecycleType) ? result : {
+    lifecycle(result: RustExpr): RustExpr {
+      const converted: RustExpr = {
         kind: "method-call", receiver: result, method: "map_err",
         args: [{ kind: "associated-value", owner: lifecycleType, name: "from" }],
       };
       return propagate(lifecycle, converted);
     },
-    lifecycleError(error: RustExpr, operandErrorType: RustType): RustExpr {
-      const converted: RustExpr = rustTypeEquals(operandErrorType, lifecycleType) ? error
-        : { kind: "associated-call", owner: lifecycleType, method: "from", args: [error] };
+    lifecycleError(error: RustExpr): RustExpr {
+      const converted: RustExpr = { kind: "associated-call", owner: lifecycleType, method: "from", args: [error] };
       const selected = join.inject(lifecycle, converted);
       if (selected === undefined) {
         failRustPlannerInvariant("Binary lifecycle errors require the exact selected native channel.");

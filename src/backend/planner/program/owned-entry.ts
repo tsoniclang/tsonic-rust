@@ -11,7 +11,6 @@ export function planRustOwnedBinaryEntry(input: {
   readonly body: RustBlock;
   readonly afterEntry: readonly RustStmt[];
   readonly errors: RustBinaryErrorPlan;
-  readonly ownerErrorType: RustType;
   readonly fallible: boolean;
 }): RustBlock {
   const root: RustExpr = input.execution.execution === "entry"
@@ -28,7 +27,7 @@ export function planRustOwnedBinaryEntry(input: {
       value: "The selected entry owner stopped without a completed root or a requested exit." }] };
   return { statements: [
     { kind: "let", name: "entry_completion", mutable: false, init: input.execution.owner.isFallible
-      ? input.errors.lifecycle(call, input.ownerErrorType) : call },
+      ? input.errors.lifecycle(call) : call },
     { kind: "if", condition: { kind: "method-call", receiver: status, method: "exit_requested", args: [] },
       then: { statements: [{ kind: "return", expr: complete({ kind: "method-call", receiver: status, method: "into", args: [] }) }] } },
     { kind: "expr", expr: input.fallible ? { kind: "try", expr: output,
