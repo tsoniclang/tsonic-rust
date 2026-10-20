@@ -367,7 +367,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const executor = binaryExecution.kind === "native" ? binaryExecution.executor : undefined;
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
     for (const hook of activeHooks) {
-      const plan = planRustBinaryHookCallPlan(hook, input, componentPlans, sourcePackageErrors, diagnostics);
+      const plan = planRustBinaryHookCallPlan(hook, input);
       if (plan === undefined) return rejectedTargetStage(diagnostics);
       hookCalls.set(hook, plan);
     }

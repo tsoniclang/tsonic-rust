@@ -50,6 +50,7 @@ import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
 import { analyzeRustProgramErrorModuleEmission } from "../errors/module-emission.js";
 import { analyzeRustDispatchRootEmission } from "../project/dispatch-emission.js";
+import { analyzeRustBinaryDispatchEmission } from "../project/binary-dispatch-emission.js";
 import { analyzeRustStructuralLivenessEmission } from "../reachability/structural-emission.js";
 import {
   validateRustGenericSourcePackageComponents,
@@ -598,6 +599,8 @@ export function analyzeRustTargetProgram(
   if (sourceFileEmissionIssues.length !== 0) return rejectedTargetStage(sourceFileEmissionIssues);
   const dispatchRootIssues = analyzeRustDispatchRootEmission(program, errorEmission.plan, context.records.dispatchContextEmissionPlans);
   if (dispatchRootIssues.length !== 0) return rejectedTargetStage(dispatchRootIssues);
+  const binaryDispatchIssues = analyzeRustBinaryDispatchEmission(program, errorEmission.plan, context.records.dispatchContextEmissionPlans);
+  if (binaryDispatchIssues.length !== 0) return rejectedTargetStage(binaryDispatchIssues);
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);

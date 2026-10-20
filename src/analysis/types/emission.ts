@@ -22,6 +22,11 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
   nodes: readonly Node[], producer: RustTypeEmissionProducer): void {
   const pending = [...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(...program.providerErrorCarriers);
+  for (const hook of program.binaryHooks) {
+    const dispatch = program.records.binaryDispatch.get(hook.id);
+    if (dispatch === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted binary hook requires its exact dispatch carrier inventory.");
+    for (const group of dispatch.groups) pending.push(group.rootEmptyOwner, ...group.components.map(component => component.emptyOwner));
+  }
   for (const component of program.sourcePackageComponents.components) {
     const roots = program.records.dispatchRoots.get(component.componentId);
     if (roots === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native component requires its complete dispatch root type inventory.");
