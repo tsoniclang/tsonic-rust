@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import type { RustTargetTypeResolutionOptions } from "./model.js";
-import type { RustSourcePolicyContext } from "../../model/context.js";
+import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
-import { resolveSelectedJsSourceExportName, resolveSelectedProviderDeclaration } from "../../identities/selected-source.js";
-import { resolveRustConstructInstance } from "./constructors.js";
+import { resolveSelectedJsSourceExportName, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
+import { resolveRustConstructInstance } from "../../../policy/types/resolution/constructors.js";
 
 export function resolveRustInstanceType(
   declaration: Node | undefined,

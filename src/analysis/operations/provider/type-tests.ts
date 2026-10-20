@@ -4,7 +4,7 @@ import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionRe
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustSelectedTargetOperation, TargetTypeRef } from "../../../target-model/types/model.js";
-import { resolveRustInstanceType } from "../../../policy/types/resolution/instance-tests.js";
+import { resolveRustInstanceType } from "../../types/resolution/instance-tests.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";

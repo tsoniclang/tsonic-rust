@@ -11,7 +11,7 @@ import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNa
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
-import { resolveRustInstanceType } from "../../policy/types/resolution/instance-tests.js";
+import { resolveRustInstanceType } from "../types/resolution/instance-tests.js";
 
 export function selectRustGuardedValueCarrier(
   reference: Node,
