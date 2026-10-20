@@ -1,16 +1,10 @@
-import type { Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import {
-  isRustJsArrayCarrier,
-  isRustVecCarrier,
-  rustFixedArrayCarrierValue,
-  rustTargetConstInteger,
-} from "../../../target-model/types/index.js";
+import { isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
-import type { RustTargetTypeResolutionContext } from "./model.js";
 
 export function resolveRustContextualLiteralCarrier(
-  context: Pick<RustTargetTypeResolutionContext, "ast">,
+  context: { readonly ast: AstReader },
   node: Node,
   expected: TargetTypeRef,
 ): TargetTypeRef | undefined {
