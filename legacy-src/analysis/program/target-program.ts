@@ -63,6 +63,7 @@ import { analyzeRustNativeMemoryEmission } from "../operations/native-memory-emi
 import { admitRustUnionProjections } from "../operations/union-projections.js";
 import { analyzeRustUnionEquality } from "../operations/union-equality.js";
 import { analyzeRustOptionEquality } from "../operations/option-equality.js";
+import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
 import { analyzeRustSourceAssertions } from "../conversions/source-assertions.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
@@ -635,6 +636,8 @@ export function analyzeRustTargetProgram(
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
+  const errorFieldIssues = analyzeRustErrorFieldBorrows(program, context.nativeNodes, context.records.errorFieldPlans);
+  if (errorFieldIssues.length !== 0) return rejectedTargetStage(errorFieldIssues);
   admitRustUnionProjections(program, context.nativeNodes);
   analyzeRustUnionEquality(program, context.nativeNodes, context.records.unionEqualityPlans);
   analyzeRustClosedTypeTests(program, context.nativeNodes, context.records.closedTypeTestPlans);
