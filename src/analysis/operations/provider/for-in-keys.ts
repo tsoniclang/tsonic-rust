@@ -19,7 +19,7 @@ export function selectedRustForInKeys(
   const expectedKeys = new Set(expected);
   const visited = new Set<Node>();
   let origin: Node | undefined = expression;
-  while (origin !== undefined && visited.size < 256 && !visited.has(origin)) {
+  while (origin !== undefined && !visited.has(origin)) {
     visited.add(origin);
     const kind = ast.kindName(origin);
     if (["KindParenthesizedExpression", "KindAsExpression", "KindSatisfiesExpression", "KindNonNullExpression"].includes(kind)) {
