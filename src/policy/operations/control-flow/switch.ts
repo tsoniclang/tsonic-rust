@@ -1,9 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSwitchComparison } from "../../../target-model/operations/switch.js";
-import {
-  isRustAbsenceCarrier, isRustBigIntCarrier, isRustBoolCarrier, isRustNumericCarrier,
-  isRustStringCarrier, rustOptionElementCarrier, rustSourceTypeCarrierValue,
-} from "../../../target-model/types/index.js";
+import { isRustAbsenceCarrier, isRustBigIntCarrier, isRustBoolCarrier, isRustNumericCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { selectRustBinaryOperator } from "../operators/rules.js";
 
 export function rustSwitchCarrierSupportsEquality(carrier: TargetTypeRef): boolean {
