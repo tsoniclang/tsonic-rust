@@ -93,7 +93,7 @@ export function analyzeRustGenericEmission(input: {
     for (const member of definition.members) {
       const declaration = member.implementation.declaration;
       const asyncFact = program.records.asyncFunction.get(declaration);
-      const selected = completion.kind === "selected" ? completion.forMember(member) : undefined;
+      const selected = completion.kind === "selected" ? completion.members.get(member) : undefined;
       if (completion.kind === "selected" && selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
         "An admitted generic member requires its exact selected completion.", declaration);
       const effects = program.records.sourceCallEffects.get(declaration);

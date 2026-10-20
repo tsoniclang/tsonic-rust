@@ -215,7 +215,7 @@ export function prepareRustCallableEmissionContexts(
     }
     for (const member of definition.members) {
       const environment = input.generic.physical.environmentFor(member.implementation);
-      const selectedCompletion = completion.kind === "direct" ? completion.result : completion.forMember(member)?.result;
+      const selectedCompletion = completion.kind === "direct" ? completion.result : completion.members.get(member)?.result;
       const selectedErrors = errors?.members.get(member);
       if (environment === undefined || selectedCompletion === undefined || selectedErrors === undefined) {
         diagnostics.push(emissionDiagnostic(member.implementation.declaration,

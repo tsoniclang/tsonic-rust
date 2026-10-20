@@ -6,20 +6,8 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
-import { rustGenericCallableInvocationBindings,
-  type RustGenericCallableBindingContext } from "./generic-bindings.js";
+import { rustGenericCallableInvocationBindings, type RustGenericCallableBindingContext } from "./generic-bindings.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
-
-export interface RustGenericCallableMemberCompletion {
-  readonly result: TargetTypeRef;
-  readonly variant: string | undefined;
-}
-
-export type RustGenericCallableCompletionSelection =
-  | { readonly kind: "direct"; readonly result: TargetTypeRef }
-  | { readonly kind: "selected"; readonly result: TargetTypeRef;
-      forMember(member: RustGenericCallablePhysicalMember): RustGenericCallableMemberCompletion | undefined }
-  | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustGenericCallableCompletionPlan {
   forDefinition(definition: RustGenericCallablePhysicalDefinition): RustGenericCallableCompletionSelection;
@@ -72,8 +60,7 @@ export function createRustGenericCallableCompletionPlan(
       return unresolved("A generic callable completion conflicts with its canonical physical union definition.");
     const selected = new Map([...members].map(([member, value]) => [member, Object.freeze({ result: value.result,
       variant: results.length === 1 ? undefined : `Variant${value.index}` })]));
-    return Object.freeze({ kind: "selected", result: snapshotClosedMetadata(result),
-      forMember: (member: RustGenericCallablePhysicalMember) => selected.get(member) });
+    return sealRustGenericCallableCompletionSelection({ kind: "selected", result: snapshotClosedMetadata(result), members: selected });
   };
   for (const definition of input.physical.definitions()) selections.set(definition, select(definition));
   const forDefinition = (definition: RustGenericCallablePhysicalDefinition): RustGenericCallableCompletionSelection =>
@@ -90,3 +77,6 @@ export function createRustGenericCallableCompletionPlan(
     },
   });
 }
+
+import type { RustGenericCallableCompletionSelection } from "../../target-model/records/generic-callable-completions.js";
+import { sealRustGenericCallableCompletionSelection } from "../program/records/generic-callable-completions.js";
