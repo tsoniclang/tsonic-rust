@@ -20,7 +20,7 @@ export function rustInlineBindingStorageType(storage: RustInlineBindingStorage, 
 
 export function rustBindingStorageOperations(storage: "location" | RustInlineBindingStorage, copyPayload = false): RustBindingStorageOperations {
   const call = (receiver: RustExpr, method: string, args: readonly RustExpr[] = []): RustExpr =>
-    ({ kind: "method-call", receiver: receiver.kind === "reference" ? receiver.expr : receiver, method, args });
+    ({ kind: "method-call", receiver, method, args });
   if (storage === "borrow-cell") {
     return {
       borrowedRead: receiver => call(receiver, "borrow"),
