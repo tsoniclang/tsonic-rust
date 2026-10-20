@@ -1,10 +1,10 @@
 import { rawPointerFactKey, rawPointerOperationFactKey, sourceMarkerFactKey } from "@tsonic/tsts";
 import type { ExtensionFactSubject, Node, RawPointerOperationFact, ReadonlySourceFactResolver } from "@tsonic/tsts";
-import type { RustTargetTypeResolutionContext } from "../../types/resolution/model.js";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
 
 export function isRustSourceRawPointer(
   subject: ExtensionFactSubject,
-  context: RustTargetTypeResolutionContext,
+  context: { readonly source: Pick<TargetSourceProgram, "sourceFacts"> },
 ): boolean {
   const fact = context.source.sourceFacts.getFact(subject, rawPointerFactKey);
   const marker = context.source.sourceFacts.getFact(subject, sourceMarkerFactKey);

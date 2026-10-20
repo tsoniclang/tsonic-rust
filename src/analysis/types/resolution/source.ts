@@ -14,7 +14,7 @@ import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, rustPa
 import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
-import { isRustSourceRawPointer } from "../../../policy/operations/pointers/source-raw-pointers.js";
+import { isRustSourceRawPointer } from "../../../source/extension/raw-pointers.js";
 import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";
 
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";

@@ -25,7 +25,7 @@ import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
 import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
-import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
+import { readRustSourceRawPointerIdentity } from "../../source/extension/raw-pointers.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 
 import { readRustNativeControl, resolveRustNativeControl } from "../expressions/native-controls.js";

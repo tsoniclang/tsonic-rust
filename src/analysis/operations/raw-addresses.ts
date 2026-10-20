@@ -10,7 +10,7 @@ import { rustOptionTargetType, rustRawPointerTargetType, rustSourcePrimitiveTarg
 
 import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
+import { readRustSourceRawPointerIdentity } from "../../source/extension/raw-pointers.js";
 import { rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
 

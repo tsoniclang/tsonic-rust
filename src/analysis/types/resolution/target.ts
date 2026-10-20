@@ -17,7 +17,7 @@ import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRawPointerTargetType } from "../../../target-model/types/carriers/callables.js";
-import { isRustSourceRawPointer } from "../../../policy/operations/pointers/source-raw-pointers.js";
+import { isRustSourceRawPointer } from "../../../source/extension/raw-pointers.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { rustBroadSourceValueTargetType } from "../../../policy/types/broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
