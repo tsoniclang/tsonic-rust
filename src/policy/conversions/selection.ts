@@ -6,7 +6,7 @@ import { rustCallableInputMatches } from "./callable-input.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
 import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { rustNumericValueConversionIsSupported } from "../../target-model/conversions/numeric-promotion.js";
+import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { rustClosedValueAdmissionConversion } from "../../target-model/conversions/closed-admission.js";
 import { isRustJsArrayCarrier, isRustJsArrayValueCarrier, isRustJsValueCarrier, isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType, isRustNeverCarrier, isRustAbsenceCarrier, rustCarrierCanEnterTsValue, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStringTargetType, rustBorrowedStrTargetType, rustStructuralObjectCarrierValue, rustTsValueTargetType } from "../../target-model/types/index.js";

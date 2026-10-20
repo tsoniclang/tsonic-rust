@@ -1,7 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustArgumentMode, RustFinalizedOperationKind, RustProviderConstantArgument, RustProviderOperationForm } from "../../target-model/operations/model.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
+import { rustNumericPromotionKind } from "../conversions/numeric-promotion.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

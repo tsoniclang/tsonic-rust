@@ -15,7 +15,7 @@ import { isRustMutableJsErrorCarrier } from "../../../target-model/types/carrier
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
-import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../../target-model/conversions/numeric-promotion.js";
+import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../conversions/numeric-promotion.js";
 import { rustNumericPromotionConversion, selectRustNumericBinaryPromotion, selectRustNumericComparisonPromotion } from "../numeric/promotion.js";
 
 export type RustCompoundAssignmentSelection =

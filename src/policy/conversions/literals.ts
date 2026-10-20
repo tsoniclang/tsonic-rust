@@ -3,7 +3,7 @@ import type { AstReader } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { compareSourceNumericLiteralMagnitude, type SourceLiteralIndex, type SourceLiteralValue, KindMinusToken, KindPlusToken, Node_Operand } from "@tsonic/target-api/source";
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
-import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
+import { rustNumericPromotionKind } from "./numeric-promotion.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";

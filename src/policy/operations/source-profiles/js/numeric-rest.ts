@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { isRustNumericCarrier, rustSourcePrimitiveTargetType } from "../../../../target-model/types/index.js";
-import { rustNumericPromotionKind } from "../../../../target-model/conversions/numeric-promotion.js";
+import { rustNumericPromotionKind } from "../../../conversions/numeric-promotion.js";
 import { rustRestSequenceElements } from "../../../../target-model/operations/rest-assembly.js";
 
 export function selectRustNumericRestCarrier(
