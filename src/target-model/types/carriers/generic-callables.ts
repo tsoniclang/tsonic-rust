@@ -1,9 +1,6 @@
 import type { TargetTypeRef } from "../model.js";
 import { hasExactObjectKeys, snapshotClosedMetadata } from "../../metadata/closed-data.js";
-import {
-  isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol,
-  type RustCallableOrigin, type RustCallableSignature,
-} from "./callable-signatures.js";
+import { isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol, type RustCallableOrigin, type RustCallableSignature } from "./callable-signatures.js";
 import { rustFutureOutputCarrier, rustFutureTargetId } from "./primitives.js";
 import { rustOptionElementCarrier } from "./optional.js";
 import { isRustGenericCallableStorage, type RustGenericCallableStorage } from "./generic-callable-storage.js";
