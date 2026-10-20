@@ -74,6 +74,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly valueRead: import("./value-read.js").RustValueReadRecords["valueRead"];
   readonly nativeComparison: import("./native-comparisons.js").RustNativeComparisonRecords["nativeComparison"];
   readonly unionEquality: RustRecordFamily<import("./union-equality.js").RustUnionEqualityEmission>;
+  readonly closedTypeTestEmission: RustRecordFamily<import("./type-tests.js").RustClosedTypeTestSource>;
   readonly nativeLayoutEmission: import("./native-layout-emission.js").RustNativeLayoutRecords["nativeLayoutEmission"];
   readonly literalEmission: import("./literal-emission.js").RustLiteralEmissionRecords["literalEmission"];
   readonly templateString: import("./template-strings.js").RustTemplateStringRecords["templateString"];
