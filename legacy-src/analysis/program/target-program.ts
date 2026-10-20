@@ -425,6 +425,7 @@ export function analyzeRustTargetProgram(
     producer: context.records.statementExits, required: context.requiredRecords });
   analyzeRustResourceScopes({ ast: context.ast, nodes: context.nativeNodes, records,
     producer: context.records.resourceScopes, required: context.requiredRecords });
+  context.records.ownershipEmissionPlans.publish(ownership.ownership);
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
   const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,

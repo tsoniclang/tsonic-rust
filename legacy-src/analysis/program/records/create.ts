@@ -10,6 +10,7 @@ import { createRustSafetyEmissionProducer } from "./safety-emission.js";
 import { createRustArrayLiteralProducer } from "./array-literals.js";
 import { createRustPropertyValueProjectionProducer } from "./property-value-projection.js";
 import { createRustOptionalChainEmissionProducer } from "./optional-chain-emission.js";
+import { createRustOwnershipEmissionProducer } from "./ownership-emission.js";
 import { createRustSourceBindingEmissionProducer } from "./binding-paths.js";
 import { createRustSourceFileEmissionProducer } from "./source-file-emission.js";
 import { createRustProviderEvaluationProducer } from "./provider-evaluation.js";
@@ -232,6 +233,7 @@ export function createRustProgramRecordBuilder(
   const arrayLiteralPlans = createRustArrayLiteralProducer(assertOpen);
   const propertyValueProjectionPlans = createRustPropertyValueProjectionProducer(assertOpen);
   const optionalChainEmissionPlans = createRustOptionalChainEmissionProducer(assertOpen);
+  const ownershipEmissionPlans = createRustOwnershipEmissionProducer(assertOpen);
   const sourceBindingEmissionPlans = createRustSourceBindingEmissionProducer(assertOpen);
   const sourceFileEmissionPlans = createRustSourceFileEmissionProducer(assertOpen);
   const providerEvaluationPlans = createRustProviderEvaluationProducer(assertOpen);
@@ -292,6 +294,7 @@ export function createRustProgramRecordBuilder(
     ...arrayLiteralPlans.records,
     ...propertyValueProjectionPlans.records,
     ...optionalChainEmissionPlans.records,
+    ...ownershipEmissionPlans.records,
     ...sourceBindingEmissionPlans.records,
     ...sourceFileEmissionPlans.records,
     ...providerEvaluationPlans.records,
@@ -417,6 +420,7 @@ export function createRustProgramRecordBuilder(
     arrayLiteralPlans,
     propertyValueProjectionPlans,
     optionalChainEmissionPlans,
+    ownershipEmissionPlans,
     sourceBindingEmissionPlans,
     sourceFileEmissionPlans,
     providerEvaluationPlans,

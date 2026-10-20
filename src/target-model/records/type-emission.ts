@@ -19,6 +19,7 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly discard: "unit" | "value" | "drop";
   readonly emptyRecord: "native-empty" | "structural" | undefined;
   readonly optionalStorage: RustOptionalStorageEmission | undefined;
   readonly sourceOptional: RustSourceOptionalEmission;
