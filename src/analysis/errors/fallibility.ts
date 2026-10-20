@@ -28,7 +28,7 @@ import { rustTargetOperationIsFallible } from "../operations/target-operation.js
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
-import { selectedDeclarationIsProjectSource } from "../expressions/references.js";
+import { selectedDeclarationIsProjectSource } from "../storage/source-bindings.js";
 import { selectRustResourceManagement } from "../control-flow/resource-management.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustPropertyProjectionGetters } from "../conversions/property-projections.js";

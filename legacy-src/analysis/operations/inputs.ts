@@ -43,7 +43,7 @@ import { appendRustDiagnostic, recordPolicySelection, rustOperationContext, rust
 import { recordBindingPatternFacts } from "../control-flow/binding-patterns.js";
 import { recordBindingWrite } from "../ownership/source-writes.js";
 import { validateFlowMarkerAgainstMode } from "./flow-markers.js";
-import { recordProjectSourceBinding } from "../expressions/references.js";
+import { recordProjectSourceBinding } from "../storage/source-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";

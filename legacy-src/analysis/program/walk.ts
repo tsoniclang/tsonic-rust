@@ -29,7 +29,7 @@ import {
   selectRustCheckedPropertyAccess,
   selectRustCheckedValue,
 } from "../operations/provider/index.js";
-import { isSharedSourceMarkerOperation } from "../expressions/references.js";
+import { isSharedSourceMarkerOperation } from "../operations/source-markers.js";
 import { resolveRegExpCreation } from "../expressions/regexp.js";
 
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
