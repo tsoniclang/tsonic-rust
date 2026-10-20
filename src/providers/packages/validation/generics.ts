@@ -1,22 +1,9 @@
-import {
-  asRecord,
-  requireExactKeys,
-  requireRustIdentifier,
-  validateCarrier,
-} from "./carriers.js";
+import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier } from "./carriers.js";
 import { isRustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/index.js";
-import type {
-  ProviderTypeParameterDeclaration,
-} from "@tsonic/tsts";
-import type {
-  RustProviderGenericParameter,
-} from "../../../target-model/operations/model.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
+import type { ProviderTypeParameterDeclaration } from "@tsonic/tsts";
+import type { RustProviderGenericParameter } from "../../../target-model/operations/model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProviderPackageDefinition } from "../model.js";
 import type { Fail } from "./model.js";
 
