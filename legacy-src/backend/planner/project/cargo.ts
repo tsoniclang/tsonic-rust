@@ -1,6 +1,6 @@
 import type { RustRuntimeReferencePlan } from "../../../analysis/project/index.js";
 import type { RustTargetConfiguration } from "../../../target-model/configuration/model.js";
-import type { CargoManifestPlan } from "../../artifact-model/project/cargo.js";
+import type { CargoManifestPlan } from "../../../target-model/project/cargo.js";
 
 export type RustCargoProjectPlan =
   | { readonly kind: "generated"; readonly manifest: CargoManifestPlan }

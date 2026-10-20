@@ -1,4 +1,4 @@
-import type { CargoManifestPlan } from "../../backend/artifact-model/project/cargo.js";
+import type { CargoManifestPlan } from "../../target-model/project/cargo.js";
 
 export function printCargoManifest(manifest: CargoManifestPlan): string {
   const lines: string[] = [

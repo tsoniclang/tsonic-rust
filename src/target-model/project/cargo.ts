@@ -2,7 +2,7 @@ import type {
   RustCargoDependency,
   RustEdition,
   RustOutputType,
-} from "../../../target-model/project/model.js";
+} from "./model.js";
 
 export type CargoDependency = RustCargoDependency;
 

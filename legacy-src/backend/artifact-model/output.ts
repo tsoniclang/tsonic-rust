@@ -1,5 +1,5 @@
 import type { RustSourceFileModel } from "../target-ast/syntax/nodes.js";
-import type { CargoManifestPlan } from "./project/cargo.js";
+import type { CargoManifestPlan } from "../../target-model/project/cargo.js";
 import type { RustEdition } from "../../target-model/project/model.js";
 
 export type RustPlannedArtifact =

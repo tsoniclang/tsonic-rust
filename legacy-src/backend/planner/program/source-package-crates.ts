@@ -1,7 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
-import type { CargoDependency, CargoManifestPlan } from "../../artifact-model/project/cargo.js";
+import type { CargoDependency, CargoManifestPlan } from "../../../target-model/project/cargo.js";
 import type { RustPlannedArtifact } from "../../artifact-model/output.js";
 import {
   createRustSourceFile,
