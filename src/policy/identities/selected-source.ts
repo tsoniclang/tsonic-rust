@@ -1,6 +1,4 @@
-import {
-  providerVirtualDeclarationFactKey,
-} from "@tsonic/tsts";
+import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, ProviderMemberKey, Symbol, Type } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { rustPolicyNode } from "../model/context.js";
