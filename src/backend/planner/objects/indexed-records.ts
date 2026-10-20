@@ -18,7 +18,7 @@ type SourceIndexFact = Extract<RustTargetOperationFact, { readonly kind: "source
 type ExpressionPlanner = typeof planRustExpression;
 
 export function planRustSourceIndexKey(
-  node: Node, fact: SourceIndexFact, context: RustPlanContext, planExpression: ExpressionPlanner, borrowed: boolean,
+  node: Node, _fact: SourceIndexFact, context: RustPlanContext, planExpression: ExpressionPlanner, borrowed: boolean,
 ): RustExpr {
   const selected = context.input.program.records.indexedRecordAccess.get(node);
   if (selected === undefined) failRustPlannerInvariant("An admitted index access requires its exact native key plan.", node);
