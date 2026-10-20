@@ -6,6 +6,7 @@ export type RustErrorTransportVariant =
   | { readonly name: string; readonly type: RustType; readonly source: "error" }
   | { readonly name: string; readonly type: RustType; readonly source: "thrown" }
   | { readonly name: string; readonly type: Extract<RustType, { readonly kind: "named" }>; readonly source: "external";
+      readonly transport: "package" | "retained";
       readonly sourceErrorType: Extract<RustType, { readonly kind: "named" }>;
       readonly writableSourceErrorType: Extract<RustType, { readonly kind: "named" }> };
 
@@ -104,6 +105,7 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "error" ? projected(item.name, own)
         : item.source === "thrown" ? call("Err", call(`ErrorTransport::${item.name}`, own))
+        : item.transport === "retained" && !writable ? projected(item.name, own)
         : { kind: "match" as const, expression: call(`${(writable ? item.writableSourceErrorType : item.sourceErrorType).path}::try_from`, own), arms: [
             { pattern: variant("Ok", binding("source")), expression: projected(item.name, path("source")) },
             { pattern: variant("Err", binding("original")), expression: call("Err", call(`ErrorTransport::${item.name}`, path("original"))) },
@@ -119,7 +121,7 @@ export function planRustSourceErrorTransport(plan: RustErrorTransportPlan, writa
     { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: call("ErrorTransport::SourceCreated", own) },
     ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
       expression: item.source === "thrown" ? { kind: "match" as const, expression: own, arms: [] }
-        : call(`ErrorTransport::${item.name}`, item.source === "external"
+        : call(`ErrorTransport::${item.name}`, item.source === "external" && (item.transport === "package" || writable)
           ? call(`${item.type.path}::from`, own) : own) })),
     { pattern: variant("ErrorTransport::Suppressed", binding("source")),
       expression: writable ? { kind: "match", expression: path("source"), arms: [] }

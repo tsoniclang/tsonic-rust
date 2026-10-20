@@ -48,6 +48,7 @@ import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.
 import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
 import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
+import { analyzeRustProgramErrorModuleEmission } from "../errors/module-emission.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -596,6 +597,8 @@ export function analyzeRustTargetProgram(
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);
+  const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
+  if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
   analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>
     sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,

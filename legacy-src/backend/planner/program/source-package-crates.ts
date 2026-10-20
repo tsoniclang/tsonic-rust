@@ -105,9 +105,7 @@ export function planRustSourcePackageCrateContent(
   );
   const programErrorModel = planRustProgramErrorModule(
     input,
-    moduleNameByFileName,
     errorDomain,
-    diagnostics,
   );
   const dispatchRoots = planRustDispatchContextRoots(createRustSourcePackageTypeRenderingContext(
     input, component, sourcePackageErrors,

@@ -4,7 +4,8 @@ import { rustCheckedNativeProjectionOutputParameter } from "../objects/checked-p
 
 export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): readonly RustItem[] {
   const types = [plan.fullTransportType,
-    ...(plan.variants.some(item => item.source !== "error") ? [plan.sourceErrorType] : []),
+    ...(plan.variants.some(item => item.source === "thrown" || item.source === "external" && item.transport === "package")
+      ? [plan.sourceErrorType] : []),
     plan.writableSourceErrorType];
   const projections = plan.variants.filter(item => item.source !== "thrown");
   const unit: RustExpr = { kind: "tuple-literal", elements: [] };

@@ -25,7 +25,8 @@ export function planRustRetainedErrorAdmission(plan: RustErrorTransportPlan): re
         ? { kind: "match", expression: own, arms: [] } : convert(own) },
       { pattern: variant("ErrorTransport::SourceCreated", binding("error")), expression: convert(own) },
       ...plan.variants.map(item => ({ pattern: variant(`ErrorTransport::${item.name}`, binding("error")),
-        expression: item.source === "thrown" ? { kind: "match" as const, expression: own, arms: [] } : convert(own) })),
+        expression: item.source === "thrown" ? { kind: "match" as const, expression: own, arms: [] }
+          : item.source === "external" && item.transport === "retained" ? own : convert(own) })),
       { pattern: variant("ErrorTransport::Suppressed", binding("error")), expression: writable
         ? { kind: "match", expression: own, arms: [] }
         : call("tsonic_rust_runtime::RetainedError::Project", call("alloc::rc::Rc::new", own)) },

@@ -1,10 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/render.js";
-import { rustJsErrorTargetType, rustProgramErrorTargetType, rustTsValueTargetType } from "../../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   createRustSourceFile,
   type RustExpr,
@@ -24,6 +21,7 @@ import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegate
 import { planRustClosedThrowAdmission } from "./closed-throws.js";
 import { planRustNativeValueProjections } from "./native-value-projections.js";
 import { planRustErrorVariants } from "./error-variants.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -90,125 +88,60 @@ function path(name: string): RustExpr {
 
 export function planRustProgramErrorModule(
   input: RustPlanningContext,
-  moduleNameByFileName: ReadonlyMap<string, string>,
   domain: import("../../../target-model/records/source-package-errors.js").RustSourcePackageErrorDomainPlan,
-  diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
   if (domain.forwardModulePath !== undefined) {
     return createRustSourceFile([{
       kind: "use", visibility: "public", path: `${domain.forwardModulePath}::*`,
     }]);
   }
-  const definitions = domain.definitions;
-  const externalPackageErrors = domain.externalErrors;
-  if (domain.errorDomain !== "project") {
-    return undefined;
-  }
-
-  const projectVariants = definitions.map((definition) => {
-    const variant = input.program.projectTypes.programErrorVariant(definition);
-    const moduleName = moduleNameByFileName.get(definition.fileName);
-    if (variant === undefined || moduleName === undefined) {
-      diagnostics.push({
-        code: "RUST_PROGRAM_ERROR_IDENTITY_MISSING",
-        category: "error",
-        source: "tsonic-rust",
-        message: `Project error '${definition.sourceName}' has no exact generated module or variant identity.`,
-        sourceNode: definition.declaration,
-        evidence: ["target.capability=rust.error.closed-program-transport"],
-      });
-      return undefined;
-    }
-    return Object.freeze({
-      definition,
-      variant,
-      type: namedType(`crate::${moduleName}::${definition.targetName}`),
-    });
-  });
-  if (projectVariants.some((variant) => variant === undefined)) {
-    return undefined;
-  }
-  const exactProjectVariants = projectVariants.filter((variant) => variant !== undefined);
-  const externalVariants = externalPackageErrors.map((external) => Object.freeze({
-    ...external,
-    type: namedType(external.typePath),
+  if (domain.errorDomain !== "project") return undefined;
+  const emission = input.program.records.programErrorModule.get(domain.componentId);
+  if (emission === undefined) failRustPlannerInvariant("An admitted program error domain requires its complete sealed native module payload.");
+  const exactProjectVariants = emission.projects.map(project => Object.freeze({
+    definition: project.definition, variant: project.name, type: namedType(project.typePath),
+    representation: project.representation, delegate: project.delegate,
   }));
-  const providerErrorTypes: RustType[] = [];
-  for (const carrier of input.program.providerErrorCarriers) {
-    if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
-      rustTargetTypeRefEquals(carrier, rustProgramErrorTargetType())) {
-      continue;
-    }
+  const externalVariants = domain.externalErrors.map(external => Object.freeze({
+    ...external, type: namedType(external.typePath),
+  }));
+  const providerErrorTypes = emission.providerErrors.map(carrier => {
     const type = rustTypeFromCarrier(carrier);
-    if (type === undefined) {
-      diagnostics.push({
-        code: "RUST_PROVIDER_ERROR_CARRIER_UNRENDERABLE",
-        category: "error",
-        source: "tsonic-rust",
-        message: "A selected provider-native error carrier has no exact renderable Rust type.",
-        evidence: [
-          "target.capability=rust.error.provider-conversion",
-          `carrier=${JSON.stringify(carrier)}`,
-        ],
-      });
-      continue;
-    }
-    if (![runtimeErrorType, runtimeJsErrorType, ...providerErrorTypes].some((existing) =>
-      JSON.stringify(existing) === JSON.stringify(type))) {
-      providerErrorTypes.push(type);
-    }
-  }
-  providerErrorTypes.sort((left, right) =>
-    JSON.stringify(left).localeCompare(JSON.stringify(right), "en"));
-  if (diagnostics.length > 0) {
-    return undefined;
-  }
-
+    if (type === undefined) failRustPlannerInvariant("An admitted provider error carrier requires its finalized standalone native syntax.");
+    return type;
+  });
   const selectedVariants = planRustErrorVariants(input.program, domain);
-  if (selectedVariants === undefined) {
-    diagnostics.push({ code: "RUST_CLOSED_ERROR_DEMAND_MISSING", category: "error", source: "tsonic-rust",
-      message: "Program Error transport requires its exact sealed variant inventory." });
-    return undefined;
-  }
-  const nativeProjectVariants = exactProjectVariants.map(variant => ({
-    name: variant.variant, type: variant.type, representation: input.program.objectRepresentations.representationFor(variant.definition),
+  if (selectedVariants === undefined) failRustPlannerInvariant("An admitted program error transport requires its sealed native variant inventory.");
+  const nativeProjectVariants = exactProjectVariants.map(project => ({
+    name: project.variant, type: project.type, representation: project.representation,
   }));
-  if (nativeProjectVariants.some(variant => variant.representation === undefined)) {
-    diagnostics.push({ code: "RUST_PROGRAM_ERROR_REPRESENTATION_MISSING", category: "error", source: "tsonic-rust",
-      message: "Native thrown-value queries require exact finalized project storage." });
-    return undefined;
-  }
   const closedVariants: RustErrorTransportVariant[] = [];
   const projectVariantByDefinition = new Map(exactProjectVariants.map(variant => [variant.definition, variant] as const));
   const transportVariants: RustErrorTransportVariant[] = [];
   for (const selected of selectedVariants) {
     if (selected.kind === "project") {
       const variant = projectVariantByDefinition.get(selected.definition);
-      if (variant === undefined) return undefined;
+      if (variant === undefined) failRustPlannerInvariant("An admitted project error variant requires its selected native payload.", selected.definition.declaration);
       transportVariants.push({ name: selected.name, type: variant.type,
         source: selected.sourceError ? "error" : "thrown" });
     } else if (selected.kind === "external") {
-      transportVariants.push({ name: selected.name, type: namedType(selected.external.typePath), source: "external",
+      transportVariants.push({ name: selected.name, type: namedType(selected.external.typePath), source: "external", transport: "package",
         sourceErrorType: namedType(`${selected.external.typePath.slice(0, -programErrorName.length)}SourceError`),
         writableSourceErrorType: namedType(`${selected.external.typePath.slice(0, -programErrorName.length)}WritableSourceError`) });
     } else if (selected.kind === "closed") {
-      const variant = { name: selected.name, source: "thrown" as const,
-        type: namedType(rustTargetTypeRefEquals(selected.carrier, rustTsValueTargetType())
-          ? "tsonic_rust_runtime::TsValue" : "tsonic_rust_js::value::JsValue") };
+      const path = emission.closedPayloadPaths.get(selected.name);
+      if (path === undefined) failRustPlannerInvariant("An admitted closed error variant requires its exact native payload path.");
+      const variant = { name: selected.name, source: "thrown" as const, type: namedType(path) };
       closedVariants.push(variant);
       transportVariants.push(variant);
     } else {
-      transportVariants.push({ name: selected.name, type: namedType("tsonic_rust_runtime::RetainedError"), source: "external",
+      transportVariants.push({ name: selected.name, type: namedType("tsonic_rust_runtime::RetainedError"), source: "external", transport: "retained",
         sourceErrorType: namedType("tsonic_rust_runtime::RetainedError"),
         writableSourceErrorType: namedType("tsonic_rust_runtime::WritableRetainedError") });
     }
   }
   const transport = planRustErrorTransport(transportVariants);
-  if (transport === undefined) {
-    diagnostics.push({ code: "RUST_ERROR_TRANSPORT_ADMISSION_NOT_CLOSED", category: "error", source: "tsonic-rust",
-      message: "Program Error transport has no exact unique variant admission and external Error-only specialization." });
-    return undefined;
-  }
+  if (transport === undefined) failRustPlannerInvariant("An admitted error transport requires its exact native syntax declaration.");
   const items: RustItem[] = [
     {
       kind: "use",
@@ -246,10 +179,7 @@ export function planRustProgramErrorModule(
       name: variant.name, type: variant.type, representation: variant.representation!,
     }))),
     displayImplementation(programErrorType, emptyRustGenerics, [
-      ...exactProjectVariants.map(({ variant, definition }) => ({
-        variant,
-        delegate: input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError === true,
-      })),
+      ...exactProjectVariants.map(({ variant, delegate }) => ({ variant, delegate })),
       ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
       ...transport.variants.filter(variant => variant.name === "Retained").map(({ name }) => ({ variant: name, delegate: true })),
       ...closedVariants.map(({ name }) => ({ variant: name, delegate: false })),

@@ -21,6 +21,7 @@ import { selectRustTypePositions } from "../../policy/types/type-emission.js";
 export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer): void {
   const pending = [...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
+  pending.push(...program.providerErrorCarriers);
   for (const context of program.physicalEmissionContexts.contexts) pending.push(...context.operands, ...context.bindings.types.values(),
     ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : []));
   for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
