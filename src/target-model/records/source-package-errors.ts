@@ -37,7 +37,7 @@ export interface RustSourcePackageErrorBoundary {
   readonly errorTypeIdentity: string;
 }
 
-export type RustProgramErrorRoute =
+export type RustSourcePackageErrorRoute =
   | {
       readonly kind: "local";
       readonly variant: string;
@@ -56,5 +56,5 @@ export interface RustSourcePackageErrorRecords {
   readonly sourcePackageErrors: { readonly get: () => RustSourcePackageErrorPlan | undefined };
   readonly sourcePackageErrorBoundary: { readonly get: (consumer: string, owner: string) => RustSourcePackageErrorBoundary | undefined };
   readonly physicalProgramErrorBoundary: { readonly get: (consumer: string, owner: RustProgramErrorOwner) => RustSourcePackageErrorBoundary | undefined };
-  readonly programErrorRoute: { readonly get: (consumer: string, definition: RustProjectTypeDefinition, variant: string) => RustProgramErrorRoute | undefined };
+  readonly programErrorRoute: { readonly get: (consumer: string, definition: RustProjectTypeDefinition, variant: string) => RustSourcePackageErrorRoute | undefined };
 }

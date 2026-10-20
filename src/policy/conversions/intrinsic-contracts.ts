@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustValueConversionId } from "../../target-model/operations/model.js";
-import { rustJsNumericTargetType, rustJsStringNumberTargetType, rustBigIntTargetType, rustJsStringTargetType, rustJsSymbolTargetType, rustSourceOptionalTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustSourcePrimitiveTargetType, rustBorrowedStrTargetType, rustStringTargetType, rustAbsenceTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
+import { rustJsNumericTargetType, rustJsStringNumberTargetType, rustBigIntTargetType, rustJsSymbolTargetType, rustSourceOptionalTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustSourcePrimitiveTargetType, rustBorrowedStrTargetType, rustStringTargetType, rustAbsenceTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 
 import { rustNumberBoxingSourceKind } from "../../target-model/conversions/number-boxing.js";
 
@@ -14,7 +14,6 @@ const float64Carrier = rustSourcePrimitiveTargetType("float64");
 const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
 const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
 const stringCarrier = rustStringTargetType();
-const exactStringCarrier = rustJsStringTargetType();
 const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();

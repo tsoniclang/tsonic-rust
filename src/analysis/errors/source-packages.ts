@@ -3,7 +3,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan, RustExternalSourcePackageError } from "../../target-model/records/source-package-errors.js";
-import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
+import type { RustSourcePackageErrorRoute } from "../../target-model/records/source-package-errors.js";
 import type { RustErrorDomain } from "../../target-model/operations/error-boundary.js";
 import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
 import type { RustProgramErrorOwner } from "../../target-model/types/model.js";
@@ -235,7 +235,7 @@ function selectRustProgramErrorRoute(
   componentId: string,
   definition: RustProjectTypeDefinition,
   ownerVariant: string,
-): RustProgramErrorRoute | undefined {
+): RustSourcePackageErrorRoute | undefined {
   const ownerComponentId = plan.componentIdByDefinition.get(definition);
   if (ownerComponentId === undefined) {
     return undefined;

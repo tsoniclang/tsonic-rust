@@ -3,7 +3,7 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
-import type { RustProgramErrorRoute } from "../../../target-model/conversions/program-error.js";
+import type { RustSourcePackageErrorRoute } from "../../../target-model/records/source-package-errors.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustSourcePackageErrors(input: RustPlanningContext): RustSourcePackageErrorPlan {
@@ -33,6 +33,6 @@ export function resolveRustProgramErrorRoute(
   consumer: string,
   definition: RustProjectTypeDefinition,
   variant: string,
-): RustProgramErrorRoute | undefined {
+): RustSourcePackageErrorRoute | undefined {
   return records.programErrorRoute.get(consumer, definition, variant);
 }

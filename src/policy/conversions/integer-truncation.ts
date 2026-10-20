@@ -2,7 +2,6 @@ import { type AstReader, type Node } from "@tsonic/tsts";
 import { sourceIntegerLiteralValue, sourceIntegerTruncationFits } from "@tsonic/target-api/source";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { type RustIntegerTruncationConversion } from "../../target-model/conversions/integer-truncation.js";
-import { rustIntegerTruncationConversionMatches } from "./integer-truncation.js";
 import { isRustBigIntCarrier } from "../../target-model/types/index.js";
 
 const truncations = new Map([
@@ -31,11 +30,6 @@ export function selectRustIntegerTruncationConversion(
   };
   return rustIntegerTruncationConversionMatches(source, target, conversion) ? conversion : undefined;
 }
-
-
-
-
-
 
 export function rustIntegerTruncationConversionMatches(
   source: TargetTypeRef,

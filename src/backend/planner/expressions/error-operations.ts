@@ -7,7 +7,7 @@ import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import type { RustProgramErrorRoute } from "../../../target-model/conversions/program-error.js";
+import type { RustSourcePackageErrorRoute } from "../../../target-model/records/source-package-errors.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "../objects/checked-project-projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
@@ -226,7 +226,7 @@ function resolveProgramErrorFactRoute(
   targetCarrier: RustProgramErrorTypeTestFact["targetCarrier"],
   variant: string,
   context: RustPlanContext,
-): RustProgramErrorRoute | undefined {
+): RustSourcePackageErrorRoute | undefined {
   const definition = context.input.program.records.projectType.get(targetCarrier);
   if (definition === undefined) failRustPlannerInvariant("An admitted Error projection requires its exact nominal source definition.", context.callableDeclaration ?? context.sourceFile);
   return context.input.program.records.programErrorRoute.get(context.sourcePackageComponentId, definition, variant);
@@ -242,7 +242,7 @@ function planCheckedErrorDispatch(
 }
 
 function programErrorPattern(
-  route: RustProgramErrorRoute,
+  route: RustSourcePackageErrorRoute,
   payload: RustPattern,
   admitted: boolean,
 ): RustPattern {
@@ -277,7 +277,7 @@ function programErrorSubject(expression: RustExpr, carrier: TargetTypeRef, owned
 }
 
 function projectErrorPayload(
-  route: RustProgramErrorRoute, carrier: TargetTypeRef, value: RustExpr, owned: boolean,
+  route: RustSourcePackageErrorRoute, carrier: TargetTypeRef, value: RustExpr, owned: boolean,
   project: RustExpr | ((payload: RustExpr) => RustExpr), otherwise: RustExpr, context: RustPlanContext,
 ): RustExpr {
   carrier = errorView(carrier, context).optional ?? carrier;

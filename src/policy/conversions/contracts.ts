@@ -9,7 +9,7 @@ import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./
 import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { isRustAbsenceCarrier, isRustNeverCarrier, isRustNumericCarrier, rustCallableProtocol, rustClosureProtocol, rustJsArrayTargetType, rustJsStringTargetType, rustJsSymbolTargetType, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustEmptyObjectTargetType, rustOptionElementCarrier, rustPrimitiveTypeName, rustSourcePrimitiveTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustJsArrayLikeElementTargetType, isRustJsArrayCarrier, isRustJsArrayValueCarrier, isRustJsValueCarrier, rustAbsenceTargetType, rustTargetGenericReferences, rustCarrierSupportsClone, rustCarrierCanEnterTsValue, rustTsValueAdmission, rustCarrierSupportsTrait, rustJsClosedValueCarrierTraitPath, rustTsValueTargetType, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { isRustAbsenceCarrier, isRustNeverCarrier, isRustNumericCarrier, rustCallableProtocol, rustClosureProtocol, rustJsArrayTargetType, rustJsStringTargetType, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustEmptyObjectTargetType, rustOptionElementCarrier, rustPrimitiveTypeName, rustSourcePrimitiveTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustJsArrayLikeElementTargetType, isRustJsArrayCarrier, isRustJsArrayValueCarrier, isRustJsValueCarrier, rustTargetGenericReferences, rustCarrierSupportsClone, rustCarrierCanEnterTsValue, rustTsValueAdmission, rustCarrierSupportsTrait, rustJsClosedValueCarrierTraitPath, rustTsValueTargetType, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
@@ -23,20 +23,10 @@ import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/nat
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustUnionArmMapping, rustUnionLeaves } from "../../target-model/types/union-relations.js";
 
-const boolCarrier = rustSourcePrimitiveTargetType("bool");
-const int32Carrier = rustSourcePrimitiveTargetType("int32");
-const uint8Carrier = rustSourcePrimitiveTargetType("uint8");
-const uint32Carrier = rustSourcePrimitiveTargetType("uint32");
-const uint64Carrier = rustSourcePrimitiveTargetType("uint64");
-const float64Carrier = rustSourcePrimitiveTargetType("float64");
-const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
-const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
 const stringCarrier = rustStringTargetType();
 const exactStringCarrier = rustJsStringTargetType();
-const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();
-const absenceCarrier = rustAbsenceTargetType();
 
 import type { RustValueConversionContract, RustValueConversionEffect } from "../../target-model/conversions/contracts.js";
 import { selectRustIntrinsicConversionContract } from "./intrinsic-contracts.js";

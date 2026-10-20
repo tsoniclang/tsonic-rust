@@ -3,7 +3,7 @@ import type { RustSourcePackageFacadePlan, RustSourcePackageEmissionRecords, Rus
 import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
-import type { RustProgramErrorRoute } from "../../../target-model/conversions/program-error.js";
+import type { RustSourcePackageErrorRoute } from "../../../target-model/records/source-package-errors.js";
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
 import type { RustProgramEmission } from "../../../target-model/records/program-emission.js";
@@ -22,7 +22,7 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
   const boundaries = new Map<string, Map<string, RustSourcePackageErrorBoundary>>();
   const physical = new Map<string, Map<string, RustSourcePackageErrorBoundary>>();
   const runtime = new Map<string, RustSourcePackageErrorBoundary>();
-  const routes = new Map<string, WeakMap<RustProjectTypeDefinition, Map<string, RustProgramErrorRoute>>>();
+  const routes = new Map<string, WeakMap<RustProjectTypeDefinition, Map<string, RustSourcePackageErrorRoute>>>();
   const admitBoundary = (table: Map<string, Map<string, RustSourcePackageErrorBoundary>>,
     consumer: string, owner: string, value: RustSourcePackageErrorBoundary): void => {
     assertOpen();
@@ -88,10 +88,10 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
       if (runtime.has(consumer)) failTargetAnalysisInvariant("tsonic-rust", "A native runtime error boundary has one exact source owner.");
       runtime.set(consumer, Object.freeze(value));
     },
-    route(consumer: string, definition: RustProjectTypeDefinition, variant: string, value: RustProgramErrorRoute): void {
+    route(consumer: string, definition: RustProjectTypeDefinition, variant: string, value: RustSourcePackageErrorRoute): void {
       assertOpen();
-      const declarations = routes.get(consumer) ?? new WeakMap<RustProjectTypeDefinition, Map<string, RustProgramErrorRoute>>();
-      const selected = declarations.get(definition) ?? new Map<string, RustProgramErrorRoute>();
+      const declarations = routes.get(consumer) ?? new WeakMap<RustProjectTypeDefinition, Map<string, RustSourcePackageErrorRoute>>();
+      const selected = declarations.get(definition) ?? new Map<string, RustSourcePackageErrorRoute>();
       if (selected.has(variant)) failTargetAnalysisInvariant("tsonic-rust", "A project error route has one exact native owner.", definition.declaration);
       selected.set(variant, Object.freeze(value));
       declarations.set(definition, selected);
