@@ -1,14 +1,7 @@
 import type { JsOperationRowData } from "./model.js";
 import { atomicOperationRows } from "./atomic-rows.js";
 import { rustJsTimerDispatchInput } from "../../../../providers/model/js-dispatch.js";
-import {
-  rustJsValueTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-  rustJsTypedArrayTargetIds,
-  rustJsPromiseTargetId,
-  type RustJsTypedArrayName,
-} from "../../../../target-model/types/index.js";
+import { rustJsValueTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustJsTypedArrayTargetIds, rustJsPromiseTargetId, type RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 
 const falseArgument = { kind: "boolean", value: false } as const;
 
