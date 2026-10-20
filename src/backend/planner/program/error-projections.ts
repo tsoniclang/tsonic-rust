@@ -1,14 +1,14 @@
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustErrorTransportPlan } from "./error-transport.js";
 import { rustCheckedNativeProjectionOutputParameter } from "../objects/checked-project-projections.js";
 
 export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): readonly RustItem[] {
-  const types = [plan.fullTransportType, plan.sourceErrorType, plan.writableSourceErrorType];
+  const types = [plan.fullTransportType,
+    ...(plan.variants.some(item => item.source !== "error") ? [plan.sourceErrorType] : []),
+    plan.writableSourceErrorType];
   const projections = plan.variants.filter(item => item.source !== "thrown");
   const unit: RustExpr = { kind: "tuple-literal", elements: [] };
-  return types.filter((type, index) => !types.slice(0, index).some(previous => rustTypeEquals(type, previous)))
-    .map(type => ({ kind: "impl", generics: emptyRustGenerics, target: type,
+  return types.map(type => ({ kind: "impl", generics: emptyRustGenerics, target: type,
       members: [false, true].map(owned => {
         const arms = projections.map(item => {
               const error: RustExpr = { kind: "path", path: "error" };
