@@ -12,7 +12,7 @@ import {
 } from "../../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
 import { planProjectMethod } from "../../declarations/index.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";

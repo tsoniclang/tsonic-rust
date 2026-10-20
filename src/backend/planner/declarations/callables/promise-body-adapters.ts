@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustGenerics, RustCallGenericArgument } from "../../../target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustInjectNativeError, rustErrorType, type RustFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustJsRejectionRegion } from "../../program/js-rejection-regions.js";

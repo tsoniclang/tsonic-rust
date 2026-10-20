@@ -5,7 +5,7 @@ import type {
   RustTraitReference,
   RustType,
   RustTypeBound,
-} from "../syntax/nodes.js";
+} from "./nodes.js";
 
 export function rustTypeEquals(
   left: RustType | undefined,
@@ -105,8 +105,8 @@ function genericArgumentsEqual(
 }
 
 function constArgumentsEqual(
-  left: import("../syntax/nodes.js").RustConstArgument,
-  right: import("../syntax/nodes.js").RustConstArgument,
+  left: import("./nodes.js").RustConstArgument,
+  right: import("./nodes.js").RustConstArgument,
 ): boolean {
   if (left.kind !== right.kind) return false;
   switch (left.kind) {
