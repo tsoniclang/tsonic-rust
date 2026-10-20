@@ -15,7 +15,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue,
-  rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustCallableInputTargetId, rustCallableTargetId, rustProgramErrorTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
+  rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustCallableInputTargetId, rustCallableTargetId, rustFutureTargetId, rustProgramErrorTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
 import { selectRustTypePositions } from "../../policy/types/type-emission.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reachability">,
@@ -56,6 +56,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     if (union !== undefined && unionArguments === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
+      callArgumentInfer: carrier.kind === "target-named" && carrier.id === rustFutureTargetId,
       generic: generic === undefined || physical === undefined ? undefined : Object.freeze({ fileName: physical.definition.ownerFileName,
         name: physical.definition.targetName, arguments: rustGenericCallableStorageArguments(generic.environment, physical.arguments) }),
       structural: unionDefinition !== undefined ? Object.freeze({ ownerFileName: unionDefinition.ownerFileName,

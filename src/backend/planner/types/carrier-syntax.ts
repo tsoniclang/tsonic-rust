@@ -1,71 +1,19 @@
-import type {
-  RustTargetConstArgument,
-  RustProgramErrorOwner,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
-import { registerAliasFromPath, rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
-import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
-import { resolveRustPhysicalProgramErrorBoundary } from "../program/source-package-errors.js";
+import type { RustTargetConstArgument, RustProgramErrorOwner, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustGenericArgument, RustConstArgument, RustLifetimeParameter, RustTraitReference, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
+import { type RustLifetimeBinder } from "../../../target-model/lifetimes/index.js";
 import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
-import { collectAliasesFromRustType } from "./type-observations.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
-import type { RustTypeEmission } from "../../../target-model/records/type-emission.js";
-import type {
-  RustCallGenericArgument,
-  RustGenericArgument,
-  RustConstArgument,
-  RustLifetimeParameter,
-  RustTraitReference,
-  RustType,
-  RustTypeBound,
-} from "../../target-ast/syntax/nodes.js";
-import {
-  rustLifetimeKey,
-  type RustLifetimeBinder,
-  type RustLifetimeRef,
-} from "../../../target-model/lifetimes/index.js";
-import {
-  rustSourceTypeCarrierValue,
-  rustSourceUnionCarrierValue,
-  rustStructuralObjectCarrierValue,
-} from "../../../target-model/types/index.js";
-import { rustSourceTypePathInContext, rustStructuralTypePathInContext } from "./paths.js";
-import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
-import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableStorageArguments } from "../../../target-model/types/carriers/generic-callable-storage.js";
-import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
-import { rustFrameCallableTypes } from "./frame-callables.js";
-import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
-import { rustProducerErrorReference, type RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
+import { rustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinReference, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
-import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
-import { rustLifetimeToAst } from "./lifetime-syntax.js";
-import { rustOptionalStorageTypeArguments } from "./type-projections.js";
+import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
-import { rustCallableInputAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
-import {
-  rustBuiltInCarrierDefinitions,
-  rustCallableTargetId,
-  rustCallableInputTargetId,
-  rustFixedArrayCarrierValue,
-  rustNamedTypeCarrierValue,
-  rustPrimitiveTypeName,
-  substituteRustTargetGenerics,
-  rustStringTargetId,
-  rustStrTargetId,
-  isRustNeverCarrier,
-  isRustAbsenceCarrier,
-  rustOnlyTypeGenericArguments,
-  rustFutureTargetId,
-  rustJsPromiseTargetId,
-  rustUnitTargetType,
-  rustProgramErrorTargetId,
-} from "../../../target-model/types/index.js";
-
-import { rustSourceUnionPayloadArguments, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustBuiltInCarrierDefinitions,
+  rustCallableTargetId, rustCallableInputTargetId, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustPrimitiveTypeName,
+  rustStringTargetId, rustStrTargetId, isRustNeverCarrier, isRustAbsenceCarrier, rustOnlyTypeGenericArguments,
+  rustJsPromiseTargetId, rustUnitTargetType, rustProgramErrorTargetId } from "../../../target-model/types/index.js";
+import { rustLifetimeToAst } from "./lifetime-syntax.js";
+import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 
 export const rustStrRefType: RustType = {
   kind: "reference",
@@ -73,13 +21,13 @@ export const rustStrRefType: RustType = {
   mutable: false,
 };
 
-interface RustSourceTypeRendering {
-  readonly typeDefinitions: RustTypeDefinitions;
+export interface RustSourceTypeRendering {
+  readonly payloadArgumentsFor: (carrier: TargetTypeRef) => readonly RustTargetGenericArgument[] | undefined;
   readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly pathFor: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined;
   readonly additionalArgumentsFor: (carrier: TargetTypeRef) => readonly RustGenericArgument[];
   readonly programErrorType?: (owner: RustProgramErrorOwner) => RustType | undefined;
-  readonly producerErrorType?: (reference: RustProducerErrorReference) => RustType | undefined;
+  readonly producerErrorType?: (carrier: TargetTypeRef) => RustType | undefined;
   readonly nativeErrorJoinType?: (reference: RustNativeErrorJoinReference) => RustType | undefined;
 }
 
@@ -92,7 +40,7 @@ export function rustTypeFromCarrier(
     return undefined;
   }
   const producerError = rustProducerErrorReference(carrier);
-  if (producerError !== undefined) return resolveSourceTypePath?.producerErrorType?.(producerError);
+  if (producerError !== undefined) return resolveSourceTypePath?.producerErrorType?.(carrier);
   const joinedError = rustNativeErrorJoinReference(carrier);
   if (joinedError !== undefined) return resolveSourceTypePath?.nativeErrorJoinType?.(joinedError);
   if (carrier.kind === "trait-ref") {
@@ -334,7 +282,7 @@ export function rustTypeFromCarrier(
     if (union !== undefined) {
       if (union.origin === "generated") return resolveStructuralShape?.(carrier);
       const path = resolveSourceTypePath.pathFor(union);
-      const arguments_ = rustSourceUnionPayloadArguments(carrier, resolveSourceTypePath.typeDefinitions);
+      const arguments_ = resolveSourceTypePath.payloadArgumentsFor(carrier);
       const genericArguments = arguments_ === undefined ? undefined : rustGenericArgumentsFromCarrier(
         arguments_, resolveSourceTypePath, resolveStructuralShape,
       );
@@ -519,231 +467,6 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive" && (carrier.name === "float32" || carrier.name === "float64");
 }
 
-export interface RustTypeRenderingContext {
-    readonly sourcePackageErrors: RustSourcePackageErrorPlan;
-    readonly sourcePackageComponentId: string;
-    readonly typeParameterNames?: ReadonlyMap<string, string>;
-    readonly moduleName: string;
-    readonly moduleNameByFileName: ReadonlyMap<string, string>;
-    readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
-    readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
-    readonly externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>;
-    readonly crateName?: string;
-    readonly structuralShapesModuleName: string;
-    readonly usedAliases?: Set<string>;
-    readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
-    readonly lifetimeSubstitutions?: ReadonlyMap<string, RustLifetimeRef>;
-    readonly input: {
-      readonly errorRegions: import("../program/error-regions.js").RustErrorRegionCatalog;
-      readonly program: {
-        readonly source: import("@tsonic/target-api/analysis").TargetSourceSyntaxProgram;
-        readonly records: import("../../../target-model/records/program.js").RustProgramRecords;
-        readonly typeDefinitions: import("../../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
-        readonly names: import("../../../target-model/names/model.js").RustNamePlan;
-        readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
-        readonly sourceCallableSpecializations: import("../../../analysis/callables/specializations.js").RustSourceCallableSpecializationPlan;
-        readonly callableValues: import("../../../analysis/callables/value-plan.js").RustCallableValuePlan;
-        readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
-        readonly declarationGenericRequirements: import("../../../analysis/declarations/generic-requirements.js").RustDeclarationGenericRequirementIndex;
-        readonly projectTypes: import("../../../target-model/types/project-types.js").RustProjectTypePolicy;
-        readonly objectRepresentations: import("../../../analysis/project-types/object-representation.js").RustObjectRepresentationPlan;
-        readonly typeFamilies: import("../../../target-model/types/type-families.js").RustSourceTypeFamilyPlan;
-      };
-    };
-}
-
-export function rustTypeFromCarrierInContext(
-  carrier: TargetTypeRef | undefined,
-  context: RustTypeRenderingContext,
-  position: "general" | "parameter" | "return" | "inferred-call" | "absence" = "general",
-): RustType | undefined {
-  const instantiatedCarrier = carrier === undefined ||
-      context.typeParameterSubstitutions === undefined &&
-      context.lifetimeSubstitutions === undefined
-    ? carrier
-    : substituteRustTargetGenerics(
-        carrier,
-        context.typeParameterSubstitutions ?? new Map(),
-        context.lifetimeSubstitutions ?? new Map(),
-      );
-  const selectedCarrier = position === "absence" && instantiatedCarrier !== undefined
-    ? rustCallableInputAbsenceWitness(instantiatedCarrier) : instantiatedCarrier;
-  const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
-    if (rustFrameCallableValue(shapeCarrier) !== undefined) return rustFrameCallableTypes(shapeCarrier, context)?.rootType;
-    const instance = rustClassConstructorInstance(shapeCarrier);
-    if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
-    const genericCallable = rustGenericCallableValue(shapeCarrier);
-    if (genericCallable !== undefined) {
-      const physical = context.input.program.callableValues.generic.physical;
-      const definition = physical.definitionFor(shapeCarrier);
-      const module = definition === undefined ? undefined : context.moduleNameByFileName.get(definition.ownerFileName);
-      const externalCrate = definition === undefined ? undefined : context.externalCrateNameByFileName.get(definition.ownerFileName);
-      const physicalArguments = physical.argumentsFor(shapeCarrier);
-      const arguments_ = physicalArguments === undefined ? undefined : rustGenericArgumentsFromCarrier(
-        rustGenericCallableStorageArguments(genericCallable.environment, physicalArguments), sourceRendering, resolveStructuralShape);
-      if (definition === undefined || module === undefined || arguments_ === undefined) return undefined;
-      return { kind: "named", path: `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${module}::${definition.targetName}`,
-        genericArguments: arguments_,
-      };
-    }
-    const union = rustSourceUnionCarrierValue(shapeCarrier);
-    const definition = union?.origin === "generated"
-      ? context.input.program.structuralShapes.unionForCarrier(shapeCarrier)
-      : context.input.program.structuralShapes.definitionForCarrier(shapeCarrier);
-    if (definition === undefined) {
-      return undefined;
-    }
-    const arguments_ = union?.origin === "generated" ? rustSourceUnionPayloadArguments(shapeCarrier, context.input.program.typeDefinitions) :
-      context.input.program.structuralShapes.definitionForCarrier(shapeCarrier)!.genericArguments;
-    if (arguments_ === undefined) return undefined;
-    const genericArguments = rustGenericArgumentsFromCarrier(arguments_, sourceRendering, resolveStructuralShape);
-    if (genericArguments === undefined) {
-      return undefined;
-    }
-    const path = rustStructuralTypePathInContext(shapeCarrier, context);
-    if (path === undefined) return undefined;
-    const stateType: RustType = {
-      kind: "named",
-      path,
-      ...(genericArguments.length === 0
-        ? {}
-        : { genericArguments: genericArguments as readonly RustGenericArgument[] }),
-    };
-    return union?.origin === "generated" || rustStructuralObjectCarrierValue(shapeCarrier)?.representation === "value" ||
-      context.input.program.structuralShapes.definitionForCarrier(shapeCarrier)?.dispatchName !== undefined ? stateType : {
-      kind: "named",
-      path: "rt::ObjectHandle",
-      genericArguments: typeGenericArguments([stateType]),
-    };
-  };
-  const resolvingProducerErrors = new Set<string>();
-  const resolvingErrorJoins = new Set<string>();
-  let producerErrorWork = 4096;
-  const sourceRendering: RustSourceTypeRendering = {
-    typeParameterNames: context.typeParameterNames, typeDefinitions: context.input.program.typeDefinitions,
-    pathFor: value => rustSourceTypePathInContext(value, context), additionalArgumentsFor: type => rustOptionalStorageTypeArguments(type, context),
-    programErrorType: owner => {
-      const boundary = context.sourcePackageErrors === undefined ? undefined : owner.kind === "logical"
-        ? rustCurrentErrorBoundary(context)
-        : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, owner);
-      return boundary === undefined ? undefined : rustErrorType(boundary);
-    },
-    producerErrorType: reference => {
-      const key = closedMetadataKey(reference);
-      if (producerErrorWork-- <= 0 || resolvingProducerErrors.size >= 128 || resolvingProducerErrors.has(key)) return undefined;
-      resolvingProducerErrors.add(key);
-      try {
-        return context.input.errorRegions.producerErrorType(reference,
-          carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
-      } finally {
-        resolvingProducerErrors.delete(key);
-      }
-    },
-    nativeErrorJoinType: reference => {
-      const key = closedMetadataKey(reference);
-      if (producerErrorWork-- <= 0 || resolvingErrorJoins.size >= 128 || resolvingErrorJoins.has(key)) return undefined;
-      resolvingErrorJoins.add(key);
-      try {
-        return context.input.errorRegions.nativeErrorJoinType(reference, context,
-          carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
-      } finally {
-        resolvingErrorJoins.delete(key);
-      }
-    },
-  };
-  const rendered = rustTypeFromCarrier(selectedCarrier, sourceRendering, resolveStructuralShape);
-  const nativePosition = selectedCarrier === undefined ? undefined : context.input.program.records.typeEmission.get(selectedCarrier)?.positions;
-  if (selectedCarrier !== undefined && nativePosition === undefined) failRustPlannerInvariant("An admitted native type requires its exact sealed position evidence.");
-  if (position === "inferred-call" && rendered !== undefined && nativePosition?.opaque === true) {
-    return { kind: "infer" };
-  }
-  if (nativePosition !== undefined && !nativePosition[position === "inferred-call" || position === "absence" ? "general" : position]) {
-    return undefined;
-  }
-  collectAliasesFromRustType(rendered, (path) => {
-    registerAliasFromPath(context, path);
-  });
-  return rendered;
-}
-
-export function rustParameterTypeFromCarrierInContext(
-  carrier: TargetTypeRef | undefined,
-  context: RustTypeRenderingContext,
-): RustType | undefined {
-  return rustTypeFromCarrierInContext(carrier, context, "parameter");
-}
-
-export function rustTypeEmissionInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): RustTypeEmission {
-  const instantiated = context.typeParameterSubstitutions === undefined && context.lifetimeSubstitutions === undefined ? carrier
-    : substituteRustTargetGenerics(carrier, context.typeParameterSubstitutions ?? new Map(), context.lifetimeSubstitutions ?? new Map());
-  const selected = context.input.program.records.typeEmission.get(instantiated);
-  if (selected === undefined) failRustPlannerInvariant("An admitted native type requires its exact sealed rendering metadata.");
-  return selected;
-}
-
-export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {
-  const union = rustSourceUnionCarrierValue(carrier);
-  const path = union !== undefined
-    ? union.origin === "generated" ? rustStructuralTypePathInContext(carrier, context) : rustSourceTypePathInContext(union, context)
-    : carrier.kind === "target-named" && rustRuntimeUnionContract(carrier) !== undefined ? rustBuiltInCarrierDefinitions[carrier.id]?.renderPath : undefined;
-  if (path !== undefined) registerAliasFromPath(context, path);
-  return path;
-}
-
-export function rustReturnTypeFromCarrierInContext(
-  carrier: TargetTypeRef | undefined,
-  context: RustTypeRenderingContext,
-): RustType | undefined {
-  return isRustNeverCarrier(carrier)
-    ? { kind: "never" }
-    : rustTypeFromCarrierInContext(carrier, context, "return");
-}
-
-export function rustTargetGenericArgumentToAstInContext(
-  argument: RustTargetGenericArgument,
-  context: RustTypeRenderingContext,
-): RustGenericArgument | undefined {
-  switch (argument.kind) {
-    case "lifetime":
-      return {
-        kind: "lifetime",
-        lifetime: rustLifetimeToAst(
-          context.lifetimeSubstitutions?.get(rustLifetimeKey(argument.lifetime)) ??
-            argument.lifetime,
-        ),
-      };
-    case "const":
-      return { kind: "const", value: rustConstArgumentToAst(argument.value) };
-    case "type": {
-      const type = rustTypeFromCarrierInContext(argument.type, context);
-      return type === undefined ? undefined : { kind: "type", type };
-    }
-  }
-}
-
-export function rustTargetCallGenericArgumentToAstInContext(
-  argument: Extract<RustTargetGenericArgument, { readonly kind: "type" | "const" }>,
-  context: RustTypeRenderingContext,
-): RustCallGenericArgument | undefined {
-  if (argument.kind === "type") {
-    const type = rustCallTypeFromCarrierInContext(argument.type, context);
-    return type === undefined ? undefined : { kind: "type", type };
-  }
-  const rendered = rustTargetGenericArgumentToAstInContext(argument, context);
-  return rendered?.kind === "type" || rendered?.kind === "const"
-    ? rendered
-    : undefined;
-}
-
-export function rustCallTypeFromCarrierInContext(
-  carrier: TargetTypeRef,
-  context: RustTypeRenderingContext,
-): RustType | undefined {
-  return carrier.kind === "target-named" && carrier.id === rustFutureTargetId
-    ? { kind: "infer" }
-    : rustTypeFromCarrierInContext(carrier, context, "inferred-call");
-}
-
 export function rustLifetimeBinderToAst(
   binder: RustLifetimeBinder,
 ): readonly RustLifetimeParameter[] {
@@ -754,7 +477,7 @@ export function rustLifetimeBinderToAst(
   })));
 }
 
-function rustGenericArgumentsFromCarrier(
+export function rustGenericArgumentsFromCarrier(
   arguments_: readonly RustTargetGenericArgument[] | undefined,
   resolveSourceTypePath?: RustSourceTypeRendering,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
@@ -780,7 +503,7 @@ function rustGenericArgumentsFromCarrier(
   return Object.freeze(result);
 }
 
-function rustConstArgumentToAst(value: RustTargetConstArgument): RustConstArgument {
+export function rustConstArgumentToAst(value: RustTargetConstArgument): RustConstArgument {
   switch (value.kind) {
     case "integer":
       return { kind: "integer", value: BigInt(value.value) };
@@ -794,6 +517,6 @@ function rustConstArgumentToAst(value: RustTargetConstArgument): RustConstArgume
   }
 }
 
-function typeGenericArguments(types: readonly RustType[]): readonly RustGenericArgument[] {
+export function typeGenericArguments(types: readonly RustType[]): readonly RustGenericArgument[] {
   return Object.freeze(types.map((type) => ({ kind: "type" as const, type })));
 }
