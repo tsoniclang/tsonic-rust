@@ -25,7 +25,7 @@ import { analyzeRustProjectConstructions } from "../project-types/construction-p
 import { analyzeRustBorrowedElementReads } from "../storage/borrowed-element-reads.js";
 import { analyzeRustBorrowEffects } from "../ownership/effects.js";
 import { analyzeRustBinaryHooks, analyzeRustDispatchContextCatalog, analyzeRustDispatchContextDemand, analyzeRustRuntimeReferences } from "../project/index.js";
-import { analyzeRustSourcePackageFacades } from "./source-package-facades.js";
+import { analyzeRustSourcePackageFacades } from "../source-modules/facade-contracts.js";
 
 import { validateRustGenericSourcePackageComponents } from "./source-package-components.js";
 import { analyzeRustCountedLoopRepresentations } from "../control-flow/counted-loop-representations.js";

@@ -1,36 +1,14 @@
+import { sourcePackageFacadeModuleSegments } from "../../policy/names/package-facades.js";
+import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustSourcePackageFacadeExportContract } from "../../target-model/records/source-packages.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 
-import type {
-  TargetSourcePackage,
-} from "@tsonic/target-api";
-import type {
-  TargetDiagnostic,
-} from "@tsonic/target-api/artifacts";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-import {
-  isValidRustIdentifier,
-  rustModuleSegmentName,
-  rustPackageModuleName,
-} from "../../target-model/names/identifiers.js";
+import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
-import type {
-  RustAnalysisContext,
-} from "./context.js";
-
-export interface RustSourcePackageFacadeClassifications {
-  readonly rootComponentId: string;
-  readonly componentIds: readonly string[];
-  readonly rootExports: readonly RustSourcePackageFacadeExportContract[];
-  exportsForComponent(
-    componentId: string,
-  ): readonly RustSourcePackageFacadeExportContract[];
-  publicModuleNamesForComponent(componentId: string): readonly string[];
-  publicImplementationItemIdentitiesForComponent(
-    componentId: string,
-  ): readonly string[];
-}
+import type { RustAnalysisContext } from "../program/context.js";
 
 export type AnalyzeRustSourcePackageFacadesResult =
   | {
@@ -231,36 +209,6 @@ function rustDeclarationItemNames(
   const names = new Set(candidates.filter((name): name is string =>
     name !== undefined && isValidRustIdentifier(name)));
   return Object.freeze([...names].sort(compareNames));
-}
-
-function sourcePackageFacadeModuleSegments(
-  sourcePackage: TargetSourcePackage,
-  specifier: string,
-  packagePrefixRequired: boolean,
-): readonly string[] {
-  const packagePrefix = packagePrefixRequired
-    ? [rustPackageModuleName(sourcePackage.name ?? sourcePackage.id)]
-    : [];
-  if (
-    specifier === "." ||
-    specifier === "./index.js" ||
-    specifier === "./index.mjs" ||
-    specifier === "./index.ts" ||
-    specifier === "./index.mts"
-  ) {
-    return Object.freeze(packagePrefix);
-  }
-  const withoutPrefix = specifier.startsWith("./")
-    ? specifier.slice(2)
-    : specifier;
-  const withoutExtension = withoutPrefix.replace(/\.(?:mjs|mts|js|ts)$/u, "");
-  const segments = withoutExtension.split("/")
-    .filter((segment) => segment.length > 0)
-    .map(rustModuleSegmentName);
-  if (segments[segments.length - 1] === "index") {
-    segments.pop();
-  }
-  return Object.freeze([...packagePrefix, ...segments]);
 }
 
 function facadeExportIdentity(
