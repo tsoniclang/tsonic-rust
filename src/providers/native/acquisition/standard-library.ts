@@ -1,52 +1,10 @@
-import type {
-  RustCompilerDependency,
-  RustCompilerFunction,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerModuleModel,
-  RustCompilerProjectSnapshot,
-  RustCompilerStandardLibrarySnapshot,
-  RustCompilerStandardTypeLocation,
-  RustCompilerType,
-} from "../model/model.js";
-import {
-  verifyRustCompilerDependencySource,
-  verifyRustCompilerStandardLibraryMetadata,
-} from "../acquisition/cargo-snapshot.js";
-import { standardModuleSpecifier } from "./module-specifier.js";
-import {
-  digestText,
-  validateDependencyBelongsToSnapshot,
-  type RustdocDocumentLoader,
-} from "../acquisition/rustdoc-artifact.js";
-import {
-  authoredPublicCanonicalPath,
-  authoredPublicKind,
-  authoredPublicName,
-  canonicalItemId,
-  isGlobUse,
-  resolveLocalRustdocItem,
-  rustdocPathIdentity,
-  type ResolvedRustdocItem,
-} from "../model/rustdoc-items.js";
-import {
-  compareText,
-  hasInnerKind,
-  isRecord,
-  itemById,
-  requireArray,
-  requireInnerRecord,
-  requireRecord,
-  requireString,
-  type RustdocDocument,
-} from "../model/rustdoc-schema.js";
-import {
-  canonicalPathKey,
-  compilerTypeRequirementCanonicalPath,
-  normalizeGenericParameters,
-  rootNormalizationContext,
-  standardTypePathKind,
-} from "../model/rustdoc-types.js";
+import type { RustCompilerDependency, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerModuleModel, RustCompilerProjectSnapshot, RustCompilerStandardLibrarySnapshot, RustCompilerStandardTypeLocation, RustCompilerType } from "../model/model.js";
+import { verifyRustCompilerDependencySource, verifyRustCompilerStandardLibraryMetadata } from "./cargo-snapshot.js";
+import { standardModuleSpecifier } from "../projection/module-specifier.js";
+import { digestText, validateDependencyBelongsToSnapshot, type RustdocDocumentLoader } from "./rustdoc-artifact.js";
+import { authoredPublicCanonicalPath, authoredPublicKind, authoredPublicName, canonicalItemId, isGlobUse, resolveLocalRustdocItem, rustdocPathIdentity, type ResolvedRustdocItem } from "../model/rustdoc-items.js";
+import { compareText, hasInnerKind, isRecord, itemById, requireArray, requireInnerRecord, requireRecord, requireString, type RustdocDocument } from "../model/rustdoc-schema.js";
+import { canonicalPathKey, compilerTypeRequirementCanonicalPath, normalizeGenericParameters, rootNormalizationContext, standardTypePathKind } from "../model/rustdoc-types.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export interface RustStandardLibraryContext {
