@@ -3,13 +3,11 @@ import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../ta
 
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
-import { optionReference, typedLocationFactMatchesPlan } from "./location-expressions.js";
+import { optionReference } from "./location-expressions.js";
 import { planRustNativeAllocation } from "./native-memory.js";
 import {
   fallibleLocationAccess,
@@ -24,14 +22,6 @@ export function planRustTypedLocationCall(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
-  if (!typedLocationFactMatchesPlan(fact, plan)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.typed-location-plan",
-      "Typed-location operation has no matching exact Rust-owned lowering plan.",
-    ));
-    return undefined;
-  }
   context.usedAliases?.add("rt");
   switch (plan.operation) {
     case "hash-pointer": {
