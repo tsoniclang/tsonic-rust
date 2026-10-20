@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import type { RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
 import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -38,12 +39,6 @@ export function rustNativeCallableAbsenceWitness(
     rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, infallible])), protocol.method.binder);
   return snapshotClosedMetadata(substituteRustTargetGenerics(witness, new Map(protocol.signature.environmentParameters.map((parameter, index) =>
     [parameter.identity, input.environment[index]!])), new Map()));
-}
-
-export interface RustNativeCallablePhysicalSource {
-  readonly carrier: TargetTypeRef;
-  readonly signature: RustCallablePhysicalSignature;
-  readonly input?: RustNativeCallableInput;
 }
 
 export function rustNativeCallablePhysicalSource(

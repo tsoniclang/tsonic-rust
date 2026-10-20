@@ -23,7 +23,8 @@ export function planRustSourceCallableValue(value: RustSourceCallableValueFact, 
     : { kind: "method-call", receiver: expression, method: "clone", args: [] };
 }
 
-export function planRustSourceCallableValueConstruction(value: RustSourceCallableValueFact, context: RustPlanContext): RustExpr | undefined {
+export function planRustSourceCallableValueConstruction(value: RustSourceCallableValueFact, context: RustPlanContext,
+  representation: "value" | "producer" = "value"): RustExpr | undefined {
   const selected = context.input.program.records.sourceCallableEmission.get(value.sourceDeclaration, value.carrier)?.construction
     ?? failRustPlannerInvariant("An admitted source callable requires its exact native construction plan.", value.sourceDeclaration);
   if (selected.kind === "generic") return planRustGenericCallableValue(value.sourceDeclaration, value.carrier, context);
@@ -54,6 +55,7 @@ export function planRustSourceCallableValueConstruction(value: RustSourceCallabl
       body: { statements: [{ kind: "tail", expr: callableResult }] } }
     : { kind: "closure", params: [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body: callableResult };
   context.usedAliases?.add("rt");
+  if (representation === "producer") return environment.bindings.length === 0 ? implementation : rustValueBlock(environment.bindings, implementation);
   const constructed: RustExpr = { kind: "associated-call", owner: callableType, method: "new", args: [implementation] };
   return environment.bindings.length === 0 ? constructed : rustValueBlock(environment.bindings, constructed);
 }

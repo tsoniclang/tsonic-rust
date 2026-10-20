@@ -70,6 +70,7 @@ export function planRustCallableExpressionBody(
   node: Node,
   outerContext: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
+  representation: "value" | "producer" = "value",
 ): RustCallableExpressionPlan | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
@@ -435,6 +436,7 @@ export function planRustCallableExpressionBody(
       ? closure : rustValueBlock(captureBindings, closure) };
   }
   if (callableType === undefined) return undefined;
+  if (representation === "producer") return { expression: rustValueBlock(captureBindings, closure) };
   context.usedAliases?.add("rt");
   const callable = {
     kind: "associated-call" as const,
