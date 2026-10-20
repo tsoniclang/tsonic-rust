@@ -1,5 +1,5 @@
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 
@@ -25,8 +25,8 @@ export function rustNativeFallibleBoundary(
   join: RustNativeErrorJoinPlan,
   local?: RustLocalErrorChannel,
 ): RustFallibleBoundary | undefined {
-  if (join.errorType === undefined || local !== undefined &&
-    (!join.accepts(local.source) || !rustTypeEquals(rustErrorType(local.owner), local.source.errorType))) return undefined;
+  if (join.errorType === undefined || local !== undefined && !join.accepts(local.source))
+    failRustPlannerInvariant("An admitted native error boundary requires its exact selected channel inventory.");
   return Object.freeze({ kind: "native", errorType: join.errorType, join,
     local: local === undefined ? undefined : Object.freeze({ ...local, source: Object.freeze({ ...local.source }) }) });
 }
@@ -41,7 +41,7 @@ export function rustInjectNativeError(
   error: RustExpr,
 ): RustExpr | undefined {
   return region.kind === "native" ? region.join.inject(source, error)
-    : rustTypeEquals(region.errorType, source.errorType) ? error : undefined;
+    : { kind: "associated-call", owner: region.errorType, method: "from", args: [error] };
 }
 
 export function rustPropagateNativeError(
@@ -50,8 +50,7 @@ export function rustPropagateNativeError(
   result: RustExpr,
 ): RustExpr | undefined {
   return region.kind === "native" ? region.join.propagate(source, result)
-    : rustTypeEquals(region.errorType, source.errorType)
-      ? { kind: "try", expr: result, operandErrorType: source.errorType, resultErrorType: region.errorType } : undefined;
+    : { kind: "try", expr: result, operandErrorType: source.errorType, resultErrorType: region.errorType };
 }
 
 export function rustPropagateMappedErrorJoin(
@@ -63,8 +62,7 @@ export function rustPropagateMappedErrorJoin(
   const error: RustExpr = { kind: "path", path: errorName };
   const mapped = operand.mapError(error, payloadName, select);
   if (mapped === undefined) return undefined;
-  const result: RustExpr = mapped === error && rustTypeEquals(operand.errorType, region.errorType) ? expression
-    : { kind: "method-call", receiver: expression, method: "map_err",
+  const result: RustExpr = { kind: "method-call", receiver: expression, method: "map_err",
       genericArguments: [{ kind: "type", type: region.errorType }, { kind: "type", type: { kind: "infer" } }],
       args: [{ kind: "closure", params: [{ name: errorName }], body: mapped }] };
   return { kind: "try", expr: result, operandErrorType: region.errorType, resultErrorType: region.errorType };
@@ -85,7 +83,7 @@ export function rustPropagateLocalError(
   }
   const local = region.local;
   if (local === undefined) return undefined;
-  const converted: RustExpr = rustTypeEquals(operandErrorType, local.source.errorType) ? result : {
+  const converted: RustExpr = {
     kind: "method-call", receiver: result, method: "map_err",
     args: [{ kind: "associated-value", owner: local.source.errorType, name: "from" }],
   };
