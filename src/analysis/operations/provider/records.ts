@@ -1,3 +1,4 @@
+import { selectRustRecordObjectOperation, selectRustRecordDeleteOperation } from "../../../policy/operations/source-profiles/js/records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
@@ -7,9 +8,9 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectedValueCarrier } from "../selected-values.js";
 import { acceptRustMemberOperation, acceptRustOperation, elementProvenance, rejectSelectedOperation } from "./result.js";
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
-import { isRustStringCarrier, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustTupleTargetType } from "../../../target-model/types/index.js";
+import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import type { SelectedObjectShapeProjection } from "./object-shape-fields.js";
-import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
+
 import { acceptSelectedCall } from "./calls/instantiation.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
@@ -80,20 +81,8 @@ export function selectRustRecordObjectCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_RECORD_PROJECTION_NOT_CLOSED",
       "Indexed Object operations require exact native string keys and copyable values when selected by the operation.");
   }
-  const result = kind === "has-own" ? rustSourcePrimitiveTargetType("bool") : kind === "assign" ? carrier :
-    rustJsArrayTargetType(kind === "keys" ? record.key : kind === "values" ? record.value : rustTupleTargetType([record.key, record.value]));
-  const parameters = kind === "has-own" ? projection.static ? [carrier, record.key] : [record.key] :
-    kind === "assign" ? [carrier, carrier] : [carrier];
-  const template: RustProviderOperationTemplate = {
-    kind: "provider-operation", operationId: `tsonic.rust.record.${kind}`, operationKind: "method",
-    target: kind === "has-own" && !projection.static ? { form: "receiver-method", name: "contains_key", argModes: ["ref"] } :
-      { form: "call", path: kind === "has-own" ? "rt::Record::contains_key" : `js_abi::record_${kind}`,
-        argModes: parameters.map(() => "ref") },
-    parameterCarriers: parameters, resultCarrier: result,
-    ...(kind === "keys" || kind === "has-own" ? {} : { carrierRequirements: [{ carrier: record.value, requirement: "clone" as const }] }),
-    isAsync: false, isFallible: false, errorBoundary: "none",
-  };
-  return acceptSelectedCall(request, template, parameters, context, options, { sourceName: projection.sourceName });
+  const template = selectRustRecordObjectOperation(kind, projection.static, carrier, record.key, record.value);
+  return acceptSelectedCall(request, template, template.parameterCarriers, context, options, { sourceName: projection.sourceName });
 }
 
 export function selectRustRecordDelete(
@@ -113,12 +102,7 @@ export function selectRustRecordDelete(
     return rejectSelectedOperation(request.expression, context, "RUST_RECORD_DELETE_NOT_CLOSED",
       "Record deletion requires one exact writable checked index signature.");
   }
-  const template: RustProviderOperationTemplate = {
-    kind: "provider-operation", operationId: "tsonic.rust.record.delete", operationKind: "indexer",
-    target: { form: "receiver-method", name: "remove", argModes: ["ref"] },
-    parameterCarriers: [record.key], receiverCarrier: receiver, resultCarrier: rustSourcePrimitiveTargetType("bool"),
-    isAsync: false, isFallible: false, errorBoundary: "none",
-  };
+  const template = selectRustRecordDeleteOperation(receiver!, record.key);
   const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.index], context, options);
   return fact === undefined ? rejectSelectedOperation(request.expression, context, "RUST_RECORD_DELETE_KEY_NOT_CLOSED",
     "Record deletion requires its exact native index key carrier.") : acceptRustOperation(fact, {
