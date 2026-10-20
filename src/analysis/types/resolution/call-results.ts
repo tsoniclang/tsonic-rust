@@ -11,7 +11,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { bindRustCallableResultTypeParameters, bindRustCallableTypeParameters, bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
 
-import { retainRustStructuralInstantiation } from "../../../policy/types/resolution/structural-instantiations.js";
+import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 

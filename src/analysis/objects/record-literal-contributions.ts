@@ -21,7 +21,7 @@ import { projectRecordMemberImplementation, selectedProjectMethodContracts } fro
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 
-import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
+import { retainRustStructuralInstantiation } from "../types/resolution/structural-instantiations.js";
 
 import { rustRecordPropertySourceName } from "./computed-field-names.js";
 import type { selectRustRecordLiteralLayout } from "./record-literal-layout.js";

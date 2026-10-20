@@ -4,7 +4,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { closeRustRetainedResult } from "../../callables/retained-result.js";
 import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { retainRustStructuralInstantiation } from "../../../policy/types/resolution/structural-instantiations.js";
+import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 
 export function resolveRustRetainedResult(
   declaration: Node,

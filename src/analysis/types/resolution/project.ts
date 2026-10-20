@@ -9,7 +9,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
 import { rustProjectGenericParameters } from "../../../policy/types/project/project-generic-contract.js";
 import { resolveRustTargetType, resolveStructuralObjectType } from "../../../policy/types/resolution/target.js";
-import { retainRustStructuralInstantiation } from "../../../policy/types/resolution/structural-instantiations.js";
+import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
