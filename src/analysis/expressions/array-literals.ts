@@ -14,7 +14,7 @@ import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { resolveRustTargetTypeRef, resolveRustTupleElementTargetType } from "../types/resolution/index.js";
-import { resolveRustInferredUnion } from "../../policy/types/resolution/inferred-unions.js";
+import { resolveRustInferredUnion } from "../types/resolution/inferred-unions.js";
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../policy/types/resolution/source-unions.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations.js";

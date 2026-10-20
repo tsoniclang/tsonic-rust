@@ -3,7 +3,7 @@ import { asNode } from "../../../policy/identities/selected-source.js";
 import { denseDefined } from "../../../policy/types/resolution/project.js";
 import { resolveRustCallableEvidence } from "../../../policy/types/resolution/source-evidence.js";
 import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
-import { resolveRustInferredUnion } from "../../../policy/types/resolution/inferred-unions.js";
+import { resolveRustInferredUnion } from "./inferred-unions.js";
 import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
