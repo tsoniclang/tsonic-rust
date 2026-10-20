@@ -1,4 +1,4 @@
-import { denseDefined } from "../../../policy/types/resolution/project.js";
+import { denseDefined } from "./project.js";
 
 import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
 

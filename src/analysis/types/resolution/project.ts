@@ -1,23 +1,16 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import {
-  rustSourceTypeCarrier,
-  rustSourceTypeCarrierValue,
-  rustSourceUnionCarrierValue,
-  rustOptionElementCarrier,
-  rustSourceOptionalTargetType,
-  rustStructuralObjectCarrierValue,
-} from "../../../target-model/types/index.js";
+import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustOptionElementCarrier, rustSourceOptionalTargetType, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { Node, Symbol, Type } from "@tsonic/tsts";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import { retainRustSourceUnionInstantiation } from "./source-unions.js";
+import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
-import { rustProjectGenericParameters } from "../project/project-generic-contract.js";
-import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
-import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
-import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
+import { rustProjectGenericParameters } from "../../../policy/types/project/project-generic-contract.js";
+import { resolveRustTargetType, resolveStructuralObjectType } from "../../../policy/types/resolution/target.js";
+import { retainRustStructuralInstantiation } from "../../../policy/types/resolution/structural-instantiations.js";
+import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
@@ -25,7 +18,7 @@ import { Node_Type, sourceCallableInterface, sourceInterfaceRepresentationBase }
 import { resolveCallableType } from "./callables.js";
 import { bindRustSourceDeclarationArguments, resolveRustSelectedTypeArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
 import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
-import { resolveRustAuthoredTargetType } from "./tuples.js";
+import { resolveRustAuthoredTargetType } from "../../../policy/types/resolution/tuples.js";
 import { resolveRustSourceArrayCarrier } from "./providers.js";
 
 export interface RustResolvedProjectGenericArguments {

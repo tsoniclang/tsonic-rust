@@ -212,7 +212,7 @@ export function resolveRustSourceDeclarationArguments(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
   selectedType: Type | undefined,
-): import("../../../policy/types/resolution/project.js").RustResolvedProjectGenericArguments | undefined {
+): import("./project.js").RustResolvedProjectGenericArguments | undefined {
   if (argumentNodes.length > contract.parameters.length) return undefined;
   const values: import("../../../target-model/types/model.js").RustTargetGenericArgument[] = [];
   for (const [index, parameter] of contract.parameters.entries()) {
