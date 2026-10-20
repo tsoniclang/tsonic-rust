@@ -8,7 +8,7 @@ import { selectRustProgramErrorConversion } from "../../target-model/conversions
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
-import { rustClosedValueAdmissionConversion } from "../../target-model/conversions/closed-admission.js";
+import { rustClosedValueAdmissionConversion } from "./closed-admission.js";
 import { isRustJsArrayCarrier, isRustJsArrayValueCarrier, isRustJsValueCarrier, isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType, isRustNeverCarrier, isRustAbsenceCarrier, rustCarrierCanEnterTsValue, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStringTargetType, rustBorrowedStrTargetType, rustStructuralObjectCarrierValue, rustTsValueTargetType } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

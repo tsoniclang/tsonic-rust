@@ -1,25 +1,14 @@
-import type { TargetTypeRef } from "../types/model.js";
-import type { RustValueConversion } from "../operations/model.js";
-import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustClosedValueRetainsError } from "../types/carriers/closed-values.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
 import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./closed-record.js";
-import { rustNumberBoxingConversionId } from "./number-boxing.js";
-import {
-  isRustAbsenceCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait,
-  rustEmptyObjectTargetType, rustJsClosedValueCarrierTraitPath, rustJsErrorTargetType,
-  rustJsSymbolTargetType, rustJsValueTargetType, rustProgramErrorTargetType,
-  rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueAdmission, rustTsValueTargetType,
-} from "../types/index.js";
-import {
-  rustAbsenceToJsValueConversion, rustBoolToJsValueConversion, rustJsValueCloneConversion,
-  rustStringToJsValueConversion, rustSymbolToJsValueConversion, rustTsValueCloneConversion,
-} from "./model.js";
+import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
+import { isRustAbsenceCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait, rustEmptyObjectTargetType, rustJsClosedValueCarrierTraitPath, rustJsErrorTargetType, rustJsSymbolTargetType, rustJsValueTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueAdmission, rustTsValueTargetType } from "../../target-model/types/index.js";
+import { rustAbsenceToJsValueConversion, rustBoolToJsValueConversion, rustJsValueCloneConversion, rustStringToJsValueConversion, rustSymbolToJsValueConversion, rustTsValueCloneConversion } from "../../target-model/conversions/model.js";
 
-export type RustClosedValueAdmissionConversion = Extract<RustValueConversion, {
-  readonly kind: "semantic-conversion" | "ts-value-from-closed-carrier" | "js-value-from-closed-carrier";
-}>;
-
+import type { RustClosedValueAdmissionConversion } from "../../target-model/conversions/closed-admission.js";
 export function rustClosedValueAdmissionConversion(
   source: TargetTypeRef, target: TargetTypeRef, definitions: RustTypeDefinitions,
 ): RustClosedValueAdmissionConversion | undefined {
