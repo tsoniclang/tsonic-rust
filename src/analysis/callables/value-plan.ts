@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -34,8 +34,7 @@ import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRe
 import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import { createRustNativeCapturePlan } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
-import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
-  type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
+import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
 import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdentityRequests, prepareRustGenericCallableIdentitySources } from "./generic-identities.js";
 import type { RustGenericCallableIdentityPlan } from "../../target-model/records/generic-callable-identity.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
@@ -43,8 +42,7 @@ import type { RustLexicalFunctionEnvironments } from "../../target-model/records
 import { createRustNativeCallableDispatchPlan } from "./native-dispatch.js";
 import type { RustNativeCallableDispatchPlan } from "../../target-model/records/native-dispatch.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
-import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
-  type RustGenericCallableCompletionPlan } from "./generic-completions.js";
+import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput, type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle, type RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import { type RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";
 import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
@@ -171,26 +169,26 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
   let finalizedSelection = false;
   let completions: RustGenericCallableCompletionPlan | undefined;
   const requireCompletions = (): RustGenericCallableCompletionPlan => {
-    if (completions === undefined) throw new Error("Generic callable completions require sealed producer effects and component owners.");
+    if (completions === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable completions require sealed producer effects and component owners.");
     return completions;
   };
   const requireLifecycle = (): RustCallableValueLifecycle => {
-    if (lifecycle === undefined) throw new Error("Rust callable values must be finalized after their selected adapters and before effect analysis.");
+    if (lifecycle === undefined) failTargetAnalysisInvariant("tsonic-rust", "Rust callable values must be finalized after their selected adapters and before effect analysis.");
     return lifecycle;
   };
   const requireSelected = (): RustCallableValueSelection => {
-    if (selected === undefined) throw new Error("Rust callable value inventories require their selected physical families after effect analysis.");
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "Rust callable value inventories require their selected physical families after effect analysis.");
     return selected;
   };
   return Object.freeze({
     initialize(input: RustCallableValuePlanInput): RustCallableValueConstruction {
-      if (lifecycle !== undefined) throw new Error("Rust callable value representations can be initialized only once.");
+      if (lifecycle !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Rust callable value representations can be initialized only once.");
       lifecycle = createRustCallableValueLifecycle(input, requireCompletions);
       return lifecycle.construction;
     },
     finalizeSelected(): TargetStageResult<readonly RustSourceCallableSpecializationIssue[]> {
       const current = requireLifecycle();
-      if (finalizedSelection) throw new Error("Rust callable value inventories finalize exactly once.");
+      if (finalizedSelection) failTargetAnalysisInvariant("tsonic-rust", "Rust callable value inventories finalize exactly once.");
       const finalized = current.finalizeSelected();
       finalizedSelection = true;
       if (finalized.kind === "rejected") return finalized;
@@ -205,7 +203,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     initializeCompletions(input: RustGenericCallableCompletionInput): void {
       const current = requireSelected();
       if (completions !== undefined || input.physical !== current.generic.physical || input.producers !== current.nativeProducers)
-        throw new Error("Generic callable completions finalize exactly once from their owned physical family and producer plans.");
+        failTargetAnalysisInvariant("tsonic-rust", "Generic callable completions finalize exactly once from their owned physical family and producer plans.");
       completions = createRustGenericCallableCompletionPlan(input);
     },
     seal: (input: RustCallableValueSealInput) => requireLifecycle().seal(input),
@@ -313,7 +311,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     carrierHost: input.carrierHost,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) => {
-      if (physicalCarrierFor === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
+      if (physicalCarrierFor === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical storage requires its finalized declaration inputs.");
       return physicalCarrierFor(carrier, ownerFileName, subject, bindings, producers);
     },
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
@@ -326,7 +324,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let parameterStorage: RustNativeStoragePlan | undefined;
   const nativeStorage: RustNativeStorageConstruction = Object.freeze({ ...nativeStorageQueries,
     parameterFor(parameter: Node) {
-      if (parameterStorage === undefined) throw new Error("Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
+      if (parameterStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
       return parameterStorage.parameterFor(parameter);
     },
   });
@@ -345,7 +343,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     construction,
     preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
       effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined) {
-      if (structuralMethodStorage !== undefined) throw new Error("Physical callable storage prepares once after its intrinsic source effects.");
+      if (structuralMethodStorage !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Physical callable storage prepares once after its intrinsic source effects.");
       structuralMethodStorage = createRustStructuralMethodStorage({ ...input, native, nativeStorage, nativeProducers,
         nativeCaptures: captures, genericCallables: generic });
       const constructorIssues = structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
@@ -364,7 +362,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       return Object.freeze([]);
     },
     finalizeSelected() {
-      if (structuralMethodStorage === undefined) throw new Error("Physical callable families require their completed constructor and field storage selection.");
+      if (structuralMethodStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Physical callable families require their completed constructor and field storage selection.");
       const suspended = createRustSuspendedCallablePlan(input.ast, input.nativeNodes, input.records, input.names, input.lifetimes,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
@@ -409,21 +407,21 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       return resolvedTargetStage(Object.freeze({ plan, issues: selectedIssues }));
     },
     finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">) {
-      if (structuralMethodStorage === undefined) throw new Error("Structural physical storage requires selected callable families.");
+      if (structuralMethodStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical storage requires selected callable families.");
       structuralMethodStorage.validateErrors(errors);
     },
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
       errorTypes: RustErrorTypeContext) {
       if (structuralMethodStorage === undefined || selectedPlan === undefined)
-        throw new Error("Structural retention requires completed physical field selection.");
+        failTargetAnalysisInvariant("tsonic-rust", "Structural retention requires completed physical field selection.");
       return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues, errorTypes);
     },
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;
       if (physicalLifecycle === undefined || selectedPlan === undefined || frameConstruction === undefined ||
         emissionRequests === undefined || sourceOccurrences === undefined)
-        throw new Error("Physical callable publication requires completed source-selected families and effects.");
+        failTargetAnalysisInvariant("tsonic-rust", "Physical callable publication requires completed source-selected families and effects.");
       const publication = physicalLifecycle.complete(physical);
       if (publication.kind === "rejected") {
         sealResult = rejectedTargetStage(publication.diagnostics);
@@ -461,7 +459,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       return sealResult;
     },
     publish(): void {
-      if (publishedPlan === undefined) throw new Error("Callable values publish only after their physical applications seal.");
+      if (publishedPlan === undefined) failTargetAnalysisInvariant("tsonic-rust", "Callable values publish only after their physical applications seal.");
       physical.publish();
     },
   });
