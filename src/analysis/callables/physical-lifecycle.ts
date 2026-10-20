@@ -21,8 +21,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
   from "../conversions/value-carrier-queries.js";
-import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup }
-  from "../operations/target-operation.js";
+import { type RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustGenericCallablePhysicalConstruction } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";

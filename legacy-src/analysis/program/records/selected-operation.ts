@@ -7,7 +7,7 @@ import type { RustSelectedTargetOperation, TargetTypeRef } from "../../../target
 import { rustSelectedTargetOperationEquals } from "../../../target-model/types/equality.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForSelectedOperation } from "../../foundation/requirements.js";
-import { rustSelectedOperatorOperation } from "../../operations/target-operation.js";
+import { rustSelectedOperatorOperation } from "./selected-operation-values.js";
 import { createRustRecordFamily } from "./family.js";
 
 export interface RustSelectedOperationProducer {

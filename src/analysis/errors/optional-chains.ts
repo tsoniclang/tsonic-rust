@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { forEachSourceImmediateEvaluationChild } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
+import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 
 export function analyzeRustOptionalChainBodyFallibility(input: {

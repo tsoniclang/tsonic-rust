@@ -6,7 +6,7 @@ import type { RustFinalizedSourceInput } from "../../target-model/records/finali
 import { providerSourceInputKey, providerSourceInputNode } from "../operations/provider-source-inputs.js";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
+import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
 import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";

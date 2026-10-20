@@ -6,7 +6,7 @@ import { rustSliceElementCarrier, isRustJsArrayCarrier, isRustVecCarrier, rustFi
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
-import { rustFinalizedCarrierTransitionMatches } from "../operations/target-operation.js";
+import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/native-contracts.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";

@@ -4,7 +4,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustProviderInputProducer } from "../program/records/provider-inputs.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
-import { rustFinalizedCarrierTransitionMatches } from "./target-operation.js";
+import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";

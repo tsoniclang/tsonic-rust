@@ -14,17 +14,17 @@ import {
 } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
-import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
+import { rustStructuralFieldIsFallible } from "../../policy/operations/native-contracts.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
-import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
 import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
 import { prepareRustGenericCallableInvocation, type RustSourceGenericCallableInvocation } from "./generic-call-errors.js";
-import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
+import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";

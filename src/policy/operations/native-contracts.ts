@@ -1,19 +1,18 @@
+import type { RustStructuralStorageLookup, RustProjectFieldDispatchLookup } from "../model/operation-record-inputs.js";
 import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSelectedTargetOperation } from "../../target-model/types/model.js";
-import type { Node } from "@tsonic/tsts";
+
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
-import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
+
 import type { RustStructuralShapeField } from "../../target-model/records/structural-shapes.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCarrierProvidesErrorMutation } from "../../target-model/types/carriers/error-protocols.js";
-import { rustTargetOperationText } from "../../target-model/operations/text.js";
 
 export function rustSourceCallCallableStorageCarrier(
   fact: RustTargetOperationFact | undefined,
@@ -26,13 +25,6 @@ export function rustSourceCallCallableStorageCarrier(
   if (target.form !== "structural-method") return undefined;
   const field = storage.field(target.receiverCarrier, target.storageIndex);
   return field?.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field?.methodStorageCarrier;
-}
-
-export function rustSelectedOperatorOperation(
-  subject: Node, fact: RustTargetOperationFact, resultType: TargetTypeRef,
-): RustSelectedTargetOperation {
-  return { operationId: fact.operationId, operationKind: "operator",
-    targetOperation: rustTargetOperationText(fact), resultType, provenance: { sourceExpression: subject } };
 }
 
 export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFact | undefined): boolean {
@@ -65,20 +57,6 @@ export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationF
     (fact?.kind === "source-method-property" && fact.write !== undefined) ||
     (fact?.kind === "source-accessor" && fact.write !== undefined) ||
     rustTargetOperationIsDirectLocation(fact);
-}
-
-export interface RustStructuralStorageLookup {
-  field(
-    carrier: TargetTypeRef,
-    storageIndex: number,
-  ): Pick<RustStructuralShapeField, "storage" | "presence" | "method" | "methodStorageCarrier" | "nativeMethod"> | undefined;
-}
-
-export interface RustProjectFieldDispatchLookup {
-  planFor(declaration: import("@tsonic/tsts").Node): {
-    readonly read: { readonly fallible: boolean };
-    readonly write?: { readonly fallible: boolean };
-  } | undefined;
 }
 
 export function rustTargetOperationIsFallible(
@@ -207,4 +185,8 @@ export function rustFinalizedCarrierTransitionMatches(
     return converted === undefined;
   }
   return converted !== undefined && rustTargetTypeRefEquals(converted, target);
+}
+
+export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
+  return field !== undefined && field.storage !== "stored";
 }

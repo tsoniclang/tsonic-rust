@@ -20,9 +20,6 @@ import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../project-types/source-type-registry.js";
 
-export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
-  return field !== undefined && field.storage !== "stored";
-}
 
 export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];

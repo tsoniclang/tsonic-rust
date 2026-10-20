@@ -67,7 +67,7 @@ import {
 } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
-import { rustTargetOperationSupportsAssignment } from "./target-operation.js";
+import { rustTargetOperationSupportsAssignment } from "../../policy/operations/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";

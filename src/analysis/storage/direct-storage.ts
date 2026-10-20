@@ -4,7 +4,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
-import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
+import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMember, RustLocationStorageRoot } from "../../target-model/records/direct-storage.js";
 

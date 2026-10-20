@@ -46,7 +46,7 @@ import type { RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type { RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetOperationSupportsAssignment } from "../target-operation.js";
+import { rustTargetOperationSupportsAssignment } from "../../../policy/operations/native-contracts.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";

@@ -8,7 +8,7 @@ import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
-import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
+import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustAssignmentEvaluation(program: Omit<RustTargetProgram, "reachability">,

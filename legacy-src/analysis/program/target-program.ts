@@ -104,7 +104,7 @@ import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../erro
 import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
-import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
+import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";

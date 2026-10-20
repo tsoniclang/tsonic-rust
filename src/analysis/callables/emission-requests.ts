@@ -11,7 +11,8 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../target-model
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
-import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup } from "../operations/target-operation.js";
+import { type RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import type { RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
