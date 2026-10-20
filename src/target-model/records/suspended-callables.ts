@@ -1,3 +1,4 @@
+import type { RustSourceCallableSpecializationIssue } from "./callable-issues.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustClosureCaptureFact } from "./operation-selections.js";
@@ -25,4 +26,10 @@ export interface RustSuspendedCallableEmission {
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
   readonly captures: readonly TargetTypeRef[];
+}
+
+export interface RustSuspendedCallablePlan {
+  readonly implementations: readonly RustSuspendedCallableImplementation[];
+  readonly issues: readonly RustSourceCallableSpecializationIssue[];
+  implementationFor(node: Node): RustSuspendedCallableImplementation | undefined;
 }

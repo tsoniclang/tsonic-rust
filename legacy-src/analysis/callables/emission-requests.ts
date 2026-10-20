@@ -18,7 +18,7 @@ import type { RustPhysicalEmissionSourceOccurrence } from "../../target-model/re
 import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
-import type { RustSuspendedCallablePlan } from "./suspended-values.js";
+import type { RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";

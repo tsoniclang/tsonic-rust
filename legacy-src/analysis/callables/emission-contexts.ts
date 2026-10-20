@@ -21,7 +21,7 @@ import { providerSourceInputKey } from "../operations/provider-source-inputs.js"
 import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "../../policy/types/callables/generic-bindings.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
-import type { RustSuspendedCallablePlan } from "./suspended-values.js";
+import type { RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";

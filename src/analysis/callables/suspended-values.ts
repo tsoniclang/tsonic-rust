@@ -3,14 +3,12 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustCallableProtocol, rustLocationTargetType, rustTargetGenericReferences } from "../../target-model/types/index.js";
 
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
-import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
@@ -19,11 +17,8 @@ import type { RustNativeCapturePlan } from "../../target-model/records/native-ca
 
 import type { RustSuspendedCallableImplementation } from "../../target-model/records/suspended-callables.js";
 
-export interface RustSuspendedCallablePlan {
-  readonly implementations: readonly RustSuspendedCallableImplementation[];
-  readonly issues: readonly RustSourceCallableSpecializationIssue[];
-  implementationFor(node: Node): RustSuspendedCallableImplementation | undefined;
-}
+import type { RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";
+import { sealRustSuspendedCallablePlan } from "../program/records/suspended-callables.js";
 
 export function createRustSuspendedCallablePlan(
   ast: AstReader,
@@ -104,7 +99,5 @@ export function createRustSuspendedCallablePlan(
       ...(bound === undefined ? {} : { elision: Object.freeze({ parameterIndex: bound.parameterIndex, lifetime }) }),
     }));
   }
-  return Object.freeze({ implementations: Object.freeze([...implementations.values()]),
-    issues: Object.freeze(issues), implementationFor: (node: Node) => implementations.get(node),
-  });
+  return sealRustSuspendedCallablePlan(implementations, issues);
 }

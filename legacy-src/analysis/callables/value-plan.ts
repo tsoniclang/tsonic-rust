@@ -9,7 +9,8 @@ import type { RustGenericCallableConversion } from "../../target-model/conversio
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 
 import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
-import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
+import { createRustSuspendedCallablePlan } from "./suspended-values.js";
+import { type RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
