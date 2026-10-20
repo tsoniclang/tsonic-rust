@@ -1,7 +1,7 @@
 import { type RustSourcePackageFacadeExportContract } from "./source-packages.js";
 import { type TargetCompileInput } from "@tsonic/target-api";
 import { type RustErrorDomain } from "../operations/error-boundary.js";
-import { type RustClosedErrorTransportDemand } from "./closed-errors.js";
+import { type RustClosedErrorTransportDemand } from "./closed-error-demand.js";
 
 export interface RustSourcePackageFacadeClassifications {
   readonly rootComponentId: string;

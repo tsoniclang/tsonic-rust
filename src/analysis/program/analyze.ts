@@ -1,3 +1,6 @@
+import { recordRustProgramClassEnvironments } from "../objects/class-environment-admission.js";
+import { collectRustSourcePackageBoundaries } from "../source-modules/boundaries.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "./records/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
@@ -6,7 +9,6 @@ import { createRustModuleBindingAnalysis } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
-import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
 import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
@@ -14,11 +16,7 @@ import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import {
-  KindExportAssignment,
-  KindFunctionDeclaration,
-  KindVariableStatement,
-} from "@tsonic/target-api/source";
+import { KindExportAssignment, KindFunctionDeclaration, KindVariableStatement } from "@tsonic/target-api/source";
 import { reserveTypeAliasUnion } from "../declarations/type-aliases.js";
 import { recordEnumFacts } from "../declarations/enum-facts.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
@@ -63,7 +61,8 @@ import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "..
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
-import { analyzeRustSourcePackageComponents, type RustSourcePackageComponentClassifications } from "./source-package-components.js";
+import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
+import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 
 interface RustSourceStageOutput {
@@ -100,7 +99,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       return;
     }
   }
-  const { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations } = collectSourcePackageBoundaries(
+  const { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations } = collectRustSourcePackageBoundaries(
     context,
     projectSourceFiles,
     sourcePackageIdentities.rootComponentId,
@@ -285,14 +284,14 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   for (const carrier of walk.providerErrorCarriers) {
     if (!context.typeDefinitions.registerProgramErrorOrigin(carrier, { kind: "provider" })) {
-      throw new Error("Rust provider Error origin conflicts with its canonical type definition.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust provider Error origin conflicts with its canonical type definition.");
     }
   }
   for (const definition of projectTypes.programErrorDefinitions) {
     const variant = projectTypes.programErrorVariant(definition);
     if (variant === undefined || !context.typeDefinitions.registerProgramErrorOrigin(projectTypes.openCarrier(definition),
       { kind: "project", variant, sourceError: projectTypes.sourceErrorDefinitions.includes(definition) })) {
-      throw new Error("Rust project Error origin conflicts with its canonical type definition.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust project Error origin conflicts with its canonical type definition.", definition.declaration);
     }
   }
   const receiverStorage = analyzeRustReceiverStorage({ ast, navigation: context.source.navigation,
@@ -378,7 +377,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     isNativeNode: context.isNativeNode,
     hasPromotedStorage(declaration) {
       return promotedStorageDeclarations.has(declaration) ||
-        context.records.bindingStorage.get(declaration) !== undefined ||
         context.records.bindingStorage.get(declaration) !== undefined;
     },
     hasMutableStorageUse(declaration) {
@@ -465,22 +463,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       }
     }
   }
-  recordRustClassEnvironmentDemands(walk);
-  for (const definition of projectTypes.definitions) {
-    const selected = selectRustClassEnvironment(walk, definition.declaration);
-    if (selected.kind === "unresolved") {
-      appendRustDiagnostic(walk, "RUST_CLASS_ENVIRONMENT_NOT_CLOSED", selected.reason, definition.declaration,
-        ["target.capability=rust.class-value.environment"]);
-    } else if (selected.kind === "available") {
-      if (!context.classValues.recordEnvironment(selected.environment)) {
-        appendRustDiagnostic(walk, "RUST_CLASS_ENVIRONMENT_NOT_CLOSED",
-          "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
-          ["target.capability=rust.class-value.environment"]);
-      }
-      requireRustRecord(context.requiredRecords, "closureCapture", definition.declaration, "class-environment", "analysis/program/analyze.ts");
-      context.records.closureCaptures.capture(definition.declaration, selected.environment.captures);
-    }
-  }
+  recordRustProgramClassEnvironments(walk, projectTypes);
   const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     navigation: context.source.navigation,
@@ -647,54 +630,4 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
-}
-
-function collectSourcePackageBoundaries(
-  context: RustAnalysisContext,
-  sourceFiles: readonly SourceFile[],
-  rootComponentId: string,
-): {
-  readonly externallyExtensibleDeclarations: ReadonlySet<Node>;
-  readonly closedSourceFiles: ReadonlySet<SourceFile>;
-  readonly publishedDeclarations: ReadonlySet<Node>;
-} {
-  const externallyExtensibleDeclarations = new Set<Node>();
-  const closedSourceFiles = new Set<SourceFile>();
-  const publishedDeclarations = new Set<Node>();
-  const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
-    [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
-  for (const sourcePackage of context.sourcePackages.packages) {
-    const publishesLibrary = sourcePackage.componentId !== rootComponentId ||
-      context.rootPublishesLibrary;
-    if (!context.rootPublishesLibrary) {
-      for (const fileName of sourcePackage.sourceFiles) {
-        const sourceFile = sourceFileByName.get(normalizeSourceFileName(fileName));
-        if (sourceFile !== undefined) {
-          closedSourceFiles.add(sourceFile);
-        }
-      }
-    }
-    if (!publishesLibrary) continue;
-    for (const sourceExport of sourcePackage.exports) {
-      const sourceFile = sourceFileByName.get(normalizeSourceFileName(sourceExport.sourceFile));
-      if (sourceFile === undefined) {
-        continue;
-      }
-      for (const exported of context.source.navigation.moduleExports(sourceFile)) {
-        publishedDeclarations.add(exported.declaration);
-        if (context.ast.is.IsClassDeclaration(exported.declaration)) {
-          externallyExtensibleDeclarations.add(exported.declaration);
-          for (const member of context.ast.members(exported.declaration)) {
-            if (member !== undefined && context.ast.is.IsMethodDeclaration(member) &&
-              !context.ast.hasModifierKind(member, "private")) publishedDeclarations.add(member);
-          }
-        }
-      }
-    }
-  }
-  return Object.freeze({ externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations });
-}
-
-function normalizeSourceFileName(value: string): string {
-  return value.split("\\").join("/");
 }
