@@ -26,6 +26,7 @@ import { createRustFlowReadEmissionProducer } from "./flow-read-emission.js";
 import { createRustProjectUnionMappingProducer } from "./project-union-mappings.js";
 import { createRustReceiverCaptureEmissionProducer } from "./receiver-captures.js";
 import { createRustSourceCallableEmissionProducer } from "./source-callable-emission.js";
+import { createRustReferenceOperationProducer } from "./reference-operations.js";
 import { createRustErrorFieldProducer } from "./error-field-borrows.js";
 import { createRustStringComparisonViewProducer } from "./string-comparison-views.js";
 import { createRustGenericCallableFlowProducer } from "./generic-callable-flow.js";
@@ -269,6 +270,7 @@ export function createRustProgramRecordBuilder(
   const projectUnionMappingPlans = createRustProjectUnionMappingProducer(assertOpen);
   const receiverCaptureEmissionPlans = createRustReceiverCaptureEmissionProducer(assertOpen);
   const sourceCallableEmissionPlans = createRustSourceCallableEmissionProducer(assertOpen);
+  const referenceOperationPlans = createRustReferenceOperationProducer(assertOpen);
   const errorFieldPlans = createRustErrorFieldProducer(assertOpen);
   const stringComparisonPlans = createRustStringComparisonViewProducer(assertOpen);
   const genericFlowApplications = createRustGenericCallableFlowProducer(assertOpen);
@@ -350,6 +352,7 @@ export function createRustProgramRecordBuilder(
     ...projectUnionMappingPlans.records,
     ...receiverCaptureEmissionPlans.records,
     ...sourceCallableEmissionPlans.records,
+    ...referenceOperationPlans.records,
     ...errorFieldPlans.records,
     ...stringComparisonPlans.records,
     ...genericFlowApplications.records,
@@ -496,6 +499,7 @@ export function createRustProgramRecordBuilder(
     projectUnionMappingPlans,
     receiverCaptureEmissionPlans,
     sourceCallableEmissionPlans,
+    referenceOperationPlans,
     errorFieldPlans,
     stringComparisonPlans,
     genericFlowApplications,
