@@ -16,7 +16,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { selectRustOptionalCallResult } from "../operations/provider/calls/optional-results.js";
 
-import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";

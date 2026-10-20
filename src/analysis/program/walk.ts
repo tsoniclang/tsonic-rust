@@ -18,7 +18,7 @@ import type { RustModuleBindingAnalysis } from "./module-bindings.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
 import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
-import type { RustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
+import type { RustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/index.js";

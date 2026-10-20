@@ -1,7 +1,7 @@
 import type { RustProjectMethodPropertyPlan } from "../../project-types/method-properties.js";
 import type { RustProjectMethodDispatchPlanRegistry } from "../../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../../project-types/index.js";
-import type { RustSourceCallableAbiResolver } from "../../../policy/ownership/source-callable-abi.js";
+import type { RustSourceCallableAbiResolver } from "../../callables/source-callable-abi.js";
 import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution/index.js";
 import type { RustReceiverFieldAliasQueries } from "../../project-types/receiver-field-aliases.js";
 

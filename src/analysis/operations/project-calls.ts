@@ -15,7 +15,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
-import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-callable-abi.js";
+import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-parameter-contracts.js";
 import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
 import { bindRustSelectedCallTypeArguments } from "../../policy/types/resolution/generic-arguments.js";
 

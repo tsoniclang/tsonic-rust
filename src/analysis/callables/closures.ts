@@ -11,7 +11,7 @@ import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
-import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustResolutionContext } from "../program/walk.js";
 

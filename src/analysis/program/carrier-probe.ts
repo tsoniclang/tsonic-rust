@@ -1,6 +1,6 @@
 import { createRustProgramRecordBuilder } from "./records/create.js";
 import type { RustFactWalk } from "./walk.js";
-import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
+import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import { finalizeRustCallableParameterAbis } from "../callables/signature-query.js";
 
 export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {

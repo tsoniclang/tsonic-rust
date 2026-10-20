@@ -11,7 +11,7 @@ import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 
 import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
-import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
+import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";

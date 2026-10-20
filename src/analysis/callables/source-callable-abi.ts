@@ -1,56 +1,27 @@
+import { rustParameterModeForCarriers, selectRustSourceParameterAbi } from "../../policy/ownership/source-parameter-contracts.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
-import { selectRustParameterEntryConversion } from "./parameter-entry-conversion.js";
+import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
 import type { Node } from "@tsonic/tsts";
-import {
-  inferRustTargetGenericBindings,
-  rustTargetGenericReferences,
-  substituteRustTargetGenerics,
-  isRustVecCarrier,
-  isRustStringCarrier,
-  isRustCopyCarrier,
-  rustOptionElementCarrier,
-  rustSourceOptionalTargetType,
-  rustSliceElementCarrier,
-  rustSliceRefTargetType,
-  isRustJsValueCarrier,
-  rustProgramErrorTargetType,
-  rustTsValueTargetType,
-  rustEmptyObjectTargetType,
-  rustObjectIdentityTargetType,
-  rustCallableInputProtocol,
-} from "../../target-model/types/index.js";
-import {
-  rustTargetTypeRefEquals,
-  rustTargetTypeRefEqualsWithinLifetimeBinders,
-} from "../../target-model/types/equality.js";
-import type { RustArgumentMode } from "../../target-model/operations/model.js";
+import { isRustVecCarrier, isRustStringCarrier, isRustCopyCarrier, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals, rustTargetTypeRefEqualsWithinLifetimeBinders } from "../../target-model/types/equality.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
+
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
-import {
-  resolveRustTargetTypeRef,
-  rustParameterLaneTargetType,
-} from "../types/resolution/index.js";
-import type {
-  RustTargetTypeResolutionContext,
-  RustTargetTypeResolutionOptions,
-} from "../types/resolution/index.js";
-import {
-  Node_Initializer,
-  Node_Expression,
-  Node_Type,
-} from "@tsonic/target-api/source";
-import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../identities/selected-source.js";
-import { selectRustProviderOperation } from "../operations/provider-selection.js";
-import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../operations/source-profiles/js/index.js";
-import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
-import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../operations/source-profiles/error-source-profile.js";
-import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
-import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
+import { resolveRustTargetTypeRef, rustParameterLaneTargetType } from "../../policy/types/resolution/index.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
+import { Node_Initializer, Node_Expression, Node_Type } from "@tsonic/target-api/source";
+import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../../policy/identities/selected-source.js";
+import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
+import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/index.js";
+import { rustProviderArgumentBorrowsString } from "../../policy/ownership/provider-argument-borrow.js";
+import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../policy/operations/source-profiles/error-source-profile.js";
+import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
+import { rustSourceInputLifetime } from "../../policy/ownership/source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
-import { selectRustSourceValueConversion } from "../conversions/selection.js";
-import { closeRustRetainedParameter } from "./retained-environments.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
+import { closeRustRetainedParameter } from "./retained-values.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -64,50 +35,6 @@ export interface RustSourceCallableAbiResolver {
     options: RustTargetTypeResolutionOptions,
     contextualValueCarrier?: TargetTypeRef,
   ): RustSourceParameterAbiFact | undefined;
-}
-
-
-export function rustSourceParameterContractCarrier(
-  abi: RustSourceParameterAbiFact,
-): TargetTypeRef {
-  return abi.parameterCarrier.kind === "reference"
-    ? abi.parameterCarrier.referent
-    : abi.parameterCarrier;
-}
-
-export function instantiateRustSourceParameterValueCarrier(
-  abi: RustSourceParameterAbiFact,
-  selectedParameterCarrier: TargetTypeRef,
-  selectedBindings: RustTargetGenericBindings,
-  normalize: (carrier: TargetTypeRef) => TargetTypeRef,
-): TargetTypeRef | undefined {
-  const references = rustTargetGenericReferences(abi.parameterCarrier);
-  const substituteSelected = (carrier: TargetTypeRef): TargetTypeRef =>
-    substituteRustTargetGenerics(
-      carrier,
-      selectedBindings.types,
-      selectedBindings.lifetimes,
-      selectedBindings.consts,
-      normalize,
-    );
-  const bindings = inferRustTargetGenericBindings(
-    substituteSelected(abi.parameterCarrier),
-    selectedParameterCarrier,
-    {
-      typeIdentities: new Set(references.typeIdentities.filter((name) => !selectedBindings.types.has(name))),
-      lifetimeIdentities: new Set(references.lifetimeIdentities.filter((identity) => !selectedBindings.lifetimes.has(identity))),
-      constIdentities: new Set(references.constIdentities.filter((identity) => !selectedBindings.consts.has(identity))),
-    },
-  );
-  return bindings === undefined
-    ? undefined
-    : substituteRustTargetGenerics(
-        substituteSelected(abi.valueCarrier),
-        bindings.types,
-        bindings.lifetimes,
-        bindings.consts,
-        normalize,
-      );
 }
 
 export function createRustSourceCallableAbiResolver(input: {
@@ -165,48 +92,10 @@ export function createRustSourceCallableAbiResolver(input: {
           ? base
           : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;
-      const requiredParameterCarrier = parameterLaneCarrier !== undefined &&
-          (isRustVecCarrier(base) || rustTargetTypeRefEquals(parameterLaneCarrier, base) && isRustStringCarrier(base)) &&
-          !requiresOwnedValue &&
-          parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression)
-        ? isRustVecCarrier(base) ? rustSliceRefTargetType(base.element) : {
-            kind: "reference" as const,
-            referent: base,
-            mutable: false,
-          }
-        : parameterLaneCarrier;
-      const requiredMode = requiredParameterCarrier === undefined
-        ? undefined
-        : rustParameterModeForCarriers(base, requiredParameterCarrier);
-      const abi = form === "optional"
-        ? {
-            form,
-            valueCarrier: rustSourceOptionalTargetType(base),
-            parameterCarrier: rustSourceOptionalTargetType(base),
-            mode: "value" as const,
-          }
-        : form === "default"
-          ? {
-              form,
-              valueCarrier: base,
-              parameterCarrier: rustSourceOptionalTargetType(base),
-              mode: "value" as const,
-            }
-          : form === "rest"
-            ? {
-                form,
-                valueCarrier: base,
-                parameterCarrier: base,
-                mode: "value" as const,
-              }
-          : requiredParameterCarrier !== undefined && requiredMode !== undefined
-              ? {
-                  form,
-                  valueCarrier: base,
-                  parameterCarrier: requiredParameterCarrier,
-                  mode: requiredMode,
-                }
-              : undefined;
+      const sharedBorrow = parameterLaneCarrier !== undefined &&
+        (isRustVecCarrier(base) || rustTargetTypeRefEquals(parameterLaneCarrier, base) && isRustStringCarrier(base)) &&
+        !requiresOwnedValue && parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
+      const abi = selectRustSourceParameterAbi(form, base, parameterLaneCarrier, sharedBorrow);
       if (abi === undefined) {
         cache.set(parameter, null);
         return undefined;
@@ -327,26 +216,6 @@ function finalizeRustSourceParameterStorage(
     : rustTargetTypeRefEquals(abi.valueCarrier, abi.parameterCarrier) ? valueCarrier
       : closeRustRetainedParameter(parameter, abi.parameterCarrier, context);
   return valueCarrier === undefined || parameterCarrier === undefined ? undefined : { ...abi, valueCarrier, parameterCarrier };
-}
-
-function rustParameterModeForCarriers(
-  valueCarrier: TargetTypeRef,
-  parameterCarrier: TargetTypeRef,
-  carriersEqual: (
-    left: TargetTypeRef | undefined,
-    right: TargetTypeRef | undefined,
-  ) => boolean = rustTargetTypeRefEquals,
-): RustArgumentMode | undefined {
-  if (carriersEqual(valueCarrier, parameterCarrier)) {
-    return "value";
-  }
-  if (parameterCarrier.kind !== "reference" ||
-    !carriersEqual(parameterCarrier.referent, valueCarrier) &&
-    !(isRustVecCarrier(valueCarrier) &&
-      carriersEqual(rustSliceElementCarrier(parameterCarrier), valueCarrier.element))) {
-    return undefined;
-  }
-  return parameterCarrier.mutable ? "mut-ref" : "ref";
 }
 
 function parameterUsesFlowState(
