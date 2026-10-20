@@ -2,33 +2,9 @@ import type { RustOperationAnalysisContext } from "./operation-context.js";
 import { requireRustRecord } from "./records/required-records.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustSourceStorageContext } from "../../policy/types/resolution/source-storage-projection.js";
-import {
-  BinaryExpression_Left,
-  BinaryExpression_Right,
-  Node_Operand,
-  KindBinaryExpression,
-  KindCallExpression,
-  KindDeleteExpression,
-  KindElementAccessExpression,
-  KindIdentifier,
-  KindNewExpression,
-  KindPostfixUnaryExpression,
-  KindPrefixUnaryExpression,
-  KindPropertyAccessExpression,
-  Node_Expression,
-  Node_Type,
-  ForInOrOfStatement_Initializer,
-  VariableDeclarationList_Declarations,
-} from "@tsonic/target-api/source";
-import {
-  selectRustCheckedCall,
-  selectRustCheckedConversion,
-  selectRustCheckedDelete,
-  selectRustCheckedElementAccess,
-  selectRustCheckedOperator,
-  selectRustCheckedPropertyAccess,
-  selectRustCheckedValue,
-} from "../operations/provider/index.js";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindNewExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, Node_Expression, Node_Type, ForInOrOfStatement_Initializer, VariableDeclarationList_Declarations } from "@tsonic/target-api/source";
+import { selectRustCheckedCall, selectRustCheckedConversion, selectRustCheckedElementAccess, selectRustCheckedOperator, selectRustCheckedPropertyAccess, selectRustCheckedValue } from "../operations/provider/index.js";
+import { selectRustCheckedDelete } from "../operations/member-access.js";
 import { isSharedSourceMarkerOperation } from "../operations/source-markers.js";
 import { resolveRegExpCreation } from "../expressions/regexp.js";
 
@@ -39,7 +15,8 @@ import { checkedPropertySelectionInput } from "../operations/member-access.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingAnalysis } from "./module-bindings.js";
 
-import type { RustOperationsProviderOptions, RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
+import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
+import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
 import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
 import type { RustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
