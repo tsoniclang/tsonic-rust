@@ -5,6 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustArrayValueConversion(
   contract: Extract<RustValueConversionContract, { readonly lowering: "js-value-from-array" }>,
@@ -14,7 +15,7 @@ export function planRustArrayValueConversion(
   convert: (contract: RustValueConversionContract, value: RustExpr) => RustExpr | undefined,
 ): RustExpr | undefined {
   const element = rustTypeFromCarrierInContext(contract.element, context);
-  if (element === undefined) return undefined;
+  if (element === undefined) failRustPlannerInvariant("An admitted native array projection requires its renderable element type.", node ?? context.sourceFile);
   registerAliasFromPath(context, "js_abi::js_value_from_array");
   registerAliasFromPath(context, "js_abi::JsArrayElement");
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast,
