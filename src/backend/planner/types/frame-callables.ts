@@ -36,7 +36,8 @@ export function rustFrameCallableTypes(carrier: TargetTypeRef, context: RustType
     const environmentType = selected.owner.environment ? rustClassEnvironmentHandleType(selected.owner.instance, context) : undefined;
     if (state === undefined || selected.owner.environment && environmentType === undefined)
       failRustPlannerInvariant("An admitted native object frame requires its exact state and environment handle syntax.");
-    frameType = rustProjectObjectSharedStateType(state, selected.owner.representation, environmentType);
+    frameType = rustProjectObjectSharedStateType(state, selected.owner.representation, environmentType)
+      ?? failRustPlannerInvariant("An admitted object frame requires its native shared-state handle.");
   }
   const entryType: RustType = { kind: "named", path: `${prefix}::${entry.targetName}`, genericArguments: parameters };
   return { definition, entry, frameType, entryType, rootType: { kind: "named", path: entry.hasIndependent ? "rt::FrameCallableFamily" : "rt::FrameCallable",
