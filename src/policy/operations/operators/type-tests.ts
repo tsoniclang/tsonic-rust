@@ -5,9 +5,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
-import { isRustAbsenceCarrier, isRustJsArrayCarrier, isRustVecCarrier, isRustJsValueCarrier, isRustProgramErrorCarrier,
-  rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustTsValueTargetType,
-} from "../../../target-model/types/index.js";
+import { isRustAbsenceCarrier, isRustJsArrayCarrier, isRustVecCarrier, isRustJsValueCarrier, isRustProgramErrorCarrier, rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustTsValueTargetType } from "../../../target-model/types/index.js";
 import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
 import { isRustSourceErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
