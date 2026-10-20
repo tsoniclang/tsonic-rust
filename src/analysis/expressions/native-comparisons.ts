@@ -3,7 +3,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
-import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier, isRustFloatCarrier } from "../../target-model/types/index.js";
+import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
@@ -40,7 +40,8 @@ export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "r
         : selected.operator === (subjectFirst ? "<" : ">") ? "lower" : selected.operator === (subjectFirst ? ">" : "<") ? "upper" : undefined;
       const bound = subjectFirst ? right : left;
       const carrier = program.records.valueRead.get(bound)?.value;
-      return relationship === undefined || !isRustIntegerCarrier(carrier) && !isRustFloatCarrier(carrier) ? undefined
+      const floating = carrier?.kind === "source-primitive" && (carrier.name === "float32" || carrier.name === "float64");
+      return relationship === undefined || !isRustIntegerCarrier(carrier) && !floating ? undefined
         : { subject, declaration: binding.sourceDeclaration, bound, relationship, integer: isRustIntegerCarrier(carrier) };
     };
     const first = term(left);
