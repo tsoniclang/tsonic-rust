@@ -6,7 +6,7 @@ import { providerOperationFact } from "../../../../policy/operations/members/pro
 import { selectedSourceValueCarrier } from "../operators.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { checkedCallIsConstruction, selectedCallReceiverValueCarrier, selectedProviderCallGenericArguments } from "./instantiation.js";
-import { mergeDirectGenericArgument, mergeGenericBindings, providerGenericParameterSet } from "./template-instantiation.js";
+import { mergeDirectGenericArgument, mergeGenericBindings, providerGenericParameterSet } from "../../../../policy/types/callables/provider-templates.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../../../program/walk.js";
 import type { RustTargetConstArgument, TargetTypeRef } from "../../../../target-model/types/model.js";

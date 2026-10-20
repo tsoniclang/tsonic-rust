@@ -4,7 +4,7 @@ import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustLocationStorageProducer } from "../program/records/location-storage.js";
 import type { RustLocationProjection } from "../../target-model/records/location-storage.js";
-import { rustIndexedLocationContract } from "../operations/indexed-location.js";
+import { rustIndexedLocationContract } from "../../policy/operations/members/abi/indexed-location.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 
 export function analyzeRustLocationStorage(program: Omit<RustTargetProgram, "reachability">,

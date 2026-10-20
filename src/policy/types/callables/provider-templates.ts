@@ -1,39 +1,17 @@
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
-import {
-  inferRustTargetGenericBindings,
-  isRustAbsenceCarrier,
-  rustOptionElementCarrier,
-  rustStrTargetId,
-  rustStringTargetType,
-  rustTargetGenericReferences,
-  substituteRustTargetGenerics,
-} from "../../../../target-model/types/index.js";
-import { finalizeRustProviderOperationAbi } from "../../../../policy/operations/members/abi/finalize.js";
-import { rustIndexedLocationContract } from "../../indexed-location.js";
-import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/constraints/provider-generic-requirements.js";
-import {
-  rustTargetGenericArgumentEquals,
-  rustTargetTypeRefEquals,
-} from "../../../../target-model/types/equality.js";
-import { substituteRustValueConversion } from "../../../../target-model/conversions/substitution.js";
-import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
-import type { RustProviderFactOperationKind, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetOperationKind } from "../../../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { RustProviderGenericParameter } from "../../../../target-model/operations/model.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../../../../target-model/types/model.js";
-import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
-import type {
-  RustTargetGenericBindings,
-  RustTargetGenericParameterSet,
-} from "../../../../target-model/types/index.js";
-import {
-  rustBorrowedStringTypeParameterNames,
-  rustProviderSourceArgumentMode,
-} from "../../../../policy/types/callables/provider-argument-shape.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { inferRustTargetGenericBindings, isRustAbsenceCarrier, rustOptionElementCarrier, rustStrTargetId, rustStringTargetType, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
+
+import { rustProviderOperationGenericRequirementsAreSelectable } from "../../constraints/provider-generic-requirements.js";
+import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { substituteRustValueConversion } from "../../../target-model/conversions/substitution.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import type { RustProviderFactOperationKind, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
+
+import type { RustProviderGenericParameter } from "../../../target-model/operations/model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import type { RustTargetGenericBindings, RustTargetGenericParameterSet } from "../../../target-model/types/index.js";
+import { rustBorrowedStringTypeParameterNames, rustProviderSourceArgumentMode } from "./provider-argument-shape.js";
 
 export interface InstantiatedProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
@@ -600,69 +578,4 @@ export function substituteProviderOperationForm(
     case "binary-operator":
       return form;
   }
-}
-
-export function finalizeProviderOperationFact(
-  template: RustProviderOperationTemplate,
-  sourceArgumentCarriers: readonly TargetTypeRef[],
-  sourceReceiver: import("../../../../target-model/records/finalized-operation.js").RustProviderSourceReceiver | undefined,
-  definitions: RustTypeDefinitions,
-  spreadSourceArgumentIndexes?: readonly number[],
-  dispatchContextInputFor?: (input: unknown) =>
-    import("../../../../target-model/operations/dispatch-contexts.js").RustResolvedDispatchContextInput | undefined,
-): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
-  const dispatchInputs = (template.dispatchInputs ?? []).map(input => dispatchContextInputFor?.(input));
-  if (dispatchInputs.some(input => input === undefined)) return undefined;
-  const abi = finalizeRustProviderOperationAbi({
-    operationKind: template.operationKind,
-    form: template.target,
-    ...(sourceReceiver === undefined ? {} : { sourceReceiver: sourceReceiver.kind === "runtime"
-      ? { ...sourceReceiver, ...(template.receiverCarrier === undefined ? {} : { declaredCarrier: template.receiverCarrier }) }
-      : sourceReceiver }),
-    sourceArgumentCarriers,
-    ...(spreadSourceArgumentIndexes === undefined ? {} : { spreadSourceArgumentIndexes }),
-    declaredSourceArgumentCarriers: template.parameterCarriers,
-    ...(template.evaluationOnlySourceArgumentIndexes === undefined
-      ? {}
-      : { evaluationOnlySourceArgumentIndexes: template.evaluationOnlySourceArgumentIndexes }),
-    resultCarrier: template.resultCarrier,
-    dispatchInputs: dispatchInputs.filter(input => input !== undefined),
-    ...(Object.prototype.hasOwnProperty.call(template, "nativeErrorCarriers") ? { nativeErrorCarriers: template.nativeErrorCarriers } : {}),
-    ...(template.targetGenericArguments === undefined
-      ? {}
-      : { targetGenericArguments: template.targetGenericArguments }),
-    ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
-    isAsync: template.isAsync,
-    isFallible: template.isFallible,
-    ...(template.returnedFuture === undefined
-      ? {}
-      : { returnedFuture: template.returnedFuture }),
-    ...(template.evaluation === undefined ? {} : { evaluation: template.evaluation }),
-    ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
-    ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
-    isUnsafe: template.isUnsafe,
-  }, definitions);
-  if (abi === undefined) {
-    return undefined;
-  }
-  const fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> = {
-    kind: "provider-operation",
-    operationId: template.operationId,
-    ...(template.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: template.indexedLocationMethod }),
-    ...(template.borrowedIndexOperation === undefined ? {} : {
-      borrowedIndexOperation: Object.freeze({ ...template.borrowedIndexOperation }),
-    }),
-    ...(template.carrierRequirements === undefined ? {} : { carrierRequirements: template.carrierRequirements }),
-    resultCarrier: abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier,
-    ...(template.sourceResultCarrier === undefined
-      ? {}
-      : { sourceResultCarrier: template.sourceResultCarrier }),
-    ...(template.sourceAbsenceCarrier === undefined
-      ? {}
-      : { sourceAbsenceCarrier: template.sourceAbsenceCarrier }),
-    abi,
-  };
-  return fact.indexedLocationMethod !== undefined && rustIndexedLocationContract(fact, definitions) === undefined
-    ? undefined
-    : fact;
 }
