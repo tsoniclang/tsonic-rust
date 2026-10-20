@@ -1,35 +1,13 @@
-import type {
-  TargetCompilationSession,
-  TargetCompilationSessionContext,
-  TargetCompileInput,
-  TargetSourceCompilerContributions,
-  TargetSourceProfileContributions,
-} from "@tsonic/target-api";
-import type {
-  TargetCompileResult,
-  TargetRuntimeContributions,
-} from "@tsonic/target-api/artifacts";
+import { rustProviderContractValidation } from "./provider-contracts.js";
+import type { TargetCompilationSession, TargetCompilationSessionContext, TargetCompileInput, TargetSourceCompilerContributions, TargetSourceProfileContributions } from "@tsonic/target-api";
+import type { TargetCompileResult, TargetRuntimeContributions } from "@tsonic/target-api/artifacts";
 import { compileRustTarget } from "../backend/compile.js";
-import {
-  rustNativeSourceProfileContributions,
-  rustJsSourceProfileOwnerId,
-} from "../source/profiles/declarations.js";
-import {
-  createRustSourceSemanticsExtension,
-} from "../source/extension/source-extension.js";
-import {
-  rustSourceSemanticsModules,
-} from "../source/profiles/source-modules.js";
-import {
-  createRustCompilerProviderSession,
-} from "../providers/native/session.js";
-import {
-  composeRustProviderSemantics,
-  mergeRustProviderSemantics,
-} from "../providers/packages/semantics.js";
-import {
-  createRustTargetConfiguration,
-} from "../options/rust-target-options.js";
+import { rustNativeSourceProfileContributions, rustJsSourceProfileOwnerId } from "../source/profiles/declarations.js";
+import { createRustSourceSemanticsExtension } from "../source/extension/source-extension.js";
+import { rustSourceSemanticsModules } from "../source/profiles/source-modules.js";
+import { createRustCompilerProviderSession } from "../providers/native/session.js";
+import { composeRustProviderSemantics, mergeRustProviderSemantics } from "../providers/packages/semantics.js";
+import { createRustTargetConfiguration } from "../options/rust-target-options.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
 import { materializeRustRuntimeReferences } from "../providers/runtime/materialization.js";
 import type { RustEdition } from "../target-model/project/model.js";
@@ -52,9 +30,10 @@ export function createRustCompilationSession(
     context.projectDirectory,
     context.paths.targetOutputRoot,
   );
-  const capturedProviderSemantics = composeRustProviderSemantics(context.capabilities);
+  const capturedProviderSemantics = composeRustProviderSemantics(context.capabilities, rustProviderContractValidation);
   const compilerProviderSession = createRustCompilerProviderSession({
     configuration,
+    contracts: rustProviderContractValidation,
     cacheRoot: context.paths.cacheRoot,
   });
   const jsEnabled = context.selectedSurfaceIds.includes(rustJsSourceProfileOwnerId);
