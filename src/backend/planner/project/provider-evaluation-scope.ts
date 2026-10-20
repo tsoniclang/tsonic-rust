@@ -22,7 +22,7 @@ import {
 import {
   enterRustProjectObjectMutableState,
 } from "../objects/project-objects.js";
-import { collectMutableInputs, type MutableProviderInput } from "./provider-mutable-inputs.js";
+import { collectMutableInputs } from "./provider-mutable-inputs.js";
 
 export interface RustFinalizedInputPlanOverrides {
   readonly sourceValues: ReadonlyMap<Node, RustExpr>;
