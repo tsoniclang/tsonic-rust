@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustCallableOwnershipComponentPublication, RustCallableOwnershipComponentQueries } from "../../../target-model/records/callable-ownership.js";
+import type { RustCallableOwnershipComponent, RustCallableOwnershipComponentPublication, RustCallableOwnershipComponentQueries } from "../../../target-model/records/callable-ownership.js";
 
 export function sealRustCallableOwnershipComponents(input: RustCallableOwnershipComponentPublication): RustCallableOwnershipComponentQueries {
   const admitted = input.failure === undefined;
-  const callableComponents = admitted ? input.callableComponents : new Map();
-  const slotComponents = admitted ? input.slotComponents : new Map();
+  const callableComponents = admitted ? input.callableComponents : new Map<Node, RustCallableOwnershipComponent>();
+  const slotComponents = admitted ? input.slotComponents : new Map<Node, RustCallableOwnershipComponent>();
   const cyclicCallables = admitted ? input.cyclicCallables : new Set<Node>();
   const cyclicSlots = admitted ? input.cyclicSlots : new Set<Node>();
   const independentCallables = admitted ? input.independentCallables : new Set<Node>();

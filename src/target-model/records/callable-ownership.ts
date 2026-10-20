@@ -54,7 +54,7 @@ export interface RustCallableOwnershipComponentQueries {
   isCyclicSlot(declaration: Node): boolean;
   isIndependentCallable(declaration: Node): boolean;
   instanceReceiverOwner(receiver: Node): Node | undefined;
-}\n
+}
 export interface RustCallableOwnershipComponentPublication {
   readonly components: readonly RustCallableOwnershipComponent[];
   readonly issues: readonly RustCallableOwnershipIssue[];
