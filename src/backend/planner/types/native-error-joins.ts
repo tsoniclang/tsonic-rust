@@ -60,7 +60,9 @@ export function planRustNativeErrorJoin(input: {
     propagatedValue,
     propagateReturn(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined {
       const value = propagatedValue(source, result);
-      return value === undefined ? undefined : { kind: "try", expr: value, nativeReturn: true,
+      if (value === undefined) return undefined;
+      if (errorType === undefined) failRustPlannerInvariant("An admitted error propagation requires its native joined error type.");
+      return { kind: "try", expr: value, nativeReturn: true,
         operandErrorType: errorType, resultErrorType: errorType };
     },
     mapError(error: RustExpr, bindingName: string,
@@ -88,6 +90,7 @@ export function planRustNativeErrorJoin(input: {
     propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined {
       const mapped = propagatedValue(source, result);
       if (mapped === undefined) return undefined;
+      if (errorType === undefined) failRustPlannerInvariant("An admitted error propagation requires its native joined error type.");
       return { kind: "try", expr: mapped, operandErrorType: errorType, resultErrorType: errorType };
     },
   });
