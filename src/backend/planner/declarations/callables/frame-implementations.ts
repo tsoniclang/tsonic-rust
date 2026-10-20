@@ -7,6 +7,7 @@ import { rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-cont
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
+import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 import { rustFrameBindingContext, rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { planNativeModuleFunction } from "./functions.js";
