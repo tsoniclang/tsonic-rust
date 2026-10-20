@@ -1,6 +1,6 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
-import type { RustNumericRepresentations } from "../numeric/representations.js";
+import type { RustNumericRepresentations } from "../../target-model/records/numeric.js";
 import type { TargetCompileInput } from "@tsonic/target-api";
 import type {
   TargetPlanningSourceNavigation,

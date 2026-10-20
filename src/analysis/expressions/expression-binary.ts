@@ -149,7 +149,7 @@ export function analyzeRustBinaryEmission(program: Omit<RustTargetProgram, "reac
     };
     producer.publish(node, { fact, left, right, leftUnit: isRustUnitCarrier(leftCarrier), rightUnit: isRustUnitCarrier(rightCarrier),
       leftNever: isRustNeverCarrier(leftCarrier), leftShared: comparison && fact.leftConversion === undefined, rightShared: comparison && fact.rightConversion === undefined,
-      int32Remainder: program.numericRepresentations.usesInt32Remainder(node),
+      int32Remainder: program.numericRepresentations.int32Remainder.get(node),
       compound: (fact.kind === "operator-token" || fact.kind === "operator-call") && fact.operator !== "=" && isRustAssignmentOperator(fact.operator),
       operator: fact.kind === "operator-token" && isRustBinaryOperator(fact.operator) ? fact.operator : undefined,
       leftLiteral: comparison && fact.leftConversion === undefined && isRustStringCarrier(leftCarrier) ? literal(left) : undefined,
