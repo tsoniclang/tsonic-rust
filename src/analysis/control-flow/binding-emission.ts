@@ -46,7 +46,7 @@ export function analyzeRustBindingProjectionEmission(input: {
     const traits = new Map([...carriers].map(carrier => [carrier, Object.freeze({
       copy: isRustCopyCarrier(carrier, selected => program.callableValues.generic.definitionFor(selected)?.copy === true),
       clone: rustCarrierSupportsClone(carrier, program.typeDefinitions) || declaration !== undefined &&
-        program.declarationGenericRequirements.supportsClone(declaration, carrier, promiseBody),
+        program.declarationGenericRequirements.supportsClone(declaration, carrier, promiseBody === undefined ? undefined : true),
     })]));
     const selected = selectRustBindingProjectionEmission(Object.freeze({ fact, traits }));
     if (selected.kind === "invalid") failTargetAnalysisInvariant("tsonic-rust", selected.reason, node);
