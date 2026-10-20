@@ -11,7 +11,7 @@ import { rustConstructionFallthrough as fallthrough, rustConstructionFlowStates,
   type RustConstructionState as ConstructionState, type RustConstructionFlow as ConstructionFlow,
   type RustConstructionTransfer } from "./construction-flow.js";
 import type { RustConstructionIssue } from "./construction-plan.js";
-import type { RustProjectTypeDefinition } from "./type-policy.js";
+import type { RustProjectTypeDefinition } from "./index.js";
 
 import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/construction.js";
 
@@ -91,9 +91,9 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   };
   const receiverIsThis = (node: Node): boolean => {
     let receiver = Node_Expression(input.ast, node);
-    for (let depth = 0; receiver !== undefined && depth < 256 &&
+    while (receiver !== undefined &&
       (input.ast.is.IsParenthesizedExpression(receiver) || input.ast.is.IsAsExpression(receiver) ||
-        input.ast.is.IsSatisfiesExpression(receiver) || input.ast.is.IsNonNullExpression(receiver) || input.ast.is.IsTypeAssertion(receiver)); depth += 1)
+        input.ast.is.IsSatisfiesExpression(receiver) || input.ast.is.IsNonNullExpression(receiver) || input.ast.is.IsTypeAssertion(receiver)))
       receiver = Node_Expression(input.ast, receiver);
     return receiver !== undefined && (input.ast.kindName(receiver) === "KindThisExpression" ||
       input.ast.kindName(receiver) === "KindThisKeyword");
