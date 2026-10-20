@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -6,10 +7,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import {
-  rustTargetTypeParameterIdentities,
-  substituteRustTargetTypeParameters,
-} from "../../target-model/types/index.js";
+import { rustTargetTypeParameterIdentities, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
@@ -96,14 +94,14 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
   let current: RustSourceCallableSpecializationPlan | undefined;
   const requireCurrent = (): RustSourceCallableSpecializationPlan => {
     if (current === undefined) {
-      throw new Error("Rust source-callable specialization plan was read before source analysis initialized it.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust source-callable specialization plan was read before source analysis initialized it.");
     }
     return current;
   };
   const registry: RustSourceCallableSpecializationPlanRegistry = {
     recordSourceCall(input) {
       if (current !== undefined) {
-        throw new Error("Rust source-callable specialization requests cannot be recorded after initialization.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust source-callable specialization requests cannot be recorded after initialization.");
       }
       const names = callableTypeParameterIdentities(
         input.callee,
@@ -123,7 +121,7 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
     },
     recordProjectMethodCall(input) {
       if (current !== undefined) {
-        throw new Error("Rust project-method specialization requests cannot be recorded after initialization.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust project-method specialization requests cannot be recorded after initialization.");
       }
       const owner = input.projectTypes.definitionContainingDeclaration(input.declaration);
       const names = callableTypeParameterIdentities(
@@ -144,7 +142,7 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
     },
     initialize(input) {
       if (current !== undefined) {
-        throw new Error("Rust source-callable specialization plan can be initialized only once.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust source-callable specialization plan can be initialized only once.");
       }
       current = createRustSourceCallableSpecializationPlan(
         sourceCalls,
@@ -571,6 +569,5 @@ function rejected(reason: string): RustSourceCallableSpecializationRegistration 
 }
 
 const accepted: RustSourceCallableSpecializationRegistration = Object.freeze({ kind: "accepted" });
-
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
