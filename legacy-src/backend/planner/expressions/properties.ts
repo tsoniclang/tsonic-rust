@@ -483,21 +483,6 @@ function planRustSourceUnionFieldRead(
   );
 }
 
-export function sourceFieldSelectedOperationMatches(
-  node: Node,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
-  context: RustPlanContext,
-): boolean {
-  const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
-  if (resultCarrier === undefined) return false;
-  return selectedOperationMatches(
-    context.input.program.records.selectedOperation.get(node),
-    fact.operationId,
-    "property",
-    resultCarrier,
-  );
-}
-
 export function sourceMethodPropertySelectedOperationMatches(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-method-property" }>,

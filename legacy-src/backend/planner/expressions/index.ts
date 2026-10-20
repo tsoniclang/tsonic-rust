@@ -30,7 +30,6 @@ export {
   finishRustSourceAccessorCall,
   planRustSourceAccessorCall,
   sourceAccessorSelectedOperationMatches,
-  sourceFieldSelectedOperationMatches,
   sourceMethodPropertySelectedOperationMatches,
   sourceStaticFieldSelectedOperationMatches,
 } from "./properties.js";

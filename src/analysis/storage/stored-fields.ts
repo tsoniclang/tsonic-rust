@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustStoredFieldProducer } from "../program/records/stored-fields.js";
@@ -9,6 +9,8 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { rustCallableProtocol, rustLocationTargetType, rustOptionElementCarrier, rustOptionTargetType, rustStructuralObjectCarrierValue,
   rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier, rustStructuralPropertyValueCarrier, rustStructuralMethodCallableCarrier } from "../../target-model/types/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustValueFieldProjectionStep } from "../../target-model/records/stored-fields.js";
 
 export function analyzeRustStoredFields(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustStoredFieldProducer): void {
   const pending = [...program.structuralShapes.instances.map(shape => shape.carrier),
@@ -41,6 +43,15 @@ export function analyzeRustStoredFields(program: Omit<RustTargetProgram, "reacha
     if (runtime !== undefined) pending.push(runtime);
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-field" || operation?.kind === "source-indexed-field") {
+      if (operation.kind === "source-field") {
+        const selected = program.records.selectedOperation.get(node);
+        const optional = program.records.optionalChain.get(node);
+        if (optional !== undefined && !rustTargetTypeRefEquals(optional.innerResultCarrier, operation.resultCarrier) ||
+          selected?.operationId !== operation.operationId || selected.operationKind !== "property" ||
+          !rustTargetTypeRefEquals(selected.resultType, optional?.resultCarrier ?? operation.resultCarrier))
+          failTargetAnalysisInvariant("tsonic-rust", "A source field requires its exact selected native operation and optional result correspondence.", node);
+        producer.admit(node, operation);
+      }
       pending.push(operation.receiverCarrier);
       const declaration = operation.kind === "source-field" ? operation.declaration : undefined;
       const captured = declaration !== undefined && (program.callableValues.frames.bindingFor(declaration) !== undefined || program.records.capturedFieldStorage.get(declaration) !== undefined);
@@ -107,4 +118,34 @@ export function analyzeRustStoredFields(program: Omit<RustTargetProgram, "reacha
     }
   }
   for (const request of requests) method(request.receiver, request.index, request.arguments);
+  for (const node of new Set(nodes)) {
+    const steps: RustValueFieldProjectionStep[] = [];
+    const visited = new Set<Node>();
+    let current = node;
+    let expected: TargetTypeRef | undefined;
+    while (!visited.has(current)) {
+      visited.add(current);
+      const transparent = sourceTransparentExpressionOperand(program.source.ast, current);
+      if (transparent !== undefined) {
+        steps.push(Object.freeze({ kind: "transparent", node: current, next: transparent }));
+        current = transparent;
+        continue;
+      }
+      const operation = producer.records.admittedField.get(current);
+      if (operation === undefined || producer.records.fieldValueReceiver.get(current) !== true ||
+        operation.declaration !== undefined && program.records.capturedFieldStorage.get(operation.declaration) !== undefined) break;
+      if (operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined ||
+        expected !== undefined && !rustTargetTypeRefEquals(expected, operation.resultCarrier)) break;
+      const field = producer.records.structuralFieldStorage.get(operation.receiverCarrier, operation.storageIndex)?.field;
+      const selected = producer.records.storedField.get(operation.storage, operation.receiverCarrier, operation.storageIndex);
+      const path = selected?.path;
+      const next = Node_Expression(program.source.ast, current);
+      if (path === undefined || next === undefined || operation.storage === "structural-object" &&
+        (field?.storage !== "stored" || field.nativeLayout !== undefined || field.method === true)) break;
+      steps.push(Object.freeze({ kind: "field", node: current, next, path, field: operation, writable: field?.readonly !== true }));
+      expected = operation.receiverCarrier;
+      current = next;
+    }
+    if (steps.some(step => step.kind === "field")) producer.projection(node, { steps: Object.freeze(steps), root: current });
+  }
 }

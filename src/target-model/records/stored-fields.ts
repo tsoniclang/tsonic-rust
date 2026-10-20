@@ -2,6 +2,17 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustStructuralShapeField } from "./structural-shapes.js";
 import type { RustFrozenWriteReceiver, RustProjectFieldDispatchPlan } from "./field-writes.js";
+import type { RustTargetOperationFact } from "./operations.js";
+
+export type RustValueFieldProjectionStep =
+  | { readonly kind: "transparent"; readonly node: Node; readonly next: Node }
+  | { readonly kind: "field"; readonly node: Node; readonly next: Node; readonly path: readonly string[];
+      readonly field: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>; readonly writable: boolean };
+
+export interface RustValueFieldProjection {
+  readonly steps: readonly RustValueFieldProjectionStep[];
+  readonly root: Node;
+}
 
 export interface RustStoredFieldEmission {
   readonly check: RustFrozenWriteReceiver | undefined;
@@ -38,6 +49,8 @@ export interface RustStructuralMethodInvocation {
 }
 
 export interface RustStoredFieldRecords {
+  readonly admittedField: { readonly get: (node: Node) => Extract<RustTargetOperationFact, { readonly kind: "source-field" }> | undefined };
+  readonly valueFieldProjection: { readonly get: (node: Node) => RustValueFieldProjection | undefined };
   readonly storedField: { readonly get: (storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number) => RustStoredFieldEmission | undefined };
   readonly structuralFieldStorage: { readonly get: (carrier: TargetTypeRef, index: number) => RustStructuralFieldStorage | undefined };
   readonly structuralObjectStorage: { readonly get: (carrier: TargetTypeRef) => { readonly value: boolean } | undefined };

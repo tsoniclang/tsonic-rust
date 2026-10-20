@@ -3,9 +3,13 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustStoredFieldEmission, RustStructuralFieldStorage, RustStructuralMethodInvocation, RustStoredFieldRecords } from "../../../target-model/records/stored-fields.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import type { RustValueFieldProjection } from "../../../target-model/records/stored-fields.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 export interface RustStoredFieldProducer {
   readonly records: RustStoredFieldRecords;
+  admit(node: Node, value: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>): void;
+  projection(node: Node, value: RustValueFieldProjection): void;
   field(storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number, value: RustStoredFieldEmission): void;
   structural(carrier: TargetTypeRef, fields: readonly RustStructuralFieldStorage[], value: boolean): void;
   invocation(carrier: TargetTypeRef, index: number, arguments_: readonly TargetTypeRef[], value: RustStructuralMethodInvocation): void;
@@ -19,7 +23,11 @@ export function createRustStoredFieldProducer(assertOpen: () => void): RustStore
   const invocations = new Map<string, RustStructuralMethodInvocation>();
   const receivers = new WeakMap<Node, boolean>();
   const stable = new WeakMap<Node, boolean>();
+  const admitted = new WeakMap<Node, Extract<RustTargetOperationFact, { readonly kind: "source-field" }>>();
+  const projections = new WeakMap<Node, RustValueFieldProjection>();
   return Object.freeze({ records: Object.freeze({
+    admittedField: Object.freeze({ get: (node: Node) => admitted.get(node) }),
+    valueFieldProjection: Object.freeze({ get: (node: Node) => projections.get(node) }),
     storedField: Object.freeze({ get: (storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number) => fields.get(closedMetadataKey([storage, carrier, index])) }),
     structuralFieldStorage: Object.freeze({ get: (carrier: TargetTypeRef, index: number) => structural.get(closedMetadataKey(carrier))?.[index] }),
     structuralObjectStorage: Object.freeze({ get: (carrier: TargetTypeRef) => objects.get(closedMetadataKey(carrier)) }),
@@ -27,6 +35,16 @@ export function createRustStoredFieldProducer(assertOpen: () => void): RustStore
     fieldValueReceiver: Object.freeze({ get: (node: Node) => receivers.get(node) }),
     capturedReceiverStable: Object.freeze({ get: (node: Node) => stable.get(node) }),
   }),
+    admit(node: Node, value: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>): void {
+      assertOpen();
+      if (admitted.has(node)) failTargetAnalysisInvariant("tsonic-rust", "A source field has one exact native operation admission.", node);
+      admitted.set(node, value);
+    },
+    projection(node: Node, value: RustValueFieldProjection): void {
+      assertOpen();
+      if (projections.has(node)) failTargetAnalysisInvariant("tsonic-rust", "A source field has one native location projection owner.", node);
+      projections.set(node, Object.freeze(value));
+    },
     field(storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number, value: RustStoredFieldEmission): void {
       assertOpen();
       const key = closedMetadataKey([storage, carrier, index]);

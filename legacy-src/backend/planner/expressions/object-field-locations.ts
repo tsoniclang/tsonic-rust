@@ -12,7 +12,6 @@ import { rustProjectObjectRepresentation, readRustStoredObjectField, writeRustSt
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { rustClassFrameFieldLocation } from "../objects/frame-storage.js";
-import { sourceFieldSelectedOperationMatches } from "./properties.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 
@@ -37,7 +36,7 @@ export function planRustReferenceObjectFieldLocation(
   const receiverNode = Node_Expression(context.input.program.source.ast, expression);
   const boundary = rustCurrentErrorBoundary(context);
   if (operation?.kind !== "source-field" || receiverNode === undefined || boundary === undefined ||
-    context.syntheticNames === undefined || !sourceFieldSelectedOperationMatches(expression, operation, context)) return undefined;
+    context.syntheticNames === undefined || !(context.input.program.records.admittedField.get(expression) === operation)) return undefined;
   const receiver = planExpression(receiverNode, context);
   if (receiver === undefined) return undefined;
   const callbackContext: RustPlanContext = { ...context, fallibleBoundary: rustPackageFallibleBoundary(boundary) };

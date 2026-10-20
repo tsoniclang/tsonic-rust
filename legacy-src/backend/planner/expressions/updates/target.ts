@@ -19,7 +19,6 @@ import { planRustMutableProjectReceiver } from "../typed-locations.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../../objects/project-field-dispatch.js";
 
-import { sourceFieldSelectedOperationMatches } from "../properties.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
@@ -37,7 +36,7 @@ export function planRustSourceFieldUpdate(
   returnsPrevious: boolean,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!sourceFieldSelectedOperationMatches(fieldExpression, field, context)) {
+  if (!(context.input.program.records.admittedField.get(fieldExpression) === field)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, fieldExpression),
       "rust.backend.source-field-selected-evidence",
