@@ -4,6 +4,7 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
 import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
+import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
 export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
@@ -138,6 +139,16 @@ export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "r
           else if (leading !== undefined) selected = { ...leading, prefix: undefined, suffix: BinaryExpression_Right(ast, second) };
         }
       }
+    }
+    if ((operation.operator === "==" || operation.operator === "!=") && operation.leftConversion === undefined && operation.rightConversion === undefined) {
+      const literal = (node: Node): boolean => ast.is.IsStringLiteral(node) || ast.is.IsNoSubstitutionTemplateLiteral(node);
+      const scoped = literal(right) ? { field: left, literal: right, reversed: false }
+        : literal(left) ? { field: right, literal: left, reversed: true } : undefined;
+      const value = scoped === undefined ? undefined : program.records.literalValue.get(scoped.literal);
+      if (scoped !== undefined && (value?.form === "string" || value?.form === "template") &&
+        rustBorrowValueIsUnprojected(scoped.field, program.records) && isRustStringCarrier(program.records.valueRead.get(scoped.field)?.value) &&
+        isRustStringCarrier(program.records.valueRead.get(scoped.literal)?.value) && program.records.fieldValueReceiver.get(scoped.field) === true)
+        selected = { kind: "scoped-string", field: scoped.field, value: value.text, reversed: scoped.reversed, operator: operation.operator };
     }
     producer.publish(node, selected);
   }

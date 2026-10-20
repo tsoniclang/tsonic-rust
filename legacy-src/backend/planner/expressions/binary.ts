@@ -385,7 +385,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
   const genericIdentity = context.input.program.callableValues.genericIdentities.forComparison(node);
   if (genericIdentity !== undefined) return planRustGenericCallableIdentity(node, genericIdentity, context);
   if (leftNode !== undefined && rightNode !== undefined && fact.kind === "operator-token") {
-    const scoped = planRustScopedStringComparison(leftNode, rightNode, fact, context);
+    const scoped = planRustScopedStringComparison(node, context);
     if (scoped !== undefined) return scoped;
   }
   const borrowedComparison = fact.kind === "operator-token" && (fact.operator === "==" || fact.operator === "!=");
