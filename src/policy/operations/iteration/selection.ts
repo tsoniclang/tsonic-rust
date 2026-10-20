@@ -2,10 +2,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
-import { isRustCopyCarrier, isRustStringCarrier, rustFixedArrayCarrierValue, getRustGeneratorProtocol,
-  rustStringTargetType, rustJsArrayLikeElementTargetType, rustJsRegExpExecArrayTargetType,
-  rustJsRegExpStringIteratorTargetId, rustRegExpExecArrayTargetType, rustRegExpStringIteratorTargetId,
-  getRustJsMapTargetTypes, getRustJsSetElementTargetType, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustStringCarrier, rustFixedArrayCarrierValue, getRustGeneratorProtocol, rustStringTargetType, rustJsArrayLikeElementTargetType, rustJsRegExpExecArrayTargetType, rustJsRegExpStringIteratorTargetId, rustRegExpExecArrayTargetType, rustRegExpStringIteratorTargetId, getRustJsMapTargetTypes, getRustJsSetElementTargetType, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 
 type RustIterableTargetPolicy =
   | {
@@ -158,4 +155,3 @@ export function selectRustIterationLowering(
       ? { kind: "fallible-owned" }
       : { kind: "owned" };
 }
-
