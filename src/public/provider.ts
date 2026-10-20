@@ -1,4 +1,4 @@
-export { createRustProviderPackage } from "../providers/packages/package.js";
+export { createRustProviderPackage } from "../compilation/provider-packages.js";
 export { rustJsTimerDispatchContextId } from "../providers/model/js-dispatch.js";
 export type {
   RustProviderBinaryHookDefinition,
@@ -58,23 +58,6 @@ export {
   rustUsizeToFloat64ValueConversion,
   rustUsizeToInt32ValueConversion,
 } from "../target-model/conversions/model.js";
-export {
-  rustBorrowedStrTargetType,
-  rustCallableTargetType,
-  rustClosureTargetType,
-  rustJsArrayConcatItemTargetType,
-  rustJsArrayTargetType,
-  rustJsStringNumberTargetType,
-  rustJsPromiseTargetType,
-  rustJsTypedArrayTargetType,
-  rustNeverTargetType,
-  rustNamedTargetType,
-  rustRetainedErrorTargetType,
-  rustWritableRetainedErrorTargetType,
-  rustOptionTargetType,
-  rustProgramErrorTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-  rustUnitTargetType,
-  rustVecTargetType,
-} from "../target-model/types/index.js";
+export { rustJsArrayConcatItemTargetType, rustJsArrayTargetType, rustJsPromiseTargetType, rustJsTypedArrayTargetType, rustRetainedErrorTargetType, rustWritableRetainedErrorTargetType, rustOptionTargetType, rustProgramErrorTargetType } from "../target-model/types/index.js";
+export { rustBorrowedStrTargetType, rustJsStringNumberTargetType, rustNeverTargetType, rustNamedTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustUnitTargetType, rustVecTargetType } from "../target-model/types/carriers/native.js";
+export { rustCallableTargetType, rustClosureTargetType } from "../target-model/types/carriers/callables.js";
