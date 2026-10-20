@@ -2,8 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs,
-  rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
+import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
 export const rustNoNativeWrites: readonly Node[] = Object.freeze([]);
