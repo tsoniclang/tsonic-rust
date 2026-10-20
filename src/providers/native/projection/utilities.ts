@@ -1,24 +1,9 @@
 import { createHash } from "node:crypto";
-import {
-  sourceGenericArgumentFor,
-  targetGenericArgumentFor,
-} from "./type-arguments.js";
-import {
-  createRustCompilerSubstitutions,
-  compilerTypeRequirementCanonicalPath,
-  substituteRustCompilerArgument,
-  substituteRustCompilerType,
-} from "../model/rustdoc-types.js";
+import { sourceGenericArgumentFor, targetGenericArgumentFor } from "./type-arguments.js";
+import { createRustCompilerSubstitutions, compilerTypeRequirementCanonicalPath, substituteRustCompilerArgument, substituteRustCompilerType } from "../model/rustdoc-types.js";
 import type { ProjectionContext } from "./model.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
-import type {
-  RustCompilerConstArgument,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerStandardTypeLocation,
-  RustCompilerType,
-  RustCompilerTypeRequirement,
-} from "../model/model.js";
+import type { RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerStandardTypeLocation, RustCompilerType, RustCompilerTypeRequirement } from "../model/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
 
 export function importedSourceType(
@@ -56,7 +41,7 @@ export function isRustStringPath(
 ): boolean {
   return type.name === "String" &&
     (type.crateName === "alloc" || type.crateName === "std") &&
-    type.modulePath[type.modulePath.length - 1] === "string" &&
+    type.modulePath.length === 1 && type.modulePath[0] === "string" &&
     type.genericArguments.length === 0;
 }
 
