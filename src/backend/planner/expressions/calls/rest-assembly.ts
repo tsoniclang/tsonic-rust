@@ -7,7 +7,8 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { Node } from "@tsonic/tsts";
 import { createRustSharedReferenceArgument } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
-import { isRustStringCarrier } from "../../../../target-model/types/index.js";
+import { rustTypeEmissionInContext } from "../../types/render.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 
 export function planRustBorrowedSingletonSlice(
   node: Node,
@@ -23,16 +24,16 @@ export function planRustBorrowedSingletonSlice(
 export function canBorrowRustSingletonSlice(
   node: Node, context: RustPlanContext, later: readonly Node[],
 ): boolean {
-  if (context.input.program.ownership.reads.get(node)?.readsStorage !== true || context.expressionOverrides?.has(node) === true) return false;
+  if (context.input.program.records.readOwnership.get(node)?.readsStorage !== true || context.expressionOverrides?.has(node) === true) return false;
   if (!requireRustReadOwnership(node, context).stablePlace &&
     later.some(value => !requireRustReadOwnership(node, context).borrowedAcross.has(value))) return false;
-  const declaration = context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
+  const declaration = context.input.program.records.sourceBinding.get(node)?.sourceDeclaration;
   const parameter = context.input.program.records.sourceParameterAbi.get(node) ??
     context.input.program.records.sourceParameterAbi.get(declaration);
-  if (parameter?.mode === "ref" && isRustStringCarrier(parameter.valueCarrier)) return false;
+  if (parameter?.mode === "ref" && rustTypeEmissionInContext(parameter.valueCarrier, context).string) return false;
   const captured = [...context.capturedBindings ?? []].reverse().find(value => value.declaration === declaration);
   const borrowed = captured?.borrowedCarrier;
-  return borrowed?.kind !== "reference" || borrowed.mutable || !isRustStringCarrier(borrowed.referent);
+  return borrowed === undefined || !rustTypeEmissionInContext(borrowed, context).sharedStringReference;
 }
 
 export function planRustRestAssembly(
@@ -40,7 +41,7 @@ export function planRustRestAssembly(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (segments.length === 1 && segments[0]?.sequence === true) return segments[0].value;
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted native rest assembly requires its hygienic name scope.", context.callableDeclaration ?? context.sourceFile);
   const name = allocateRustSyntheticName(context.syntheticNames, "spread_rest");
   const collection: RustExpr = { kind: "path", path: name };
   let value: RustExpr = collection;

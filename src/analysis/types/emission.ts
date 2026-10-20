@@ -93,6 +93,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
       option: isRustOptionCarrier(carrier), string: isRustStringCarrier(carrier),
+      sharedStringReference: carrier.kind === "reference" && !carrier.mutable && isRustStringCarrier(carrier.referent),
       optionPayload: optionalElement === undefined ? undefined : Object.freeze({ str: payloadView(true), shared: payloadView(false) }),
       completion: isRustUnitCarrier(carrier) ? "unit" : isRustNeverCarrier(carrier) ? "never" : "value",
       promiseObject: carrier.kind === "target-named" && carrier.id === rustJsPromiseTargetId,
