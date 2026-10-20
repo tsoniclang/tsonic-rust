@@ -256,7 +256,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     return leftNode === undefined ? undefined : planExpression(leftNode, context);
   }
-  if (fact?.kind === "option-coalesce") return planNullishCoalescing(node, fact, context);
+  if (fact?.kind === "option-coalesce") return planNullishCoalescing(node, context);
   if (fact !== undefined && fact.kind === "option-check") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);

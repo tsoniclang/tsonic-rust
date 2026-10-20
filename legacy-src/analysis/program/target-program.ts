@@ -126,6 +126,7 @@ import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emis
 import { analyzeRustGenericEmission } from "../callables/generic-emission.js";
 import { analyzeRustSourceCallableEmission } from "../callables/source-callable-value.js";
 import { analyzeRustReferenceOperations } from "../expressions/reference-operations.js";
+import { analyzeRustNullishCoalescing } from "../expressions/nullish-coalescing.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
@@ -654,6 +655,8 @@ export function analyzeRustTargetProgram(
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
   const referenceOperationIssues = analyzeRustReferenceOperations(program, context.nativeNodes, context.records.referenceOperationPlans);
   if (referenceOperationIssues.length !== 0) return rejectedTargetStage(referenceOperationIssues);
+  const nullishCoalescingIssues = analyzeRustNullishCoalescing(program, context.nativeNodes, context.records.nullishCoalescingPlans);
+  if (nullishCoalescingIssues.length !== 0) return rejectedTargetStage(nullishCoalescingIssues);
   const flowReadEmissionIssues = analyzeRustFlowReadEmission(program, context.nativeNodes, context.records.flowReadEmissionPlans);
   if (flowReadEmissionIssues.length !== 0) return rejectedTargetStage(flowReadEmissionIssues);
   const projectUnionMappingIssues = analyzeRustProjectUnionMappings(program, context.nativeNodes, context.records.projectUnionMappingPlans);
