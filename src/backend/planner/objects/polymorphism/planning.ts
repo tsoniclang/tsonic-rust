@@ -4,18 +4,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustStructField, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
-import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
-import {
-  diagnosticInput,
-  rustProjectTypeHasPublicImplementationAbi,
-} from "../../program/plan-context.js";
-import {
-  rustGeneratedExactStorageDeadCodeDisposition,
-  rustGeneratedProjectInternalFieldDeadCodeDisposition,
-  rustProjectInterfaceDeadCodeDisposition,
-} from "../../program/reachability-directives.js";
-import { rustPlannedImplementationsReferenceSelfField } from "../../../target-ast/syntax/item-usage.js";
+import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,
@@ -58,85 +48,36 @@ export function planPolymorphicClassDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
-  if (definition?.kind !== "class" || !context.input.program.projectTypes.isPolymorphic(definition)) {
-    return undefined;
-  }
-  const diagnosticCountBeforeShape = context.diagnostics.length;
+  const selected = context.input.program.records.projectPolymorphicEmission.get(declaration);
+  if (selected === undefined || selected.definition.kind !== "class")
+    failRustPlannerInvariant("An admitted polymorphic class requires its sealed native declaration.", declaration);
+  const { definition, carrier: openCarrier, representation } = selected;
   context = rustProjectTypeParameterContext(definition, context, "declaration");
-  const openCarrier = context.input.program.projectTypes.openCarrier(definition);
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(openCarrier, context);
   const dispatchObjectType = rustProjectDispatchObjectType(openCarrier, context);
   const rootType = rustProjectRootType(openCarrier, context);
   const layers = projectClassStateLayers(definition, openCarrier, context);
   const stateType = layers === undefined ? undefined : projectStateType(layers, context);
-  if (wrapperType === undefined || dispatchObjectType === undefined || rootType === undefined ||
-    layers === undefined || stateType === undefined || representation === undefined) {
-    if (context.diagnostics.length === diagnosticCountBeforeShape) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.project-polymorphism-carrier",
-        "Polymorphic project class has no exact wrapper, dispatch, root, or state carrier.",
-      ));
-    }
-    return undefined;
-  }
-  const diagnosticCountBeforeTrait = context.diagnostics.length;
+  if (wrapperType === undefined || dispatchObjectType === undefined || rootType === undefined || layers === undefined || stateType === undefined)
+    failRustPlannerInvariant("An admitted polymorphic class requires exact native wrapper, dispatch, root and state syntax.", declaration);
   const trait = planProjectDispatchTrait(definition, openCarrier, context);
-  if (trait === undefined) {
-    if (context.diagnostics.length === diagnosticCountBeforeTrait) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.project-polymorphism-dispatch",
-        "Polymorphic project class has no complete exact dispatch-trait plan.",
-      ));
-    }
-    return undefined;
-  }
-  const diagnosticCountBeforeConstructor = context.diagnostics.length;
+  if (trait === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its exact native dispatch trait.", declaration);
   const implementationContext = rustProjectTypeParameterContext(definition, context, "implementation");
   const implementationType = rustTypeFromCarrierInContext(openCarrier, implementationContext);
   const implementationRoot = rustProjectRootType(openCarrier, implementationContext);
   const implementationLayers = projectClassStateLayers(definition, openCarrier, implementationContext);
-  if (implementationType === undefined || implementationRoot === undefined || implementationLayers === undefined) return undefined;
+  if (implementationType === undefined || implementationRoot === undefined || implementationLayers === undefined)
+    failRustPlannerInvariant("An admitted polymorphic class requires its exact native implementation context.", declaration);
   const implementationGenerics = rustProjectRepresentationGenerics(representation, implementationContext);
   const constructor = planProjectClassConstructor(definition, implementationType, implementationRoot, implementationLayers, implementationContext);
-  if (constructor === undefined) {
-    if (context.diagnostics.length === diagnosticCountBeforeConstructor) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.project-polymorphism-construction",
-        "Polymorphic project class has no complete exact construction plan.",
-      ));
-    }
-    return undefined;
-  }
-  const diagnosticCountBeforeRootImplementations = context.diagnostics.length;
+  if (constructor === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its exact native constructor.", declaration);
   const rootImplementations = constructor.construct === undefined ? [] : planProjectRootImplementations(
-    definition,
-    openCarrier,
-    implementationRoot,
-    implementationLayers,
-    implementationContext,
-  );
-  if (rootImplementations === undefined) {
-    if (context.diagnostics.length === diagnosticCountBeforeRootImplementations) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.project-polymorphism-root",
-        "Polymorphic project class has no complete exact root implementation plan.",
-      ));
-    }
-    return undefined;
-  }
+    definition, openCarrier, implementationRoot, implementationLayers, implementationContext);
+  if (rootImplementations === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its exact native root implementation.", declaration);
   context.usedAliases?.add("rt");
   const generics = rustProjectRepresentationGenerics(representation, context);
   const stateMarker = rustProjectStateMarker(definition, context);
-  const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
-  const publiclyReachable = programErrorVariant !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, definition.targetPath);
-  const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
+  const publiclyReachable = selected.publiclyReachable;
   const ownLayer = layers[layers.length - 1]!;
   const privateStateAccessors = planProjectPrivateStateAccessors(
     stateType,
@@ -144,16 +85,12 @@ export function planPolymorphicClassDeclaration(
     publiclyReachable,
     context,
   );
-  if (privateStateAccessors === undefined) {
-    return undefined;
-  }
+  if (privateStateAccessors === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its exact private native state accessors.", declaration);
   const baseLayer = layers[layers.length - 2];
   const baseStateType = baseLayer === undefined
     ? undefined
     : rustProjectStateType(baseLayer.carrier, context);
-  if (baseLayer !== undefined && baseStateType === undefined) {
-    return undefined;
-  }
+  if (baseLayer !== undefined && baseStateType === undefined) failRustPlannerInvariant("An admitted polymorphic class requires its exact native base-state type.", declaration);
   const staticMethods = planProjectStaticMethods(definition, implementationContext);
   const externalErrorImplementations = planProjectExternalErrorImplementations(
     definition,
@@ -162,47 +99,31 @@ export function planPolymorphicClassDeclaration(
     context,
   );
   const errorObservations = planRustProjectErrorWrapper(definition, implementationType, implementationContext);
-  if (staticMethods === undefined || externalErrorImplementations === undefined || errorObservations === undefined) {
-    return undefined;
-  }
+  if (staticMethods === undefined || externalErrorImplementations === undefined || errorObservations === undefined)
+    failRustPlannerInvariant("An admitted polymorphic class requires its native static and error implementations.", declaration);
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
-  const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
-  const wrapperDeadCode = rustProjectInterfaceDeadCodeDisposition(context, declaration, publiclyReachable);
+  const wrapperVisibility = selected.visibility;
+  const wrapperDeadCode = selected.wrapperDeadCode;
   const defaultImplementation = constructor.construct === undefined ? undefined : rustDefaultImplementation(
     implementationType,
     implementationGenerics,
     context.input.program.records.classDeclaration.get(declaration)?.defaultConstructor,
   );
-  const selectedEnvironment = context.input.program.classValues.forDeclaration(declaration)?.environment;
-  const environment = selectedEnvironment?.instancesUseEnvironment ? selectedEnvironment : undefined;
+  const environment = selected.environment;
   const environmentType = environment === undefined ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
-  if (environment !== undefined && environmentType === undefined) return undefined;
-  const rootIdentityDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
-    rustPlannedImplementationsReferenceSelfField(
-      rootImplementations,
-      rustProjectObjectIdentityField,
-    ),
-  );
-  const rootStateDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
-    rustPlannedImplementationsReferenceSelfField(
-      rootImplementations,
-      rustProjectObjectStateField,
-    ),
-  );
+  if (environment !== undefined && environmentType === undefined)
+    failRustPlannerInvariant("An admitted native instance environment requires its exact handle type.", declaration);
+  const rootStateDeadCode = selected.rootStateDeadCode;
   const implementationBase = implementationLayers[implementationLayers.length - 2];
   const implementationBaseState = implementationBase === undefined ? undefined
     : rustProjectStateType(implementationBase.carrier, implementationContext);
-  if (implementationBase !== undefined && implementationBaseState === undefined) return undefined;
+  if (implementationBase !== undefined && implementationBaseState === undefined) failRustPlannerInvariant("An admitted native implementation requires its exact base-state type.", declaration);
   const stateConstruction = planRustStateConstruction(implementationLayers[implementationLayers.length - 1]!,
     implementationBaseState, implementationContext);
-  if (stateConstruction === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
-      "rust.backend.state-construction", "Physical native state has no exact aggregate assembly contract."));
-    return undefined;
-  }
+  if (stateConstruction === undefined) failRustPlannerInvariant("An admitted native state requires its exact aggregate construction.", declaration);
   const identityImplementations = projectIdentityImplementations(definition, wrapperType, representation, context);
-  const wrapperDispatchDeadCode = rustGeneratedExactStorageDeadCodeDisposition(publiclyReachable ||
-    rustPlannedImplementationsReferenceSelfField(identityImplementations, rustProjectObjectDispatchField));
+  const stateConstructionSelection = context.input.program.records.projectStateConstruction.get(definition);
+  if (stateConstructionSelection === undefined) failRustPlannerInvariant("An admitted native state requires its exact physical base slot.", declaration);
   return [
     trait,
     stateConstruction,
@@ -216,17 +137,12 @@ export function planPolymorphicClassDeclaration(
         ...(baseStateType === undefined
           ? []
           : [{
-              name: context.input.program.projectTypes.baseStateFieldName(definition),
+              name: stateConstructionSelection.baseName,
               type: baseStateType,
               visibility: implementationVisibility,
               ...(() => {
                 const attrs = publiclyReachable ? [rustHiddenAttribute] : [];
-                const deadCode = rustGeneratedProjectInternalFieldDeadCodeDisposition(
-                  context,
-                  declaration,
-                  "base-state",
-                  implementationVisibility === "public",
-                );
+                const deadCode = selected.baseStateDeadCode;
                 return {
                   ...(attrs.length === 0 ? {} : { attrs }),
                   ...(deadCode === undefined ? {} : { deadCode }),
@@ -270,7 +186,7 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: definition.targetName,
       visibility: wrapperVisibility,
-      ...(programErrorVariant === undefined ? {} : { attrs: [rustHiddenAttribute] }),
+      ...(selected.programError ? { attrs: [rustHiddenAttribute] } : {}),
       ...(wrapperDeadCode === undefined ? {} : { deadCode: wrapperDeadCode }),
       generics,
       fields: [
@@ -288,7 +204,6 @@ export function planPolymorphicClassDeclaration(
             const attrs = publiclyReachable ? [rustHiddenAttribute] : [];
             return {
               ...(attrs.length === 0 ? {} : { attrs }),
-              ...(wrapperDispatchDeadCode === undefined ? {} : { deadCode: wrapperDispatchDeadCode }),
             };
           })(),
         },
@@ -308,11 +223,6 @@ export function planPolymorphicClassDeclaration(
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },
           visibility: "private",
-          ...(() => {
-            return rootIdentityDeadCode === undefined
-              ? {}
-              : { deadCode: rootIdentityDeadCode };
-          })(),
         },
         {
           name: rustProjectObjectStateField,
@@ -349,26 +259,21 @@ function planProjectExternalErrorImplementations(
   representation: import("../../../../target-model/records/object-representation.js").RustObjectRepresentation,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const external = context.input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base;
-  if (external === undefined) {
-    return [];
-  }
-  const name = external.fields.find((field) => field.sourceName === "name");
-  const message = external.fields.find((field) => field.sourceName === "message");
-  const stack = external.fields.find((field) => field.sourceName === "stack");
-  if (name === undefined || message === undefined || stack === undefined) {
-    return undefined;
-  }
-  const nameRead = context.input.program.projectTypes.memberSlotName(name.declaration, "read");
-  const messageRead = context.input.program.projectTypes.memberSlotName(message.declaration, "read");
-  const stackWrite = context.input.program.projectTypes.memberSlotName(stack.declaration, "write");
-  if (nameRead === undefined || messageRead === undefined || stackWrite === undefined) {
-    return undefined;
-  }
+  const external = context.input.program.records.projectError.get(definition);
+  if (external === undefined) failRustPlannerInvariant("An admitted native class requires its exact external error classification.", definition.declaration);
+  if (!external.inherited) return [];
+  const name = external.fields.find(field => field.name === "name");
+  const message = external.fields.find(field => field.name === "message");
+  const stack = external.fields.find(field => field.name === "stack");
+  const nameRead = name?.read;
+  const messageRead = message?.read;
+  const stackWrite = stack?.write;
+  if (nameRead === undefined || messageRead === undefined || stackWrite === undefined)
+    failRustPlannerInvariant("An admitted native error requires its exact name, message and stack slots.", definition.declaration);
   const self = { kind: "path" as const, path: "self" };
   const errorName = readRustProjectDispatchedField(self, nameRead);
   const errorMessage = readRustProjectDispatchedField(self, messageRead);
-  if (errorName === undefined || errorMessage === undefined) return undefined;
+  if (errorName === undefined || errorMessage === undefined) failRustPlannerInvariant("An admitted native error requires its exact field read syntax.", definition.declaration);
   return [{
     kind: "impl",
     generics: rustProjectRepresentationGenerics(representation, context),
@@ -446,42 +351,22 @@ export function planPolymorphicInterfaceDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
-  if (definition?.kind !== "interface" || !context.input.program.projectTypes.isPolymorphic(definition)) {
-    return undefined;
-  }
+  const selected = context.input.program.records.projectPolymorphicEmission.get(declaration);
+  if (selected === undefined || selected.definition.kind !== "interface")
+    failRustPlannerInvariant("An admitted polymorphic interface requires its exact sealed native declaration.", declaration);
+  const { definition, carrier, representation, publiclyReachable } = selected;
   context = rustProjectTypeParameterContext(definition, context, "declaration");
-  const carrier = context.input.program.projectTypes.openCarrier(definition);
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(carrier, context);
   const dispatchObjectType = rustProjectDispatchObjectType(carrier, context);
   const trait = planProjectDispatchTrait(definition, carrier, context);
-  if (wrapperType === undefined || dispatchObjectType === undefined || trait === undefined ||
-    representation === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.project-interface-carrier",
-      "Polymorphic project interface has no exact wrapper or dispatch carrier.",
-    ));
-    return undefined;
-  }
+  if (wrapperType === undefined || dispatchObjectType === undefined || trait === undefined)
+    failRustPlannerInvariant("An admitted polymorphic interface requires its exact native wrapper and dispatch syntax.", declaration);
   context.usedAliases?.add("rt");
   const generics = rustProjectRepresentationGenerics(representation, context);
-  const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
-  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
-    context,
-    definition.targetPath,
-  );
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
-  const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
-  const wrapperDeadCode = rustProjectInterfaceDeadCodeDisposition(
-    context,
-    declaration,
-    publiclyReachable,
-  );
+  const wrapperVisibility = selected.visibility;
+  const wrapperDeadCode = selected.wrapperDeadCode;
   const identityImplementations = projectIdentityImplementations(definition, wrapperType, representation, context);
-  const wrapperDispatchDeadCode = rustGeneratedExactStorageDeadCodeDisposition(publiclyReachable ||
-    rustPlannedImplementationsReferenceSelfField(identityImplementations, rustProjectObjectDispatchField));
   return [
     trait,
     {
@@ -505,7 +390,6 @@ export function planPolymorphicInterfaceDeclaration(
             const attrs = publiclyReachable ? [rustHiddenAttribute] : [];
             return {
               ...(attrs.length === 0 ? {} : { attrs }),
-              ...(wrapperDispatchDeadCode === undefined ? {} : { deadCode: wrapperDispatchDeadCode }),
             };
           })(),
         },

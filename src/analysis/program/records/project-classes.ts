@@ -7,8 +7,10 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustProjectCallableAdapterIndex } from "../../../target-model/records/project-classes.js";
 import type { RustProjectRootEmission } from "../../../target-model/records/project-classes.js";
 import type { RustProjectDispatchEmission } from "../../../target-model/records/project-classes.js";
+import type { RustProjectPolymorphicEmission } from "../../../target-model/records/project-classes.js";
 
 export interface RustProjectClassProducer {
+  polymorphic(declaration: Node, value: RustProjectPolymorphicEmission): void;
   dispatch(definition: RustProjectTypeDefinition, value: RustProjectDispatchEmission): void;
   root(carrier: TargetTypeRef, value: RustProjectRootEmission): void;
   relationship(receiver: TargetTypeRef, owner: RustProjectTypeDefinition, value: TargetTypeRef): void;
@@ -46,7 +48,9 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
   const forwarders = new WeakMap<Node, WeakMap<Node, "adapter" | "direct">>();
   const roots = new Map<string, RustProjectRootEmission>();
   const dispatches = new WeakMap<RustProjectTypeDefinition, RustProjectDispatchEmission>();
+  const polymorphic = new WeakMap<Node, RustProjectPolymorphicEmission>();
   return Object.freeze({ records: Object.freeze({
+    projectPolymorphicEmission: Object.freeze({ get: (declaration: Node) => polymorphic.get(declaration) }),
     projectDispatchEmission: Object.freeze({ get: (definition: RustProjectTypeDefinition) => dispatches.get(definition) }),
     projectRootEmission: Object.freeze({ get: (carrier: TargetTypeRef) => roots.get(closedMetadataKey(carrier)) }),
     projectRelationship: Object.freeze({ get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => relationships.get(owner)?.get(closedMetadataKey(receiver)) }),
@@ -66,6 +70,11 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
     projectMemberImplementation: Object.freeze({ get: (definition: RustProjectTypeDefinition, member: Node) => implementations.get(definition)?.get(member) }),
     projectCallableSignature: Object.freeze({ get: (member: Node) => callables.get(member) }),
   }),
+    polymorphic(declaration: Node, value: RustProjectPolymorphicEmission): void {
+      assertOpen();
+      if (polymorphic.has(declaration)) failTargetAnalysisInvariant("tsonic-rust", "A polymorphic native declaration has one exact emission owner.", declaration);
+      polymorphic.set(declaration, Object.freeze(value));
+    },
     dispatch(definition: RustProjectTypeDefinition, value: RustProjectDispatchEmission): void {
       assertOpen();
       if (dispatches.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A native project dispatch trait has one exact source owner.", definition.declaration);

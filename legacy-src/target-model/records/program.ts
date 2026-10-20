@@ -118,6 +118,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly projectForwarder: import("./project-classes.js").RustProjectClassRecords["projectForwarder"];
   readonly projectRootEmission: import("./project-classes.js").RustProjectClassRecords["projectRootEmission"];
   readonly projectDispatchEmission: import("./project-classes.js").RustProjectClassRecords["projectDispatchEmission"];
+  readonly projectPolymorphicEmission: import("./project-classes.js").RustProjectClassRecords["projectPolymorphicEmission"];
   readonly structuralFieldStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralFieldStorage"];
   readonly structuralObjectStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralObjectStorage"];
   readonly structuralMethodInvocation: import("./stored-fields.js").RustStoredFieldRecords["structuralMethodInvocation"];

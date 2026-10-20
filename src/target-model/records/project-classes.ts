@@ -6,6 +6,8 @@ import type { RustProjectDowncastRoute } from "../types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
 import type { RustProjectFieldImplementation, RustProjectFieldDispatchPlan } from "./field-writes.js";
 import type { RustDeadCodeDisposition } from "./native-liveness.js";
+import type { RustObjectRepresentation } from "./object-representation.js";
+import type { RustNamedClassEnvironment } from "./class-values.js";
 
 export type RustProjectCallableAdapterIndex = ReadonlyMap<Node, ReadonlyMap<Node, ReadonlyMap<string, RustProjectCallableAdapter>>>;
 
@@ -45,6 +47,7 @@ export interface RustProjectCallableSignature {
 }
 
 export interface RustProjectClassRecords {
+  readonly projectPolymorphicEmission: { readonly get: (declaration: Node) => RustProjectPolymorphicEmission | undefined };
   readonly projectDispatchEmission: { readonly get: (definition: RustProjectTypeDefinition) => RustProjectDispatchEmission | undefined };
   readonly projectRootEmission: { readonly get: (carrier: TargetTypeRef) => RustProjectRootEmission | undefined };
   readonly projectRelationship: { readonly get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => TargetTypeRef | undefined };
@@ -120,4 +123,17 @@ export interface RustProjectDispatchEmission {
   readonly methodWrites: readonly { readonly property: RustProjectMethodPropertyEmission; readonly slot: string; readonly deadCode: RustDeadCodeDisposition | undefined }[];
   readonly projectSupers: readonly TargetTypeRef[];
   readonly structuralSupers: readonly TargetTypeRef[];
+}
+
+export interface RustProjectPolymorphicEmission {
+  readonly definition: RustProjectTypeDefinition;
+  readonly carrier: TargetTypeRef;
+  readonly representation: RustObjectRepresentation;
+  readonly programError: boolean;
+  readonly publiclyReachable: boolean;
+  readonly visibility: "public" | "crate";
+  readonly wrapperDeadCode: RustDeadCodeDisposition | undefined;
+  readonly baseStateDeadCode: RustDeadCodeDisposition | undefined;
+  readonly rootStateDeadCode: RustDeadCodeDisposition | undefined;
+  readonly environment: RustNamedClassEnvironment | undefined;
 }
