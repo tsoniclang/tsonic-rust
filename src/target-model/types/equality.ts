@@ -1,25 +1,11 @@
-import {
-  closedMetadataEquals,
-  isClosedMetadata,
-  isDenseDataArray,
-} from "../metadata/closed-data.js";
-import type {
-  RustSelectedTargetOperation,
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  RustTargetTraitRef,
-  RustTargetTypeRef,
-} from "../../target-model/types/model.js";
-import {
-  rustLifetimesEqual,
-} from "../lifetimes/index.js";
+import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, RustTargetTraitRef, RustTargetTypeRef } from "./model.js";
+
+import { rustLifetimesEqual } from "../lifetimes/index.js";
 import { rustNamedTypeCarrierValue } from "./carriers/native.js";
 import { isRustProgramErrorOwner } from "./carriers/program-errors.js";
 import { rustProgramErrorTargetId } from "./carriers/source-types.js";
-import type {
-  RustLifetimeBinder,
-  RustLifetimeRef,
-} from "../lifetimes/index.js";
+import type { RustLifetimeBinder, RustLifetimeRef } from "../lifetimes/index.js";
 
 export function rustTargetTypeRefEquals(
   left: RustTargetTypeRef | undefined,
@@ -85,40 +71,6 @@ export function rustTargetGenericArgumentEquals(
     [right],
     emptyLifetimeEqualityContext,
   );
-}
-
-export function rustSelectedTargetOperationEquals(
-  left: RustSelectedTargetOperation,
-  right: RustSelectedTargetOperation,
-): boolean {
-  return left.operationId === right.operationId &&
-    left.operationKind === right.operationKind &&
-    left.targetOperation === right.targetOperation &&
-    rustTargetTypeRefEquals(left.resultType, right.resultType) &&
-    closedMetadataEquals(left.providerDeclaration, right.providerDeclaration) &&
-    operationProvenanceEquals(left.provenance, right.provenance);
-}
-
-function operationProvenanceEquals(
-  left: RustSelectedTargetOperation["provenance"],
-  right: RustSelectedTargetOperation["provenance"],
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  return left.sourceExpression === right.sourceExpression &&
-    left.sourceReceiver === right.sourceReceiver &&
-    left.sourceCallee === right.sourceCallee &&
-    left.sourceSelectedSignature === right.sourceSelectedSignature &&
-    left.sourceSelectedSymbol === right.sourceSelectedSymbol &&
-    left.sourceSelectedDeclaration === right.sourceSelectedDeclaration &&
-    left.sourceSelectedReadDeclaration === right.sourceSelectedReadDeclaration &&
-    left.sourceSelectedWriteDeclaration === right.sourceSelectedWriteDeclaration &&
-    left.sourceCalleeSymbol === right.sourceCalleeSymbol &&
-    left.sourceCalleeDeclaration === right.sourceCalleeDeclaration &&
-    left.sourceResultType === right.sourceResultType &&
-    left.sourceReturnType === right.sourceReturnType &&
-    closedMetadataEquals(left.providerDeclaration, right.providerDeclaration);
 }
 
 function rustTargetTypeRefEqualsValidated(

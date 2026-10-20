@@ -6,7 +6,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSelectedTargetOperation } from "../../../target-model/records/member-selections.js";
-import { rustSelectedTargetOperationEquals } from "../../../target-model/types/equality.js";
+import { rustSelectedTargetOperationEquals } from "../../../target-model/records/operation-equality.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForSelectedOperation } from "../../foundation/requirements.js";
 import { rustSelectedOperatorOperation } from "./selected-operation-values.js";

@@ -1,10 +1,11 @@
-import type { Node } from "@tsonic/tsts";
+import { type Node } from "@tsonic/tsts";
 import { closedMetadataEquals } from "../metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
-import type { RustTargetOperationFact } from "./operations.js";
-import type { RustProjectFieldSelection } from "./project-fields.js";
-import type { RustProjectAccessorSelection } from "./project-accessors.js";
-import type { RustPropertyProjectionFact } from "./property-projections.js";
+import { type RustTargetOperationFact } from "./operations.js";
+import { type RustProjectFieldSelection } from "./project-fields.js";
+import { type RustProjectAccessorSelection } from "./project-accessors.js";
+import { type RustPropertyProjectionFact } from "./property-projections.js";
+import { type RustSelectedTargetOperation } from "./member-selections.js";
 
 type RustOperationComparisonInput = RustTargetOperationFact | RustProjectFieldSelection | RustProjectAccessorSelection;
 
@@ -143,4 +144,43 @@ function projectOperationMetadata(fact: RustOperationComparisonInput, references
     default:
       return fact;
   }
+}
+
+
+
+
+
+
+export function rustSelectedTargetOperationEquals(
+  left: RustSelectedTargetOperation,
+  right: RustSelectedTargetOperation,
+): boolean {
+  return left.operationId === right.operationId &&
+    left.operationKind === right.operationKind &&
+    left.targetOperation === right.targetOperation &&
+    rustTargetTypeRefEquals(left.resultType, right.resultType) &&
+    closedMetadataEquals(left.providerDeclaration, right.providerDeclaration) &&
+    operationProvenanceEquals(left.provenance, right.provenance);
+}
+
+function operationProvenanceEquals(
+  left: RustSelectedTargetOperation["provenance"],
+  right: RustSelectedTargetOperation["provenance"],
+): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return left.sourceExpression === right.sourceExpression &&
+    left.sourceReceiver === right.sourceReceiver &&
+    left.sourceCallee === right.sourceCallee &&
+    left.sourceSelectedSignature === right.sourceSelectedSignature &&
+    left.sourceSelectedSymbol === right.sourceSelectedSymbol &&
+    left.sourceSelectedDeclaration === right.sourceSelectedDeclaration &&
+    left.sourceSelectedReadDeclaration === right.sourceSelectedReadDeclaration &&
+    left.sourceSelectedWriteDeclaration === right.sourceSelectedWriteDeclaration &&
+    left.sourceCalleeSymbol === right.sourceCalleeSymbol &&
+    left.sourceCalleeDeclaration === right.sourceCalleeDeclaration &&
+    left.sourceResultType === right.sourceResultType &&
+    left.sourceReturnType === right.sourceReturnType &&
+    closedMetadataEquals(left.providerDeclaration, right.providerDeclaration);
 }

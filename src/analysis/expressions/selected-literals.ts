@@ -13,7 +13,7 @@ import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFac
 import { rustSelectedOperatorOperation } from "../program/records/selected-operation-values.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
-import { rustSelectedTargetOperationEquals } from "../../target-model/types/equality.js";
+import { rustSelectedTargetOperationEquals } from "../../target-model/records/operation-equality.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function sourceLiteralIsRepresentableAsPrimitive(
