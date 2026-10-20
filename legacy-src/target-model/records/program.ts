@@ -81,6 +81,8 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly directStorage: RustRecordFamily<import("./direct-storage.js").RustDirectStorageEmission>;
   readonly directStorageIdentity: RustRecordFamily<import("./direct-storage.js").RustDirectStorageIdentity>;
   readonly storageEffectful: RustRecordFamily<boolean>;
+  readonly updateProjectField: RustRecordFamily<import("./direct-storage.js").RustUpdateProjectField | null>;
+  readonly updateProjection: { readonly get: (operand: import("@tsonic/tsts").Node, field: import("@tsonic/tsts").Node) => readonly import("./direct-storage.js").RustUpdateProjectionArgument[] | undefined };
   readonly errorFieldEmission: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldEmission"];
   readonly errorFieldSnapshot: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldSnapshot"];
   readonly stringComparisonView: RustRecordFamily<import("./string-comparison-views.js").RustStringComparisonView>;

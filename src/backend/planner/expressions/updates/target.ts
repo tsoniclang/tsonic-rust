@@ -1,17 +1,8 @@
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
-import {
-  KindElementAccessExpression,
-  KindParenthesizedExpression,
-  KindPropertyAccessExpression,
-  ElementAccessExpression_ArgumentExpression,
-  Node_Expression,
-} from "@tsonic/target-api/source";
+import { Node_Expression } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { diagnosticInput } from "../../program/plan-context.js";
-import { expressionCarrier } from "../fundamentals.js";
-import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
-import { isRustFinalizedSourceInput } from "../../../../analysis/operations/finalized-operation/conversions.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
+import { rustCarrierHasCopyContract } from "../../types/generic-requirements.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
 import { planFinalizedTargetInput, planProviderOperationExpression } from "../conversions.js";
@@ -37,12 +28,7 @@ export function planRustSourceFieldUpdate(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (!(context.input.program.records.admittedField.get(fieldExpression) === field)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, fieldExpression),
-      "rust.backend.source-field-selected-evidence",
-      "Project-source field update conflicts with the TSTS-selected property fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted project field update requires its sealed source field.", fieldExpression);
   }
   const receiverNode = Node_Expression(context.input.program.source.ast, fieldExpression);
   const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
@@ -112,14 +98,9 @@ export function planRustSourceFieldUpdate(
   }
   const dispatchPlan = field.declaration === undefined
     ? undefined
-    : context.input.program.projectFieldDispatch.planFor(field.declaration);
+    : context.input.program.records.projectFieldDispatch.get(field.declaration);
   if (dispatchPlan?.write === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, fieldExpression),
-      "rust.backend.project-field-dispatch-plan",
-      "Project-source field update has no exact finalized writable dispatch plan.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted project field update requires its sealed writable dispatch plan.", fieldExpression);
   }
   const dispatchRoles = planRustProjectFieldDispatchRoles(dispatchPlan, context);
   if (dispatchRoles?.write === undefined) {
@@ -188,20 +169,9 @@ export function findRustUpdateProjectField(
     { readonly kind: "source-field" | "source-union-field" }
   >;
 } | undefined {
-  let current: Node | undefined = operand;
-  while (current !== undefined) {
-    const fact = context.input.program.records.targetOperation.get(current);
-    if (fact?.kind === "source-field" || fact?.kind === "source-union-field") {
-      return { expression: current, fact };
-    }
-    const kind = context.input.program.source.ast.kindName(current);
-    if (kind !== KindPropertyAccessExpression && kind !== KindElementAccessExpression &&
-      kind !== KindParenthesizedExpression) {
-      return undefined;
-    }
-    current = Node_Expression(context.input.program.source.ast, current);
-  }
-  return undefined;
+  const selected = context.input.program.records.updateProjectField.get(operand);
+  if (selected === undefined) failRustPlannerInvariant("An admitted update requires its sealed source field query.", operand);
+  return selected === null ? undefined : selected;
 }
 
 export function planRustUpdateProjectionArguments(
@@ -219,15 +189,8 @@ export function planRustUpdateProjectionArguments(
   if (context.syntheticNames === undefined) {
     return undefined;
   }
-  const projections: Node[] = [];
-  let current: Node | undefined = operand;
-  while (current !== undefined && current !== fieldExpression) {
-    projections.push(current);
-    current = Node_Expression(context.input.program.source.ast, current);
-  }
-  if (current !== fieldExpression) {
-    return undefined;
-  }
+  const projections = context.input.program.records.updateProjection.get(operand, fieldExpression)
+    ?? failRustPlannerInvariant("An admitted update projection requires its sealed ordered native arguments.", operand);
   const bindings: { name: string; value: RustExpr }[] = [];
   const overrides: {
     node: Node;
@@ -238,36 +201,18 @@ export function planRustUpdateProjectionArguments(
     };
   }[] = [];
   const inputOverrides = new Map<RustFinalizedSourceInput, RustExpr>();
-  for (const projection of projections.reverse()) {
-    if (context.input.program.source.ast.kindName(projection) !== KindElementAccessExpression) {
-      continue;
-    }
-    const argument = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, projection);
-    const carrier = argument === undefined ? undefined : expressionCarrier(argument, context);
-    const operation = context.input.program.records.targetOperation.get(projection);
-    const candidateTargetInput = operation?.kind === "provider-operation" &&
-        operation.abi.target.form === "index" &&
-        operation.abi.targetArguments.length === 1
-      ? operation.abi.targetArguments[0]
-      : undefined;
-    const targetInput = candidateTargetInput !== undefined &&
-        isRustFinalizedSourceInput(candidateTargetInput)
-      ? candidateTargetInput
-      : undefined;
-    const value = argument === undefined
-      ? undefined
-      : targetInput === undefined
+  for (const projection of projections) {
+    const { argument, carrier, targetInput } = projection;
+    const value = targetInput === undefined
         ? planExpression(argument, context)
         : planFinalizedTargetInput(
             context,
             targetInput,
-            Node_Expression(context.input.program.source.ast, projection),
+            projection.receiver,
             [argument],
-            projection,
+            projection.projection,
           );
-    if (argument === undefined || carrier === undefined || value === undefined) {
-      return undefined;
-    }
+    if (value === undefined) failRustPlannerInvariant("An admitted update projection requires its native index argument.", argument);
     const name = allocateRustSyntheticName(context.syntheticNames, "update_index");
     bindings.push({ name, value });
     if (targetInput !== undefined) {
@@ -328,7 +273,7 @@ export function planRustBorrowedUpdateLocation(
       name: locationName,
       value: { kind: "reference", expr: target, mutable: true },
     }],
-    read: isRustCopyCarrier(update.resultCarrier)
+    read: rustCarrierHasCopyContract(update.resultCarrier, context)
       ? dereference
       : { kind: "method-call", receiver: dereference, method: "clone", args: [] },
     write: (value) => ({
@@ -362,7 +307,7 @@ export function planRustUpdateValue(options: {
   const previous: RustExpr = { kind: "path", path: previousName };
   const next: RustExpr = { kind: "path", path: nextName };
   const reusable = (value: RustExpr, preserve: boolean): RustExpr =>
-    preserve && !isRustCopyCarrier(options.update.resultCarrier)
+    preserve && !rustCarrierHasCopyContract(options.update.resultCarrier, options.context)
       ? { kind: "method-call", receiver: value, method: "clone", args: [] }
       : value;
   const nextValue: RustExpr = {

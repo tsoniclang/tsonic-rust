@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedSourceInput } from "./finalized-operation.js";
 import type { RustTargetOperationFact } from "./operations.js";
+import type { TargetTypeRef } from "../types/model.js";
 
 export type RustDirectStorageEmission =
   | { readonly kind: "unavailable" }
@@ -15,4 +16,17 @@ export type RustDirectStorageEmission =
 export interface RustDirectStorageIdentity {
   readonly resolved: boolean;
   readonly invalidatedRoots: ReadonlySet<Node>;
+}
+
+export interface RustUpdateProjectField {
+  readonly expression: Node;
+  readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" | "source-union-field" }>;
+}
+
+export interface RustUpdateProjectionArgument {
+  readonly projection: Node;
+  readonly receiver: Node | undefined;
+  readonly argument: Node;
+  readonly carrier: TargetTypeRef;
+  readonly targetInput: RustFinalizedSourceInput | undefined;
 }

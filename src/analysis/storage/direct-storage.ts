@@ -5,6 +5,8 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
 import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
+import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
+import type { RustUpdateProjectField, RustUpdateProjectionArgument } from "../../target-model/records/direct-storage.js";
 
 export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustDirectStorageProducer): readonly TargetDiagnostic[] {
@@ -133,6 +135,33 @@ export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reach
     }
   };
   for (const node of nodes) { select(node); effect(node); }
+  for (const node of nodes) {
+    let current: Node | undefined = node;
+    let field: RustUpdateProjectField | null = null;
+    const arguments_: RustUpdateProjectionArgument[] = [];
+    const visited = new Set<Node>();
+    let complete = true;
+    while (current !== undefined && !visited.has(current)) {
+      visited.add(current);
+      const fact = program.records.targetOperation.get(current);
+      if (fact?.kind === "source-field" || fact?.kind === "source-union-field") {
+        if (field === null) field = { expression: current, fact };
+        if (complete) producer.projection(node, current, [...arguments_].reverse());
+      }
+      if (!ast.is.IsPropertyAccessExpression(current) && !ast.is.IsElementAccessExpression(current) && !ast.is.IsParenthesizedExpression(current)) break;
+      if (ast.is.IsElementAccessExpression(current)) {
+        const argument = ElementAccessExpression_ArgumentExpression(ast, current);
+        const carrier = argument === undefined ? undefined : program.records.runtimeCarrier.get(argument)?.carrier;
+        const candidate = fact?.kind === "provider-operation" && fact.abi.target.form === "index" && fact.abi.targetArguments.length === 1
+          ? fact.abi.targetArguments[0] : undefined;
+        if (argument === undefined || carrier === undefined) complete = false;
+        else arguments_.push(Object.freeze({ projection: current, receiver: Node_Expression(ast, current), argument, carrier,
+          targetInput: candidate !== undefined && isRustFinalizedSourceInput(candidate) ? candidate : undefined }));
+      }
+      current = Node_Expression(ast, current);
+    }
+    producer.field(node, field);
+  }
   for (const node of nodes) {
     const computed = program.records.computedMember.get(node);
     const accessor = program.records.accessorReceiver.get(node);
