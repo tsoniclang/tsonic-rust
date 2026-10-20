@@ -1,246 +1,42 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import {
-  isRustBigIntCarrier,
-  isRustIntegerCarrier,
-  isRustBoolCarrier,
-  isRustProgramErrorCarrier,
-  isRustNumericCarrier,
-  isRustAbsenceCarrier,
-  rustOptionElementCarrier,
-  isRustSignedNumericCarrier,
-} from "../../../target-model/types/index.js";
+import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 
-import { rustPostCheckBinaryOperationId, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../target-model/operations/model.js";
-import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
+import { normalizeSelectedOperationInputCarrier, providerIdentityText, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
+import { providerOperationTemplate } from "../../../policy/operations/members/provider-templates.js";
+import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
-import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
+
 import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
 import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
 import { selectJsSurfaceMemberWrite } from "../../../policy/operations/source-profiles/js/member-reads.js";
-import {
-  ElementAccessExpression_ArgumentExpression,
-  KindBigIntLiteral,
-  sourceSequenceInputIsEmpty,
-} from "@tsonic/target-api/source";
+import { ElementAccessExpression_ArgumentExpression } from "@tsonic/target-api/source";
 import { finalizeRustProviderOperationAbi } from "../../../policy/operations/members/abi/finalize.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
-import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
+import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
-import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
+import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectedValueCarrier } from "../selected-values.js";
+
 import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
 
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
-import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
-import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
-import { selectRustClosedTypeTest } from "./type-tests.js";
-import { selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
-import type { RustCheckedCallSelectionInput, RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
-import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
+
+import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { ExtensionFactSubject, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustOperatorToken } from "../../../target-model/syntax/tokens.js";
+
 import type { RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetOperationSupportsAssignment } from "../../../policy/operations/native-contracts.js";
-import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+
 import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";
 
-export function selectRustCheckedOperator(
-  request: RustCheckedOperatorSelectionInput,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  if (isDeclarationFileSubject(request.expression, context)) {
-    return acceptDeclarationOperation("operator");
-  }
-  if (request.operator === "instanceof") {
-    return selectRustBuiltinErrorTypeTest(request, context, options) ??
-      selectRustProjectTypeTest(request, context, options);
-  }
-  if (request.right !== undefined) {
-    if (request.operator !== "=") {
-      return acceptPostCheckOperator(request);
-    }
-    let left = resolveRustTargetTypeRef(request.left, context, options);
-    let right = resolveRustTargetTypeRef(request.right, context, options);
-    if (isRustAbsenceCarrier(right)) {
-      const rightNode = asNode(request.right, context);
-      const rightType = rightNode === undefined
-        ? undefined
-        : context.currentSemantics.types.expressionType(rightNode);
-      if (rightType !== undefined && !context.currentSemantics.types.isUnion(rightType)) {
-        right = resolveRustExactNullishValueCarrier(rightType, context.currentSemantics);
-      }
-    }
-    left = normalizeSelectedLiteralCarrier(request.left, left, right, context, options);
-    right = normalizeSelectedLiteralCarrier(request.right, right, left, context, options);
-    const selectedSet = mapSelectedAssignment(request, left, right, context, options);
-    if (selectedSet !== undefined) {
-      return selectedSet;
-    }
-    return acceptPostCheckOperator(request);
-  }
-  const operand = rustEffectiveValueCarrier(context.records, request.left) ??
-    resolveRustTargetTypeRef(request.left, context, options);
-  return mapSelectedUnaryOperator(request, operand, context);
-}
-
-function selectRustProjectTypeTest(
-  request: RustCheckedOperatorSelectionInput,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const sourceCarrier = rustEffectiveValueCarrier(context.records, request.left) ??
-    resolveRustTargetTypeRef(request.left, context, options);
-  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
-  const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
-  const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
-  const targetCarrier = targetDefinition === undefined || targetDefinition.kind !== "class" ||
-      targetDefinition.genericParameters.length !== 0
-    ? undefined
-    : options.projectTypes.openCarrier(targetDefinition);
-  const programErrorVariant = targetDefinition === undefined
-    ? undefined
-    : options.projectTypes.programErrorVariant(targetDefinition);
-  if (sourceCarrier !== undefined && (isRustProgramErrorCarrier(dispatchCarrier) ||
-    (isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier) || isRustClosedValueCarrier(dispatchCarrier)) &&
-    targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) &&
-    targetCarrier !== undefined && programErrorVariant !== undefined &&
-    targetDefinition !== undefined && options.projectTypes.sourceErrorDefinitions.includes(targetDefinition)) {
-    const resultCarrier = rustSourcePrimitiveTargetType("bool");
-    const fact: RustTargetOperationFact = {
-      kind: "program-error-type-test",
-      operationId: `tsonic.rust.program-error-type-test.${programErrorVariant}`,
-      sourceCarrier,
-      targetCarrier,
-      variant: programErrorVariant,
-      resultCarrier,
-    };
-    return acceptRustOperation(fact, {
-      sourceExpression: request.expression,
-      sourceReceiver: request.left,
-      sourceSelectedDeclaration: request.sourceRightDeclaration,
-    }, resultCarrier);
-  }
-  if (sourceCarrier === undefined || dispatchCarrier === undefined ||
-    sourceDefinition === undefined && !isRustClosedValueCarrier(dispatchCarrier) && !isRustProgramErrorCarrier(dispatchCarrier) ||
-    targetDefinition === undefined || targetCarrier === undefined) {
-    const closed = sourceCarrier === undefined ? undefined : selectRustClosedTypeTest(request, sourceCarrier, context, options);
-    if (closed !== undefined) return closed;
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_TYPE_TEST_EVIDENCE_MISSING",
-      "Checked instanceof requires exact project source, concrete class declaration, and closed target carrier evidence.",
-    );
-  }
-  const plan = selectRustProjectTypeTestPlan(sourceCarrier, targetCarrier, options.projectTypes);
-  if (plan === undefined) {
-    return rejectSelectedOperation(request.expression, context, "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
-      "Checked instanceof requires an unambiguous closed generated project downcast route.");
-  }
-  const resultCarrier = rustSourcePrimitiveTargetType("bool");
-  const fact: RustTargetOperationFact = {
-    kind: "project-type-test",
-    operationId: `tsonic.rust.project-type-test.${plan.lowering.kind}`,
-    ...plan,
-    resultCarrier,
-  };
-  return acceptRustOperation(fact, {
-    sourceExpression: request.expression,
-    sourceReceiver: request.left,
-    sourceSelectedDeclaration: request.sourceRightDeclaration,
-  }, resultCarrier);
-}
-
-function acceptPostCheckOperator(
-  request: RustCheckedOperatorSelectionInput,
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const unaryOperationId = request.right === undefined
-    ? request.operator === "-"
-      ? rustPostCheckUnaryMinusOperationId
-      : request.operator === "+"
-        ? rustPostCheckUnaryPlusOperationId
-        : undefined
-    : undefined;
-  const operationId = unaryOperationId ?? rustPostCheckBinaryOperationId;
-  const provenance: NonNullable<RustTargetOperationSelection["provenance"]> = {
-    sourceExpression: request.expression,
-    sourceReceiver: request.left,
-    ...(request.right === undefined ? {} : { sourceResultType: request.right }),
-  };
-  return acceptRustPolicy({
-    operation: {
-      operationId,
-      operationKind: "operator",
-      targetOperation: unaryOperationId === rustPostCheckUnaryMinusOperationId
-        ? "-"
-        : unaryOperationId === rustPostCheckUnaryPlusOperationId
-          ? unaryOperationId
-          : "post-check-finalization",
-      provenance,
-    },
-    provenance,
-  }, [{ message: "rust retained the TSTS-checked operator for post-check carrier finalization" }]);
-}
-
-function mapSelectedUnaryOperator(
-  request: RustCheckedOperatorSelectionInput,
-  operand: TargetTypeRef | undefined,
-  context: RustOperationAnalysisContext,
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const operandNode = asNode(request.left, context);
-  if ((request.operator === "-" || request.operator === "+") &&
-    operandNode !== undefined &&
-    (context.ast.kindName(operandNode) === "KindNumericLiteral" ||
-      context.ast.kindName(operandNode) === KindBigIntLiteral)) {
-    return acceptPostCheckOperator(request);
-  }
-  let targetOperator: RustOperatorToken | undefined;
-  let resultCarrier: TargetTypeRef | undefined;
-  if (request.operator === "!" && isRustBoolCarrier(operand)) {
-    targetOperator = "!";
-    resultCarrier = operand;
-  } else if (request.operator === "~" && operand !== undefined && isRustIntegerCarrier(operand)) {
-    targetOperator = "!";
-    resultCarrier = operand;
-  } else if (request.operator === "~" && isRustBigIntCarrier(operand)) {
-    targetOperator = "!";
-    resultCarrier = operand;
-  } else if (request.operator === "-" &&
-    (isRustSignedNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
-    targetOperator = "-";
-    resultCarrier = operand;
-  } else if ((request.operator === "++" || request.operator === "--") &&
-    (isRustNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
-    targetOperator = request.operator === "++" ? "+=" : "-=";
-    resultCarrier = operand;
-  } else if (request.operator === "+" && operand !== undefined && isRustNumericCarrier(operand)) {
-    return acceptRustOperation({
-      kind: "source-conversion",
-      operationId: "tsonic.rust.operator.unary-plus",
-      resultCarrier: operand,
-    }, {
-      sourceExpression: request.expression,
-      sourceReceiver: request.left,
-    });
-  }
-  if (targetOperator === undefined || resultCarrier === undefined) {
-    return rejectSelectedOperation(request.expression, context, "RUST_UNARY_OPERATOR_UNSUPPORTED", `Checked unary operator '${request.operator}' has no closed Rust operation for the selected operand carrier.`);
-  }
-  return acceptRustOperation(operatorFact(targetOperator, resultCarrier), {
-    sourceExpression: request.expression,
-    sourceReceiver: request.left,
-  });
-}
-
-function mapSelectedAssignment(
+export function mapSelectedAssignment(
   request: RustCheckedOperatorSelectionInput,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
@@ -552,69 +348,4 @@ function mapSelectedProviderAssignment(
     sourceResultType: request.right,
     providerDeclaration: identity,
   }, sourceResultCarrier ?? selectedRight);
-}
-
-function operatorFact(operator: RustOperatorToken, resultCarrier: TargetTypeRef): Extract<RustTargetOperationFact, { readonly kind: "operator-token" }> {
-  return {
-    kind: "operator-token",
-    operationId: `tsonic.rust.operator.${operator}.${rustCarrierIdentity(resultCarrier)}`,
-    operator,
-    resultCarrier,
-    operandModes: [operator === "+=" || operator === "-=" ? "mut-ref" : "value"],
-  };
-}
-
-function rustCarrierIdentity(carrier: TargetTypeRef): string {
-  if (carrier.kind === "source-primitive") {
-    return carrier.name;
-  }
-  if (carrier.kind === "target-named") {
-    return carrier.id;
-  }
-  return carrier.kind;
-}
-
-export function selectedCallArgumentNodes(
-  request: RustCheckedCallSelectionInput,
-): readonly Node[] {
-  return request.source.sourceArguments.map((argument) => argument.expression);
-}
-
-export function selectedCallArgumentCarriers(
-  request: RustCheckedCallSelectionInput,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): readonly (TargetTypeRef | undefined)[] {
-  return request.source.sourceArguments.map((argument) =>
-    selectedSourceValueCarrier(argument, context, options));
-}
-
-export function selectedSourceValueCarrier(
-  value: RustCheckedCallSelectionInput["source"]["sourceArguments"][number],
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): TargetTypeRef | undefined {
-  if (context.ast.is.IsSpreadElement(value.expression)) {
-    const operand = context.ast.as.AsSpreadElement(value.expression)?.Expression;
-    if (operand !== undefined && sourceSequenceInputIsEmpty(context.ast, operand)) return { kind: "tuple", elements: [] };
-    return operand === undefined
-      ? undefined
-      : rustEffectiveValueCarrier(context.records, operand) ??
-        resolveRustTargetTypeRef(operand, context, options);
-  }
-  return selectedValueCarrier(value.expression, value.type, context, options);
-}
-
-export function selectedCallCalleeSymbol(
-  request: RustCheckedCallSelectionInput,
-): import("@tsonic/tsts").Symbol | undefined {
-  return request.source.sourceCallee.selectedSymbol ??
-    request.source.sourceCallee.symbol;
-}
-
-export function selectedCallCalleeDeclaration(
-  request: RustCheckedCallSelectionInput,
-): Node | undefined {
-  return request.source.sourceCallee.selectedDeclaration ??
-    request.source.sourceCallee.declaration;
 }

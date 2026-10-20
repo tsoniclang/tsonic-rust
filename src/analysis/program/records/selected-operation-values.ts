@@ -2,6 +2,8 @@ import { type Node } from "@tsonic/tsts";
 import { type RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { type TargetTypeRef, type RustSelectedTargetOperation } from "../../../target-model/types/model.js";
 import { rustTargetOperationText } from "../../../target-model/operations/text.js";
+import { acceptDeclarationOperation, acceptRustOperation } from "../../operations/provider/result.js";
+import { acceptRustPolicy, type RustCheckedOperationSelectionResult, type RustPolicySelection, type RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 
 export function rustSelectedOperatorOperation(
   subject: Node, fact: RustTargetOperationFact, resultType: TargetTypeRef,
@@ -80,4 +82,35 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     default:
       return "operator";
   }
+}
+
+export function acceptPostCheckOperator(
+  request: RustCheckedOperatorSelectionInput,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const unaryOperationId = request.right === undefined
+    ? request.operator === "-"
+      ? rustPostCheckUnaryMinusOperationId
+      : request.operator === "+"
+        ? rustPostCheckUnaryPlusOperationId
+        : undefined
+    : undefined;
+  const operationId = unaryOperationId ?? rustPostCheckBinaryOperationId;
+  const provenance: NonNullable<RustTargetOperationSelection["provenance"]> = {
+    sourceExpression: request.expression,
+    sourceReceiver: request.left,
+    ...(request.right === undefined ? {} : { sourceResultType: request.right }),
+  };
+  return acceptRustPolicy({
+    operation: {
+      operationId,
+      operationKind: "operator",
+      targetOperation: unaryOperationId === rustPostCheckUnaryMinusOperationId
+        ? "-"
+        : unaryOperationId === rustPostCheckUnaryPlusOperationId
+          ? unaryOperationId
+          : "post-check-finalization",
+      provenance,
+    },
+    provenance,
+  }, [{ message: "rust retained the TSTS-checked operator for post-check carrier finalization" }]);
 }
