@@ -1,17 +1,10 @@
-import type { TargetTypeRef } from "../model.js";
-import { rustCallableInputProtocol } from "./callables.js";
-import { bindRustCallableInputLifetimes } from "./callable-input-lifetimes.js";
-import { rustNamedTargetType } from "./native.js";
-import { mapRustTargetTypes } from "./substitution.js";
-import type { RustLifetimeBinder } from "../../lifetimes/index.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
+import { bindRustCallableInputLifetimes } from "./input-lifetimes.js";
+import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
+import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 
-export function rustCallableSignatureAbsenceWitness(
-  parameters: readonly TargetTypeRef[], result: TargetTypeRef, binder?: RustLifetimeBinder,
-): TargetTypeRef {
-  return { kind: "function-pointer", args: [{ kind: "tuple", elements: parameters }], result,
-    ...(binder === undefined || binder.parameters.length === 0 ? {} : { lifetimeBinder: binder }) };
-}
-
+import { rustCallableSignatureAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
 export function rustCallableInputAbsenceWitness(carrier: TargetTypeRef): TargetTypeRef | undefined {
   let valid = true;
   const witness = mapRustTargetTypes(carrier, selected => {
