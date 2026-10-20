@@ -54,10 +54,11 @@ export function planRustConstructionLayers(
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
         : planRustCallableParameters(base.constructor, baseContext, syntheticNames);
-      const args = layer.baseCall === undefined
-        ? parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name }))
+      const argumentsPlan = layer.baseCall === undefined
+        ? { arguments: parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name })), statements: [] }
         : planRustSelectedSourceCallArguments(layer.baseCall, layerContext);
-      if (baseParameters === undefined || args === undefined || args.length !== baseParameters.params.length) {
+      const args = argumentsPlan.arguments;
+      if (baseParameters === undefined || args.length !== baseParameters.params.length) {
         failRustPlannerInvariant("Native base construction requires its exact selected argument and parameter ABI.", layer.constructor ?? layer.definition.declaration);
       }
       const temporaries: RustStmt[] = [];
@@ -71,7 +72,7 @@ export function planRustConstructionLayers(
       }
       const body = planLayer(index - 1, baseParameters);
       if (body === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
-      statements.push(...temporaries, ...construction.exportInitialized(
+      statements.push(...argumentsPlan.statements, ...temporaries, ...construction.exportInitialized(
         plan.layers.slice(0, index).flatMap(layer => layer.fields.map(field => field.declaration)), [...bindings, ...body]));
       if (!plan.completingLayers.has(base.definition)) return statements;
     } else {

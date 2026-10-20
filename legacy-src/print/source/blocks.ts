@@ -3,6 +3,7 @@ import { printRustItem } from "./items.js";
 import { printRustAttribute, printRustAttributes as printRustStatementAttributes } from "./attributes.js";
 import { indentText, printRustType } from "./types.js";
 import type { RustBlock, RustStmt } from "../../backend/target-ast/syntax/nodes.js";
+import { printRustPattern } from "./patterns.js";
 
 export function printRustBlockStatements(block: RustBlock, depth: number, separator = "\n"): string {
   if (block === undefined || !Array.isArray(block.statements)) {
@@ -25,6 +26,7 @@ function printRustBlock(block: RustBlock, depth: number, header: string): string
 function printRustStmt(statement: RustStmt, depth: number): string {
   const indent = indentText(depth);
   switch (statement.kind) {
+    case "let-pattern": return `${indent}let ${printRustPattern(statement.pattern)} = ${printRustExpr(statement.init)};`;
     case "item":
       return printRustItem(statement.item).split("\n").map(line => `${indent}${line}`).join("\n");
     case "let": {

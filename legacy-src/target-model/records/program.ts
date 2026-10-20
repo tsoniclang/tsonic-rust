@@ -106,6 +106,9 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly nullishCoalescing: RustRecordFamily<import("./nullish-coalescing.js").RustNullishCoalescingEmission>;
   readonly objectReferenceEmission: RustRecordFamily<import("./object-reference-views.js").RustObjectReferenceEmission>;
   readonly sourceCallArgument: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallArgumentEmission>;
+  readonly sourceCallEvaluation: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallEvaluationEmission>;
+  readonly sourceCallParameters: { readonly get: (fact: import("./source-call-arguments.js").RustSourceCallFact) => readonly import("./source-call-arguments.js").RustSourceParameterEmission[] | undefined };
+  readonly providerArguments: { readonly get: (abi: import("./finalized-operation.js").RustFinalizedOperationAbi) => boolean };
   readonly binaryEmission: RustRecordFamily<import("./expression-binary.js").RustBinaryEmission>;
   readonly assignmentEvaluation: RustRecordFamily<import("./assignment-evaluation.js").RustAssignmentEvaluation>;
   readonly locationProjection: import("./location-storage.js").RustLocationStorageRecords["locationProjection"];

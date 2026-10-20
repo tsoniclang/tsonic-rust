@@ -704,7 +704,8 @@ export function analyzeRustTargetProgram(
   analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans);
-  analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
+  const sourceCallArgumentIssues = analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
+  if (sourceCallArgumentIssues.length !== 0) return rejectedTargetStage(sourceCallArgumentIssues);
   analyzeRustUnionCalls(program, context.nativeNodes, context.records.unionCallPlans, context.records.conversionEmissionPlans);
   const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans);
   if (directStorageIssues.length !== 0) return rejectedTargetStage(directStorageIssues);

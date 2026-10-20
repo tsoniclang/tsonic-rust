@@ -22,7 +22,6 @@ export { applyRustArgumentMode } from "./input-shaping.js";
 export {
   planRustSelectedSourceCallArguments,
   requireProviderArgumentPassingFacts,
-  sourceCallSelectedMemberMatches,
 } from "./calls/arguments.js";
 export {
   finishRustSourceAccessorCall,

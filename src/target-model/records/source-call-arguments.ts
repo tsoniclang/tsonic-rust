@@ -1,4 +1,29 @@
 import type { Node } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../types/model.js";
+import type { RustTargetOperationFact } from "./operations.js";
+
+export type RustSourceCallFact = Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
+
+export interface RustSourceCallInputEmission {
+  readonly argumentIndex: number;
+  readonly projection: { readonly kind: "tuple" | "fixed" | "element"; readonly index: number; readonly clone: boolean } | undefined;
+  readonly passing: "value" | "identity" | "ref" | "mut-ref";
+  readonly sequence: "value" | "native" | "js";
+}
+
+export interface RustSourceParameterEmission {
+  readonly form: "required" | "optional" | "default" | "rest";
+  readonly carrier: TargetTypeRef;
+  readonly rest: "native" | "js";
+  readonly inputs: readonly RustSourceCallInputEmission[];
+}
+
+export interface RustSourceCallEvaluationEmission {
+  readonly arguments: readonly { readonly source: Node; readonly expression: Node; readonly destination: TargetTypeRef | undefined;
+    readonly mutable: boolean; readonly borrow: "value" | "identity" | "ref" | "mut-ref";
+    readonly elements: readonly { readonly index: number; readonly mode: "value" | "ref" | "mut-ref" }[] }[];
+  readonly spread: boolean;
+}
 
 export type RustSourceCallArgumentEmission =
   | { readonly kind: "value" }

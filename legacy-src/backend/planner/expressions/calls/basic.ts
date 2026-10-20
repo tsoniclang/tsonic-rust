@@ -135,7 +135,6 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
   if (fact !== undefined && fact.kind === "source-call") {
     const argumentPlan = planRustSourceCallArgumentEvaluation(
       node,
-      fact,
       context,
     );
     if (argumentPlan === undefined) {
@@ -144,16 +143,15 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
     const native = planSelectedSourceCall(
       node,
       callee,
-      argumentPlan.arguments,
+      argumentPlan,
       fact,
       context,
-      argumentPlan.borrowedInputs,
     );
     const planned = native === undefined || fact.resultProjection === undefined ? native
       : planRustValueProjection(node, native, fact.resultProjection, context, "move");
     return planned === undefined || argumentPlan.bindings.length === 0
       ? planned
-      : rustValueBlock(argumentPlan.bindings, planned);
+      : { kind: "block", body: { statements: [...argumentPlan.bindings, { kind: "tail", expr: planned }] } };
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
     return planRustProviderCall(node, fact, context);

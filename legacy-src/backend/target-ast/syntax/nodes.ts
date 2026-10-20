@@ -167,7 +167,8 @@ export type RustType =
 
 export type RustPattern =
   | { readonly kind: "wildcard" }
-  | { readonly kind: "binding"; readonly name: string }
+  | { readonly kind: "binding"; readonly name: string; readonly borrow?: "ref" | "mut-ref" }
+  | { readonly kind: "slice"; readonly elements: readonly RustPattern[]; readonly rest: boolean }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
   | { readonly kind: "struct"; readonly path: string;
@@ -285,6 +286,7 @@ export type {
 } from "../../../target-model/operations/error-boundary.js";
 
 export type RustStmt =
+  | { readonly kind: "let-pattern"; readonly pattern: RustPattern; readonly init: RustExpr }
   | { readonly kind: "item"; readonly item: RustItem }
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly RustAttribute[] }
   | { readonly kind: "expr"; readonly expr: RustExpr; readonly attrs?: readonly RustAttribute[] }

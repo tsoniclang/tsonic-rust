@@ -5,7 +5,8 @@ export function printRustPattern(pattern: RustPattern): string {
     case "wildcard":
       return "_";
     case "binding":
-      return pattern.name;
+      return `${pattern.borrow === "ref" ? "ref " : pattern.borrow === "mut-ref" ? "ref mut " : ""}${pattern.name}`;
+    case "slice": return `[${[...pattern.elements.map(printRustPattern), ...(pattern.rest ? [".."] : [])].join(", ")}]`;
     case "path":
       return pattern.path;
     case "tuple": {

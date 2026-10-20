@@ -12,7 +12,6 @@ import {
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
-import { rustSourceCallArgumentCarriers } from "../../../../analysis/callables/source-call-lifetimes.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -24,14 +23,13 @@ import {
   sourceTypePath,
 } from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
-import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planExpression } from "../entry.js";
 import {
   planPromotedSourceMethodCall,
   shapeRustSourceCallParameters,
-  sourceCallSelectedMemberMatches,
+  type RustSourceArgumentEvaluation,
 } from "./arguments.js";
 import { planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression, rustEliminateInfallibleResult } from "../../types/fallible-shape.js";
@@ -66,7 +64,6 @@ import { rustNativeInputEffectsMatch } from "../../../../analysis/callables/nati
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 
 import { planRustSourceErrorPropagation } from "./source-errors.js";
-import { rustRetainedCallSubstitutions } from "../../../../analysis/callables/retained-call-lifetimes.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustNativeCallableCompletion } from "../../../../target-model/types/callable-completions.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
@@ -113,40 +110,16 @@ export function sourceCallEffectsMatch(
 export function planSelectedSourceCall(
   node: Node,
   callee: Node | undefined,
-  args: readonly RustExpr[],
+  argumentPlan: RustSourceArgumentEvaluation,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   context: RustPlanContext,
-  borrowedInputs: ReadonlyMap<Node, RustExpr>,
 ): RustExpr | undefined {
+  const args = argumentPlan.arguments;
+  const borrowedInputs = argumentPlan.borrowedInputs;
   const selected = context.input.program.records.selectedCall.get(node);
-  const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(
-    fact,
-    selected,
-    selected.member.returnType,
-    context.input.program.typeFamilies.normalize,
-    context.input.program.projectTypes,
-    rustSourceCallArgumentCarriers(node, context.input.program.source.ast, context.input.program.records),
-    context.input.program.typeDefinitions,
-    rustRetainedCallSubstitutions(context.input.program.records, node),
-  );
-  if (!selectedMatches) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.source-call-selected-signature",
-      "Selected project-source call fact conflicts with the TSTS-selected target member ABI.",
-    ));
-    return undefined;
-  }
-  const rawArgumentNodes = context.input.program.source.ast.arguments(node);
-  if (!isDenseDataArray(rawArgumentNodes) || rawArgumentNodes.some((argument) => argument === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.source-call-arguments",
-      "Selected project-source call contains an undefined or non-data argument slot.",
-    ));
-    return undefined;
-  }
-  const argumentNodes = rawArgumentNodes as readonly Node[];
+  if (selected === undefined || context.input.program.records.sourceCallEvaluation.get(node) === undefined)
+    failRustPlannerInvariant("An admitted source call requires its exact selected target signature and argument evaluation.", node);
+  const argumentNodes = argumentPlan.nodes;
   const nativeInput = context.input.program.callableValues.native.callFor(node);
   if (argumentNodes.length !== args.length) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -157,11 +130,9 @@ export function planSelectedSourceCall(
     return undefined;
   }
   const shaped = shapeRustSourceCallParameters(
-    argumentNodes,
-    args,
+    argumentPlan,
     fact,
     context,
-    borrowedInputs,
   );
   if (shaped === undefined) {
     return undefined;

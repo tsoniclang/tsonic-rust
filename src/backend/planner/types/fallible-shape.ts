@@ -96,6 +96,7 @@ export function applyFallibleShape(
       case "tail": return { ...statement,
         expr: wrapTail ? result(wrapReturns(statement.expr)) : wrapReturns(statement.expr) };
       case "let": return statement.init === undefined ? statement : { ...statement, init: wrapReturns(statement.init) };
+      case "let-pattern": return { ...statement, init: wrapReturns(statement.init) };
       case "expr": return { ...statement, expr: wrapReturns(statement.expr) };
       case "assign": return { ...statement, target: wrapReturns(statement.target), value: wrapReturns(statement.value) };
       case "index-assign": return { ...statement, receiver: wrapReturns(statement.receiver),
