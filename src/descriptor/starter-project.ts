@@ -1,7 +1,4 @@
-import type {
-  TargetStarterProject,
-  TargetStarterProjectContext,
-} from "@tsonic/target-api";
+import type { TargetStarterProject, TargetStarterProjectContext } from "@tsonic/target-api";
 import { rustTargetId } from "../target-model/identities/target.js";
 
 export function createRustStarterProject(
