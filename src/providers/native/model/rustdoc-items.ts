@@ -1,15 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RustCompilerDependency } from "./model.js";
-import {
-  hasInnerKind,
-  isRecord,
-  itemById,
-  requireArray,
-  requireInnerRecord,
-  requireRecord,
-  requireString,
-  type RustdocDocument,
-} from "./rustdoc-schema.js";
+import { hasInnerKind, isRecord, itemById, requireArray, requireInnerRecord, requireRecord, requireString, type RustdocDocument } from "./rustdoc-schema.js";
 import { canonicalPathKey } from "./rustdoc-types.js";
 
 export interface ResolvedRustdocItem {
