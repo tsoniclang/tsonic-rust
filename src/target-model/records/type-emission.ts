@@ -24,6 +24,8 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly errorView: { readonly kind: "program" | "source" | "retained" | "closed" | "other";
+    readonly observed: boolean; readonly optional: TargetTypeRef | undefined };
   readonly errorStorage: { readonly kind: "source" | "retained"; readonly path: string; readonly writable: boolean } | undefined;
   readonly option: boolean;
   readonly string: boolean;

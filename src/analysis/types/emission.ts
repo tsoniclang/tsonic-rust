@@ -25,6 +25,9 @@ import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustSour
 import { selectRustTypePositions } from "../../policy/types/type-emission.js";
 import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier,
   isRustWritableRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
+import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
+import { rustCarrierProvidesErrorObservation } from "../../target-model/types/carriers/error-protocols.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -94,6 +97,9 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     if (union !== undefined && unionArguments === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted source union requires its exact selected native payload arguments.");
     const value: Omit<RustTypeEmission, "positions" | "constructionArguments"> = Object.freeze({ producerError, unionArguments,
+      errorView: Object.freeze({ kind: isRustProgramErrorCarrier(carrier) ? "program" : isRustSourceErrorCarrier(carrier) ? "source"
+        : isRustRetainedErrorCarrier(carrier) ? "retained" : isRustClosedValueCarrier(carrier) ? "closed" : "other",
+        observed: rustCarrierProvidesErrorObservation(carrier, program.typeDefinitions), optional: rustOptionElementCarrier(carrier) }),
       errorStorage: isRustRetainedErrorCarrier(carrier) ? Object.freeze({ kind: "retained", writable: isRustWritableRetainedErrorCarrier(carrier),
         path: isRustWritableRetainedErrorCarrier(carrier) ? "tsonic_rust_runtime::WritableRetainedError" : "tsonic_rust_runtime::RetainedError" })
         : isRustSourceErrorCarrier(carrier) ? Object.freeze({ kind: "source", writable: isRustWritableSourceErrorCarrier(carrier),

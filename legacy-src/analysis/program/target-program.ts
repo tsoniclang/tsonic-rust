@@ -154,6 +154,7 @@ import { analyzeRustProviderForms } from "../operations/provider-forms.js";
 import { analyzeRustCallableEmission } from "../conversions/callable-emission.js";
 import { analyzeRustArgumentViews } from "../expressions/argument-views.js";
 import { admitRustRecordContributions } from "../reachability/record-contributions.js";
+import { admitRustErrorObservations } from "../errors/observations.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -725,6 +726,8 @@ export function analyzeRustTargetProgram(
   analyzeRustStringComparisonViews(program, context.nativeNodes, context.records.stringComparisonPlans);
   analyzeRustArgumentViews(program, context.nativeNodes, context.records.argumentViewPlans);
   const nativeLayoutTypes = analyzeRustNativeMemoryEmission(program, context.nativeNodes, context.records.nativeLayoutPlans);
+  const errorObservationIssues = admitRustErrorObservations(program, context.nativeNodes);
+  if (errorObservationIssues.length !== 0) return rejectedTargetStage(errorObservationIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans,
     [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types]);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
