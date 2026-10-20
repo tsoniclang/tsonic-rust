@@ -7,7 +7,8 @@ import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sour
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
-import { mapRustAwaitSelection, rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { mapRustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";

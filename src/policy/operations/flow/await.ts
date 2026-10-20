@@ -1,23 +1,17 @@
-import type { TargetTypeRef } from "./model.js";
-import { rustFutureOutputCarrier } from "./carriers/primitives.js";
-import { rustOptionElementCarrier } from "./carriers/optional.js";
-import { isRustUnitCarrier } from "./carriers/js.js";
-import { rustSourceOptionalTargetType } from "./projections.js";
-import { rustFutureTargetId } from "./carriers/primitives.js";
-import { rustJsPromiseTargetId } from "./carriers/source-types.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
-import { rustUnionAlternatives } from "./union-relations.js";
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "./source-union-definitions.js";
-import type { RustRuntimeUnionVariant } from "./carriers/runtime-unions.js";
-import { closedMetadataKey, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustFutureOutputCarrier } from "../../../target-model/types/carriers/primitives.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
+import { isRustUnitCarrier } from "../../../target-model/types/carriers/js.js";
+import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
+import { rustFutureTargetId } from "../../../target-model/types/carriers/primitives.js";
+import { rustJsPromiseTargetId } from "../../../target-model/types/carriers/source-types.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 
-export interface RustAwaitCarrier {
-  readonly futureCarrier: TargetTypeRef;
-  readonly outputCarrier: TargetTypeRef;
-  readonly resultCarrier: TargetTypeRef;
-  readonly optional: boolean;
-}
+import { closedMetadataKey, isClosedMetadata, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 
+import { rustAwaitSelectionLeaves, type RustAwaitCarrier, type RustAwaitSelection } from "../../../target-model/types/await.js";
 export function rustAwaitCarrier(carrier: TargetTypeRef | undefined): RustAwaitCarrier | undefined {
   if (carrier === undefined) return undefined;
   const optional = rustOptionElementCarrier(carrier);
@@ -29,18 +23,6 @@ export function rustAwaitCarrier(carrier: TargetTypeRef | undefined): RustAwaitC
       ? outputCarrier : rustSourceOptionalTargetType(outputCarrier),
   };
 }
-
-export interface RustAwaitLeaf {
-  readonly carrier: TargetTypeRef;
-  readonly future?: RustAwaitCarrier;
-}
-
-export type RustAwaitSelection<Leaf = RustAwaitLeaf> =
-  | { readonly kind: "leaf"; readonly value: Leaf }
-  | { readonly kind: "optional"; readonly carrier: TargetTypeRef; readonly present: RustAwaitSelection<Leaf> }
-  | { readonly kind: "union"; readonly carrier: TargetTypeRef;
-      readonly alternatives: readonly { readonly variant: RustRuntimeUnionVariant;
-        readonly selection: RustAwaitSelection<Leaf> }[] };
 
 export function rustAwaitSelection(
   carrier: TargetTypeRef | undefined,
@@ -86,26 +68,6 @@ export function rustAwaitSelection(
   return carrier === undefined ? undefined : visit(carrier, new Set());
 }
 
-export function mapRustAwaitSelection<Source, Target>(
-  selection: RustAwaitSelection<Source>,
-  select: (leaf: Source) => Target | undefined,
-): RustAwaitSelection<Target> | undefined {
-  if (selection.kind === "leaf") {
-    const value = select(selection.value);
-    return value === undefined ? undefined : Object.freeze({ kind: "leaf", value });
-  }
-  if (selection.kind === "optional") {
-    const present = mapRustAwaitSelection(selection.present, select);
-    return present === undefined ? undefined : Object.freeze({ ...selection, present });
-  }
-  const alternatives = selection.alternatives.map(alternative => {
-    const selected = mapRustAwaitSelection(alternative.selection, select);
-    return selected === undefined ? undefined : Object.freeze({ ...alternative, selection: selected });
-  });
-  return alternatives.some(alternative => alternative === undefined) ? undefined : Object.freeze({ ...selection,
-    alternatives: Object.freeze(alternatives as NonNullable<typeof alternatives[number]>[]) });
-}
-
 export function rustAwaitSelectionResultCarrier(selection: RustAwaitSelection | undefined): TargetTypeRef | undefined {
   if (selection === undefined) return undefined;
   if (selection.kind === "leaf") return selection.value.future?.outputCarrier ?? selection.value.carrier;
@@ -120,10 +82,4 @@ export function rustAwaitSelectionResultCarrier(selection: RustAwaitSelection | 
   const selected = present[0]!;
   if (present.some(output => !rustTargetTypeRefEquals(output, selected))) return undefined;
   return present.length === outputs.length ? selected : rustSourceOptionalTargetType(selected);
-}
-
-export function rustAwaitSelectionLeaves<Leaf>(selection: RustAwaitSelection<Leaf>): readonly Leaf[] {
-  if (selection.kind === "leaf") return [selection.value];
-  if (selection.kind === "optional") return rustAwaitSelectionLeaves(selection.present);
-  return selection.alternatives.flatMap(alternative => rustAwaitSelectionLeaves(alternative.selection));
 }

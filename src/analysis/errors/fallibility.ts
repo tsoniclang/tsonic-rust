@@ -36,7 +36,8 @@ import type { RustFactWalk } from "../program/walk.js";
 
 import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../callables/future-values.js";
 import { rustFutureValueForStoredBranch } from "../callables/future-storage.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import { collectRustErrorRegionEffects } from "./region-effects.js";
 import { collectRustErrorDeclarations } from "./error-declarations.js";
 import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "./error-effects.js";

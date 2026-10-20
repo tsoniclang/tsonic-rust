@@ -25,7 +25,7 @@ import { selectRustConditionalNumericCarrier } from "../../policy/types/conditio
 import { resolveRustBranchUnion } from "../types/resolution/branch-unions.js";
 import { type Node, type SourceFile } from "@tsonic/tsts";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
-import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../target-model/types/await.js";
+import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../policy/operations/flow/await.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { normalizeSelectedLiteralCarrier } from "./selected-literals.js";
 import { resolveTemplateExpressionCarrier } from "./template-strings.js";

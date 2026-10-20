@@ -1,7 +1,8 @@
 import { Node_Expression, Node_Type, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createTargetGraphComponentQuery, createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import type { Node } from "@tsonic/tsts";
-import { rustAwaitSelection, rustAwaitSelectionLeaves, type RustAwaitSelection } from "../../target-model/types/await.js";
+import { rustAwaitSelectionLeaves, type RustAwaitSelection } from "../../target-model/types/await.js";
+import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import {
   isRustNeverCarrier,
   rustFutureOutputCarrier,

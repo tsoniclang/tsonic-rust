@@ -7,7 +7,8 @@ import type { RustDeferredProducerChannel } from "../../target-model/records/def
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";

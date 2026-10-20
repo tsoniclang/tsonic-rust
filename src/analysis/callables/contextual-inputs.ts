@@ -10,7 +10,8 @@ import { selectedRustCheckedCallInputCarrier } from "../operations/provider/call
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 
 function checkedCallableInputs(walk: RustFactWalk, expression: Node): readonly {
   readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef;

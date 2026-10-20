@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
+import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
+import { rustAwaitSelection } from "../../operations/flow/await.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustFutureTargetId } from "../../../target-model/types/carriers/primitives.js";
