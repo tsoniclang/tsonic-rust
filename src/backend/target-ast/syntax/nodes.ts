@@ -335,6 +335,7 @@ export type RustStmt =
   | {
       readonly kind: "try-scope";
       readonly normalBindings?: readonly Extract<RustStmt, { readonly kind: "let" }>[];
+      readonly bodyBindings?: readonly Extract<RustStmt, { readonly kind: "let" }>[];
       readonly bodyName: string;
       readonly flowName: string;
       readonly finallyName?: string;
@@ -346,6 +347,7 @@ export type RustStmt =
       readonly bodyTerminates: boolean;
       readonly tail?: true;
       readonly catchClause?: {
+        readonly bindings?: readonly Extract<RustStmt, { readonly kind: "let" }>[];
         readonly binding: string;
         readonly bindingUsed: boolean;
         readonly body: RustBlock;

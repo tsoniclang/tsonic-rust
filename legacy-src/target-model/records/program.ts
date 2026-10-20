@@ -87,6 +87,8 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly valueRead: import("./value-read.js").RustValueReadRecords["valueRead"];
   readonly valueProjection: import("./value-projection.js").RustValueProjectionRecords["valueProjection"];
   readonly expressionExit: import("./expression-exits.js").RustExpressionExitRecords["expressionExit"];
+  readonly completionBindings: import("./completion-bindings.js").RustCompletionBindingRecords["completionBindings"];
+  readonly completionBindingOwner: import("./completion-bindings.js").RustCompletionBindingRecords["completionBindingOwner"];
   readonly projectUpcastEmission: import("./value-projection.js").RustValueProjectionRecords["projectUpcastEmission"];
   readonly promiseResult: RustRecordFamily<import("./promise-results.js").RustPromiseResult>;
   readonly nativeComparison: import("./native-comparisons.js").RustNativeComparisonRecords["nativeComparison"];

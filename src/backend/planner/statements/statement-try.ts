@@ -21,6 +21,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const completion = context.input.program.records.throwCompletion.get(node);
@@ -81,6 +82,14 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   }
 
   const outwardFallible = context.fallibleBoundary !== undefined;
+  const completionBindings = context.input.program.records.completionBindings.get(node) ?? [];
+  const normalBindings = completionBindings.map((selected): Extract<RustStmt, { readonly kind: "let" }> => {
+    const binding = context.input.program.records.localBinding.get(selected.declaration);
+    if (binding?.kind !== "value") failRustPlannerInvariant("An admitted completion binding requires its exact native local storage.", selected.declaration);
+    const type = rustTypeFromCarrierInContext(binding.nativeCarrier, context)
+      ?? failRustPlannerInvariant("An admitted completion binding requires its native type.", selected.declaration);
+    return { kind: "let", name: binding.name, mutable: binding.mutable, type };
+  });
   const errorType = rustActiveErrorType(context);
   const bodyFallible = catchBlock !== undefined || outwardFallible;
   const catchOwner = catchBlock === undefined ? undefined : rustCurrentErrorBoundary(context);
@@ -111,6 +120,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     if (binding === undefined) failRustPlannerInvariant("An admitted catch requires its exact native binding plan.", catchClause);
     const terminates = statementExits(catchBlock, context);
     plannedCatch = {
+      bindings: normalBindings.filter((_binding, index) => completionBindings[index]!.catch),
       binding: binding.name,
       bindingUsed: binding.used,
       body: terminates ? tailCompletionExits(catchBody) : catchBody,
@@ -144,10 +154,13 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     .filter((boundary): boundary is RustCompletionBoundary => boundary !== undefined);
   const dispatch = collectRustCompletionDispatch(boundaries);
   context.usedAliases?.add("rt");
-  return [{
+  const flowName = allocateRustSyntheticName(context.syntheticNames, "try_flow");
+  const scope: Extract<RustStmt, { readonly kind: "try-scope" }> = {
     kind: "try-scope",
     bodyName: allocateRustSyntheticName(context.syntheticNames, "try_body"),
-    flowName: allocateRustSyntheticName(context.syntheticNames, "try_flow"),
+    flowName,
+    normalBindings,
+    bodyBindings: normalBindings.filter((_binding, index) => completionBindings[index]!.body),
     ...(plannedFinally === undefined
       ? {}
       : { finallyName: allocateRustSyntheticName(context.syntheticNames, "finally_flow") }),
@@ -168,7 +181,10 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
       ...(target.kind === "loop" ? { continuePrelude: target.continuePrelude } : {}),
     })),
     terminates,
-  }];
+  };
+  return [scope, ...normalBindings.map((binding, index) => ({ ...binding, init: {
+    kind: "field" as const, receiver: { kind: "path" as const, path: flowName }, name: String(index),
+  } }))];
 }
 
 function statementExits(node: Node, context: RustPlanContext): boolean {

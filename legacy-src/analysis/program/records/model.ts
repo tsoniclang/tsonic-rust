@@ -131,6 +131,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly expressionSyntaxPlans: import("./expression-syntax.js").RustExpressionSyntaxProducer;
   readonly valueProjectionPlans: import("./value-projection.js").RustValueProjectionProducer;
   readonly expressionExitPlans: import("./expression-exits.js").RustExpressionExitProducer;
+  readonly completionBindingPlans: import("./completion-bindings.js").RustCompletionBindingProducer;
   readonly providerInputPlans: import("./provider-inputs.js").RustProviderInputProducer;
   readonly conversionEmissionPlans: import("./conversion-emission.js").RustConversionEmissionProducer;
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;

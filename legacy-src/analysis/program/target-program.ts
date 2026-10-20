@@ -161,6 +161,7 @@ import { analyzeRustSourceCalls } from "../callables/source-calls.js";
 import { admitRustCalls } from "../operations/call-admission.js";
 import { analyzeRustExpressionSyntax } from "../expressions/syntax.js";
 import { analyzeRustExpressionExits } from "../control-flow/expression-exits.js";
+import { analyzeRustCompletionBindings } from "../control-flow/completion-bindings.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -684,6 +685,7 @@ export function analyzeRustTargetProgram(
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustExpressionExits(program, context.nativeNodes, context.records.expressionExitPlans);
+  analyzeRustCompletionBindings(program, context.nativeNodes, context.records.completionBindingPlans);
   const valueReadIssues = analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans,
     context.records.valueProjectionPlans, context.records.conversionEmissionPlans);
   if (valueReadIssues.length !== 0) return rejectedTargetStage(valueReadIssues);

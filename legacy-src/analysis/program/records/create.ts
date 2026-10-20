@@ -54,6 +54,7 @@ import { createRustSourceCallProducer } from "./source-calls.js";
 import { createRustExpressionSyntaxProducer } from "./expression-syntax.js";
 import { createRustValueProjectionProducer } from "./value-projection.js";
 import { createRustExpressionExitProducer } from "./expression-exits.js";
+import { createRustCompletionBindingProducer } from "./completion-bindings.js";
 import { createRustConversionEmissionProducer } from "./conversion-emission.js";
 import { createRustErrorTransportEmissionProducer } from "./error-transport.js";
 import { createRustDispatchContextEmissionProducer } from "./dispatch-contexts.js";
@@ -318,6 +319,7 @@ export function createRustProgramRecordBuilder(
   const expressionSyntaxPlans = createRustExpressionSyntaxProducer(assertOpen);
   const valueProjectionPlans = createRustValueProjectionProducer(assertOpen);
   const expressionExitPlans = createRustExpressionExitProducer(assertOpen);
+  const completionBindingPlans = createRustCompletionBindingProducer(assertOpen);
   const conversionEmissionPlans = createRustConversionEmissionProducer(assertOpen);
   const errorTransportEmissionPlans = createRustErrorTransportEmissionProducer(assertOpen);
   const dispatchContextEmissionPlans = createRustDispatchContextEmissionProducer(assertOpen);
@@ -422,6 +424,7 @@ export function createRustProgramRecordBuilder(
     ...expressionSyntaxPlans.records,
     ...valueProjectionPlans.records,
     ...expressionExitPlans.records,
+    ...completionBindingPlans.records,
     ...conversionEmissionPlans.records,
     ...errorTransportEmissionPlans.records,
     ...dispatchContextEmissionPlans.records,
@@ -589,6 +592,7 @@ export function createRustProgramRecordBuilder(
     expressionSyntaxPlans,
     valueProjectionPlans,
     expressionExitPlans,
+    completionBindingPlans,
     conversionEmissionPlans,
     errorTransportEmissionPlans,
     dispatchContextEmissionPlans,

@@ -17,7 +17,8 @@ import { planNativeModuleFunction } from "../declarations/callables/functions.js
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const declarations = collectVariableDeclarations(node, context);
   if (declarations.length === 0) failRustPlannerInvariant("An admitted variable statement requires its declaration sequence.", node);
-  return declarations.flatMap(declaration => planVariableDeclaration(declaration, context));
+  return declarations.flatMap(declaration => context.input.program.records.completionBindingOwner.get(declaration) === undefined
+    ? planVariableDeclaration(declaration, context) : []);
 }
 
 function planVariableDeclaration(declaration: Node, context: RustPlanContext): readonly RustStmt[] {
