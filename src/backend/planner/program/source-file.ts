@@ -1,6 +1,6 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
-import { planRustErrorRegion } from "./error-regions.js";
+import { planRustErrorRegion, planRustErrorJoinDeclarations } from "./error-regions.js";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -141,7 +141,7 @@ export function planRustSourceFile(
   const context: RustPlanContext = { ...baseContext, objectLiteralImplementations };
   const baseModule = planModuleItems(context, syntheticNames);
   const plannedModule = { ...baseModule,
-    items: [...input.errorRegions.itemsFor(input.program.source.ast.getFileName(sourceFile)),
+    items: [...planRustErrorJoinDeclarations(sourceFile, input),
       ...objectLiteralImplementations.items, ...baseModule.items, ...planRustTypeFamilyImplementations(context),
       ...planRustGenericCallableItems(context), ...planRustNativeCallableProtocolItems(context),
       ...planRustFrameCallableItems(context), ...planRustSuspendedCallableItems(context)] };

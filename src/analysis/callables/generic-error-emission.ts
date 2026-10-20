@@ -18,9 +18,7 @@ export function analyzeRustGenericErrorEmission(input: {
 }): void {
   for (const sourceFile of input.sourceFiles) {
     const fileName = input.ast.getFileName(sourceFile);
-    input.producer.join(fileName, 0, "NativeErrors0");
-    input.producer.join(fileName, 1, "NativeErrors1");
-    for (const declaration of input.regions.declarationsFor(fileName)) input.producer.join(fileName, declaration.arity, declaration.name);
+    input.producer.joins(fileName, input.regions.declarationsFor(fileName));
   }
   for (const node of input.nodes) {
     const region = input.regions.get(node);

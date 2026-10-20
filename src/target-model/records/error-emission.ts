@@ -5,6 +5,7 @@ import type { RustSourceCallEffectsFact } from "./object-methods.js";
 import type { RustGenericCallableEffectsFact } from "./generic-callable-effects.js";
 import type { RustRecordFamily } from "./program.js";
 import type { RustPhysicalErrorOwner } from "./error-regions.js";
+import type { RustErrorJoinDeclaration } from "./error-regions.js";
 
 export interface RustProjectMemberError {
   readonly carrier: TargetTypeRef;
@@ -25,6 +26,7 @@ export interface RustGenericCallableErrorEmission {
 }
 
 export interface RustErrorEmissionRecords {
+  readonly nativeErrorJoinDeclarations: { readonly get: (fileName: string) => readonly RustErrorJoinDeclaration[] | undefined };
   readonly errorDeclarationOwner: RustRecordFamily<string>;
   readonly errorMemberOwner: RustRecordFamily<RustPhysicalErrorOwner>;
   readonly optionalChainBodyFallible: RustRecordFamily<boolean>;

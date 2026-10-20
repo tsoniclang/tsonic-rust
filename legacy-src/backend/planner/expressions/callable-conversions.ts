@@ -76,7 +76,7 @@ function planSelectedRustCallableConversion(
   if (sourceType === undefined || argumentsType === undefined || errorType === undefined) return undefined;
   if (!native && !input && targetType === undefined) return undefined;
   const arity = conversion.errors.length;
-  const joinName = arity === 1 ? "NativeErrors1" : context.input.errorRegions.nameFor(fileName, arity);
+  const joinName = context.input.program.records.nativeErrorJoinName.get(fileName, arity);
   const errorSources = conversion.errors.map(error => {
     const errorType = rustTypeFromCarrierInContext(error.errorType, context);
     return errorType === undefined ? undefined : { ...error, errorType };

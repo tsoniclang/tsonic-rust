@@ -7,6 +7,7 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import { createRustRecordFamily } from "./family.js";
 import type { RustProjectMemberError } from "../../../target-model/records/error-emission.js";
 import type { RustPhysicalErrorOwner } from "../../../target-model/records/error-regions.js";
+import type { RustErrorJoinDeclaration } from "../../../target-model/records/error-regions.js";
 
 export interface RustErrorEmissionProducer {
   declarationOwner(node: Node, component: string): void;
@@ -16,19 +17,21 @@ export interface RustErrorEmissionProducer {
   readonly records: RustErrorEmissionRecords;
   readonly regions: RustRecordFamily<RustErrorRegionSelection>;
   generic(definition: RustGenericCallablePhysicalDefinition, value: RustGenericCallableErrorEmission): void;
-  join(fileName: string, arity: number, name: string): void;
+  joins(fileName: string, declarations: readonly RustErrorJoinDeclaration[]): void;
   region(declaration: Node, value: RustErrorRegionSelection): void;
 }
 
 export function createRustErrorEmissionProducer(assertOpen: () => void): RustErrorEmissionProducer {
   const generics = new WeakMap<RustGenericCallablePhysicalDefinition, RustGenericCallableErrorEmission>();
   const names = new Map<string, Map<number, string>>();
+  const declarations = new Map<string, readonly RustErrorJoinDeclaration[]>();
   const regions = createRustRecordFamily<RustErrorRegionSelection>({ id: "tsonic.rust.nativeErrorRegion", equals: (left, right) => left === right }, assertOpen);
   const members = createRustRecordFamily<RustProjectMemberError>({ id: "tsonic.rust.projectMemberError", equals: (left, right) => left === right }, assertOpen);
   const optionalChains = createRustRecordFamily<boolean>({ id: "tsonic.rust.optionalChainBodyFallible", equals: (left, right) => left === right }, assertOpen);
   const declarationOwners = createRustRecordFamily<string>({ id: "tsonic.rust.errorDeclarationOwner", equals: (left, right) => left === right }, assertOpen);
   const memberOwners = createRustRecordFamily<RustPhysicalErrorOwner>({ id: "tsonic.rust.errorMemberOwner", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ regions: regions.reader, records: Object.freeze({
+    nativeErrorJoinDeclarations: Object.freeze({ get: (fileName: string) => declarations.get(fileName) }),
     errorDeclarationOwner: declarationOwners.reader,
     errorMemberOwner: memberOwners.reader,
     optionalChainBodyFallible: optionalChains.reader,
@@ -45,12 +48,16 @@ export function createRustErrorEmissionProducer(assertOpen: () => void): RustErr
       if (generics.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A generic callable error emission admits exactly once.");
       generics.set(definition, Object.freeze(value));
     },
-    join(fileName: string, arity: number, name: string): void {
+    joins(fileName: string, value: readonly RustErrorJoinDeclaration[]): void {
       assertOpen();
-      const existing = names.get(fileName) ?? new Map<number, string>();
-      if (existing.has(arity)) failTargetAnalysisInvariant("tsonic-rust", "A native error join name admits exactly once.");
-      existing.set(arity, name);
+      if (declarations.has(fileName)) failTargetAnalysisInvariant("tsonic-rust", "Native error join declarations have one exact file owner.");
+      const existing = new Map<number, string>([[0, "NativeErrors0"], [1, "NativeErrors1"]]);
+      for (const declaration of value) {
+        if (existing.has(declaration.arity)) failTargetAnalysisInvariant("tsonic-rust", "A native error join name admits exactly once.");
+        existing.set(declaration.arity, declaration.name);
+      }
       names.set(fileName, existing);
+      declarations.set(fileName, Object.freeze(value));
     },
     region: (declaration: Node, value: RustErrorRegionSelection): void => regions.writer.set(declaration, value),
   });
