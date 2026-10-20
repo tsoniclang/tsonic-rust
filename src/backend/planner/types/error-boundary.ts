@@ -1,3 +1,4 @@
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustAwaitedErrorBoundary, RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
@@ -46,7 +47,7 @@ export function rustErrorBoundaryOperandType(
   providerErrorType?: RustType,
 ): RustType {
   if (boundary === "provider-native" && providerErrorType === undefined) {
-    throw new Error("A provider-native Rust error boundary requires one exact provider error type.");
+    failRustPlannerInvariant("A provider-native Rust error boundary requires one exact provider error type.");
   }
   return boundary === "provider-native" ? providerErrorType!
     : boundary === "target-runtime" ? rustTargetRuntimeErrorType
