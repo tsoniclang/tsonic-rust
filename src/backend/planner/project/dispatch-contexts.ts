@@ -44,10 +44,6 @@ const emptyDispatchInputScope: RustDispatchContextInputScope = Object.freeze({
   input: () => undefined, apply: (expression: RustExpr) => expression,
 });
 
-export function rustDispatchContextRootName(index: number): string {
-  return `dispatch_root_${index + 1}`;
-}
-
 export function planRustDispatchContextInputScope(
   inputs: readonly RustFinalizedDispatchContextInput[],
   operationNode: Node,
@@ -56,23 +52,22 @@ export function planRustDispatchContextInputScope(
   if (inputs.length === 0) return emptyDispatchInputScope;
   const program = context.input.program;
   const names = context.syntheticNames ?? createRustSyntheticNameState(program.source.ast, operationNode, []);
-  const roots = new Map<string, { readonly name: string; readonly ordinal: number }>();
+  const roots = new Map<string, { readonly name: string; readonly path: string }>();
   const values = new Map<RustFinalizedDispatchContextInput, RustExpr>();
   for (const input of inputs) {
-    const selected = program.dispatchContextDemand.inputFor(context.sourcePackageComponentId, input);
+    const selected = program.records.dispatchInput.get(context.sourcePackageComponentId, input);
     if (selected === undefined) return failRustPlannerInvariant("Native dispatch rendering requires its admitted exact component-owned input.", operationNode);
-    const { access, rootOrdinal, handle } = selected;
-    const root = roots.get(access.rootContextId) ?? { name: allocateRustSyntheticName(names, "dispatch_root"), ordinal: rootOrdinal };
-    roots.set(access.rootContextId, root);
-    let value = projectRustDispatchContext({ kind: "path", path: root.name }, access.projections);
-    if (input.source.view === "handle") {
-      value = { kind: "method-call", receiver: value, method: handle!.name, args: [] };
-      if (input.mode === "ref") value = { kind: "reference", expr: value };
+    const root = roots.get(selected.rootIdentity) ?? { name: allocateRustSyntheticName(names, "dispatch_root"), path: selected.path };
+    roots.set(selected.rootIdentity, root);
+    let value = projectRustDispatchContext({ kind: "path", path: root.name }, selected.projections);
+    if (selected.handle !== undefined) {
+      value = { kind: "method-call", receiver: value, method: selected.handle, args: [] };
+      if (selected.reference) value = { kind: "reference", expr: value };
     }
     values.set(input, value);
   }
   const bindings = [...roots.values()].map(root => ({
-    name: root.name, path: `crate::${context.programModuleName}::${rustDispatchContextRootName(root.ordinal)}`,
+    name: root.name, path: root.path,
   }));
   return {
     input: input => values.get(input),

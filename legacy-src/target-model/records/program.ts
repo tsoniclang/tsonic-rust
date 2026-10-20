@@ -82,6 +82,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly programErrorVariants: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorVariants"];
   readonly programErrorModule: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorModule"];
   readonly dispatchRoots: import("./dispatch-contexts.js").RustDispatchContextEmissionRecords["dispatchRoots"];
+  readonly dispatchInput: import("./dispatch-contexts.js").RustDispatchContextEmissionRecords["dispatchInput"];
   readonly binaryDispatch: import("./dispatch-contexts.js").RustDispatchContextEmissionRecords["binaryDispatch"];
   readonly authoredLiveness: import("./native-liveness.js").RustLivenessEmissionRecords["authoredLiveness"];
   readonly structuralLiveness: import("./native-liveness.js").RustLivenessEmissionRecords["structuralLiveness"];

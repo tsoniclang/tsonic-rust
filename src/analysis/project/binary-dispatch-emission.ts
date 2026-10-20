@@ -54,8 +54,10 @@ export function analyzeRustBinaryDispatchEmission(program: Omit<RustTargetProgra
           if (index === undefined || index < 0) { refuse("Binary context access has no exact demanded physical root."); continue; }
           const crate = component.root ? program.configuration.crateName : component.crateName;
           if (crate === undefined) { refuse("Binary context access has no exact native crate identity."); continue; }
+          const root = producer.records.dispatchRoots.get(component.componentId)?.find(candidate => candidate.index === index);
+          if (root === undefined) { refuse("Binary context access has no exact demanded physical root."); continue; }
           accesses.push(Object.freeze({ identity: `${component.componentId}:${access.rootContextId}`,
-            path: `${crate}::${component.programModuleName}::dispatch_root_${index + 1}`, projections: access.projections }));
+            path: `${crate}::${component.programModuleName}::${root.name}`, projections: access.projections }));
         }
         selected.push(Object.freeze({ componentId: component.componentId, emptyOwner: owner,
           children: componentDemand.children, accesses: Object.freeze(accesses) }));

@@ -8,9 +8,12 @@ import { isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../tar
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { Node } from "@tsonic/tsts";
+import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
+import { isRustFinalizedDispatchContextInput } from "../operations/finalized-operation/conversions.js";
 
 export function analyzeRustDispatchRootEmission(program: Omit<RustTargetProgram, "reachability">,
-  errors: RustSourcePackageErrorPlan, producer: RustDispatchContextEmissionProducer): readonly TargetDiagnostic[] {
+  errors: RustSourcePackageErrorPlan, nodes: readonly Node[], producer: RustDispatchContextEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (message: string): void => {
     issues.push(Object.freeze({ code: "RUST_DISPATCH_CONTEXT_ROOT_INVALID", category: "error", source: "tsonic-rust",
@@ -33,9 +36,38 @@ export function analyzeRustDispatchRootEmission(program: Omit<RustTargetProgram,
         refuse("A demanded native dispatch root has no exact renderable carrier.");
         continue;
       }
-      roots.push(Object.freeze({ index, carrier, construct: Object.freeze({ path: declaration.construct.path, const: declaration.construct.const }) }));
+      roots.push(Object.freeze({ name: `dispatch_root_${index + 1}`, index, carrier, construct: Object.freeze({ path: declaration.construct.path, const: declaration.construct.const }) }));
     }
     producer.roots(domain.componentId, roots);
+  }
+  const components = program.records.sourcePackageComponents.get();
+  if (components === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native dispatch input publication requires its exact source components.");
+  const published = new Map<string, Set<RustFinalizedDispatchContextInput>>();
+  for (const node of nodes) {
+    const file = program.source.ast.getSourceFile(node);
+    const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
+    const component = fileName === undefined ? undefined : components.find(selected => selected.sourceFileNames.has(fileName));
+    if (component === undefined) continue;
+    const operation = program.records.compoundWrite.get(node) ?? program.records.targetOperation.get(node);
+    const disposal = program.records.resourceManagement.get(node)?.disposal.target;
+    const abis: readonly RustFinalizedOperationAbi[] = [
+      ...(operation?.kind === "provider-operation" || operation?.kind === "runtime-set" ? [operation.abi]
+        : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation.abi]) : []),
+      ...(disposal?.form === "provider" ? [disposal.abi] : []),
+    ];
+    const selected = published.get(component.componentId) ?? new Set<RustFinalizedDispatchContextInput>();
+    published.set(component.componentId, selected);
+    for (const abi of abis) for (const input of abi.targetArguments.filter(isRustFinalizedDispatchContextInput)) {
+      if (selected.has(input)) continue;
+      const selection = program.dispatchContextDemand.inputFor(component.componentId, input);
+      if (selection === undefined) { refuse("Native dispatch rendering requires its admitted exact component-owned input."); continue; }
+      const root = producer.records.dispatchRoots.get(component.componentId)?.find(candidate => candidate.index === selection.rootOrdinal);
+      if (root === undefined) { refuse("A demanded native dispatch input requires its exact physical root."); continue; }
+      producer.input(component.componentId, input, { rootIdentity: selection.access.rootContextId,
+        path: `crate::${component.programModuleName}::${root.name}`, projections: selection.access.projections,
+        handle: selection.handle?.name, reference: input.source.view === "handle" && input.mode === "ref" });
+      selected.add(input);
+    }
   }
   return Object.freeze(issues);
 }

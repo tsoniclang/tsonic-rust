@@ -603,7 +603,7 @@ export function analyzeRustTargetProgram(
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
   const sourceFileEmissionIssues = analyzeRustSourceFileEmission(program, context.records.sourceFileEmissionPlans);
   if (sourceFileEmissionIssues.length !== 0) return rejectedTargetStage(sourceFileEmissionIssues);
-  const dispatchRootIssues = analyzeRustDispatchRootEmission(program, errorEmission.plan, context.records.dispatchContextEmissionPlans);
+  const dispatchRootIssues = analyzeRustDispatchRootEmission(program, errorEmission.plan, context.nativeNodes, context.records.dispatchContextEmissionPlans);
   if (dispatchRootIssues.length !== 0) return rejectedTargetStage(dispatchRootIssues);
   const binaryDispatchIssues = analyzeRustBinaryDispatchEmission(program, errorEmission.plan, context.records.dispatchContextEmissionPlans);
   if (binaryDispatchIssues.length !== 0) return rejectedTargetStage(binaryDispatchIssues);
