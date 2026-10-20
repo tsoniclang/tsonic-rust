@@ -1,19 +1,15 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity, type SourceLexicalEnvironment } from "@tsonic/target-api/source";
-import type { RustSourcePolicyContext } from "../model/context.js";
+import { isSourceCallableBodyBoundary, Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity } from "@tsonic/target-api/source";
+import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
-import type { RustRetainedEnvironmentSelection } from "./retained-environments.js";
+import type { RustRetainedEnvironmentSelection } from "../../policy/ownership/retained-environments.js";
 
-type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes">;
-type LexicalSelection = SourceLexicalEnvironment | { readonly kind: "unresolved"; readonly reason: string };
-
-export interface RustRetainedEnvironmentQueries {
-  suspendedParametersFor(declaration: Node): readonly Node[] | undefined;
-  lexicalFor(declaration: Node): LexicalSelection;
-  environmentFor(declaration: Node): RustRetainedEnvironmentSelection;
-}
+type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
+  readonly declarations: readonly Node[];
+};
+import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../target-model/records/retained-environments.js";
 
 export function createRustRetainedEnvironmentQueries(
   input: RustRetainedEnvironmentHost, maximumSteps = defaultSourceStorageLimits.maximumSteps,
@@ -22,7 +18,7 @@ export function createRustRetainedEnvironmentQueries(
   const storage = input.sourceStorage;
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
   const suspended = new Map<Node, readonly Node[] | undefined>();
-  const lexical = new Map<Node, LexicalSelection>();
+  const lexical = new Map<Node, RustRetainedLexicalSelection>();
   let opaqueInvocations: ReadonlySet<Node> | undefined;
   let remaining = Number.isSafeInteger(maximumSteps) && maximumSteps > 0 ? maximumSteps : 0;
   const step = (): boolean => remaining > 0 && --remaining >= 0;
@@ -48,7 +44,7 @@ export function createRustRetainedEnvironmentQueries(
     suspended.set(declaration, result);
     return result;
   };
-  const lexicalFor = (declaration: Node): LexicalSelection => {
+  const lexicalFor = (declaration: Node): RustRetainedLexicalSelection => {
     const cached = lexical.get(declaration);
     if (cached !== undefined) return cached;
     const body = ast.body(declaration);
@@ -204,11 +200,15 @@ export function createRustRetainedEnvironmentQueries(
         name: allocateRustGeneratedName(names, "environment") }), parameters: Object.freeze(selected) });
     return Object.freeze({ kind: "selected", environment });
   };
-  return Object.freeze({ suspendedParametersFor, lexicalFor, environmentFor(declaration: Node) {
-    const cached = environments.get(declaration);
-    if (cached !== undefined) return cached;
-    const selected = select(declaration);
-    environments.set(declaration, selected);
-    return selected;
-  } });
+  for (const declaration of input.declarations) {
+    if (!isSourceCallableBodyBoundary(ast, declaration)) continue;
+    suspendedParametersFor(declaration);
+    lexicalFor(declaration);
+    environments.set(declaration, select(declaration));
+  }
+  return Object.freeze({
+    suspendedParametersFor: (declaration: Node) => suspended.get(declaration),
+    lexicalFor: (declaration: Node) => lexical.get(declaration) ?? unresolved(),
+    environmentFor: (declaration: Node) => environments.get(declaration) ?? unresolved(),
+  });
 }

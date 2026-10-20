@@ -26,7 +26,7 @@ import type { RustNativeCallableProducerConstruction } from "./native-producers.
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
-import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
+import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";

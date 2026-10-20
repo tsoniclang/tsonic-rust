@@ -45,7 +45,7 @@ import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../callables/borrowed-returns.js";
-import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
+import { createRustRetainedEnvironmentQueries } from "../callables/retained-environment-shapes.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
@@ -176,7 +176,7 @@ export function createRustAnalysisContext(
     isNativeNode,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),
-    retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
+    retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage, declarations: nativeNodes,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,

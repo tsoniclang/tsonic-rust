@@ -49,7 +49,7 @@ import type { RustGenericCallableFlowProducer } from "../program/records/generic
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
 import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
-import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
+import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";

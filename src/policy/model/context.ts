@@ -8,7 +8,7 @@ import type { TsonicPointerReturnQueries, TsonicMemoryBindingIndex } from "@tson
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustSourceCallableQueries } from "../../target-model/records/source-callables.js";
-import type { RustRetainedEnvironmentQueries } from "../ownership/retained-environment-queries.js";
+import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 
 export interface RustSourcePolicyContext {
   readonly callableRepresentation: "signature" | "storage";
