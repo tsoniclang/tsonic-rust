@@ -42,7 +42,7 @@ import {
   type RustWorkerEntryPlan,
 } from "./worker-entries.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
-import { applyRustFoundationImports } from "../foundation/imports.js";
+import { applyRustFoundationImports } from "../../target-ast/normalization/foundation-imports.js";
 import { planRustAsyncExecution } from "./async-execution.js";
 import { planRustOwnedBinaryEntry, rustBinaryExitCodeType } from "./owned-entry.js";
 
