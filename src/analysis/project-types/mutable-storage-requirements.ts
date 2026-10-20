@@ -1,25 +1,12 @@
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustAddressOfSourceOperation, selectRustBindPointerSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
-import {
-  KindCallExpression,
-  KindElementAccessExpression,
-  KindNewExpression,
-  KindPropertyAccessExpression,
-  Node_Expression,
-} from "@tsonic/target-api/source";
-import {
-  resolveSelectedProviderDeclaration,
-} from "../../policy/identities/selected-source.js";
-import {
-  rustProviderOperationSourceArgumentMayMutate,
-  rustProviderOperationSourceReceiverMayMutate,
-} from "../../policy/operations/forms.js";
-import {
-  selectRustProviderOperation,
-} from "../../policy/operations/provider-selection.js";
+import { KindCallExpression, KindElementAccessExpression, KindNewExpression, KindPropertyAccessExpression, Node_Expression } from "@tsonic/target-api/source";
+import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
+import { rustProviderOperationSourceArgumentMayMutate, rustProviderOperationSourceReceiverMayMutate } from "../../policy/operations/forms.js";
+import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustProjectTypePolicy } from "./type-policy.js";
+import type { RustProjectTypePolicy } from "./index.js";
 import { rustProjectObjectField } from "./object-layout.js";
 import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
 import { createRustStructuralStorageCollector } from "./structural-storage-requirements.js";
