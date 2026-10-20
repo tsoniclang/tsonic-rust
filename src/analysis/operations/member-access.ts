@@ -5,7 +5,8 @@ import { acceptRustMemberOperation, isDeclarationFileSubject, rejectSelectedOper
 import { acceptDeclarationOperation, acceptRustOperation } from "../program/records/selected-operation-values.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./provider/conversions.js";
 
-import { selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./provider/structural-properties.js";
+import { selectStructuralSourceProperty } from "./provider/structural-properties.js";
+import { selectRustFixedArrayLengthProperty } from "./fixed-arrays.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
 import { resolveRustProjectField } from "./provider/project-fields.js";
