@@ -1,47 +1,15 @@
-import {
-  functionSignatureDigest,
-  operationRow,
-  typeRequirements,
-} from "./operations.js";
-import {
-  parameterPassing,
-  sourceTypeFor,
-  targetTraitFor,
-  targetTypeFor,
-} from "./types.js";
-import {
-  providerGenericBindingsFor,
-  providerGenericParametersFor,
-  targetGenericArgumentFor,
-  targetGenericParameterArguments,
-} from "./type-arguments.js";
-import {
-  requireCurrentType,
-  withProjectionGenericParameters,
-} from "./utilities.js";
-import {
-  referencedCallableOwnerGenericParameters,
-  sourceCallableGenericParameters,
-} from "./source-generics.js";
+import { functionSignatureDigest, operationRow, typeRequirements } from "./operations.js";
+import { parameterPassing, sourceTypeFor, targetTraitFor, targetTypeFor } from "./types.js";
+import { providerGenericBindingsFor, providerGenericParametersFor, targetGenericArgumentFor, targetGenericParameterArguments } from "./type-arguments.js";
+import { requireCurrentType, withProjectionGenericParameters } from "./utilities.js";
+import { referencedCallableOwnerGenericParameters, sourceCallableGenericParameters } from "./source-generics.js";
 import { compilerFunctionResult } from "./representability.js";
 import { withCallableGenericProjections } from "./callable-generics.js";
-import {
-  rustBorrowedStrToStringValueConversion,
-} from "../../../target-model/conversions/model.js";
+
 import type { ProjectionContext } from "./model.js";
-import type {
-  ProviderMemberDeclaration,
-  ProviderParameterDeclaration,
-  ProviderSignatureDeclaration,
-} from "@tsonic/tsts";
-import type {
-  RustCompilerFunction,
-  RustCompilerGenericParameter,
-  RustCompilerType,
-} from "../model/model.js";
-import type {
-  RustProviderOperationDefinition,
-} from "../../../target-model/identities/provider-relations.js";
+import type { ProviderMemberDeclaration, ProviderParameterDeclaration, ProviderSignatureDeclaration } from "@tsonic/tsts";
+import type { RustCompilerFunction, RustCompilerGenericParameter, RustCompilerType } from "../model/model.js";
+import type { RustProviderOperationDefinition } from "../../../target-model/identities/provider-relations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function projectFunction(
@@ -106,14 +74,11 @@ export function projectFunction(
   }
 
   const result = compilerFunctionResult(fn.result);
-  const exposedResultType = fn.borrowedResult?.sourceType ?? result.type;
+  const exposedResultType = result.type;
   const resultCarrier = targetTypeFor(exposedResultType, functionContext, "result");
   const returnType = constructor
     ? undefined
     : sourceTypeFor(exposedResultType, functionContext, "result");
-  const resultConversion = fn.borrowedResult === undefined
-    ? undefined
-    : borrowedResultConversion(fn.borrowedResult, functionContext);
 
   const selectedOwnerGenerics = context.currentType !== undefined &&
       !instanceMethod
@@ -193,7 +158,6 @@ export function projectFunction(
     ...(targetGenericArguments.length === 0
       ? {}
       : { targetGenericArguments }),
-    ...(resultConversion === undefined ? {} : { resultConversion }),
     ...(fn.asynchronous ? { isAsync: true as const } : {}),
     ...(fn.unsafe ? { isUnsafe: true as const } : {}),
   };
@@ -220,37 +184,6 @@ export function projectFunction(
         })
       : operationRow(operation),
   };
-}
-
-function borrowedResultConversion(
-  projection: NonNullable<RustCompilerFunction["borrowedResult"]>,
-  context: ProjectionContext,
-): import("../../../target-model/operations/model.js").RustValueConversion {
-  if (projection.conversion === "owned-string") {
-    return rustBorrowedStrToStringValueConversion;
-  }
-  if (projection.conversion === "copy") {
-    return Object.freeze({
-      kind: "copy-from-reference",
-      target: targetTypeFor(projection.sourceType, context, "result"),
-    });
-  }
-  if (projection.sourceType.kind !== "path") {
-    throw new Error("An optional borrowed Rust result requires one exact Option projection.");
-  }
-  const argument = projection.sourceType.genericArguments[0];
-  if (argument?.kind !== "type") {
-    throw new Error("An optional borrowed Rust result requires one exact element type.");
-  }
-  return Object.freeze({
-    kind: "option-map",
-    elementConversion: projection.conversion === "optional-owned-string"
-      ? rustBorrowedStrToStringValueConversion
-      : Object.freeze({
-          kind: "copy-from-reference",
-          target: targetTypeFor(argument.type, context, "result"),
-        }),
-  });
 }
 
 function projectParameter(
