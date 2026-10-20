@@ -1,11 +1,5 @@
-import type {
-  ProviderDeclarationIdentity,
-} from "@tsonic/tsts";
-import type {
-  RustProviderExportRow,
-  RustProviderOperationKind,
-  RustProviderOperationRow,
-} from "../../target-model/identities/provider-relations.js";
+import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
+import type { RustProviderExportRow, RustProviderOperationKind, RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
 
 interface RustProviderOwnerIdentity {
   readonly providerId: string;
