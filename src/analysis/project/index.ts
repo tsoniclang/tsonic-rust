@@ -1,6 +1,6 @@
 export {
   analyzeRustRuntimeReferences,
-} from "./references.js";
+} from "./classification.js";
 export {
   analyzeRustBinaryHooks,
 } from "./hooks.js";
@@ -17,7 +17,7 @@ export type {
 export type {
   RustRuntimeReferenceAnalysisResult,
   RustRuntimeReferencePlan,
-} from "./references.js";
+} from "./classification.js";
 export type {
   RustBinaryHookPlan,
 } from "../../target-model/records/binary-execution.js";
