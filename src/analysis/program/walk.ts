@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "./operation-context.js";
 import { requireRustRecord } from "./records/required-records.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
-import { rustSourceStorageContext } from "../../policy/types/resolution/source-storage-projection.js";
+import { rustSourceStorageContext } from "../types/resolution/source-storage-projection.js";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindNewExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, Node_Expression, Node_Type, ForInOrOfStatement_Initializer, VariableDeclarationList_Declarations } from "@tsonic/target-api/source";
 import { selectRustCheckedCall, selectRustCheckedConversion, selectRustCheckedElementAccess, selectRustCheckedOperator, selectRustCheckedPropertyAccess, selectRustCheckedValue } from "../operations/provider/index.js";
 import { selectRustCheckedDelete } from "../operations/member-access.js";
