@@ -110,7 +110,7 @@ export function planRustSourcePackageCrateContent(
   const dispatchRoots = planRustDispatchContextRoots(createRustSourcePackageTypeRenderingContext(
     input, component, sourcePackageErrors,
     { moduleNameByFileName, externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName },
-  ), errorDomain, component.programModuleName, diagnostics);
+  ), errorDomain, component.programModuleName);
   if (dispatchRoots === undefined) return undefined;
   const programModel = programErrorModel === undefined && dispatchRoots.length === 0
     ? undefined : createRustSourceFile([...(programErrorModel?.items ?? []), ...dispatchRoots], programErrorModel?.innerAttrs ?? []);

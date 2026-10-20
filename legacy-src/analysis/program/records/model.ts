@@ -122,6 +122,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;
   readonly sourceFileEmissionPlans: import("./source-file-emission.js").RustSourceFileEmissionProducer;
   readonly errorTransportEmissionPlans: import("./error-transport.js").RustErrorTransportEmissionProducer;
+  readonly dispatchContextEmissionPlans: import("./dispatch-contexts.js").RustDispatchContextEmissionProducer;
   readonly sourcePackageEmission: import("./source-packages.js").RustSourcePackageEmissionProducer;
   readonly statementExits: RustStatementExitProducer;
   readonly statementCompletions: RustStatementCompletionProducer;

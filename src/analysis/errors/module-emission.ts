@@ -16,15 +16,15 @@ export function analyzeRustProgramErrorModuleEmission(program: Omit<RustTargetPr
   const issues: TargetDiagnostic[] = [];
   const providers = new Map<string, TargetTypeRef>();
   const builtins = new Set([
-    selectRustStandaloneTypeIdentity(rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError")),
-    selectRustStandaloneTypeIdentity(rustNamedTargetType(rustJsErrorTargetId, "tsonic_rust_runtime::JsError")),
+    selectRustStandaloneTypeIdentity(rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError"), { programError: false }),
+    selectRustStandaloneTypeIdentity(rustNamedTargetType(rustJsErrorTargetId, "tsonic_rust_runtime::JsError"), { programError: false }),
   ]);
   const ownsTransport = [...errors.domainsByComponentId.values()].some(domain =>
     domain.errorDomain === "project" && domain.forwardModulePath === undefined);
   if (!ownsTransport) return Object.freeze(issues);
   for (const carrier of program.providerErrorCarriers) {
     if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) || rustTargetTypeRefEquals(carrier, rustProgramErrorTargetType())) continue;
-    const identity = selectRustStandaloneTypeIdentity(carrier);
+    const identity = selectRustStandaloneTypeIdentity(carrier, { programError: false });
     if (identity === undefined) {
       issues.push(Object.freeze({ code: "RUST_PROVIDER_ERROR_CARRIER_UNRENDERABLE", category: "error", source: "tsonic-rust",
         message: "A selected provider-native error carrier has no exact renderable Rust type.",

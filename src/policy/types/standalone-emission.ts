@@ -5,11 +5,13 @@ import { rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustBuiltInCarri
   rustProgramErrorTargetId, rustCallableInputTargetId, rustCallableTargetId } from "../../target-model/types/index.js";
 import { rustTargetGenericArgumentEquals } from "../../target-model/types/equality.js";
 
-export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef): string | undefined {
+export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef,
+  context: { readonly programError: boolean }): string | undefined {
+  const identityFor = (carrier: TargetTypeRef): string | undefined => selectRustStandaloneTypeIdentity(carrier, context);
   const argumentsFor = (values: readonly RustTargetGenericArgument[]): readonly string[] | undefined => {
     const arguments_: string[] = [];
     for (const value of values) {
-      const selected = value.kind === "type" ? selectRustStandaloneTypeIdentity(value.type) : closedMetadataKey(value);
+      const selected = value.kind === "type" ? identityFor(value.type) : closedMetadataKey(value);
       if (selected === undefined) return undefined;
       arguments_.push(selected);
     }
@@ -28,7 +30,7 @@ export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef): string
       const parameters = argumentsFor(constraint.genericArguments);
       if (parameters === undefined) return undefined;
       if (constraint.kind === "equality") {
-        const type = selectRustStandaloneTypeIdentity(constraint.type);
+        const type = identityFor(constraint.type);
         if (type === undefined) return undefined;
         constraints.push(closedMetadataKey(["equality", constraint.name, parameters, type]));
       } else {
@@ -46,7 +48,11 @@ export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef): string
     return name === undefined ? undefined : closedMetadataKey(["primitive", name]);
   }
   if (carrier.kind === "target-named") {
-    if (carrier.id === rustProgramErrorTargetId || carrier.id === rustCallableInputTargetId || carrier.id === rustCallableTargetId) return undefined;
+    if (carrier.id === rustProgramErrorTargetId) {
+      const owner = carrier.errorOwner;
+      return context.programError && owner?.kind === "physical" ? closedMetadataKey(["program-error", owner]) : undefined;
+    }
+    if (carrier.id === rustCallableInputTargetId || carrier.id === rustCallableTargetId) return undefined;
     if (carrier.id === rustStringTargetId) return closedMetadataKey(["string"]);
     if (carrier.id === rustStrTargetId) return closedMetadataKey(["str"]);
     const path = rustBuiltInCarrierDefinitions[carrier.id]?.renderPath;
@@ -61,32 +67,32 @@ export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef): string
   }
   const fixed = rustFixedArrayCarrierValue(carrier);
   if (fixed !== undefined) {
-    const element = selectRustStandaloneTypeIdentity(fixed.element);
+    const element = identityFor(fixed.element);
     return element === undefined ? undefined : closedMetadataKey(["fixed-array", element, fixed.length]);
   }
   switch (carrier.kind) {
     case "array": return named("Vec", [{ kind: "type", type: carrier.element }]);
     case "tuple": {
-      const elements = carrier.elements.map(selectRustStandaloneTypeIdentity);
+      const elements = carrier.elements.map(identityFor);
       return elements.some(element => element === undefined) ? undefined : closedMetadataKey(elements.length === 0 ? ["unit"] : ["tuple", elements]);
     }
     case "reference": {
-      const element = selectRustStandaloneTypeIdentity(carrier.referent);
+      const element = identityFor(carrier.referent);
       return element === undefined ? undefined : closedMetadataKey(["reference", carrier.mutable, carrier.lifetime ?? null, element]);
     }
     case "slice": {
-      const element = selectRustStandaloneTypeIdentity(carrier.element);
+      const element = identityFor(carrier.element);
       return element === undefined ? undefined : closedMetadataKey(["slice", element]);
     }
     case "pointer": {
-      const element = selectRustStandaloneTypeIdentity(carrier.pointee);
+      const element = identityFor(carrier.pointee);
       return element === undefined || carrier.mutability !== "const" && carrier.mutability !== "mut" ? undefined
         : closedMetadataKey(["pointer", carrier.mutability, element]);
     }
     case "type-parameter": return closedMetadataKey(["parameter", carrier.identity]);
     case "function-pointer": {
-      const parameters = carrier.args.map(selectRustStandaloneTypeIdentity);
-      const result = isRustNeverCarrier(carrier.result) ? closedMetadataKey(["never-return"]) : selectRustStandaloneTypeIdentity(carrier.result);
+      const parameters = carrier.args.map(identityFor);
+      const result = isRustNeverCarrier(carrier.result) ? closedMetadataKey(["never-return"]) : identityFor(carrier.result);
       return parameters.some(parameter => parameter === undefined) || result === undefined ? undefined
         : closedMetadataKey(["function-pointer", parameters, result, carrier.lifetimeBinder ?? null, carrier.abi ?? null, carrier.isUnsafe === true]);
     }
@@ -100,7 +106,7 @@ export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef): string
         : closedMetadataKey(["trait-object", principal, auto, carrier.lifetime ?? null]);
     }
     case "associated-type": {
-      const owner = selectRustStandaloneTypeIdentity(carrier.owner);
+      const owner = identityFor(carrier.owner);
       const trait = carrier.trait === undefined ? null : (carrier.trait.lifetimeBinder?.parameters.length ?? 0) === 0 ? traitFor(carrier.trait) : undefined;
       const arguments_ = argumentsFor(carrier.genericArguments ?? []);
       return owner === undefined || trait === undefined || arguments_ === undefined ? undefined
