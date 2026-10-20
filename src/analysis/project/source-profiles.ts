@@ -23,18 +23,16 @@ export function createRustSourceProfileRegistry(
     }
     sourceFileByProfile.set(profile, sourceFile);
   }
-  return {
+  const profiles = new WeakMap([...sourceFileByProfile].map(([profile, file]) => [file, profile] as const));
+  return Object.freeze({
     profileForNode(node, nodeAst) {
       const sourceFile = nodeAst.getSourceFile(node);
       if (sourceFile === undefined) {
         return undefined;
       }
-      const profile = sourceProfileForFileName(nodeAst.getFileName(sourceFile), jsEnabled);
-      return profile !== undefined && sourceFileByProfile.get(profile) === sourceFile
-        ? profile
-        : undefined;
+      return profiles.get(sourceFile);
     },
-  };
+  });
 }
 
 function sourceProfileForFileName(
