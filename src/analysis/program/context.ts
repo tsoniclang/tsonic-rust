@@ -1,15 +1,6 @@
-import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex,
-  createTsonicPointerBackingDemands, type TsonicPointerBackingDemands,
-  createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
-import type {
-  AstReader,
-  Node,
-  SourceFile,
-} from "@tsonic/tsts";
-import type {
-  TargetCompileInput,
-  TargetSelection,
-} from "@tsonic/target-api";
+import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex, createTsonicPointerBackingDemands, type TsonicPointerBackingDemands, createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { TargetCompileInput, TargetSelection } from "@tsonic/target-api";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
@@ -17,9 +8,7 @@ import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type T
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
-import {
-  createRustNamePlan,
-} from "../names/plan.js";
+import { createRustNamePlan } from "../names/plan.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
@@ -28,58 +17,29 @@ import { createRustClassValueRegistry, type RustClassValueRegistry } from "./rec
 import { createRustProgramRecordBuilder } from "./records/create.js";
 import type { RustRequiredRecord } from "./records/required-records.js";
 import type { RustProgramRecordBuilder } from "./records/model.js";
-import {
-  createRustProjectTypePolicyRegistry,
-} from "../project-types/type-policy.js";
+import { createRustProjectTypePolicyRegistry } from "../project-types/type-policy.js";
 import type { RustProjectTypePolicyRegistry } from "../project-types/type-policy.js";
-import {
-  createRustProjectMethodDispatchPlanRegistry,
-} from "../project-types/method-dispatch.js";
+import { createRustProjectMethodDispatchPlanRegistry } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodDispatchPlanRegistry } from "../project-types/method-dispatch.js";
-import {
-  createRustProjectMethodPropertyPlanRegistry,
-} from "../project-types/method-properties.js";
+import { createRustProjectMethodPropertyPlanRegistry } from "../project-types/method-properties.js";
 import type { RustProjectMethodPropertyPlanRegistry } from "../project-types/method-properties.js";
-import {
-  createRustProjectFieldDispatchPlanRegistry,
-} from "../project-types/field-dispatch.js";
+import { createRustProjectFieldDispatchPlanRegistry } from "../project-types/field-dispatch.js";
 import type { RustProjectFieldDispatchPlanRegistry } from "../project-types/field-dispatch.js";
-import {
-  createRustSourceCallableSpecializationPlanRegistry,
-} from "../callables/specializations.js";
+import { createRustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
 import type { RustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
 import { createRustCallableValuePlanRegistry, type RustCallableValuePlanRegistry } from "../callables/value-plan.js";
-import {
-  createRustStructuralShapePlanRegistry,
-} from "../objects/structural-shape-plan.js";
+import { createRustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } from "../objects/frozen-data-writes.js";
-import {
-  createRustSafetyApplicationFactIndex,
-} from "../safety/application-index.js";
+import { createRustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
-import {
-  createRustObjectRepresentationPlanRegistry,
-  type RustObjectRepresentationPlanRegistry,
-} from "../project-types/object-representation.js";
-import {
-  createRustRuntimeValueUsePlan,
-  type RustRuntimeValueUsePlan,
-} from "./runtime-value-uses.js";
-import {
-  analyzeRustLifetimes,
-} from "../declarations/lifetimes.js";
-import {
-  emptyRustLifetimeIndex,
-  type RustLifetimeIndex,
-} from "../../target-model/lifetimes/index.js";
-import {
-  createRustGeneratedDeclarationUseRegistry,
-  type RustGeneratedDeclarationUseRegistry,
-} from "./generated-declaration-uses.js";
+import { createRustObjectRepresentationPlanRegistry, type RustObjectRepresentationPlanRegistry } from "../project-types/object-representation.js";
+import { createRustRuntimeValueUsePlan, type RustRuntimeValueUsePlan } from "./runtime-value-uses.js";
+import { analyzeRustLifetimes } from "../declarations/lifetimes.js";
+import { emptyRustLifetimeIndex, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { createRustGeneratedDeclarationUseRegistry, type RustGeneratedDeclarationUseRegistry } from "./records/generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
-import { analyzeSourceReceiverOccurrences, createSourceStorageQuery,
-  type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
@@ -91,8 +51,7 @@ import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
 import { analyzeRustNativeParticipation } from "../callables/participation.js";
-import { selectRustSourcePackageComponentIdentities,
-  type SelectRustSourcePackageComponentIdentitiesResult } from "./source-package-components.js";
+import { selectRustSourcePackageComponentIdentities, type SelectRustSourcePackageComponentIdentitiesResult } from "../source-modules/component-semantics.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
