@@ -1,10 +1,9 @@
-import { getRustTypeofRuntimeKind, type RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import type { RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../types/render.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustRuntimeCategory(
   value: RustExpr,
@@ -12,8 +11,6 @@ export function planRustRuntimeCategory(
   context: RustPlanContext,
   borrowed = false,
 ): RustExpr | undefined {
-  const selected = getRustTypeofRuntimeKind(result.sourceCarrier, context.input.program.typeDefinitions);
-  if (selected === undefined || closedMetadataKey(selected) !== closedMetadataKey(result)) return undefined;
   const expression = planRuntimeCategory(value, result, context, borrowed);
   return expression === undefined ? undefined : { kind: "owned-string-from-borrowed-str", expression };
 }
@@ -25,11 +22,11 @@ function planRuntimeCategory(
   borrowed: boolean,
 ): RustExpr | undefined {
   if (result.kind === "runtime-method") {
-    return { kind: "method-call", receiver: borrowed && value.kind === "reference" ? value.expr : value,
+    return { kind: "method-call", receiver: value,
       method: result.method, args: [] };
   }
   if (result.kind === "optional") {
-    if (context.syntheticNames === undefined) return undefined;
+    if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted runtime category requires its native bindings.", context.callableDeclaration ?? context.sourceFile);
     const binding = typeof result.value === "string" ? undefined : allocateRustSyntheticName(context.syntheticNames, "typeof_value");
     const expression = typeof result.value === "string" ? { kind: "str-literal" as const, value: result.value }
       : planRuntimeCategory({ kind: "path", path: binding! }, result.value, context, true);
@@ -41,11 +38,8 @@ function planRuntimeCategory(
     ] };
   }
   const path = rustUnionTypePathInContext(result.sourceCarrier, context);
-  const variants = context.input.program.typeDefinitions.sourceUnionVariants(result.sourceCarrier);
-  if (path === undefined || context.syntheticNames === undefined || variants?.length !== result.variants.length) return undefined;
-  const arms = result.variants.map((variant, index) => {
-    const declared = variants[index];
-    if (declared?.name !== variant.name || !rustTargetTypeRefEquals(declared.carrier, variant.carrier)) return undefined;
+  if (path === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted runtime union category requires its native identity and bindings.", context.callableDeclaration ?? context.sourceFile);
+  const arms = result.variants.map((variant) => {
     const binding = typeof variant.result === "string" ? undefined
       : allocateRustSyntheticName(context.syntheticNames!, "typeof_value");
     const expression = typeof variant.result === "string" ? { kind: "str-literal" as const, value: variant.result }
