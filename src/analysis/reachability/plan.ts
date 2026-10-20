@@ -1,14 +1,14 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
-import type { RustReachability, RustReachabilityInput } from "./model.js";
+import type { RustReachabilityInput } from "./model.js";
+import type { RustReachability } from "../../target-model/records/reachability.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceUnionDefinitionIdentity } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
-import {
-  analyzeRustGeneratedItemUsage,
-} from "./generated-item-usage.js";
+import { analyzeRustGeneratedItemUsage } from "./generated-item-usage.js";
 import { transitivelyReachable, projectStandaloneItemEdges, deadComponentRoots } from "./graph.js";
 
 type DeclarationOwner =
@@ -264,7 +264,7 @@ function collectDeclarationUnits(
   for (const node of nativeNodes) {
     if (!isDeclarationUnit(ast, node)) continue;
     const file = ast.getSourceFile(node);
-    if (file === undefined) throw new Error("An admitted native declaration requires its exact checked source file.");
+    if (file === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native declaration requires its exact checked source file.");
     const declarations = byFile.get(file) ?? [];
     declarations.push(node);
     byFile.set(file, declarations);
@@ -346,7 +346,6 @@ function enclosingDeclarationOwner(
   }
   return { kind: "root" };
 }
-
 
 function enclosingMemberOwner(
   ast: AstReader,
