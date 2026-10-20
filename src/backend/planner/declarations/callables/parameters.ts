@@ -14,7 +14,7 @@ import { planRustParameterEntryConversion } from "./parameter-entry-conversion.j
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
   | { readonly kind: "default"; readonly initializer: Node; readonly name: string; readonly mutable: boolean;
-      readonly carrier: TargetTypeRef; readonly valueCarrier: TargetTypeRef }
+      readonly carrier: TargetTypeRef; readonly valueCarrier: TargetTypeRef; readonly retainStorage: boolean }
   | { readonly kind: "binding"; readonly pattern: Node; readonly name: string; readonly sourceCarrier: TargetTypeRef };
 
 export interface RustCallableParameterPlan {
@@ -36,7 +36,7 @@ export function planRustCallableParameters(callable: Node, context: RustPlanCont
     prelude.push(...planRustParameterEntryConversion(parameter, name, selected.mutable, context)
       .map(statement => ({ kind: "statement" as const, statement })));
     if (selected.default !== undefined) prelude.push({ kind: "default", initializer: selected.default.initializer,
-      name, mutable: selected.mutable, carrier: selected.carrier, valueCarrier: selected.default.valueCarrier });
+      name, mutable: selected.mutable, carrier: selected.carrier, valueCarrier: selected.default.valueCarrier, retainStorage: selected.default.retainStorage });
     if (selected.pattern !== undefined) {
       if (selected.sourceCarrier === undefined) failRustPlannerInvariant("An admitted binding parameter requires its exact source carrier.", parameter);
       prelude.push({ kind: "binding", pattern: selected.pattern, name, sourceCarrier: selected.sourceCarrier });
@@ -69,7 +69,7 @@ export function planRustCallableParameterPrelude(plan: RustCallableParameterPlan
     if (entry.kind === "default") {
       const initializer = planExpression(entry.initializer, context);
       if (initializer === undefined) failRustPlannerInvariant("An admitted native default parameter requires its initializer expression.", entry.initializer);
-      const value = rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context, entry.valueCarrier);
+      const value = rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context, entry.retainStorage);
       statements.push({ kind: "let", name: entry.name, mutable: entry.mutable, init: value });
       continue;
     }

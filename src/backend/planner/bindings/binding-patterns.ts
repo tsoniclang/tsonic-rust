@@ -120,7 +120,7 @@ export function normalizeRustBindingValue(
   const fallback = initializer === undefined ? undefined : planExpression(initializer, context);
   if (fallback === undefined) failRustPlannerInvariant("Defaulted binding projection has no concrete finalized fallback expression.", element);
   if (fact.normalization === "default-on-absence") return { kind: "evaluate-then", effect: stored, discard: "unit", value: fallback };
-  const result = rustOptionDefaultValue(stored, fallback, fact.storageCarrier, context, fact.bindingCarrier);
+  const result = rustOptionDefaultValue(stored, fallback, fact.storageCarrier, context, selected.retainStorage);
   if (result === undefined) failRustPlannerInvariant("An admitted binding default requires its native optional projection.", element);
   return result;
 }

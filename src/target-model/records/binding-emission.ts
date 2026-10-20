@@ -4,6 +4,7 @@ import type { RustBindingValueProjectionFact } from "./value-projections.js";
 export type RustBindingProjectionOwnership = "copy" | "clone";
 
 interface RustBindingProjectionSelection {
+  readonly retainStorage: boolean;
   readonly fact: RustBindingValueProjectionFact;
   readonly checkedElement: TargetTypeRef | undefined;
 }

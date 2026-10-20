@@ -10,5 +10,5 @@ export interface RustCallableParameterEmission {
   readonly storage: RustBindingStorageFact | undefined;
   readonly mutable: boolean;
   readonly parameterMutable: boolean;
-  readonly default: { readonly initializer: Node; readonly valueCarrier: TargetTypeRef } | undefined;
+  readonly default: { readonly initializer: Node; readonly valueCarrier: TargetTypeRef; readonly retainStorage: boolean } | undefined;
 }

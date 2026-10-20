@@ -4,6 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, rustJsArrayLikeElementTargetType,
   rustStructuralObjectCarrierValue, rustTargetConstInteger, rustTupleTargetType } from "../../target-model/types/index.js";
+import { selectRustOptionalDefaultStorage } from "../conversions/optional-storage.js";
 
 export type RustBindingProjectionSelection =
   | { readonly kind: "selected"; readonly value: RustBindingProjectionEmission }
@@ -12,7 +13,8 @@ export type RustBindingProjectionSelection =
 export function selectRustBindingProjectionEmission(input: RustBindingProjectionPolicyInput): RustBindingProjectionSelection {
   const { fact } = input;
   const projection = fact.projection;
-  const base = { fact, checkedElement: projection.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(fact.sourceCarrier) : undefined };
+  const base = { fact, retainStorage: selectRustOptionalDefaultStorage(Object.freeze({ storage: fact.storageCarrier, result: fact.bindingCarrier })),
+    checkedElement: projection.kind === "js-array-element" ? rustJsArrayLikeElementTargetType(fact.sourceCarrier) : undefined };
   const ownership = (carrier: TargetTypeRef): RustBindingProjectionOwnership | undefined => {
     const traits = input.traits.get(carrier);
     return traits?.copy ? "copy" : traits?.clone ? "clone" : undefined;
