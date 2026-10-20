@@ -15,7 +15,7 @@ import { inferRustTargetGenericBindings } from "../../target-model/types/carrier
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustStructuralGenericCarrier } from "../objects/structural-generic-carrier.js";
+import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection,
   RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";

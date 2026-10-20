@@ -1,38 +1,24 @@
-import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralShapeGenericParameter, RustStructuralMethodConstruction, RustStructuralMethodStorageSelection } from "../../target-model/records/structural-shapes.js";
-import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import type { Node } from "@tsonic/tsts";
+import { structuralStorageKey, instantiateStructuralDefinition } from "../../policy/types/objects/structural-storage.js";
+import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../names/structural-storage.js";
+import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection } from "../../target-model/records/structural-shapes.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+
 import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
 import type { RustStructuralInstantiation } from "../../policy/types/model/source-type-registry.js";
 import type { RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
-import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
+import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import {
-  rustPascalCaseIdentifier,
-} from "../../target-model/names/identifiers.js";
-import {
-  rustStructuralObjectCarrierValue,
-  rustStructuralObjectTargetType,
-  rustTargetGenericReferences,
-  rustStructuralMethodStorageCarrier,
-  rustOptionElementCarrier,
-  rustCallableProtocol,
-  rustProgramErrorTargetType,
-} from "../../target-model/types/index.js";
+
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustStructuralMethodStorageCarrier, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustRuntimeRecordFieldTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { visitRustTargetTypeParameters } from "../../target-model/types/carriers/generic-references.js";
-import { substituteRustTargetTypeParameters, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+
 import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
-import type {
-  RustSourceObjectShape,
-  RustStructuralFieldImplementation,
-} from "../project-types/source-type-registry.js";
+import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../project-types/source-type-registry.js";
 
 export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
   return field !== undefined && field.storage !== "stored";
@@ -66,6 +52,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
 
 export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlanRegistry {
   let current: RustStructuralShapePlan | undefined;
+  let sealed = false;
   let construction: ReturnType<typeof createRustStructuralShapeConstruction> | undefined;
   let unions: RustGeneratedUnionPlan | undefined;
   let componentForFile: ((fileName: string) => string) | undefined;
@@ -88,7 +75,7 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       instantiations: readonly RustStructuralInstantiation[],
       receiverIndependentMethods: ReadonlySet<string> = new Set(),
     ) {
-      if (current !== undefined) {
+      if (sealed || current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
       componentForFile = selectComponent;
@@ -100,6 +87,7 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       return current;
     },
     initializeUnions(definitions: readonly RustSourceUnionDefinition[]) {
+      if (sealed) throw new Error("Rust structural unions cannot change after sealing.");
       const shapes = requireCurrent();
       if (unions !== undefined || componentForFile === undefined)
         throw new Error("Rust generated unions can be finalized only once after structural objects.");
@@ -114,14 +102,16 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     },
     finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition,
       ReadonlyMap<number, RustStructuralMethodStorageSelection>>) {
-      if (construction === undefined) throw new Error("Structural method storage requires its initialized shape builder.");
+      if (sealed || construction === undefined) throw new Error("Structural method storage requires its open initialized shape builder.");
       construction.finalizeMethodStorage(selections);
     },
     isInitialized() {
       return current !== undefined;
     },
     seal() {
+      if (sealed) throw new Error("Rust structural storage seals once.");
       requireUnions();
+      sealed = true;
       return requireCurrent();
     },
     get definitions() {
@@ -389,6 +379,7 @@ function createRustStructuralShapeConstruction(
     }
     registerCarrier(definition, nested.carrier);
   }
+  let publishedInstances = Object.freeze([...byKey.values()]);
   const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
     const key = closedMetadataKey(carrier);
@@ -398,7 +389,7 @@ function createRustStructuralShapeConstruction(
     get unionDefinitions() { return unions.unionDefinitions; },
     unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
     get definitions() { return definitions; },
-    get instances() { return Object.freeze([...byKey.values()]); },
+    get instances() { return publishedInstances; },
     sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
       const leftDefinition = definitionFor(left);
       const rightDefinition = definitionFor(right);
@@ -467,7 +458,7 @@ function createRustStructuralShapeConstruction(
       }
       const instances = new Map<string, RustStructuralShapeDefinition>();
       for (const [key, selected] of byKey) {
-        const origin = originsByKey.get(key) ?? byStorageKey.get(structuralStorageKey(selected.carrier, componentForFile));
+        const origin = originsByKey.get(key);
         const replacement = origin === undefined ? undefined : replacements.get(origin);
         const instance = replacement === undefined ? undefined : instantiateStructuralDefinition(replacement, selected.carrier);
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
@@ -477,107 +468,8 @@ function createRustStructuralShapeConstruction(
       for (const [key, definition] of byStorageKey) byStorageKey.set(key, replacements.get(definition)!);
       for (const [key, definition] of originsByKey) originsByKey.set(key, replacements.get(definition)!);
       definitions = Object.freeze(definitions.map(definition => replacements.get(definition)!));
+      publishedInstances = Object.freeze([...byKey.values()]);
       methodStorageFinalized = true;
     },
   });
-}
-
-export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
-  const substitutions = new Map<string, TargetTypeRef>();
-  visitRustTargetTypeParameters(carrier, (parameter) => {
-    if (!substitutions.has(parameter.identity)) {
-      substitutions.set(parameter.identity, { kind: "type-parameter", identity: `structural-shape:${substitutions.size}`, name: `ShapeParameter${substitutions.size}` });
-    }
-    return false;
-  });
-  const normalized = substituteRustTargetTypeParameters(carrier, substitutions);
-  const shape = rustStructuralObjectCarrierValue(normalized);
-  return closedMetadataKey(shape === undefined ? normalized :
-    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation, shape.construction, shape.bases));
-}
-
-function instantiateStructuralDefinition(
-  definition: RustStructuralShapeDefinition,
-  carrier: TargetTypeRef,
-): RustStructuralShapeDefinition | undefined {
-  if (rustTargetTypeRefEquals(definition.carrier, carrier)) {
-    return definition;
-  }
-  const parameters = new Set(definition.genericParameters.flatMap(parameter =>
-    parameter.kind === "type" ? [parameter.identity] : []));
-  const lifetimes = new Set(definition.genericParameters.flatMap(parameter =>
-    parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
-  const shape = rustStructuralObjectCarrierValue(carrier);
-  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction, shape.bases);
-  const bindings = inferRustTargetGenericBindings(definition.carrier, aligned, {
-    typeIdentities: parameters, lifetimeIdentities: lifetimes, constIdentities: new Set(),
-  });
-  const substitute = (type: TargetTypeRef) => bindings === undefined ? type :
-    substituteRustTargetGenerics(type, bindings.types, bindings.lifetimes, bindings.consts);
-  if (bindings === undefined || bindings.types.size !== parameters.size || bindings.lifetimes.size !== lifetimes.size ||
-    !rustTargetTypeRefEquals(substitute(definition.carrier), aligned)) {
-    return undefined;
-  }
-  return Object.freeze({
-    ...definition,
-    carrier,
-    genericArguments: Object.freeze(definition.genericArguments.map(argument => {
-      if (argument.kind === "lifetime") return Object.freeze({ kind: "lifetime" as const,
-        lifetime: bindings.lifetimes.get(rustLifetimeKey(argument.lifetime)) ?? argument.lifetime });
-      if (argument.kind !== "type") return argument;
-      return Object.freeze({ kind: "type" as const, type: substitute(argument.type) });
-    })),
-    fields: Object.freeze(definition.fields.map(field => Object.freeze({
-      ...field,
-      carrier: substitute(field.carrier),
-      ...(field.boundStorage === undefined ? {} : { boundStorage: Object.freeze({ ...field.boundStorage, carrier: substitute(field.boundStorage.carrier) }) }),
-      ...(field.methodStorageCarrier === undefined ? {} : {
-        methodStorageCarrier: substitute(field.methodStorageCarrier),
-      }),
-      ...(field.methodConstructions === undefined ? {} : {
-        methodConstructions: Object.freeze(field.methodConstructions.map(construction => Object.freeze({ ...construction,
-          physicalCarrier: substitute(construction.physicalCarrier),
-          destinationCarrier: substitute(construction.destinationCarrier),
-        }))),
-      }),
-    }))),
-    ...(definition.construction === undefined ? {} : { construction: Object.freeze({
-      ...definition.construction, carrier: substitute(definition.construction.carrier),
-    }) }),
-  });
-}
-
-function preferredShapeName(fields: readonly RustStructuralShapeField[]): string {
-  if (fields.length === 0) {
-    return "EmptyObjectShape";
-  }
-  const selected = fields.slice(0, 3).map((field) =>
-    rustPascalCaseIdentifier(field.sourceName));
-  const suffix = fields.length <= 3 ? "" : `And${fields.length - 3}More`;
-  const candidate = `${selected.join("")}${suffix}Shape`;
-  return candidate.length <= 80
-    ? candidate
-    : `${selected[0] ?? "Object"}ObjectShape`;
-}
-
-function allocateSnakeName(usedNames: Set<string>, preferred: string): string {
-  let candidate = preferred;
-  let suffix = 2;
-  while (usedNames.has(candidate)) {
-    candidate = `${preferred}_${suffix}`;
-    suffix += 1;
-  }
-  usedNames.add(candidate);
-  return candidate;
-}
-
-function allocatePascalName(usedNames: Set<string>, preferred: string): string {
-  let candidate = preferred;
-  let suffix = 2;
-  while (usedNames.has(candidate)) {
-    candidate = `${preferred}${suffix}`;
-    suffix += 1;
-  }
-  usedNames.add(candidate);
-  return candidate;
 }

@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 
-import { structuralStorageKey } from "./structural-shape-plan.js";
+import { structuralStorageKey } from "../../policy/types/objects/structural-storage.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
