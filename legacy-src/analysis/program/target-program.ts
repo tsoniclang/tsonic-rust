@@ -155,6 +155,7 @@ import { analyzeRustCallableEmission } from "../conversions/callable-emission.js
 import { analyzeRustArgumentViews } from "../expressions/argument-views.js";
 import { admitRustRecordContributions } from "../reachability/record-contributions.js";
 import { admitRustErrorObservations } from "../errors/observations.js";
+import { analyzeRustUnionCalls } from "../callables/union-calls.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -704,6 +705,7 @@ export function analyzeRustTargetProgram(
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans);
   analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
+  analyzeRustUnionCalls(program, context.nativeNodes, context.records.unionCallPlans, context.records.conversionEmissionPlans);
   const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans);
   if (directStorageIssues.length !== 0) return rejectedTargetStage(directStorageIssues);
   const assignmentEvaluationIssues = analyzeRustAssignmentEvaluation(program, context.nativeNodes, context.records.assignmentEvaluationPlans);

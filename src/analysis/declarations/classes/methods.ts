@@ -5,6 +5,7 @@ import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../../program/model.js";
 import type { RustMethodEmissionProducer } from "../../program/records/method-emission.js";
 import type { RustMethodEmissionVariant } from "../../../target-model/records/method-emission.js";
+import { instantiateRustProjectMethodDispatchArguments } from "../../project-types/method-dispatch.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 
@@ -81,6 +82,11 @@ export function analyzeRustMethodEmission(input: {
     const representation = writable ? program.objectRepresentations.representationFor(owner) : undefined;
     if (writable && (owner.kind !== "class" || overrideName === undefined || representation === undefined || program.records.fallible.get(member) === undefined))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted writable method requires its exact field, representation and error contract.", member);
+    for (const variant of program.projectMethodDispatch.variantsForMember(member)) {
+      const arguments_ = instantiateRustProjectMethodDispatchArguments(member, variant.targetTypeArguments, program.projectTypes.openCarrier(owner), program.projectTypes);
+      if (arguments_ === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted method dispatch requires its exact native owner specialization.", member);
+      input.producer.dispatch(member, arguments_, variant);
+    }
     input.producer.method(member, { kind: body === undefined ? "overload" : "body", name, isStatic, visibility, staticSlot, owner, environment,
       override: overrideName === undefined || representation === undefined ? undefined : Object.freeze({ name: overrideName, representation }),
       variants: Object.freeze(variants) });

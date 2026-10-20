@@ -125,6 +125,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly callableConversionPlans: import("./callable-conversions.js").RustCallableConversionProducer;
   readonly argumentViewPlans: import("./argument-views.js").RustArgumentViewProducer;
   readonly recordContributionPlans: import("./record-contributions.js").RustRecordContributionProducer;
+  readonly unionCallPlans: import("./union-calls.js").RustUnionCallProducer;
   readonly providerInputPlans: import("./provider-inputs.js").RustProviderInputProducer;
   readonly conversionEmissionPlans: import("./conversion-emission.js").RustConversionEmissionProducer;
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;

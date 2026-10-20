@@ -275,7 +275,7 @@ export function planSelectedSourceCall(
       break;
     }
     case "union-method": {
-      planned = planRustUnionMethodCall(node, callee, shaped, fact, fact.target, callGenericArguments, targetTypeArguments, context);
+      planned = planRustUnionMethodCall(node, shaped, callGenericArguments, targetTypeArguments, context);
       break;
     }
     case "function": {

@@ -4,6 +4,7 @@ import type { RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 import type { RustSourceCallableSpecializationVariant } from "./callable-emission.js";
 import type { RustRecordFamily } from "./program.js";
+import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
 
 export interface RustMethodEmissionVariant {
   readonly name: string | undefined;
@@ -27,6 +28,7 @@ export interface RustMethodDeclarationEmission {
 }
 
 export interface RustMethodEmissionRecords {
+  readonly methodDispatch: { readonly get: (declaration: Node, arguments_: readonly TargetTypeRef[]) => RustProjectMethodDispatchVariant | undefined };
   readonly methodDeclaration: RustRecordFamily<RustMethodDeclarationEmission>;
   readonly classMethods: RustRecordFamily<readonly Node[]>;
 }
