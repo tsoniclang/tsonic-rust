@@ -5,4 +5,4 @@ export type {
   RustSourceModuleConstruction,
   RustSourceModuleConstructionIndex,
   RustSourceModuleBootstrap,
-} from "./model.js";
+} from "../../target-model/records/source-modules.js";
