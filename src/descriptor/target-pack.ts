@@ -1,14 +1,5 @@
-import type {
-  TargetCompilationSessionContext,
-  TargetPack,
-  TargetToolchain,
-  TargetToolchainContext,
-} from "@tsonic/target-api";
-import {
-  createRustCompilationSession,
-  rustTargetProvider,
-  rustTargetSurfaces,
-} from "../compilation/index.js";
+import type { TargetCompilationSessionContext, TargetPack, TargetToolchain, TargetToolchainContext } from "@tsonic/target-api";
+import { createRustCompilationSession, rustTargetProvider, rustTargetSurfaces } from "../compilation/index.js";
 import { rustTargetId } from "../target-model/identities/target.js";
 import { createCargoToolchain } from "../toolchain/native.js";
 import { formatRustCompileResult } from "../toolchain/rustfmt.js";
