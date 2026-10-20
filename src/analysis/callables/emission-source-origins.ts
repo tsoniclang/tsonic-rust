@@ -1,12 +1,8 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageConstructionSelection,
-  SourceStorageDomainBoundary, SourceStorageSubject, SourceStorageQueries, TargetUseSiteRef }
-  from "@tsonic/target-api/analysis";
-import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer }
-  from "../../target-model/records/error-regions.js";
-import type { RustPhysicalCallableSourceProducer, RustPhysicalCallableSourceSelection,
-  RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins }
-  from "../../target-model/records/physical-emission-contexts.js";
+import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageConstructionSelection, SourceStorageDomainBoundary, SourceStorageSubject, SourceStorageQueries, TargetUseSiteRef } from "@tsonic/target-api/analysis";
+import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
+import type { RustPhysicalCallableSourceProducer, RustPhysicalCallableSourceSelection, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
@@ -72,7 +68,7 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       : demand.kind === "return" ? input.nativeStorage.returnFor(demand.subject)
       : input.nativeStorage.invocationCallableFor(demand.subject);
     if (selected.kind === "unresolved") continue;
-    if (!Array.isArray(selected.sources)) throw new Error("Physical source origins require the complete original selection source vector.");
+    if (!Array.isArray(selected.sources)) failTargetAnalysisInvariant("tsonic-rust", "Physical source origins require the complete original selection source vector.");
     for (const source of selected.sources) {
       if (seenSources.has(source)) continue;
       seenSources.add(source);
@@ -90,10 +86,10 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
   for (const initializer of [input.initialization.root, ...input.initialization.workers.map(worker => worker.initializer)]) {
     for (const module of initializer.modules) {
       if (input.initialization.moduleFor(module.sourceFile) !== module)
-        throw new Error("Source initialization requires its original selected module descriptor.");
+        failTargetAnalysisInvariant("tsonic-rust", "Source initialization requires its original selected module descriptor.");
       const previous = modules.get(module.sourceFile);
       if (previous !== undefined && previous.module !== module)
-        throw new Error("One authored source module requires one original initializer descriptor.");
+        failTargetAnalysisInvariant("tsonic-rust", "One authored source module requires one original initializer descriptor.");
       if (previous === undefined) modules.set(module.sourceFile, { module, initializers: Object.freeze([initializer]) });
       else if (!previous.initializers.includes(initializer))
         modules.set(module.sourceFile, { module, initializers: Object.freeze([...previous.initializers, initializer]) });
