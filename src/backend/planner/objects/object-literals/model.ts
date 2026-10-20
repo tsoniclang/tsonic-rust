@@ -105,7 +105,7 @@ export function createRustObjectLiteralImplementationRegistry(
   const referenceViews = new Map<Node, RustStructuralLiteralImplementation>();
   const items: RustItem[] = [];
   for (const request of context.input.program.records.objectLiteralEmissions.get(sourceFile) ?? []) {
-    const plan = request.kind === "project" ? createImplementationPlan(request.node, request.fact, context, names)
+    const plan = request.kind === "project" ? createImplementationPlan(request.node, request.selection, context, names)
       : createStructuralLiteralImplementation(request.node, request.selection, context, names);
     if (plan === undefined) failRustPlannerInvariant("An admitted object literal requires its exact native implementation.", request.node);
     if (request.kind === "reference") {

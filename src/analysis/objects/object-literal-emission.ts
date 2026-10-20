@@ -6,6 +6,7 @@ import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustS
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType } from "../../target-model/types/index.js";
 import { selectRustObjectLiteralDispatch } from "../../policy/objects/object-literal-emission.js";
+import { analyzeRustProjectLiteralEmission } from "./project-literal-emission.js";
 
 export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustObjectLiteralEmissionProducer): void {
   const modules = new Map<SourceFile, RustObjectLiteralEmissionRequest[]>();
@@ -48,7 +49,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustTargetProgram
       const form = selectRustObjectLiteralDispatch({ fact, structuralDispatch: program.structuralShapes.definitionForCarrier(fact.resultCarrier)?.dispatchName !== undefined,
         polymorphicProject: project !== undefined && program.projectTypes.isPolymorphic(project) });
       if (form !== undefined) {
-        const selected: RustObjectLiteralEmission = form === "project" ? Object.freeze({ kind: "project", node, fact })
+        const selected: RustObjectLiteralEmission = form === "project" ? Object.freeze({ kind: "project", node, selection: analyzeRustProjectLiteralEmission(program, node, fact) })
           : Object.freeze({ kind: "structural", node, selection: structural(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
             contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : []))) });
         producer.literal(node, selected);

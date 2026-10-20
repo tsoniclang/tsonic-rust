@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustProgramRecordBuilder } from "../program/records/model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableParameterAbi } from "../../target-model/records/callable-adapters.js";
 
@@ -9,7 +9,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 
 export function sourceCallableParameterAbis(
-  input: { readonly ast: AstReader; readonly records: RustProgramRecordBuilder },
+  input: { readonly ast: AstReader; readonly records: RustProgramRecords },
   callable: Node,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): RustCallableParameterAbi[] | undefined {
@@ -27,7 +27,7 @@ export function sourceCallableParameterAbis(
 }
 
 export function sourceCallableReturnCarrier(
-  input: { readonly records: RustProgramRecordBuilder },
+  input: { readonly records: RustProgramRecords },
   callable: Node,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): TargetTypeRef | undefined {

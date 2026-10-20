@@ -2,6 +2,9 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustTargetOperationFact } from "./operations.js";
 import type { RustStructuralShapeDefinition, RustStructuralShapeField } from "./structural-shapes.js";
+import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../types/project-types.js";
+import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
+import type { RustObjectLiteralMethodAdapterFact } from "./object-methods.js";
 
 export type RustRecordLiteralFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;
 
@@ -20,7 +23,7 @@ export interface RustStructuralLiteralEmission {
 }
 
 export type RustObjectLiteralEmission =
-  | { readonly kind: "project"; readonly node: Node; readonly fact: RustRecordLiteralFact }
+  | { readonly kind: "project"; readonly node: Node; readonly selection: RustProjectLiteralEmission }
   | { readonly kind: "structural"; readonly node: Node; readonly selection: RustStructuralLiteralEmission };
 
 export type RustObjectLiteralEmissionRequest = RustObjectLiteralEmission |
@@ -29,4 +32,45 @@ export type RustObjectLiteralEmissionRequest = RustObjectLiteralEmission |
 export interface RustObjectLiteralEmissionRecords {
   readonly objectLiteralEmission: { readonly get: (node: Node) => RustObjectLiteralEmission | undefined };
   readonly objectLiteralEmissions: { readonly get: (file: SourceFile) => readonly RustObjectLiteralEmissionRequest[] | undefined };
+}
+
+export type RustProjectLiteralImplementation = {
+  readonly kind: "authored";
+  readonly propertyIdentity: Node;
+  readonly sourceCallable: Node;
+  readonly parameters: readonly TargetTypeRef[];
+  readonly result: TargetTypeRef;
+  readonly error: TargetTypeRef | undefined;
+  readonly substitutions: readonly (readonly [string, TargetTypeRef])[];
+} | {
+  readonly kind: "spread";
+  readonly propertyIdentity: Node;
+  readonly contractMethod: Node;
+  readonly carrier: TargetTypeRef;
+  readonly parameterCount: number;
+  readonly error: TargetTypeRef;
+};
+
+export interface RustProjectLiteralMethodEmission {
+  readonly contractMethod: Node;
+  readonly owner: RustProjectTypeDefinition;
+  readonly ownerCarrier: TargetTypeRef;
+  readonly variant: RustProjectMethodDispatchVariant;
+  readonly implementationIndex: number;
+  readonly adapter: RustObjectLiteralMethodAdapterFact["dispatches"][number] | undefined;
+  readonly overrideIndex: number | undefined;
+}
+
+export interface RustProjectLiteralEmission {
+  readonly carrier: TargetTypeRef;
+  readonly definition: RustProjectTypeDefinition;
+  readonly contracts: readonly RustProjectInstanceContract[];
+  readonly fields: readonly { readonly declaration: Node; readonly contracts: readonly Node[]; readonly storageIndex: number;
+    readonly preferredName: string; readonly carrier: TargetTypeRef }[];
+  readonly accessors: readonly { readonly storageIndex: number; readonly contracts: readonly Node[];
+    readonly carrier: TargetTypeRef; readonly error: TargetTypeRef; readonly setter: boolean }[];
+  readonly implementations: readonly RustProjectLiteralImplementation[];
+  readonly methods: readonly RustProjectLiteralMethodEmission[];
+  readonly overrides: readonly number[];
+  readonly stateUsed: boolean;
 }
