@@ -59,7 +59,7 @@ import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressio
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { resolveRustDeclaredBindingStorage, recordBindingPatternFacts, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
-import { recordThrowFacts } from "../resources/suspension.js";
+import { recordThrowFacts } from "../errors/thrown-values.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
