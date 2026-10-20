@@ -2,7 +2,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustBinaryHookPlan } from "../../../target-model/records/binary-execution.js";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
+import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { applyRustDispatchContextBindings, projectRustDispatchContext, rustDispatchContextRootName } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextBinding } from "../project/dispatch-contexts.js";

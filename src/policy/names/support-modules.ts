@@ -1,5 +1,5 @@
-import { rustModuleSegmentName } from "../../../target-model/names/identifiers.js";
-import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
+import { rustModuleSegmentName } from "../../target-model/names/identifiers.js";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
 
 export function allocateRustSupportModuleName(
   identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,

@@ -5,7 +5,7 @@ import type { RustErrorRegionSelection } from "../../../target-model/records/err
 
 import {
   allocateRustComponentSupportModuleName,
-} from "../names/source-output-identities.js";
+} from "../../../policy/names/support-modules.js";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustPlanningContext } from "../context.js";
 import {

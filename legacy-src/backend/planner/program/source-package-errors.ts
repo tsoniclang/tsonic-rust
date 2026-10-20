@@ -2,7 +2,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
+import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
 import type {
   RustErrorDomain,
 } from "../../../target-model/operations/error-boundary.js";

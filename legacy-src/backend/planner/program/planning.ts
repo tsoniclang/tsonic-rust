@@ -19,7 +19,7 @@ import {
 } from "./module-initialization.js";
 import {
   allocateRustComponentSupportModuleName,
-} from "../names/source-output-identities.js";
+} from "../../../policy/names/support-modules.js";
 import { rustErrorBoundaryOperandType, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
 import { rustTypeFromCarrier } from "../types/render.js";
@@ -65,15 +65,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       .map(([fileName, identity]) => [fileName, identity.externalCrateName!] as const),
   );
   const facadePlan = materializeRustSourcePackageFacades(input);
-  const componentResult = planRustSourcePackageComponents(
-    input,
-    identities,
-    facadePlan,
-  );
-  if (componentResult.kind === "rejected") {
-    return rejectedTargetStage([...diagnostics, ...componentResult.diagnostics]);
-  }
-  const componentPlans = componentResult.components;
+  const componentPlans = planRustSourcePackageComponents(input);
   const rootComponentPlan = componentPlans.find((component) => component.root);
   if (rootComponentPlan === undefined) {
     return rejectedTargetStage([...diagnostics, {

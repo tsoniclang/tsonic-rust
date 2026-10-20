@@ -15,7 +15,8 @@ import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { planRustProgramErrorModule } from "./errors.js";
 import { planRustDispatchContextRoots } from "./dispatch-contexts.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
-import { createRustSourcePackageTypeRenderingContext, type RustSourcePackageComponentPlan } from "./source-package-components.js";
+import { createRustSourcePackageTypeRenderingContext } from "./source-package-components.js";
+import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
 import type {
   RustSourcePackageFacadeExport,
   RustSourcePackageFacadePlan,

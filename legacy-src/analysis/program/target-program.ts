@@ -41,6 +41,7 @@ import {
   analyzeRustSourcePackageFacades,
 } from "./source-package-facades.js";
 import { analyzeRustSourcePackageFacadeEmission } from "../source-modules/package-facades.js";
+import { analyzeRustSourcePackageComponentEmission } from "../source-modules/package-components.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -539,6 +540,14 @@ export function analyzeRustTargetProgram(
   const facadeEmission = analyzeRustSourcePackageFacadeEmission(program, sourceOutputIdentities.identities);
   if (facadeEmission.plan === undefined) return rejectedTargetStage(facadeEmission.diagnostics);
   context.records.sourcePackageEmission.facades(facadeEmission.plan);
+  const componentEmission = analyzeRustSourcePackageComponentEmission(program, sourceOutputIdentities.identities, facadeEmission.plan);
+  if (componentEmission.kind === "rejected") return rejectedTargetStage(componentEmission.diagnostics);
+  if (!componentEmission.components.some(component => component.root)) return rejectedTargetStage([{
+    code: "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING", category: "error", source: "tsonic-rust",
+    message: "Rust artifact planning has no exact root source-package component.",
+    evidence: ["target.capability=rust.backend.source-package-components"],
+  }]);
+  context.records.sourcePackageEmission.components(componentEmission.components);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);

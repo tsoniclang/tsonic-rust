@@ -1,56 +1,10 @@
-import type {
-  TargetDiagnostic,
-} from "@tsonic/target-api/artifacts";
-import type {
-  RustErrorDomain,
-} from "../../../target-model/operations/error-boundary.js";
-import type {
-  RustPlanningContext,
-} from "../context.js";
-import {
-  allocateRustComponentSupportModuleName,
-} from "../names/source-output-identities.js";
-import type {
-  RustSourceFileOutputIdentity,
-} from "../../../target-model/names/source-output-identities.js";
-import type {
-  RustSourcePackageFacadePlan,
-} from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
-import type { RustTypeRenderingContext } from "../types/render.js";
-
-export interface RustSourcePackageComponentPlan {
-  readonly componentId: string;
-  readonly sourceFileNames: ReadonlySet<string>;
-  readonly dependencyComponentIds: readonly string[];
-  readonly crateName?: string;
-  readonly programModuleName: string;
-  readonly structuralShapesModuleName: string;
-  readonly publicModuleNames: ReadonlySet<string>;
-  readonly publicImplementationModuleNames: ReadonlySet<string>;
-  readonly publicImplementationItemIdentities: ReadonlySet<string>;
-  readonly publishesImplementationAbi: boolean;
-  readonly errorDomain: RustErrorDomain;
-  readonly errorOwnerComponentId: string | undefined;
-  readonly root: boolean;
-}
-
-export function createRustSourcePackageTypeRenderingContext(
-  input: RustPlanningContext,
-  component: RustSourcePackageComponentPlan,
-  sourcePackageErrors: RustSourcePackageErrorPlan,
-  paths: Pick<RustTypeRenderingContext, "moduleNameByFileName" | "externalCrateNameByFileName" |
-    "externalItemPathByIdentity" | "externalStructuralShapeModuleByFileName">,
-): RustTypeRenderingContext & { readonly input: RustPlanningContext } {
-  return {
-    input, ...paths, sourcePackageErrors, sourcePackageComponentId: component.componentId,
-    moduleName: component.programModuleName, structuralShapesModuleName: component.structuralShapesModuleName,
-    ...(component.crateName === undefined ? {} : { crateName: component.crateName }),
-  };
-}
-
-export function planRustSourcePackageComponents(
-  input: RustPlanningContext,
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustSourcePackageComponentPlan, RustSourcePackageFacadePlan } from "../../target-model/records/source-packages.js";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import { allocateRustComponentSupportModuleName } from "../../policy/names/support-modules.js";
+export function analyzeRustSourcePackageComponentEmission(
+  program: Pick<RustTargetProgram, "sourcePackageComponents" | "sourceModuleConstructions" | "source">,
   identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   facades: RustSourcePackageFacadePlan,
 ):
@@ -63,7 +17,7 @@ export function planRustSourcePackageComponents(
       readonly diagnostics: readonly TargetDiagnostic[];
     } {
   const diagnostics: TargetDiagnostic[] = [];
-  const classifications = input.program.sourcePackageComponents;
+  const classifications = program.sourcePackageComponents;
   if (classifications.rootComponentId !== facades.rootComponentId) {
     return rejected(
       "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISMATCH",
@@ -77,12 +31,12 @@ export function planRustSourcePackageComponents(
       [fileName, component.componentId] as const),
   ));
   const sourceModuleDependenciesByComponent = new Map<string, Set<string>>();
-  for (const construction of input.program.sourceModuleConstructions.entries()) {
+  for (const construction of program.sourceModuleConstructions.entries()) {
     const sourceComponentId = componentIdByFileName.get(
-      input.program.source.ast.getFileName(construction.sourceFile),
+      program.source.ast.getFileName(construction.sourceFile),
     );
     const targetComponentId = componentIdByFileName.get(
-      input.program.source.ast.getFileName(construction.targetSourceFile),
+      program.source.ast.getFileName(construction.targetSourceFile),
     );
     if (sourceComponentId === undefined || targetComponentId === undefined) {
       diagnostics.push(componentDiagnostic(

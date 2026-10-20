@@ -1,4 +1,20 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustErrorDomain } from "../operations/error-boundary.js";
+export interface RustSourcePackageComponentPlan {
+  readonly componentId: string;
+  readonly sourceFileNames: ReadonlySet<string>;
+  readonly dependencyComponentIds: readonly string[];
+  readonly crateName?: string;
+  readonly programModuleName: string;
+  readonly structuralShapesModuleName: string;
+  readonly publicModuleNames: ReadonlySet<string>;
+  readonly publicImplementationModuleNames: ReadonlySet<string>;
+  readonly publicImplementationItemIdentities: ReadonlySet<string>;
+  readonly publishesImplementationAbi: boolean;
+  readonly errorDomain: RustErrorDomain;
+  readonly errorOwnerComponentId: string | undefined;
+  readonly root: boolean;
+}
 
 export interface RustSourcePackageFacadeExportContract {
   readonly packageId: string;
@@ -38,5 +54,6 @@ export interface RustSourcePackageFacadePlan {
 }
 
 export interface RustSourcePackageEmissionRecords {
+  readonly sourcePackageComponents: { readonly get: () => readonly RustSourcePackageComponentPlan[] | undefined };
   readonly sourcePackageFacades: { readonly get: () => RustSourcePackageFacadePlan | undefined };
 }
