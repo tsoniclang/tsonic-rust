@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustDeclarationEmissionProducer } from "../program/records/declaration-emission.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
@@ -10,9 +10,10 @@ export function analyzeRustDeclarationEmission(input: {
   readonly nodes: readonly Node[];
   readonly producer: RustDeclarationEmissionProducer;
   readonly required: RustRequiredRecord[];
-}): void {
+}): readonly TargetDiagnostic[] {
   const { program } = input;
   const { ast } = program.source;
+  const issues: TargetDiagnostic[] = [];
   for (const sourceFile of program.sourceFiles) {
     const scopes = program.projectTypes.definitions.filter(definition => definition.sourceFile === sourceFile)
       .flatMap(definition => {
@@ -70,9 +71,19 @@ export function analyzeRustDeclarationEmission(input: {
     requireRustRecord(input.required, "classDeclaration", node, "native class declaration", "analyzeRustDeclarationEmission");
   }
   const declarations = new Set(program.callableValues.nativeProducers.producers.map(producer => producer.declaration));
+  for (const node of input.nodes) if (program.records.sourceCallableReturn.get(node) !== undefined) declarations.add(node);
   for (const declaration of declarations) {
+    const destination = program.callableValues.nativeStorage.returnFor(declaration);
+    if (destination.kind === "unresolved") {
+      issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: declaration,
+        message: `${destination.reason} Node kind: ${ast.kindName(declaration)}.`, evidence: ["target.capability=rust.backend.value-destination"] });
+      continue;
+    }
     input.producer.callable(declaration, { invocation: program.callableValues.nativeProducers.invocationResultFor(declaration),
-      outward: program.callableValues.nativeProducers.outwardReturnFor(declaration) });
+      outward: program.callableValues.nativeProducers.outwardReturnFor(declaration),
+      destination: destination.kind === "identity" ? Object.freeze({ kind: "identity" })
+        : Object.freeze({ kind: "selected", carrier: destination.carrier }) });
     requireRustRecord(input.required, "callableReturn", declaration, "native callable result", "analyzeRustDeclarationEmission");
   }
+  return Object.freeze(issues);
 }

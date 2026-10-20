@@ -551,7 +551,9 @@ export function analyzeRustTargetProgram(
     producer: context.records.assignmentWrites, required: context.requiredRecords });
   if (assignmentWriteIssues.length !== 0) return rejectedTargetStage(assignmentWriteIssues);
   analyzeRustFieldWrites({ program, nodes: context.nativeNodes, producer: context.records.fieldWrites, required: context.requiredRecords });
-  analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes, producer: context.records.declarationEmission, required: context.requiredRecords });
+  const declarationEmissionIssues = analyzeRustDeclarationEmission({ program, nodes: context.nativeNodes,
+    producer: context.records.declarationEmission, required: context.requiredRecords });
+  if (declarationEmissionIssues.length !== 0) return rejectedTargetStage(declarationEmissionIssues);
   analyzeRustLexicalValues({ program, nodes: context.nativeNodes, producer: context.records.lexicalValuePlans });
   analyzeRustLexicalFunctionEmission({ program, nodes: context.nativeNodes, producer: context.records.lexicalFunctionPlans });
   analyzeRustCallableParameterEmission({ program, nodes: context.nativeNodes, producer: context.records.callableParameterPlans, required: context.requiredRecords });

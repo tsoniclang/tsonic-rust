@@ -12,6 +12,7 @@ export interface RustClassDeclarationEmission {
 export interface RustCallableReturnEmission {
   readonly invocation: TargetTypeRef | undefined;
   readonly outward: TargetTypeRef | undefined;
+  readonly destination: { readonly kind: "identity" } | { readonly kind: "selected"; readonly carrier: TargetTypeRef };
 }
 
 export interface RustCallableLeadingEmission {
