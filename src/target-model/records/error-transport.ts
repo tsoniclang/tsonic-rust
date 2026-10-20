@@ -3,6 +3,7 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustValueConversion } from "../operations/model.js";
 import type { RustExternalSourcePackageError, RustSourcePackageErrorDomainPlan } from "./source-package-errors.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
+import type { RustValueConversionContract } from "../conversions/contracts.js";
 
 export interface RustProgramErrorModuleEmission {
   readonly projects: readonly { readonly definition: RustProjectTypeDefinition; readonly name: string; readonly typePath: string;
@@ -37,7 +38,23 @@ export interface RustBoundaryErrorVariants {
 }
 
 export interface RustErrorTransportEmissionRecords {
+  readonly programErrorClosedValue: { readonly get: (component: string, identity: string, target: TargetTypeRef) => RustClosedErrorValueSelection | undefined };
   readonly programErrorModule: { readonly get: (componentId: string) => RustProgramErrorModuleEmission | undefined };
   readonly programErrorVariants: { readonly get: (componentId: string) => readonly RustPlannedErrorVariant[] | undefined };
   readonly boundaryErrorVariants: { readonly get: (componentId: string, identity: string) => RustBoundaryErrorVariants | undefined };
 }
+
+export type RustClosedErrorPayloadEmission =
+  | { readonly kind: "error" | "suppressed" }
+  | { readonly kind: "value"; readonly conversion: RustValueConversionContract | null }
+  | { readonly kind: "external"; readonly value: RustClosedErrorValueEmission };
+
+export type RustClosedErrorValueEmission =
+  | { readonly kind: "runtime" }
+  | { readonly kind: "domain"; readonly path: string; readonly arms: readonly {
+      readonly name: string; readonly payload: RustClosedErrorPayloadEmission;
+    }[] };
+
+export type RustClosedErrorValueSelection =
+  | { readonly kind: "selected"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue"; readonly value: RustClosedErrorValueEmission }
+  | { readonly kind: "rejected"; readonly reason: string };

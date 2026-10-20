@@ -79,6 +79,7 @@ import { analyzeRustSourceAssertions } from "../conversions/source-assertions.js
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
 import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
+import { analyzeRustClosedErrorValues } from "../errors/closed-values.js";
 import { analyzeRustProgramErrorModuleEmission } from "../errors/module-emission.js";
 import { analyzeRustDispatchRootEmission } from "../project/dispatch-emission.js";
 import { analyzeRustBinaryDispatchEmission } from "../project/binary-dispatch-emission.js";
@@ -605,6 +606,9 @@ export function analyzeRustTargetProgram(
   if (workerEntryIssues.length !== 0) return rejectedTargetStage(workerEntryIssues);
   const errorVariantIssues = analyzeRustErrorVariantEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorVariantIssues.length !== 0) return rejectedTargetStage(errorVariantIssues);
+  const closedErrorValueIssues = analyzeRustClosedErrorValues(program, errorEmission.plan, context.nativeNodes,
+    context.records.errorTransportEmissionPlans, context.records.conversionEmissionPlans);
+  if (closedErrorValueIssues.length !== 0) return rejectedTargetStage(closedErrorValueIssues);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
