@@ -1,0 +1,26 @@
+import type { Node } from "@tsonic/tsts";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { Node_Expression, Node_Operand } from "@tsonic/target-api/source";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustSourceAssertionProducer } from "../program/records/source-assertions.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+
+export function analyzeRustSourceAssertions(program: Omit<RustTargetProgram, "reachability">,
+  nodes: readonly Node[], producer: RustSourceAssertionProducer): readonly TargetDiagnostic[] {
+  const issues: TargetDiagnostic[] = [];
+  const { ast } = program.source;
+  for (const node of nodes) {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind !== "source-conversion") continue;
+    const operand = ast.is.IsPrefixUnaryExpression(node) ? Node_Operand(ast, node) : Node_Expression(ast, node);
+    const contract = operation.conversion === undefined ? undefined : rustValueConversionContract(operation.conversion, program.typeDefinitions);
+    if (operand === undefined || operation.conversion !== undefined && contract === undefined) {
+      issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+        message: `Source assertion conversion conflicts with its finalized runtime carrier or TSTS-selected operation fact. Node kind: ${ast.kindName(node)}.`,
+        evidence: ["target.capability=rust.backend.conversion-selected-evidence"] });
+      continue;
+    }
+    producer.publish(node, { operand, conversion: operation.conversion, borrowed: contract?.sourceMode === "ref" });
+  }
+  return Object.freeze(issues);
+}

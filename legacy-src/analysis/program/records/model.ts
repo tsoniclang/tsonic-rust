@@ -130,6 +130,10 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly propertyValueProjectionPlans: import("./property-value-projection.js").RustPropertyValueProjectionProducer;
   readonly optionalChainEmissionPlans: import("./optional-chain-emission.js").RustOptionalChainEmissionProducer;
   readonly ownershipEmissionPlans: import("./ownership-emission.js").RustOwnershipEmissionProducer;
+  readonly valueReadPlans: import("./value-read.js").RustValueReadProducer;
+  readonly literalEmissionPlans: import("./literal-emission.js").RustLiteralEmissionProducer;
+  readonly templateStringPlans: import("./template-strings.js").RustTemplateStringProducer;
+  readonly sourceAssertionPlans: import("./source-assertions.js").RustSourceAssertionProducer;
   readonly statementExits: RustStatementExitProducer;
   readonly statementCompletions: RustStatementCompletionProducer;
   readonly resourceScopes: RustResourceScopeProducer;

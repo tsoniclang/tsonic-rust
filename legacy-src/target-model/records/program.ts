@@ -70,6 +70,10 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly sourceErrorRegion: RustErrorEmissionRecords["sourceErrorRegion"];
   readonly readOwnership: import("./ownership-emission.js").RustOwnershipEmissionRecords["readOwnership"];
   readonly captureOwnership: import("./ownership-emission.js").RustOwnershipEmissionRecords["captureOwnership"];
+  readonly valueRead: import("./value-read.js").RustValueReadRecords["valueRead"];
+  readonly literalEmission: import("./literal-emission.js").RustLiteralEmissionRecords["literalEmission"];
+  readonly templateString: import("./template-strings.js").RustTemplateStringRecords["templateString"];
+  readonly sourceAssertion: import("./source-assertions.js").RustSourceAssertionRecords["sourceAssertion"];
   readonly borrowedSequenceEmission: import("./array-literals.js").RustArrayLiteralRecords["borrowedSequenceEmission"];
   readonly safetyOperation: import("./safety-emission.js").RustSafetyEmissionRecords["safetyOperation"];
   readonly declarationSafety: import("./safety-emission.js").RustSafetyEmissionRecords["declarationSafety"];

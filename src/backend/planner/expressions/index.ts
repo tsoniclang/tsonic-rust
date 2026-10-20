@@ -6,10 +6,8 @@ export {
 export {
   expressionCarrier,
   negateRustPlannedBooleanExpression,
-  planNumericLiteral,
-  planNumericLiteralWithCarrier,
-  providerSelectedCallMatches,
 } from "./fundamentals.js";
+export { planNumericLiteral, planNumericLiteralWithCarrier } from "./literal-conversions.js";
 export { planRustOperatorCallExpression } from "./binary.js";
 export {
   applyFinalizedValueConversion,
