@@ -50,6 +50,7 @@ import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import { analyzeRustWorkerEntries } from "../source-modules/worker-entries.js";
 import { analyzeRustProgramEmission } from "../source-modules/program-emission.js";
 import { analyzeRustSourceArtifacts } from "../source-modules/artifacts.js";
+import { analyzeRustSafetyEmission } from "../safety/emission.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
 import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
@@ -620,6 +621,8 @@ export function analyzeRustTargetProgram(
   analyzeRustSignatureVisibility(program, context.nativeNodes, context.records.sourcePackageEmission);
   const artifactIssues = analyzeRustSourceArtifacts(program, context.nativeNodes, context.records.sourceArtifactPlans);
   if (artifactIssues.length !== 0) return rejectedTargetStage(artifactIssues);
+  const safetyEmissionIssues = analyzeRustSafetyEmission(program, context.records.safetyEmissionPlans);
+  if (safetyEmissionIssues.length !== 0) return rejectedTargetStage(safetyEmissionIssues);
   context.callableValues.publish();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({ ...program,

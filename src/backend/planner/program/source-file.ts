@@ -56,9 +56,6 @@ import {
   planPolymorphicInterfaceDeclaration,
 } from "../objects/polymorphism/index.js";
 import {
-  diagnoseRustSafetyApplications,
-} from "../safety/explicit-safety.js";
-import {
   planRustModuleCell,
   planRustHoistedModuleCell,
   rustModuleCellCallableAlias,
@@ -110,7 +107,6 @@ export function planRustSourceFile(
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
 ): PlannedRustSourceFile {
-  diagnoseRustSafetyApplications(sourceFile, input, diagnostics);
   const usedAliases = new Set<string>();
   const baseContext: RustPlanContext = {
     input,
