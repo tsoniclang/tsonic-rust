@@ -208,25 +208,6 @@ function nodeRequiresUnsafe(
     rustSelectedAccessorRequiresUnsafe(node, "setter", input);
 }
 
-function walkDeclarationSubtree(
-  root: Node,
-  input: RustSafetyAnalysisInput,
-  visit: (node: Node) => void,
-): void {
-  const pending: Node[] = [root];
-  while (pending.length > 0) {
-    const node = pending.pop();
-    if (node === undefined) continue;
-    if (node !== root && isIndependentSafetyBoundary(node, input)) continue;
-    visit(node);
-    const children = input.program.source.ast.children(node);
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const child = children[index];
-      if (child !== undefined) pending.push(child);
-    }
-  }
-}
-
 function isIndependentSafetyBoundary(
   node: Node,
   input: RustSafetyAnalysisInput,
