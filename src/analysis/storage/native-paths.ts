@@ -13,7 +13,7 @@ export type RustNativeStorageProjection = Node | string;
 
 export function rustNativeStorageRoot(node: Node, input: RustNativeStoragePathInput): Node | undefined {
   const visited = new Set<Node>();
-  for (let depth = 0; depth < 256 && !visited.has(node); depth += 1) {
+  while (!visited.has(node)) {
     visited.add(node);
     if (input.ast.is.IsIdentifier(node)) return input.navigation.sourceReferenceFor(node)?.declaration;
     const kind = input.ast.kindName(node);
@@ -30,7 +30,7 @@ export function rustNativeStorageProjections(
 ): readonly RustNativeStorageProjection[] | undefined {
   const projections: RustNativeStorageProjection[] = [];
   const visited = new Set<Node>();
-  for (let depth = 0; depth < 256 && !visited.has(node); depth += 1) {
+  while (!visited.has(node)) {
     visited.add(node);
     const kind = input.ast.kindName(node);
     if (kind === "KindIdentifier") return input.navigation.sourceReferenceFor(node)?.declaration === root
