@@ -1,9 +1,5 @@
-import type {
-  RustSelectedTargetOperation,
-  RustSelectedTargetSignature,
-  RustTargetGenericArgument,
-  RustTargetTypeRef,
-} from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, RustTargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetOperation, RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 import {
   rustFixedArrayCarrierValue,
   rustBuiltInCarrierDefinitions,

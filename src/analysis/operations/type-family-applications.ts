@@ -3,7 +3,8 @@ import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
-import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 import { resolveRustTypeFamilyApplication } from "../types/resolution/type-families.js";
 
 export function realizeRustSelectedTypeFamilies(

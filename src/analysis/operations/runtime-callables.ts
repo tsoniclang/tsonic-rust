@@ -29,7 +29,8 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
-import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
 import { runtimeCallableProtocol } from "../../policy/types/callables/runtime-protocols.js";
 import type { RustOptionalCallGuard } from "../../target-model/records/optional-calls.js";

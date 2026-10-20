@@ -21,7 +21,8 @@ import { bindRustSelectedCallTypeArguments } from "../types/resolution/generic-a
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";

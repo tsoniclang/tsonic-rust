@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
-import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

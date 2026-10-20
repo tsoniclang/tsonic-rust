@@ -9,7 +9,8 @@ import { rustSelectedCallTypeParameters } from "../types/resolution/generic-argu
 import { acceptRustPolicy, rejectRustPolicy } from "../../policy/operations/contracts.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 
-import type { RustSelectedTargetOperation, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetOperation } from "../../target-model/records/member-selections.js";
 import { Node_Expression, Node_Type, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";

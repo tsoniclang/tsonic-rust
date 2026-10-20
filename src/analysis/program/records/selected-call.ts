@@ -2,7 +2,8 @@ import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, Rus
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { rustSelectedTargetSignatureEquals } from "../../../target-model/types/selected-call-equality.js";
-import type { RustSelectedTargetSignature, RustTargetMember } from "../../../target-model/types/model.js";
+import type { RustTargetMember } from "../../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../../target-model/records/member-selections.js";
 import { rustFoundationForSelectedCall } from "../../foundation/requirements.js";
 import { createRustRecordFamily } from "./family.js";
 

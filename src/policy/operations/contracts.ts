@@ -1,7 +1,8 @@
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, ResolvedSourceIterationInfo, Symbol, Type, TypeIndexInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 
-import type { RustSelectedTargetOperation, RustSelectedTargetSignature, RustTargetCallArgumentSlot, RustTargetParameter, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetParameter, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetOperation, RustSelectedTargetSignature, RustTargetCallArgumentSlot } from "../../target-model/records/member-selections.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 

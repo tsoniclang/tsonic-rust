@@ -9,7 +9,8 @@ import type { RustFinalizedOperationAbiFor, RustFinalizedValueConversion } from 
 import type { RustProgramErrorConversion } from "../conversions/program-error.js";
 import type { RustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../syntax/tokens.js";
-import type { RustTargetGenericArgument, RustSelectedUnionMethodIdentity, TargetTypeRef } from "../types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
+import type { RustSelectedUnionMethodIdentity } from "./member-selections.js";
 
 import type { RustOptionEqualityContract } from "../operations/option-equality.js";
 

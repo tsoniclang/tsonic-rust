@@ -4,7 +4,8 @@ import type { RustPolicySelection } from "../../../policy/operations/contracts.j
 import { rustPostCheckOperationKind } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import type { RustSelectedTargetOperation, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSelectedTargetOperation } from "../../../target-model/records/member-selections.js";
 import { rustSelectedTargetOperationEquals } from "../../../target-model/types/equality.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForSelectedOperation } from "../../foundation/requirements.js";

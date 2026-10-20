@@ -20,7 +20,8 @@ import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/ty
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
-import type { RustSelectedTargetSignature, RustTargetGenericArgument, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
 export interface FinalizedProjectSourceGenericArguments {
   readonly targetGenericArguments: readonly RustTargetGenericArgument[];

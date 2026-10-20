@@ -6,7 +6,8 @@ import { selectRustPointerReturnCarrier } from "../../../callables/pointer-retur
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, substituteRustTargetGenerics } from "../../../../target-model/types/index.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
-import type { RustSelectedUnionMethod, RustSelectedUnionMethodIdentity, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustSelectedUnionMethod, RustSelectedUnionMethodIdentity } from "../../../../target-model/records/member-selections.js";
 import { rustProjectCallableTargetName } from "../../../names/source-member-name.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import { selectedCallCalleeSymbol } from "../operators.js";

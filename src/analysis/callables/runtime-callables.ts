@@ -21,7 +21,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
