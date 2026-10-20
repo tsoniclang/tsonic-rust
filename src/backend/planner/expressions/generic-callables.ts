@@ -4,36 +4,25 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustGenericCallableImplementationPath } from "../declarations/callables/generic-implementations.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.js";
+import { rustSourceBindingPath } from "../program/plan-context.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustCaptureValue } from "./typed-locations.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./receiver-captures.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
 
 export function planRustGenericCallableValue(
-  node: Node, carrier: TargetTypeRef, context: RustPlanContext,
+  node: Node, _carrier: TargetTypeRef, context: RustPlanContext,
 ): RustExpr | undefined {
-  const plan = context.input.program.callableValues.generic;
-  const implementation = plan.implementationFor(node);
-  const selected = context.input.program.callableValues.nativeStorage.operandFor(node);
-  const physical = selected.kind === "unresolved" ? undefined : selected.carrier;
-  const definition = physical === undefined ? undefined : plan.physical.definitionFor(physical);
-  const member = definition?.members.length === 1 ? definition.members[0] : undefined;
-  const environment = implementation === undefined ? undefined : plan.physical.environmentFor(implementation);
-  const rendered = physical === undefined ? undefined : rustTypeFromCarrierInContext(physical, context);
+  const selected = context.input.program.records.genericValue.get(node)
+    ?? failRustPlannerInvariant("An admitted generic callable requires its native construction plan.", node);
+  const { implementation, member } = selected;
+  const rendered = rustTypeFromCarrierInContext(selected.carrier, context);
   const owner = rendered?.kind === "named" ? rendered : undefined;
-  const path = implementation === undefined ? undefined
-    : rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
-  if (implementation === undefined || definition === undefined || environment === undefined || owner === undefined || path === undefined ||
-    member?.implementation !== implementation || physical === undefined || !rustGenericCallableSignaturesMatch(carrier, physical)) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.backend.generic-callable-construction", "A generic callable requires one sealed native implementation and environment."));
-    return undefined;
-  }
+  const path = rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
+  if (owner === undefined || path === undefined) failRustPlannerInvariant("An admitted generic callable requires its native implementation and storage type identities.", node);
   const fields: { name: string; value: RustExpr }[] = [];
   for (const [index, capture] of implementation.captures.entries()) {
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
@@ -53,7 +42,7 @@ export function planRustGenericCallableValue(
   for (const [index, binding] of receiverBindings.entries()) fields.push({
     name: `capture_${implementation.captures.length + index}`, value: { kind: "path", path: binding.name },
   });
-  if (definition.signature.environmentParameters.length + environment.parameters.length > 0) {
+  if (selected.marker) {
     fields.push({ name: "marker", value: { kind: "path", path: "core::marker::PhantomData" } });
   }
   const state: RustExpr = { kind: "struct-literal", path, fields };

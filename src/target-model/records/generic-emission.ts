@@ -1,4 +1,4 @@
-import type { SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../types/model.js";
 import type { RustGenericCallableImplementation, RustGenericCallableEnvironment, RustGenericCallablePhysicalDefinition,
   RustGenericCallablePhysicalMember, RustGenericCallableIdentitySelection } from "./generic-callables.js";
@@ -38,7 +38,15 @@ export interface RustGenericDeclarationInventory {
   readonly definitions: readonly RustGenericCallablePhysicalDefinition[];
 }
 
+export interface RustGenericValueEmission {
+  readonly carrier: TargetTypeRef;
+  readonly implementation: RustGenericCallableImplementation;
+  readonly member: RustGenericCallablePhysicalMember;
+  readonly marker: boolean;
+}
+
 export interface RustGenericEmissionRecords {
+  readonly genericValue: { readonly get: (node: Node) => RustGenericValueEmission | undefined };
   readonly genericImplementation: { readonly get: (implementation: RustGenericCallableImplementation) => RustGenericImplementationEmission | undefined };
   readonly genericDefinition: { readonly get: (definition: RustGenericCallablePhysicalDefinition) => RustGenericDefinitionEmission | undefined };
   readonly genericDeclarations: { readonly get: (sourceFile: SourceFile) => RustGenericDeclarationInventory | undefined };

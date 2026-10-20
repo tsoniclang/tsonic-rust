@@ -553,7 +553,7 @@ export function analyzeRustTargetProgram(
   analyzeRustGenericErrorEmission({ ast: context.ast, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     regions: program.errorRegions, index: genericCallableErrors.value, physical: program.callableValues.generic.physical,
     producer: context.records.errorEmissionPlans });
-  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.genericEmissionPlans });
+  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes, producer: context.records.genericEmissionPlans });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,

@@ -1,4 +1,4 @@
-import type { SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustGenericEmissionProducer } from "../program/records/generic-emission.js";
@@ -7,10 +7,12 @@ import type { RustGenericCallableImplementation, RustGenericCallablePhysicalMemb
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 
 export function analyzeRustGenericEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
+  readonly nodes: readonly Node[];
   readonly producer: RustGenericEmissionProducer;
 }): void {
   const { program, producer } = input;
@@ -28,6 +30,20 @@ export function analyzeRustGenericEmission(input: {
       suspended: program.records.asyncFunction.get(implementation.declaration) !== undefined || program.records.generator.get(implementation.declaration) !== undefined });
   }
   const physical = generic.physical.definitions();
+  for (const node of input.nodes) {
+    const implementation = generic.implementationFor(node);
+    if (implementation === undefined) continue;
+    const selected = program.callableValues.nativeStorage.operandFor(node);
+    if (selected.kind === "unresolved") continue;
+    const definition = generic.physical.definitionFor(selected.carrier);
+    if (definition === undefined) continue;
+    const member = definition.members.length === 1 ? definition.members[0] : undefined;
+    const environment = generic.physical.environmentFor(implementation);
+    if (member?.implementation !== implementation || environment === undefined || !rustGenericCallableSignaturesMatch(implementation.carrier, selected.carrier))
+      failTargetAnalysisInvariant("tsonic-rust", "A generic callable requires one sealed native implementation and environment.", node);
+    producer.value(node, { carrier: selected.carrier, implementation, member,
+      marker: definition.signature.environmentParameters.length + environment.parameters.length > 0 });
+  }
   for (const definition of physical) {
     const invoked = program.callableValues.genericDispatch.requiredFor(definition);
     const identity = program.callableValues.genericIdentities.forDefinition(definition);
