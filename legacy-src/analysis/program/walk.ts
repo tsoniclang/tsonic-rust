@@ -37,7 +37,7 @@ import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { checkedPropertySelectionInput } from "../operations/member-access.js";
 import type { RustAnalysisContext } from "./context.js";
-import type { RustModuleBindingPolicy } from "./module-bindings.js";
+import type { RustModuleBindingAnalysis } from "./module-bindings.js";
 
 import type { RustOperationsProviderOptions, RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustProviderOperationRow } from "../../target-model/identities/provider-relations.js";
@@ -90,7 +90,7 @@ export interface RustFactWalk {
   readonly promotedStorageDeclarations: ReadonlySet<Node>;
   readonly objectLiteralMethodExpressions: Set<Node>;
   readonly objectLiteralMethodSpreadExpressions: Set<Node>;
-  readonly moduleBindings: RustModuleBindingPolicy;
+  readonly moduleBindings: RustModuleBindingAnalysis;
   currentThisCarrier?: TargetTypeRef;
   currentSuperCarrier?: TargetTypeRef;
   currentMethodDeclaration?: Node;

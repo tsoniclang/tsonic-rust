@@ -1,31 +1,15 @@
+import { selectRustModuleValueStorage } from "../../policy/operations/declarations/module-bindings.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { flowStateFactKey } from "@tsonic/tsts";
-import { isRustStringCarrier } from "../../target-model/types/index.js";
-import {
-  KindFalseKeyword,
-  KindArrayBindingPattern,
-  KindFunctionExpression,
-  KindNonNullExpression,
-  KindNumericLiteral,
-  KindObjectBindingPattern,
-  KindParenthesizedExpression,
-  KindSatisfiesExpression,
-  KindTrueKeyword,
-  KindVariableDeclaration,
-  KindVariableStatement,
-  Node_Expression,
-  Node_Initializer,
-  Node_Name,
-  VariableDeclarationList_Declarations,
-  VariableStatement_DeclarationList,
-} from "@tsonic/target-api/source";
+
+import { KindFalseKeyword, KindArrayBindingPattern, KindFunctionExpression, KindNonNullExpression, KindNumericLiteral, KindObjectBindingPattern, KindParenthesizedExpression, KindSatisfiesExpression, KindTrueKeyword, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Name, VariableDeclarationList_Declarations, VariableStatement_DeclarationList } from "@tsonic/target-api/source";
 import { cyclicSourceFiles } from "./module-graph.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingFact } from "../../target-model/records/operation-selections.js";
 import { selectRustModuleBindingPattern } from "../module-initialization/binding-patterns.js";
 
-export interface RustModuleBindingPolicy {
+export interface RustModuleBindingAnalysis {
   nativeCallable(declaration: Node): RustNativeModuleCallable | undefined;
   isNativeCallableExpression(expression: Node): boolean;
   classifyValue(
@@ -41,10 +25,10 @@ export interface RustNativeModuleCallable {
   readonly valueObserved: boolean;
 }
 
-export function createRustModuleBindingPolicy(
+export function createRustModuleBindingAnalysis(
   context: RustAnalysisContext,
   addressTakenDeclarations: ReadonlySet<Node>,
-): RustModuleBindingPolicy {
+): RustModuleBindingAnalysis {
   const callableByDeclaration = collectNativeCallableCandidates(context);
   const cyclic = cyclicSourceFiles(context.source.navigation, context.sourceFiles);
   if (cyclic.kind === "unresolved") context.diagnostics.push({
@@ -88,29 +72,15 @@ export function createRustModuleBindingPolicy(
       const initializerKind = initializer === undefined
         ? undefined
         : context.ast.kindName(initializer);
-      const stringConstant = isRustStringCarrier(valueCarrier) &&
-        (initializerKind === "KindStringLiteral" || initializerKind === "KindNoSubstitutionTemplateLiteral") &&
-        moduleStringCanUseStaticStorage(declaration, context) &&
-        !cyclic.sourceFiles.has(context.ast.getSourceFile(declaration)!) &&
-        !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration);
-      const nativeConst = declarationKind === "const" && !addressTakenDeclarations.has(declaration) && (
-        initializerKind === KindNumericLiteral ||
-        initializerKind === KindTrueKeyword ||
-        initializerKind === KindFalseKeyword || stringConstant
-      );
-      if (nativeConst) {
-        return {
-          declarationKind: "const",
-          storage: "native-const",
-          valueCarrier,
-        };
-      }
-      return {
-        declarationKind,
-        storage: "module-cell",
-        initialization: initializer === undefined ? "declaration" : "value",
-        valueCarrier,
-      };
+      return selectRustModuleValueStorage(declarationKind, valueCarrier, {
+        addressTaken: addressTakenDeclarations.has(declaration),
+        scalarLiteral: initializerKind === KindNumericLiteral || initializerKind === KindTrueKeyword || initializerKind === KindFalseKeyword,
+        stringLiteral: initializerKind === "KindStringLiteral" || initializerKind === "KindNoSubstitutionTemplateLiteral",
+        stringStable: moduleStringCanUseStaticStorage(declaration, context) &&
+          !cyclic.sourceFiles.has(context.ast.getSourceFile(declaration)!) &&
+          !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration),
+        initialized: initializer !== undefined,
+      });
     },
   });
 }

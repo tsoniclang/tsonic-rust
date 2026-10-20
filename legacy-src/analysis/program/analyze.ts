@@ -2,7 +2,7 @@ import { requireRustRecord } from "./records/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
-import { createRustModuleBindingPolicy } from "./module-bindings.js";
+import { createRustModuleBindingAnalysis } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
@@ -107,7 +107,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   );
   for (const declaration of publishedDeclarations) context.promiseBodies.expose(declaration, declaration);
   const promotedStorageDeclarations = new Set<Node>();
-  const moduleBindings = createRustModuleBindingPolicy(context, promotedStorageDeclarations);
+  const moduleBindings = createRustModuleBindingAnalysis(context, promotedStorageDeclarations);
   const sourceCallableAbi = createRustSourceCallableAbiResolver({
     isNativeCallableExpression: moduleBindings.isNativeCallableExpression,
     parameterAbiFor: parameter => context.records.sourceParameterAbi.get(parameter),
