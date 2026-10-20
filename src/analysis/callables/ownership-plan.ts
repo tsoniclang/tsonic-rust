@@ -1,7 +1,8 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { createRustCallableOwnershipComponentQueries, type RustCallableOwnershipComponentQueries } from "./ownership-components.js";
-import type { RustCallableOwnershipComponent, RustCallableOwnershipCapture } from "../../target-model/records/callable-ownership.js";
+import type { RustCallableOwnershipComponent } from "../../target-model/records/callable-ownership.js";
 
 import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 
@@ -23,12 +24,12 @@ export interface RustCallableOwnershipRegistry extends RustCallableOwnershipPlan
 export function createRustCallableOwnershipRegistry(): RustCallableOwnershipRegistry {
   let current: RustCallableOwnershipPlan | undefined;
   const requireCurrent = (): RustCallableOwnershipPlan => {
-    if (current === undefined) throw new Error("Callable ownership must be sealed before declaration ABI selection.");
+    if (current === undefined) failTargetAnalysisInvariant("tsonic-rust", "Callable ownership must be initialized before declaration ABI selection.");
     return current;
   };
   return Object.freeze({
     initialize(input: Parameters<typeof createRustCallableOwnershipComponentQueries>[0]) {
-      if (current !== undefined) throw new Error("Callable ownership can be initialized only once.");
+      if (current !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Callable ownership can be initialized only once.");
       current = createRustCallableOwnershipPlan(input.storage, createRustCallableOwnershipComponentQueries(input));
       return current;
     },
@@ -63,7 +64,7 @@ export function createRustCallableOwnershipPlan(
   const activations = Object.freeze([...groups].map(([activationScope, group]) => {
     const first = group[0]!;
     if (group.some(component => component.kind !== first.kind || component.ownerDeclaration !== first.ownerDeclaration))
-      throw new Error("One checked source activation cannot acquire conflicting physical owners.");
+      failTargetAnalysisInvariant("tsonic-rust", "One checked source activation cannot acquire conflicting physical owners.", activationScope);
     const slotDeclarations = Object.freeze([...new Set(group.flatMap(component => component.slotDeclarations))]);
     const slots = new Set(slotDeclarations);
     const activation = Object.freeze({ activationScope, ownerDeclaration: first.ownerDeclaration, kind: first.kind,
