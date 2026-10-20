@@ -26,6 +26,7 @@ import { readRustProjectDispatchedField, writeRustProjectDispatchedField, withRu
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation, writeRustStoredObjectField } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
+import { planRustStringConcatOperand } from "../expressions/string-concat-parts.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
@@ -246,7 +247,7 @@ export function planRustAssignmentWrite(
           }
           const nextName = allocateRustSyntheticName(syntheticNames, "union_next");
           const next: RustExpr = operator === "+=" && isRustStringCarrier(fact.resultCarrier)
-            ? rustStringConcat([{ kind: "path", path: currentName }, value])
+            ? rustStringConcat([{ kind: "value", value: { kind: "path", path: currentName } }, planRustStringConcatOperand(valueNode, value, context)])
             : { kind: "evaluate-then", discard: "unit", effect: { kind: "assignment", operator,
                 target: { kind: "path", path: currentName }, value },
                 value: { kind: "path", path: currentName } };
@@ -427,8 +428,8 @@ export function planRustAssignmentWrite(
             dispatchReadRole!,
           );
       const concatenated = rustStringConcat([
-        { kind: "path", path: currentName },
-        value,
+        { kind: "value", value: { kind: "path", path: currentName } },
+        planRustStringConcatOperand(valueNode, value, context),
       ]);
       const written = sourceField.dispatch === undefined
         ? writeRustStoredObjectField(
@@ -551,8 +552,8 @@ export function planRustAssignmentWrite(
     }
     const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
     const concatenated = rustStringConcat([
-      { kind: "path", path: currentName },
-      value,
+      { kind: "value", value: { kind: "path", path: currentName } },
+      planRustStringConcatOperand(valueNode, value, context),
     ]);
     const promotedLocation = planRustPromotedStorageLocation(
       left,

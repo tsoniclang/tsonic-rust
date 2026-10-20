@@ -5,7 +5,8 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
+import { rustStringConcat, type RustStringConcatPart } from "../../target-ast/syntax/expressions.js";
+import { planRustStringConcatOperand } from "./string-concat-parts.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
@@ -133,11 +134,11 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   }
   if (fact.kind === "string-concat") {
     const nodes = selected.concatParts ?? failRustPlannerInvariant("An admitted concatenation requires its ordered source operands.", node);
-    const parts: RustExpr[] = [];
+    const parts: RustStringConcatPart[] = [];
     for (const operand of nodes) {
       const value = planExpression(operand, context);
       if (value === undefined) return undefined;
-      parts.push(value);
+      parts.push(planRustStringConcatOperand(operand, value, context));
     }
     return rustStringConcat(parts);
   }

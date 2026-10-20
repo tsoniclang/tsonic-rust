@@ -389,7 +389,7 @@ export function planRustCompoundAssignmentValue(
   const selection = context.input.program.records.assignmentValue.get(node);
   if (selection === undefined) failRustPlannerInvariant("An admitted assignment requires its sealed native value operation.", node);
   if (selection.kind === "plain") return value;
-  if (selection.kind === "string-concat") return rustStringConcat([current, value]);
+  if (selection.kind === "string-concat") return rustStringConcat([{ kind: "value", value: current }, { kind: "value", value }]);
   if (selection.kind === "call") {
     const planned = planRustOperatorCallExpression(selection.operation,
       { expression: current, form: currentForm }, { expression: value, form: "value" }, node, context);
