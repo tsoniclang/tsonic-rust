@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
-import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
@@ -190,7 +189,6 @@ function planRustFunctionItem(
   if (parameters === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const { params, parameterPlan, syntheticNames } = parameters;
   context = parameters.context;
-  const returnTypeNode = Node_Type(ast, node);
   const sourceReturn = context.input.program.records.sourceCallableReturn.get(node);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
     sourceReturn?.returnCarrier;
