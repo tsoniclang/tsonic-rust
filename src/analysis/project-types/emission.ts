@@ -5,7 +5,7 @@ import type { RustProjectEmissionProducer } from "../program/records/project-emi
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/model.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { rustTargetGenericReferences } from "../../target-model/types/index.js";
+import { rustTargetGenericReferences, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
@@ -34,11 +34,28 @@ export function analyzeRustProjectEmission(input: {
     ...program.classValues.instanceViewImplementations.flatMap(view => [view.sourceCarrier, view.targetCarrier]),
     ...input.nodes.flatMap(node => { const carrier = program.records.runtimeCarrier.get(node)?.carrier; return carrier === undefined ? [] : [carrier]; })];
   const seenCarriers = new Set<string>();
+  for (const context of program.physicalEmissionContexts.contexts) unionCarriers.push(...context.operands);
+  for (const operand of program.physicalEmissionContexts.operands) unionCarriers.push(operand.carrier,
+    ...(operand.destination === undefined ? [] : [operand.destination]));
+  for (const protocol of program.callableValues.native.protocols) unionCarriers.push(protocol.trait, ...protocol.method.parameters, protocol.result);
+  const sourceTypes = new Map<string, Set<string>>();
+  const sourceType = (fileName: string, typeName: string): void => {
+    const selected = sourceTypes.get(fileName) ?? new Set<string>();
+    if (selected.has(typeName)) return;
+    selected.add(typeName);
+    sourceTypes.set(fileName, selected);
+    const protocol = program.callableValues.native.protocolForSourceItem(fileName, typeName);
+    const targetName = protocol === undefined ? program.names.nameForSourceType(fileName, typeName) : protocol.targetName;
+    if (targetName !== undefined) producer.sourceType(fileName, typeName, { targetName, native: protocol !== undefined });
+  };
   for (let index = 0; index < unionCarriers.length; index++) {
     const carrier = unionCarriers[index]!;
     const key = closedMetadataKey(carrier);
     if (seenCarriers.has(key)) continue;
     seenCarriers.add(key);
+    const source = rustSourceTypeCarrierValue(carrier) ?? rustSourceUnionCarrierValue(carrier);
+    if (source !== undefined) sourceType(source.fileName, source.typeName);
+    if (carrier.kind === "trait-ref" && carrier.sourceItem !== undefined) sourceType(carrier.sourceItem.fileName, carrier.sourceItem.typeName);
     const union = program.structuralShapes.unionForCarrier(carrier);
     if (union !== undefined) producer.union(carrier, union);
     const definition = program.projectTypes.definitionForCarrier(carrier);

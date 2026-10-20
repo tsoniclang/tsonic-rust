@@ -9,11 +9,11 @@ export function rustSourceTypePathInContext(
 ): string | undefined {
   const moduleName = context.moduleNameByFileName.get(value.fileName);
   if (moduleName === undefined) return undefined;
-  const protocol = context.input.program.callableValues.native.protocolForSourceItem(value.fileName, value.typeName);
-  const typeName = protocol?.targetName ?? context.input.program.names.nameForSourceType(value.fileName, value.typeName);
-  if (typeName === undefined) return undefined;
+  const selected = context.input.program.records.sourceTypeIdentity.get(value.fileName, value.typeName);
+  if (selected === undefined) return undefined;
+  const typeName = selected.targetName;
   const externalCrate = context.externalCrateNameByFileName.get(value.fileName);
-  return protocol !== undefined
+  return selected.native
     ? `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${moduleName}::${typeName}`
     : externalCrate !== undefined && externalCrate !== context.crateName
     ? context.externalItemPathByIdentity.get(rustSourceItemIdentity(value.fileName, typeName))
@@ -23,8 +23,8 @@ export function rustSourceTypePathInContext(
 export function rustStructuralTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {
   const union = rustSourceUnionCarrierValue(carrier);
   const definition = union?.origin === "generated"
-    ? context.input.program.structuralShapes.unionForCarrier(carrier)
-    : context.input.program.structuralShapes.definitionForCarrier(carrier);
+    ? context.input.program.records.sourceUnion.get(carrier)
+    : context.input.program.records.structuralShape.get(carrier);
   if (definition === undefined) return undefined;
   const moduleName = context.externalStructuralShapeModuleByFileName.get(definition.ownerFileName);
   const crateName = context.externalCrateNameByFileName.get(definition.ownerFileName);

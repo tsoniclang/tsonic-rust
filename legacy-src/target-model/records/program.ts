@@ -185,6 +185,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly genericCallableErrors: RustErrorEmissionRecords["genericCallableErrors"];
   readonly nativeErrorJoinName: RustErrorEmissionRecords["nativeErrorJoinName"];
   readonly projectMemberError: RustErrorEmissionRecords["projectMemberError"];
+  readonly sourceTypeIdentity: import("./project-emission.js").RustProjectEmissionRecords["sourceTypeIdentity"];
   readonly nativeErrorRegion: RustRecordFamily<RustErrorRegionSelection>;
   readonly classInitialization: RustRecordFamily<readonly RustClassInitializationEntry[]>;
   readonly staticFieldStorage: RustRecordFamily<RustStaticFieldStorageSelection>;
