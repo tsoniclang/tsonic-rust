@@ -7,7 +7,7 @@ import { isDenseDataArray, snapshotClosedMetadata } from "../../../target-model/
 import { isRustAwaitedErrorBoundary, isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef } from "../../../target-model/types/equality.js";
-import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
+import { operationKinds, validateRustFinalizedOperationAbi } from "../../../policy/operations/members/abi/validation.js";
 import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";

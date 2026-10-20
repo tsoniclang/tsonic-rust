@@ -4,7 +4,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
-import { validateRustFinalizedOperationAbi } from "./finalized-operation/validation.js";
+import { validateRustFinalizedOperationAbi } from "../../policy/operations/members/abi/validation.js";
 
 export function rustIndexedLocationContract(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,

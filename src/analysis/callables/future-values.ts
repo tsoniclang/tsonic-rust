@@ -3,7 +3,7 @@ import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureOutputCarrier, rustAwaitCarrier, rustJsPromiseOutputTargetType, rustJsPromiseTargetId } from "../../target-model/types/index.js";
-import { validateRustFinalizedOperationAbi } from "../operations/finalized-operation/validation.js";
+import { validateRustFinalizedOperationAbi } from "../../policy/operations/members/abi/validation.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";

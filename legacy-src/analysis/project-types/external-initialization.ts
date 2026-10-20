@@ -5,7 +5,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { rustOptionElementCarrier, rustStringTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import { validateRustFinalizedOperationAbi } from "../operations/finalized-operation/validation.js";
+import { validateRustFinalizedOperationAbi } from "../../policy/operations/members/abi/validation.js";
 import { sourceInput } from "../../policy/operations/members/abi/conversions.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";

@@ -1,22 +1,22 @@
-import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { carrierAfterMode, finalizedConversionIsValid } from "../../../policy/operations/members/abi/conversions.js";
-import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../target-model/operations/finalized-inputs.js";
-import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import { createInputFactory, finalizeTargetInputs } from "../../../policy/operations/members/abi/inputs.js";
-import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
-import { isRustFallibleErrorBoundary, isRustOperationErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
-import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
-import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
-import { isFinalizedConversion } from "../../../policy/operations/members/abi/conversion-shape.js";
-import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
-import { insertRustDispatchContextInputs } from "../../../policy/operations/members/abi/dispatch-inputs.js";
-import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
-import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
+import { emptyRustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
+import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
+import { carrierAfterMode, finalizedConversionIsValid } from "./conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../../target-model/operations/finalized-inputs.js";
+import { closedMetadataEquals, isClosedMetadata } from "../../../../target-model/metadata/closed-data.js";
+import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
+import { rustRestSequenceForm } from "../../../../target-model/operations/rest-assembly.js";
+import { isRustFallibleErrorBoundary, isRustOperationErrorBoundary } from "../../../../target-model/operations/error-boundary.js";
+import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../../target-model/types/index.js";
+import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../forms.js";
+import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
+import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../../target-model/operations/model.js";
+import { rustLengthEmptinessContractIsValid } from "../../../../target-model/operations/length-emptiness.js";
+import { isFinalizedConversion } from "./conversion-shape.js";
+import { hasExactKeys, isRecord } from "./validation-records.js";
+import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+import { isRustResolvedDispatchContextInput } from "../../dispatch-contexts.js";
+import { isRustNativeErrorCarriers } from "../../../../target-model/operations/native-error-carriers.js";
 
 export function validateRustFinalizedOperationAbi(
   candidate: unknown,
