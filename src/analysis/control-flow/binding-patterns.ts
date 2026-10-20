@@ -7,38 +7,15 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import {
-  BindingElement_IsRest,
-  BindingElement_PropertyName,
-  KindArrayBindingPattern,
-  KindBindingElement,
-  KindIdentifier,
-  KindNumericLiteral,
-  KindObjectBindingPattern,
-  KindOmittedExpression,
-  KindStringLiteral,
-  Node_Initializer,
-  Node_Name,
-} from "@tsonic/target-api/source";
+import { BindingElement_IsRest, BindingElement_PropertyName, KindArrayBindingPattern, KindBindingElement, KindIdentifier, KindNumericLiteral, KindObjectBindingPattern, KindOmittedExpression, KindStringLiteral, Node_Initializer, Node_Name } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustSelectedBindingProjection } from "../../target-model/records/value-projections.js";
 import { selectRustBindingPatternProjection } from "../../policy/types/objects/binding-projection-policy.js";
-import {
-  isRustJsArrayCarrier,
-  rustJsArrayLikeElementTargetType,
-  isRustVecCarrier,
-  rustFixedArrayCarrierValue,
-  rustSourceTypeCarrierValue,
-  rustStructuralObjectCarrierValue,
-  rustStructuralObjectTargetType,
-} from "../../target-model/types/index.js";
+import { isRustJsArrayCarrier, isRustVecCarrier, rustFixedArrayCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/index.js";
 import type { RustAnalysisContext } from "../program/context.js";
-import type {
-  RustSourceObjectField,
-  RustSourceTypeRegistry,
-} from "../project-types/source-type-registry.js";
+import type { RustSourceObjectField, RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/objects/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";

@@ -4,8 +4,8 @@ import { closedMetadataEquals } from "../../../target-model/metadata/closed-data
 import type { RustResourceManagementFact } from "../../../target-model/records/callables-and-resources.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustOperationsProviderOptions } from "../../operations/provider/index.js";
-import { selectRustResourceManagement } from "../../resources/management.js";
-import type { RustProjectDisposerEffects, RustResourceManagementSelection } from "../../resources/management.js";
+import { selectRustResourceManagement } from "../../control-flow/resource-management.js";
+import type { RustProjectDisposerEffects, RustResourceManagementSelection } from "../../control-flow/resource-management.js";
 import { createRustRecordFamily } from "./family.js";
 
 export interface RustResourceManagementProducer {

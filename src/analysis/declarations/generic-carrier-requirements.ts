@@ -186,7 +186,7 @@ function classifyStaticCarrier(
           return unresolved("A native frame entry lost its exact source-to-physical capture correspondence.");
         selected.push(...retained.map(capture => apply(capture.carrier, bindings)));
       }
-      if (implementation.receivers.some(receiver => !implementation.capture.receivers.includes(receiver)) ||
+      if (implementation.receivers.some(receiver => !implementation.capture.receivers.some(candidate => candidate === receiver)) ||
         implementation.capture.receivers.some(receiver => !implementation.receivers.includes(receiver) &&
           (definition.activation.kind !== "class" || receiver.owner !== definition.activation.ownerDeclaration)))
         return unresolved("A native frame entry lost its exact receiver-to-activation correspondence.");

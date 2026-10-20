@@ -22,10 +22,11 @@ import {
 import { reserveTypeAliasUnion } from "../declarations/type-aliases.js";
 import { recordEnumFacts } from "../declarations/enum-facts.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
-import { recordFallibilityFacts } from "../resources/fallibility.js";
+import { recordFallibilityFacts } from "../errors/fallibility.js";
 import { recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
-import { recordFutureValueFacts, recordResourceManagementFacts } from "../resources/suspension.js";
-import { recordRustDeferredProducerEffects } from "../resources/deferred-producer-effects.js";
+import { recordFutureValueFacts } from "../callables/suspension.js";
+import { recordResourceManagementFacts } from "../control-flow/resource-management.js";
+import { recordRustDeferredProducerEffects } from "../errors/deferred-producer-effects.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -41,7 +42,7 @@ import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
 
 import { recordRustNativeBacking } from "../operations/native-memory.js";
-import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
+import { collectRustThrownClassDeclarations } from "../errors/thrown-values.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";

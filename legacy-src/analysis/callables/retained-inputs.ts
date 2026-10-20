@@ -14,7 +14,7 @@ import type { RustSourcePackageComponentClassifications } from "../program/sourc
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
 export interface RustRetainedCallableBoundary {
   readonly inputs: readonly RustNativeCallableInput[];

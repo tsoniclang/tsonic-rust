@@ -1,14 +1,9 @@
-import {
-  requirementContractsEqual,
-  requirementUseHasValidStorage,
-  stringListsEqual,
-  type RequirementContractState,
-} from "./generic-requirement-contract.js";
+import { requirementContractsEqual, requirementUseHasValidStorage, stringListsEqual, type RequirementContractState } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOptionalStorageRequirement } from "../../target-model/records/generic-requirements.js";
+
 import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
-import type { RustAssociatedTypeRequirement } from "../../target-model/records/generic-requirements.js";
+
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { analyzeRustShapeGenericRequirements } from "./generic-shape-requirements.js";
@@ -49,7 +44,7 @@ import type { RustClassValuePlan } from "../../target-model/records/class-values
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 
-import type { RustGenericRequirement, RustDeclarationTypeParameterRequirements, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
+import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
 
 export interface RustDeclarationGenericRequirementIndex {
   projectionImplementationsFor(definition: RustProjectTypeDefinition): readonly RustProjectProjectionImplementation[];

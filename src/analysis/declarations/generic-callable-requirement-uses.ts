@@ -474,7 +474,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       const returnError = addUse(node, delegated.returnType, ["clone"]);
       if (returnError !== undefined) return returnError;
     }
-    const callError = collectRustSourceCallRequirements(input, { node, operation, dependencies, addUse, collectType });
+    const callError = collectRustSourceCallRequirements(input, { node, operation, dependencies, projections, associated, addUse, collectType });
     if (callError !== undefined) return callError;
     let childError: string | undefined;
     ast.forEachChild(node, (child) => {

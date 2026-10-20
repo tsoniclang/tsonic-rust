@@ -2,7 +2,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
+
 import { generalizeRustProjectStructuralView } from "./project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "./project-structural-views-members.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";

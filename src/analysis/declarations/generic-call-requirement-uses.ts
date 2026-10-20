@@ -1,4 +1,6 @@
 import type { RustCallableRequirementInput } from "./generic-callable-requirements-model.js";
+import type { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
+import type { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
@@ -29,13 +31,15 @@ interface SourceCallRequirements {
   readonly node: Node;
   readonly operation: ReturnType<RustAnalysisRecords["targetOperation"]["get"]>;
   readonly dependencies: Set<string>;
+  readonly projections: ReturnType<typeof createRustProjectProjectionRequirementCollector>;
+  readonly associated: ReturnType<typeof createRustAssociatedRequirementCollector>;
   readonly addUse: (node: Node, carrier: TargetTypeRef | undefined, requirements: readonly RustGenericRequirement[], nativeStorage?: boolean) => string | undefined;
   readonly collectType: (carrier: TargetTypeRef) => string | undefined;
 }
 
 export function collectRustSourceCallRequirements(input: RustCallableRequirementInput, state: SourceCallRequirements): string | undefined {
   const { ast, declaration, records } = input;
-  const { node, operation, dependencies, addUse, collectType } = state;
+  const { node, operation, dependencies, projections, associated, addUse, collectType } = state;
   if (operation?.kind === "source-call") {
     for (const parameter of operation.parameters) {
       if (parameter.mode !== "value") continue;

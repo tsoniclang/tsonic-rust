@@ -12,7 +12,7 @@ import type { RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
 import type { RustGenericCallableIdentityPair, RustGenericCallableIdentitySelection,
   RustGenericCallableIdentityComparison } from "../../target-model/records/generic-callables.js";

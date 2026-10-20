@@ -78,5 +78,5 @@ export function selectedDeclarationIsProjectSource(walk: RustFactWalk, declarati
     return false;
   }
   const sourceFile = ast.getSourceFile(declaration);
-  return walk.context.source.semantics.includes(sourceFile) && !ast.isDeclarationFile(sourceFile);
+  return sourceFile !== undefined && walk.context.source.semantics.includes(sourceFile) && !ast.isDeclarationFile(sourceFile);
 }

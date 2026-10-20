@@ -205,7 +205,7 @@ export function resolveRecordLiteralCarrier(
   const layout = selectRustRecordLiteralLayout(walk, expression, selectedExpected, accessorSelection);
   if (layout === undefined) return undefined;
   const { resultCarrier, storage, selectedFields, selectedMethodDeclarations } = layout;
-  const assigned = collectRustRecordLiteralContributions(walk, expression, sourceFile, selectedExpected,
+  const assigned = collectRustRecordLiteralContributions(walk, sourceFile, selectedExpected,
     properties, accessorsByElement, layout);
   if (assigned === undefined) return undefined;
   const { contributions, assignedStorageIndexes, assignedAccessorRoles, assignedMethodDeclarations } = assigned;

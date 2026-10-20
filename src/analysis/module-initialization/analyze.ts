@@ -1,4 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import type { RustFoundation } from "../../target-model/foundation/model.js";
 import { resolve } from "node:path";
 
 import {

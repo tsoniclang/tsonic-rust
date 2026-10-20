@@ -7,7 +7,7 @@ import type { RustGenericCallableEffectsFact } from "../../target-model/records/
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallableBindingContext } from "./generic-bindings.js";
-import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 
 export interface RustGenericCallableErrorIndex {

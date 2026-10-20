@@ -26,7 +26,7 @@ import { retainRustStructuralInstantiation } from "../../policy/types/resolution
 import { rustRecordPropertySourceName } from "./computed-field-names.js";
 import type { selectRustRecordLiteralLayout } from "./record-literal-layout.js";
 export function collectRustRecordLiteralContributions(
-  walk: RustFactWalk, expression: Node, sourceFile: SourceFile, selectedExpected: TargetTypeRef,
+  walk: RustFactWalk, sourceFile: SourceFile, selectedExpected: TargetTypeRef,
   properties: readonly Node[], accessorsByElement: ReadonlyMap<Node, Extract<ReturnType<typeof selectSourceObjectLiteralAccessors>, { readonly kind: "resolved" }>["members"][number]>,
   layout: NonNullable<ReturnType<typeof selectRustRecordLiteralLayout>>,
 ) {

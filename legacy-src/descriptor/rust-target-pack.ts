@@ -10,7 +10,7 @@ import {
   rustTargetSurfaces,
 } from "../compilation/index.js";
 import { rustTargetId } from "../target-model/identities/target.js";
-import { createCargoToolchain } from "../toolchain/cargo-toolchain.js";
+import { createCargoToolchain } from "../toolchain/native.js";
 import { formatRustCompileResult } from "../toolchain/rustfmt.js";
 
 export function createRustTargetPack(): TargetPack {

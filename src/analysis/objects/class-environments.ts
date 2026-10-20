@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
+
 import type { RustFactWalk } from "../program/walk.js";
 import { collectRustLexicalCaptures } from "../callables/closures.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";

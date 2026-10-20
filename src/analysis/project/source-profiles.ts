@@ -1,4 +1,4 @@
-import type { AstReader, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { isTsonicSourceProfileDeclarationPath } from "@tsonic/target-api/provider";
 import { rustJsSourceProfileOwnerId, rustSourceProfileOwnerId } from "../../source/profiles/declarations.js";
 import type { RustSourceProfileKind, RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
@@ -25,7 +25,7 @@ export function createRustSourceProfileRegistry(
   }
   const profiles = new WeakMap([...sourceFileByProfile].map(([profile, file]) => [file, profile] as const));
   return Object.freeze({
-    profileForNode(node, nodeAst) {
+    profileForNode(node: Node, nodeAst: AstReader) {
       const sourceFile = nodeAst.getSourceFile(node);
       if (sourceFile === undefined) {
         return undefined;

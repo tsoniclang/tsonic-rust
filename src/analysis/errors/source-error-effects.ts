@@ -4,7 +4,7 @@ import type { RustAnalysisContext } from "../program/context.js";
 import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
-import { mergeRustErrorEffects } from "./error-effects.js";
+import { mergeRustErrorEffects, rustErrorEffectsEqual } from "./error-effects.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";

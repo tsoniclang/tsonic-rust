@@ -32,7 +32,7 @@ import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignat
 import { rustNativeCallableAbsenceWitness } from "./native-conversions.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
-import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
 import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings,
