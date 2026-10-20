@@ -97,6 +97,7 @@ import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
 import { analyzeRustStoredFields } from "../storage/stored-fields.js";
+import { analyzeRustProjectClassLayouts } from "../project-types/class-layouts.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -549,6 +550,8 @@ export function analyzeRustTargetProgram(
   const classEmissionIssues = analyzeRustClassEmission({ program, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
+  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans);
+  if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
   analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>
     sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);

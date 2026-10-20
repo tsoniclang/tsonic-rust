@@ -97,6 +97,15 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly storedField: import("./stored-fields.js").RustStoredFieldRecords["storedField"];
   readonly admittedField: import("./stored-fields.js").RustStoredFieldRecords["admittedField"];
   readonly valueFieldProjection: import("./stored-fields.js").RustStoredFieldRecords["valueFieldProjection"];
+  readonly projectClassMembers: import("./project-classes.js").RustProjectClassRecords["projectClassMembers"];
+  readonly projectClassAccessors: import("./project-classes.js").RustProjectClassRecords["projectClassAccessors"];
+  readonly projectClassFields: import("./project-classes.js").RustProjectClassRecords["projectClassFields"];
+  readonly projectMethodProperties: import("./project-classes.js").RustProjectClassRecords["projectMethodProperties"];
+  readonly projectClassState: import("./project-classes.js").RustProjectClassRecords["projectClassState"];
+  readonly projectFieldStoragePath: import("./project-classes.js").RustProjectClassRecords["projectFieldStoragePath"];
+  readonly projectMethodPropertyPath: import("./project-classes.js").RustProjectClassRecords["projectMethodPropertyPath"];
+  readonly projectMemberImplementation: import("./project-classes.js").RustProjectClassRecords["projectMemberImplementation"];
+  readonly projectCallableSignature: import("./project-classes.js").RustProjectClassRecords["projectCallableSignature"];
   readonly structuralFieldStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralFieldStorage"];
   readonly structuralObjectStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralObjectStorage"];
   readonly structuralMethodInvocation: import("./stored-fields.js").RustStoredFieldRecords["structuralMethodInvocation"];

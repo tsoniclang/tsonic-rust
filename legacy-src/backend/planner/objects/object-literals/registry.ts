@@ -299,7 +299,7 @@ export function createImplementationPlan(
     if (owner === undefined || ownerRelation?.kind !== "related" || variant === undefined) {
       return undefined;
     }
-    const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType));
+    const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType, context));
     variant.sourceTypeParameterIdentities.forEach((name, index) => {
       const target = variant.targetTypeArguments[index];
       if (target !== undefined) {
@@ -311,10 +311,7 @@ export function createImplementationPlan(
       {
         ...context,
         typeParameterSubstitutions: substitutions,
-        lifetimeSubstitutions: projectLifetimeSubstitutions(
-          owner,
-          ownerRelation.targetType,
-        ),
+        lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType, context),
       },
       {
         methodTypeArgumentSubstitutions: new Map(
@@ -378,14 +375,8 @@ export function createImplementationPlan(
           contractMethod,
           {
             ...context,
-            typeParameterSubstitutions: projectTypeSubstitutions(
-              owner,
-              ownerRelation.targetType,
-            ),
-            lifetimeSubstitutions: projectLifetimeSubstitutions(
-              owner,
-              ownerRelation.targetType,
-            ),
+            typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType, context),
+            lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType, context),
           },
           { methodTypeArgumentSubstitutions: new Map() },
         );

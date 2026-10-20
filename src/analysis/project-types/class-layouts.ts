@@ -1,0 +1,181 @@
+import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { Node_Initializer, Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustProjectClassProducer } from "../program/records/project-classes.js";
+import type { RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../target-model/records/project-classes.js";
+import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { isRustNeverCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { rustCallableInvocationResult } from "../callables/results.js";
+import { selectRustProjectCallableSignature } from "../../policy/objects/project-dispatch-callables.js";
+import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
+
+export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer): readonly TargetDiagnostic[] {
+  const { ast } = program.source;
+  const issues: TargetDiagnostic[] = [];
+  const members = new Map<RustProjectTypeDefinition, readonly Node[]>();
+  const callableDeclarations = new Set<Node>();
+  const instanceCache = new WeakMap<RustProjectTypeDefinition, Map<string, { readonly fields: readonly RustProjectFieldEmission[]; readonly properties: readonly RustProjectMethodPropertyEmission[] }>>();
+  for (const definition of program.projectTypes.definitions) {
+    if (definition.kind !== "class" && definition.kind !== "interface") continue;
+    const values = ast.members(definition.declaration);
+    if (values.some(member => member === undefined)) failTargetAnalysisInvariant("tsonic-rust", "An admitted project type requires its dense checked member inventory.", definition.declaration);
+    const selected = values as readonly Node[];
+    members.set(definition, selected);
+    const accessors = selected.flatMap(member => ast.hasModifierKind(member, "static") ? []
+      : ast.kindName(member) === "KindGetAccessor" ? [{ declaration: member, role: "read" as const }]
+        : ast.kindName(member) === "KindSetAccessor" ? [{ declaration: member, role: "write" as const }] : []);
+    producer.members(definition, Object.freeze([...selected]), Object.freeze(accessors));
+    if (!program.projectTypes.isPolymorphic(definition)) continue;
+    for (const member of selected) {
+      if (ast.hasModifierKind(member, "static")) continue;
+      if (ast.is.IsMethodDeclaration(member) || ast.kindName(member) === "KindMethodSignature" ||
+        ast.kindName(member) === "KindGetAccessor" || ast.kindName(member) === "KindSetAccessor") callableDeclarations.add(member);
+    }
+  }
+  for (const member of callableDeclarations) {
+    const asynchronous = program.records.asyncFunction.get(member);
+    const typeParameters = ast.typeParameters(member).map(parameter => {
+      const selected = program.sourceLifetimes.parameterFor(parameter);
+      return selected?.kind === "type" ? selected.identity : undefined;
+    });
+    const result = rustCallableInvocationResult(program.records, member);
+    const effects = program.records.sourceCallEffects.get(member);
+    if (result === undefined || effects === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact native result and invocation effects.", member);
+    const safety = (placement: "declaration" | "getter" | "setter"): boolean => {
+      const selected = program.safetyApplications.forDeclaration(member).filter(application => application.applicationPlacement === placement);
+      return selected.length !== 0 && selected.every(application => application.contract === "requires-unsafe");
+    };
+    let error: TargetTypeRef | undefined;
+    if (effects.invocation === "fallible") {
+      const contracts = program.sourceNavigation.memberContracts(member);
+      if (contracts.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact native error contracts.", member);
+      const declarations = contracts.contracts.length === 0 ? [member] : contracts.contracts;
+      const owners = declarations.map(declaration => selectRustPhysicalProgramErrorOwner(declaration, { ast, components: program.sourcePackageComponents }));
+      const first = owners[0];
+      if (first === undefined || owners.some(owner => owner === undefined || closedMetadataKey(owner) !== closedMetadataKey(first)))
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires one exact declaration-owned native error ABI.", member);
+      error = rustProgramErrorTargetType(first);
+    }
+    const signature = selectRustProjectCallableSignature({ typeParameters, result, effects, error,
+      generator: program.records.generator.get(member) !== undefined, asynchronous: asynchronous?.kind, authoredAsync: ast.hasModifierKind(member, "async"),
+      safety: Object.freeze({ declaration: safety("declaration"), getter: safety("getter"), setter: safety("setter") }) });
+    if (signature === undefined) {
+      issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: member,
+        message: `Polymorphic project methods require an exact object-safe native invocation ABI. Node kind: ${ast.kindName(member)}.`,
+        evidence: ["target.capability=rust.backend.project-dispatch-object-safety"] });
+    } else producer.callable(member, signature);
+  }
+  if (issues.length !== 0) return Object.freeze(issues);
+  const instance = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef) => {
+    let contexts = instanceCache.get(definition);
+    if (contexts === undefined) { contexts = new Map(); instanceCache.set(definition, contexts); }
+    const key = closedMetadataKey(carrier);
+    const existing = contexts.get(key);
+    if (existing !== undefined) return existing;
+    const layout = program.projectTypes.objectLayoutForDefinition(definition);
+    if (layout === undefined || layout.kind !== definition.kind) failTargetAnalysisInvariant("tsonic-rust", "An admitted project instance requires its exact native object layout.", definition.declaration);
+    const fields: RustProjectFieldEmission[] = [];
+    for (const field of program.projectTypes.externalBaseForDefinition(definition)?.fields ?? []) {
+      const targetName = program.projectTypes.fieldStorageName(definition, field.declaration);
+      if (targetName === undefined) failTargetAnalysisInvariant("tsonic-rust", "An external project field requires its exact native slot.", field.declaration);
+      fields.push(Object.freeze({ ...field, storage: "stored", targetName, origin: "external", readonly: false, initializer: undefined }));
+    }
+    const offset = fields.length;
+    for (const field of layout.fields) {
+      const declared = program.records.runtimeCarrier.get(field.declaration)?.carrier ?? program.records.runtimeCarrier.get(Node_Type(ast, field.declaration))?.carrier;
+      const selected = declared === undefined ? undefined : program.projectTypes.instantiateMemberCarrier(field.declaration, carrier, declared);
+      const targetName = program.projectTypes.fieldStorageName(definition, field.declaration);
+      if (selected === undefined || isRustNeverCarrier(selected) || targetName === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted project field requires its exact instantiated native carrier and slot.", field.declaration);
+      const initializer = sourceParameterIsProperty(ast, field.declaration) ? ast.name(field.declaration) : Node_Initializer(ast, field.declaration);
+      fields.push(Object.freeze({ ...field, storage: program.objectRepresentations.aliasFor(field.declaration) === undefined ? "stored" : "receiver-alias",
+        targetName, storageIndex: offset + field.storageIndex, carrier: selected, origin: "project",
+        readonly: ast.hasModifierKind(field.declaration, "readonly"), initializer }));
+    }
+    const properties: RustProjectMethodPropertyEmission[] = [];
+    const seen = new Set<Node>();
+    for (const member of program.records.classMethods.get(definition.declaration) ?? []) {
+      if (ast.hasModifierKind(member, "static")) continue;
+      const implementation = program.sourceNavigation.callableImplementation(member);
+      const declaration = implementation.kind === "resolved" ? implementation.implementation.declaration : member;
+      if (seen.has(declaration)) continue;
+      const usage = program.projectMethodProperties.usageFor(member) ?? program.projectMethodProperties.usageFor(declaration);
+      if (usage?.writable !== true) continue;
+      seen.add(declaration);
+      const owner = program.projectTypes.definitionContainingDeclaration(declaration);
+      const relation = owner === undefined ? undefined : program.projectTypes.relationship(carrier, owner);
+      const name = owner === undefined ? undefined : program.projectTypes.fieldStorageName(owner, declaration);
+      const signature = producer.records.projectCallableSignature.get(declaration);
+      if (owner === undefined || relation?.kind !== "related" || name === undefined || signature === undefined ||
+        signature.typeParameters.length !== 0 || signature.safety.declaration || !signature.fallible)
+        failTargetAnalysisInvariant("tsonic-rust", "A writable native method property requires its exact object-safe fallible contract and slot.", declaration);
+      properties.push(Object.freeze({ declaration, owner, ownerCarrier: relation.targetType, targetName: name }));
+    }
+    const result = Object.freeze({ fields: Object.freeze(fields), properties: Object.freeze(properties) });
+    contexts.set(key, result);
+    producer.instance(definition, carrier, result.fields, result.properties);
+    return result;
+  };
+  const pending = [...program.projectTypes.definitions.filter(definition => members.has(definition)).map(definition => program.projectTypes.openCarrier(definition))];
+  for (const node of nodes) {
+    const carrier = program.records.runtimeCarrier.get(node)?.carrier;
+    if (carrier !== undefined) pending.push(carrier);
+  }
+  const seen = new Set<string>();
+  for (let index = 0; index < pending.length; index++) {
+    const carrier = pending[index]!;
+    const key = closedMetadataKey(carrier);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pending.push(...rustTargetTypeChildren(carrier));
+    const definition = program.projectTypes.definitionForCarrier(carrier);
+    if (definition === undefined || !members.has(definition)) continue;
+    instance(definition, carrier);
+    pending.push(...(program.projectTypes.directSupertypes(carrier) ?? []));
+    if (definition.kind !== "class") continue;
+    const lineage = program.projectTypes.classLineage(definition);
+    if (lineage === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native class requires its exact state lineage.", definition.declaration);
+    const layers: RustProjectClassStateEmission[] = lineage.map(owner => {
+      const relation = program.projectTypes.relationship(carrier, owner);
+      if (relation.kind !== "related") failTargetAnalysisInvariant("tsonic-rust", "A native class state layer requires its exact checked generic relationship.", owner.declaration);
+      const selected = instance(owner, relation.targetType);
+      return Object.freeze({ definition: owner, carrier: relation.targetType, methodProperties: selected.properties,
+        fields: Object.freeze(selected.fields.filter(field => field.storage === "stored" &&
+          program.objectRepresentations.receiverCaptures.storageDeclaration(field.declaration) === field.declaration && !ast.hasModifierKind(field.declaration, "abstract"))) });
+    });
+    producer.state(definition, carrier, Object.freeze(layers));
+  }
+  for (const definition of program.projectTypes.definitions) {
+    if (definition.kind !== "class" || !members.has(definition)) continue;
+    const layers = producer.records.projectClassState.get(definition, program.projectTypes.openCarrier(definition));
+    if (layers === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native class requires its selected physical state lineage.", definition.declaration);
+    const fields = new Map<Node, readonly string[]>();
+    const properties = new Map<Node, readonly string[]>();
+    const storagePaths = new Map<Node, readonly string[]>();
+    for (const [index, layer] of layers.entries()) {
+      const prefix = layers.slice(index + 1).reverse().map(next => program.projectTypes.baseStateFieldName(next.definition));
+      for (const field of layer.fields) {
+        if (storagePaths.has(field.declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native class field requires one physical state slot.", field.declaration);
+        storagePaths.set(field.declaration, Object.freeze([...prefix, field.targetName]));
+      }
+      for (const property of layer.methodProperties) properties.set(property.declaration, Object.freeze([...prefix, property.targetName]));
+    }
+    for (const layer of layers) for (const member of [...(members.get(layer.definition) ?? []), ...layer.fields.map(field => field.declaration)]) {
+      const physical = program.objectRepresentations.receiverCaptures.storageDeclaration(member);
+      const path = storagePaths.get(physical);
+      if (path !== undefined) fields.set(member, path);
+    }
+    producer.paths(definition, fields, properties);
+    const implementations = new Map<Node, Node>();
+    for (const contract of program.projectTypes.contractsForClass(definition) ?? []) for (const member of members.get(contract) ?? []) {
+      const selection = program.projectTypes.memberImplementation(definition, member);
+      if (selection.kind === "resolved") implementations.set(member, selection.implementation.declaration);
+    }
+    producer.implementations(definition, implementations);
+  }
+  return Object.freeze(issues);
+}

@@ -237,8 +237,8 @@ function planRootCallableImplementation(
   const planned = planProjectMethod(implementation, {
     ...context,
     syntheticNames,
-    typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType),
-    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType),
+    typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType, context),
+    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType, context),
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
   }, {
@@ -302,14 +302,8 @@ export function planRootMethodForwarder(
   const contractShape = contractRelation.kind === "related" && specialization !== undefined
     ? projectCallableShape(contractMember, {
         ...context,
-        typeParameterSubstitutions: projectTypeSubstitutions(
-          contractOwner,
-          contractRelation.targetType,
-        ),
-        lifetimeSubstitutions: projectLifetimeSubstitutions(
-          contractOwner,
-          contractRelation.targetType,
-        ),
+        typeParameterSubstitutions: projectTypeSubstitutions(contractOwner, contractRelation.targetType, context),
+        lifetimeSubstitutions: projectLifetimeSubstitutions(contractOwner, contractRelation.targetType, context),
       }, { methodTypeArgumentSubstitutions: specialization })
     : undefined;
   if (contractShape === undefined) {
@@ -441,8 +435,8 @@ export function projectAccessorCallableShape(
     declaration,
     {
       ...context,
-      typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
-      lifetimeSubstitutions: projectLifetimeSubstitutions(definition, carrier),
+      typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier, context),
+      lifetimeSubstitutions: projectLifetimeSubstitutions(definition, carrier, context),
     },
     { safetyPlacement: role === "read" ? "getter" : "setter" },
   );
