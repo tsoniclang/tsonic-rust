@@ -14,7 +14,7 @@ import type { RustProjectProjectionImplementation } from "../../target-model/rec
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
 import { createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";
-import type { RustOwnershipFlow } from "../ownership/flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveTargetContractFixedPoint } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";

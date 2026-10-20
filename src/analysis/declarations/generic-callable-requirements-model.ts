@@ -11,7 +11,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
-import type { RustOwnershipFlow } from "../ownership/flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";

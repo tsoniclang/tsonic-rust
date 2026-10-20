@@ -1,17 +1,10 @@
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
-import { analyzeSourceLiveness, createSourceControlFlow, type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceFlowLimits,
-  type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
-  type TargetSourceProgram } from "@tsonic/target-api/source";
+import { analyzeSourceLiveness, createSourceControlFlow, type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceFlowLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-
-export interface RustOwnershipFlow {
-  readonly regions: readonly { readonly graph: SourceControlFlowGraph;
-    readonly liveness: Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }> }[];
-  readonly movingReads: ReadonlySet<Node>;
-  readonly captureTransfers: ReadonlyMap<Node, ReadonlySet<Node>>;
-}
 
 export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;
@@ -30,7 +23,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   | { readonly kind: "resolved"; readonly flow: RustOwnershipFlow }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
   const { source, storage } = input;
-  if (storage.source !== source) throw new Error("Rust ownership and flow require the identical checked source program.");
+  if (storage.source !== source) failTargetAnalysisInvariant("tsonic-rust", "Rust ownership and flow require the identical checked source program.");
   const { ast } = source;
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
@@ -45,7 +38,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       message: liveness.reason, sourceNode: liveness.source ?? declaration,
       evidence: ["target.capability=rust.analysis.ownership"],
     }] };
-    if (selected.kind !== "resolved") throw new Error("Resolved ownership liveness requires its source graph.");
+    if (selected.kind !== "resolved") failTargetAnalysisInvariant("tsonic-rust", "Resolved ownership liveness requires its source graph.", declaration);
     const graph = selected.graph;
     regions.push(Object.freeze({ graph, liveness }));
     const awaitedReads = new Set<Node>();

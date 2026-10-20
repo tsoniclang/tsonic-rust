@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { analyzeSourceWrites } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustOwnershipFlow } from "../ownership/flow.js";
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
