@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
-import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
+import { rustUnionPayloadAdmission } from "../../policy/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
 import { KindFunctionExpression, KindFunctionDeclaration, KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Type, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 

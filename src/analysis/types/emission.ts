@@ -8,7 +8,7 @@ import { isRustOptionCarrier, rustOptionValueCarrier, isRustStringCarrier } from
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustOptionElementCarrier, rustOptionTargetType, rustAbsenceTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
+import { rustUnionPayloadAdmission } from "../../policy/conversions/union-injection.js";
 import { isRustNativeFutureCarrier, isRustNeverCarrier, rustJsPromiseTargetId } from "../../target-model/types/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";

@@ -1,11 +1,11 @@
-import type { TargetTypeRef } from "../types/model.js";
-import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { rustUnionPathsMatching, type RustUnionLeaf } from "../types/union-relations.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustUnionPathsMatching, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
-import { isRustJsValueCarrier } from "../types/carriers/js.js";
-import { rustTsValueTargetId } from "../types/carriers/source-types.js";
-import { rustTsValueAdmission } from "../types/carriers/traits.js";
-import { selectRustProgramErrorConversion } from "./program-error.js";
+import { isRustJsValueCarrier } from "../../target-model/types/carriers/js.js";
+import { rustTsValueTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustTsValueAdmission } from "../../target-model/types/carriers/traits.js";
+import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 
 export function rustUnionPayloadAdmission(
   source: TargetTypeRef,
