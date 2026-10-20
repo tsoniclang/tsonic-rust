@@ -1,7 +1,4 @@
-import {
-  targetSourceProfileDeclaration,
-  typescriptNoLibUtilityDeclarations,
-} from "@tsonic/target-api/provider";
+import { targetSourceProfileDeclaration, typescriptNoLibUtilityDeclarations } from "@tsonic/target-api/provider";
 import { jsStandardSourceProfileDeclarations, sourceErrorDeclarations } from "@tsonic/js-source-profile";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
 import { rustTargetId } from "../../target-model/identities/target.js";
