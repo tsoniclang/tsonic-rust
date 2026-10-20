@@ -18,7 +18,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 

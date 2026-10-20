@@ -48,7 +48,7 @@ import {
   sourceTransparentExpressionOperand,
 } from "@tsonic/target-api/source";
 import { isRustBoolCarrier, isRustStringCarrier, rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
-import { isRustNumericLiteralCarrier } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { isRustNumericLiteralCarrier } from "../../policy/conversions/literals.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 

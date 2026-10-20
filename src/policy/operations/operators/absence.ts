@@ -8,7 +8,7 @@ import { rustOptionNestingDepth } from "../../../target-model/types/carriers/opt
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import { rustOptionEqualityContract } from "../../../target-model/operations/option-equality.js";
-import { selectedIntegerLiteralJoin } from "../../types/resolution/selected-numeric-literal.js";
+import { selectedIntegerLiteralJoin } from "../../conversions/literals.js";
 import { rustNumericPromotionConversion } from "../numeric/promotion.js";
 import type { selectedOptionNullishRelationship } from "./nullish-comparisons.js";
 

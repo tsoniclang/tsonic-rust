@@ -16,7 +16,7 @@ import {
   isRustIntegerCarrier,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";

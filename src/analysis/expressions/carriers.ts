@@ -8,7 +8,7 @@ import { rustPostCheckOperationKind } from "../../target-model/operations/model.
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 
 import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operators/rules.js";
 import { recordAssignmentWrite } from "../ownership/source-writes.js";

@@ -19,7 +19,7 @@ import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveRecordLiteralCarrier } from "../objects/object-literals.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/conversions/literals.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";

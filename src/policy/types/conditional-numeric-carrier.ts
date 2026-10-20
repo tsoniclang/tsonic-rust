@@ -3,7 +3,7 @@ import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { isRustAbsenceCarrier, isRustIntegerCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
-import { selectedSourceLiteralIsRepresentable } from "./resolution/selected-numeric-literal.js";
+import { selectedSourceLiteralIsRepresentable } from "../conversions/literals.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function selectRustConditionalNumericCarrier(

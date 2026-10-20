@@ -25,7 +25,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
 
-import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 
 import { setCarrierFact } from "./project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
