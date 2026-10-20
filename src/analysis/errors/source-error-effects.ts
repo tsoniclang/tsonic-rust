@@ -15,7 +15,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
-import type { RustNativeCallableProducer } from "../callables/native-producers.js";
+import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
 import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -29,7 +29,7 @@ import type { RustTargetConstArgument } from "../../target-model/types/model.js"
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
-import type { RustNativeCallableProducerPlan } from "../callables/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 
 type RustSourceErrorContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage" | "typeDefinitions"> & {
   readonly callableValues: {

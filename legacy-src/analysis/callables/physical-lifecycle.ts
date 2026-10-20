@@ -28,7 +28,8 @@ import type { RustGenericCallablePhysicalConstruction } from "./generic-physical
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustNativeStorageConstruction, RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
-import type { RustNativeCallableProducerConstruction, RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerConstruction } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import { rustEmissionSourceIdentity } from "./emission-contexts.js";
 
 export type RustPhysicalCallableStorage = Pick<RustNativeStoragePlan,

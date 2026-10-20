@@ -41,7 +41,7 @@ import { createRustNativeStorageGenericSelection, selectRustNativeStorageGeneric
 import { createRustNativeFutureInputPlan, type RustNativeFutureEnvironmentSelection } from "./native-future-inputs.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";

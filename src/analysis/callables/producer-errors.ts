@@ -15,7 +15,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 
 export interface RustProducerErrorContext {
   readonly producers: RustNativeCallableProducerPlan;

@@ -26,26 +26,6 @@ type RustNativeProducerPhysicalSelection =
   | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
   | { readonly kind: "unresolved" | "pending"; readonly reason: string };
 
-export interface RustNativeCallableProducer {
-  readonly declaration: Node;
-  readonly identity: string;
-  readonly fileName: string;
-  readonly environment: readonly RustTargetGenericArgument[];
-}
-
-export interface RustNativeCallableProducerPlan {
-  readonly producers: readonly RustNativeCallableProducer[];
-  forDeclaration(declaration: Node): RustNativeCallableProducer | undefined;
-  forIdentity(identity: string): RustNativeCallableProducer | undefined;
-  errorFor(declaration: Node, channel: RustProducerErrorReference["channel"]): TargetTypeRef | undefined;
-  deferredFor(declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined;
-  deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined;
-  outwardReturnFor(declaration: Node): TargetTypeRef | undefined;
-  invocationResultFor(declaration: Node): TargetTypeRef | undefined;
-  bodyResultFor(declaration: Node): TargetTypeRef | undefined;
-  physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
-}
-
 export interface RustNativeCallableProducerConstruction extends RustNativeCallableProducerPlan {
   selectConstructionErrors(errors: ReadonlyMap<Node, TargetTypeRef>): void;
   seal(requests: readonly RustRequiredNativeProducer[]): TargetStageResult<RustNativeCallableProducerPlan>;
@@ -97,7 +77,7 @@ export function createRustNativeCallableProducerPlan(input: {
       ...references.constParameters.map(value => ({ kind: "const" as const, value })),
     ]);
     const producer = Object.freeze({ declaration, identity: `${fileName}:${identity}`, fileName, environment });
-    if (byIdentity.has(producer.identity)) throw new Error("Native callable producer identity must be unique.");
+    if (byIdentity.has(producer.identity)) failTargetAnalysisInvariant("tsonic-rust", "Native callable producer identity must be unique.", declaration);
     byDeclaration.set(declaration, producer);
     byIdentity.set(producer.identity, producer);
   }
@@ -187,7 +167,7 @@ export function createRustNativeCallableProducerPlan(input: {
     physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
       if (published !== undefined) return published.physicalFor(declaration, carrier);
       const selected = selectPhysical(declaration, carrier);
-      if (selected.kind === "pending") throw new Error(selected.reason);
+      if (selected.kind === "pending") failTargetAnalysisInvariant("tsonic-rust", selected.reason, declaration);
       return selected.kind === "selected" ? selected.carrier : undefined;
     },
   });
@@ -195,12 +175,12 @@ export function createRustNativeCallableProducerPlan(input: {
   return Object.freeze({ ...plan,
     selectConstructionErrors(errors: ReadonlyMap<Node, TargetTypeRef>): void {
       if (sealed || constructionErrors !== undefined || [...errors.keys()].some(declaration => !byDeclaration.has(declaration)))
-        throw new Error("Native retained construction errors select once from exact admitted producer declarations.");
+        failTargetAnalysisInvariant("tsonic-rust", "Native retained construction errors select once from exact admitted producer declarations.");
       constructionErrors = new Map(errors);
     },
     seal(requests: readonly RustRequiredNativeProducer[]): TargetStageResult<RustNativeCallableProducerPlan> {
-      if (sealed) throw new Error("Native callable producer results seal exactly once after selected effects and storage.");
-      if (!Array.isArray(requests)) throw new Error("Native callable producer sealing requires its complete selecting-owner request vector.");
+      if (sealed) failTargetAnalysisInvariant("tsonic-rust", "Native callable producer results seal exactly once after selected effects and storage.");
+      if (!Array.isArray(requests)) failTargetAnalysisInvariant("tsonic-rust", "Native callable producer sealing requires its complete selecting-owner request vector.");
       sealed = true;
       const diagnostics: TargetDiagnostic[] = [];
       const physical = new Map<Node, Map<string, RustNativeProducerPhysicalSelection>>();
@@ -252,19 +232,22 @@ export function createRustNativeCallableProducerPlan(input: {
         if (invocationResult !== undefined) invocationResults.set(declaration, invocationResult);
         if (bodyResult !== undefined) bodyResults.set(declaration, bodyResult);
       }
-      published = Object.freeze({ producers: plan.producers, forDeclaration: plan.forDeclaration, forIdentity: plan.forIdentity,
-        errorFor: (declaration: Node, channel: RustProducerErrorReference["channel"]) => errors.get(declaration)?.get(channel),
-        deferredFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal),
-        deferredErrorFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal)?.errorCarrier,
-        outwardReturnFor: (declaration: Node) => outwardReturns.get(declaration),
-        invocationResultFor: (declaration: Node) => invocationResults.get(declaration),
-        bodyResultFor: (declaration: Node) => bodyResults.get(declaration),
-        physicalFor(declaration: Node, carrier: TargetTypeRef) {
-          const selected = physical.get(declaration)?.get(closedMetadataKey(carrier));
-          return selected?.kind === "selected" ? selected.carrier : undefined;
-        },
-      });
+      const physicalCarriers = new Map<Node, ReadonlyMap<string, TargetTypeRef>>();
+      for (const [declaration, selections] of physical) {
+        const carriers = new Map<string, TargetTypeRef>();
+        for (const [key, selection] of selections) {
+          if (selection.kind !== "selected") failTargetAnalysisInvariant("tsonic-rust", "Admitted native producer storage requires its selected physical carrier.", declaration);
+          carriers.set(key, selection.carrier);
+        }
+        physicalCarriers.set(declaration, carriers);
+      }
+      published = sealRustNativeCallableProducers({ byDeclaration, byIdentity, errors, deferred, outwardReturns,
+        invocationResults, bodyResults, physical: physicalCarriers });
       return resolvedTargetStage(published);
     },
   });
 }
+
+import type { RustNativeCallableProducer, RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import { sealRustNativeCallableProducers } from "../program/records/native-producers.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

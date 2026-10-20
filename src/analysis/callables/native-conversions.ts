@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 
 export function rustNativeCallableOperand(

@@ -26,7 +26,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import type { RustRetainedCallableInputPlan } from "../../target-model/records/retained-inputs.js";
 import { rustNativeCallableInputPhysicalSignature } from "../../policy/conversions/native-callables.js";

@@ -26,7 +26,8 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeStorageQueries, type RustNativeStorageConstruction, type RustNativeStoragePlan } from "./native-storage.js";
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
-import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
+import { createRustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests,
   type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan } from "./native-captures.js";

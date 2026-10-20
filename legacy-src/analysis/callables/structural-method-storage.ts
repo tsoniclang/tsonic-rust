@@ -22,7 +22,8 @@ import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelec
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableProducerPlan, RustNativeCallableProducerConstruction } from "./native-producers.js";
+import type { RustNativeCallableProducerConstruction } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";

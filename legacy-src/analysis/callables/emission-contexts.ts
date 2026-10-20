@@ -24,7 +24,7 @@ import type { RustFrameCallablePlan } from "./frame-values.js";
 import type { RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";

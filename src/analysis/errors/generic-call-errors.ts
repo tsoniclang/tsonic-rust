@@ -12,7 +12,7 @@ import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity } from "@t
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
-import type { RustNativeCallableProducerPlan } from "../callables/native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

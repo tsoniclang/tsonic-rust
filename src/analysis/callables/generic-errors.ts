@@ -5,7 +5,7 @@ import type { RustNativeErrorSource } from "../../target-model/types/native-erro
 import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
 
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../target-model/records/generic-callables.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustGenericCallableBindingContext } from "./generic-bindings.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";

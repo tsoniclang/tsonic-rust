@@ -10,7 +10,7 @@ import { rustNamedTargetType } from "../../target-model/types/carriers/native.js
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 
 export interface RustNativeOutwardResults {
   returnFor(declaration: Node): TargetTypeRef | undefined;

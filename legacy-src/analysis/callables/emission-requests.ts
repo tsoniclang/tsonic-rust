@@ -20,7 +20,7 @@ import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustFrameCallablePlan } from "./frame-values.js";
 import type { RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import type { RustGenericCallableIdentitySources } from "./generic-identities.js";

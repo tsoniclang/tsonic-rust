@@ -9,7 +9,7 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 import { rustCallableConversionErrorArities } from "../../target-model/conversions/callable-physical.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
-import type { RustNativeCallableProducer } from "../callables/native-producers.js";
+import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
 import type { RustCallableValuePlan } from "../callables/value-plan.js";
 import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustProducerErrorReference, rustProducerErrorTargetType } from "../../target-model/types/carriers/producer-errors.js";
