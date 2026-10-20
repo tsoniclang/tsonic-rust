@@ -1,5 +1,6 @@
 import type { RustProviderContractValidation } from "../model/contract-validation.js";
-import { canonicalizeProviderOperationRow, materializeProviderBinaryHookRow, materializeProviderDispatchContextRow, materializeProviderCarrier, materializeProviderGenericParameter, materializeProviderOperationRow } from "./materialization.js";
+import { materializeProviderCarrier, materializeProviderGenericParameter } from "./materialization/carriers.js";
+import { canonicalizeProviderOperationRow, materializeProviderBinaryHookRow, materializeProviderDispatchContextRow, materializeProviderOperationRow } from "./materialization/operations.js";
 import { rustProviderBindingProviderId } from "./source-provider.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
