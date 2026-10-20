@@ -6,7 +6,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { rustCallScopedElisionLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { rustEnclosingStorageContract, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
+import { rustEnclosingStorageContract } from "./storage-contracts.js";
 
 export function rustRetainedValueLifetime(
   declaration: Node, captures: readonly TargetTypeRef[],

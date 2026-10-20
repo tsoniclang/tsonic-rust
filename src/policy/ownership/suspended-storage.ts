@@ -3,20 +3,6 @@ import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime, rustPlacehol
 import { rustSingleElidedInput } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
-
-export function rustEnclosingStorageContract(
-  subject: Node, ast: AstReader, lifetimes: RustLifetimeIndex,
-): RustSourceGenericContract {
-  const parameters = new Map<Node, RustSourceGenericParameterContract>();
-  for (let owner: Node | undefined = subject; owner !== undefined; owner = ast.parent(owner)) {
-    for (const parameter of lifetimes.contractFor(owner)?.parameters ?? []) {
-      parameters.set(parameter.declaration, parameter);
-    }
-  }
-  return { declaration: subject, parameters: [...parameters.values()] };
-}
 
 export function selectRustSuspendedStorageLifetime(
   carriers: readonly TargetTypeRef[],

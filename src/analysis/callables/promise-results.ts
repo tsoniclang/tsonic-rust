@@ -18,7 +18,7 @@ import { classifyCarrierRequirements, rustFinalContractSupportsStatic,
   type RustStaticRequirementEvidence } from "../declarations/generic-carrier-requirements.js";
 import type { AnalyzeRustDeclarationGenericRequirementsResult } from "../declarations/generic-requirements.js";
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";
-import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
+import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 

@@ -9,7 +9,7 @@ import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeri
 import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType, rustSourceOptionalTargetType, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustLifetimeKey, rustLifetimeOutlives } from "../../target-model/lifetimes/index.js";
-import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
+import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
