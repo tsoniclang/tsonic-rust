@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustPolicySelection } from "../../../policy/operations/contracts.js";
 import { rustPostCheckOperationKind } from "../../../target-model/operations/model.js";
@@ -34,7 +35,7 @@ export function createRustSelectedOperationProducer(
   let sealed = false;
   let foundation: RustFoundation = "core";
   const assertOpen = (): void => {
-    if (sealed) throw new Error("Rust semantic plans cannot be written after analysis is sealed.");
+    if (sealed) failTargetAnalysisInvariant("tsonic-rust", "Rust semantic plans cannot be written after analysis is sealed.");
   };
   const family = createRustRecordFamily({ id: "selectedOperation", equals: rustSelectedTargetOperationEquals },
     assertOpen, inherited, operation => {
