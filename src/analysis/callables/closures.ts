@@ -3,31 +3,9 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 
 import { appendRustDiagnostic } from "../program/walk.js";
-import {
-  KindBlock,
-  KindFunctionExpression,
-  KindBindingElement,
-  KindNonNullExpression,
-  KindParameter,
-  KindParenthesizedExpression,
-  KindSatisfiesExpression,
-  KindVariableDeclaration,
-  Node_Expression,
-  Node_Initializer,
-  Node_Name,
-  Node_Type,
-  sourceLexicalEnvironment,
-} from "@tsonic/target-api/source";
+import { KindBlock, KindFunctionExpression, KindBindingElement, KindNonNullExpression, KindParameter, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, Node_Expression, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 
-import {
-  rustSourceOptionalTargetType,
-  rustOptionElementCarrier,
-  rustCallableProtocol,
-  rustCallableInputProtocol,
-  rustCallableTargetType,
-  rustClosureProtocol,
-  rustUnitTargetType,
-} from "../../target-model/types/index.js";
+import { rustSourceOptionalTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableInputProtocol, rustCallableTargetType, rustClosureProtocol, rustUnitTargetType } from "../../target-model/types/index.js";
 import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
@@ -483,14 +461,3 @@ function callableExpressionValueDeclaration(
     ? parent
     : undefined;
 }
-
-// --- RegExp constant lane ----------------------------------------------------
-
-// Compile-time mirror of the runtime RegExp parser contract: a faithful
-// TypeScript port of `rust-js/crates/tsonic_rust_js/src/regexp/parser.rs`
-// (`parse_flags` + `parse_pattern`). The returned violation string is the
-// engine's exact construction-time error message, and the acceptance
-// decision is held equal to the engine by the shared corpus at
-// `rust-js/tests/oracle/regexp-acceptance-corpus.json`.
-
-// Mirrors `MAX_QUANTIFIER_BOUND` in parser.rs.
