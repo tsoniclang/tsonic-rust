@@ -15,7 +15,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustStructuralMethodStorageCarrier } from "../../target-model/types/carriers/callables.js";
+import { rustStructuralMethodStorageCarrier } from "../../policy/types/objects/member-storage.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";

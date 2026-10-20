@@ -2,7 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
 import { rustGeneratorFactEquals } from "../../../target-model/records/equality.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import { rustGeneratorStorageTargetType, type RustGeneratorProtocol } from "../../../target-model/types/index.js";
+import { type RustGeneratorProtocol } from "../../../target-model/types/index.js";
+import { rustGeneratorStorageTargetType } from "../../../policy/types/callables/generators.js";
 import { createRustRecordFamily } from "./family.js";
 
 type RustGeneratorStorage = Pick<RustGeneratorFact, "capturedParameters" | "storage" | "ownedReceiver">;

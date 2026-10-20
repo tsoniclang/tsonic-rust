@@ -5,7 +5,8 @@ import type { RustObjectReferenceEmissionProducer } from "../program/records/obj
 import type { RustObjectReferenceEmission } from "../../target-model/records/object-reference-views.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { rustOptionElementCarrier, rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../target-model/types/index.js";
+import { rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../policy/types/objects/member-storage.js";
 
 export function analyzeRustObjectReferenceEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustObjectReferenceEmissionProducer) {

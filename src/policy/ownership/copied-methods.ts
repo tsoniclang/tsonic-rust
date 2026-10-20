@@ -1,4 +1,5 @@
-import { rustStructuralObjectCarrierValue, rustStructuralMethodStorageCarrier } from "../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustStructuralMethodStorageCarrier } from "../types/objects/member-storage.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

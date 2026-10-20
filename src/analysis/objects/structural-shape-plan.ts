@@ -12,7 +12,8 @@ import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/nati
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
-import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustStructuralMethodStorageCarrier, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { rustStructuralMethodStorageCarrier } from "../../policy/types/objects/member-storage.js";
 import { rustRuntimeRecordFieldTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";

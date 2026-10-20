@@ -1,8 +1,8 @@
 import type { RustStructuralEmissionPolicyInput } from "../model/structural-emission.js";
 import type { RustConstructorShapeEmission, RustStructuralFieldEmission, RustStructuralShapeEmission } from "../../target-model/records/structural-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCallableProtocol, rustLocationTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustUnitTargetType, rustStructuralObjectCarrierValue,
-  rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier, rustStructuralPropertyValueCarrier } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustLocationTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustUnitTargetType, rustStructuralObjectCarrierValue, rustStructuralPropertyValueCarrier } from "../../target-model/types/index.js";
+import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../types/objects/member-storage.js";
 import { rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustPascalCaseIdentifier } from "../../target-model/names/identifiers.js";
 

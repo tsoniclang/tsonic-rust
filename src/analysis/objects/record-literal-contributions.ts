@@ -1,5 +1,6 @@
 import { KindFunctionExpression, KindSpreadAssignment, ObjectLiteralProperty_Value, SpreadAssignment_Expression, sourceObjectLiteralDestinationMember } from "@tsonic/target-api/source";
-import { rustOptionElementCarrier, rustCallableProtocol, rustStructuralMethodCallableCarrier, rustStructuralMethodStorageCarrier, rustClosureProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustClosureTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustCallableProtocol, rustStructuralMethodCallableCarrier, rustClosureProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustClosureTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
+import { rustStructuralMethodStorageCarrier } from "../../policy/types/objects/member-storage.js";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 

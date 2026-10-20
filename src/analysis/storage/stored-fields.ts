@@ -6,8 +6,8 @@ import type { RustStoredFieldProducer } from "../program/records/stored-fields.j
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustCallableProtocol, rustLocationTargetType, rustOptionElementCarrier, rustOptionTargetType, rustStructuralObjectCarrierValue,
-  rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier, rustStructuralPropertyValueCarrier, rustStructuralMethodCallableCarrier } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustLocationTargetType, rustOptionElementCarrier, rustOptionTargetType, rustStructuralObjectCarrierValue, rustStructuralPropertyValueCarrier, rustStructuralMethodCallableCarrier } from "../../target-model/types/index.js";
+import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../policy/types/objects/member-storage.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustValueFieldProjectionStep } from "../../target-model/records/stored-fields.js";

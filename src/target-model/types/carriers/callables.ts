@@ -1,26 +1,11 @@
-import {
-  rustAsyncGeneratorTargetId,
-  rustBorrowedAsyncGeneratorTargetId,
-  rustBorrowedGeneratorTargetId,
-  rustCallableTargetId,
-  rustCallableInputTargetId,
-  rustGeneratorTargetId,
-  rustIteratorResultTargetId,
-  rustLocationTargetId,
-  rustInfallibleTargetId,
-  rustRawPointerTargetId,
-} from "./source-types.js";
-import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
-import { rustUnitTargetType } from "./native.js";
+import { rustAsyncGeneratorTargetId, rustBorrowedAsyncGeneratorTargetId, rustBorrowedGeneratorTargetId, rustCallableTargetId, rustCallableInputTargetId, rustGeneratorTargetId, rustIteratorResultTargetId, rustLocationTargetId, rustInfallibleTargetId, rustRawPointerTargetId } from "./source-types.js";
+import { rustOptionElementCarrier } from "./optional.js";
+
 import { rustProgramErrorTargetType } from "./js.js";
 import type { TargetTypeRef } from "../model.js";
-import {
-  rustLifetimeGenericArgument,
-  rustOnlyTypeGenericArguments,
-  rustTypeGenericArguments,
-} from "../generic-arguments.js";
+import { rustLifetimeGenericArgument, rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
 import { rustPlaceholderLifetime, type RustLifetimeRef } from "../../lifetimes/index.js";
-import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "./generic-callables.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableProtocol, rustFrameCallableValue } from "./frame-callables.js";
 
 export function rustLocationTargetType(
@@ -123,63 +108,11 @@ export function rustStructuralMethodCallableCarrier(
     ? undefined : callableCarrier;
 }
 
-export function rustStructuralMethodStorageCarrier(
-  receiverCarrier: TargetTypeRef,
-  fieldCarrier: TargetTypeRef,
-  presence: "required" | "optional",
-): TargetTypeRef | undefined {
-  const callableCarrier = rustStructuralMethodCallableCarrier(fieldCarrier, presence);
-  const generic = rustGenericCallableValue(callableCarrier);
-  if (generic !== undefined) {
-    const protocol = rustGenericCallableProtocol(callableCarrier);
-    const storage = protocol === undefined ? undefined : rustGenericCallableTargetType(
-      generic.signature.typeParameters, [receiverCarrier, ...protocol.parameters], protocol.result, generic.origin, generic.environment,
-    );
-    return storage === undefined ? undefined : presence === "optional" ? rustOptionTargetType(storage) : storage;
-  }
-  const callable = rustCallableProtocol(callableCarrier);
-  if (callable === undefined) {
-    return undefined;
-  }
-  const storageCarrier = rustCallableTargetType(
-    [receiverCarrier, ...callable.parameters],
-    callable.result,
-    callable.lifetime,
-    callable.error,
-  );
-  return presence === "optional" ? rustOptionTargetType(storageCarrier) : storageCarrier;
-}
-
 export function rustStructuralPropertyValueCarrier(
   fieldCarrier: TargetTypeRef,
   presence: "required" | "optional",
 ): TargetTypeRef | undefined {
   return presence === "optional" ? rustOptionElementCarrier(fieldCarrier) : fieldCarrier;
-}
-
-export function rustStructuralPropertyGetterStorageCarrier(
-  receiverCarrier: TargetTypeRef,
-  fieldCarrier: TargetTypeRef,
-  presence: "required" | "optional",
-): TargetTypeRef | undefined {
-  const valueCarrier = rustStructuralPropertyValueCarrier(fieldCarrier, presence);
-  return valueCarrier === undefined
-    ? undefined
-    : rustOptionTargetType(rustCallableTargetType([receiverCarrier], valueCarrier));
-}
-
-export function rustStructuralPropertySetterStorageCarrier(
-  receiverCarrier: TargetTypeRef,
-  fieldCarrier: TargetTypeRef,
-  presence: "required" | "optional",
-): TargetTypeRef | undefined {
-  const valueCarrier = rustStructuralPropertyValueCarrier(fieldCarrier, presence);
-  return valueCarrier === undefined
-    ? undefined
-    : rustOptionTargetType(rustCallableTargetType(
-        [receiverCarrier, valueCarrier],
-        rustUnitTargetType(),
-      ));
 }
 
 export function rustClosureTargetType(
@@ -242,31 +175,6 @@ export function rustAsyncGeneratorTargetType(
       protocol.yieldType,
       protocol.returnType,
       protocol.nextType,
-    ]),
-  };
-}
-
-export function rustGeneratorStorageTargetType(
-  protocol: RustGeneratorProtocol,
-  lifetime: RustLifetimeRef | undefined,
-): TargetTypeRef {
-  if (lifetime === undefined) {
-    return protocol.kind === "sync"
-      ? rustGeneratorTargetType(protocol)
-      : rustAsyncGeneratorTargetType(protocol);
-  }
-  return {
-    kind: "target-named",
-    id: protocol.kind === "sync"
-      ? rustBorrowedGeneratorTargetId
-      : rustBorrowedAsyncGeneratorTargetId,
-    genericArguments: Object.freeze([
-      rustLifetimeGenericArgument(lifetime),
-      ...rustTypeGenericArguments([
-        protocol.yieldType,
-        protocol.returnType,
-        protocol.nextType,
-      ]),
     ]),
   };
 }
