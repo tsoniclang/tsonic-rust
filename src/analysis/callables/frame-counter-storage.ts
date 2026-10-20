@@ -1,4 +1,5 @@
-import type { AstReader } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
 
@@ -23,7 +24,10 @@ function retainedFrameCounterName(
     if (implementation.independent) continue;
     let current = implementation.declaration;
     let constructionOnly = false;
-    for (let depth = 0; depth < 256; depth += 1) {
+    const visited = new Set<Node>();
+    while (true) {
+      if (visited.has(current)) failTargetAnalysisInvariant("tsonic-rust", "Retained frame construction ancestry must be acyclic.", current);
+      visited.add(current);
       const point = construction.pointFor(current);
       if (point !== undefined) {
         constructionOnly = !point.published && !point.publishBefore;
