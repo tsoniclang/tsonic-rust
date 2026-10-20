@@ -1,6 +1,6 @@
 import { sourceMarkerFactKey } from "@tsonic/tsts";
 import type { ExtensionFactSubject, Type } from "@tsonic/tsts";
-import { asNode } from "../../identities/selected-source.js";
+import { asNode } from "../../../policy/identities/selected-source.js";
 import type { RustTargetTypeResolutionContext } from "./model.js";
 
 export function resolveRustSourceMarker(
