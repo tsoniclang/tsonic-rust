@@ -96,9 +96,9 @@ export function formatRustCompileOutput(
           return artifact;
         }
         const formatted = formattedByPath.get(artifact.path);
-        return formatted === undefined
-          ? artifact
-          : Object.freeze({ ...artifact, text: formatted });
+        if (formatted === undefined) throw new RustFormattingError(
+          `Generated Rust source '${artifact.path}' has no formatter output.`);
+        return Object.freeze({ ...artifact, text: formatted });
       })),
     });
   } catch (error) {
