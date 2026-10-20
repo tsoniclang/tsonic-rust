@@ -47,7 +47,7 @@ import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor }
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectRustProviderPointerResult } from "../../../../policy/operations/pointers/provider-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { sourceCallMarkerByIdentity } from "../model.js";
+import { sourceCallMarkerByIdentity } from "../../../../source/profiles/call-markers.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectRustRuntimeCallableGenerics } from "../../../../policy/types/callables/runtime-callable-generics.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
