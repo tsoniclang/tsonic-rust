@@ -25,7 +25,7 @@ import { normalizeRustGenericRequirements } from "./generic-requirement-contract
 
 import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
 
-import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
+import { rustCallableRestCloneSources } from "../../policy/conversions/callable-requirements.js";
 
 import type { RustCallableRequirementInput } from "./generic-callable-requirements-model.js";
 import { createRustCallableRequirementVisitor } from "./generic-callable-requirement-uses.js";
