@@ -254,10 +254,6 @@ export function isUpperSnakeName(name: string): boolean {
   return /^[A-Z][A-Z0-9_]*$/u.test(name);
 }
 
-export function diagnosticInput(context: RustPlanContext, node: Node) {
-  return { ast: context.input.program.source.ast, sourceFile: context.sourceFile, node };
-}
-
 export function sourceTypePath(
   context: RustPlanContext,
   value: { readonly fileName: string; readonly typeName: string },
