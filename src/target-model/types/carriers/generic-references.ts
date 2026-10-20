@@ -1,22 +1,11 @@
-import {
-  rustFixedArrayCarrierValue,
-  rustNamedTypeCarrierValue,
-} from "./native.js";
-import {
-  rustSourceTypeCarrierValue,
-  rustSourceUnionCarrierValue,
-  rustStructuralObjectCarrierValue,
-} from "./source-types.js";
+import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableValue } from "./frame-callables.js";
 import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import { rustProducerErrorReference } from "./producer-errors.js";
 import { rustNativeErrorJoinReference } from "../native-error-joins.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { rustLifetimeKey, rustPlaceholderLifetime } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
