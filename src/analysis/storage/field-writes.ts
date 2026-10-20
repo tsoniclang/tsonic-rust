@@ -1,11 +1,13 @@
 import type { Node } from "@tsonic/tsts";
+import { Node_Expression } from "@tsonic/target-api/source";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustFieldWriteProducer } from "../program/records/field-writes.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export function analyzeRustFieldWrites(input: {
-  readonly program: Pick<RustTargetProgram, "records" | "ownership" | "projectFieldDispatch" | "projectTypes" | "objectRepresentations" | "frozenDataWrites">;
+  readonly program: Pick<RustTargetProgram, "source" | "records" | "ownership" | "projectFieldDispatch" | "projectTypes" | "objectRepresentations" | "frozenDataWrites">;
   readonly nodes: readonly Node[];
   readonly producer: RustFieldWriteProducer;
   readonly required: RustRequiredRecord[];
@@ -18,8 +20,15 @@ export function analyzeRustFieldWrites(input: {
     if (borrowed !== undefined) input.producer.borrowed(node, borrowed);
     const dispatch = program.projectFieldDispatch.planFor(node);
     if (dispatch !== undefined) input.producer.dispatch(node, dispatch);
-    if (program.records.methodWriteDispatch.get(node) === undefined) continue;
     const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-accessor" && operation.receiver.kind === "instance") {
+      const receiver = Node_Expression(program.source.ast, node);
+      const carrier = receiver === undefined ? undefined : rustEffectiveValueCarrier(program.records, receiver);
+      if (receiver === undefined || carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted instance accessor requires its exact checked receiver and carrier.", node);
+      const representation = program.objectRepresentations.representationFor(program.projectTypes.definitionForCarrier(carrier));
+      input.producer.accessor(node, { receiver, value: representation?.kind === "value" });
+    }
+    if (program.records.methodWriteDispatch.get(node) === undefined) continue;
     if (operation?.kind !== "source-method-property")
       failTargetAnalysisInvariant("tsonic-rust", "An admitted method replacement requires its source property operation.", node);
     const definition = program.projectTypes.definitionForCarrier(operation.receiverCarrier);

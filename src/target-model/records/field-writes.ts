@@ -25,8 +25,14 @@ export interface RustMethodWriteReceiver {
 }
 
 export interface RustFieldWriteRecords {
+  readonly accessorReceiver: RustRecordFamily<RustAccessorReceiver>;
   readonly frozenDataReceiver: RustRecordFamily<RustFrozenWriteReceiver>;
   readonly borrowedFieldWrite: RustRecordFamily<RustBorrowedFieldWrite>;
   readonly projectFieldDispatch: RustRecordFamily<RustProjectFieldDispatchPlan>;
   readonly methodWriteReceiver: RustRecordFamily<RustMethodWriteReceiver>;
+}
+
+export interface RustAccessorReceiver {
+  readonly receiver: Node;
+  readonly value: boolean;
 }
