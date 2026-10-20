@@ -1,6 +1,5 @@
 import { finalizeRustNativeEmission } from "./emission.js";
 import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
-import type { Node } from "@tsonic/tsts";
 import { snapshotTargetPlanningSourceNavigation, targetSourceSyntaxProgram } from "@tsonic/target-api/analysis";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
