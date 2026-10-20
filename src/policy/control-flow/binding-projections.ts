@@ -8,7 +8,8 @@ import { selectRustOptionalDefaultStorage } from "../conversions/optional-storag
 
 export type RustBindingProjectionSelection =
   | { readonly kind: "selected"; readonly value: RustBindingProjectionEmission }
-  | { readonly kind: "rejected" | "invalid"; readonly reason: string };
+  | { readonly kind: "rejected"; readonly reason: string }
+  | { readonly kind: "invalid"; readonly reason: string };
 
 export function selectRustBindingProjectionEmission(input: RustBindingProjectionPolicyInput): RustBindingProjectionSelection {
   const { fact } = input;
