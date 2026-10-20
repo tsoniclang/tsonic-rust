@@ -1,7 +1,9 @@
 import type { RustProviderBinaryHookRow, RustProviderDispatchContextRow } from "../../target-model/metadata/provider-metadata.js";
 import type { RustDispatchContextGroupInput, RustDispatchContextInput } from "../../target-model/operations/dispatch-contexts.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustCallableTargetType, rustNamedTargetType, rustProgramErrorTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { rustNamedTargetType, rustUnitTargetType } from "../../target-model/types/carriers/native.js";
+import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 
 export const rustJsTimerDispatchContextId = "tsonic.rust.js.timers";
 
