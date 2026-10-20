@@ -1,13 +1,13 @@
-import type { TargetTypeRef } from "./model.js";
-import type { RustTypeDefinitions } from "./source-union-definitions.js";
-import { rustSourceUnionDefinitionIdentity } from "./source-union-definitions.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
-import { rustOptionElementCarrier } from "./carriers/optional.js";
-import { rustUnionAlternatives, rustUnionProjectionContract } from "./union-relations.js";
-import { rustRuntimeUnionContract } from "./carriers/runtime-unions.js";
-import { rustSourceUnionCarrierValue } from "./carriers/source-types.js";
-import { closedMetadataEquals } from "../metadata/closed-data.js";
-import { rustLifetimesEqual } from "../lifetimes/index.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustSourceUnionDefinitionIdentity } from "../../target-model/types/source-union-definitions.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustUnionAlternatives, rustUnionProjectionContract } from "../../target-model/types/union-relations.js";
+import { rustRuntimeUnionContract } from "../../target-model/types/carriers/runtime-unions.js";
+import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 
 export function rustPhysicalPayloadFor(
   logical: TargetTypeRef,

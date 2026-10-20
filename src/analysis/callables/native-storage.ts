@@ -24,7 +24,7 @@ import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from ".
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";

@@ -7,7 +7,7 @@ import { rustTargetGenericBindingsForArguments } from "../../target-model/types/
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import type { RustGenericCallablePlan } from "./generic-values.js";

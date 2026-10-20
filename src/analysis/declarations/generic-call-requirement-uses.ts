@@ -25,7 +25,7 @@ import { rustGenericCallableMemberInvocationBindings } from "../callables/generi
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 
-import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 
 interface SourceCallRequirements {
   readonly node: Node;

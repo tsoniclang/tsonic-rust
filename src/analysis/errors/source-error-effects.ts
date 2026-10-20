@@ -14,7 +14,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import type { RustNativeCallableProducer } from "../../target-model/records/native-producers.js";
 import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";

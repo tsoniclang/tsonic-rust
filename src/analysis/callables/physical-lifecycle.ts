@@ -10,7 +10,7 @@ import { type RustGenericCallableConversion } from "../../target-model/conversio
 import { rustGenericCallableConversionMatches } from "../../policy/conversions/generic-callable.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
