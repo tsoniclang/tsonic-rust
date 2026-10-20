@@ -5,9 +5,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustNumberArrayPayload } from "../../target-model/types/carriers/array-unions.js";
-import { instantiateRustSourceUnionVariants, createRustSourceUnionPayloadTemplate,
-  rustSourceUnionDefinitionIdentity, type RustSourceUnionDefinition,
-  } from "../../target-model/types/source-union-definitions.js";
+import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, type RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
+import { createRustSourceUnionPayloadTemplate } from "../project-types/source-union-payloads.js";
 import type { RustGeneratedUnionDefinition } from "../../target-model/records/generated-unions.js";
 
 export interface RustGeneratedUnionPlan {

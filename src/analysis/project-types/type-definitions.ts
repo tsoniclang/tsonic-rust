@@ -7,9 +7,8 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType } from "../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, createRustSourceUnionPayloadTemplate,
-  type RustTypeDefinitions, type RustSourceUnionDefinition, type RustSourceUnionPayloadTemplate,
-  type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
+import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions, type RustSourceUnionDefinition, type RustSourceUnionPayloadTemplate, type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
+import { createRustSourceUnionPayloadTemplate } from "./source-union-payloads.js";
 
 export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
   registerSourceEnum(carrier: TargetTypeRef, definition: RustNativeEnumDeclaration): boolean;
