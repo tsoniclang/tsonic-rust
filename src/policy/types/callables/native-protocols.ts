@@ -1,19 +1,22 @@
-import type { TargetTypeRef, RustTargetGenericArgument } from "../../../target-model/types/model.js";
-
+import { type TargetTypeRef, type RustTargetGenericArgument } from "../../../target-model/types/model.js";
 import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
 import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
-import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../../target-model/types/callable-completions.js";
-import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { instantiateRustNativeCompletion, rustNativeCompletionFutureType, rustNativeCallableCompletion } from "../../../target-model/types/callable-completions.js";
+import { type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
-import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding, RustNativeCallableOutlivesBound } from "../../../target-model/records/native-protocols.js";
+import { type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding, type RustNativeCallableOutlivesBound } from "../../../target-model/records/native-protocols.js";
 import { rustJsPromiseTargetId } from "../../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseOutputTargetType } from "../../../target-model/types/carriers/promises.js";
 import { rustJsValueTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustCallableSignatureBinding } from "../../../target-model/types/carriers/callable-signatures.js";
+import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
+import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
 
 export function selectRustNativeCallableOutlivesBounds(method: Pick<RustNativeCallableProtocol["method"], "parameters" | "binder">): readonly RustNativeCallableOutlivesBound[] {
   const lifetimes = new Set(method.binder.parameters.map(parameter => rustLifetimeKey(parameter.lifetime)));
@@ -92,4 +95,21 @@ export function selectRustNativeCallableProtocolResult(
           output: future.output, error: error(`AwaitError${future.ordinal}`), captures }), definitions);
   return completion === undefined ? undefined : rustNamedTargetType("rust.core.Result", "Result",
     rustTypeGenericArguments([completion, error("InvocationError")]));
+}
+
+export function selectRustNativeCallableProtocolSignature(source: TargetTypeRef, definitions: RustTypeDefinitions) {
+      const carrier = rustOptionElementCarrier(source) ?? source;
+      const generic = rustGenericCallableValue(carrier);
+      const ordinary = rustCallableProtocol(carrier);
+      const binding = generic === undefined ? ordinary === undefined ? undefined :
+        rustCallableSignatureBinding([], ordinary.parameters, ordinary.result) :
+        { signature: generic.signature, environment: generic.environment };
+      if (binding === undefined) return undefined;
+      const selectedMethod = bindRustCallableInputLifetimes(binding.signature.parameters, binding.signature.result);
+      if (selectedMethod === undefined) return undefined;
+      const method = Object.freeze({ ...selectedMethod, outlives: selectRustNativeCallableOutlivesBounds(selectedMethod) });
+      const completion = rustNativeCallableCompletion(method.result, definitions);
+
+  return Object.freeze({ signature: binding.signature, environment: binding.environment, method,
+    identityMethod: selectedMethod, ...(completion === undefined ? {} : { completion }) });
 }
