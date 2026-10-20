@@ -74,12 +74,12 @@ export function collectRustMutableProjectStorageRequirements(
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
-    const address = selectRustAddressOfSourceOperation(node, sourceFact, sourceFact);
+    const address = selectRustAddressOfSourceOperation(node, sourceFact);
     if (address?.storageDeclaration !== undefined && rustProjectObjectField(address.storageDeclaration, projectTypes) !== undefined) {
       const definition = projectTypes.definitionContainingDeclaration(address.storageDeclaration);
       if (definition?.kind === "class") referenceDeclarations.add(definition.declaration);
     }
-    const pointer = selectRustBindPointerSourceOperation(node, sourceFact, sourceFact);
+    const pointer = selectRustBindPointerSourceOperation(node, sourceFact);
     if (pointer !== undefined) {
       const semantics = context.semantics(sourceFile);
       const identityType = semantics.types.expressionType(pointer.identityExpression);

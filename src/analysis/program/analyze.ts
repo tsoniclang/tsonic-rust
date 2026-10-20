@@ -329,7 +329,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     const operation = selectRustAddressOfSourceOperation(
       node,
       (subject, key) => context.source.sourceFacts.getFact(subject, key),
-      (subject, key) => context.source.sourceFacts.getFact(subject, key),
     );
     if (operation !== undefined) {
       const root = rustTypedLocationStorageRootReference(

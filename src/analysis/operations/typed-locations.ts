@@ -48,7 +48,6 @@ export function selectRustTypedLocationCall(
     request.source.call,
     marker,
     (subject, key) => context.source.sourceFacts.getFact(subject, key),
-    (subject, key) => context.source.sourceFacts.getFact(subject, key),
   );
   if (selection.kind === "not-typed-location") {
     return undefined;
