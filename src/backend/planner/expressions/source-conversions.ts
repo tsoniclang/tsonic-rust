@@ -12,5 +12,5 @@ export function planSourceConversion(node: Node, context: RustPlanContext, acces
   const value = planExpression(selected.operand, context, "value", selected.borrowed ? "shared-reference"
     : selected.conversion === undefined && access !== "value" ? "shared-place" : "value");
   if (value === undefined) failRustPlannerInvariant("An admitted source assertion requires its native input.", selected.operand);
-  return selected.conversion === undefined ? value : applyRustValueConversion(context, value, selected.conversion, selected.operand, true, selected.borrowed);
+  return selected.conversion === undefined ? value : applyRustValueConversion(context, value, selected.conversion, selected.operand, selected.borrowed);
 }

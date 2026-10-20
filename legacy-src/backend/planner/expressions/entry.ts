@@ -464,7 +464,7 @@ function applyRustContextualValueConversion(
     ));
     return undefined;
   }
-  return applyRustValueConversion(context, expression, fact.conversion, node, false, sourceIsSharedReference);
+  return applyRustValueConversion(context, expression, fact.conversion, node, sourceIsSharedReference);
 }
 
 function rustExpressionUnsafeRequirement(

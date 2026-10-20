@@ -35,6 +35,7 @@ import type {
 } from "./generated-item-usage-model.js";
 
 import { createRustGeneratedItemUsageState } from "./generated-item-usage-state.js";
+import { admitRustConversionEmission } from "../conversions/emission.js";
 
 export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput): RustGeneratedItemUsage {
   const nativeNodes = new Set(input.nativeNodes);
@@ -119,10 +120,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       }
       return;
     }
-    const contract = rustValueConversionContract(conversion, input.typeDefinitions);
-    if (contract === undefined) {
-      throw new Error("A finalized Rust value conversion has no valid dead-code usage contract.");
-    }
+    const contract = admitRustConversionEmission(input.conversionEmission, conversion, input.typeDefinitions);
     visitConversionContract(contract, { structuralFieldRead: markStructuralFieldRead,
       variantRead: markVariantRead, variantConstructed: markVariantConstructed, closedObjectUsed: carrier => {
       const representation = input.objectRepresentations.representationFor(input.projectTypes.definitionForCarrier(carrier));
@@ -373,6 +371,9 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       case "source-conversion":
         visitConversion(fact.conversion);
         return;
+      case "throw-op":
+        if (fact.error.kind === "conversion") visitConversion(fact.error.conversion);
+        return;
       case "project-type-test":
         if (fact.lowering.kind === "dispatch") {
           markDowncastUsed(fact.dispatchCarrier, fact.targetCarrier);
@@ -476,7 +477,6 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       case "tuple-index":
       case "await-op":
       case "closure":
-      case "throw-op":
       case "regexp-create":
       case "option-none":
       case "option-wrap":
@@ -506,6 +506,10 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
         markProjectTypeUsed(input.records.runtimeCarrier.get(node)?.carrier);
       }
       const fact = input.records.targetOperation.get(node);
+      const compound = input.records.compoundWrite.get(node);
+      if (compound !== undefined) visitAbi(compound.abi);
+      const disposal = input.records.resourceManagement.get(node)?.disposal.target;
+      if (disposal !== undefined && disposal.form !== "source-method") visitAbi(disposal.abi);
       const propertyProjection = input.records.propertyProjection.get(node);
       for (const projection of propertyProjection?.cases ?? []) {
         for (const read of projection.reads) {

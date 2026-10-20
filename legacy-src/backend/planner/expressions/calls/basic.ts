@@ -429,7 +429,6 @@ function planObjectShapeProjectionCall(
               stored,
               field.conversion,
               undefined,
-              false,
             );
         if (converted === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -512,7 +511,6 @@ function planObjectShapeProjectionCall(
               stored,
               field.conversion,
               undefined,
-              false,
             );
         const write = converted === undefined
           ? undefined

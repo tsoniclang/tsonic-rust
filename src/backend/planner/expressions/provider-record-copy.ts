@@ -24,7 +24,7 @@ export function planProviderRecordCopy(
     const source = readRustStoredObjectField("structural-object", conversion.source,
       { kind: "path", path: name }, field.storageIndex, field.sourceCarrier, context);
     if (source === undefined) failRustPlannerInvariant("An admitted native record copy requires its selected source field.", node);
-    const value = applyRustValueConversion(context, source, field.conversion, node, false);
+    const value = applyRustValueConversion(context, source, field.conversion, node);
     if (value === undefined) failRustPlannerInvariant("An admitted native record copy requires its field conversion.", node);
     return { name: field.targetName, value };
   });

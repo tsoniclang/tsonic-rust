@@ -144,6 +144,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & Rust
         | "rest-values"
       )[];
       readonly sourceFallible: boolean;
+      readonly invocation: "invoke" | "call";
     }
   | {
       readonly lowering: "owned-string-from-borrowed-str";
@@ -537,6 +538,7 @@ export function rustValueConversionContract(
           lane: value.lane,
           projections: value.projections,
           sourceFallible: value.sourceFallible,
+          invocation: rustCallableProtocol(value.source) === undefined ? "invoke" : "call",
           fallible: false,
         };
   }

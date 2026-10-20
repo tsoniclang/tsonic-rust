@@ -91,7 +91,7 @@ export function planRustUnionMethodCall(
       if (conversion === undefined || conversion.fallible ||
         !rustTargetTypeRefEquals(conversion.source, method.returnType) ||
         !rustTargetTypeRefEquals(conversion.target, result)) return undefined;
-      const converted = applyRustValueConversion(context, expression, method.resultConversion, node, false);
+      const converted = applyRustValueConversion(context, expression, method.resultConversion, node);
       if (converted === undefined) return undefined;
       expression = converted;
     }

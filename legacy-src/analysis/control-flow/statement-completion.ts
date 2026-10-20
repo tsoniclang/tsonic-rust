@@ -36,6 +36,7 @@ import { admitRustThrowCompletion } from "../errors/throw-admission.js";
 import { admitRustProjectFieldDispatch } from "../errors/field-dispatch.js";
 import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chains.js";
 import { admitRustAwaitBoundary } from "../callables/await-admission.js";
+import { admitRustSourceValueConversions } from "../conversions/source-admission.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
@@ -460,6 +461,8 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     if (compound !== undefined) setter(node, compound);
     else if (operation?.kind === "runtime-set") setter(node, operation);
     if (operation?.kind === "operator-token" || operation?.kind === "operator-call") assignment(node, operation);
+    diagnostics.push(...admitRustSourceValueConversions({ ast, records, definitions: input.typeDefinitions,
+      fallible: frame(node).fallible }, node, operation));
     ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
   }
   if (diagnostics.length > 0) return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };

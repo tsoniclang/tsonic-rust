@@ -583,7 +583,7 @@ export function analyzeRustTargetProgram(
     genericRequirements: declarationGenericRequirements.index, structuralShapes: program.structuralShapes });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
-  const reachability = analyzeRustReachability(program, context.nativeNodes);
+  const reachability = analyzeRustReachability(program, context.nativeNodes, context.records.conversionEmissionPlans);
   const facadeEmission = analyzeRustSourcePackageFacadeEmission(program, sourceOutputIdentities.identities);
   if (facadeEmission.plan === undefined) return rejectedTargetStage(facadeEmission.diagnostics);
   context.records.sourcePackageEmission.facades(facadeEmission.plan);

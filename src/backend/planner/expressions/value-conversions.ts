@@ -1,23 +1,16 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import {
-  rustOptionTargetType,
-  rustCallableProtocol,
   rustProgramErrorTargetType,
-  rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import {
-  diagnosticInput,
   registerAliasFromPath,
   rustActiveErrorType,
   rustCurrentErrorBoundary,
 } from "../program/plan-context.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
 import {
   invokeRustStructuralObjectMethod,
@@ -28,7 +21,6 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
-import { finalizedConversionIsValid } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
@@ -49,42 +41,13 @@ export function applyRustValueConversion(
   expression: RustExpr,
   conversion: RustValueConversion | undefined,
   node: Node | undefined,
-  validateSourceCarrier = true,
   sourceIsSharedReference = false,
 ): RustExpr | undefined {
   if (conversion === undefined) {
     return expression;
   }
-  const contract = rustValueConversionContract(conversion, context.input.program.typeDefinitions);
-  if (contract === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.value-conversion-contract",
-      "Target value conversion has no closed Rust semantic conversion contract.",
-    ));
-    return undefined;
-  }
-  if (validateSourceCarrier) {
-    const sourceCarrier = node === undefined
-      ? undefined
-      : rustEffectiveValueCarrier(context.input.program.records, node);
-    if (sourceCarrier === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node ?? context.sourceFile),
-        "rust.backend.value-conversion-source",
-        "Target value conversion has no finalized source carrier evidence.",
-      ));
-      return undefined;
-    }
-    if (!rustTargetTypeRefEquals(sourceCarrier, contract.source)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, node ?? context.sourceFile),
-        "rust.backend.value-conversion-source",
-        "Target value conversion source does not match the finalized source carrier.",
-      ));
-      return undefined;
-    }
-  }
+  const contract = context.input.program.records.conversionContract.get(conversion)
+    ?? failRustPlannerInvariant("An admitted native value conversion requires its sealed physical contract.", node ?? context.sourceFile);
   const producer = conversion.kind === "callable-input"
     ? planRustCallableInputProducer(expression, contract.source, context, node) : expression;
   if (producer === undefined) return undefined;
@@ -99,23 +62,11 @@ export function applyRustValueConversion(
     return converted;
   }
   const region = context.fallibleBoundary;
-  if (region === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.value-conversion",
-      "Fallible target value conversion requires a finalized fallible lowering context.",
-    ));
-    return undefined;
-  }
+  if (region === undefined) failRustPlannerInvariant("An admitted fallible conversion requires its native error region.", node ?? context.sourceFile);
   const providerErrorType = contract.errorBoundary === "provider-native"
     ? rustTypeFromCarrierInContext(contract.errorCarrier, context) : undefined;
   if (contract.errorBoundary === "provider-native" && providerErrorType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.value-conversion-error",
-      "Fallible target value conversion requires its exact native error carrier.",
-    ));
-    return undefined;
+    return failRustPlannerInvariant("An admitted fallible conversion requires its rendered native error carrier.", node ?? context.sourceFile);
   }
   return applyRustLocalErrorBoundary(converted, contract.errorBoundary, region, providerErrorType);
 }
@@ -150,11 +101,10 @@ export function lowerRustValueConversion(
     case "owned-string-from-borrowed-str":
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "borrowed-str-from-owned-string":
-      return source.kind === "str-literal" ? source
-        : { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
+      return { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
     case "borrowed-str-from-optional-string":
       return { kind: "method-call", receiver: {
-        kind: "method-call", receiver: source.kind === "reference" ? source.expr : source, method: "as_deref", args: [],
+        kind: "method-call", receiver: source, method: "as_deref", args: [],
       }, method: "unwrap_or", args: [{ kind: "str-literal", value: "" }] };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
@@ -177,7 +127,7 @@ export function lowerRustValueConversion(
         (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));
     case "js-array-backing": {
       const element = rustTypeFromCarrierInContext(contract.element, context);
-      return element === undefined ? undefined : { kind: "method-call", receiver: source.kind === "reference" ? source.expr : source,
+      return element === undefined ? undefined : { kind: "method-call", receiver: source,
         method: contract.method, genericArguments: [{ kind: "type", type: element }], args: [] };
     }
     case "union-fold":
@@ -206,12 +156,7 @@ export function lowerRustValueConversion(
         ? rustActiveErrorType(context)
         : undefined;
       if (contract.lane === "native" && activeErrorType === undefined) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, node ?? context.sourceFile),
-          "rust.backend.regexp-callback-native-string",
-          "A native RegExp callback projection requires a finalized fallible lowering context.",
-        ));
-        return undefined;
+        return failRustPlannerInvariant("An admitted native RegExp callback projection requires its exact error context.", node ?? context.sourceFile);
       }
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
@@ -249,7 +194,7 @@ export function lowerRustValueConversion(
         callbackArguments.push(propagated);
       }
       const callbackExpression: RustExpr = { kind: "path", path: callbackName };
-      const invocation: RustExpr = rustCallableProtocol(contract.source) === undefined
+      const invocation: RustExpr = contract.invocation === "invoke"
         ? { kind: "invoke", callee: callbackExpression, args: callbackArguments }
         : {
             kind: "method-call",
@@ -284,12 +229,7 @@ export function lowerRustValueConversion(
         lowerRustValueConversion(contract.payloadConversion, source, context, node);
       const expression = payload === undefined ? undefined : planRustUnionConstruction(contract.path, payload, context);
       if (expression === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node ?? context.sourceFile),
-          "rust.backend.source-union-conversion",
-          "Source-union conversion has no exact emitted variant contract.",
-        ));
-        return undefined;
+        return failRustPlannerInvariant("An admitted source-union conversion requires its exact emitted variant.", node ?? context.sourceFile);
       }
       return expression;
     }
@@ -331,13 +271,10 @@ export function lowerRustValueConversion(
       if (converted === undefined) {
         return undefined;
       }
-      const directMapper: RustExpr | undefined = converted.kind === "owned-string-from-borrowed-str" &&
-          converted.expression.kind === "path" && converted.expression.path === valueName
+      const directMapper: RustExpr | undefined = contract.element.sourceMode === "value" && contract.element.lowering === "owned-string-from-borrowed-str"
         ? { kind: "path", path: "String::from" }
-        : converted.kind === "call" &&
-          converted.args.length === 1 && converted.args[0]?.kind === "path" &&
-          converted.args[0].path === valueName
-        ? { kind: "path", path: converted.path }
+        : contract.element.sourceMode === "value" && contract.element.lowering === "call"
+        ? { kind: "path", path: contract.element.path }
         : undefined;
       const mapped: RustExpr = {
         kind: "method-call",
@@ -365,22 +302,8 @@ function lowerStructuralToJsonValueConversion(
   context: RustPlanContext,
   node: Node | undefined,
 ): RustExpr | undefined {
-  const structural = rustStructuralObjectCarrierValue(contract.source);
-  const field = structural?.fields[contract.storageIndex];
-  const plannedField = context.input.program.structuralShapes.field(
-    contract.source,
-    contract.storageIndex,
-  );
-  if (field === undefined || field.method !== true || field.sourceName !== "toJSON" ||
-    field.presence !== "required" || plannedField === undefined ||
-    plannedField.method !== true || plannedField.sourceName !== "toJSON") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.js-value-to-json",
-      "Selected toJSON projection has no exact emitted structural method contract.",
-    ));
-    return undefined;
-  }
+  const plannedField = context.input.program.records.structuralShape.get(contract.source)?.fields[contract.storageIndex]
+    ?? failRustPlannerInvariant("An admitted toJSON projection requires its exact emitted structural method.", node ?? context.sourceFile);
   const sourceName = allocateConversionName(context, node, "json_source");
   const keyName = allocateConversionName(
     context,
@@ -402,23 +325,13 @@ function lowerStructuralToJsonValueConversion(
     context,
   );
   if (invocation === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.js-value-to-json-invocation",
-      "Selected toJSON projection cannot be invoked through its exact structural method storage.",
-    ));
-    return undefined;
+    return failRustPlannerInvariant("An admitted toJSON projection requires its exact native invocation.", node ?? context.sourceFile);
   }
   const invocationErrorType = plannedField.nativeMethod === true
     ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context)
     : rustTargetRuntimeErrorType;
   if (invocationErrorType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.js-value-to-json-error",
-      "Selected toJSON projection requires its exact native method error boundary.",
-    ));
-    return undefined;
+    return failRustPlannerInvariant("An admitted toJSON projection requires its rendered native method error.", node ?? context.sourceFile);
   }
   const converted = lowerNestedRustValueConversion(
     contract.resultConversion,
@@ -475,40 +388,15 @@ function lowerStructuralObjectJsValueConversion(
   context: RustPlanContext,
   node: Node | undefined,
 ): RustExpr | undefined {
-  const structural = rustStructuralObjectCarrierValue(contract.source);
-  const definition = context.input.program.structuralShapes.definitionForCarrier(
-    contract.source,
-  );
-  if (structural === undefined || definition === undefined ||
-    structural.fields.length !== definition.fields.length ||
-    structural.fields.filter((field) => field.method !== true).length !==
-      contract.fields.length) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.js-value-structural-shape",
-      "Closed JavaScript-value projection conflicts with the finalized structural object shape.",
-    ));
-    return undefined;
-  }
+  const definition = context.input.program.records.structuralShape.get(contract.source)
+    ?? failRustPlannerInvariant("An admitted closed value projection requires its native structural shape.", node ?? context.sourceFile);
   const sourceName = allocateConversionName(context, node, "js_object_source");
   const sourcePath = { kind: "path" as const, path: sourceName };
   const entries: RustExpr[] = [];
   for (const field of contract.fields) {
-    const structuralField = structural.fields[field.storageIndex];
     const plannedField = definition.fields[field.storageIndex];
-    if (structuralField === undefined || plannedField === undefined ||
-      structuralField.sourceName !== field.sourceName ||
-      plannedField.sourceName !== field.sourceName ||
-      plannedField.storage !== "stored" || plannedField.method === true ||
-      structuralField.accessor !== undefined || structuralField.method === true) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node ?? context.sourceFile),
-        "rust.backend.js-value-structural-field",
-        `Closed JavaScript-value projection field '${field.sourceName}' has no exact stored-field plan.`,
-      ));
-      return undefined;
-    }
-    const storedCarrier = structuralField.type;
+    if (plannedField === undefined) failRustPlannerInvariant("An admitted closed value field requires its exact native storage.", node ?? context.sourceFile);
+    const storedCarrier = plannedField.carrier;
     const stored = readRustStoredObjectField(
       "structural-object",
       contract.source,
@@ -521,15 +409,6 @@ function lowerStructuralObjectJsValueConversion(
       return undefined;
     }
     if (field.presence === "optional") {
-      const expectedStorage = rustOptionTargetType(field.sourceCarrier);
-      if (!rustTargetTypeRefEquals(storedCarrier, expectedStorage)) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node ?? context.sourceFile),
-          "rust.backend.js-value-optional-field",
-          `Optional JavaScript-value projection field '${field.sourceName}' has no exact optional storage carrier.`,
-        ));
-        return undefined;
-      }
       const valueName = allocateConversionName(
         context,
         node,
@@ -611,11 +490,6 @@ export function applyFinalizedValueConversion(
   node: Node,
   sourceIsSharedReference = false,
 ): RustExpr | undefined {
-  if (!finalizedConversionIsValid(conversion, context.input.program.typeDefinitions)) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.backend.finalized-conversion", "Finalized value lowering requires exact source, destination and conversion evidence."));
-    return undefined;
-  }
   if (conversion.kind === "sequence") {
     let result: RustExpr | undefined = expression;
     for (let index = 0; index < conversion.steps.length; index += 1) {
@@ -632,7 +506,6 @@ export function applyFinalizedValueConversion(
         expression,
         conversion.conversion,
         node,
-        false,
         sourceIsSharedReference,
       );
 }

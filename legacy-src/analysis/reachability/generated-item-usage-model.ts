@@ -66,6 +66,7 @@ export interface RustGeneratedItemUsage {
 }
 
 export interface RustGeneratedItemUsageInput {
+  readonly conversionEmission: import("../program/records/conversion-emission.js").RustConversionEmissionProducer;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly nativeNodes: readonly Node[];

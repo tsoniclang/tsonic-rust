@@ -18,7 +18,7 @@ export function planNullishCoalescing(node: Node, context: RustPlanContext): Rus
   for (let depth = 1; depth < fact.rightOptionDepth; depth++) right = { kind: "method-call", receiver: right, method: "flatten", args: [] };
   const presentName = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []), "present_value");
   const value: RustExpr = { kind: "path", path: presentName };
-  const present = fact.leftConversion === undefined ? value : applyRustValueConversion(context, value, fact.leftConversion, node, false);
+  const present = fact.leftConversion === undefined ? value : applyRustValueConversion(context, value, fact.leftConversion, node);
   if (present === undefined) return undefined;
   return planRustOptionBranch(left, selected.leftCarrier, presentName,
     fact.rightOptionDepth > 0 ? { kind: "call", path: "Some", args: [present] } : present, right, context);

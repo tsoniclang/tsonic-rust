@@ -16,7 +16,8 @@ type DeclarationOwner =
   | { readonly kind: "erased" }
   | { readonly kind: "root" };
 
-export function analyzeRustReachability(program: RustReachabilityInput, nativeNodes: readonly Node[]): RustReachability {
+export function analyzeRustReachability(program: RustReachabilityInput, nativeNodes: readonly Node[],
+  conversionEmission: import("../program/records/conversion-emission.js").RustConversionEmissionProducer): RustReachability {
   const ast = program.source.ast;
   const nativeNodeSet = new Set(nativeNodes);
   const declarations = collectDeclarationUnits(ast, nativeNodes);
@@ -62,6 +63,7 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
       ast.getFileName(ast.getSourceFile(declaration)),
     )?.publishesImplementationAbi === true;
   const generatedUsage = analyzeRustGeneratedItemUsage({
+    conversionEmission,
     ast,
     sourceFiles: program.sourceFiles,
     nativeNodes,
