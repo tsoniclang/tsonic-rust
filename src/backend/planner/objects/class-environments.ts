@@ -37,12 +37,9 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
     if (type === undefined) failRustPlannerInvariant("An admitted class capture requires its native storage carrier.", declaration);
     fields.push({ name: capture.name, visibility: "private", type });
   }
-  for (const field of environment.staticFields) {
+  for (const { field, visibility, deadCode } of emission.fields) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
-    if (type === undefined) return undefined;
-    const visibility = rustProjectMemberStorageVisibility(context.input.program.records,
-      field.declaration, publiclyReachable);
-    const deadCode = rustAuthoredFieldDeadCodeDisposition(context, declaration, field.declaration, visibility === "public");
+    if (type === undefined) failRustPlannerInvariant("An admitted class environment field requires its finalized native storage syntax.", field.declaration);
     fields.push({ name: field.fieldName, visibility, ...(deadCode === undefined ? {} : { deadCode }), type: field.readonly ? type : {
       kind: "named", path: "core::cell::RefCell", genericArguments: [{ kind: "type", type }],
     } });

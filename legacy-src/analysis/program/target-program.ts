@@ -50,6 +50,7 @@ import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
 import { analyzeRustProgramErrorModuleEmission } from "../errors/module-emission.js";
 import { analyzeRustDispatchRootEmission } from "../project/dispatch-emission.js";
+import { analyzeRustStructuralLivenessEmission } from "../reachability/structural-emission.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -606,6 +607,7 @@ export function analyzeRustTargetProgram(
     sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.nativeLiveness, required: context.requiredRecords });
+  analyzeRustStructuralLivenessEmission(program, reachability, context.records.nativeLiveness);
   context.callableValues.publish();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({ ...program,

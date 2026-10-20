@@ -16,7 +16,9 @@ export function analyzeRustDeclarationLiveness(input: {
 }): void {
   const { program, reachability } = input;
   const { ast } = program.source;
-  for (const node of input.nodes) {
+  for (const node of new Set(input.nodes)) {
+    const authoredDeadCode = reachability.suppressedDeclarations.has(node) ? "authored-declaration" as const : undefined;
+    input.producer.subject(node, { deadCode: authoredDeadCode });
     const form = program.records.nativeDeclaration.get(node);
     if (form === undefined) continue;
     const file = ast.getSourceFile(node);
@@ -28,7 +30,7 @@ export function analyzeRustDeclarationLiveness(input: {
     const nativeAlias = form.kind === "alias" && form.fact.kind === "native-alias";
     const visibility = ast.hasModifierKind(node, "export") || !nativeAlias && publiclyReachable || form.kind === "alias" && form.fact.kind === "family"
       ? "public" : "crate";
-    const deadCode = reachability.suppressedDeclarations.has(node) ? "authored-declaration" : undefined;
+    const deadCode = authoredDeadCode;
     const enumDiscriminant = reachability.externallyReachable.has(node) || deadCode !== undefined ? undefined : "generated-enum-discriminant";
     const sourceVariants = form.kind === "enum" ? form.variants : form.kind === "alias" &&
       (form.fact.kind === "runtime" || form.fact.kind === "string-literal") ? form.fact.variants : [];
