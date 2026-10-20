@@ -2,8 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustObjectLiteralMethodAdapterFact } from "../../../target-model/records/object-methods.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import { selectRustObjectLiteralMethodAdapter,
-  type RustObjectLiteralMethodAdapterInput, type RustObjectLiteralMethodAdapterIssue } from "../../objects/method-adapters.js";
+import { selectRustObjectLiteralMethodAdapter, type RustObjectLiteralMethodAdapterInput, type RustObjectLiteralMethodAdapterIssue } from "../../objects/method-adapters.js";
 import { createRustRecordFamily } from "./family.js";
 import { requireRustRecord, type RustRequiredRecord } from "./required-records.js";
 
