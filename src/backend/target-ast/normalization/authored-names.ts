@@ -88,6 +88,7 @@ function namedType<Value extends { readonly name: string; readonly attrs?: reado
 
 export function rustStatementDeclaresNonSnakeName(statement: RustStmt): boolean {
   switch (statement.kind) {
+    case "let-pattern": return patternDeclaresNonSnakeName(statement.pattern);
     case "let": return rustNameNeedsStyleAllowance(statement.name, "snake");
     case "for":
     case "while-let-some": return rustNameNeedsStyleAllowance(statement.binding, "snake");
@@ -114,6 +115,7 @@ function patternDeclaresNonSnakeName(pattern: RustPattern): boolean {
     case "struct": return pattern.fields.some(field => patternDeclaresNonSnakeName(field.pattern));
     case "binding": return rustNameNeedsStyleAllowance(pattern.name, "snake");
     case "tuple":
+    case "slice":
     case "tuple-variant": return pattern.elements.some(patternDeclaresNonSnakeName);
     case "or": return pattern.alternatives.some(patternDeclaresNonSnakeName);
     case "path":
