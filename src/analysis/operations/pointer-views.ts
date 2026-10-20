@@ -4,13 +4,7 @@ import { selectTsonicPointerView } from "@tsonic/source-core/facts";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import {
-  isRustAbsenceCarrier,
-  rustSourceLocationTargetType,
-  rustOptionalLocationPointeeCarrier,
-  rustOptionTargetType,
-  rustUnitTargetType,
-} from "../../target-model/types/index.js";
+import { isRustAbsenceCarrier, rustSourceLocationTargetType, rustOptionalLocationPointeeCarrier, rustOptionTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import { recordRustTypedLocationCall } from "./typed-locations.js";
 import { rustLocationCallbackCarrier } from "../../policy/operations/callables/location-callbacks.js";
