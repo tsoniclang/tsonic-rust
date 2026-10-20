@@ -218,8 +218,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     }
     return Object.freeze({ kind: "assignment", declaration, reference: initializer, name: selectedName });
   };
-  const iteration = (node: Node): void => {
-    const operation = records.targetOperation.get(node);
+  const exception = (node: Node): void => {
     if (ast.is.IsThrowStatement(node)) {
       const file = ast.getSourceFile(node);
       const component = file === undefined ? undefined : input.components.componentForFile(ast.getFileName(file));
@@ -231,11 +230,14 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       const declaration = ast.as.AsCatchClause(node)?.VariableDeclaration;
       const name = declaration === undefined ? "_" : input.names.nameForDeclaration(declaration);
       if (name === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted catch binding requires its authored native name.", node);
-      const used = declaration === undefined || input.source.navigation.declarationUseSummary(declaration).uses.some(use =>
+      const used = declaration !== undefined && input.source.navigation.declarationUseSummary(declaration).uses.some(use =>
         input.isNativeNode(use.reference) && records.nativeUnreachable.get(use.reference) !== true &&
         records.compileTimeSource.get(use.reference) === undefined && records.nativeParticipation.get(use.reference) !== "erased");
       publish(catches, node, Object.freeze({ name, used }));
     }
+  };
+  const iteration = (node: Node): void => {
+    const operation = records.targetOperation.get(node);
     const selected = records.selectedOperation.get(node);
     if (operation?.kind !== "iteration" || selected?.operationKind !== "iteration" || selected.operationId !== operation.operationId ||
       !rustTargetTypeRefEquals(selected.resultType, operation.elementCarrier) ||
@@ -418,6 +420,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     if (ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) || ast.is.IsForStatement(node) ||
       ast.is.IsForInStatement(node) || ast.is.IsForOfStatement(node) || ast.is.IsSwitchStatement(node) || ast.is.IsLabeledStatement(node)) selectTargets(node);
     if (ast.is.IsForInStatement(node) || ast.is.IsForOfStatement(node)) iteration(node);
+    if (ast.is.IsThrowStatement(node) || ast.is.IsCatchClause(node)) exception(node);
     if (ast.is.IsSwitchStatement(node)) switchSelection(node);
     if (ast.is.IsVariableDeclaration(node)) {
       const kind = ast.variableDeclarationKind(node);
