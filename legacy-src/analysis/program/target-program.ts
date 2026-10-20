@@ -49,6 +49,8 @@ import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
 import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import { analyzeRustWorkerEntries } from "../source-modules/worker-entries.js";
 import { analyzeRustProgramEmission } from "../source-modules/program-emission.js";
+import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
+import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
 import { analyzeRustProgramErrorModuleEmission } from "../errors/module-emission.js";
 import { analyzeRustDispatchRootEmission } from "../project/dispatch-emission.js";
@@ -607,6 +609,8 @@ export function analyzeRustTargetProgram(
   if (binaryDispatchIssues.length !== 0) return rejectedTargetStage(binaryDispatchIssues);
   const programEmissionIssues = analyzeRustProgramEmission(program, context.records.sourcePackageEmission);
   if (programEmissionIssues.length !== 0) return rejectedTargetStage(programEmissionIssues);
+  const packageCargoIssues = analyzeRustPackageCargo(program, context.records.sourcePackageEmission);
+  if (packageCargoIssues.length !== 0) return rejectedTargetStage(packageCargoIssues);
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);
@@ -617,6 +621,7 @@ export function analyzeRustTargetProgram(
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.nativeLiveness, required: context.requiredRecords });
   analyzeRustStructuralLivenessEmission(program, reachability, context.records.nativeLiveness);
+  analyzeRustSignatureVisibility(program, context.nativeNodes, context.records.sourcePackageEmission);
   context.callableValues.publish();
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({ ...program,

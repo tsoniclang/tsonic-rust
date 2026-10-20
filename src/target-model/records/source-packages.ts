@@ -74,6 +74,8 @@ export interface RustSourcePackageFacadePlan {
 }
 
 export interface RustSourcePackageEmissionRecords extends RustSourcePackageErrorRecords {
+  readonly packageCargo: import("./source-package-crates.js").RustPackageCargoRecords["packageCargo"];
+  readonly signatureVisibility: import("./signature-visibility.js").RustSignatureVisibilityRecords["signatureVisibility"];
   readonly programEmission: import("./program-emission.js").RustProgramEmissionRecords["programEmission"];
   readonly workerEntries: { readonly get: () => readonly RustWorkerEntryEmission[] | undefined };
   readonly sourcePackageInitializers: { readonly get: () => RustSourcePackageInitializerPlan | undefined };

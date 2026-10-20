@@ -1,15 +1,16 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
-import type { CargoDependency, CargoManifestPlan } from "../../../target-model/project/cargo.js";
+import type { CargoManifestPlan } from "../../../target-model/project/cargo.js";
+import type { RustSourcePackageCargoPlan } from "../../../target-model/records/source-package-crates.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustPlannedArtifact } from "../../artifact-model/output.js";
 import {
   createRustSourceFile,
   type RustItem,
   type RustSourceFileModel,
 } from "../../target-ast/syntax/nodes.js";
-import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/signature-visibility.js";
-import { closeRustModuleTypeVisibility } from "../../target-ast/normalization/module-visibility.js";
+import { applyRustSealedTypeVisibility } from "../../target-ast/normalization/sealed-type-visibility.js";
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { planRustProgramErrorModule } from "./errors.js";
@@ -39,14 +40,6 @@ export interface RustSourcePackageCrateContentPlan {
   readonly syntheticModules: ReadonlyMap<string, RustSourceFileModel>;
 }
 
-export interface RustSourcePackageCargoPlan {
-  readonly rootManifest: CargoManifestPlan;
-  readonly externalManifestsByComponentId: ReadonlyMap<
-    string,
-    { readonly directory: `crates/${string}`; readonly manifest: CargoManifestPlan }
-  >;
-}
-
 type RustPlannedSourceArtifact = Extract<RustPlannedArtifact, { readonly kind: "source" }>;
 type RustCrateArtifactPrefix = "" | `crates/${string}`;
 
@@ -68,26 +61,16 @@ export function planRustSourcePackageCrateContent(
     component.componentId,
   );
   if (initializerFacadeModuleName === undefined) {
-    diagnostics.push(crateDiagnostic(
-      "RUST_SOURCE_PACKAGE_INITIALIZER_COMPONENT_MISSING",
-      `Source-package component '${component.componentId}' has no exact initializer facade identity.`,
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted source component requires its native initializer facade identity.");
   }
   const componentExports = facadePlan.exportsByComponentId.get(component.componentId) ?? [];
   const facades = applyRustSourcePackageFacades(sources, componentExports);
-  const structuralShapePathPrefix = `crate::${component.structuralShapesModuleName}::`;
-  const structuralShapeNames = new Set(facades.sources.flatMap((source) =>
-    rustPublicSignatureTypeNames(source.model)
-      .filter((name) => name.startsWith(structuralShapePathPrefix))
-      .map((name) => name.slice(structuralShapePathPrefix.length))));
+  const signature = input.program.records.signatureVisibility.get(component.componentId);
+  if (signature === undefined) failRustPlannerInvariant("An admitted source component requires its sealed native public signature closure.");
+  const structuralShapeNames = signature.structuralShapes;
   const errorDomain = sourcePackageErrors.domainsByComponentId.get(component.componentId);
   if (errorDomain === undefined) {
-    diagnostics.push(crateDiagnostic(
-      "RUST_SOURCE_PACKAGE_ERROR_DOMAIN_MISSING",
-      `Source-package component '${component.componentId}' has no exact error-domain plan.`,
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted source component requires its native error domain.");
   }
   const structuralShapeModel = planRustStructuralShapeModule(
     input,
@@ -115,10 +98,8 @@ export function planRustSourcePackageCrateContent(
   const programModel = programErrorModel === undefined && dispatchRoots.length === 0
     ? undefined : createRustSourceFile([...(programErrorModel?.items ?? []), ...dispatchRoots], programErrorModel?.innerAttrs ?? []);
   const initializerFacadeModel = planRustInitializerFacadeModule(
-    facades.sources,
     packageInitializers,
     component.componentId,
-    diagnostics,
   );
   if (diagnostics.length > 0) {
     return undefined;
@@ -129,11 +110,7 @@ export function planRustSourcePackageCrateContent(
   for (const identity of componentIdentities.values()) {
     const topLevelModuleName = identity.moduleSegments[0];
     if (topLevelModuleName === undefined) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_MODULE_IDENTITY_MISSING",
-        `Source file '${identity.fileName}' has no exact top-level Rust module identity.`,
-      ));
-      continue;
+      failRustPlannerInvariant("An admitted source module requires its top-level native module identity.");
     }
     topLevelModuleNames.add(topLevelModuleName);
   }
@@ -189,13 +166,14 @@ export function planRustSourcePackageCrateContent(
     }),
     ...facades.rootItems,
   ];
-  const visibleModels = closeRustModuleTypeVisibility(new Map([
+  const visibleModels = new Map([
     ...facades.sources.map(source => [source.moduleName, source.model] as const),
     ...facades.syntheticModules,
     ...(structuralShapeModel === undefined ? [] : [[component.structuralShapesModuleName, structuralShapeModel] as const]),
     ...(programModel === undefined ? [] : [[component.programModuleName, programModel] as const]),
     ...(initializerFacadeModel === undefined ? [] : [[initializerFacadeModuleName, initializerFacadeModel] as const]),
-  ]));
+  ].map(([name, model]) => [name, applyRustSealedTypeVisibility(model,
+    signature.requiredByModule.get(name) ?? new Set<string>())] as const));
   return Object.freeze({
     component,
     initializerFacadeModuleName,
@@ -221,6 +199,8 @@ export function materializeRustSourcePackageCrateArtifacts(
     readonly additionalLibraryItems?: readonly RustItem[];
   },
 ): readonly RustPlannedArtifact[] | undefined {
+  const emission = input.program.records.programEmission.get();
+  if (emission === undefined) failRustPlannerInvariant("An admitted crate requires its native program configuration.");
   const artifacts: RustPlannedArtifact[] = options.manifest === undefined
     ? []
     : [{
@@ -230,7 +210,7 @@ export function materializeRustSourcePackageCrateArtifacts(
       }];
   artifacts.push(rustSourceArtifact(
     prefixedPath(options.prefix, "src/lib.rs"),
-    createRustCrateRootSourceFile(input.program.configuration.foundation, [
+    createRustCrateRootSourceFile(emission.configuration.foundation, [
       ...plan.libraryItems,
       ...rustRuntimeAliasUseItems(new Set([...rustRuntimeAliasImports.keys()].filter(alias =>
         rustItemsReferenceModuleAlias(options.additionalLibraryItems ?? [], alias))),
@@ -271,11 +251,7 @@ export function materializeRustSourcePackageCrateArtifacts(
     compareNames(left.moduleName, right.moduleName))) {
     const identity = identities.get(input.program.source.ast.getFileName(source.sourceFile));
     if (identity === undefined || identity.componentId !== plan.component.componentId) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_OUTPUT_IDENTITY_MISSING",
-        `Planned Rust source module '${source.moduleName}' has no exact component-owned output identity.`,
-      ));
-      continue;
+      failRustPlannerInvariant("An admitted source module requires its component-owned output identity.", source.sourceFile);
     }
     sourceArtifacts.push(rustSourceArtifact(identity.artifactPath, source.model));
   }
@@ -287,133 +263,11 @@ export function materializeRustSourcePackageCrateArtifacts(
   return diagnostics.length === 0 ? Object.freeze(artifacts) : undefined;
 }
 
-export function planRustSourcePackageCargo(
-  rootManifest: CargoManifestPlan,
-  components: readonly RustSourcePackageComponentPlan[],
-  diagnostics: TargetDiagnostic[],
-  linkedComponentIds: readonly string[] = [],
-): RustSourcePackageCargoPlan | undefined {
-  const root = components.find((component) => component.root);
-  if (root === undefined) {
-    diagnostics.push(crateDiagnostic(
-      "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING",
-      "Rust Cargo planning has no exact root source-package component.",
-    ));
-    return undefined;
-  }
-  const componentById = new Map(components.map((component) =>
-    [component.componentId, component] as const));
-  const externalComponents = components.filter((component) => !component.root);
-  const runtimeNames = new Set(rootManifest.dependencies.map((dependency) => dependency.name));
-  const componentIdByCrateName = new Map<string, string>();
-  for (const component of externalComponents) {
-    if (component.crateName === undefined || component.crateName === rootManifest.packageName ||
-      runtimeNames.has(component.crateName)) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
-        `Generated source-package component '${component.componentId}' has conflicting Rust crate identity '${String(component.crateName)}'.`,
-      ));
-      continue;
-    }
-    const existingComponentId = componentIdByCrateName.get(component.crateName);
-    if (existingComponentId !== undefined) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_CONFLICT",
-        `Source-package components '${existingComponentId}' and '${component.componentId}' share Rust crate identity '${component.crateName}'.`,
-      ));
-      continue;
-    }
-    componentIdByCrateName.set(component.crateName, component.componentId);
-  }
-  if (diagnostics.length > 0) {
-    return undefined;
-  }
-  const dependencyFor = (
-    component: RustSourcePackageComponentPlan,
-    dependencyId: string,
-  ): CargoDependency | undefined => {
-    const dependency = componentById.get(dependencyId);
-    if (dependency?.crateName === undefined) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_PACKAGE_COMPONENT_DEPENDENCY_MISSING",
-        `Source-package component '${component.componentId}' has no exact generated dependency crate for '${dependencyId}'.`,
-      ));
-      return undefined;
-    }
-    return {
-      name: dependency.crateName,
-      path: component.root
-        ? `crates/${dependency.crateName}`
-        : `../${dependency.crateName}`,
-    };
-  };
-  const rootDependencies = mergeCargoDependencies(
-    rootManifest.dependencies,
-    [...new Set([...root.dependencyComponentIds, ...linkedComponentIds])].flatMap((dependencyId) => {
-      const dependency = dependencyFor(root, dependencyId);
-      return dependency === undefined ? [] : [dependency];
-    }),
-    diagnostics,
-  );
-  const componentRuntimeDependencies = rootManifest.dependencies.map(
-    (dependency): CargoDependency => Object.freeze({
-      name: dependency.name,
-      path: dependency.path,
-      ...(dependency.defaultFeatures === undefined
-        ? {}
-        : { defaultFeatures: dependency.defaultFeatures }),
-      ...(dependency.features === undefined ? {} : { features: dependency.features }),
-    }),
-  );
-  const externalManifestsByComponentId = new Map<string, {
-    readonly directory: `crates/${string}`;
-    readonly manifest: CargoManifestPlan;
-  }>();
-  for (const component of externalComponents) {
-    const crateName = component.crateName;
-    if (crateName === undefined) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_PACKAGE_CRATE_IDENTITY_MISSING",
-        `Source-package component '${component.componentId}' has no exact Rust crate identity.`,
-      ));
-      continue;
-    }
-    const componentDependencies = component.dependencyComponentIds.flatMap((dependencyId) => {
-      const dependency = dependencyFor(component, dependencyId);
-      return dependency === undefined ? [] : [dependency];
-    });
-    const dependencies = mergeCargoDependencies(
-      componentRuntimeDependencies,
-      componentDependencies,
-      diagnostics,
-    );
-    externalManifestsByComponentId.set(component.componentId, Object.freeze({
-      directory: `crates/${crateName}`,
-      manifest: Object.freeze({
-        packageName: crateName,
-        edition: rootManifest.edition,
-        outputType: "lib",
-        dependencies,
-      }),
-    }));
-  }
-  if (diagnostics.length > 0) {
-    return undefined;
-  }
-  return Object.freeze({
-    rootManifest: Object.freeze({
-      ...rootManifest,
-      dependencies: rootDependencies,
-      workspace: {
-        members: Object.freeze([...externalManifestsByComponentId.values()]
-          .map((entry) => entry.directory)
-          .sort(compareNames)),
-      },
-    }),
-    externalManifestsByComponentId: new Map(externalManifestsByComponentId),
-  });
+export function planRustSourcePackageCargo(input: RustPlanningContext): RustSourcePackageCargoPlan | undefined {
+  const selected = input.program.records.packageCargo.get();
+  if (selected === undefined) failRustPlannerInvariant("An admitted program requires its selected native package manifests.");
+  return selected.kind === "generated" ? selected.plan : undefined;
 }
-
 interface AppliedRustSourcePackageFacades {
   readonly sources: readonly PlannedRustSourceFile[];
   readonly rootItems: readonly RustItem[];
@@ -470,35 +324,17 @@ function applyRustSourcePackageFacades(
 }
 
 function planRustInitializerFacadeModule(
-  sources: readonly PlannedRustSourceFile[],
   initializers: RustSourcePackageInitializerPlan,
   componentId: string,
-  diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
-  const sourceByFile = new Map(sources.map((source) => [source.sourceFile, source] as const));
   const items: RustItem[] = [];
   for (const contract of [...initializers.byFileName.values()]
     .filter((entry) => entry.componentId === componentId)
     .sort((left, right) => compareNames(left.facadeFunctionName, right.facadeFunctionName))) {
-    const source = sourceByFile.get(contract.sourceFile);
-    const initialization = source?.moduleInitialization;
-    const errorContractMatches = initialization?.errorRegion === contract.errorRegion;
-    if (source === undefined || initialization === undefined ||
-      initialization.functionName !== contract.implementationFunctionName ||
-      initialization.asynchronous !== contract.asynchronous || !errorContractMatches) {
-      diagnostics.push({
-        ...crateDiagnostic(
-          "RUST_SOURCE_PACKAGE_INITIALIZER_CONTRACT_MISMATCH",
-          `Source module '${contract.fileName}' does not implement its exact package initializer contract.`,
-        ),
-        sourceNode: contract.sourceFile,
-      });
-      continue;
-    }
     items.push({
       kind: "use",
       visibility: "public",
-      path: `crate::${source.moduleName}::${initialization.functionName}`,
+      path: `crate::${contract.implementationModuleName}::${contract.implementationFunctionName}`,
       alias: contract.facadeFunctionName,
     });
   }
@@ -578,43 +414,6 @@ function distinctRustUseItems(items: readonly RustItem[]): RustItem[] {
   });
 }
 
-function mergeCargoDependencies(
-  base: readonly CargoDependency[],
-  added: readonly CargoDependency[],
-  diagnostics: TargetDiagnostic[],
-): readonly CargoDependency[] {
-  const byName = new Map<string, CargoDependency>();
-  for (const dependency of [...base, ...added]) {
-    const existing = byName.get(dependency.name);
-    if (existing !== undefined &&
-      (
-        existing.path !== dependency.path ||
-        existing.registryPatch !== dependency.registryPatch ||
-        existing.defaultFeatures !== dependency.defaultFeatures ||
-        !sameCargoFeatures(existing.features, dependency.features)
-      )) {
-      diagnostics.push(crateDiagnostic(
-        "RUST_SOURCE_PACKAGE_CRATE_DEPENDENCY_CONFLICT",
-        `Cargo dependency '${dependency.name}' has contradictory source-package and runtime paths.`,
-      ));
-      continue;
-    }
-    byName.set(dependency.name, dependency);
-  }
-  return Object.freeze([...byName.values()].sort((left, right) =>
-    compareNames(left.name, right.name)));
-}
-
-function sameCargoFeatures(
-  left: readonly string[] | undefined,
-  right: readonly string[] | undefined,
-): boolean {
-  const leftValues = left ?? [];
-  const rightValues = right ?? [];
-  return leftValues.length === rightValues.length &&
-    leftValues.every((value, index) => value === rightValues[index]);
-}
-
 function prefixedPath(prefix: RustCrateArtifactPrefix, path: string): string {
   return prefix.length === 0 ? path : `${prefix}/${path}`;
 }
@@ -627,16 +426,6 @@ function cargoManifestPath(
   prefix: RustCrateArtifactPrefix,
 ): "Cargo.toml" | `crates/${string}/Cargo.toml` {
   return prefix === "" ? "Cargo.toml" : `${prefix}/Cargo.toml`;
-}
-
-function crateDiagnostic(code: string, message: string): TargetDiagnostic {
-  return {
-    code,
-    category: "error",
-    source: "tsonic-rust",
-    message,
-    evidence: ["target.capability=rust.backend.source-package-crates"],
-  };
 }
 
 function compareNames(left: string, right: string): number {

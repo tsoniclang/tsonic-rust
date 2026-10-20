@@ -142,8 +142,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     emission.runtimeReferences,
   );
   const sourcePackageCargo = cargoProject.kind === "generated"
-    ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans, diagnostics,
-      emission.linkedComponentIds)
+    ? planRustSourcePackageCargo(input)
     : undefined;
   if (cargoProject.kind === "generated" && sourcePackageCargo === undefined) {
     return rejectedTargetStage(diagnostics);
