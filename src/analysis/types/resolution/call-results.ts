@@ -4,7 +4,7 @@ import type { RustProjectTypePolicy } from "../../../target-model/types/project-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustNativeRepresentationMatches } from "../../../target-model/conversions/native-representation.js";
 import { selectRustProjectProjection } from "../../../policy/types/project/project-projections.js";
-import { selectRustFlowReadProjection } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { isRustJsValueCarrier, rustOptionElementCarrier, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { rustUnionAlternatives } from "../../../target-model/types/union-relations.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";

@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustAppliedValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
+import type { RustAppliedValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import type { RustContextualValueConversionFact, RustOptionProjectionFact, RustProjectUpcastFact } from "../../../target-model/records/value-projections.js";
 
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";

@@ -4,7 +4,7 @@ import { isRustAbsenceCarrier } from "../../../../target-model/types/index.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
 
 import { normalizeSelectedArgumentCarrier } from "../result.js";
-import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
@@ -19,7 +19,7 @@ import { selectReferenceReborrow } from "../../../../policy/conversions/referenc
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 
-import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
+import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";

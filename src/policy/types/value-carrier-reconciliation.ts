@@ -1,33 +1,24 @@
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves } from "../../../target-model/types/union-relations.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../../target-model/records/value-projections.js";
-import {
-  isRustProgramErrorCarrier,
-  rustJsErrorTargetType,
-  rustCarrierSupportsClone,
-  rustCarrierSupportsTrait,
-  rustOptionElementCarrier,
-  rustCallableProtocol,
-  rustCallableTargetType,
-} from "../../../target-model/types/index.js";
-import { rustCallableTargetId } from "../../../target-model/types/carriers/source-types.js";
-import type { RustContextualValueConversion } from "../../../target-model/conversions/contextual.js";
-import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
-import { selectRustSourceValueConversion } from "../../conversions/selection.js";
-import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
-import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
-import { rustLifetimeKey, rustLifetimesEqual } from "../../../target-model/lifetimes/index.js";
-import { rustEmptyRecordCarrier } from "../../../target-model/conversions/empty-record.js";
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { selectRustProjectProjection } from "../project/project-projections.js";
-import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
-import { selectRustCallableConversion } from "../../../target-model/conversions/callable.js";
-import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier,
-  isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
-import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
-import { selectRustProjectUnionMapping } from "../project/project-union-mappings.js";
-import { selectRustProjectTypeTestPlan } from "../../operations/operators/type-tests.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves } from "../../target-model/types/union-relations.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import { isRustProgramErrorCarrier, rustJsErrorTargetType, rustCarrierSupportsClone, rustCarrierSupportsTrait, rustOptionElementCarrier, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import { selectRustSourceValueConversion } from "../conversions/selection.js";
+import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { selectRustProjectProjection } from "./project/project-projections.js";
+import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
+import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustReadonlySourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
+import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
+import { selectRustProjectUnionMapping } from "./project/project-union-mappings.js";
+import { selectRustProjectTypeTestPlan } from "../operations/operators/type-tests.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }

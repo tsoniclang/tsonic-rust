@@ -2,8 +2,8 @@ import type { RustFlowReadProjectionFact } from "../../target-model/records/valu
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
-import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import type { RustFlowReadProjectionSelection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import type { RustFlowReadProjectionSelection } from "../../policy/types/value-carrier-reconciliation.js";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

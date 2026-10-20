@@ -22,7 +22,7 @@ import {
   rustRuntimeUnionContract,
   rustRuntimeUnionProjection,
 } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";

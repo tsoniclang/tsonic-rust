@@ -13,7 +13,7 @@ import { isRustCopyCarrier, isRustStringCarrier, isRustUnitCarrier, rustCarrierS
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
 import { rustContextualRuntimeConversionContract, rustCompilerOwnedContextualConversionMatches } from "../../target-model/conversions/contextual.js";
 import { rustProjectUnionUpcastRelation } from "../../target-model/conversions/project-union-relations.js";
-import { selectRustValueCarrierReconciliation } from "../types/resolution/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../types/value-carrier-reconciliation.js";
 
 export function selectRustCallableValueAdapter(
   sourceCarrier: TargetTypeRef,

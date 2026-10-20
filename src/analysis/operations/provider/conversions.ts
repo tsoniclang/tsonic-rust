@@ -9,7 +9,7 @@ import { providerFormRequiresSourceReceiver } from "../../../policy/operations/m
 import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
 import { finalizeProviderOperationFact } from "../../program/records/provider-operations.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
-import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
 import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
