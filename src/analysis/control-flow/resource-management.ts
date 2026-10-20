@@ -26,7 +26,7 @@ import {
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
-import { finalizeRustProviderOperationAbi } from "../operations/finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../policy/operations/members/abi/finalize.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustOperationAbiInvocationIsFallible, rustOperationAbiAwaitIsFallible } from "../operations/target-operation.js";

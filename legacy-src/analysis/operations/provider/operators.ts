@@ -22,7 +22,7 @@ import {
   KindBigIntLiteral,
   sourceSequenceInputIsEmpty,
 } from "@tsonic/target-api/source";
-import { finalizeRustProviderOperationAbi } from "../finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../policy/operations/members/abi/finalize.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";

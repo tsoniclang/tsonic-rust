@@ -1,20 +1,20 @@
-import { emptyRustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "../../../policy/operations/members/abi/inputs.js";
-import { declaredCarriersMatch, finalizeValueConversion } from "../../../policy/operations/members/abi/conversions.js";
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../target-model/operations/finalized-inputs.js";
-import { isDenseDataArray, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import { isRustAwaitedErrorBoundary, isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
-import { isRustTargetGenericArgument, isRustTargetTypeRef } from "../../../target-model/types/equality.js";
-import { operationKinds, validateRustFinalizedOperationAbi } from "../../../policy/operations/members/abi/validation.js";
-import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../target-model/types/index.js";
-import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
-import { insertRustDispatchContextInputs } from "../../../policy/operations/members/abi/dispatch-inputs.js";
-import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
-import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
+import { emptyRustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
+import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
+import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
+import { declaredCarriersMatch, finalizeValueConversion } from "./conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "../../../../target-model/operations/finalized-inputs.js";
+import { isDenseDataArray, snapshotClosedMetadata } from "../../../../target-model/metadata/closed-data.js";
+import { isRustAwaitedErrorBoundary, isRustFallibleErrorBoundary } from "../../../../target-model/operations/error-boundary.js";
+import { rustRestSequenceForm } from "../../../../target-model/operations/rest-assembly.js";
+import { isRustTargetGenericArgument, isRustTargetTypeRef } from "../../../../target-model/types/equality.js";
+import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
+import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../../target-model/types/index.js";
+import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../forms.js";
+import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationKind } from "../../../../target-model/operations/model.js";
+import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
+import { isRustNativeErrorCarriers } from "../../../../target-model/operations/native-error-carriers.js";
+import { hasExactKeys, isRecord } from "./validation-records.js";
 
 const finalizationOptionKeys = new Set([
   "operationKind", "form", "sourceReceiver", "sourceArgumentCarriers", "spreadSourceArgumentIndexes",

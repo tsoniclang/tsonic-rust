@@ -8,7 +8,7 @@ import {
   rustTargetGenericReferences,
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
-import { finalizeRustProviderOperationAbi } from "../../finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../../policy/operations/members/abi/finalize.js";
 import { rustIndexedLocationContract } from "../../indexed-location.js";
 import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/constraints/provider-generic-requirements.js";
 import {
