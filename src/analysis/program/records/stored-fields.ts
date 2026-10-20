@@ -14,6 +14,7 @@ export interface RustStoredFieldProducer {
   structural(carrier: TargetTypeRef, fields: readonly RustStructuralFieldStorage[], value: boolean): void;
   invocation(carrier: TargetTypeRef, index: number, arguments_: readonly TargetTypeRef[], value: RustStructuralMethodInvocation): void;
   receiver(node: Node, value: boolean, stable: boolean): void;
+  reference(node: Node, value: boolean): void;
 }
 
 export function createRustStoredFieldProducer(assertOpen: () => void): RustStoredFieldProducer {
@@ -23,6 +24,7 @@ export function createRustStoredFieldProducer(assertOpen: () => void): RustStore
   const invocations = new Map<string, RustStructuralMethodInvocation>();
   const receivers = new WeakMap<Node, boolean>();
   const stable = new WeakMap<Node, boolean>();
+  const references = new WeakMap<Node, boolean>();
   const admitted = new WeakMap<Node, Extract<RustTargetOperationFact, { readonly kind: "source-field" }>>();
   const projections = new WeakMap<Node, RustValueFieldProjection>();
   return Object.freeze({ records: Object.freeze({
@@ -33,8 +35,14 @@ export function createRustStoredFieldProducer(assertOpen: () => void): RustStore
     structuralObjectStorage: Object.freeze({ get: (carrier: TargetTypeRef) => objects.get(closedMetadataKey(carrier)) }),
     structuralMethodInvocation: Object.freeze({ get: (carrier: TargetTypeRef, index: number, arguments_: readonly TargetTypeRef[]) => invocations.get(closedMetadataKey([carrier, index, arguments_])) }),
     fieldValueReceiver: Object.freeze({ get: (node: Node) => receivers.get(node) }),
+    referenceObjectField: Object.freeze({ get: (node: Node) => references.get(node) }),
     capturedReceiverStable: Object.freeze({ get: (node: Node) => stable.get(node) }),
   }),
+    reference(node: Node, value: boolean): void {
+      assertOpen();
+      if (references.has(node)) failTargetAnalysisInvariant("tsonic-rust", "A native field has one reference-location owner.", node);
+      references.set(node, value);
+    },
     admit(node: Node, value: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>): void {
       assertOpen();
       if (admitted.has(node)) failTargetAnalysisInvariant("tsonic-rust", "A source field has one exact native operation admission.", node);

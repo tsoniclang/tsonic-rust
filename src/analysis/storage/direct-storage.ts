@@ -209,7 +209,17 @@ export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reach
       if (receiver !== undefined) admitPlace(receiver);
     }
     const location = program.records.typedLocationPlan.get(node);
-    if (location?.operation === "address-of") admitPlace(location.storageExpression);
+    if (location?.operation === "address-of") {
+      admitPlace(location.storageExpression);
+      if (program.records.referenceObjectField.get(location.storageExpression) === true) {
+        const field = program.records.targetOperation.get(location.storageExpression);
+        const dispatch = field?.kind === "source-field" && field.declaration !== undefined
+          ? program.records.projectFieldDispatch.get(field.declaration) : undefined;
+        if (field?.kind !== "source-field" || field.dispatch !== undefined && (field.dispatch.write === undefined || dispatch?.write === undefined))
+          refuse(location.storageExpression, "rust.backend.projected-field-address", "RUST_MISSING_TARGET_FACT",
+            "A projected native field address requires its exact physical read and write operations.");
+      }
+    }
     const assignment = program.records.assignmentCompletion.get(node);
     const operator = program.records.targetOperation.get(node);
     const left = ast.is.IsBinaryExpression(node) ? BinaryExpression_Left(ast, node) : undefined;

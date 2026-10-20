@@ -56,5 +56,6 @@ export interface RustStoredFieldRecords {
   readonly structuralObjectStorage: { readonly get: (carrier: TargetTypeRef) => { readonly value: boolean } | undefined };
   readonly structuralMethodInvocation: { readonly get: (carrier: TargetTypeRef, index: number, arguments_: readonly TargetTypeRef[]) => RustStructuralMethodInvocation | undefined };
   readonly fieldValueReceiver: { readonly get: (node: Node) => boolean | undefined };
+  readonly referenceObjectField: { readonly get: (node: Node) => boolean | undefined };
   readonly capturedReceiverStable: { readonly get: (node: Node) => boolean | undefined };
 }

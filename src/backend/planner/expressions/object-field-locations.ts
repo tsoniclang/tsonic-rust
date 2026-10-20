@@ -3,28 +3,19 @@ import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 
-import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
+import { rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustProjectObjectRepresentation, readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
+import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { rustClassFrameFieldLocation } from "../objects/frame-storage.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function rustExpressionHasReferenceObjectField(expression: Node, context: RustPlanContext): boolean {
-  const operation = context.input.program.records.targetOperation.get(expression);
-  if (operation?.kind !== "source-field") return false;
-  if (operation.storage === "structural-object") {
-    const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
-    return rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "reference" &&
-      field !== undefined && field.storage !== "bound" && field.nativeLayout === undefined;
-  }
-  const representation = rustProjectObjectRepresentation(operation.receiverCarrier, context);
-  return representation !== undefined && representation.kind !== "value";
+  return context.input.program.records.referenceObjectField.get(expression) === true;
 }
 
 export function planRustReferenceObjectFieldLocation(
@@ -36,15 +27,17 @@ export function planRustReferenceObjectFieldLocation(
   const receiverNode = Node_Expression(context.input.program.source.ast, expression);
   const boundary = rustCurrentErrorBoundary(context);
   if (operation?.kind !== "source-field" || receiverNode === undefined || boundary === undefined ||
-    context.syntheticNames === undefined || !(context.input.program.records.admittedField.get(expression) === operation)) return undefined;
+    context.syntheticNames === undefined || !(context.input.program.records.admittedField.get(expression) === operation))
+    failRustPlannerInvariant("An admitted reference field address requires its checked source receiver and native error boundary.", expression);
   const receiver = planExpression(receiverNode, context);
   if (receiver === undefined) return undefined;
   const callbackContext: RustPlanContext = { ...context, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
   const dispatch = operation.declaration === undefined ? undefined
-    : context.input.program.projectFieldDispatch.planFor(operation.declaration);
+    : context.input.program.records.projectFieldDispatch.get(operation.declaration);
   const roles = dispatch === undefined ? undefined : planRustProjectFieldDispatchRoles(dispatch, callbackContext);
-  if (operation.dispatch !== undefined && roles?.write === undefined) return undefined;
-  const framed = operation.declaration !== undefined && context.input.program.callableValues.frames.bindingFor(operation.declaration) !== undefined;
+  if (operation.dispatch !== undefined && roles?.write === undefined)
+    failRustPlannerInvariant("An admitted reference field address requires its exact native writable dispatch.", expression);
+  const framed = operation.declaration !== undefined && context.input.program.records.frameBindingDeclaration.get(operation.declaration) !== undefined;
   return planRustProjectedObjectLocation(planRustSharedReceiver(receiverNode, receiver, context), operation.operationId, callbackContext,
     reader => framed ? rustClassFrameFieldLocation(operation.declaration!, operation.receiverCarrier, reader, callbackContext)?.read
       : operation.dispatch === undefined
@@ -66,7 +59,8 @@ export function planRustProjectedObjectLocation(
   identity: (owner: RustExpr) => RustExpr = owner => owner,
 ): RustExpr | undefined {
   const errorType = rustActiveErrorType(context);
-  if (context.syntheticNames === undefined || errorType === undefined) return undefined;
+  if (context.syntheticNames === undefined || errorType === undefined)
+    failRustPlannerInvariant("An admitted projected native address requires its hygienic scope and error type.", context.callableDeclaration ?? context.sourceFile);
   const ownerName = allocateRustSyntheticName(context.syntheticNames, "location_owner");
   const readerName = allocateRustSyntheticName(context.syntheticNames, "location_reader");
   const writerName = allocateRustSyntheticName(context.syntheticNames, "location_writer");
@@ -78,12 +72,10 @@ export function planRustProjectedObjectLocation(
   const read = selectRead(reader);
   const write = selectWrite(writer, value);
   if (read === undefined || write === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.callableDeclaration ?? context.sourceFile),
-      "rust.backend.projected-field-address", "A projected native field address requires its exact physical read and write operations."));
-    return undefined;
+    failRustPlannerInvariant("An admitted projected native field address requires its physical read and write operations.", context.callableDeclaration ?? context.sourceFile);
   }
   const clone = (value: RustExpr): RustExpr => ({ kind: "method-call",
-    receiver: value.kind === "reference" ? value.expr : value, method: "clone", args: [] });
+    receiver: value, method: "clone", args: [] });
   context.usedAliases?.add("rt");
   return rustValueBlock([
     { name: ownerName, value: clone(receiver) },

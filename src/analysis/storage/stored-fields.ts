@@ -56,6 +56,7 @@ export function analyzeRustStoredFields(program: Omit<RustTargetProgram, "reacha
       const declaration = operation.kind === "source-field" ? operation.declaration : undefined;
       const captured = declaration !== undefined && (program.callableValues.frames.bindingFor(declaration) !== undefined || program.records.capturedFieldStorage.get(declaration) !== undefined);
       const structural = operation.kind === "source-field" && operation.storage === "structural-object";
+      const structuralField = structural ? program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex) : undefined;
       const representation = structural ? undefined : program.objectRepresentations.representationFor(program.projectTypes.definitionForCarrier(operation.receiverCarrier));
       const receiver = Node_Expression(program.source.ast, node);
       const reference = receiver === undefined ? undefined : program.sourceNavigation.sourceReferenceFor(receiver)?.declaration;
@@ -63,6 +64,10 @@ export function analyzeRustStoredFields(program: Omit<RustTargetProgram, "reacha
         program.source.ast.is.IsIdentifier(receiver) && reference !== undefined && !program.sourceNavigation.declarationUseSummary(reference).bindingWritten);
       producer.receiver(node, captured || operation.kind === "source-indexed-field" ||
         (structural ? rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value" : representation?.kind === "value"), stable);
+      if (operation.kind === "source-field") producer.reference(node, structural
+        ? rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "reference" && structuralField !== undefined &&
+          structuralField.storage !== "bound" && structuralField.nativeLayout === undefined
+        : representation !== undefined && representation.kind !== "value");
     }
     if (operation?.kind === "source-union-field") pending.push(...operation.variants.map(variant => variant.carrier));
     if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
