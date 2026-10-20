@@ -1,10 +1,10 @@
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import type { RustDiscardedPromiseLeaf } from "../../../target-model/records/promise-results.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
+import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../types/render.js";
 
 export function planRustDiscardedPromise(
@@ -13,7 +13,8 @@ export function planRustDiscardedPromise(
   selection: RustAwaitSelection<RustDiscardedPromiseLeaf>,
   context: RustPlanContext,
 ): RustExpr {
-  const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
+  const names = context.syntheticNames;
+  if (names === undefined) failRustPlannerInvariant("An admitted discarded Promise requires its native name scope.", node);
   const unit: RustExpr = { kind: "tuple-literal", elements: [] };
   const plan = (selected: RustAwaitSelection<RustDiscardedPromiseLeaf>, value: RustExpr): RustExpr => {
     if (selected.kind === "leaf") return selected.value.observe
@@ -28,7 +29,7 @@ export function planRustDiscardedPromise(
       ] };
     }
     const owner = rustUnionTypePathInContext(selected.carrier, context);
-    if (owner === undefined) return failTargetPlannerInvariant("tsonic-rust", "A sealed discarded Promise union has no native type identity.");
+    if (owner === undefined) return failRustPlannerInvariant("A sealed discarded Promise union has no native type identity.", node);
     const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = selected.alternatives.map(alternative => {
       const name = allocateRustSyntheticName(names, "discarded_value");
       const path = `${owner}::${alternative.variant.name}`;
