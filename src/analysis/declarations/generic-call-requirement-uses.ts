@@ -11,7 +11,7 @@ import type { Node } from "@tsonic/tsts";
 
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 
-import type { RustAnalysisRecords } from "../program/records/model.js";
+import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { isRustCopyCarrier, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";

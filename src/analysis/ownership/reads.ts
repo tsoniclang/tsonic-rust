@@ -3,7 +3,7 @@ import { Node_Expression, sourceEnclosingCallable, sourceParameterIsProperty, so
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceStorageLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact } from "../../target-model/records/ownership.js";
-import type { RustAnalysisRecords } from "../program/records/model.js";
+import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustCopyCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustLocationTargetType } from "../../target-model/types/index.js";

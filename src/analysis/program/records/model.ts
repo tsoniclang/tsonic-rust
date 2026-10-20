@@ -1,6 +1,7 @@
+import type { RustAnalysisRecords } from "../../../target-model/records/analysis.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustRequiredRecord } from "./required-records.js";
-import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
+
 import type { RustResourceScopeProducer } from "./resource-scopes.js";
 import type { RustLocalBindingProducer } from "./local-bindings.js";
 import type { RustFieldProjectionAssignmentProducer } from "./field-projection-assignment.js";
@@ -35,10 +36,7 @@ import type { RustBindingEmissionProducer } from "./binding-emission.js";
 import type { RustNativeDeclarationProducer } from "./native-declarations.js";
 import type { RustNativeLivenessProducer } from "./native-liveness.js";
 import type { RustNativeGenericProducer } from "./native-generics.js";
-import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
-import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
-import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
-import type { RustTypedLocationPlan } from "../../../target-model/records/operations.js";
+
 import type { RustNativeHandlerProducer } from "./native-handlers.js";
 import type { RustConversionProducer } from "./conversion.js";
 import type { RustOptionProjectionProducer } from "./option-projection.js";
@@ -109,14 +107,6 @@ import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
 import type { RustStatementExitProducer } from "./statement-exits.js";
 import type { RustStatementCompletionProducer } from "./statement-completion.js";
-
-export interface RustAnalysisRecords extends RustProgramRecords {
-  readonly rawLocationPlan: RustRecordFamily<RustRawLocationPlan>;
-  readonly memoryBindingPlan: RustRecordFamily<RustMemoryBindingPlan>;
-  readonly rawAddressPlan: RustRecordFamily<RustRawAddressPlan>;
-  readonly memoryLayoutObservation: RustRecordFamily<{ readonly value: number }>;
-  readonly typedLocationPlan: RustRecordFamily<RustTypedLocationPlan>;
-}
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly bindingLivenessPlans: import("./binding-liveness.js").RustBindingLivenessProducer;

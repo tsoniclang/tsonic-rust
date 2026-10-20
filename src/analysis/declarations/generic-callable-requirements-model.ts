@@ -14,7 +14,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustAnalysisRecords } from "../program/records/model.js";
+import type { RustAnalysisRecords } from "../../target-model/records/analysis.js";
 
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
