@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Initializer, type SourceProgramNavigation, type SourceProgramSemantics } from "@tsonic/target-api/source";
-import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./type-policy.js";
+import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.js";
 
 export interface RustReceiverFieldAlias {
   readonly declaration: Node;
