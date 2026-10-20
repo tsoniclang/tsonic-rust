@@ -6,7 +6,7 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
 import { asNode, isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { rustJsErrorTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
-import { readRustSourceKeepAlive } from "../../../../policy/operations/pointers/reachability.js";
+import { readRustSourceKeepAlive } from "../../../../source/extension/reachability.js";
 import { mapSelectedJsSpecialCall } from "../../object-projections.js";
 import { acceptProjectSourceCall } from "../../project-call-signatures.js";
 import { selectRustArrayTypeTest } from "../type-tests.js";
