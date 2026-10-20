@@ -8,7 +8,8 @@ import { resolveRustInstanceType } from "../../../policy/types/resolution/instan
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
-import { acceptRustOperation, rejectSelectedOperation } from "./result.js";
+import { rejectSelectedOperation } from "./result.js";
+import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
 import { selectedValueCarrier } from "../selected-values.js";
 
 import { selectedRustCallSignature } from "../../program/records/selected-call.js";

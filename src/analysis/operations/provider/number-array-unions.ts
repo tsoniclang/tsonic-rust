@@ -7,7 +7,8 @@ import { resolveSelectedJsSourceMember, resolveSelectedSourceProfilePropertyMemb
 import { selectRustNumberArrayUnionOperation } from "../../../policy/operations/source-profiles/js/number-array-unions.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
-import { acceptRustMemberOperation, elementProvenance, rejectSelectedOperation } from "./result.js";
+import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js";
+import { elementProvenance } from "../../program/records/selected-operation-values.js";
 
 export function selectRustNumberArrayUnionMember(
   request: RustCheckedPropertySelectionInput | RustCheckedElementSelectionInput,

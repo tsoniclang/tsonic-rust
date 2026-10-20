@@ -2,7 +2,7 @@ import { inferRustTargetGenericBindings, substituteRustTargetGenerics } from "..
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { rustOperationContext } from "../../../program/walk.js";
-import { providerOperationFact } from "../result.js";
+import { providerOperationFact } from "../../../../policy/operations/members/provider-templates.js";
 import { selectedSourceValueCarrier } from "../operators.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { checkedCallIsConstruction, selectedCallReceiverValueCarrier, selectedProviderCallGenericArguments } from "./instantiation.js";

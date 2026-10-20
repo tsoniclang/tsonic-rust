@@ -4,7 +4,7 @@ import { resolveRustTypeComponentEvidence } from "../../../../policy/types/resol
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
-import { providerOperationFact } from "../result.js";
+import { providerOperationFact } from "../../../../policy/operations/members/provider-templates.js";
 import { checkedCallIsConstruction, instantiateSelectedCallTemplate } from "./instantiation.js";
 import { selectedCallSourceParameterCarriers } from "./source-sequences.js";
 import { createRustJsCallRequest } from "./source-profile-request.js";

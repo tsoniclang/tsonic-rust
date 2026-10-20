@@ -1,22 +1,11 @@
+import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
 import { requireRustRecord } from "../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import {
-  isRustAbsenceCarrier,
-  isRustProgramErrorCarrier,
-  isRustNumericCarrier,
-  rustOptionElementCarrier,
-  rustOptionNestingDepth,
-  rustOptionValueCarrier,
-  isRustJsArrayCarrier,
-  isRustVecCarrier,
-} from "../../../target-model/types/index.js";
+import { isRustAbsenceCarrier, isRustProgramErrorCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustOptionValueCarrier, isRustJsArrayCarrier, isRustVecCarrier } from "../../../target-model/types/index.js";
 import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations.js";
 
-import { acceptRustPolicy, rejectRustPolicy } from "../../../policy/operations/contracts.js";
-import {
-  asNode,
-  resolveSelectedSourceProfilePropertyMembers,
-} from "../../../policy/identities/selected-source.js";
+import { rejectRustPolicy } from "../../../policy/operations/contracts.js";
+import { asNode, resolveSelectedSourceProfilePropertyMembers } from "../../../policy/identities/selected-source.js";
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 
@@ -25,41 +14,19 @@ import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolu
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 
-import { rustTargetOperationText } from "../../../target-model/operations/text.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
-import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
-import type { RustProviderFactOperationKind, RustProviderOperationTemplate, RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
+import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
+
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustProviderOperationRow } from "../../../target-model/identities/provider-relations.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-export function acceptRustOperation(
-  fact: RustTargetOperationFact,
-  provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
-  resultType: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const evidence = [{ message: `rust selected operation ${fact.operationId}` }];
-  const operation: RustTargetOperationSelection = {
-    operationId: fact.operationId,
-    operationKind: genericOperationKind(fact),
-    targetOperation: rustTargetOperationText(fact),
-    ...(resultType === undefined ? {} : { resultType }),
-    provenance,
-  };
-  return acceptRustPolicy({
-    targetFact: fact,
-    operation,
-    ...(resultType === undefined ? {} : { resultType }),
-    provenance,
-  }, evidence);
-}
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectedMemberReceiverCarrier(
   request: RustCheckedPropertySelectionInput,
@@ -338,14 +305,6 @@ export function acceptRustMemberOperation(
   return accepted;
 }
 
-export function acceptDeclarationOperation(
-  operationKind: RustTargetOperationSelection["operationKind"],
-): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  return acceptRustPolicy({
-    operation: genericOperation(`tsonic.rust.declaration.${operationKind}`, operationKind, "declaration-only"),
-  }, [{ message: "rust declaration-only checked operation" }]);
-}
-
 export function rejectSelectedOperation<T>(
   nodeOrSpan: ExtensionFactSubject,
   context: RustOperationAnalysisContext,
@@ -362,64 +321,6 @@ export function rejectSelectedOperation<T>(
     nodeOrSpan,
     evidence: [{ message: "target.capability=rust.selected-operation" }, ...evidence],
   });
-}
-
-export function providerOperationFact(
-  row: RustProviderOperationRow<RustProviderFactOperationKind>,
-): RustProviderOperationTemplate {
-  return providerOperationTemplate(row, row.operationKind);
-}
-
-export function providerOperationTemplate<
-  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind,
->(
-  row: RustProviderOperationRow<OperationKind>,
-  operationKind: OperationKind,
-): RustProviderOperationTemplate<OperationKind> {
-  return {
-    kind: "provider-operation",
-    operationId: providerOperationId(row),
-    operationKind,
-    target: row.target,
-    ...(row.dispatchInputs === undefined ? {} : { dispatchInputs: row.dispatchInputs }),
-    resultCarrier: row.resultCarrier,
-    ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
-    ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
-    ...(row.genericParameters === undefined ? {} : { genericParameters: row.genericParameters }),
-    ...(row.typeRequirements === undefined ? {} : { typeRequirements: row.typeRequirements }),
-    ...(row.targetGenericArguments === undefined ? {} : { targetGenericArguments: row.targetGenericArguments }),
-    ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
-    isAsync: row.isAsync === true,
-    isFallible: row.isFallible === true,
-    ...(row.evaluation === undefined ? {} : { evaluation: row.evaluation }),
-    errorBoundary: row.isFallible === true ? row.errorBoundary : "none",
-    ...(row.errorCarrier === undefined ? {} : { errorCarrier: row.errorCarrier }),
-    ...(row.nativeErrorCarriers === undefined ? {} : { nativeErrorCarriers: row.nativeErrorCarriers }),
-    isUnsafe: row.isUnsafe === true,
-  };
-}
-
-function providerOperationId(row: RustProviderOperationRow): string {
-  const identity = row.signatureId ?? row.memberId ?? row.exportId;
-  const segment = (value: string): string => `${value.length}:${value}`;
-  return `tsonic.rust.provider.${[
-    row.providerPackageId,
-    row.providerId,
-    row.providerVersion,
-    row.providerModuleId,
-    row.moduleSpecifier,
-    identity,
-  ].map(segment).join("")}`;
-}
-
-export function elementProvenance(request: RustCheckedElementSelectionInput): NonNullable<RustTargetOperationSelection["provenance"]> {
-  return {
-    sourceExpression: request.expression,
-    sourceReceiver: request.receiver,
-    sourceSelectedSymbol: request.sourceSelectedSymbol,
-    sourceSelectedDeclaration: request.sourceSelectedDeclaration,
-    sourceResultType: request.sourceResultType,
-  };
 }
 
 export function sourceOperationId(
@@ -452,39 +353,6 @@ export function selectedDeclarationIsCallable(
     kind === "KindConstructSignature" ||
     kind === "KindFunctionDeclaration" ||
     kind === "KindFunctionType";
-}
-
-function genericOperation(
-  operationId: string,
-  operationKind: RustTargetOperationSelection["operationKind"],
-  targetOperation: string,
-): RustTargetOperationSelection {
-  return { operationId, operationKind, targetOperation };
-}
-
-function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperationSelection["operationKind"] {
-  switch (fact.kind) {
-    case "provider-operation":
-      return fact.abi.operationKind;
-    case "tuple-index":
-    case "fixed-index":
-    case "source-index-signature":
-    case "source-indexed-field":
-      return "indexer";
-    case "source-field":
-    case "builtin-error-property":
-    case "source-method-property":
-    case "source-static-field":
-    case "source-accessor":
-    case "source-union-field":
-    case "union-property":
-    case "source-enum-member":
-      return "property";
-    case "iteration":
-      return "iteration";
-    default:
-      return "operator";
-  }
 }
 
 export function providerIdentityText(identity: ProviderDeclarationIdentity): string {
