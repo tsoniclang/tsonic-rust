@@ -4,8 +4,7 @@ import type { SourceProgramSemantics } from "@tsonic/target-api/source";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustEmissionProviderOperation, RustPhysicalEmissionSourceOccurrence,
-  RustPhysicalEmissionSourceSlot } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustEmissionProviderOperation, RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot } from "../../target-model/records/physical-emission-contexts.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../target-model/types/index.js";
 import { rustFinalizedSourceInputs } from "./finalized-operation/conversions.js";
 import { rustRuntimeSetSourceInputs } from "../control-flow/statement-completion.js";
