@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectUnionMappingProducer } from "../program/records/project-union-mappings.js";
-import { rustProjectUnionMapConversionMatches } from "../../target-model/conversions/project-union.js";
+import { rustProjectUnionMapConversionMatches } from "../../policy/conversions/project-union.js";
 import { rustProjectUnionUpcastRelation } from "../../target-model/conversions/project-union-relations.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";

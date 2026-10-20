@@ -1,25 +1,12 @@
-import type { TargetTypeRef } from "../types/model.js";
-import type { RustProjectUpcastFact } from "../records/value-projections.js";
-import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustSourceTypeCarrierValue } from "../types/carriers/source-types.js";
-import { isRustUnionArmMappings, selectRustUnionArmMapping, type RustUnionArmMapping } from "../types/union-relations.js";
-import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../metadata/closed-data.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-export type RustProjectUpcastRelation = (source: TargetTypeRef, target: TargetTypeRef) =>
-  "related" | "unrelated" | "ambiguous";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { isRustUnionArmMappings, selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
+import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
-export interface RustProjectUnionMapArm extends RustUnionArmMapping {
-  readonly upcast: Pick<RustProjectUpcastFact, "sourceCarrier" | "targetCarrier"> | null;
-}
-
-export interface RustProjectUnionMapConversion {
-  readonly kind: "project-union-map";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-  readonly arms: readonly RustProjectUnionMapArm[];
-}
-
+import type { RustProjectUpcastRelation, RustProjectUnionMapArm, RustProjectUnionMapConversion } from "../../target-model/conversions/project-union.js";
 export function selectRustProjectUnionMapConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,

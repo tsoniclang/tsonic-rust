@@ -11,7 +11,8 @@ import { rustIntegerTruncationConversionMatches } from "./integer-truncation.js"
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
 
 import { rustCallableConversionMatches } from "./callable.js";
-import { rustProjectUnionMapConversionMatches, type RustProjectUpcastRelation } from "../../target-model/conversions/project-union.js";
+import { type RustProjectUpcastRelation } from "../../target-model/conversions/project-union.js";
+import { rustProjectUnionMapConversionMatches } from "./project-union.js";
 
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 export function rustContextualRuntimeConversionContract(
