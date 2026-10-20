@@ -66,10 +66,10 @@ export function selectRustNativeMemoryLayout(
       return child;
     }
   }
-  const sizes: Readonly<Partial<Record<string, number>>> = {
-    int8: 1, uint8: 1, int16: 2, uint16: 2, int32: 4, uint32: 4,
-    int64: 8, uint64: 8, int128: 16, uint128: 16, float32: 4, float64: 8,
-    "native-int": layout.dataLayout.addressWidth / 8, "native-uint": layout.dataLayout.addressWidth / 8,
+  const sizes: Readonly<Partial<Record<string, bigint>>> = {
+    int8: 1n, uint8: 1n, int16: 2n, uint16: 2n, int32: 4n, uint32: 4n,
+    int64: 8n, uint64: 8n, int128: 16n, uint128: 16n, float32: 4n, float64: 8n,
+    "native-int": BigInt(layout.dataLayout.addressWidth) / 8n, "native-uint": BigInt(layout.dataLayout.addressWidth) / 8n,
   };
   const fields: import("../../../target-model/operations/native-memory.js").RustNativeMemoryField[] = [];
   const structural = rustStructuralObjectCarrierValue(pointeeCarrier);

@@ -35,10 +35,10 @@ export function analyzeRustNativeMemoryEmission(program: Omit<RustAnalysisProgra
     if (layout.kind === "array") {
       const fixed = rustFixedArrayCarrierValue(layout.pointeeCarrier);
       if (fixed === undefined || rustTargetConstInteger(fixed.length) !== BigInt(layout.length) ||
-        !Number.isSafeInteger(layout.stride) || layout.stride < 0)
+        typeof layout.stride !== "bigint" || layout.stride < 0n)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted array layout requires its exact native extent and stride.");
       const childWrites = visit(layout.element);
-      hasWrites = layout.length !== "0" && (layout.element.size !== 0 || childWrites);
+      hasWrites = layout.length !== "0" && (layout.element.size !== 0n || childWrites);
     } else if (layout.kind === "record") {
       hasWrites = false;
       for (const field of layout.fields) {

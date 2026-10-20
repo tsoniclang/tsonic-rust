@@ -5,7 +5,7 @@ import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 export type RustNativeArrayStorage = {
   readonly runtimeCarrier: TargetTypeRef;
   readonly layout: RustNativeMemoryLayout;
-  readonly stride: number;
+  readonly stride: bigint;
 } & ({ readonly kind: "element"; readonly declaration: Node } |
   { readonly kind: "binding" | "reference" | "literal" });
 

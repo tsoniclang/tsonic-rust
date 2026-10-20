@@ -48,11 +48,11 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
     { kind: "int-literal", text: `${layout.alignment}usize` }, { kind: "int-literal", text: `${layout.width}u32` },
     { kind: "bool-literal", value: layout.littleEndian }];
   if (layout.kind === "scalar") return { kind: "associated-call", owner, method: "scalar", args: dimensions };
-  const integer = (value: string | number): RustExpr => ({ kind: "int-literal", text: `${value}usize` });
+  const integer = (value: string | number | bigint): RustExpr => ({ kind: "int-literal", text: `${value}usize` });
   type Offset = { readonly expression: RustExpr; readonly zero: boolean };
   const addOffset = (offset: Offset, value: RustExpr): Offset => ({ zero: false,
     expression: offset.zero ? value : { kind: "binary", left: offset.expression, operator: "+", right: value } });
-  const walk = (current: RustNativeMemoryLayout, fieldValue: RustExpr, offset: Offset, alignment: number, depth: number):
+  const walk = (current: RustNativeMemoryLayout, fieldValue: RustExpr, offset: Offset, alignment: bigint, depth: number):
     { readonly read: RustExpr; readonly writes: readonly RustStmt[] } => {
     const emission = context.input.program.records.nativeLayoutEmission.get(current);
     if (emission === undefined) failRustPlannerInvariant("An admitted native layout requires each closed child plan.", context.callableDeclaration ?? context.sourceFile);
@@ -63,10 +63,10 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
       if (current.length === "0") return { read: { kind: "slice-literal", elements: [] }, writes: [] };
       const index = `index_${depth}`;
       const indexExpression: RustExpr = { kind: "path", path: index };
-      const elementOffset = current.stride === 0 ? offset : addOffset(offset,
+      const elementOffset = current.stride === 0n ? offset : addOffset(offset,
         { kind: "binary", left: indexExpression, operator: "*", right: integer(current.stride) });
       const element = walk(current.element, { kind: "index", receiver: fieldValue, index: indexExpression },
-        elementOffset, Math.min(alignment, current.element.alignment), depth + 1);
+        elementOffset, alignment < current.element.alignment ? alignment : current.element.alignment, depth + 1);
       if (!emission.hasWrites) return { read: { kind: "array-repeat", element: element.read, length: type.length }, writes: [] };
       return { read: { kind: "call", path: "core::array::from_fn", args: [
         { kind: "closure", params: [{ name: index, byRefCopy: false }], body: element.read }] },
@@ -81,7 +81,7 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
         const name = emission.fields[index];
         if (name === undefined) failRustPlannerInvariant("An admitted native field requires its selected physical name.", context.callableDeclaration ?? context.sourceFile);
         const value = walk(field.layout, { kind: "field", receiver: fieldValue, name },
-          field.offset === 0 ? offset : addOffset(offset, integer(field.offset)), Math.min(alignment, field.alignment), depth + 1);
+          field.offset === 0n ? offset : addOffset(offset, integer(field.offset)), alignment < field.alignment ? alignment : field.alignment, depth + 1);
         fields.push({ name, value: value.read }); writes.push(...value.writes);
       }
       return { read: { kind: "struct-literal", path: type.path, fields }, writes };

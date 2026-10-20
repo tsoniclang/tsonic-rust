@@ -3,23 +3,23 @@ import { rustTargetTypeRefEquals } from "../types/equality.js";
 
 interface RustNativeMemoryDimensions {
   readonly pointeeCarrier: TargetTypeRef;
-  readonly size: number;
-  readonly alignment: number;
+  readonly size: bigint;
+  readonly alignment: bigint;
   readonly width: 32 | 64;
   readonly littleEndian: boolean;
 }
 
 export type RustNativeMemoryLayout = RustNativeMemoryDimensions & (
   | { readonly kind: "scalar" | "record"; readonly fields: readonly RustNativeMemoryField[] }
-  | { readonly kind: "array"; readonly length: string; readonly stride: number; readonly element: RustNativeMemoryLayout }
+  | { readonly kind: "array"; readonly length: string; readonly stride: bigint; readonly element: RustNativeMemoryLayout }
 );
 
 export interface RustNativeMemoryField {
   readonly projection:
     | { readonly kind: "native-field"; readonly name: string }
     | { readonly kind: "value-field"; readonly storageIndex: number };
-  readonly offset: number;
-  readonly alignment: number;
+  readonly offset: bigint;
+  readonly alignment: bigint;
   readonly layout: RustNativeMemoryLayout;
 }
 

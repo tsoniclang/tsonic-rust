@@ -13,7 +13,7 @@ export interface RustNativeArrayStorageProducer {
     subjects: readonly (readonly [Node, RustNativeArrayStorage["kind"]])[],
     declaration: Node,
     layout: RustNativeMemoryLayout,
-    stride: number,
+    stride: bigint,
     runtimeCarrier: TargetTypeRef,
   ): boolean;
 }
@@ -29,7 +29,7 @@ export function createRustNativeArrayStorageProducer(
       subjects: readonly (readonly [Node, RustNativeArrayStorage["kind"]])[],
       declaration: Node,
       layout: RustNativeMemoryLayout,
-      stride: number,
+      stride: bigint,
       runtimeCarrier: TargetTypeRef,
     ): boolean {
       assertOpen();
