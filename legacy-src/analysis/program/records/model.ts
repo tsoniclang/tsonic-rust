@@ -119,6 +119,7 @@ export interface RustAnalysisRecords extends RustProgramRecords {
 }
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
+  readonly bindingLivenessPlans: import("./binding-liveness.js").RustBindingLivenessProducer;
   readonly lambdaEmissionPlans: import("./lambda-emission.js").RustLambdaEmissionProducer;
   readonly integerTruncationPlans: import("./integer-truncation.js").RustIntegerTruncationProducer;
   readonly providerFormPlans: import("./provider-forms.js").RustProviderFormProducer;

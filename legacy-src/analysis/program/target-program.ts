@@ -26,6 +26,7 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
+import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
 import { analyzeRustBindingProjectionEmission } from "../control-flow/binding-emission.js";
 import { analyzeRustReadOwnership } from "../ownership/reads.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
@@ -361,6 +362,8 @@ export function analyzeRustTargetProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
+  const bindingLivenessIssues = analyzeRustBindingLiveness(context.source, ownershipFlow.flow, records, context.records.bindingLivenessPlans);
+  if (bindingLivenessIssues.length !== 0) return rejectedTargetStage(bindingLivenessIssues);
   const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,

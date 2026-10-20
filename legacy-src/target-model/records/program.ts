@@ -63,6 +63,8 @@ export interface RustRecordFamily<T> {
 
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
+  readonly bindingLiveness: import("./binding-liveness.js").RustBindingLivenessRecords["bindingLiveness"];
+  readonly unobservedWrite: import("./binding-liveness.js").RustBindingLivenessRecords["unobservedWrite"];
   readonly providerSlice: import("./provider-inputs.js").RustProviderInputRecords["providerSlice"];
   readonly providerReference: import("./provider-inputs.js").RustProviderInputRecords["providerReference"];
   readonly argumentView: import("./argument-views.js").RustArgumentViewRecords["argumentView"];

@@ -4,6 +4,7 @@ import type { RustProgramRecords } from "../../../target-model/records/program.j
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { createRustConversionProducer } from "./conversion.js";
+import { createRustBindingLivenessProducer } from "./binding-liveness.js";
 import { createRustSourcePackageEmissionProducer } from "./source-packages.js";
 import { createRustSourceArtifactProducer } from "./artifacts.js";
 import { createRustSafetyEmissionProducer } from "./safety-emission.js";
@@ -320,6 +321,7 @@ export function createRustProgramRecordBuilder(
   const valueProjectionPlans = createRustValueProjectionProducer(assertOpen);
   const expressionExitPlans = createRustExpressionExitProducer(assertOpen);
   const completionBindingPlans = createRustCompletionBindingProducer(assertOpen);
+  const bindingLivenessPlans = createRustBindingLivenessProducer(assertOpen);
   const conversionEmissionPlans = createRustConversionEmissionProducer(assertOpen);
   const errorTransportEmissionPlans = createRustErrorTransportEmissionProducer(assertOpen);
   const dispatchContextEmissionPlans = createRustDispatchContextEmissionProducer(assertOpen);
@@ -425,6 +427,7 @@ export function createRustProgramRecordBuilder(
     ...valueProjectionPlans.records,
     ...expressionExitPlans.records,
     ...completionBindingPlans.records,
+    ...bindingLivenessPlans.records,
     ...conversionEmissionPlans.records,
     ...errorTransportEmissionPlans.records,
     ...dispatchContextEmissionPlans.records,
@@ -593,6 +596,7 @@ export function createRustProgramRecordBuilder(
     valueProjectionPlans,
     expressionExitPlans,
     completionBindingPlans,
+    bindingLivenessPlans,
     conversionEmissionPlans,
     errorTransportEmissionPlans,
     dispatchContextEmissionPlans,
