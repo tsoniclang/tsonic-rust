@@ -11,7 +11,7 @@ import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustR
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
+import { resolveArrayLiteralCarrier } from "./array-literals.js";
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
