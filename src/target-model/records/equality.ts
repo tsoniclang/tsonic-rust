@@ -6,9 +6,7 @@ import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataR
 import { isRustCapturedFieldStorage } from "../types/field-storage.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustLifetimesEqual } from "../lifetimes/index.js";
-import type {
-  RustAsyncFunctionFact, RustGeneratorFact, RustJsPromiseLowering, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver,
-} from "./callables-and-resources.js";
+import type { RustAsyncFunctionFact, RustGeneratorFact, RustJsPromiseLowering, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
 
 export function rustSourceCallableReturnFactEquals(left: RustSourceCallableReturnFact, right: RustSourceCallableReturnFact): boolean {
   return rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
