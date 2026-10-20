@@ -160,7 +160,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
     } else if (carrier.kind === "type-parameter" || carrier.kind === "source-primitive") children = [];
     else if (carrier.kind === "target-named") children = argumentTypes(carrier.genericArguments);
     else if (carrier.kind === "trait-ref") {
-      children = [...argumentTypes(carrier.genericArguments), ...carrier.associatedConstraints.flatMap(constraint => constraint.kind === "equality" ? [constraint.type] : constraint.traits)];
+      children = [...argumentTypes(carrier.genericArguments), ...carrier.associatedConstraints.flatMap<TargetTypeRef>(constraint => constraint.kind === "equality" ? [constraint.type] : constraint.traits)];
       nested = false;
     } else if (carrier.kind === "function-pointer" || carrier.kind === "trait-object" || carrier.kind === "associated-type") {
       children = rustTargetTypeChildren(carrier); nested = false;
