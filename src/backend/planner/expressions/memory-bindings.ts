@@ -5,21 +5,21 @@ import type { RustPlanContext } from "../program/plan-context.js";
 
 import { createRustStructuralObjectFromCarrier } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustEmptyObjectTargetType } from "../../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustMemoryBinding(
-  _node: Node, plan: RustMemoryBindingPlan, context: RustPlanContext,
+  node: Node, plan: RustMemoryBindingPlan, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): RustExpr | undefined {
   if (plan.kind === "field") return planExpression(plan.expression, context);
-  if (rustTargetTypeRefEquals(plan.carrier, rustEmptyObjectTargetType())) {
-    return plan.fields.length === 0
-      ? { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] }
-      : undefined;
+  const emission = context.input.program.records.typeEmission.get(plan.carrier);
+  if (emission === undefined) failRustPlannerInvariant("An admitted bound record requires its native representation.", node);
+  if (emission.emptyRecord === "native-empty") {
+    if (plan.fields.length !== 0) failRustPlannerInvariant("An admitted native empty record has no field locations.", node);
+    return { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] };
   }
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted bound record requires hygienic location names.", node);
   const bindings: { name: string; value: RustExpr }[] = [];
   const fields: { kind: "bound"; value: RustExpr }[] = [];
   for (const field of plan.fields) {
