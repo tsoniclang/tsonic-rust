@@ -25,7 +25,8 @@ import {
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation } from "../../../program/records/value-carrier-admission.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 
 import { rustArgumentPassingMode } from "../../../callables/parameter-passing.js";

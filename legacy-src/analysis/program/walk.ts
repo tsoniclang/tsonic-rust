@@ -50,7 +50,7 @@ import type { RustCaptureStorage } from "../callables/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordRustConversionSelection } from "../conversions/value-carrier-queries.js";
+import { recordRustConversionSelection } from "./records/value-carrier-admission.js";
 import type { RustOperationAttempt } from "./operation-attempts.js";
 import type { RustCallableSignatureState } from "../callables/signature-query.js";
 import type { RustInferredReturnMemo } from "../callables/inferred-return.js";

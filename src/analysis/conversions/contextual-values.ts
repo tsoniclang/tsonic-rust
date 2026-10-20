@@ -6,7 +6,8 @@ import { selectRustIntegerTruncationConversion } from "../../policy/conversions/
 import { selectRustKnownNumericValueConversion } from "../../policy/conversions/selection.js";
 
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustConversionSelection, recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
+import { recordRustConversionSelection } from "../program/records/value-carrier-admission.js";
+import { recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 

@@ -13,7 +13,8 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 

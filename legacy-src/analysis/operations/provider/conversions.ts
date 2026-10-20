@@ -10,7 +10,8 @@ import {
 } from "./calls/template-instantiation.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
 import { sourceExpressionResultDisposition } from "@tsonic/target-api/source";
