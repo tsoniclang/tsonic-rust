@@ -1,11 +1,7 @@
 import type { Node, SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustBinaryOperator } from "../syntax/tokens.js";
 import type { RustErrorBoundary, RustFallibleErrorBoundary, RustOperationErrorBoundary } from "./error-boundary.js";
-import type {
-  RustTargetAssociatedConstraint,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../types/model.js";
+import type { RustTargetAssociatedConstraint, RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import type { RustLifetimeBinder } from "../lifetimes/index.js";
 import type { RustExactIntegerConversion } from "../conversions/exact-integer.js";
 import type { RustIntegerRefinementConversion } from "../conversions/integer-refinement.js";
