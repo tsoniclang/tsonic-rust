@@ -1,24 +1,6 @@
-import {
-  compilerTypeSupportsRequirement,
-  directImplementationTypeParameterPositions,
-  normalizeType,
-  sourceVisibleTypeParameterCount,
-  substituteRustCompilerTrait,
-  substituteRustCompilerType,
-  typeParameterGuaranteesRequirement,
-  typeRequirementKey,
-} from "../rustdoc-types.js";
+import { compilerTypeSupportsRequirement, directImplementationTypeParameterPositions, normalizeType, sourceVisibleTypeParameterCount, substituteRustCompilerTrait, substituteRustCompilerType, typeParameterGuaranteesRequirement, typeRequirementKey } from "../rustdoc-types.js";
 import { compareText } from "../rustdoc-schema.js";
-import type {
-  RustCompilerDependency,
-  RustCompilerGenericParameter,
-  RustCompilerItemIdentity,
-  RustCompilerGenericArgument,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-  RustCompilerTypeParameter,
-  RustCompilerTypeRequirement,
-} from "../model.js";
+import type { RustCompilerDependency, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerGenericArgument, RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeParameter, RustCompilerTypeRequirement } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustCompilerSubstitutions } from "../rustdoc-types.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
