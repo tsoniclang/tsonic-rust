@@ -111,6 +111,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly projectMethodPropertyPath: import("./project-classes.js").RustProjectClassRecords["projectMethodPropertyPath"];
   readonly projectMemberImplementation: import("./project-classes.js").RustProjectClassRecords["projectMemberImplementation"];
   readonly projectCallableSignature: import("./project-classes.js").RustProjectClassRecords["projectCallableSignature"];
+  readonly projectCallableAdapter: import("./project-classes.js").RustProjectClassRecords["projectCallableAdapter"];
   readonly structuralFieldStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralFieldStorage"];
   readonly structuralObjectStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralObjectStorage"];
   readonly structuralMethodInvocation: import("./stored-fields.js").RustStoredFieldRecords["structuralMethodInvocation"];

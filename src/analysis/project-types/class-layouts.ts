@@ -14,6 +14,7 @@ import { selectRustProjectCallableSignature } from "../../policy/objects/project
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
+import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
@@ -72,6 +73,18 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     } else producer.callable(member, signature);
   }
   if (issues.length !== 0) return Object.freeze(issues);
+  for (const definition of program.projectTypes.definitions) {
+    const index = new Map<Node, Map<Node, Map<string, RustProjectCallableAdapter>>>();
+    for (const adapter of program.records.projectCallableAdapters.get(definition.declaration) ?? []) {
+      let implementations = index.get(adapter.contract);
+      if (implementations === undefined) { implementations = new Map(); index.set(adapter.contract, implementations); }
+      let slots = implementations.get(adapter.implementation);
+      if (slots === undefined) { slots = new Map(); implementations.set(adapter.implementation, slots); }
+      if (slots.has(adapter.slot)) failTargetAnalysisInvariant("tsonic-rust", "An admitted native callable adapter requires one exact contract, implementation and slot.", adapter.contract);
+      slots.set(adapter.slot, adapter);
+    }
+    producer.adapters(definition.declaration, index);
+  }
   const instance = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef) => {
     let contexts = instanceCache.get(definition);
     if (contexts === undefined) { contexts = new Map(); instanceCache.set(definition, contexts); }

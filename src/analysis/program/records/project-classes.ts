@@ -4,8 +4,10 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../../../target-model/types/project-types.js";
 import type { RustProjectClassRecords, RustProjectCallableSignature, RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../../target-model/records/project-classes.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import type { RustProjectCallableAdapterIndex } from "../../../target-model/records/project-classes.js";
 
 export interface RustProjectClassProducer {
+  adapters(concrete: Node, values: RustProjectCallableAdapterIndex): void;
   contracts(carrier: TargetTypeRef, values: readonly RustProjectInstanceContract[]): void;
   alias(source: TargetTypeRef, target: TargetTypeRef, value: { readonly same: boolean; readonly polymorphic: boolean }): void;
   readonly records: RustProjectClassRecords;
@@ -29,7 +31,9 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
   const callables = new WeakMap<Node, RustProjectCallableSignature>();
   const aliases = new Map<string, { readonly same: boolean; readonly polymorphic: boolean }>();
   const contracts = new Map<string, readonly RustProjectInstanceContract[]>();
+  const adapters = new WeakMap<Node, RustProjectCallableAdapterIndex>();
   return Object.freeze({ records: Object.freeze({
+    projectCallableAdapter: Object.freeze({ get: (concrete: Node, contract: Node, implementation: Node, slot: string) => adapters.get(concrete)?.get(contract)?.get(implementation)?.get(slot) }),
     projectInstanceContracts: Object.freeze({ get: (carrier: TargetTypeRef) => contracts.get(closedMetadataKey(carrier)) }),
     receiverAlias: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => aliases.get(closedMetadataKey([source, target])) }),
     projectClassMembers: Object.freeze({ get: (definition: RustProjectTypeDefinition) => members.get(definition) }),
@@ -42,6 +46,11 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
     projectMemberImplementation: Object.freeze({ get: (definition: RustProjectTypeDefinition, member: Node) => implementations.get(definition)?.get(member) }),
     projectCallableSignature: Object.freeze({ get: (member: Node) => callables.get(member) }),
   }),
+    adapters(concrete: Node, values: RustProjectCallableAdapterIndex): void {
+      assertOpen();
+      if (adapters.has(concrete)) failTargetAnalysisInvariant("tsonic-rust", "A concrete native class has one exact callable-adapter index owner.", concrete);
+      adapters.set(concrete, values);
+    },
     contracts(carrier: TargetTypeRef, values: readonly RustProjectInstanceContract[]): void {
       assertOpen();
       const key = closedMetadataKey(carrier);

@@ -1,6 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../types/project-types.js";
+import type { RustProjectCallableAdapter } from "./project-callable-adapters.js";
+
+export type RustProjectCallableAdapterIndex = ReadonlyMap<Node, ReadonlyMap<Node, ReadonlyMap<string, RustProjectCallableAdapter>>>;
 
 export interface RustProjectFieldEmission {
   readonly storage: "stored" | "receiver-alias";
@@ -38,6 +41,7 @@ export interface RustProjectCallableSignature {
 }
 
 export interface RustProjectClassRecords {
+  readonly projectCallableAdapter: { readonly get: (concrete: Node, contract: Node, implementation: Node, slot: string) => RustProjectCallableAdapter | undefined };
   readonly projectInstanceContracts: { readonly get: (carrier: TargetTypeRef) => readonly RustProjectInstanceContract[] | undefined };
   readonly receiverAlias: { readonly get: (source: TargetTypeRef, target: TargetTypeRef) => { readonly same: boolean; readonly polymorphic: boolean } | undefined };
   readonly projectClassMembers: { readonly get: (definition: RustProjectTypeDefinition) => readonly Node[] | undefined };

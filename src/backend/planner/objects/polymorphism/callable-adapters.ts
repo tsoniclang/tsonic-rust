@@ -1,21 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustCallableParameterAbi } from "../../../../target-model/records/callable-adapters.js";
-
-import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
-import type { RustExpr, RustFunctionParam, RustImplFunction, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
+import type { RustExpr, RustImplFunction, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { applyRustCallableValueAdapter } from "../../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../../declarations/callables/parameter-adapters.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput, rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
-import { rustParameterTypeFromCarrierInContext, rustReturnTypeFromCarrierInContext } from "../../types/render.js";
+import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { readRustProjectMethodOverride } from "../project-objects.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import type { ProjectCallableShape } from "./model.js";
 
 export function planRootCallableForwarder(
@@ -29,20 +25,11 @@ export function planRootCallableForwarder(
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const concrete = context.input.program.projectTypes.definitionForCarrier(concreteCarrier);
-  const representation = context.input.program.objectRepresentations.representationFor(concrete);
-  const matches = concrete === undefined ? []
-    : (context.input.program.records.projectCallableAdapters.get(concrete.declaration) ?? [])
-      .filter(adapter => adapter.contract === contract && adapter.implementation === implementation && adapter.slot === slot);
-  const adapter = matches.length === 1 ? matches[0] : undefined;
-  if (representation === undefined || adapter === undefined ||
-    !matchesAbi(adapter.parameters, adapter.returnCarrier, shape.params, shape.returnType, shape.errorType, context) ||
-    !matchesAbi(adapter.implementationParameters, adapter.implementationReturnCarrier,
-      helper.params, helper.returnType, helper.errorType, context) ||
-    !matchesAbi(adapter.parameterAdapters.map(parameter => parameter.target), adapter.implementationReturnCarrier,
-      helper.params, helper.returnType, helper.errorType, context) ||
-    helper.errorType !== undefined && !rustTypeEquals(helper.errorType, shape.errorType) ||
-    (helper.isUnsafe === true) !== shape.isUnsafe) {
+  const concrete = context.input.program.records.projectType.get(concreteCarrier);
+  const representation = context.input.program.records.objectRepresentation.get(concrete);
+  const adapter = concrete === undefined ? undefined
+    : context.input.program.records.projectCallableAdapter.get(concrete.declaration, contract, implementation, slot);
+  if (representation === undefined || adapter === undefined) {
     return reject();
   }
   const boundary = shape.errorType === undefined ? undefined : rustErrorBoundaryForProjectMember(contract, context);
@@ -99,27 +86,7 @@ export function planRootCallableForwarder(
       : applyRustFallibleResultExpression(converted, { errorType: shape.errorType });
   }
 
-  function reject(): undefined {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, implementation),
-      "rust.backend.project-dispatch-signature",
-      "Selected project member implementation does not preserve its finalized contract-to-implementation Rust ABI adapter."));
-    return undefined;
+  function reject(): never {
+    return failRustPlannerInvariant("An admitted project member requires its exact sealed contract-to-implementation native ABI adapter.", implementation);
   }
-}
-
-function matchesAbi(
-  parameters: readonly RustCallableParameterAbi[],
-  returnCarrier: TargetTypeRef,
-  emittedParameters: readonly RustFunctionParam[],
-  emittedReturn: RustType | undefined,
-  errorType: RustType | undefined,
-  context: RustPlanContext,
-): boolean {
-  if (parameters.length !== emittedParameters.length || parameters.some((parameter, index) => {
-    const type = rustParameterTypeFromCarrierInContext(parameter.parameterCarrier, context);
-    return type === undefined || !rustTypeEquals(type, emittedParameters[index]?.type);
-  })) return false;
-  const unit = isRustUnitCarrier(returnCarrier) || errorType !== undefined && isRustNeverCarrier(returnCarrier);
-  const result = unit ? undefined : rustReturnTypeFromCarrierInContext(returnCarrier, context);
-  return (unit || result !== undefined) && rustTypeEquals(result, emittedReturn);
 }
