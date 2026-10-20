@@ -1,39 +1,17 @@
-import {
-  TstsSourceProviderContractVersion,
-} from "@tsonic/tsts";
+import type { RustProviderContractValidation } from "../model/contract-validation.js";
+import { TstsSourceProviderContractVersion } from "@tsonic/tsts";
 import { resolve } from "node:path";
 import { refineNativeExportDeclaration } from "./projection/declaration-state.js";
-import type {
-  ExtensionDiagnostic,
-  ProviderDeclarationModel,
-  ProviderDeclarationRequest,
-  ProviderModuleResolution,
-  SourceDeclarationProvider,
-} from "@tsonic/tsts";
+import type { ExtensionDiagnostic, ProviderDeclarationModel, ProviderDeclarationRequest, ProviderModuleResolution, SourceDeclarationProvider } from "@tsonic/tsts";
 import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
-import type {
-  RustProviderOperationDefinition,
-  RustProviderTypeDefinition,
-} from "../../target-model/identities/provider-relations.js";
+import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../target-model/identities/provider-relations.js";
 import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import type { RustProviderModuleDefinition, RustProviderPackageDefinition } from "../packages/model.js";
-import {
-  mergeRustProviderSemantics,
-  collectRustProviderSemanticsFromDefinitions,
-} from "../packages/semantics.js";
+import { mergeRustProviderSemantics, collectRustProviderSemanticsFromDefinitions } from "../packages/semantics.js";
 import { rustProviderBindingProviderId } from "../packages/source-provider.js";
-import type {
-  RustCompilerDependency,
-  RustCompilerProjectSnapshot,
-} from "./model/model.js";
-import {
-  compilerModulePathFromSpecifier,
-  compilerModuleSpecifier,
-  compilerProviderModuleId,
-  compilerProviderVersion,
-  projectRustCompilerModule,
-} from "./projection/projection.js";
+import type { RustCompilerDependency, RustCompilerProjectSnapshot } from "./model/model.js";
+import { compilerModulePathFromSpecifier, compilerModuleSpecifier, compilerProviderModuleId, compilerProviderVersion, projectRustCompilerModule } from "./projection/projection.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
@@ -59,6 +37,7 @@ export interface RustCompilerProviderSession {
 export function createRustCompilerProviderSession(
   context: {
     readonly configuration: RustTargetConfiguration;
+    readonly contracts: RustProviderContractValidation;
     readonly cacheRoot: string;
   },
   worker: RustCompilerWorkerClient = createRustCompilerWorkerClient(
@@ -69,6 +48,7 @@ export function createRustCompilerProviderSession(
   const standardSnapshotLease = createCompilerSnapshotLease(standardSnapshot);
   const standardVersion = compilerProviderVersion(standardSnapshot.digest);
   const standardRegistry = createProjectionRegistry({
+    contracts: context.contracts,
     packageId: rustStandardProviderPackageId,
     displayName: "Rust standard-library compiler provider",
     providerVersion: standardVersion,
@@ -107,6 +87,7 @@ export function createRustCompilerProviderSession(
   const snapshotLease = createCompilerSnapshotLease(snapshot);
   const providerVersion = compilerProviderVersion(snapshot.digest);
   const registry = createProjectionRegistry({
+    contracts: context.contracts,
     packageId: rustCompilerProviderPackageId,
     displayName: "Rust Cargo compiler provider",
     providerVersion,
@@ -305,6 +286,7 @@ interface ProjectionRegistry {
 }
 
 function createProjectionRegistry(options: {
+  readonly contracts: RustProviderContractValidation;
   readonly packageId: string;
   readonly displayName: string;
   readonly providerVersion: string;
@@ -446,7 +428,7 @@ function createProjectionRegistry(options: {
           ? {}
           : { carrierTraits: Object.freeze(carrierTraitRecord) }),
       });
-      sealedSemantics = collectRustProviderSemanticsFromDefinitions([definition]);
+      sealedSemantics = collectRustProviderSemanticsFromDefinitions([definition], options.contracts);
       return sealedSemantics;
     },
     close(): void {
