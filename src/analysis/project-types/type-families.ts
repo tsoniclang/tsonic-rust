@@ -1,10 +1,7 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type {
-  RustSourceTypeFamily,
-  RustSourceTypeFamilyImplementation,
-  RustSourceTypeFamilyRegistry,
-} from "../../target-model/types/type-families.js";
+import type { RustSourceTypeFamily, RustSourceTypeFamilyImplementation, RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings, rustTargetTypePatternsAreNominallyDisjoint } from "../../target-model/types/carriers/generic-inference.js";
@@ -25,7 +22,7 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
   const fieldKeys = new Map<string, string>();
   let sealed = false;
   const assertWritable = (): void => {
-    if (sealed) throw new Error("Rust source type families are already sealed.");
+    if (sealed) failTargetAnalysisInvariant("tsonic-rust", "Rust source type families are already sealed.");
   };
   const key = (trait: RustTargetTraitRef, owner: TargetTypeRef): string =>
     closedMetadataKey({ trait, owner });
