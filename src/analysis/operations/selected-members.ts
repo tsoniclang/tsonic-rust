@@ -5,7 +5,7 @@ import { rustCheckedElementRequestsEqual, rustCheckedPropertyRequestsEqual } fro
 import { admitRustOperationSelection } from "./operation-admission.js";
 import { resolveRustCheckedElementAccess } from "./provider/elements-and-iteration.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
-import { resolveRustCheckedPropertyAccess } from "./provider/properties.js";
+import { resolveRustCheckedPropertyAccess } from "./member-access.js";
 
 export function selectRustCheckedPropertyAccess(
   request: RustCheckedPropertySelectionInput, context: RustOperationAnalysisContext, options: RustOperationsProviderOptions,

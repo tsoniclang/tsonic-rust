@@ -14,7 +14,7 @@ import { rustSourceOptionalElementCarrier } from "../../target-model/types/carri
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { checkedPropertySelectionInput } from "../operations/provider/properties.js";
+import { checkedPropertySelectionInput } from "../operations/member-access.js";
 import { selectRustCheckedPropertyAccess } from "../operations/selected-members.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
