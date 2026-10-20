@@ -46,6 +46,7 @@ import { analyzeRustSourcePackageInitializers } from "../source-modules/package-
 import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries } from "../errors/source-packages.js";
 import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.js";
 import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
+import { analyzeRustSourceFileEmission } from "../source-modules/emission.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -587,6 +588,8 @@ export function analyzeRustTargetProgram(
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
+  const sourceFileEmissionIssues = analyzeRustSourceFileEmission(program, context.records.sourceFileEmissionPlans);
+  if (sourceFileEmissionIssues.length !== 0) return rejectedTargetStage(sourceFileEmissionIssues);
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);

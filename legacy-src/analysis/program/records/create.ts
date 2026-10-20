@@ -6,6 +6,7 @@ import { maximumRustFoundation, type RustFoundation } from "../../../target-mode
 import { createRustConversionProducer } from "./conversion.js";
 import { createRustSourcePackageEmissionProducer } from "./source-packages.js";
 import { createRustSourceBindingEmissionProducer } from "./binding-paths.js";
+import { createRustSourceFileEmissionProducer } from "./source-file-emission.js";
 import { createRustTypeEmissionProducer } from "./type-emission.js";
 import { createRustBorrowedInitializerProducer } from "./borrowed-initializers.js";
 import { createRustCaptureStorageProducer } from "./capture-storage.js";
@@ -219,6 +220,7 @@ export function createRustProgramRecordBuilder(
   const projectEmissionPlans = createRustProjectEmissionProducer(assertOpen);
   const sourcePackageEmission = createRustSourcePackageEmissionProducer(assertOpen);
   const sourceBindingEmissionPlans = createRustSourceBindingEmissionProducer(assertOpen);
+  const sourceFileEmissionPlans = createRustSourceFileEmissionProducer(assertOpen);
   const carrierReadPlans = createRustCarrierReadProducer(assertOpen);
   const typeEmissionPlans = createRustTypeEmissionProducer(assertOpen);
   const indexedRecordPlans = createRustIndexedRecordProducer(assertOpen);
@@ -269,6 +271,7 @@ export function createRustProgramRecordBuilder(
     ...projectEmissionPlans.records,
     ...sourcePackageEmission.records,
     ...sourceBindingEmissionPlans.records,
+    ...sourceFileEmissionPlans.records,
     ...carrierReadPlans.records,
     ...indexedRecordPlans.records,
     ...objectProjectionPlans.records,
@@ -385,6 +388,7 @@ export function createRustProgramRecordBuilder(
     projectEmissionPlans,
     sourcePackageEmission,
     sourceBindingEmissionPlans,
+    sourceFileEmissionPlans,
     carrierReadPlans,
     typeEmissionPlans,
     indexedRecordPlans,

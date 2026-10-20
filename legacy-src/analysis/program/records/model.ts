@@ -120,6 +120,7 @@ export interface RustAnalysisRecords extends RustProgramRecords {
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;
+  readonly sourceFileEmissionPlans: import("./source-file-emission.js").RustSourceFileEmissionProducer;
   readonly sourcePackageEmission: import("./source-packages.js").RustSourcePackageEmissionProducer;
   readonly statementExits: RustStatementExitProducer;
   readonly statementCompletions: RustStatementCompletionProducer;
