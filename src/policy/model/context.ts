@@ -11,6 +11,7 @@ import type { RustSourceCallableQueries } from "../../target-model/records/sourc
 import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 
 export interface RustSourcePolicyContext {
+  readonly integerRanges: import("../../target-model/records/integer-ranges.js").RustIntegerRangeIndex;
   readonly callableRepresentation: "signature" | "storage";
   readonly typeDefinitions: RustTypeDefinitions;
   readonly source: TargetSourceProgram;

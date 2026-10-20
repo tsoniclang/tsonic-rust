@@ -1,3 +1,4 @@
+import { createRustIntegerRangeIndex } from "./records/integer-ranges.js";
 import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex, createTsonicPointerBackingDemands, type TsonicPointerBackingDemands, createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput, TargetSelection } from "@tsonic/target-api";
@@ -172,6 +173,7 @@ export function createRustAnalysisContext(
   return resolvedTargetStage<RustAnalysisContext>(Object.freeze({
     callableRepresentation: "storage" as const,
     literalValues,
+    integerRanges: createRustIntegerRangeIndex(input.source, sourceStorage.nodes),
     sourceProfiles,
     sourceStorage,
     nativeNodes,

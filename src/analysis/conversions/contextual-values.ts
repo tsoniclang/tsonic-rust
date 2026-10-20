@@ -35,8 +35,7 @@ export function applyRustOptionalValueCarrier(
     !rustTargetTypeRefEquals(resolved, target)) {
     const scalarTarget = expectedOptionElement ?? target;
     const retained = walk.context.records.contextualValueConversion.get(expression);
-    const refined = selectRustGuardedIntegerConversion({ ast: walk.context.ast, navigation: walk.context.source.navigation,
-      sourceFacts: walk.context.source.sourceFacts }, expression, resolved, scalarTarget);
+    const refined = selectRustGuardedIntegerConversion({ integerRanges: walk.context.integerRanges }, expression, resolved, scalarTarget);
     const exactInteger = refined ?? (integerConversion === "exact"
       ? selectRustExactIntegerConversion(resolved, scalarTarget) : undefined);
     const scalarConversion = selectRustKnownNumericValueConversion(resolved, scalarTarget,
