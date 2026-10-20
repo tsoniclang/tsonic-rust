@@ -85,7 +85,7 @@ export function rustTargetOperationIsFallible(
   fact: RustTargetOperationFact | undefined,
   structuralStorage: RustStructuralStorageLookup,
   projectFieldDispatch: RustProjectFieldDispatchLookup,
-  frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan,
+  frozenDataWrites: import("../../target-model/records/frozen-data.js").RustFrozenDataWritePlan,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (fact === undefined) {

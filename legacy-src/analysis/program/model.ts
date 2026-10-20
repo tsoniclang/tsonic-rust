@@ -90,7 +90,7 @@ export interface RustTargetProgram {
   readonly ownership: import("../../target-model/records/ownership.js").RustOwnershipRecords;
   readonly retainedCallableInputs: import("../callables/retained-inputs.js").RustRetainedCallableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;
-  readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
+  readonly frozenDataWrites: import("../../target-model/records/frozen-data.js").RustFrozenDataWritePlan;
   readonly classValues: import("../../target-model/records/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextDeclarations;

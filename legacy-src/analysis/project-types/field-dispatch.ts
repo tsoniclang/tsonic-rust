@@ -9,7 +9,7 @@ import type {
   RustProjectTypePolicy,
 } from "./type-policy.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
-import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
+import type { RustFrozenDataWritePlan } from "../../target-model/records/frozen-data.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 
 import type { RustProjectFieldDispatchPlan } from "../../target-model/records/field-writes.js";

@@ -11,12 +11,10 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 
 import type { RustFrozenWriteReceiver } from "../../target-model/records/field-writes.js";
 
-export interface RustFrozenDataWritePlan {
-  receiverFor(storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number): RustFrozenWriteReceiver | undefined;
-  receiverForDeclaration(declaration: Node): RustFrozenWriteReceiver | undefined;
-  capturesFieldIdentity(declaration: Node, reference?: Node): boolean;
-}
-
+import type { RustFrozenDataWritePlan } from "../../target-model/records/frozen-data.js";
+import { createRustFrozenDataWriteRecords } from "../program/records/frozen-data.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
 export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {
   initialize(input: {
     readonly jsEnabled: boolean;
@@ -68,20 +66,27 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
         }
         fields.set(definition, selected);
       }
-      current = Object.freeze({
-        receiverFor(storage: "project-object" | "structural-object", carrier: TargetTypeRef, index: number) {
-          if (!input.jsEnabled) return undefined;
-          if (storage === "structural-object") {
-            const field = input.structuralShapes.field(carrier, index);
-            return rustStructuralObjectCarrierValue(carrier)?.representation === "reference" && field !== undefined && field.storage !== "bound" &&
-              (field.method !== true || field.receiverIndependent === true) && field.nativeLayout === undefined ? "receiver" as const : undefined;
-          }
-          const definition = input.projectTypes.definitionForCarrier(carrier);
-          return definition === undefined ? undefined : fields.get(definition)?.get(index);
-        },
-        receiverForDeclaration: (declaration: Node) => declarations.get(declaration),
-        capturesFieldIdentity: (declaration: Node, reference?: Node) => retained?.capturesFieldIdentity(declaration, reference) === true,
-      });
+      const projectFields = new Map<string, ReadonlyMap<number, RustFrozenWriteReceiver>>();
+      for (const [definition, selected] of fields) {
+        const carrier = rustSourceTypeCarrierValue(input.projectTypes.openCarrier(definition));
+        if (carrier !== undefined) projectFields.set(JSON.stringify([carrier.fileName, carrier.typeName]), selected);
+      }
+      const structuralFields = new Map<string, ReadonlySet<number>>();
+      if (input.jsEnabled) for (const carrier of new Set([
+        ...input.structuralShapes.instances.map(shape => shape.carrier),
+        ...input.structuralShapes.definitions.flatMap(shape => shape.sourceCarriers),
+      ])) {
+        const value = rustStructuralObjectCarrierValue(carrier);
+        if (value?.representation !== "reference") continue;
+        const writable = new Set<number>();
+        for (let index = 0; index < value.fields.length; index += 1) {
+          const field = input.structuralShapes.field(carrier, index);
+          if (field !== undefined && field.storage !== "bound" &&
+            (field.method !== true || field.receiverIndependent === true) && field.nativeLayout === undefined) writable.add(index);
+        }
+        structuralFields.set(closedMetadataKey(carrier), writable);
+      }
+      current = createRustFrozenDataWriteRecords({ declarations, projectFields, structuralFields, retained });
     },
     receiverFor: (storage, carrier, index) => requireCurrent().receiverFor(storage, carrier, index),
     receiverForDeclaration: declaration => requireCurrent().receiverForDeclaration(declaration),

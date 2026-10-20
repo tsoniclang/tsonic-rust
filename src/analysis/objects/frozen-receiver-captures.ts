@@ -12,9 +12,8 @@ import type { RustStructuralShapePlan } from "./structural-shape-plan.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
-export interface RustFrozenReceiverCapturePlan {
-  capturesFieldIdentity(declaration: Node, reference?: Node): boolean;
-}
+import type { RustFrozenReceiverCapturePlan } from "../../target-model/records/frozen-data.js";
+import { createRustFrozenReceiverCaptureRecords } from "../program/records/frozen-data.js";
 
 export function analyzeRustFrozenReceiverCaptures(input: {
   readonly ast: AstReader;
@@ -32,6 +31,7 @@ export function analyzeRustFrozenReceiverCaptures(input: {
   const origins = new Map<string, { readonly carrier: TargetTypeRef; readonly sources: Map<string, TargetTypeRef> }>();
   const writes: RustReceiverFieldCapture[] = [];
   const pending: Node[] = [];
+  const sourceNodes: Node[] = [];
   let visited = 0;
   const reserve = (): void => {
     if (++visited > 4_194_304) throw new Error("Frozen receiver capture analysis exceeds its finite work budget.");
@@ -56,6 +56,7 @@ export function analyzeRustFrozenReceiverCaptures(input: {
   while (pending.length !== 0) {
     const node = pending.pop()!;
     if (!input.isNativeNode(node)) continue;
+    sourceNodes.push(node);
     const operation = input.records.targetOperation.get(node);
     if (operation?.kind === "provider-operation" && operation.abi.target.form === "call" &&
       operation.abi.target.path === "tsonic_rust_runtime::freeze_object") {
@@ -147,8 +148,11 @@ export function analyzeRustFrozenReceiverCaptures(input: {
     for (const reference of capture.references) { reserve(); references.add(reference); }
     fields.set(declaration, references);
   }
-  return Object.freeze({ capturesFieldIdentity(declaration: Node, reference?: Node): boolean {
-    const references = fields.get(input.captures.storageDeclaration(declaration));
-    return references !== undefined && (reference === undefined || references.has(reference));
-  } });
+  const entries: (readonly [Node, ReadonlySet<Node>])[] = [];
+  for (const node of sourceNodes) {
+    const references = fields.get(input.captures.storageDeclaration(node));
+    if (references !== undefined) entries.push([node, references]);
+  }
+  for (const [declaration, references] of fields) entries.push([declaration, references]);
+  return createRustFrozenReceiverCaptureRecords(entries);
 }
