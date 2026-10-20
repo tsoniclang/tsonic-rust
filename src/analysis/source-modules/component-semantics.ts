@@ -1,42 +1,18 @@
-import type {
-  TargetDiagnostic,
-} from "@tsonic/target-api/artifacts";
+import type { RustSourcePackageComponentSemantics, RustSourcePackageComponentClassifications, RustSourcePackageComponentIdentities } from "../../target-model/records/source-package-semantics.js";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput } from "@tsonic/target-api";
-import type {
-  RustErrorDomain,
-} from "../../target-model/operations/error-boundary.js";
-import type {
-  RustAnalysisContext,
-} from "./context.js";
+
+import type { RustAnalysisContext } from "../program/context.js";
 
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedErrorTransportDemand } from "../errors/closed-errors.js";
-import type { RustClosedErrorTransportDemand } from "../errors/closed-errors.js";
+
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
-
-export interface RustSourcePackageComponentSemantics {
-  readonly componentId: string;
-  readonly sourceFileNames: readonly string[];
-  readonly dependencyComponentIds: readonly string[];
-  readonly publishesImplementationAbi: boolean;
-  readonly errorDomain: RustErrorDomain;
-  readonly errorOwnerComponentId: string | undefined;
-  readonly closedErrorDemand: RustClosedErrorTransportDemand;
-  readonly root: boolean;
-}
-
-export interface RustSourcePackageComponentClassifications {
-  readonly components: readonly RustSourcePackageComponentSemantics[];
-  readonly rootComponentId: string;
-  forComponent(componentId: string): RustSourcePackageComponentSemantics | undefined;
-  componentForFile(fileName: string): RustSourcePackageComponentSemantics | undefined;
-  canReferenceFile(fromFileName: string, targetFileName: string): boolean;
-}
 
 export type AnalyzeRustSourcePackageComponentsResult =
   | {
@@ -47,15 +23,6 @@ export type AnalyzeRustSourcePackageComponentsResult =
       readonly kind: "rejected";
       readonly diagnostics: readonly TargetDiagnostic[];
     };
-
-export interface RustSourcePackageComponentIdentities {
-  readonly rootComponentId: string;
-  readonly componentById: ReadonlyMap<string, TargetCompileInput["sourcePackages"]["components"][number]>;
-  readonly sourceFileNamesByComponent: ReadonlyMap<string, ReadonlySet<string>>;
-  readonly activeComponentIds: ReadonlySet<string>;
-  readonly componentOrder: readonly string[];
-  componentIdForFile(fileName: string): string | undefined;
-}
 
 export type SelectRustSourcePackageComponentIdentitiesResult =
   | { readonly kind: "resolved"; readonly identities: RustSourcePackageComponentIdentities }

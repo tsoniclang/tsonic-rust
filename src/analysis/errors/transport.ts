@@ -7,7 +7,7 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustErrorPayloadAdmission, RustErrorPayloadVariant, RustErrorTransportQueries } from "../../target-model/records/error-transport.js";
-import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";

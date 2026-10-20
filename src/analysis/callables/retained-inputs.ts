@@ -10,7 +10,7 @@ import { rustOnlyTypeGenericArguments } from "../../target-model/types/generic-a
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
-import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";

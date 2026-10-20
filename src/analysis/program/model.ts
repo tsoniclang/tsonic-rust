@@ -23,7 +23,7 @@ import type { RustTargetConfiguration } from "../../target-model/configuration/m
 import type { RustRuntimeReferencePlan } from "../project/index.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
 import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/source-package-semantics.js";
-import type { RustSourcePackageComponentClassifications } from "./source-package-components.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";

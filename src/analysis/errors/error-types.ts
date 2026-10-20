@@ -8,7 +8,7 @@ import { rustProducerErrorReference } from "../../target-model/types/carriers/pr
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { selectRustProducerError, type RustProducerErrorContext } from "../callables/producer-errors.js";
-import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 
 export interface RustErrorTypeContext extends RustProducerErrorContext {
   readonly ast: Pick<AstReader, "getSourceFile" | "getFileName">;

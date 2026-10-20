@@ -7,7 +7,7 @@ import type { RustBinaryHookPlan } from "../project/index.js";
 import type { RustModuleInitializationPlan } from "../../target-model/records/module-initialization.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/model.js";
 import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/source-package-semantics.js";
-import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 import type { RustAnalyzedErrorRegions } from "./regions.js";

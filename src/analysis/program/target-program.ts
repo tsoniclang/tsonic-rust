@@ -27,7 +27,7 @@ import { analyzeRustBorrowEffects } from "../ownership/effects.js";
 import { analyzeRustBinaryHooks, analyzeRustDispatchContextCatalog, analyzeRustDispatchContextDemand, analyzeRustRuntimeReferences } from "../project/index.js";
 import { analyzeRustSourcePackageFacades } from "../source-modules/facade-contracts.js";
 
-import { validateRustGenericSourcePackageComponents } from "./source-package-components.js";
+import { validateRustGenericSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { analyzeRustCountedLoopRepresentations } from "../control-flow/counted-loop-representations.js";
 import { rustJsAsyncExecutor, rustJsEntryOwner } from "../../providers/model/js-dispatch.js";
 import { analyzeRustBinaryExecution } from "../project/binary-execution.js";

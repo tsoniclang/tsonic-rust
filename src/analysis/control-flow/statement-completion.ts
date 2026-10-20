@@ -38,7 +38,7 @@ import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chai
 import { admitRustAwaitBoundary } from "../callables/await-admission.js";
 import { admitRustSourceValueConversions } from "../conversions/source-admission.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
-import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
 import type { RustAssignmentValueSelection } from "../../target-model/records/operator-selection.js";
 import { selectRustAssignmentValue } from "../../policy/operations/operators/assignment-value.js";
