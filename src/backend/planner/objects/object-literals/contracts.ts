@@ -9,7 +9,7 @@ import {
 } from "../project-objects.js";
 import { applyRustCallableValueAdapter } from "../../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../../declarations/callables/parameter-adapters.js";
-import { projectOwnFields, projectOwnMethods } from "../polymorphism/model.js";
+import { projectOwnFields } from "../polymorphism/model.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
 import type {
   RustExpr,
@@ -25,7 +25,7 @@ import {
   rustErrorType,
 } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
-import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { checkRustDataWrite } from "../data-writes.js";
@@ -43,40 +43,38 @@ export function planContractImplementation(
 ): RustItem | undefined {
   const trait = rustProjectDispatchTraitType(contract.carrier, context);
   const fields = projectOwnFields(contract.definition, contract.carrier, context);
-  const representation = context.input.program.objectRepresentations.representationFor(
-    contract.definition,
-  );
-  if (trait === undefined || fields === undefined || representation === undefined ||
+  const representation = context.input.program.records.objectRepresentation.get(contract.definition);
+  const selected = context.input.program.records.projectDispatchEmission.get(contract.definition);
+  if (trait === undefined || fields === undefined || representation === undefined || selected === undefined ||
     wrapperType.kind !== "named") {
-    return undefined;
+    failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
   }
   const functions: RustImplFunction[] = [];
-  const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(contract.definition);
+  const projectionSlot = selected.projection?.slot;
   if (projectionSlot !== undefined) {
     const projection = planCheckedProjectProjectionImplementation(projectionSlot, contracts, [], context);
-    if (projection === undefined) return undefined;
+    if (projection === undefined) failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
     functions.push(projection);
   }
   for (const field of fields) {
-    const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
+    const chosen = selected.fields.get(field.declaration);
+    const dispatch = chosen?.dispatch;
     const stateField = stateFields.find((candidate) =>
       candidate.contractDeclarations.includes(field.declaration));
     const accessor = accessors.find((candidate) =>
       candidate.contractDeclarations.includes(field.declaration));
-    const read = context.input.program.projectTypes.memberSlotName(field.declaration, "read");
-    const write = dispatch?.write === undefined
-      ? undefined
-      : context.input.program.projectTypes.memberSlotName(field.declaration, "write");
+    const read = chosen?.read;
+    const write = chosen?.write;
     if (dispatch === undefined || (stateField === undefined) === (accessor === undefined) ||
       read === undefined || dispatch.write !== undefined && write === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
     }
     const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
       ? rustErrorBoundaryForProjectMember(field.declaration, context)
       : undefined;
     if ((dispatch.read.fallible || dispatch.write?.fallible === true) &&
       fieldErrorBoundary === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
     }
     const fieldErrorType = fieldErrorBoundary === undefined
       ? undefined
@@ -110,7 +108,7 @@ export function planContractImplementation(
         ? readValue
         : undefined;
     if (readResult === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
     }
     functions.push({ kind: "function",
       name: read,
@@ -155,13 +153,13 @@ export function planContractImplementation(
               }],
             };
       const check = stateField === undefined ? undefined
-        : context.input.program.frozenDataWrites.receiverForDeclaration(field.declaration);
+        : context.input.program.records.frozenDataReceiver.get(field.declaration);
       if (writeValue !== undefined && check !== undefined) {
-        if (fieldErrorBoundary === undefined) return undefined;
+        if (fieldErrorBoundary === undefined) failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
         writeValue = checkRustDataWrite(check, { kind: "path", path: "self" }, writeValue, rustPackageFallibleBoundary(fieldErrorBoundary));
       }
       if (writeValue === undefined || !dispatch.write.fallible && accessor !== undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       functions.push({ kind: "function",
         name: write!,
@@ -190,19 +188,17 @@ export function planContractImplementation(
       });
     }
   }
-  for (const contractMethod of projectOwnMethods(contract.definition, context)) {
-    if (context.input.program.source.ast.hasModifierKind(contractMethod, "static")) {
-      continue;
-    }
-    for (const variant of context.input.program.projectMethodDispatch.variantsForMember(contractMethod)) {
+  for (const selectedMethod of selected.methods) {
+      const contractMethod = selectedMethod.declaration;
+      const variant = selectedMethod.variant;
       const method = methods.find((candidate) =>
         candidate.contractMethod === contractMethod &&
         candidate.variant.virtualSlot === variant.virtualSlot);
       if (method === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       if (wrapperType.kind !== "named") {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       const receiver: RustExpr = {
         kind: "struct-literal",
@@ -266,10 +262,8 @@ export function planContractImplementation(
       const methodErrorBoundary = method.errorType === undefined
         ? undefined
         : rustErrorBoundaryForProjectMember(method.contractMethod, context);
-      if (method.errorType !== undefined &&
-        (methodErrorBoundary === undefined ||
-          !rustTypeEquals(rustErrorType(methodErrorBoundary), method.errorType))) {
-        return undefined;
+      if (method.errorType !== undefined && methodErrorBoundary === undefined) {
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       const adapterContext: RustPlanContext = {
         ...context,
@@ -293,7 +287,7 @@ export function planContractImplementation(
           }],
         };
         if (method.errorType === undefined && method.implementation.errorType !== undefined) {
-          return undefined;
+          failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
         }
         const result = method.errorType === undefined
           ? invocation
@@ -346,7 +340,7 @@ export function planContractImplementation(
         parameterAdapters: method.adapter.parameterAdapters,
       }, adapterContext);
       if (adapted === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       let invocation: RustExpr = {
         kind: "method-call",
@@ -372,7 +366,7 @@ export function planContractImplementation(
         adapterContext,
       );
       if (adaptedResult === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       const result = method.errorType === undefined
         ? adaptedResult
@@ -407,19 +401,16 @@ export function planContractImplementation(
           }],
         },
       });
-    }
-    const usage = context.input.program.projectMethodProperties.usageFor(contractMethod);
-    if (usage?.writable === true) {
+  }
+  for (const selectedWrite of selected.methodWrites) {
+      const contractMethod = selectedWrite.property.declaration;
       const implementations = methods.filter((candidate) =>
         candidate.contractMethod === contractMethod);
       const override = implementations[0]?.override;
-      const write = context.input.program.projectTypes.memberSlotName(
-        contractMethod,
-        "method-write",
-      );
+      const write = selectedWrite.slot;
       if (override === undefined || write === undefined ||
         implementations.some((candidate) => candidate.override !== override)) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       const replacement = writeRustProjectMethodOverride(
         { kind: "path", path: "self" },
@@ -428,7 +419,7 @@ export function planContractImplementation(
         representation,
       );
       if (replacement === undefined) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native object literal requires its exact sealed contract implementation.", contract.definition.declaration);
       }
       functions.push({ kind: "function",
         name: write,
@@ -443,7 +434,6 @@ export function planContractImplementation(
           }],
         },
       });
-    }
   }
   return {
     kind: "impl",
