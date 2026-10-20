@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureOutputCarrier, rustAwaitCarrier, rustJsPromiseOutputTargetType, rustJsPromiseTargetId } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "../../policy/operations/members/abi/validation.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
-import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "../../policy/conversions/native-representation.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";

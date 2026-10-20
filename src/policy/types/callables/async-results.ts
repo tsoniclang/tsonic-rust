@@ -1,5 +1,5 @@
 import { rustCallableValueConversionMatches } from "../../../target-model/conversions/callable.js";
-import { rustNativeRepresentationMatches } from "../../../target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "../../conversions/native-representation.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";

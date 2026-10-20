@@ -1,7 +1,7 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type { SourceLiteralValue } from "@tsonic/target-api/source";
 import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
-import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustCallableInputMatches } from "./callable-input.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
 import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";

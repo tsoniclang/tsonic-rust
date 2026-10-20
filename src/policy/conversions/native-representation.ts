@@ -1,9 +1,9 @@
-import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
-import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustLifetimesEqual } from "../lifetimes/index.js";
-import { isRustUnitCarrier } from "../types/carriers/js.js";
-import { isRustAbsenceCarrier } from "../types/carriers/native.js";
-import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustProgramErrorTargetId } from "../types/carriers/source-types.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { isRustUnitCarrier } from "../../target-model/types/carriers/js.js";
+import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
+import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustProgramErrorTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export function rustNativeRepresentationMatches(source: TargetTypeRef, target: TargetTypeRef): boolean {
   if (rustTargetTypeRefEquals(source, target)) return true;

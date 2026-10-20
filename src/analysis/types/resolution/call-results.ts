@@ -2,7 +2,7 @@ import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetType
 import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustNativeRepresentationMatches } from "../../../target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "../../../policy/conversions/native-representation.js";
 import { selectRustProjectProjection } from "../../../policy/types/project/project-projections.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { isRustJsValueCarrier, rustOptionElementCarrier, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
