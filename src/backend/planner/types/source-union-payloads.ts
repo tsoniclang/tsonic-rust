@@ -1,3 +1,4 @@
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustSourceUnionPayloadTemplate } from "../../../target-model/types/source-union-definitions.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -10,10 +11,10 @@ export function planRustSourceUnionPayloadTemplate(
 ): { readonly generics: RustGenerics; readonly variants: Extract<RustItem, { readonly kind: "enum" }>["variants"] } | undefined {
   const source = rustSourceUnionCarrierValue(template.carrier);
   if (source === undefined || sourceGenerics.parameters.length !== source.genericArguments.length ||
-    sourceGenerics.parameters.some((parameter, index) => parameter.kind !== source.genericArguments[index]?.kind)) return undefined;
+    sourceGenerics.parameters.some((parameter, index) => parameter.kind !== source.genericArguments[index]?.kind)) failRustPlannerInvariant("An admitted native union payload requires its exact sealed generic and field correspondence.");
   const parameters = template.sourceArgumentIndexes.map(index => sourceGenerics.parameters[index]);
   const fields = template.variants.map(variant => render(variant.carrier));
-  if (parameters.some(parameter => parameter === undefined) || fields.some(field => field === undefined)) return undefined;
+  if (parameters.some(parameter => parameter === undefined) || fields.some(field => field === undefined)) failRustPlannerInvariant("An admitted native union payload requires its exact sealed generic and field correspondence.");
   return {
     generics: { parameters: [...parameters as RustGenerics["parameters"], ...template.payloadParameters.map(({ parameter }) => ({
       kind: "type" as const, name: parameter.name, bounds: [],
