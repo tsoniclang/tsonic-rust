@@ -1,8 +1,4 @@
-import type {
-  RustCompilerDependency,
-  RustCompilerModuleModel,
-  RustCompilerProjectSnapshot,
-} from "../model/model.js";
+import type { RustCompilerDependency, RustCompilerModuleModel, RustCompilerProjectSnapshot } from "../model/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
