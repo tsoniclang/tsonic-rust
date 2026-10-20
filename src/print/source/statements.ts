@@ -1,13 +1,14 @@
 import { printRustExpr } from "./expressions/core.js";
-import { printRustItem } from "./items.js";
+import { printRustItem } from "./declarations.js";
 import { printRustAttribute, printRustAttributes as printRustStatementAttributes } from "./attributes.js";
 import { indentText, printRustType } from "./types.js";
 import type { RustBlock, RustStmt } from "../../backend/target-ast/syntax/nodes.js";
 import { printRustPattern } from "./patterns.js";
+import { failRustSyntaxInvariant } from "./invariants.js";
 
 export function printRustBlockStatements(block: RustBlock, depth: number, separator = "\n"): string {
   if (block === undefined || !Array.isArray(block.statements)) {
-    throw new Error("Rust block requires the canonical native statement body");
+    return failRustSyntaxInvariant(block, "block without canonical native statement body");
   }
   return [
     ...(block.innerAttrs ?? []).map((attribute) => `${indentText(depth)}${printRustAttribute(attribute, true)}`),
@@ -101,7 +102,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${indent}continue${statement.label === undefined ? "" : ` '${statement.label}`};`;
     case "completion-exit":
     case "resource-scope":
-      throw new Error("Rust completion regions must be normalized to native AST before printing.");
+      return failRustSyntaxInvariant(statement, "unnormalized completion region");
     case "index-assign":
       return `${indent}${printRustExpr(statement.receiver)}[${printRustExpr(statement.index)}] = ${printRustExpr(statement.value)};`;
     case "scope": {
@@ -118,10 +119,10 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return statement.tail === true ? `${indent}${result}` : `${indent}return ${result};`;
     }
     case "try-scope":
-      throw new Error("Rust completion regions must be normalized to native AST before printing.");
+      return failRustSyntaxInvariant(statement, "unnormalized completion region");
   }
   const unsupported: never = statement;
-  throw new Error(`Unsupported Rust statement: ${JSON.stringify(unsupported)}`);
+  return failRustSyntaxInvariant(unsupported, "statement");
 }
 
 function nestedMarkedElseIf(

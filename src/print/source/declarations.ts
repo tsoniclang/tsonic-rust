@@ -1,4 +1,4 @@
-import { printRustBlockStatements } from "./blocks.js";
+import { printRustBlockStatements } from "./statements.js";
 import { printRustExpr } from "./expressions/core.js";
 import { printRustAttribute, printRustAttributes as printAttributes } from "./attributes.js";
 import { failRustSyntaxInvariant } from "./invariants.js";
