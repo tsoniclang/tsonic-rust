@@ -4,7 +4,8 @@ import { Node_Expression, Node_Initializer, sourceParameterIsProperty } from "@t
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
-import { rustInheritedProjectConstructor, type RustProjectTypeDefinition, type RustProjectTypePolicy } from "./index.js";
+import { type RustProjectTypeDefinition, type RustProjectTypePolicy } from "./index.js";
+import { rustInheritedProjectConstructor } from "./inherited-constructors.js";
 import type { RustObjectRepresentationPlan } from "./object-representation.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
