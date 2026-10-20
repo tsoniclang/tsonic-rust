@@ -3,6 +3,8 @@ import type { RustTargetProgram } from "../program/model.js";
 import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
 import type { RustPlannedErrorVariant } from "../../target-model/records/error-transport.js";
 import type { RustErrorTransportEmissionProducer } from "../program/records/error-transport.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustErrorVariantEmission(program: Pick<RustTargetProgram, "errorTransport">,
   errors: RustSourcePackageErrorPlan, producer: RustErrorTransportEmissionProducer): readonly TargetDiagnostic[] {
@@ -30,8 +32,12 @@ export function analyzeRustErrorVariantEmission(program: Pick<RustTargetProgram,
     const domain = selected.forwardModulePath === undefined ? selected
       : selected.errorOwnerComponentId === undefined ? undefined : errors.domainsByComponentId.get(selected.errorOwnerComponentId);
     const variants = domain === undefined ? undefined : producer.records.programErrorVariants.get(domain.componentId);
-    if (domain !== undefined && variants !== undefined && domain.errorTypeIdentity === selected.errorTypeIdentity)
-      producer.boundary(selected.componentId, selected.errorTypeIdentity, { domain, variants });
+    if (domain !== undefined && variants !== undefined && domain.errorTypeIdentity === selected.errorTypeIdentity) {
+      const retained = variants.find(variant => variant.kind === "retained");
+      const closed = variants.find(variant => variant.kind === "closed" && rustTargetTypeRefEquals(variant.carrier, rustJsValueTargetType()));
+      producer.boundary(selected.componentId, selected.errorTypeIdentity, { domain, variants,
+        jsRejection: retained === undefined || closed === undefined ? undefined : Object.freeze({ retained: retained.name, closed: closed.name }) });
+    }
   }
   return Object.freeze(issues);
 }

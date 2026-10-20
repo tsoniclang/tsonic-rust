@@ -33,6 +33,7 @@ export type RustPlannedErrorVariant = RustErrorPayloadVariant
 export interface RustBoundaryErrorVariants {
   readonly domain: RustSourcePackageErrorDomainPlan;
   readonly variants: readonly RustPlannedErrorVariant[];
+  readonly jsRejection: { readonly retained: string; readonly closed: string } | undefined;
 }
 
 export interface RustErrorTransportEmissionRecords {
