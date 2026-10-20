@@ -1,30 +1,8 @@
-import {
-  sourceSemanticsExtensionId,
-} from "@tsonic/tsts";
-import type {
-  CompilerExtension,
-  ProviderDeclarationModel,
-  SourceDeclarationProvider,
-} from "@tsonic/tsts";
-import {
-  createSourceSemanticsVirtualModuleProvider,
-  nativePointerProviderDeclaration,
-  providerExportDeclarationsForSemanticsModule,
-} from "@tsonic/source-core/extension";
-import {
-  rustLifetimeTypeDeclarations,
-  rustReferenceOperationDeclarations,
-} from "./declarations/index.js";
-import {
-  rustLangModule,
-  rustConstPointerExport,
-  rustMutPointerExport,
-  rustSourceProviderVersion,
-  rustSourceSemanticsExtensionId,
-  rustSourceTypeExportIds,
-  rustSourceVirtualModulesProviderId,
-  rustTypesModule,
-} from "./identity.js";
+import { sourceSemanticsExtensionId } from "@tsonic/tsts";
+import type { CompilerExtension, ProviderDeclarationModel, SourceDeclarationProvider } from "@tsonic/tsts";
+import { createSourceSemanticsVirtualModuleProvider, nativePointerProviderDeclaration, providerExportDeclarationsForSemanticsModule } from "@tsonic/source-core/extension";
+import { rustLifetimeTypeDeclarations, rustReferenceOperationDeclarations } from "./declarations/index.js";
+import { rustLangModule, rustConstPointerExport, rustMutPointerExport, rustSourceProviderVersion, rustSourceSemanticsExtensionId, rustSourceTypeExportIds, rustSourceVirtualModulesProviderId, rustTypesModule } from "./identity.js";
 import { rustSourceSemanticsModules } from "../profiles/source-modules.js";
 
 export {
