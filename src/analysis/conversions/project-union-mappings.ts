@@ -3,7 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectUnionMappingProducer } from "../program/records/project-union-mappings.js";
 import { rustProjectUnionMapConversionMatches } from "../../policy/conversions/project-union.js";
-import { rustProjectUnionUpcastRelation } from "./project-union-relations.js";
+import { rustProjectUnionUpcastRelation } from "../../policy/model/project-union-relations.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
