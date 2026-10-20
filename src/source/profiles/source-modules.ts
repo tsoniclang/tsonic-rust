@@ -1,13 +1,6 @@
-import {
-  sourcePrimitive,
-} from "@tsonic/tsts";
-import type {
-  SourceSemanticsModule,
-} from "@tsonic/tsts";
-import {
-  rustLangModule,
-  rustTypesModule,
-} from "../extension/identity.js";
+import { sourcePrimitive } from "@tsonic/tsts";
+import type { SourceSemanticsModule } from "@tsonic/tsts";
+import { rustLangModule, rustTypesModule } from "../extension/identity.js";
 
 export { rustLangModule, rustTypesModule } from "../extension/identity.js";
 
