@@ -4,7 +4,7 @@ import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
-import { isFinalizedConversion } from "../../../../analysis/operations/finalized-operation/conversion-shape.js";
+import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
 import type { RustFinalizedSourceInput, RustFinalizedValueConversion } from "../../../../target-model/records/finalized-operation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";

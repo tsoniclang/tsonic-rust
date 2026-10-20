@@ -12,7 +12,7 @@ import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOpe
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
 import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
-import { isFinalizedConversion } from "./conversion-shape.js";
+import { isFinalizedConversion } from "../../../policy/operations/members/abi/conversion-shape.js";
 import { hasExactKeys, isRecord } from "../../../policy/operations/members/abi/validation-records.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
