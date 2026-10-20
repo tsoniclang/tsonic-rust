@@ -1,16 +1,7 @@
-import {
-  hasExactObjectKeys,
-  isDenseDataArray,
-} from "../../metadata/closed-data.js";
+import { hasExactObjectKeys, isDenseDataArray } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../model.js";
-import {
-  isRustLifetimeRef,
-} from "../../lifetimes/index.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../model.js";
+import { isRustLifetimeRef } from "../../lifetimes/index.js";
 
 export const rustAbsenceTargetId = "rust.native.absence";
 export const rustStringTargetId = "rust.std.String";
