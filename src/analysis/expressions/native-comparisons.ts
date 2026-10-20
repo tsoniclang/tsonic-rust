@@ -3,11 +3,55 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustNativeComparisonProducer } from "../program/records/native-comparisons.js";
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
-import { isRustIntegerCarrier, isRustSignedNumericCarrier } from "../../target-model/types/index.js";
+import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier, isRustFloatCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
   const { ast } = program.source;
+  const unwrap = (node: Node): Node => {
+    while (ast.is.IsParenthesizedExpression(node)) {
+      const inner = Node_Expression(ast, node);
+      if (inner === undefined) break;
+      node = inner;
+    }
+    return node;
+  };
+  const range = (left: Node, right: Node, operator: "&&" | "||"):
+    Omit<Extract<RustNativeComparison, { readonly kind: "range" }>, "prefix" | "suffix"> | undefined => {
+    const term = (input: Node) => {
+      const expression = unwrap(input);
+      const selected = program.records.targetOperation.get(expression);
+      if (selected?.kind !== "operator-token" || selected.leftConversion !== undefined || selected.rightConversion !== undefined) return undefined;
+      const left = BinaryExpression_Left(ast, expression);
+      const right = BinaryExpression_Right(ast, expression);
+      if (left === undefined || right === undefined) return undefined;
+      const first = program.records.literalValue.get(left);
+      const second = program.records.literalValue.get(right);
+      const subject = second?.numeric !== undefined || second?.integer !== undefined ? left
+        : first?.numeric !== undefined || first?.integer !== undefined ? right : undefined;
+      if (subject === undefined || !ast.is.IsIdentifier(unwrap(subject))) return undefined;
+      const binding = program.records.sourceBinding.get(unwrap(subject));
+      const read = program.ownership.reads.get(subject);
+      if (binding?.scope !== "lexical" || program.records.bindingStorage.get(binding.sourceDeclaration) !== undefined ||
+        read?.pure !== true || !read.stablePlace) return undefined;
+      const subjectFirst = subject === left;
+      const relationship = operator === "&&"
+        ? selected.operator === (subjectFirst ? ">=" : "<=") ? "lower" : selected.operator === (subjectFirst ? "<=" : ">=") ? "upper" : undefined
+        : selected.operator === (subjectFirst ? "<" : ">") ? "lower" : selected.operator === (subjectFirst ? ">" : "<") ? "upper" : undefined;
+      const bound = subjectFirst ? right : left;
+      const carrier = program.records.valueRead.get(bound)?.value;
+      return relationship === undefined || !isRustIntegerCarrier(carrier) && !isRustFloatCarrier(carrier) ? undefined
+        : { subject, declaration: binding.sourceDeclaration, bound, relationship, integer: isRustIntegerCarrier(carrier) };
+    };
+    const first = term(left);
+    const second = term(right);
+    if (first === undefined || second === undefined || first.declaration !== second.declaration || first.relationship === second.relationship) return undefined;
+    const lower = first.relationship === "lower" ? first : second;
+    const upper = first.relationship === "upper" ? first : second;
+    if (lower.integer !== upper.integer) return undefined;
+    return { kind: "range", subject: first.subject, lower: lower.bound, upper: upper.bound, operator,
+      form: operator === "||" && !lower.integer ? "outside-float" : "contains" };
+  };
   for (const node of nodes) {
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind !== "operator-token" || !ast.is.IsBinaryExpression(node)) continue;
@@ -48,6 +92,49 @@ export function analyzeRustNativeComparisons(program: Omit<RustTargetProgram, "r
               empty = Object.freeze({ receiver, input: abi.targetReceiver.input, method: abi.target.emptyTestMethod });
             selected = { kind: "unsigned-zero", operand: boundary.operand, operator, empty };
           }
+        }
+      }
+    }
+    if (selected.kind === "ordinary" && operation.leftConversion === undefined && operation.rightConversion === undefined) {
+      const leftValue = program.records.literalValue.get(unwrap(left));
+      const rightValue = program.records.literalValue.get(unwrap(right));
+      const leftCarrier = program.records.valueRead.get(left)?.value;
+      const rightCarrier = program.records.valueRead.get(right)?.value;
+      if (leftValue?.integer !== undefined && rightValue?.integer !== undefined && isRustIntegerCarrier(leftCarrier) && isRustIntegerCarrier(rightCarrier)) {
+        const first = leftValue.integer;
+        const second = rightValue.integer;
+        const value = operation.operator === "==" ? first === second : operation.operator === "!=" ? first !== second
+          : operation.operator === "<" ? first < second : operation.operator === ">" ? first > second
+          : operation.operator === "<=" ? first <= second : operation.operator === ">=" ? first >= second : undefined;
+        if (value !== undefined) selected = { kind: "integer-constant", value };
+      }
+      if (operation.operator === "==" || operation.operator === "!=") {
+        const boolean = leftValue?.form === "true" || leftValue?.form === "false" ? { value: leftValue.form === "true", operand: "right" as const, carrier: rightCarrier }
+          : rightValue?.form === "true" || rightValue?.form === "false" ? { value: rightValue.form === "true", operand: "left" as const, carrier: leftCarrier } : undefined;
+        if (boolean !== undefined && isRustBoolCarrier(boolean.carrier)) selected = { kind: "boolean", operand: boolean.operand,
+          negated: operation.operator === "==" ? !boolean.value : boolean.value };
+        else {
+          const empty = leftValue?.text === "" ? { operand: "right" as const, carrier: rightCarrier }
+            : rightValue?.text === "" ? { operand: "left" as const, carrier: leftCarrier } : undefined;
+          if (empty !== undefined && isRustStringCarrier(empty.carrier)) selected = { kind: "empty-string", operand: empty.operand, negated: operation.operator === "!=" };
+        }
+      }
+      if (selected.kind === "ordinary" && (operation.operator === "&&" || operation.operator === "||")) {
+        const direct = range(left, right, operation.operator);
+        if (direct !== undefined) selected = { ...direct, prefix: undefined, suffix: undefined };
+        else {
+          const first = unwrap(left);
+          const second = unwrap(right);
+          const firstOperation = program.records.targetOperation.get(first);
+          const secondOperation = program.records.targetOperation.get(second);
+          const trailingLeft = BinaryExpression_Right(ast, first);
+          const leadingRight = BinaryExpression_Left(ast, second);
+          const trailing = firstOperation?.kind === "operator-token" && firstOperation.operator === operation.operator && trailingLeft !== undefined
+            ? range(trailingLeft, right, operation.operator) : undefined;
+          const leading = secondOperation?.kind === "operator-token" && secondOperation.operator === operation.operator && leadingRight !== undefined
+            ? range(left, leadingRight, operation.operator) : undefined;
+          if (trailing !== undefined) selected = { ...trailing, prefix: BinaryExpression_Left(ast, first), suffix: undefined };
+          else if (leading !== undefined) selected = { ...leading, prefix: undefined, suffix: BinaryExpression_Right(ast, second) };
         }
       }
     }
