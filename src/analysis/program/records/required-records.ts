@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustAnalysisRecords } from "./model.js";
+import type { RustAnalysisRecords } from "../../../target-model/records/analysis.js";
 
 export type RustNodeRecordFamily = {
   [Family in keyof RustAnalysisRecords]: RustAnalysisRecords[Family] extends { readonly get: (subject: Node) => unknown } ? Family : never;
