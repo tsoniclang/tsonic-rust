@@ -10,7 +10,7 @@ import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/nati
 
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 
-import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
@@ -39,7 +39,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
   const inputCarrier = resolveExpressionCarrier(walk, selected.expression, file, expected);
   if (inputCarrier === undefined) return reject("The raw conversion operand has no exact native carrier.");
   requireRustRecord(context.requiredRecords, "rawLocationPlan", expression, selected.operation.operation, "resolveRustRawLocationCarrier");
-  context.records.rawLocations.conversion(expression, selected.operation.operation, selected.expression, inputCarrier, layout);
+  context.records.rawLocations.conversion(expression, selected.operation.operation, selected.expression, inputCarrier, layout, rustOptionElementCarrier(inputCarrier) !== undefined);
   return { handled: true as const, carrier: setCarrierFact(walk, expression,
     selected.operation.operation === "to-raw" ? raw : location) };
 }

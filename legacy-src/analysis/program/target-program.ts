@@ -59,6 +59,7 @@ import { analyzeRustValueReads } from "../conversions/value-reads.js";
 import { analyzeRustLiteralEmission } from "../expressions/literals.js";
 import { analyzeRustTemplateStrings } from "../expressions/template-strings.js";
 import { analyzeRustNativeComparisons } from "../expressions/native-comparisons.js";
+import { analyzeRustNativeMemoryEmission } from "../operations/native-memory-emission.js";
 import { analyzeRustSourceAssertions } from "../conversions/source-assertions.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
 import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
@@ -637,7 +638,8 @@ export function analyzeRustTargetProgram(
   if (templateIssues.length !== 0) return rejectedTargetStage(templateIssues);
   const assertionIssues = analyzeRustSourceAssertions(program, context.nativeNodes, context.records.sourceAssertionPlans);
   if (assertionIssues.length !== 0) return rejectedTargetStage(assertionIssues);
-  analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);
+  const nativeLayoutTypes = analyzeRustNativeMemoryEmission(program, context.nativeNodes, context.records.nativeLayoutPlans);
+  analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans, nativeLayoutTypes);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
   analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>

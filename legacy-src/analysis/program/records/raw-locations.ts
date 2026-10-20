@@ -9,7 +9,7 @@ import { createRustRecordFamily } from "./family.js";
 export interface RustRawLocationProducer {
   readonly records: RustRecordFamily<RustRawLocationPlan>;
   conversion(subject: Node, operation: RustRawLocationPlan["operation"], expression: Node,
-    inputCarrier: TargetTypeRef, layout: RustNativeMemoryLayout): void;
+    inputCarrier: TargetTypeRef, layout: RustNativeMemoryLayout, optionalInput: boolean): void;
 }
 
 export function createRustRawLocationProducer(
@@ -18,14 +18,14 @@ export function createRustRawLocationProducer(
 ): RustRawLocationProducer {
   const family = createRustRecordFamily({ id: "tsonic.rust.rawLocation", equals: (
     left: RustRawLocationPlan, right: RustRawLocationPlan,
-  ) => left.operation === right.operation && left.expression === right.expression &&
+  ) => left.operation === right.operation && left.expression === right.expression && left.optionalInput === right.optionalInput &&
     rustTargetTypeRefEquals(left.inputCarrier, right.inputCarrier) && rustNativeMemoryLayoutsEqual(left.layout, right.layout) },
   assertOpen, inherited);
   return Object.freeze({
     records: family.reader,
     conversion(subject: Node, operation: RustRawLocationPlan["operation"], expression: Node,
-      inputCarrier: TargetTypeRef, layout: RustNativeMemoryLayout): void {
-      family.writer.set(subject, Object.freeze({ operation, expression, inputCarrier, layout }));
+      inputCarrier: TargetTypeRef, layout: RustNativeMemoryLayout, optionalInput: boolean): void {
+      family.writer.set(subject, Object.freeze({ operation, expression, inputCarrier, layout, optionalInput }));
     },
   });
 }

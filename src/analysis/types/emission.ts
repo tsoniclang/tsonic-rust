@@ -25,8 +25,8 @@ import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustSour
 import { selectRustTypePositions } from "../../policy/types/type-emission.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reachability">,
-  nodes: readonly Node[], producer: RustTypeEmissionProducer): void {
-  const pending = [...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
+  nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
+  const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(...program.providerErrorCarriers);
   for (const hook of program.binaryHooks) {
     const dispatch = program.records.binaryDispatch.get(hook.id);

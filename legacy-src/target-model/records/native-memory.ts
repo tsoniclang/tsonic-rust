@@ -9,6 +9,7 @@ export type RustNativeArrayStorage = {
   { readonly kind: "binding" | "reference" | "literal" });
 
 export interface RustRawLocationPlan {
+  readonly optionalInput: boolean;
   readonly operation: "to-raw" | "reinterpret";
   readonly expression: Node;
   readonly inputCarrier: TargetTypeRef;
