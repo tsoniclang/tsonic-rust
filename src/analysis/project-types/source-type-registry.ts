@@ -19,12 +19,12 @@ export type {
   RustSourceEnumVariant,
   RustSourceObjectField,
   RustSourceObjectShape,
-  RustSourceTypeRegistry,
   RustSourceUnion,
   RustSourceUnionVariant,
   RustStructuralFieldImplementation,
   RustStructuralFieldRegistration,
-} from "../../policy/types/model/source-type-registry.js";
+} from "../../target-model/records/source-types.js";
+export type { RustSourceTypeRegistry } from "./source-type-model.js";
 
 export function createRustSourceTypeRegistry(
   typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),
