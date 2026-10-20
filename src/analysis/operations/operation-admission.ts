@@ -25,10 +25,10 @@ export function admitRustOperationSelection<T extends {
   const existingTarget = value.targetFact === undefined ? undefined : context.records.targetOperation.get(subject);
   const existingOperation = value.operation === undefined ? undefined : context.records.selectedOperation.get(subject);
   if (existingTarget !== undefined && value.targetFact !== undefined && !rustTargetOperationFactEquals(existingTarget, value.targetFact)) {
-    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.targetOperation' for one exact source subject.");
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.targetOperation' for one exact source subject.", subject);
   }
   if (existingOperation !== undefined && value.operation !== undefined && !rustSelectedTargetOperationEquals(existingOperation, value.operation)) {
-    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'selectedOperation' for one exact source subject.");
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'selectedOperation' for one exact source subject.", subject);
   }
   if (value.targetFact !== undefined && existingTarget === undefined) context.records.targetOperations.checked(subject, selection);
   if (value.operation !== undefined && existingOperation === undefined) context.records.selectedOperations.checked(subject, selection);
