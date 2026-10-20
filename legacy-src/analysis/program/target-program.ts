@@ -69,6 +69,7 @@ import { analyzeRustLocationCallbacks } from "../callables/location-callbacks.js
 import { analyzeRustDirectStorage } from "../storage/direct-storage.js";
 import { analyzeRustUnaryEmission } from "../expressions/expression-unary.js";
 import { analyzeRustFlowReadEmission } from "../control-flow/flow-read-emission.js";
+import { analyzeRustProjectUnionMappings } from "../conversions/project-union-mappings.js";
 import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
 import { analyzeRustStringComparisonViews } from "../expressions/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
@@ -645,6 +646,8 @@ export function analyzeRustTargetProgram(
   analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
   const flowReadEmissionIssues = analyzeRustFlowReadEmission(program, context.nativeNodes, context.records.flowReadEmissionPlans);
   if (flowReadEmissionIssues.length !== 0) return rejectedTargetStage(flowReadEmissionIssues);
+  const projectUnionMappingIssues = analyzeRustProjectUnionMappings(program, context.nativeNodes, context.records.projectUnionMappingPlans);
+  if (projectUnionMappingIssues.length !== 0) return rejectedTargetStage(projectUnionMappingIssues);
   const errorFieldIssues = analyzeRustErrorFieldBorrows(program, context.nativeNodes, context.records.errorFieldPlans);
   if (errorFieldIssues.length !== 0) return rejectedTargetStage(errorFieldIssues);
   admitRustUnionProjections(program, context.nativeNodes);
