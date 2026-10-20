@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
-import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
 import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
 import { planRustCaptureValue } from "../../expressions/typed-locations.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
