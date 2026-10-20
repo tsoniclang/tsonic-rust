@@ -1,26 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type {
-  RustCompilerDependency,
-  RustCompilerProjectSnapshot,
-  RustCompilerStandardLibrarySnapshot,
-} from "../model/model.js";
+import type { RustCompilerDependency, RustCompilerProjectSnapshot, RustCompilerStandardLibrarySnapshot } from "../model/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import { verifyRustCompilerStandardLibraryMetadata } from "./cargo-snapshot.js";
-import {
-  isRecord,
-  parseRustdocDocument,
-  type RustdocDocument,
-} from "../model/rustdoc-schema.js";
+import { isRecord, parseRustdocDocument, type RustdocDocument } from "../model/rustdoc-schema.js";
 
 const commandBufferLimit = 64 * 1024 * 1024;
 const rustdocJsonByteLimit = 128 * 1024 * 1024;
