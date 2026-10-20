@@ -1,22 +1,11 @@
-import type { TargetTypeRef } from "./model.js";
-import type { RustTypeDefinitions } from "./source-union-definitions.js";
-import { closedMetadataKey } from "../metadata/closed-data.js";
-import { rustRuntimeUnionContract } from "./carriers/runtime-unions.js";
-import {
-  isRustAbsenceCarrier, isRustBigIntCarrier, isRustCallableCarrier,
-  isRustNumericCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustJsSymbolTargetId,
-  rustOptionElementCarrier, rustSourceTypeCarrierValue,
-  rustTsValueTargetId,
-} from "./index.js";
-import { isRustStringViewCarrier } from "./carriers/native.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
+import { isRustAbsenceCarrier, isRustBigIntCarrier, isRustCallableCarrier, isRustNumericCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustJsSymbolTargetId, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTsValueTargetId } from "../../../target-model/types/index.js";
+import { isRustStringViewCarrier } from "../../../target-model/types/carriers/native.js";
 
-export type RustTypeofResult =
-  | "boolean" | "number" | "bigint" | "string" | "symbol" | "function" | "object" | "undefined"
-  | { readonly kind: "runtime-method"; readonly method: string; readonly sourceCarrier: TargetTypeRef }
-  | { readonly kind: "optional"; readonly sourceCarrier: TargetTypeRef; readonly value: RustTypeofResult }
-  | { readonly kind: "source-union"; readonly sourceCarrier: TargetTypeRef;
-      readonly variants: readonly { readonly name: string; readonly carrier: TargetTypeRef; readonly result: RustTypeofResult }[] };
-
+import type { RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
 export function getRustTypeofRuntimeKind(
   carrier: TargetTypeRef,
   definitions: RustTypeDefinitions,

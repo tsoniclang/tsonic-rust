@@ -2,7 +2,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
 import { rustUnionAlternatives, rustUnionLeaves } from "../../../target-model/types/union-relations.js";
-import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
+import { getRustTypeofRuntimeKind } from "../syntax/runtime-kind.js";
 import { snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { selectRustBinaryOperator } from "./rules.js";
 import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/carriers/native.js";

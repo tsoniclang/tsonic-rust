@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
 
-import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
+import { getRustTypeofRuntimeKind } from "../syntax/runtime-kind.js";
 import { selectRustClosedTypeTestPlan } from "../operators/type-tests.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { isRustAbsenceCarrier } from "../../../target-model/types/carriers/native.js";
