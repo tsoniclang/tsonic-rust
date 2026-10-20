@@ -1,35 +1,22 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import { BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
-import { isRustCopyCarrier } from "../../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpressionAsStatement } from "../statements/statement-simple.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpressionBeforeContextualConversion } from "./entry.js";
-import { expressionCarrier } from "./fundamentals.js";
 
 export function planAssignmentExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const right = BinaryExpression_Right(context.input.program.source.ast, node);
-  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.records, right);
-  const type = carrier === undefined ? undefined : rustTypeFromCarrierInContext(carrier, context);
-  if (right === undefined || carrier === undefined || type === undefined ||
-      context.syntheticNames === undefined ||
-      !rustTargetTypeRefEquals(carrier, expressionCarrier(node, context))) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.assignment-value-carrier",
-      "An assignment expression requires its exact finalized right-hand value carrier before storage projection.",
-    ));
-    return undefined;
-  }
-  const copy = isRustCopyCarrier(carrier);
+  const selected = context.input.program.records.assignmentWrite.get(node);
+  if (selected?.valueResult === undefined) failRustPlannerInvariant("An admitted value assignment requires its exact native right-hand completion.", node);
+  const right = selected.value;
+  const { carrier, copy } = selected.valueResult;
+  const type = rustTypeFromCarrierInContext(carrier, context);
+  if (type === undefined || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted value assignment requires its native result type and hygienic scope.", node);
   if (!copy && !requireRustCarrierRequirements(carrier, ["clone"], node, context)) {
     return undefined;
   }

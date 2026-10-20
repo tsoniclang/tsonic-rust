@@ -1,16 +1,16 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustStringAppendPart } from "../../target-model/records/assignment-writes.js";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustAssignmentWriteProducer } from "../program/records/assignment-writes.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
-import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustAssignmentWrites(input: {
-  readonly program: Pick<RustTargetProgram, "source" | "records" | "projectTypes" | "objectRepresentations" | "callableValues" | "names">;
+  readonly program: Pick<RustTargetProgram, "source" | "sourceNavigation" | "records" | "projectTypes" | "objectRepresentations" | "callableValues" | "names">;
   readonly nodes: readonly Node[];
   readonly producer: RustAssignmentWriteProducer;
   readonly required: RustRequiredRecord[];
@@ -137,7 +137,18 @@ export function analyzeRustAssignmentWrites(input: {
     const deferReceiverBorrow = assignment.operator === "=" && representation(target) === "value" &&
       (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword");
     requireRustRecord(input.required, "assignmentWrite", node, "native assignment write", "analyzeRustAssignmentWrites");
-    input.producer.assignment(node, { target, value, valueField, deferReceiverBorrow, stringAppend });
+    let valueResult: import("../../target-model/records/assignment-writes.js").RustAssignmentWriteCompletion["valueResult"];
+    if (assignment.operator === "=" && program.sourceNavigation.expressionResultUse(node) === "consumed") {
+      const carrier = rustValueCarrierBeforeContextualConversion(records, value);
+      if (carrier === undefined || !rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(node)?.carrier)) {
+        issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+          message: `An assignment expression requires its exact finalized right-hand value carrier before storage projection. Node kind: ${ast.kindName(node)}.`,
+          evidence: ["target.capability=rust.backend.assignment-value-carrier"] });
+        continue;
+      }
+      valueResult = Object.freeze({ carrier, copy: isRustCopyCarrier(carrier) });
+    }
+    input.producer.assignment(node, { target, value, valueField, deferReceiverBorrow, stringAppend, valueResult });
   }
   return Object.freeze(issues);
 }

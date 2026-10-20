@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../types/model.js";
 
 export type RustStringAppendPart =
   | { readonly kind: "character"; readonly value: string }
@@ -10,6 +11,7 @@ export interface RustAssignmentWriteCompletion {
   readonly value: Node;
   readonly valueField: boolean;
   readonly deferReceiverBorrow: boolean;
+  readonly valueResult: { readonly carrier: TargetTypeRef; readonly copy: boolean } | undefined;
   readonly stringAppend: {
     readonly receiver: "direct" | "borrow-cell";
     readonly parts: readonly RustStringAppendPart[];
