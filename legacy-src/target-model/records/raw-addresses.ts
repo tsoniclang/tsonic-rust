@@ -7,6 +7,7 @@ export type RustRawAddressPlan = {
     readonly expression: Node;
     readonly carrier: TargetTypeRef;
     readonly input: "raw-ref" | "raw-owner-ref" | "u64" | "i128" | "u128";
+    readonly cast: boolean;
   }[];
 } & ({ readonly method: "same" | "hash" } | {
   readonly method: "address" | "from_address" | "offset" | "offset_unsigned";

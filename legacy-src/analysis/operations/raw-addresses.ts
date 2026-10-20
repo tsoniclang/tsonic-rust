@@ -11,6 +11,8 @@ import { rustOptionTargetType, rustRawPointerTargetType, rustSourcePrimitiveTarg
 import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
+import { rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";
+import { rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
 export function resolveRustRawPointerIdentityCarrier(
   walk: RustFactWalk, expression: Node, sourceFile: SourceFile,
@@ -29,7 +31,7 @@ export function resolveRustRawPointerIdentityCarrier(
   const expected = rustOptionTargetType(rustRawPointerTargetType());
   const argumentsPlan = inputs.map(input => {
     const carrier = resolveExpressionCarrier(walk, input, sourceFile, expected);
-    return carrier === undefined ? undefined : Object.freeze({ expression: input, carrier, input: "raw-owner-ref" as const });
+    return carrier === undefined ? undefined : Object.freeze({ expression: input, carrier, input: "raw-owner-ref" as const, cast: false });
   });
   if (argumentsPlan.some(argument => argument === undefined)) return {};
   const resultCarrier = rustSourcePrimitiveTargetType(source.operation === "equal-raw-pointer" ? "bool" : "float64");
@@ -71,7 +73,13 @@ export function resolveRustRawAddressCarrier(
   }
   const argumentsPlan = inputs.map(input => {
     const carrier = resolveExpressionCarrier(walk, input.expression, sourceFile, input.expected);
-    return carrier === undefined ? undefined : Object.freeze({ expression: input.expression, carrier, input: input.input });
+    if (carrier === undefined) return undefined;
+    const literal = walk.context.literalValues.literalValue.get(input.expression);
+    const unsuffixed = carrier.kind === "source-primitive" && carrier.name === "int32" && literal?.integer !== undefined &&
+      literal.form !== "binary" && rustBorrowValueIsUnprojected(input.expression, walk.context.records);
+    const cast = input.input !== "raw-ref" && input.input !== "raw-owner-ref" && !unsuffixed &&
+      !(carrier.kind === "source-primitive" && rustPrimitiveTypeName(carrier.name) === input.input);
+    return Object.freeze({ expression: input.expression, carrier, input: input.input, cast });
   });
   if (argumentsPlan.some(argument => argument === undefined)) return reject("A raw address operand has no closed Rust value carrier.");
   const resultCarrier = source.operation === "raw-to-address-integer"

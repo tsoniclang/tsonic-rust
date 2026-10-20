@@ -23,7 +23,7 @@ export function createRustRawAddressProducer(
     rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) && left.arguments.length === right.arguments.length &&
     left.arguments.every((argument, index) => {
       const other = right.arguments[index];
-      return other !== undefined && argument.expression === other.expression && argument.input === other.input &&
+      return other !== undefined && argument.expression === other.expression && argument.input === other.input && argument.cast === other.cast &&
         rustTargetTypeRefEquals(argument.carrier, other.carrier);
     }) }, assertOpen, inherited);
   return Object.freeze({
