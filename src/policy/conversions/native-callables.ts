@@ -1,5 +1,3 @@
-import type { Node } from "@tsonic/tsts";
-import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
 import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
@@ -11,10 +9,8 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
-import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
-import type { RustNativeStoragePlan } from "./native-storage.js";
+
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
@@ -86,30 +82,12 @@ export function rustNativeCallableInputPhysicalSignature(
       original.owner.identity === `${protocol.identity}:Self`) return { ...carrier, owner: input.implementation, trait: input.trait };
     return carrier.kind === "type-parameter" && carrier.identity === `${protocol.identity}:Self` ? input.implementation : carrier;
   });
-  const resultArguments = rustOnlyTypeGenericArguments(rustNamedTypeCarrierValue(result)?.genericArguments);
+  const resultValue = rustNamedTypeCarrierValue(result);
+  const resultArguments = resultValue?.id === "rust.core.Result"
+    ? rustOnlyTypeGenericArguments(resultValue.genericArguments) : undefined;
   return resultArguments?.length !== 2 ? undefined : snapshotClosedMetadata({
     parameters: Object.freeze(protocol.method.parameters.map(parameter =>
       substituteRustTargetGenerics(parameter, bindings.types, bindings.lifetimes, bindings.consts))),
     result: resultArguments[0]!, error: resultArguments[1]!,
   });
-}
-
-export function rustNativeCallableOperand(
-  source: TargetTypeRef,
-  node: Node,
-  input: {
-    readonly records: RustProgramRecords;
-    readonly storage: Pick<RustNativeStoragePlan, "operandFor">;
-    readonly producers: RustNativeCallableProducerPlan;
-  },
-): RustNativeCallablePhysicalSource | undefined {
-  const reference = input.records.directCallableReference.get(node);
-  if (reference !== undefined) {
-    if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
-    const carrier = input.producers.physicalFor(reference.sourceDeclaration, source);
-    return carrier === undefined ? undefined
-      : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier });
-  }
-  if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.records, node), source)) return undefined;
-  return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node));
 }

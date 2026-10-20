@@ -20,7 +20,7 @@ import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-s
 import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection,
   RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
-import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
+import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan, RustNativeCallableProducerConstruction } from "./native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";

@@ -29,7 +29,7 @@ import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import type { RustRetainedCallableInputPlan } from "./retained-inputs.js";
-import { rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
+import { rustNativeCallableInputPhysicalSignature } from "../../policy/conversions/native-callables.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import { emissionDiagnostic } from "./emission-contexts.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";

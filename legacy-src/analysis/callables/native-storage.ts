@@ -28,8 +28,8 @@ import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloa
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
-import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
-import { rustNativeCallableAbsenceWitness } from "./native-conversions.js";
+import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "../../policy/conversions/native-callables.js";
+import { rustNativeCallableAbsenceWitness } from "../../policy/conversions/native-callables.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
