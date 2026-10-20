@@ -11,7 +11,7 @@ import type { RustCallableValueAdapter } from "../../target-model/records/callab
 import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
 import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import { rustCallableAdapterValues } from "./adapter-values.js";
+import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
 
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";

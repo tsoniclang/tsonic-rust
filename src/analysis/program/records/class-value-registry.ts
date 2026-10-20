@@ -16,7 +16,7 @@ import type { RustProjectStructuralView } from "../../../target-model/records/pr
 import { selectRustProjectViewImplementations } from "../../objects/view-implementations.js";
 
 import type { RustCallableValueAdapter } from "../../../target-model/records/callable-adapters.js";
-import { rustCallableAdapterValues } from "../../callables/adapter-values.js";
+import { rustCallableAdapterValues } from "../../../policy/conversions/callable-values.js";
 
 import type { RustClassValuePlan, RustClassValueView, RustClassValueDefinition } from "../../../target-model/records/class-values.js";
 export interface RustClassValueRegistry {

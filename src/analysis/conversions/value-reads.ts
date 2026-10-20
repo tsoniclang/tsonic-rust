@@ -15,7 +15,7 @@ import { rustProjectUpcastSourceMatches } from "./value-carrier-queries.js";
 import { admitRustConversionEmission } from "./emission.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustCallableAdapterValues } from "../callables/adapter-values.js";
+import { rustCallableAdapterValues } from "../../policy/conversions/callable-values.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 
 export function analyzeRustValueReads(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[],
