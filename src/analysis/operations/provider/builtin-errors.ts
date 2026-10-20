@@ -1,20 +1,16 @@
+import { selectRustBuiltinErrorPropertyForm } from "../../../policy/operations/source-profiles/js/error-properties.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import {
-  type RustSelectedSourceMemberSet,
-} from "../../../policy/identities/selected-source.js";
+import { type RustSelectedSourceMemberSet } from "../../../policy/identities/selected-source.js";
 import { selectRustErrorTypePredicate } from "../../../policy/operations/source-profiles/js/type-tests.js";
-import {
-  rustSourceOptionalTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-} from "../../../target-model/types/index.js";
+import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
-import { acceptRustMemberOperation, acceptRustOperation, rejectSelectedOperation } from "./result.js";
+import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js";
+import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
 import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustCarrierProvidesErrorObservation, rustCarrierProvidesErrorMutation } from "../../../target-model/types/carriers/error-protocols.js";
+import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 
@@ -62,30 +58,9 @@ export function selectRustBuiltinErrorProperty(
     !rustCarrierProvidesErrorObservation(receiverCarrier, context.typeDefinitions)) {
     return undefined;
   }
-  if (request.accessMode === "delete") return rejectSelectedOperation(request.expression, context,
-    "RUST_BUILTIN_ERROR_DELETE_UNSUPPORTED", "An admitted native Error field cannot be removed from its physical storage.");
-  if (request.accessMode !== "read" && !rustCarrierProvidesErrorMutation(receiverCarrier, context.typeDefinitions)) {
-    return rejectSelectedOperation(
-      request.expression, context, "RUST_BUILTIN_ERROR_MUTATION_UNSUPPORTED",
-      "The exact selected native Error storage is immutable; writable Error admission requires an original physical setter owner.",
-    );
-  }
-  if (member.memberName !== "message" && member.memberName !== "name" && member.memberName !== "stack") {
-    return rejectSelectedOperation(
-      request.expression, context, "RUST_BUILTIN_ERROR_PROPERTY_UNSUPPORTED",
-      "The selected builtin Error member has no exact native runtime property contract.",
-    );
-  }
-  return acceptRustMemberOperation(request, "property", {
-    kind: "builtin-error-property",
-    accessMode: request.accessMode,
-    operationId: `tsonic.rust.error.property.${member.memberName}`,
-    receiverCarrier: receiverCarrier!,
-    resultCarrier: member.memberName === "stack"
-      ? rustSourceOptionalTargetType(rustStringTargetType())
-      : rustStringTargetType(),
-    property: member.memberName,
-  }, context, options, {
+  const selected = selectRustBuiltinErrorPropertyForm(member.memberName, request.accessMode, receiverCarrier!, context.typeDefinitions);
+  if (selected.kind === "rejected") return rejectSelectedOperation(request.expression, context, selected.code, selected.message);
+  return acceptRustMemberOperation(request, "property", selected.fact, context, options, {
     sourceExpression: request.expression,
     sourceReceiver: request.receiver,
     sourceSelectedSymbol: request.sourceSelectedSymbol,
