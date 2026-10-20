@@ -8,7 +8,7 @@ import { rustTargetTypeParameterIdentities } from "../../../target-model/types/c
 import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
-import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType } from "./target.js";
 import { resolveSourcePrimitive } from "./callables.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { selectedRustSourceTypeArgument } from "./generic-arguments.js";

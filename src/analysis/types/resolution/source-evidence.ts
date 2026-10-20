@@ -2,7 +2,7 @@ import { resolveRustSourceUnionCarrier } from "../../../policy/types/resolution/
 import { rustCallableTargetType, rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";
-import { resolveRustExactNullishValueCarrier, resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustExactNullishValueCarrier, resolveRustTargetType } from "./target.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { SourceCallableTypeEvidence, SourceTypeComponentEvidence } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";

@@ -2,7 +2,7 @@ import { rustNeverTargetType, rustOptionElementCarrier, rustTupleTargetType } fr
 
 import { resolveCallableType } from "./callables.js";
 import { resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
-import { resolveRustTargetType, resolveStructuralObjectType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 
 import type { Node, Type } from "@tsonic/tsts";

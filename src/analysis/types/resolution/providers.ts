@@ -1,6 +1,6 @@
 import { denseDefined } from "./project.js";
 
-import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType } from "./target.js";
 
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustProviderTypeRow } from "../../../target-model/identities/provider-relations.js";

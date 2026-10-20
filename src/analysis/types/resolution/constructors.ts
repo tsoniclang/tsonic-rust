@@ -6,7 +6,7 @@ import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType } from "./target.js";
 
 export function resolveRustConstructInstance(
   type: Type,

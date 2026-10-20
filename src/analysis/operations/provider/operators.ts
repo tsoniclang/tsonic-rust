@@ -14,7 +14,7 @@ import { asNode } from "../../../policy/identities/selected-source.js";
 import { KindBigIntLiteral, sourceSequenceInputIsEmpty } from "@tsonic/target-api/source";
 
 import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
-import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
+import { resolveRustExactNullishValueCarrier } from "../../types/resolution/target.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";

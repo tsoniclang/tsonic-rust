@@ -14,7 +14,7 @@ import { finalizeRustProviderOperationAbi } from "../../../policy/operations/mem
 import { providerFormRequiresSourceReceiver } from "../../../policy/operations/members/call-inputs.js";
 import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
 import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
-import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
+import { resolveRustExactNullishValueCarrier } from "../../types/resolution/target.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";

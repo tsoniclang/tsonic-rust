@@ -1,47 +1,25 @@
-import {
-  rustBigIntTargetType,
-  rustEmptyObjectTargetType,
-  rustObjectIdentityTargetType,
-  rustFixedArrayTargetType,
-  rustJsArrayTargetType,
-  rustJsSymbolTargetType,
-  rustSourceLocationTargetType,
-  rustAbsenceTargetType,
-  rustNeverTargetType,
-  rustOptionElementCarrier,
-  rustSourcePrimitiveTargetType,
-  rustStructuralObjectTargetType,
-  rustStructuralObjectCarrierValue,
-  rustSourceUnionCarrierValue,
-  rustSourceTypeCarrierValue,
-  rustStringTargetType,
-  rustTupleTargetType,
-  rustUnitTargetType,
-  rustVecTargetType,
-  isRustNumericCarrier,
-} from "../../../target-model/types/index.js";
+import { rustBigIntTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustFixedArrayTargetType, rustJsArrayTargetType, rustJsSymbolTargetType, rustSourceLocationTargetType, rustAbsenceTargetType, rustNeverTargetType, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue, rustSourceTypeCarrierValue, rustStringTargetType, rustTupleTargetType, rustUnitTargetType, rustVecTargetType, isRustNumericCarrier } from "../../../target-model/types/index.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 import { bindRustSourceAliasArguments, resolveRustSelectedTypeArguments } from "./generic-arguments.js";
-import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
-import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../objects/source-shapes.js";
+import { instantiateTargetType, resolveSourceProfileCarrier } from "./providers.js";
+import { providerCarrierFromRelations } from "../../../policy/types/project/provider-instantiation.js";
+import { resolveOwnedSourceProfileTypeName } from "../../../policy/identities/source-types.js";
+import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";
+import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../../../policy/types/objects/source-shapes.js";
 import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
 import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import {
-  sourcePropertyTypeEvidenceNodes,
-  sourceTransformedTypeFactEvidenceNodes,
-  ObjectLiteralProperty_Value,
-  sourceTypeIsAuthoredEmptyObject,
-} from "@tsonic/target-api/source";
+import { sourcePropertyTypeEvidenceNodes, sourceTransformedTypeFactEvidenceNodes, ObjectLiteralProperty_Value, sourceTypeIsAuthoredEmptyObject } from "@tsonic/target-api/source";
 import { structFactKey } from "@tsonic/tsts";
 import type { Node, StructFact, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRawPointerTargetType } from "../../../target-model/types/carriers/callables.js";
-import { isRustSourceRawPointer } from "../../operations/pointers/source-raw-pointers.js";
-import { resolveRustAuthoredBroadSourceValueTargetType, rustBroadSourceValueTargetType } from "./broad-values.js";
+import { isRustSourceRawPointer } from "../../../policy/operations/pointers/source-raw-pointers.js";
+import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
+import { rustBroadSourceValueTargetType } from "../../../policy/types/broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
 import { resolveRustSemanticConditionalAlias } from "./type-families.js";
@@ -51,7 +29,7 @@ import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { resolveRustIndexedRecordType } from "./records.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
-import type { RustSourceObjectField } from "../model/source-type-registry.js";
+import type { RustSourceObjectField } from "../../../target-model/records/source-types.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,

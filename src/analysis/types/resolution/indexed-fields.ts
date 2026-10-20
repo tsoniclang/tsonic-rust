@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../target-model/types/carriers/indexed-fields.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType } from "./target.js";
 
 export interface RustIndexedFieldSelection {
   readonly key: TargetTypeRef;

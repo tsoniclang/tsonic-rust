@@ -3,7 +3,7 @@ import { TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeParameters } from "../../../target-model/names/type-parameters.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType } from "./target.js";
 import { resolveRustAuthoredTargetType } from "./tuples.js";
 import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { bindRustExactTypeParameters } from "../../../target-model/types/carriers/generic-inference.js";

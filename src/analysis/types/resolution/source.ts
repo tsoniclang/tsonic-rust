@@ -11,7 +11,7 @@ import { resolveOwnedSourceProfileTypeName, resolveOwnedSourceProfileTypeNameFor
 import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";
 import { resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";
-import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "../../../policy/types/resolution/target.js";
+import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
 import { isRustSourceRawPointer } from "../../../policy/operations/pointers/source-raw-pointers.js";

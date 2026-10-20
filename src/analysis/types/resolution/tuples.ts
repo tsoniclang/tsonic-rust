@@ -1,6 +1,6 @@
 import { Node_Initializer, Node_Type, TypeReferenceNode_TypeName, TypeOperatorNode_Type } from "@tsonic/target-api/source";
 import { resolveOwnedSourceProfileTypeNameForDeclaration } from "../../../policy/identities/source-types.js";
-import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
+import { resolveRustTargetType } from "./target.js";
 import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "./source.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
