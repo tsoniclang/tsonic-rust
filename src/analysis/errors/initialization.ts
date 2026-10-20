@@ -4,7 +4,7 @@ import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/art
 import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustBinaryHookPlan } from "../project/index.js";
-import type { RustModuleInitializationPlan } from "../module-initialization/analyze.js";
+import type { RustModuleInitializationPlan } from "../../target-model/records/module-initialization.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/model.js";
 import type { RustSourcePackageFacadeClassifications } from "../program/source-package-facades.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";

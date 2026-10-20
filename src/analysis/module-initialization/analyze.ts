@@ -1,6 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { resolve } from "node:path";
-import type { SourceBinaryEntryIssue } from "@tsonic/target-api/source";
 
 import {
   KindExportAssignment,
@@ -14,22 +13,12 @@ import {
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustFoundation } from "../../target-model/foundation/model.js";
 import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { rustModuleInitializationIsStateIndependent } from "./independence.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 
-export type RustModuleInitializationRequirement =
-  | { readonly kind: "required" }
-  | { readonly kind: "not-required" }
-  | { readonly kind: "unresolved"; readonly node: Node; readonly reason: string };
-
-export interface RustModuleInitializationPlan {
-  readonly issues: readonly SourceBinaryEntryIssue[];
-  requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement;
-  minimumFoundation(): RustFoundation;
-  hasStateIndependentCycle(sourceFile: SourceFile): boolean;
-}
+import type { RustModuleInitializationPlan, RustModuleInitializationRequirement } from "../../target-model/records/module-initialization.js";
+import { createRustModuleInitializationRecords } from "../program/records/module-initialization.js";
 
 type RustModuleInitializationPlanInput = Pick<
   RustAnalysisContext,
@@ -67,21 +56,7 @@ export function createRustModuleInitializationPlan(
       for (const sourceFile of component) stateIndependentCycles.add(sourceFile);
     }
   }
-  return Object.freeze({
-    issues,
-    requirementFor(sourceFile: SourceFile) {
-      return requirements.get(sourceFile) ?? unresolved(
-        sourceFile,
-        "Source file has no finalized Rust module-initialization requirement.",
-      );
-    },
-    minimumFoundation() {
-      return minimumFoundation;
-    },
-    hasStateIndependentCycle(sourceFile: SourceFile) {
-      return stateIndependentCycles.has(sourceFile);
-    },
-  });
+  return createRustModuleInitializationRecords({ issues, requirements, minimumFoundation, stateIndependentCycles });
 }
 
 function classifyModuleInitialization(

@@ -20,7 +20,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustModuleInitializationPlan } from "../module-initialization/analyze.js";
+import type { RustModuleInitializationPlan } from "../../target-model/records/module-initialization.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustRuntimeReferencePlan } from "../project/index.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
