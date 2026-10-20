@@ -23,7 +23,7 @@ import type { RustClassValuePlan } from "../../target-model/records/class-values
 
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 
-import type { RustFrameCallablePlan } from "../callables/frame-values.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectStructuralView } from "../../target-model/records/project-structural-views.js";
 

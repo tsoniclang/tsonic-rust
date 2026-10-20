@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { failTargetAnalysisInvariant, failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceBindingScope, type SourceProgramNavigation } from "@tsonic/target-api/source";
@@ -13,9 +13,7 @@ import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
-import type { RustCallableActivation } from "../../target-model/records/callable-ownership.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -25,21 +23,6 @@ import type { RustProjectConstructionPlan } from "../project-types/construction-
 import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 
 import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding, RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
-import type { RustFrameInputAdmission } from "../../target-model/records/frame-emission.js";
-
-export interface RustFrameCallablePlan {
-  readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
-  readonly receiverOwners: ReadonlyMap<Node, Node>;
-  readonly definitions: readonly RustFrameCallableDefinition[];
-  readonly issues: readonly RustSourceCallableSpecializationIssue[];
-  definitionFor(carrier: TargetTypeRef): RustFrameCallableDefinition | undefined;
-  definitionForOwner(declaration: Node): RustFrameCallableDefinition | undefined;
-  entryFor(carrier: TargetTypeRef): RustFrameCallableEntryDefinition | undefined;
-  implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
-  bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
-  isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
-  counterNameFor(definition: RustFrameCallableDefinition): string | undefined;
-}
 
 export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
   sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan;
@@ -178,10 +161,9 @@ export function createRustFrameCallablePlan(input: {
       const immutable = classDefinition === undefined ? !input.navigation.declarationUseSummary(declaration).bindingWritten
         : classStorage === undefined ? !input.navigation.declarationUseSummary(declaration).memberWritten
           : classStorage.kind === "shared" || classStorage.kind === "copy";
-      const storage = entry === undefined && lexicalStorage?.storage === "location" ? "location" as const
-        : !standalone && representation?.mutable === true || immutable && (classDefinition !== undefined || entry === undefined)
-        ? "value" as const : entry?.copy === true || entry === undefined && isRustCopyCarrier(carrier)
-          ? "cell" as const : "borrow-cell" as const;
+      const storage = selectRustFrameBindingStorage(Object.freeze({ entry, carrier,
+        location: lexicalStorage?.storage === "location", standalone, mutableObject: representation?.mutable === true,
+        immutable, classOwned: classDefinition !== undefined }));
       const fieldName = classDefinition === undefined ? `binding_${frameBindings.length}`
         : input.projectTypes.fieldStorageName(classDefinition, declaration);
       if (fieldName === undefined) {
@@ -319,33 +301,17 @@ export function createRustFrameCallablePlan(input: {
       activationInputs.set(node, selected);
     }
   }
-  let counterNames: ReadonlyMap<RustFrameCallableDefinition, string | undefined> | undefined;
-  const plan: RustFrameCallablePlan = Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
-    activationInputs, receiverOwners,
-    definitionFor: (carrier: TargetTypeRef) => selectedDefinitions.get(closedMetadataKey(carrier)),
-    definitionForOwner: (declaration: Node) => byDeclaration.get(declaration),
-    entryFor(carrier: TargetTypeRef) {
-      return selectedEntries.get(closedMetadataKey(carrier));
-    },
-    implementationFor: (declaration: Node) => implementations.get(declaration),
-    isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean {
-      const selected = activationInputs.get(expression)?.get(definition);
-      return selected !== undefined && (selected.independent || selected.receiverOwner === undefined || receiver === undefined ||
-        receiverOwners.get(receiver) === selected.receiverOwner);
-    },
-    bindingFor: (declaration: Node) => bindings.get(declaration),
-    counterNameFor(definition: RustFrameCallableDefinition): string | undefined {
-      if (counterNames === undefined) failTargetAnalysisInvariant("tsonic-rust",
-        "Native frame counter decisions require finalized construction plans before publication.");
-      if (!counterNames.has(definition)) failTargetPlannerInvariant("tsonic-rust",
-        "A native frame counter lookup requires its exact original sealed frame definition.");
-      return counterNames.get(definition);
-    },
+  const producer = createRustFrameCallableRecords({
+    definitions: Object.freeze(definitions), issues: Object.freeze(issues), activationInputs, receiverOwners,
+    selectedDefinitions, selectedEntries, byDeclaration, implementations, bindings,
   });
-  return Object.freeze({ ...plan,
+  return Object.freeze({ ...producer.records,
     sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan {
-      counterNames ??= prepareRustRetainedFrameCounters(definitions, input.ast, constructions);
-      return plan;
+      return producer.finalizeCounters(prepareRustRetainedFrameCounters(definitions, input.ast, constructions));
     },
   });
 }
+
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
+import { createRustFrameCallableRecords } from "../program/records/frame-callables.js";
+import { selectRustFrameBindingStorage } from "../../policy/ownership/frame-bindings.js";

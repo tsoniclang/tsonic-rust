@@ -4,7 +4,7 @@ import type { RustGenericRequirement, RustDeclarationGenericRequirementContract 
 import type { RustSourceGenericContract, RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
-import type { RustFrameCallablePlan } from "../callables/frame-values.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../target-model/records/frame-callables.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";

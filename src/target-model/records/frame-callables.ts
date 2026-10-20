@@ -3,6 +3,34 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustCallableOrigin, RustCallableSignature } from "../types/carriers/callable-signatures.js";
 import type { RustClosureCaptureFact } from "./operation-selections.js";
 import type { RustCallableActivation } from "./callable-ownership.js";
+import type { RustSourceCallableSpecializationIssue } from "./callable-issues.js";
+import type { RustFrameInputAdmission } from "./frame-emission.js";
+
+export interface RustFrameCallablePlan {
+  readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
+  readonly receiverOwners: ReadonlyMap<Node, Node>;
+  readonly definitions: readonly RustFrameCallableDefinition[];
+  readonly issues: readonly RustSourceCallableSpecializationIssue[];
+  definitionFor(carrier: TargetTypeRef): RustFrameCallableDefinition | undefined;
+  definitionForOwner(declaration: Node): RustFrameCallableDefinition | undefined;
+  entryFor(carrier: TargetTypeRef): RustFrameCallableEntryDefinition | undefined;
+  implementationFor(declaration: Node): RustFrameCallableImplementation | undefined;
+  bindingFor(declaration: Node): RustFrameCallableBinding | undefined;
+  isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean;
+  counterNameFor(definition: RustFrameCallableDefinition): string | undefined;
+}
+
+export interface RustFrameCallableRecordInput {
+  readonly definitions: readonly RustFrameCallableDefinition[];
+  readonly issues: readonly RustSourceCallableSpecializationIssue[];
+  readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
+  readonly receiverOwners: ReadonlyMap<Node, Node>;
+  readonly selectedDefinitions: ReadonlyMap<string, RustFrameCallableDefinition>;
+  readonly selectedEntries: ReadonlyMap<string, RustFrameCallableEntryDefinition>;
+  readonly byDeclaration: ReadonlyMap<Node, RustFrameCallableDefinition>;
+  readonly implementations: ReadonlyMap<Node, RustFrameCallableImplementation>;
+  readonly bindings: ReadonlyMap<Node, RustFrameCallableBinding>;
+}
 
 export interface RustFrameCallableImplementation {
   readonly declaration: Node;

@@ -7,7 +7,7 @@ import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/ty
 import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, type RustProjectTypeDefinition,
   type RustProjectTypePolicy } from "./type-policy.js";
 import type { RustObjectRepresentationPlan } from "./object-representation.js";
-import type { RustFrameCallablePlan } from "../callables/frame-values.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";

@@ -18,7 +18,8 @@ import { rustStructuralObjectCarrierValue } from "../../target-model/types/carri
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { createRustFrameCallablePlan, type RustFrameCallablePlan, type RustFrameCallablePlanRegistry } from "./frame-values.js";
+import { createRustFrameCallablePlan, type RustFrameCallablePlanRegistry } from "./frame-values.js";
+import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";
 import type { RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
