@@ -2,6 +2,25 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustProjectConstructorSignature, RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustFrameCallableDefinition } from "./frame-callables.js";
+import type { RustFinalizedSourceInput } from "./finalized-operation.js";
+import type { RustExternalProjectBase } from "../types/external-project-types.js";
+
+export type RustExternalInitialization =
+  | { readonly kind: "empty" }
+  | { readonly kind: "value" | "optional"; readonly input: RustFinalizedSourceInput };
+
+export interface RustConstructionEmissionRecords {
+  readonly implicitConstructorParameters: { readonly get: (signature: RustProjectConstructorSignature, carrier: TargetTypeRef) => readonly RustImplicitConstructorParameter[] | undefined };
+  readonly externalProjectInitialization: { readonly get: (call: Node) => RustExternalInitialization | undefined };
+  readonly inheritedExternalInitialization: { readonly get: (signature: RustProjectConstructorSignature) => { readonly name: string } | undefined };
+  readonly externalProjectBase: { readonly get: (definition: RustProjectTypeDefinition) => RustExternalProjectBase | undefined };
+}
+
+export interface RustImplicitConstructorParameter {
+  readonly declaration: Node;
+  readonly name: string;
+  readonly carrier: TargetTypeRef;
+}
 
 export interface RustConstructionField {
   readonly declaration: Node;

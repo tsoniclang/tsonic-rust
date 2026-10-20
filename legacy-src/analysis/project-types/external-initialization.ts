@@ -12,9 +12,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../operations/target-operation.js";
 
-export type RustExternalInitialization =
-  | { readonly kind: "empty" }
-  | { readonly kind: "value" | "optional"; readonly input: RustFinalizedSourceInput };
+import type { RustExternalInitialization } from "../../target-model/records/construction.js";
 
 export function selectRustExternalInitialization(
   base: RustExternalProjectBase,

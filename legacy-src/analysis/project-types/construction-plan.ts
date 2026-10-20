@@ -14,7 +14,8 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
 import type { RustConstructionExpression, RustConstructionPoint } from "../../target-model/records/construction.js";
-import { selectRustExternalInitialization, type RustExternalInitialization } from "./external-initialization.js";
+import { selectRustExternalInitialization } from "./external-initialization.js";
+import type { RustExternalInitialization } from "../../target-model/records/construction.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import type { RustConstructionField, RustConstructionLayer, RustConstructionProjection, RustConstructionPreparationSelection } from "../../target-model/records/construction.js";

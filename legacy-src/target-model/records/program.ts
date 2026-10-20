@@ -167,6 +167,10 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly suspendedDeclaration: RustRecordFamily<RustSuspendedCallableEmission>;
   readonly suspendedDeclarations: RustRecordFamily<readonly RustSuspendedCallableImplementation[]>;
   readonly classConstruction: RustRecordFamily<RustAdmittedConstruction>;
+  readonly implicitConstructorParameters: import("./construction.js").RustConstructionEmissionRecords["implicitConstructorParameters"];
+  readonly externalProjectInitialization: import("./construction.js").RustConstructionEmissionRecords["externalProjectInitialization"];
+  readonly inheritedExternalInitialization: import("./construction.js").RustConstructionEmissionRecords["inheritedExternalInitialization"];
+  readonly externalProjectBase: import("./construction.js").RustConstructionEmissionRecords["externalProjectBase"];
   readonly nativeClass: RustRecordFamily<RustNativeClassEmission>;
   readonly borrowedInitializer: RustRecordFamily<RustBorrowedInitializer>;
   readonly captureStorageScope: RustRecordFamily<RustCaptureStorageScope>;

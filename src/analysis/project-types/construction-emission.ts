@@ -4,6 +4,11 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustConstructionProducer } from "../program/records/construction.js";
 import type { RustConstructionPreparationSelection, RustConstructionProjection } from "../../target-model/records/construction.js";
+import type { RustProjectConstructorSignature } from "../../target-model/types/project-types.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustTargetIdentifier, isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustSourceOptionalTargetType, rustStringTargetType } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustConstructionEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -11,6 +16,13 @@ export function analyzeRustConstructionEmission(input: {
 }): readonly TargetDiagnostic[] {
   const { program } = input;
   const issues: TargetDiagnostic[] = [];
+  const parameterRequests = new WeakMap<RustProjectConstructorSignature, Set<string>>();
+  const inherited = new Set<RustProjectConstructorSignature>();
+  const externalCalls = new Set<Node>();
+  for (const definition of program.projectTypes.definitions) {
+    const base = program.projectTypes.externalBaseForDefinition(definition);
+    if (base !== undefined) input.producer.externalBase(definition, base);
+  }
   const contexts = new Map(program.physicalEmissionContexts.contexts.filter(context => context.use.role === "constructor-layer")
     .map(context => [context.use.subject, context]));
   for (const definition of program.projectTypes.definitions) {
@@ -23,6 +35,47 @@ export function analyzeRustConstructionEmission(input: {
       for (const issue of rejected) issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: issue.node,
         message: `${issue.reason} Node kind: ${program.source.ast.kindName(issue.node)}.`, evidence: ["target.capability=rust.backend.constructor-readiness"] });
       continue;
+    }
+    const rootCarrier = program.projectTypes.openCarrier(definition);
+    for (const layer of plan.layers) {
+      if (layer.constructor === undefined) {
+        const relation = program.projectTypes.relationship(rootCarrier, layer.definition);
+        if (relation.kind !== "related") failTargetAnalysisInvariant("tsonic-rust", "An inherited construction layer requires its exact native generic relationship.", layer.definition.declaration);
+        const key = closedMetadataKey(relation.targetType);
+        let requests = parameterRequests.get(layer.signature);
+        if (requests === undefined) { requests = new Set(); parameterRequests.set(layer.signature, requests); }
+        if (!requests.has(key)) {
+          requests.add(key);
+          const parameters = layer.signature.parameters.map(parameter => {
+            const abi = program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
+            const carrier = abi === undefined ? undefined : program.projectTypes.instantiateMemberCarrier(parameter.parameterDeclaration, relation.targetType, abi.parameterCarrier);
+            const name = rustTargetIdentifier(parameter.parameterName);
+            if (carrier === undefined || !isValidRustIdentifier(name)) failTargetAnalysisInvariant("tsonic-rust", "An inherited effective constructor parameter requires its exact instantiated native ABI and authored name.", parameter.parameterDeclaration);
+            return Object.freeze({ declaration: parameter.parameterDeclaration, carrier, name });
+          });
+          input.producer.parameters(layer.signature, relation.targetType, Object.freeze(parameters));
+        }
+      }
+      const base = program.projectTypes.externalBaseForDefinition(layer.definition);
+      if (base === undefined) continue;
+      if (layer.baseCall !== undefined) {
+        if (externalCalls.has(layer.baseCall)) continue;
+        externalCalls.add(layer.baseCall);
+        const initialization = program.projectConstructions.externalInitializationForCall(layer.baseCall);
+        if (initialization === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted external construction requires its exact selected native argument ABI.", layer.baseCall);
+        input.producer.external(layer.baseCall, initialization);
+      } else if (!inherited.has(layer.signature)) {
+        inherited.add(layer.signature);
+        const signature = layer.signature;
+        const parameter = signature.parameters[0];
+        const abi = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
+        if (!signature.implicit || signature.declaration === undefined || !base.constructorDeclarations.includes(signature.declaration) ||
+          signature.parameters.length !== 1 || parameter === undefined || !parameter.acceptsOmission || parameter.rest || abi?.form !== "optional" ||
+          abi.mode !== "value" || !rustTargetTypeRefEquals(abi.parameterCarrier, rustSourceOptionalTargetType(rustStringTargetType())) ||
+          !rustTargetTypeRefEquals(abi.valueCarrier, abi.parameterCarrier) || base.fields.some(field => field.initializer.kind === "message" && field.initializer.parameterIndex !== 0))
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted inherited external constructor requires its exact optional string ABI.", layer.definition.declaration);
+        input.producer.inherited(signature, rustTargetIdentifier(parameter.parameterName));
+      }
     }
     const preparations = new Map<Node, RustConstructionPreparationSelection>();
     const retainedReferences = new Set<Node>();
