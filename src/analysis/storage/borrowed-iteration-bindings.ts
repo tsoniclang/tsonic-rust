@@ -1,9 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import {
-  BinaryExpression_Left, BinaryExpression_Right, ForInOrOfStatement_Initializer,
-  ForInOrOfStatement_Statement, Node_Expression, Node_Name, Node_Operand,
-  VariableDeclarationList_Declarations, type SourceProgramNavigation,
-} from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ForInOrOfStatement_Initializer, ForInOrOfStatement_Statement, Node_Expression, Node_Name, Node_Operand, VariableDeclarationList_Declarations, type SourceProgramNavigation } from "@tsonic/target-api/source";
 
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
@@ -11,7 +7,7 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
 import { rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
-import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
+import { rustBorrowedStringInputs } from "./provider-borrows.js";
 
 export function selectRustBorrowedIterationBinding(
   node: Node, ast: AstReader, records: RustProgramRecords, navigation: SourceProgramNavigation,
