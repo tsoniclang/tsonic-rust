@@ -1,61 +1,13 @@
 import { requireRustRecord } from "../program/records/required-records.js";
-import {
-  ConditionalExpression_Condition,
-  ConditionalExpression_WhenFalse,
-  ConditionalExpression_WhenTrue,
-  TemplateExpression_TemplateSpans,
-  TemplateSpan_Expression,
-  KindBinaryExpression,
-  KindCallExpression,
-  KindConditionalExpression,
-  KindElementAccessExpression,
-  KindFalseKeyword,
-  KindFunctionExpression,
-  KindIdentifier,
-  KindArrayLiteralExpression,
-  KindBigIntLiteral,
-  KindNewExpression,
-  KindNoSubstitutionTemplateLiteral,
-  KindNonNullExpression,
-  KindNumericLiteral,
-  KindParenthesizedExpression,
-  KindPostfixUnaryExpression,
-  KindPrefixUnaryExpression,
-  KindPropertyAccessExpression,
-  KindStringLiteral,
-  KindSatisfiesExpression,
-  KindSpreadElement,
-  KindTemplateExpression,
-  KindTrueKeyword,
-  KindTypeOfExpression,
-  KindVoidExpression,
-  Node_Expression,
-  sourceIntegerLiteralValue,
-  sourceExpressionResultDisposition,
-} from "@tsonic/target-api/source";
+import { ConditionalExpression_Condition, ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindElementAccessExpression, KindFalseKeyword, KindFunctionExpression, KindIdentifier, KindArrayLiteralExpression, KindBigIntLiteral, KindNewExpression, KindNoSubstitutionTemplateLiteral, KindNonNullExpression, KindNumericLiteral, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindStringLiteral, KindSatisfiesExpression, KindSpreadElement, KindTemplateExpression, KindTrueKeyword, KindTypeOfExpression, KindVoidExpression, Node_Expression, sourceIntegerLiteralValue, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNumericLiteralIsFinite } from "../numeric/literal-admission.js";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { getRustTypeofRuntimeKind } from "../../target-model/types/runtime-kind.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
-import {
-  getRustGeneratorProtocol,
-  isRustBigIntCarrier,
-  isRustBoolCarrier,
-  isRustIntegerCarrier,
-  isRustNumericCarrier,
-  isRustOptionCarrier,
-  isRustSourceStringConvertibleCarrier,
-  rustOptionElementCarrier,
-  rustBigIntTargetType,
-  rustAbsenceTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-} from "../../target-model/types/index.js";
-
-import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
-import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustBigIntTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../target-model/types/index.js";
+import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../target-model/records/operations.js";
+import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation, type RustFactWalk, rustOperationContext } from "../program/walk.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
 import { setCarrierFact } from "../operations/project-calls.js";
@@ -71,14 +23,12 @@ import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, sele
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { type Node, type SourceFile } from "@tsonic/tsts";
+import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../target-model/types/await.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { normalizeSelectedLiteralCarrier } from "./selected-literals.js";
-import { rustOperationContext } from "../program/walk.js";
+import { resolveTemplateExpressionCarrier } from "./template-strings.js";
 
 export function resolveExpressionCarrierUncached(
   walk: RustFactWalk,
@@ -572,53 +522,4 @@ export function resolveExpressionCarrierUncached(
       return undefined;
     }
   }
-}
-
-function resolveTemplateExpressionCarrier(
-  walk: RustFactWalk,
-  expression: Node,
-  sourceFile: SourceFile,
-): TargetTypeRef | undefined {
-  const spans = TemplateExpression_TemplateSpans(walk.context.ast, expression);
-  if (spans === undefined || !isDenseDataArray(spans) || spans.some((span) => span === undefined)) {
-    appendRustDiagnostic(
-      walk,
-      "RUST_TEMPLATE_STRUCTURE_INVALID",
-      "Template expression requires a dense checked template-span sequence.",
-      expression,
-      ["target.capability=rust.syntax.template"],
-    );
-    return undefined;
-  }
-  const substitutions: { expression: Node; carrier: TargetTypeRef }[] = [];
-  for (const span of spans as readonly Node[]) {
-    const substitution = TemplateSpan_Expression(walk.context.ast, span);
-    const carrier = substitution === undefined
-      ? undefined
-      : resolveExpressionCarrier(walk, substitution, sourceFile, undefined);
-    if (substitution === undefined || carrier === undefined ||
-      !isRustSourceStringConvertibleCarrier(carrier)) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_TEMPLATE_SUBSTITUTION_UNSUPPORTED",
-        "Template substitution requires an exact closed primitive, string, or undefined carrier.",
-        span,
-        [
-          "target.capability=rust.syntax.template",
-          `substitution.carrier=${JSON.stringify(carrier)}`,
-        ],
-      );
-      return undefined;
-    }
-    substitutions.push({ expression: substitution, carrier });
-  }
-  const resultCarrier = rustStringTargetType();
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "template-string", "analysis/expressions/value-resolution.ts");
-  walk.context.records.targetOperations.source(expression, {
-    kind: "template-string",
-    operationId: "tsonic.rust.syntax.template-string",
-    resultCarrier,
-    substitutions,
-  });
-  return setCarrierFact(walk, expression, resultCarrier);
 }

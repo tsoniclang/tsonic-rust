@@ -1,11 +1,17 @@
-import type { Node } from "@tsonic/tsts";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { type Node, type SourceFile } from "@tsonic/tsts";
+import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { TemplateExpression_Head, TemplateExpression_TemplateSpans, TemplateSpan_Expression, TemplateSpan_Literal } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../program/model.js";
-import type { RustTemplateStringProducer } from "../program/records/template-strings.js";
-import type { RustTemplateStringEmission } from "../../target-model/records/template-strings.js";
-import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { type RustTargetProgram } from "../program/model.js";
+import { type RustTemplateStringProducer } from "../program/records/template-strings.js";
+import { type RustTemplateStringEmission } from "../../target-model/records/template-strings.js";
+import { isRustStringCarrier, isRustSourceStringConvertibleCarrier, rustStringTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { requireRustRecord } from "../program/records/required-records.js";
+import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { setCarrierFact } from "../operations/project-calls.js";
+import { resolveExpressionCarrier } from "./carriers.js";
+import { type TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustTemplateStrings(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustTemplateStringProducer): readonly TargetDiagnostic[] {
@@ -38,4 +44,90 @@ export function analyzeRustTemplateStrings(program: Omit<RustTargetProgram, "rea
     if (parts.length === spans.length) producer.publish(node, { head: ast.text(head), parts: Object.freeze(parts) });
   }
   return Object.freeze(issues);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function resolveTemplateExpressionCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+): TargetTypeRef | undefined {
+  const spans = TemplateExpression_TemplateSpans(walk.context.ast, expression);
+  if (spans === undefined || !isDenseDataArray(spans) || spans.some((span) => span === undefined)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_TEMPLATE_STRUCTURE_INVALID",
+      "Template expression requires a dense checked template-span sequence.",
+      expression,
+      ["target.capability=rust.syntax.template"],
+    );
+    return undefined;
+  }
+  const substitutions: { expression: Node; carrier: TargetTypeRef }[] = [];
+  for (const span of spans as readonly Node[]) {
+    const substitution = TemplateSpan_Expression(walk.context.ast, span);
+    const carrier = substitution === undefined
+      ? undefined
+      : resolveExpressionCarrier(walk, substitution, sourceFile, undefined);
+    if (substitution === undefined || carrier === undefined ||
+      !isRustSourceStringConvertibleCarrier(carrier)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_TEMPLATE_SUBSTITUTION_UNSUPPORTED",
+        "Template substitution requires an exact closed primitive, string, or undefined carrier.",
+        span,
+        [
+          "target.capability=rust.syntax.template",
+          `substitution.carrier=${JSON.stringify(carrier)}`,
+        ],
+      );
+      return undefined;
+    }
+    substitutions.push({ expression: substitution, carrier });
+  }
+  const resultCarrier = rustStringTargetType();
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "template-string", "analysis/expressions/value-resolution.ts");
+  walk.context.records.targetOperations.source(expression, {
+    kind: "template-string",
+    operationId: "tsonic.rust.syntax.template-string",
+    resultCarrier,
+    substitutions,
+  });
+  return setCarrierFact(walk, expression, resultCarrier);
 }
