@@ -68,6 +68,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly programEmission: import("./program-emission.js").RustProgramEmissionRecords["programEmission"];
   readonly packageCargo: import("./source-package-crates.js").RustPackageCargoRecords["packageCargo"];
   readonly signatureVisibility: import("./signature-visibility.js").RustSignatureVisibilityRecords["signatureVisibility"];
+  readonly providerSourceOccurrence: import("./provider-evaluation.js").RustProviderEvaluationRecords["providerSourceOccurrence"];
   readonly sourcePackageComponents: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageComponents"];
   readonly sourcePackageInitializers: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageInitializers"];
   readonly sourcePackageErrors: import("./source-package-errors.js").RustSourcePackageErrorRecords["sourcePackageErrors"];

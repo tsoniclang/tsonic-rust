@@ -453,6 +453,8 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
+  for (const occurrence of callableValues.value.emissionContexts.sourceOccurrences)
+    context.records.providerEvaluationPlans.occurrence(occurrence);
   const localStorageAliases = analyzeRustLocalStorageAliases({ ast: context.ast,
     navigation: context.source.navigation, nativeNodes: context.nativeNodes, records });
   const localBindingIssues = analyzeRustLocalBindings({ ast: context.ast, nodes: context.nativeNodes, records,

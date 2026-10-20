@@ -91,7 +91,7 @@ export function planRustProviderEvaluationScope(
   if (!mutableRootsAreDisjoint(operationNode, fact, mutableInputs, context)) {
     return { kind: "failed" };
   }
-  const sourceSlots = sourceRuntimeSlots(context.input.program.physicalEmissionContexts, operationNode, fact);
+  const sourceSlots = sourceRuntimeSlots(context.input.program.records, operationNode, fact);
   if (sourceSlots === undefined) failRustPlannerInvariant("Provider rendering requires its admitted original source occurrence and evaluation slots.", operationNode);
   const stabilizationKeys = providerInputStabilizationKeys(
     context,
@@ -342,7 +342,7 @@ function providerInputStabilizationKeys(
     .filter(([, inputs]) => inputs.length > 0 && inputs.every((input) =>
       preplannedInputs?.has(input) === true))
     .map(([key]) => key));
-  const targetOrder = providerTargetRuntimeSlotKeys(context.input.program.physicalEmissionContexts, operationNode, fact)!
+  const targetOrder = providerTargetRuntimeSlotKeys(context.input.program.records, operationNode, fact)!
     .filter((key) => !preplannedKeys.has(key));
   const targetCounts = new Map<string, number>();
   for (const key of targetOrder) {
