@@ -10,7 +10,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { KindSpreadElement, Node_Expression } from "@tsonic/target-api/source";
 import type { RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
-import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
+import { rustCallableInputMatches } from "../../policy/conversions/callable-input.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function rustSourceCallArgumentCarriers(

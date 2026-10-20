@@ -9,7 +9,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
+import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";

@@ -4,7 +4,7 @@ import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import { rustCallableConversionMatches } from "../../target-model/conversions/callable.js";
-import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
+import { rustCallableInputMatches } from "../../policy/conversions/callable-input.js";
 
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
