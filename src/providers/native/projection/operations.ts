@@ -3,18 +3,9 @@ import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js"
 import { sourceGenericParameterName } from "./type-arguments.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustNamedTypeTraitContract, rustNativeTraitRef } from "../../../target-model/types/carriers/native.js";
-import type {
-  RustCompilerDependency,
-  RustCompilerFunction,
-  RustCompilerTypeParameter,
-  RustCompilerTypeTraits,
-  RustCompilerTraitDispatch,
-} from "../model/model.js";
+import type { RustCompilerDependency, RustCompilerFunction, RustCompilerTypeParameter, RustCompilerTypeTraits, RustCompilerTraitDispatch } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
-import type {
-  RustNamedTypeTraitContract,
-  RustTargetTraitRef,
-} from "../../../target-model/types/model.js";
+import type { RustNamedTypeTraitContract, RustTargetTraitRef } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition } from "../../packages/model.js";
 import type { RustProviderOperationDefinition } from "../../../target-model/identities/provider-relations.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
