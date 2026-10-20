@@ -23,7 +23,8 @@ import { rustRestSequenceElements } from "../../target-model/operations/rest-ass
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray, hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { selectRustUnionArmMapping, rustUnionLeaves } from "../../target-model/types/union-relations.js";
+import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping } from "./union-relations.js";
 
 const stringCarrier = rustStringTargetType();
 const exactStringCarrier = rustJsStringTargetType();

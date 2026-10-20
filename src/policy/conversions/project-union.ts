@@ -3,7 +3,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
-import { isRustUnionArmMappings, selectRustUnionArmMapping } from "../../target-model/types/union-relations.js";
+import { isRustUnionArmMappings } from "../../target-model/types/union-relations.js";
+import { selectRustUnionArmMapping } from "./union-relations.js";
 import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import type { RustProjectUpcastRelation, RustProjectUnionMapArm, RustProjectUnionMapConversion } from "../../target-model/conversions/project-union.js";
