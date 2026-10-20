@@ -12,7 +12,7 @@ import { resolveParameterAbi } from "../callables/parameter-facts.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-parameter-contracts.js";

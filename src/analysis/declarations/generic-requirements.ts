@@ -30,7 +30,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { classifyRustCallableRequirements } from "./generic-callable-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustFrameCallablePlan } from "../../target-model/records/frame-callables.js";

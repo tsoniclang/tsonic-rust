@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { finalizeProjectSourceGenericArguments } from "../operations/project-call-generics.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 
 import { rustOptionElementCarrier, rustCallableProtocol, rustNativeCallableProtocol, substituteRustTargetGenerics } from "../../target-model/types/index.js";

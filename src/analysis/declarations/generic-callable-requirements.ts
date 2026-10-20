@@ -12,7 +12,7 @@ import { isRustIndependentCallable, isRustGenericTypeDeclaration } from "./gener
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 

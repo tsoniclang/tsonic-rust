@@ -9,7 +9,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 

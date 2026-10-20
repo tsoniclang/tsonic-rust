@@ -14,7 +14,7 @@ import { createRustAssociatedRequirementCollector } from "./associated-requireme
 
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";

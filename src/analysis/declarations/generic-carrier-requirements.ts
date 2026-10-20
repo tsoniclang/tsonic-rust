@@ -27,7 +27,7 @@ import type { RustTargetGenericBindings } from "../../target-model/types/carrier
 import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
 import { rustGenericCallablePhysicalBindings } from "../../policy/types/callables/generic-bindings.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
