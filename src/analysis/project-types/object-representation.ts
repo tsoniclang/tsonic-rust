@@ -1,27 +1,14 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { selectRustObjectRepresentationKind, selectRustDispatchObjectLifetime, selectRustMethodSelfMode } from "../../policy/objects/representation.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import {
-  sourceNodesEqual,
-  Node_Expression,
-  sourceObjectMemberDeclarations,
-  type SourceDeclarationUse,
-  type SourceExpressionValueFlowSummary,
-  type SourceProgramNavigation,
-  type SourceProgramSemantics,
-} from "@tsonic/target-api/source";
-import type {
-  RustProjectTypeDefinition,
-  RustProjectTypePolicy,
-} from "./type-policy.js";
-import {
-  rustLifetimeOutlives,
-  rustStaticLifetime,
-} from "../../target-model/lifetimes/index.js";
-import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { sourceNodesEqual, Node_Expression, sourceObjectMemberDeclarations, type SourceDeclarationUse, type SourceExpressionValueFlowSummary, type SourceProgramNavigation, type SourceProgramSemantics } from "@tsonic/target-api/source";
+import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.js";
+
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
 import type { RustReceiverStoragePlan } from "./receiver-storage.js";
 
-import type { RustObjectRepresentation, RustObjectRepresentationKind } from "../../target-model/records/object-representation.js";
+import type { RustObjectRepresentation } from "../../target-model/records/object-representation.js";
 
 export interface RustObjectRepresentationPlan extends RustReceiverFieldAliasQueries {
   readonly receiverCaptures: RustReceiverFieldCaptureQueries;
@@ -56,14 +43,14 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
   let current: RustObjectRepresentationPlan | undefined;
   const requireCurrent = (): RustObjectRepresentationPlan => {
     if (current === undefined) {
-      throw new Error("Rust object representation plan was read before source analysis initialized it.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust object representation plan was read before source analysis initialized it.");
     }
     return current;
   };
   return Object.freeze({
     initialize(input: RustObjectRepresentationAnalysisInput) {
       if (current !== undefined) {
-        throw new Error("Rust object representation plan can be initialized only once.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust object representation plan can be initialized only once.");
       }
       current = createRustObjectRepresentationPlan(input);
       return current;
@@ -121,21 +108,14 @@ export function createRustObjectRepresentationPlan(
       flow.aliasDeclarations.some(declaration => !hasStableLocalBinding(declaration, input)));
     const aliasedMutableValue = mutable && creationFlows.some((flow) =>
       flow.bindingAliased);
-    const kind: RustObjectRepresentationKind = input.projectTypes.isPolymorphic(definition)
-      ? "open-hierarchy"
-      : creationFlows.length > 0 &&
-            (definition.kind === "class" || interfaceHasOnlyLocalLiteralBindings(definition, creationFlows, input)) &&
-            !exported &&
-            !identityObserved &&
-            !escapes &&
-            !hasIncompleteFlow &&
-            !input.referenceDeclarations?.has(definition.declaration) &&
-            !promotedStorage &&
-            !aliasedMutableValue
-          ? "value"
-          : mutable || definition.kind !== "class"
-            ? "shared-mutable"
-            : "shared-immutable";
+    const kind = selectRustObjectRepresentationKind({
+      polymorphic: input.projectTypes.isPolymorphic(definition),
+      hasLocalConstructions: creationFlows.length > 0,
+      localValueEligible: definition.kind === "class" || interfaceHasOnlyLocalLiteralBindings(definition, creationFlows, input),
+      exported, identityObserved, escapes, hasIncompleteFlow, promotedStorage,
+      referenceRequired: input.referenceDeclarations?.has(definition.declaration) === true,
+      aliasedMutableValue, mutable, class: definition.kind === "class",
+    });
     return Object.freeze({
       definition,
       kind,
@@ -143,11 +123,19 @@ export function createRustObjectRepresentationPlan(
       identityObserved,
       escapes,
       constructionCount: creationFlows.length,
-      dispatchObjectLifetime: selectDispatchObjectLifetime(definition, kind),
+      dispatchObjectLifetime: selectRustDispatchObjectLifetime(definition, kind),
     });
   });
   const byDefinition = new Map(representations.map((representation) =>
     [representation.definition, representation] as const));
+  const selfModes = new Map<Node, "ref" | "mut-ref">();
+  for (const definition of input.projectTypes.definitions) {
+    const representation = byDefinition.get(definition);
+    for (const member of sourceObjectMemberDeclarations(input.ast, definition.declaration)) {
+      if (member !== undefined) selfModes.set(member,
+        selectRustMethodSelfMode(representation?.kind, mutatingMethods.has(member)));
+    }
+  }
   return Object.freeze({
     receiverCaptures,
     aliases: receiverAliases.aliases,
@@ -156,13 +144,7 @@ export function createRustObjectRepresentationPlan(
     representationFor(definition: RustProjectTypeDefinition | undefined) {
       return definition === undefined ? undefined : byDefinition.get(definition);
     },
-    methodSelfMode(member: Node) {
-      const owner = input.projectTypes.definitionContainingDeclaration(member);
-      const representation = owner === undefined ? undefined : byDefinition.get(owner);
-      return representation?.kind === "value" && mutatingMethods.has(member)
-        ? "mut-ref"
-        : "ref";
-    },
+    methodSelfMode: (member: Node) => selfModes.get(member) ?? "ref",
   });
 }
 
@@ -183,22 +165,6 @@ function hasStableLocalBinding(
     current = input.ast.parent(current);
   }
   return false;
-}
-
-function selectDispatchObjectLifetime(
-  definition: RustProjectTypeDefinition,
-  kind: RustObjectRepresentationKind,
-): RustLifetimeRef | undefined {
-  if (kind !== "open-hierarchy") return undefined;
-  const lifetimes = definition.genericParameters.flatMap((parameter) =>
-    parameter.kind === "lifetime" ? [parameter.lifetime] : []);
-  if (lifetimes.length === 0) return rustStaticLifetime;
-  const contract = Object.freeze({
-    declaration: definition.declaration,
-    parameters: definition.genericParameters,
-  });
-  return lifetimes.find((candidate) =>
-    lifetimes.every((source) => rustLifetimeOutlives(source, candidate, contract)));
 }
 
 function projectReceiverEscapes(
@@ -377,7 +343,7 @@ function writesCapturedField(
   captures: RustReceiverFieldCaptureQueries,
 ): boolean {
   let current = reference;
-  for (let depth = 0; depth < 256; depth += 1) {
+  while (true) {
     const selection = input.ast.is.IsPropertyAccessExpression(current)
       ? input.semantics.forNode(current).operations.propertyAccess(current)
       : input.ast.is.IsElementAccessExpression(current) ? input.semantics.forNode(current).operations.elementAccess(current) : undefined;
@@ -386,7 +352,6 @@ function writesCapturedField(
     if (parent === undefined || Node_Expression(input.ast, parent) !== current && input.ast.name(parent) !== current) return false;
     current = parent;
   }
-  return false;
 }
 
 function isInstanceCallable(node: Node, ast: AstReader): boolean {
