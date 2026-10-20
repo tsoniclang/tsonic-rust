@@ -14,7 +14,7 @@ import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../..
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
-import type { RustNativeCapturePlan } from "./native-captures.js";
+import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 
 import type { RustSuspendedCallableImplementation } from "../../target-model/records/suspended-callables.js";
 

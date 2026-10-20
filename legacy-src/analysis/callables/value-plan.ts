@@ -28,7 +28,8 @@ import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests,
   type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
-import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
+import { createRustNativeCapturePlan } from "./native-captures.js";
+import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
   type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
 import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdentityRequests, prepareRustGenericCallableIdentitySources,

@@ -5,7 +5,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 
-import type { RustNativeCaptureSelection } from "./native-captures.js";
+import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
 import type { RustGenericCallableImplementation } from "../../target-model/records/generic-callables.js";
 
 import type { RustGenericCallableEnvironment } from "../../target-model/records/generic-callables.js";

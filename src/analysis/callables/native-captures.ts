@@ -2,23 +2,13 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetGenericReferences, type RustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-
-export type RustNativeCaptureSelection =
-  | { readonly kind: "resolved"; readonly captures: readonly TargetTypeRef[];
-      readonly receiverFields: readonly TargetTypeRef[]; readonly receivers: readonly TargetTypeRef[];
-      readonly inputs: readonly RustNativeCallableInput[]; readonly environment: RustTargetGenericReferences }
-  | { readonly kind: "unresolved"; readonly reason: string };
-
-export interface RustNativeCapturePlan {
-  forDeclaration(declaration: Node): RustNativeCaptureSelection;
-}
 
 export interface RustNativeCaptureConstruction extends RustNativeCapturePlan {
   require(declaration: Node): RustNativeCaptureSelection;
@@ -101,12 +91,13 @@ export function createRustNativeCapturePlan(input: {
     forDeclaration: (declaration: Node) => construct(declaration, false),
     require: (declaration: Node) => construct(declaration, true),
     complete(): RustNativeCapturePlan {
-      if (published !== undefined) throw new Error("Native capture environments complete exactly once.");
-      const completed = new Map(selections);
-      published = Object.freeze({
-        forDeclaration: (declaration: Node) => nodes.has(declaration) ? completed.get(declaration) ?? unrequired : foreign,
-      });
+      if (published !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native capture environments complete exactly once.");
+      published = sealRustNativeCaptures(nodes, selections, foreign, unrequired);
       return published;
     },
   });
 }
+
+import type { RustNativeCaptureSelection, RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
+import { sealRustNativeCaptures } from "../program/records/native-captures.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

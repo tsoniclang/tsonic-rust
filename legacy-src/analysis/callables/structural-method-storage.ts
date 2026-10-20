@@ -36,7 +36,8 @@ import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustSourceObjectField, RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
-import type { RustNativeCaptureConstruction, RustNativeCaptureSelection } from "./native-captures.js";
+import type { RustNativeCaptureConstruction } from "./native-captures.js";
+import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
 import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustFrameCallablePlan } from "./frame-values.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
