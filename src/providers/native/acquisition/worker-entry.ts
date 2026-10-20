@@ -1,22 +1,9 @@
 import { randomUUID } from "node:crypto";
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import {
-  createRustCompilerProjectSnapshot,
-  createRustCompilerStandardLibrarySnapshot,
-} from "./cargo-snapshot.js";
+import { createRustCompilerProjectSnapshot, createRustCompilerStandardLibrarySnapshot } from "./cargo-snapshot.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
-import type {
-  RustCompilerWorkerRequest,
-  RustCompilerWorkerResponse,
-} from "./protocol.js";
+import type { RustCompilerWorkerRequest, RustCompilerWorkerResponse } from "./protocol.js";
 import { loadRustCompilerModule } from "./rustdoc.js";
 import { createRustdocDocumentLoader } from "./rustdoc-artifact.js";
 
