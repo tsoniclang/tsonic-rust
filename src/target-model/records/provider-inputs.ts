@@ -8,4 +8,5 @@ export interface RustProviderSliceEmission {
 
 export interface RustProviderInputRecords {
   readonly providerSlice: { readonly get: (node: Node, input: RustFinalizedSliceInput) => RustProviderSliceEmission | undefined };
+  readonly providerReference: { readonly get: (node: Node, input: RustFinalizedSourceInput) => boolean | undefined };
 }

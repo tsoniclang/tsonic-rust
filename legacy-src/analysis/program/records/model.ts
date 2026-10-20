@@ -123,6 +123,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly integerTruncationPlans: import("./integer-truncation.js").RustIntegerTruncationProducer;
   readonly providerFormPlans: import("./provider-forms.js").RustProviderFormProducer;
   readonly callableConversionPlans: import("./callable-conversions.js").RustCallableConversionProducer;
+  readonly argumentViewPlans: import("./argument-views.js").RustArgumentViewProducer;
   readonly providerInputPlans: import("./provider-inputs.js").RustProviderInputProducer;
   readonly conversionEmissionPlans: import("./conversion-emission.js").RustConversionEmissionProducer;
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;

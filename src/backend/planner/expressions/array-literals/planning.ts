@@ -14,7 +14,7 @@ import { planRustBorrowedSequenceAppend } from "./borrowed-sequences.js";
 type Contribution = { readonly kind: "value"; readonly value: RustExpr }
   | { readonly kind: "spread"; readonly input: RustBorrowedSequenceInput };
 
-export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr {
+export function planArrayLiteral(node: Node, context: RustPlanContext, representation: "value" | "slice" = "value"): RustExpr {
   const fact = context.input.program.records.targetOperation.get(node);
   if (fact?.kind !== "array-literal" && fact?.kind !== "tuple-literal")
     failRustPlannerInvariant("An admitted array literal requires its exact native construction record.", node);
@@ -26,6 +26,12 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     elements: [...sources.map(value), ...fact.omittedOptionalElementIndexes.map((): RustExpr => ({ kind: "none" }))] };
   const contributions = fact.contributions.map((contribution, index): Contribution => contribution.kind === "spread"
     ? { kind: "spread", input: contribution.input } : { kind: "value", value: value(sources[index]) });
+  if (representation === "slice") {
+    if (context.input.program.records.argumentView.get(node)?.slice !== true)
+      failRustPlannerInvariant("An admitted native slice operand requires its exact source construction form.", node);
+    return { kind: "slice-literal", elements: contributions.map(contribution => contribution.kind === "value" ? contribution.value
+      : failRustPlannerInvariant("An admitted direct slice has no spread preparation.", node)) };
+  }
   const array: RustExpr = contributions.every(contribution => contribution.kind === "value")
     ? { kind: "vec-literal", elements: contributions.map(contribution => contribution.value) }
     : planSpreadArray(node, contributions, fact.elementCarrier, context);

@@ -152,6 +152,7 @@ import { analyzeRustLambdaEmission } from "../callables/lambda-emission.js";
 import { analyzeRustIntegerTruncation } from "../expressions/integer-truncation.js";
 import { analyzeRustProviderForms } from "../operations/provider-forms.js";
 import { analyzeRustCallableEmission } from "../conversions/callable-emission.js";
+import { analyzeRustArgumentViews } from "../expressions/argument-views.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -719,6 +720,7 @@ export function analyzeRustTargetProgram(
   const assertionIssues = analyzeRustSourceAssertions(program, context.nativeNodes, context.records.sourceAssertionPlans);
   if (assertionIssues.length !== 0) return rejectedTargetStage(assertionIssues);
   analyzeRustStringComparisonViews(program, context.nativeNodes, context.records.stringComparisonPlans);
+  analyzeRustArgumentViews(program, context.nativeNodes, context.records.argumentViewPlans);
   const nativeLayoutTypes = analyzeRustNativeMemoryEmission(program, context.nativeNodes, context.records.nativeLayoutPlans);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans,
     [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types]);

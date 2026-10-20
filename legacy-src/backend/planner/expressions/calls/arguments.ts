@@ -351,7 +351,7 @@ function shapeRustSourceCallInput(
     : selectedInput.kind === "string-literal" && !mutable
       ? { kind: "str-literal", value: selectedInput.value }
       : mutable
-        ? createRustMutableReferenceArgument(selectedInput)
+        ? createRustMutableReferenceArgument(context, selectedInput, argumentNode)
         : createRustSharedReferenceArgument(context, selectedInput, argumentNode);
 }
 

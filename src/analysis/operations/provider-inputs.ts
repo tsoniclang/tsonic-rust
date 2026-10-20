@@ -20,6 +20,13 @@ export function analyzeRustProviderInputs(program: Omit<RustTargetProgram, "reac
     seen.set(occurrence.node, admitted);
     const nodes = new Map(occurrence.inputs.map(({ input, slot }) => [input, slot.node]));
     for (const { input, slot } of occurrence.inputs) {
+      if (producer.records.providerReference.get(slot.node, input) === undefined) {
+        const parameter = program.records.sourceParameterAbi.get(slot.node);
+        const reborrow = program.records.valueRead.get(slot.node)?.referenceReborrow;
+        producer.reference(slot.node, input, parameter?.mode === input.mode && rustTargetTypeRefEquals(parameter.parameterCarrier, input.parameterCarrier) ||
+          reborrow !== undefined && rustTargetTypeRefEquals(reborrow.target, input.sourceCarrier) &&
+            (input.mode === "ref" || input.mode === "mut-ref" && reborrow.source.mutable));
+      }
       const contexts = program.physicalEmissionContexts.operands.filter(operand => operand.origin.kind === "call-input" &&
         operand.origin.operationNode === occurrence.node && operand.origin.input === input);
       const raw = program.records.runtimeCarrier.get(slot.node)?.carrier;

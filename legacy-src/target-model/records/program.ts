@@ -64,6 +64,8 @@ export interface RustRecordFamily<T> {
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly providerSlice: import("./provider-inputs.js").RustProviderInputRecords["providerSlice"];
+  readonly providerReference: import("./provider-inputs.js").RustProviderInputRecords["providerReference"];
+  readonly argumentView: import("./argument-views.js").RustArgumentViewRecords["argumentView"];
   readonly lambdaBody: import("./lambda-emission.js").RustLambdaEmissionRecords["lambdaBody"];
   readonly integerTruncation: import("./integer-truncation.js").RustIntegerTruncationRecords["integerTruncation"];
   readonly providerForm: import("./provider-forms.js").RustProviderFormRecords["providerForm"];
