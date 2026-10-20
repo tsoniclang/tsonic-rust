@@ -4,11 +4,14 @@ import type { RustDeadCodeDisposition } from "../../../target-model/records/nati
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
-import { rustCallableProtocol } from "../../../target-model/types/index.js";
+import type { RustConstructorShapeEmission } from "../../../target-model/records/structural-emission.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planRustConstructorShape(
   definition: RustStructuralShapeDefinition,
+  selected: RustConstructorShapeEmission,
   generics: RustGenerics,
   type: RustType,
   visibility: RustVisibility,
@@ -17,41 +20,26 @@ export function planRustConstructorShape(
   superTraits: readonly RustType[] = [],
   fieldDeadCode: (index: number, role: "getter" | "setter") => RustDeadCodeDisposition | undefined = () => undefined,
 ): readonly RustItem[] | undefined {
-  if (definition.dispatchName === undefined || type.kind !== "named") return undefined;
+  if (definition.dispatchName === undefined || type.kind !== "named") failRustPlannerInvariant("An admitted constructor shape requires its named native dispatch type.");
   const functions: RustTraitFunction[] = [];
-  const callable = (name: string, carrier: TargetTypeRef, construction: boolean): boolean => {
-    const protocol = rustCallableProtocol(carrier);
-    const result = protocol === undefined ? undefined : render(protocol.result);
-    const parameters = protocol?.parameters.map((parameter, index) => {
+  for (const member of selected.members) {
+    const result = render(member.result);
+    const parameters = member.parameters.map((parameter, index) => {
       const type = render(parameter);
       return type === undefined ? undefined : { name: `argument${index}`, type };
     });
-    if (result === undefined || parameters === undefined || parameters.some(parameter => parameter === undefined)) return false;
-    functions.push({ kind: "function", name, generics: emptyRustGenerics, selfParam: rustSelfParameter(construction || definition.construction === undefined ? "rc" : "ref"),
-      params: parameters as NonNullable<typeof parameters[number]>[], returnType: result, errorType });
-    return true;
-  };
-  if (definition.construction !== undefined && !callable(definition.construction.targetName, definition.construction.carrier, true)) return undefined;
-  for (const [index, field] of definition.fields.entries()) {
-    if (field.method) {
-      if (!callable(field.targetName, field.carrier, false)) return undefined;
-    } else {
-      const selected = render(field.carrier);
-      if (selected === undefined || field.property === undefined) return undefined;
-      functions.push({ kind: "function", name: field.property.getterTargetName, generics: emptyRustGenerics,
-        deadCode: fieldDeadCode(index, "getter"),
-        selfParam: rustSelfParameter(field.property.selfMode), params: [], returnType: selected, errorType });
-      if (field.property.setterTargetName !== undefined) functions.push({ kind: "function", name: field.property.setterTargetName,
-        deadCode: fieldDeadCode(index, "setter"),
-        generics: emptyRustGenerics, selfParam: rustSelfParameter(field.property.selfMode), params: [{ name: "value", type: selected }],
-        returnType: { kind: "unit" }, errorType });
-    }
+    if (result === undefined || parameters.some(parameter => parameter === undefined)) failRustPlannerInvariant("An admitted constructor member requires its exact native signature.");
+    const field = member.field;
+    const params = parameters as NonNullable<typeof parameters[number]>[];
+    functions.push({ kind: "function", name: member.name, generics: emptyRustGenerics,
+      ...(field === undefined ? {} : { deadCode: fieldDeadCode(field.index, field.role) }),
+      selfParam: rustSelfParameter(member.selfMode), params: field?.role === "setter" ? [{ name: "value", type: params[0]!.type }] : params,
+      returnType: result, errorType });
   }
   const trait: RustType = { kind: "named", path: definition.dispatchName, genericArguments: type.genericArguments };
   const dispatch: RustType = { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: {
     kind: "trait-object", principal: { trait }, autoTraits: [],
-    ...(definition.genericParameters.filter(parameter => parameter.kind === "lifetime").length === 1
-      ? { lifetime: { kind: "named" as const, name: definition.genericParameters.find(parameter => parameter.kind === "lifetime")!.lifetime.name } } : {}),
+    ...(selected.lifetime === undefined ? {} : { lifetime: rustLifetimeToAst(selected.lifetime) }),
   } }] };
   const field = (owner: string, name: string): RustExpr => ({ kind: "field", receiver: { kind: "path", path: owner }, name });
   return [

@@ -93,6 +93,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly closedNativeProjection: import("./object-projections.js").RustObjectProjectionRecords["closedNativeProjection"];
   readonly projectProjection: import("./object-projections.js").RustObjectProjectionRecords["projectProjection"];
   readonly projectClosedValue: import("./object-projections.js").RustObjectProjectionRecords["projectClosedValue"];
+  readonly structuralShapeEmission: import("./structural-emission.js").RustStructuralEmissionRecords["structuralShapeEmission"];
   readonly structuralShape: import("./project-emission.js").RustProjectEmissionRecords["structuralShape"];
   readonly projectStateConstruction: import("./project-emission.js").RustProjectEmissionRecords["projectStateConstruction"];
   readonly projectProjectionImplementations: import("./project-emission.js").RustProjectEmissionRecords["projectProjectionImplementations"];

@@ -95,6 +95,7 @@ import { analyzeRustClassValueEmission } from "../objects/class-value-emission.j
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
+import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -527,6 +528,8 @@ export function analyzeRustTargetProgram(
   context.records.nativeDeclarations.publish(context.ast, context.nativeNodes, context.sourceFiles, nativeDeclarations.forms);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
+  const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
+  if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
   const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
   if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
   analyzeRustObjectProjections(program, context.nativeNodes, context.records.objectProjectionPlans);
