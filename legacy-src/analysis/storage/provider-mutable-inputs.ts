@@ -43,7 +43,8 @@ export function createRustProviderMutableInputPlan(input: RustProviderMutableInp
 export function selectRustProviderMutableInputs(
   operationNode: Node, operation: ProviderOperation, input: RustProviderMutableInputContext,
 ): RustProviderMutableInputSelection | undefined {
-  if ((input.records.compoundWrite.get(operationNode) ?? input.records.targetOperation.get(operationNode)) !== operation)
+  const owned = input.records.compoundWrite.get(operationNode) ?? input.records.targetOperation.get(operationNode);
+  if (owned !== operation && !(owned?.kind === "union-property" && owned.variants.some(variant => variant.operation === operation)))
     return Object.freeze({ kind: "rejected", node: operationNode,
       reason: "Mutable provider admission requires its exact owned operation fact." });
   const mutable = rustFinalizedSourceInputs(operation.abi).filter(value => value.mode === "mut-ref");

@@ -1,7 +1,23 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionSourceOccurrence } from "./physical-emission-contexts.js";
+import type { RustFinalizedSourceInput } from "./finalized-operation.js";
+import type { SourceExpressionEffects } from "@tsonic/target-api/source";
+
+export type RustMutableProviderStorage =
+  | { readonly kind: "direct" | "owned"; readonly rootDeclaration: Node | undefined }
+  | { readonly kind: "project-field"; readonly rootDeclaration: Node | undefined;
+      readonly receiver: Node; readonly path: readonly string[] };
+
+export interface RustMutableProviderOperand {
+  readonly key: string;
+  readonly input: RustFinalizedSourceInput;
+  readonly node: Node;
+  readonly storage: RustMutableProviderStorage;
+}
 
 export interface RustProviderEvaluationRecords {
+  readonly providerMutableOperands: { readonly get: (node: Node, operation: RustEmissionProviderOperation) => readonly RustMutableProviderOperand[] | undefined };
+  readonly providerStorageEffects: { readonly get: (node: Node) => SourceExpressionEffects | undefined };
   readonly providerSourceOccurrence: {
     readonly get: (node: Node, operation: RustEmissionProviderOperation) => RustPhysicalEmissionSourceOccurrence | undefined;
   };

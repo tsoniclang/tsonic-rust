@@ -79,7 +79,6 @@ import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
-import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { analyzeRustReachability } from "../reachability/plan.js";
@@ -110,6 +109,7 @@ import { analyzeRustProjectEmission } from "../project-types/emission.js";
 import { analyzeRustOptionalStorageEmission } from "../project-types/optional-storage-emission.js";
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
+import { analyzeRustProviderMutableEmission } from "../storage/provider-mutable-emission.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -432,17 +432,6 @@ export function analyzeRustTargetProgram(
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
-  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
-    navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
-  const mutableInputDiagnostics: TargetDiagnostic[] = [];
-  for (const node of context.nativeNodes) {
-    const selection = providerMutableInputs.forOperation(node);
-    if (selection?.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
-      category: "error", source: "tsonic-rust", message: selection.reason,
-      sourceNode: selection.node,
-      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
-  }
-  if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const callableValues = context.callableValues.seal({
     nativeGenerics: context.records.nativeGenericPlans,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
@@ -500,7 +489,6 @@ export function analyzeRustTargetProgram(
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     ownership: ownership.ownership,
-    providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
@@ -599,6 +587,8 @@ export function analyzeRustTargetProgram(
   analyzeRustProjectMemberErrors(program, context.nativeNodes, context.records.errorEmissionPlans);
   analyzeRustDeclarationErrorOwners(program, context.nativeNodes, context.records.errorEmissionPlans);
   analyzeRustSourceBindingEmission(program, context.nativeNodes, context.records.sourceBindingEmissionPlans);
+  const providerMutableIssues = analyzeRustProviderMutableEmission(program, context.nativeNodes, context.records.providerEvaluationPlans);
+  if (providerMutableIssues.length !== 0) return rejectedTargetStage(providerMutableIssues);
   const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans);
