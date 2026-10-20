@@ -23,6 +23,8 @@ import {
   type RustFoundation,
 } from "../../target-model/foundation/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustNativeRootFoundations, rustRuntimeExportFoundations } from "../../target-model/foundation/native-paths.js";
 
 export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFoundation {
   let foundation: RustFoundation = "core";
@@ -193,33 +195,14 @@ export function rustFoundationForSelectedOperation(
 }
 
 export function rustFoundationForPath(path: string): RustFoundation {
-  const root = path.split("::", 1)[0] ?? path;
-  if (root === "std" || root === "js_abi" || root === "tsonic_rust_js") {
-    return "std";
-  }
-  if (root === "alloc" || root === "String" || root === "Vec" ||
-    root === "Box" || root === "Rc" || root === "Arc") {
-    return "alloc";
-  }
+  const [root = path, member] = path.split("::", 2);
+  const native = rustNativeRootFoundations[root];
+  if (native !== undefined) return native;
   if (root === "rt" || root === "tsonic_rust_runtime") {
-    const exportPath = path.slice(root.length + "::".length);
-    return exportPath === "block_on" || exportPath === "capture_error_stack" || exportPath === "Record"
-      ? "std"
-      : runtimeCoreExports.has(exportPath) ? "core" : "alloc";
+    const selected = member === undefined ? undefined : rustRuntimeExportFoundations[member];
+    if (selected === undefined) return failTargetAnalysisInvariant("tsonic-rust",
+      "A selected runtime path requires its registered native feature requirement.");
+    return selected;
   }
   return "core";
 }
-
-const runtimeCoreExports = new Set([
-  "finish_finally",
-  "Completion",
-  "Completion::Normal",
-  "Completion::Return",
-  "Completion::Break",
-  "Completion::Continue",
-  "iter_cloned",
-  "iter_copied",
-  "native_shift_left",
-  "native_shift_right",
-  "native_unsigned_shift_right",
-]);
