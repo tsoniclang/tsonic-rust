@@ -17,6 +17,7 @@ import type { RustProjectCallableAdapter } from "../../target-model/records/proj
 import type { RustReachability } from "../reachability/model.js";
 import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
 import { analyzeRustProjectRootEmission } from "./root-emission.js";
+import { analyzeRustProjectDispatchEmission } from "./dispatch-emission.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
   const { ast } = program.source;
@@ -258,5 +259,7 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     producer.implementations(definition, implementations);
   }
   for (const root of roots) analyzeRustProjectRootEmission(program, root.definition, root.carrier, producer, methodRequest);
+  for (const definition of members.keys()) if (program.projectTypes.isPolymorphic(definition))
+    analyzeRustProjectDispatchEmission(program, definition, reachability, producer);
   return Object.freeze(issues);
 }

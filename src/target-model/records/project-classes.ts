@@ -5,6 +5,7 @@ import type { RustProjectCallableAdapter } from "./project-callable-adapters.js"
 import type { RustProjectDowncastRoute } from "../types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
 import type { RustProjectFieldImplementation, RustProjectFieldDispatchPlan } from "./field-writes.js";
+import type { RustDeadCodeDisposition } from "./native-liveness.js";
 
 export type RustProjectCallableAdapterIndex = ReadonlyMap<Node, ReadonlyMap<Node, ReadonlyMap<string, RustProjectCallableAdapter>>>;
 
@@ -44,6 +45,7 @@ export interface RustProjectCallableSignature {
 }
 
 export interface RustProjectClassRecords {
+  readonly projectDispatchEmission: { readonly get: (definition: RustProjectTypeDefinition) => RustProjectDispatchEmission | undefined };
   readonly projectRootEmission: { readonly get: (carrier: TargetTypeRef) => RustProjectRootEmission | undefined };
   readonly projectRelationship: { readonly get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => TargetTypeRef | undefined };
   readonly projectMethodArguments: { readonly get: (member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef) => readonly TargetTypeRef[] | undefined };
@@ -97,4 +99,25 @@ export interface RustProjectRootContractEmission {
 export interface RustProjectRootEmission {
   readonly projections: readonly TargetTypeRef[];
   readonly contracts: readonly RustProjectRootContractEmission[];
+}
+
+export interface RustProjectDispatchEmission {
+  readonly publiclyReachable: boolean;
+  readonly deadCode: RustDeadCodeDisposition | undefined;
+  readonly projection: { readonly slot: string; readonly deadCode: RustDeadCodeDisposition | undefined } | undefined;
+  readonly routes: readonly { readonly route: RustProjectDowncastRoute; readonly deadCode: RustDeadCodeDisposition | undefined }[];
+  readonly fields: ReadonlyMap<Node, {
+    readonly dispatch: RustProjectFieldDispatchPlan;
+    readonly read: string;
+    readonly write: string | undefined;
+    readonly capture: string | undefined;
+    readonly contentMutation: boolean;
+    readonly deadCode: Readonly<Record<"read" | "write" | "capture" | "content", RustDeadCodeDisposition | undefined>>;
+  }>;
+  readonly accessors: readonly { readonly declaration: Node; readonly role: "read" | "write"; readonly slot: string; readonly deadCode: RustDeadCodeDisposition | undefined }[];
+  readonly methods: readonly { readonly declaration: Node; readonly variant: RustProjectMethodDispatchVariant; readonly exact: boolean;
+    readonly virtualDeadCode: RustDeadCodeDisposition | undefined; readonly exactDeadCode: RustDeadCodeDisposition | undefined }[];
+  readonly methodWrites: readonly { readonly property: RustProjectMethodPropertyEmission; readonly slot: string; readonly deadCode: RustDeadCodeDisposition | undefined }[];
+  readonly projectSupers: readonly TargetTypeRef[];
+  readonly structuralSupers: readonly TargetTypeRef[];
 }
