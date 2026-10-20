@@ -22,6 +22,7 @@ import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { planRustAbsentValue, planRustPresentValue } from "./optional-storage.js";
 import { planRustDiscardedPromise } from "./discarded-promises.js";
+import { planRustExpressionExit } from "./eager-exits.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 
@@ -100,6 +101,8 @@ export function planExpressionBeforeValueProjections(node: Node, context: RustPl
 
 export function planRawExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse,
   access: RustExpressionAccess = "value"): RustExpr {
+  const exit = context.input.program.records.expressionExit.get(node);
+  if (exit !== undefined) return planRustExpressionExit(node, exit, context, planExpression);
   const handler = context.input.program.records.nativeHandler.get(node);
   const planned = handler === undefined ? planExpressionInner(node, context, resultUse, access)
     : planRustNativeHandler(node, handler, context, resultUse, planExpression);

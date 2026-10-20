@@ -122,7 +122,7 @@ export function analyzeRustValueReads(program: Omit<RustTargetProgram, "reachabi
         }
       }
       if (failed) continue;
-      plans.push({ carrier, value: Object.freeze({ exits: isRustNeverCarrier(source), flow: applied.has("flow") ? flow : undefined, upcast: applied.has("cast") ? cast : undefined,
+      plans.push({ carrier, value: Object.freeze({ exits: program.records.expressionExit.get(node) !== undefined || isRustNeverCarrier(source), flow: applied.has("flow") ? flow : undefined, upcast: applied.has("cast") ? cast : undefined,
         downcast: applied.has("cast") ? downcast : undefined, object: applied.has("object") ? object : undefined,
         contextual: applied.has("contextual") ? contextual : undefined, option: applied.has("option") ? optional : undefined,
         fused: applied.has("flow") && applied.has("contextual") ? fused : undefined, borrowable: borrowable && applied.has("flow"),
