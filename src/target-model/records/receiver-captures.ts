@@ -22,4 +22,10 @@ export interface RustReceiverCapture {
 
 export interface RustReceiverCaptureEmissionRecords {
   readonly capturedFieldIdentity: { readonly get: (declaration: Node, reference: Node) => boolean | undefined };
+  readonly captureEnvironment: { readonly get: (owner: Node, reference: Node) => RustCaptureEnvironmentEmission | undefined };
+}
+
+export interface RustCaptureEnvironmentEmission {
+  readonly name: string;
+  readonly lexicalBinding: string | undefined;
 }

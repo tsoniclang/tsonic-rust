@@ -9,6 +9,7 @@ import type { RustCapturedFieldStorageFact } from "../../target-model/records/re
 import type { RustReceiverCaptureEmissionProducer } from "../program/records/receiver-captures.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustClosureCaptureEquals } from "../../target-model/records/equality.js";
+import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 
 export function validatedRustCapturedFieldStorageFact(
   declaration: Node,
@@ -58,6 +59,23 @@ export function analyzeRustReceiverCaptureEmission(program: Omit<RustTargetProgr
     const operation = program.records.targetOperation.get(node);
     const field = capture.recursiveField;
     const carrier = operation?.kind === "closure" ? operation.resultCarrier : program.records.runtimeCarrier.get(node)?.carrier;
+    for (const binding of capture.captures) {
+      const source = program.records.sourceBinding.get(binding.reference);
+      const functionValue = source !== undefined && program.source.ast.is.IsFunctionDeclaration(source.sourceDeclaration) &&
+        program.lexicalFunctions.forDeclaration(source.sourceDeclaration) !== undefined;
+      const lexicalBinding = source === undefined || !functionValue ? undefined : program.names.callableValueNameForDeclaration(source.sourceDeclaration);
+      const name = source === undefined ? undefined : functionValue ? lexicalBinding : program.records.sourceBindingEmission.get(source.sourceDeclaration)?.name;
+      if (source === undefined || name === undefined || !isValidRustIdentifier(name)) {
+        refuse(node, "rust.backend.closure-captures", "Callable expressions require finalized exact capture evidence.");
+        continue;
+      }
+      if (binding.mutable === true && (binding.storage !== "value" || operation?.kind !== "closure" ||
+        operation.resultCarrier.kind !== "closure" || operation.resultCarrier.callTrait !== "FnMut" && operation.resultCarrier.callTrait !== "FnOnce")) {
+        refuse(node, "rust.backend.native-mutable-capture", "A mutable value capture requires its exact owning native callable contract.");
+        continue;
+      }
+      producer.environment(node, binding.reference, { name, lexicalBinding });
+    }
     if (!rustClosureCaptureEquals(capture, capture) || (fixed === undefined ? field !== undefined : field === undefined ||
       fixed.declaration !== field.declaration || capture.recursiveDeclaration !== field.declaration || capture.invocationOwner !== undefined ||
       capture.captures.length !== 0 || capture.receivers.length !== 0 || capture.receiverFields.length !== 0 ||

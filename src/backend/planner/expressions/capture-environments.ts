@@ -4,8 +4,8 @@ import type { RustClosureCaptureFact } from "../../../target-model/records/opera
 
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustCapturedBinding, RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from "../program/plan-context.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { rustSourceBindingPath } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCaptureValue } from "./typed-locations.js";
@@ -20,23 +20,19 @@ export function planRustCapturedEnvironment(
   for (const [index, capture] of captures.entries()) {
     const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
       (requireRustCaptureOwnership(owner, capture.declaration, context).read.kind !== "clone");
-    if (context.syntheticNames === undefined || !requireRustCarrierRequirements(capture.carrier,
+    if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted native environment requires its hygienic name scope.", owner);
+    if (!requireRustCarrierRequirements(capture.carrier,
       [...(move ? [] : ["clone" as const]), ...(options.staticStorage ? ["static" as const] : [])],
       capture.reference, context)) return undefined;
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
-    if (binding === undefined) return undefined;
-    const functionValue = context.input.program.source.ast.is.IsFunctionDeclaration(binding.sourceDeclaration) &&
-      context.input.program.lexicalFunctions.forDeclaration(binding.sourceDeclaration) !== undefined;
-    const sourceName = (functionValue
-      ? context.input.program.names.callableValueNameForDeclaration(binding.sourceDeclaration)
-      : context.input.program.names.nameForDeclaration(binding.sourceDeclaration)) ?? "";
-    const sourcePath = functionValue ? sourceName : rustSourceBindingPath(context, binding);
-    if (!isValidRustIdentifier(sourceName) || sourcePath === undefined) return undefined;
+    const selected = context.input.program.records.captureEnvironment.get(owner, capture.reference);
+    if (binding === undefined || selected === undefined) failRustPlannerInvariant("An admitted environment requires its exact captured source binding.", capture.reference);
+    const sourceName = selected.name;
+    const sourcePath = selected.lexicalBinding ?? rustSourceBindingPath(context, binding);
+    if (sourcePath === undefined) failRustPlannerInvariant("An admitted captured binding requires its exact native path.", capture.reference);
     if (capture.mutable === true) {
       if (capture.storage !== "value" || !options.mutableValueCapture) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, owner),
-          "rust.backend.native-mutable-capture", "A mutable value capture requires its exact owning native callable contract."));
-        return undefined;
+        failRustPlannerInvariant("An admitted mutable capture requires its exact owning native callable contract.", owner);
       }
       capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: sourcePath },
         storage: "value", valueCarrier: capture.carrier });
