@@ -3,7 +3,7 @@ import { rustBindingStorageEquals } from "../../../target-model/records/equality
 import type { RustBindingStorageFact } from "../../../target-model/records/operation-selections.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustCaptureStorage } from "../../callables/capture-storage.js";
+import type { RustCaptureStorage } from "../../../target-model/records/capture-storage.js";
 import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustBindingLocationStorage } from "../../storage/binding-locations.js";

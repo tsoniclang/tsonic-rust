@@ -7,17 +7,11 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
 
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import { rustCallArgumentIsOwned } from "./parameter-passing.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import { selectRustBindingLocationStorage } from "../storage/binding-locations.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-
-export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable"> & {
-  readonly initialization?: "deferred";
-  readonly iterationScope?: Node;
-};
 
 export function rustCapturedBindingStorage(
   walk: RustFactWalk,
@@ -154,3 +148,5 @@ function singleOwnerDirectBinding(
       return true;
     });
 }
+
+import type { RustCaptureStorage } from "../../target-model/records/capture-storage.js";

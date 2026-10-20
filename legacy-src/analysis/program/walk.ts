@@ -46,7 +46,7 @@ import type { RustSourceProfileRegistry } from "../../policy/types/model/source-
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/index.js";
 import type { RustSelectedTargetOperation, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCaptureStorage } from "../callables/capture-storage.js";
+import type { RustCaptureStorage } from "../../target-model/records/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
