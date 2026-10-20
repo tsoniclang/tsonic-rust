@@ -1,3 +1,6 @@
+import { KindVariableDeclaration } from "@tsonic/target-api/source";
+import { appendRustDiagnostic, rustOperationContext, type RustFactWalk } from "../program/walk.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationPolicyContext } from "../../policy/model/operation-context.js";
 
 import type {
@@ -284,4 +287,41 @@ function resourceDisposalTargetsEqual(
 
 function rejected(reason: string): Extract<RustResourceManagementSelection, { readonly kind: "rejected" }> {
   return { kind: "rejected", reason };
+}
+
+export function recordResourceManagementFacts(walk: RustFactWalk): void {
+  walk.context.records.assertOpen();
+  const { ast } = walk.context;
+  for (const declaration of walk.context.nativeNodes) {
+    if (ast.kindName(declaration) !== KindVariableDeclaration) continue;
+    const declarationKind = ast.variableDeclarationKind(declaration);
+    if (declarationKind !== "using" && declarationKind !== "await using") continue;
+    requireRustRecord(walk.context.requiredRecords, "resourceManagement", declaration,
+      declarationKind, "recordResourceManagementFacts");
+    const selected = walk.context.records.resourceManagementPlans.select(
+      declaration,
+      rustOperationContext(walk, declaration),
+      walk.operationOptions,
+      (method) => {
+        const selfMode = walk.context.records.selfMode.get(method);
+        if (selfMode === undefined) return undefined;
+        return {
+          selfMode,
+          async: walk.context.records.asyncFunction.get(method) !== undefined,
+          fallible: walk.context.records.fallible.get(method) !== undefined,
+        };
+      },
+    );
+    if (selected.kind === "rejected") {
+      appendRustDiagnostic(
+        walk,
+        "RUST_RESOURCE_MANAGEMENT_NOT_PROVEN",
+        selected.reason,
+        declaration,
+        ["target.capability=rust.resource-management.selected-disposer"],
+      );
+      continue;
+    }
+    walk.context.generatedDeclarationUses.record(declaration, selected.projectDisposerDeclarations);
+  }
 }

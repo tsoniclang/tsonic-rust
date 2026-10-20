@@ -1,64 +1,14 @@
-import {
-  KindIdentifier,
-  KindParenthesizedExpression,
-  KindVariableDeclaration,
-  Node_Expression,
-  Node_Initializer,
-} from "@tsonic/target-api/source";
-
-import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
-import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
-import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../callables/future-values.js";
-
+import { KindIdentifier, KindParenthesizedExpression, KindVariableDeclaration, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
+import type { Node } from "@tsonic/tsts";
+import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
+import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "./future-values.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFactWalk } from "../program/walk.js";
 import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
-
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
 import { requireRustRecord } from "../program/records/required-records.js";
-import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
-
-export function recordResourceManagementFacts(walk: RustFactWalk): void {
-  walk.context.records.assertOpen();
-  const { ast } = walk.context;
-  for (const declaration of walk.context.nativeNodes) {
-    if (ast.kindName(declaration) !== KindVariableDeclaration) continue;
-    const declarationKind = ast.variableDeclarationKind(declaration);
-    if (declarationKind !== "using" && declarationKind !== "await using") continue;
-    requireRustRecord(walk.context.requiredRecords, "resourceManagement", declaration,
-      declarationKind, "recordResourceManagementFacts");
-    const selected = walk.context.records.resourceManagementPlans.select(
-      declaration,
-      rustOperationContext(walk, declaration),
-      walk.operationOptions,
-      (method) => {
-        const selfMode = walk.context.records.selfMode.get(method);
-        if (selfMode === undefined) return undefined;
-        return {
-          selfMode,
-          async: walk.context.records.asyncFunction.get(method) !== undefined,
-          fallible: walk.context.records.fallible.get(method) !== undefined,
-        };
-      },
-    );
-    if (selected.kind === "rejected") {
-      appendRustDiagnostic(
-        walk,
-        "RUST_RESOURCE_MANAGEMENT_NOT_PROVEN",
-        selected.reason,
-        declaration,
-        ["target.capability=rust.resource-management.selected-disposer"],
-      );
-      continue;
-    }
-    walk.context.generatedDeclarationUses.record(declaration, selected.projectDisposerDeclarations);
-  }
-}
+import type { RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 
 export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSourceErrorEffectSelection): void {
   walk.context.records.assertOpen();
@@ -134,10 +84,11 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSou
     const knownFuture = resolve(operand);
     requireRustRecord(walk.context.requiredRecords, "awaitValue", node,
       "await", "recordFutureValueFacts");
-    const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf =>
-      knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
-        ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf, sourceErrors) ?? rustFutureValueForSourceStorage(leaf),
-    (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions));
+    const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf => {
+      if (knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)) return knownFuture;
+      const intrinsic = rustFutureValueForSourceStorage(leaf);
+      return intrinsic === undefined ? rustFutureValueForStoredBranch(walk, operand, leaf, sourceErrors) : intrinsic;
+    }, (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions));
     if (awaiting === undefined) {
       appendRustDiagnostic(walk, "RUST_AWAIT_VALUE_CONTRACT_NOT_PROVEN",
         "Await requires a closed native branch selection with exact future effects and result conversions.", node,
@@ -145,33 +96,3 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSou
     }
   }
 }
-
-export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
-  const expression = Node_Expression(walk.context.ast, statement);
-  if (expression === undefined) {
-    return;
-  }
-  const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
-  const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
-    undefined, walk.context.typeDefinitions);
-  if (conversion !== undefined) {
-    requireRustRecord(walk.context.requiredRecords, "targetOperation", statement, "throw-op", "analysis/resources/suspension.ts");
-    walk.context.records.targetOperations.source(statement, Object.freeze({
-      kind: "throw-op",
-      operationId: "tsonic.rust.error.throw",
-      error: Object.freeze({ kind: "conversion", expression, conversion }),
-    }));
-    return;
-  }
-  if (carrier !== undefined && isRustProgramErrorCarrier(carrier)) {
-    requireRustRecord(walk.context.requiredRecords, "targetOperation", statement, "throw-op", "analysis/resources/suspension.ts");
-    walk.context.records.targetOperations.source(statement, {
-      kind: "throw-op",
-      operationId: "tsonic.rust.error.rethrow",
-      error: { kind: "program", expression, carrier },
-    });
-  }
-}
-
-// Callable expressions lower to Rust closures only when the selected target
-// callback supplies one finalized function-pointer carrier.
