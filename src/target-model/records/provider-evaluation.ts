@@ -27,6 +27,7 @@ export interface RustProviderEvaluationRecords {
 }
 
 export interface RustProviderEvaluationEmission {
+  readonly indexReceiverBorrow: boolean;
   readonly source: RustPhysicalEmissionSourceOccurrence;
   readonly force: ReadonlySet<string>;
   readonly orderConflicts: readonly (readonly string[])[];

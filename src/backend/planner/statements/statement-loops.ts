@@ -16,6 +16,7 @@ import { planBlockLike } from "./planning.js";
 import { planRustBindingPattern } from "../bindings/binding-patterns.js";
 import { planRustModuleBindingStore, planRustPromotedStorageWrite } from "../expressions/typed-locations.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
+import { planRustRuntimeSetExpression } from "../expressions/runtime-setters.js";
 
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
@@ -27,14 +28,7 @@ export function planRuntimeSetStatement(
   fact: Extract<import("../../../target-model/records/operations.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const admitted = context.input.program.records.runtimeSetter.get(expression);
-  if (admitted === undefined) failRustPlannerInvariant("Runtime setter requires its admitted native source operands and ABI correspondence.", expression);
-  const sourceArgumentNodes = admitted.sourceArguments;
-  const native = planProviderOperationExpression(context, fact, admitted.receiver, sourceArgumentNodes, expression, { resultUse: "value" });
-  if (native === undefined) failRustPlannerInvariant("An admitted runtime setter requires its native operation plan.", expression);
-  const completed = finishProviderOperationExpression(context, fact, native, expression);
-  if (completed === undefined) failRustPlannerInvariant("An admitted runtime setter requires its native completion plan.", expression);
-  return [{ kind: "expr", expr: completed }];
+  return [{ kind: "expr", expr: planRustRuntimeSetExpression(expression, fact, context) }];
 }
 
 export function planForOfStatement(

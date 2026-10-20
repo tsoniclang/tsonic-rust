@@ -101,6 +101,9 @@ export function analyzeRustProviderEvaluation(program: Omit<RustTargetProgram, "
           : "Direct mutable provider input cannot move across another effectful source input without changing its exact storage identity.", "RUST_UNSUPPORTED_AST");
     }
     producer.evaluation(source.node, source.operation, { source, slots: Object.freeze(slots), force, orderConflicts: Object.freeze(orderConflicts), effects,
+      indexReceiverBorrow: source.operation.abi.targetReceiver.kind === "input" && source.operation.abi.targetReceiver.input.mode === "ref" &&
+        source.operation.abi.targetReceiver.input.conversion.kind === "identity" && source.slots.some(slot => slot.source.kind === "receiver" &&
+          program.ownership.reads.get(slot.node)?.stablePlace === true),
       dispatch: source.operation.abi.dispatchInputs.length !== 0 });
   }
   return Object.freeze(issues);
