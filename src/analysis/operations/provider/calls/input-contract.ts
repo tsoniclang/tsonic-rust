@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import { isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTypeComponentEvidence } from "../../../types/resolution/source-evidence.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
-import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/selection.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { providerOperationFact } from "../../../../policy/operations/members/provider-templates.js";
 import { checkedCallIsConstruction, instantiateSelectedCallTemplate } from "./instantiation.js";

@@ -15,7 +15,8 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { Node_Initializer, Node_Expression, Node_Type } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
-import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceConstructorBySourceOwner } from "../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/selection.js";
 import { rustProviderArgumentBorrowsString } from "../../policy/ownership/provider-argument-borrow.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../policy/operations/source-profiles/error-source-profile.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";

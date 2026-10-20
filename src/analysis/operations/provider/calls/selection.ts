@@ -27,7 +27,8 @@ import { createRustPropertyProjectionSelector } from "../../../conversions/prope
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration } from "../operators.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
-import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceConstructorBySourceOwner } from "../../../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/selection.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/operations/source-profiles/generator-source-profile.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../../../policy/operations/source-profiles/error-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";

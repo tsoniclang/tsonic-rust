@@ -13,7 +13,7 @@ import { resolveRustProjectField } from "./provider/project-fields.js";
 import { rustSourceTypeCarrier } from "../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 
-import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/selection.js";
 import { selectRustGeneratorSourceProperty } from "../../policy/operations/source-profiles/generator-source-profile.js";
 import { selectRustBuiltinErrorProperty } from "./provider/builtin-errors.js";
 import { isIntrinsicSourceQualifier } from "./provider/source-qualifiers.js";

@@ -6,7 +6,7 @@ import type { RustOperationsProviderOptions } from "./provider/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { selectRustGuardedValueMembers } from "./native-flow-refinement.js";
 import { resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
-import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/selection.js";
 import { finalizeProviderOperationFromSubjects } from "./provider/conversions.js";
 import { acceptRustMemberOperation, rejectSelectedOperation } from "./provider/result.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

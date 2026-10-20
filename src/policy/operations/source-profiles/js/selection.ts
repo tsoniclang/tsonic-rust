@@ -1,65 +1,10 @@
-import {
-  emptyRustTypeDefinitions,
-  type RustTypeDefinitions,
-} from "../../../../target-model/types/source-union-definitions.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { selectRustNumberArrayUnionOperation } from "./number-array-unions.js";
 import { isRustSourceNumberConvertibleCarrier } from "../../../../target-model/types/carriers/traits.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
 import { selectRustNumericRestCarrier } from "./numeric-rest.js";
-import { rustJsArrayEntriesElementTargetType } from "../../../../target-model/types/carriers/array-entries.js";
-import {
-  isRustBigIntCarrier,
-  rustEmptyObjectTargetType,
-  rustObjectIdentityTargetType,
-  rustStructuralObjectCarrierValue,
-  getRustJsMapTargetTypes,
-  getRustJsSetElementTargetType,
-  getRustJsWeakMapTargetTypes,
-  getRustJsWeakSetElementTargetType,
-  rustCarrierSupportsClone,
-  rustCarrierSupportsJsEquality,
-  rustCarrierSupportsObjectIdentity,
-  isRustBoolCarrier,
-  isRustIntegerCarrier,
-  rustJsArrayLikeElementTargetType,
-  isRustJsArrayValueCarrier,
-  isRustSourceStringConvertibleCarrier,
-  rustJsErrorTargetType,
-  rustJsStringTargetId,
-  rustStringTargetId,
-  isRustNumericCarrier,
-  rustJsDateTargetId,
-  rustJsArrayBufferTargetId,
-  rustJsDataViewTargetId,
-  rustJsIntlCollatorTargetId,
-  rustJsIntlDateTimeFormatPartTargetId,
-  rustJsIntlDateTimeFormatTargetId,
-  rustJsIntlNumberFormatPartTargetId,
-  rustJsIntlNumberFormatTargetId,
-  rustJsIntlResolvedCollatorOptionsTargetId,
-  rustJsIntlResolvedDateTimeFormatOptionsTargetId,
-  rustJsIntlResolvedNumberFormatOptionsTargetId,
-  rustJsTypedArrayElementTargetType,
-  rustJsTypedArrayTargetIds,
-  rustFutureOutputCarrier,
-  rustJsPromiseOutputTargetType,
-  rustJsPromiseFulfilledResultTargetId,
-  rustJsPromiseRejectedResultTargetId,
-  rustJsPromiseSettledResultTargetId,
-  rustJsRegExpNamedGroupsTargetId,
-  rustJsRegExpNamedIndicesTargetId,
-  rustJsRegExpStringIteratorTargetId,
-  rustJsRegExpTargetId,
-  rustRegExpNamedGroupsTargetId,
-  rustRegExpNamedIndicesTargetId,
-  rustRegExpStringIteratorTargetId,
-  isRustCallableCarrier,
-  rustCallableProtocol,
-  rustClosureProtocol,
-  rustAbsenceTargetType,
-  rustSourceOptionalTargetType,
-  rustUnitTargetType,
-} from "../../../../target-model/types/index.js";
+
+import { rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustCarrierSupportsJsEquality, rustCarrierSupportsObjectIdentity, isRustIntegerCarrier, rustJsArrayLikeElementTargetType, isRustSourceStringConvertibleCarrier, rustJsErrorTargetType, rustStringTargetId, isRustNumericCarrier, rustFutureOutputCarrier, isRustCallableCarrier, rustCallableProtocol, rustClosureProtocol, rustAbsenceTargetType, rustSourceOptionalTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { isRustJsPromiseContinuation, selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
@@ -68,179 +13,11 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { isRustStringViewCarrier } from "../../../../target-model/types/carriers/native.js";
 import { rustNamedTypeCarrierValue } from "../../../../target-model/types/carriers/native.js";
 import { materializeJsOperationTarget, materializeJsValueProjections, materializeTarget, materializeVariadicTarget, selectJsValueProjection } from "./materialization.js";
-import type { JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
+import type { JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { resolveCarrierRef, type JsLaneBindings } from "./carrier-references.js";
 
-
-function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
-  if (isRustJsArrayValueCarrier(carrier)) {
-    return { lane: "array-value", bindings: { receiver: carrier } };
-  }
-  if (carrier?.kind === "reference" && carrier.referent.kind === "target-named" && carrier.referent.id === rustStringTargetId) {
-    // Borrowed string parameters (&str) share the string lane.
-    return { lane: "string", bindings: { receiver: carrier.referent } };
-  }
-  if (carrier?.kind === "target-named") {
-    const arrayElement = rustJsArrayLikeElementTargetType(carrier);
-    if (arrayElement !== undefined) {
-      return { lane: "js-array", bindings: { element: arrayElement, receiver: carrier } };
-    }
-    const mapTypes = getRustJsMapTargetTypes(carrier);
-    if (mapTypes !== undefined) {
-      return { lane: "map", bindings: { mapKey: mapTypes.key, mapValue: mapTypes.value, receiver: carrier } };
-    }
-    const setValue = getRustJsSetElementTargetType(carrier);
-    if (setValue !== undefined) {
-      return { lane: "set", bindings: { setValue, receiver: carrier } };
-    }
-    const weakMapTypes = getRustJsWeakMapTargetTypes(carrier);
-    if (weakMapTypes !== undefined) {
-      return {
-        lane: "weak-map",
-        bindings: {
-          weakKey: weakMapTypes.key,
-          weakValue: weakMapTypes.value,
-          receiver: carrier,
-        },
-      };
-    }
-    const weakSetValue = getRustJsWeakSetElementTargetType(carrier);
-    if (weakSetValue !== undefined) {
-      return { lane: "weak-set", bindings: { weakKey: weakSetValue, receiver: carrier } };
-    }
-    const entryElement = rustJsArrayEntriesElementTargetType(carrier);
-    if (entryElement !== undefined) {
-      return { lane: "array-entries", bindings: { element: entryElement, receiver: carrier } };
-    }
-    if (carrier.id === rustJsDateTargetId) {
-      return { lane: "date", bindings: { receiver: carrier } };
-    }
-    const promiseOutput = rustJsPromiseOutputTargetType(carrier);
-    if (promiseOutput !== undefined) {
-      return {
-        lane: "promise",
-        bindings: { promiseOutput, receiver: carrier },
-      };
-    }
-    if (carrier.id === rustJsPromiseFulfilledResultTargetId ||
-      carrier.id === rustJsPromiseRejectedResultTargetId ||
-      carrier.id === rustJsPromiseSettledResultTargetId) {
-      return { lane: "promise-record", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustJsArrayBufferTargetId) {
-      return { lane: "array-buffer", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustJsDataViewTargetId) {
-      return { lane: "data-view", bindings: { receiver: carrier } };
-    }
-    const typedElement = rustJsTypedArrayElementTargetType(carrier);
-    if (typedElement !== undefined) {
-      return {
-        lane: "typed-array",
-        bindings: {
-          element: typedElement,
-          receiver: carrier,
-        },
-      };
-    }
-    if (carrier.id === rustJsIntlDateTimeFormatTargetId) {
-      return { lane: "intl-date-time", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustJsIntlNumberFormatTargetId) {
-      return { lane: "intl-number", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustJsIntlCollatorTargetId) {
-      return { lane: "intl-collator", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustJsIntlDateTimeFormatPartTargetId ||
-      carrier.id === rustJsIntlNumberFormatPartTargetId ||
-      carrier.id === rustJsIntlResolvedDateTimeFormatOptionsTargetId ||
-      carrier.id === rustJsIntlResolvedNumberFormatOptionsTargetId ||
-      carrier.id === rustJsIntlResolvedCollatorOptionsTargetId) {
-      return { lane: "intl-record", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustJsRegExpTargetId) {
-      return { lane: "regexp", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustRegExpNamedGroupsTargetId ||
-      carrier.id === rustJsRegExpNamedGroupsTargetId) {
-      return { lane: "regexp-named-groups", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustRegExpNamedIndicesTargetId ||
-      carrier.id === rustJsRegExpNamedIndicesTargetId) {
-      return { lane: "regexp-named-indices", bindings: { receiver: carrier } };
-    }
-    if (carrier.id === rustRegExpStringIteratorTargetId ||
-      carrier.id === rustJsRegExpStringIteratorTargetId) {
-      return { lane: "regexp-string-iterator", bindings: { receiver: carrier } };
-    }
-  }
-  if (isRustStringViewCarrier(carrier)) {
-    return { lane: "string", bindings: { receiver: carrier } };
-  }
-  if (carrier?.kind === "target-named" && carrier.id === rustJsStringTargetId) {
-    return { lane: "js-string", bindings: { receiver: carrier } };
-  }
-  if (isRustNumericCarrier(carrier)) {
-    return { lane: "number", bindings: { receiver: carrier } };
-  }
-  if (isRustBigIntCarrier(carrier)) {
-    return { lane: "bigint", bindings: { receiver: carrier } };
-  }
-  if (isRustBoolCarrier(carrier)) {
-    return { lane: "boolean", bindings: { receiver: carrier } };
-  }
-  const staticReceiver = carrier === undefined || isRustCallableCarrier(carrier);
-  if (staticReceiver && ownerName === "StringConstructor") {
-    return { lane: "string", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "ArrayConstructor") {
-    return { lane: "js-array", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "DateConstructor") {
-    return { lane: "date", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "JSON") {
-    return { lane: "json", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "Math") {
-    return { lane: "math", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "NumberConstructor") {
-    return { lane: "number", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "BigIntConstructor") {
-    return { lane: "bigint", bindings: {} };
-  }
-  if (staticReceiver && Object.keys(rustJsTypedArrayTargetIds).some((name) => ownerName === `${name}Constructor`)) {
-    return { lane: "typed-array", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "Global") {
-    return { lane: "global", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "Atomics") {
-    return { lane: "global", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "Console") {
-    return { lane: "console", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "ObjectConstructor") {
-    return { lane: "object", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "RegExpConstructor") {
-    return { lane: "regexp", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "SymbolConstructor") {
-    return { lane: "symbol", bindings: {} };
-  }
-  if (staticReceiver && ownerName === "PromiseConstructor") {
-    return { lane: "promise", bindings: {} };
-  }
-  return undefined;
-}
-
-
+import { selectJsSurfaceLane } from "./lanes.js";
 function firstArgumentId(request: JsOperationRequest): string | undefined {
   const carrier = request.argumentCarriers?.[0];
   return isRustStringViewCarrier(carrier) ? rustStringTargetId : carrier?.kind === "target-named" ? carrier.id : undefined;
@@ -286,7 +63,7 @@ function selectJsSurfaceOperationForDemand(
   if (numberArrayUnion !== undefined) return numberArrayUnion;
   const upcasts = rustNamedTypeCarrierValue(request.receiverCarrier)?.upcasts ?? [];
   if (upcasts.length > 0) {
-    const selected = upcasts.filter((upcast) => laneOf(upcast.target, request.ownerName) !== undefined);
+    const selected = upcasts.filter((upcast) => selectJsSurfaceLane(upcast.target, request.ownerName) !== undefined);
     if (selected.length !== 1) return undefined;
     const receiverCarrier = selected[0]!.target;
     const result = selectJsSurfaceOperationForDemand({ ...request, receiverCarrier }, definitions, demand);
@@ -301,7 +78,7 @@ function selectJsSurfaceOperationForDemand(
   if (request.ownerName === "ArrayConstructor" && request.memberName === "call" && request.operationKind === "call") {
     return selectJsArrayConstruction(request.selectedMethodTypeArgumentCarriers ?? [], request.argumentCarriers ?? [], "method", request.soleArgumentNumberKind);
   }
-  const laneMatch = laneOf(request.receiverCarrier, request.ownerName);
+  const laneMatch = selectJsSurfaceLane(request.receiverCarrier, request.ownerName);
   if (laneMatch === undefined) {
     return undefined;
   }
@@ -539,9 +316,7 @@ function selectJsSurfaceOperationForDemand(
       ...(row.shape.sourceAbsence === undefined
         ? {}
         : {
-            sourceAbsenceCarrier: row.shape.sourceAbsence === "undefined"
-              ? rustAbsenceTargetType()
-              : rustAbsenceTargetType(),
+            sourceAbsenceCarrier: rustAbsenceTargetType(),
           }),
       ...(declaredRuntimeParameterCarriers === undefined
         ? {}
@@ -570,7 +345,6 @@ function selectJsSurfaceOperationForDemand(
     ...(callback === undefined ? {} : { callback }),
   };
 }
-
 
 function carrierRequirementsMatch(
   requirements: JsOperationRowData["requirements"],

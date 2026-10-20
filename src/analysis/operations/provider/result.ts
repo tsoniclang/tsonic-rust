@@ -16,7 +16,7 @@ import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../..
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
-import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/selection.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
