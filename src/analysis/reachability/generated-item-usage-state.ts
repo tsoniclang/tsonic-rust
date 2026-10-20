@@ -1,6 +1,7 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 
-import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../project-types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
 import type { RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
@@ -8,7 +9,8 @@ import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../tar
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustStructuralUsageKey } from "./generated-item-usage-helpers.js";
 import type { RustStructuralUsageKey } from "./generated-item-usage-helpers.js";
-import type { RustDispatchMemberRole, RustGeneratedItemUsage, RustGeneratedItemUsageInput, RustGeneratedProjectFieldRole, RustStructuralReachability, RustVariantReachability } from "./generated-item-usage-model.js";
+import type { RustGeneratedItemUsageInput } from "./generated-item-usage-model.js";
+import type { RustDispatchMemberRole, RustGeneratedItemUsage, RustGeneratedProjectFieldRole, RustStructuralReachability, RustVariantReachability } from "../../target-model/records/reachability.js";
 
 export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageInput) {
   const storageKeys = new Map<TargetTypeRef, RustStructuralUsageKey>();
@@ -319,7 +321,7 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
     const declarationVariants = new Map<Node, RustVariantReachability>();
     for (const [declaration, key] of carriersByDeclaration) {
       const selected = byStorage.get(key);
-      if (selected === undefined) throw new Error("A source declaration lost its sealed physical usage record.");
+      if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "A source declaration lost its sealed physical usage record.");
       declarationVariants.set(declaration, selected.variants);
     }
     return Object.freeze({
