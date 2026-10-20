@@ -17,7 +17,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import type { RustFactWalk } from "../program/walk.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
-import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
+import { rustRetainedEnvironment } from "./retained-values.js";
 import type {
   RustAsyncFunctionFact, RustJsPromiseLowering, RustSettledPromiseAwait,
 } from "../../target-model/records/callables-and-resources.js";

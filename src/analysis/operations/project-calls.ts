@@ -26,7 +26,7 @@ import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-mo
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
-import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
+import { rustRetainedEnvironment } from "../callables/retained-values.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 

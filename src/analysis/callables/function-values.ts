@@ -11,7 +11,7 @@ import { rustTypeParameterFromSourceContract } from "../../target-model/names/ty
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
-import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
+import { rustRetainedValueLifetime } from "./retained-values.js";
 
 export function rustSourceClosureValueCarrier(
   walk: RustFactWalk, declaration: Node, selected: TargetTypeRef, captures?: readonly TargetTypeRef[],

@@ -4,7 +4,8 @@ import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/
 import type { RustFactWalk } from "../program/walk.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustHasOpenOwnedStorage, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
+import { rustRetainedEnvironment, rustRetainedValueLifetime } from "./retained-values.js";
+import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage.js";
 import { rustEnclosingStorageContract, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustCallScopedElisionLifetime, rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";

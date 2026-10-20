@@ -12,7 +12,7 @@ import type { RustRetainedEnvironment } from "../../target-model/records/retaine
 
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "../../policy/ownership/retained-environments.js";
+import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "./retained-values.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
