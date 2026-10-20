@@ -41,7 +41,7 @@ import { selectRustClosedArrayView } from "../../policy/types/collections/closed
 import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier,
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
-import { rustWritableErrorRecoveryOriginMatches } from "../../target-model/conversions/program-error.js";
+import { rustWritableErrorRecoveryOriginMatches } from "../../policy/conversions/program-error.js";
 import { rustSourceAbsenceReadCarrier } from "../../policy/operations/flow/absence-use.js";
 import { resolveRustNativeFlowCarrier } from "../types/resolution/native-flow-refinement.js";
 

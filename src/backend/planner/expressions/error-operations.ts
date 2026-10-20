@@ -7,7 +7,7 @@ import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import type { RustProgramErrorRoute } from "../../../target-model/records/source-package-errors.js";
+import type { RustProgramErrorRoute } from "../../../target-model/conversions/program-error.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "../objects/checked-project-projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";

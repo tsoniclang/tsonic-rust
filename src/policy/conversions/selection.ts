@@ -4,7 +4,7 @@ import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { rustCallableInputMatches } from "./callable-input.js";
 import { rustUnionPayloadAdmission } from "./union-injection.js";
-import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "./program-error.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { selectRustExactIntegerConversion } from "./exact-integer.js";

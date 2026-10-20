@@ -5,7 +5,7 @@ import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { isRustJsValueCarrier } from "../../target-model/types/carriers/js.js";
 import { rustTsValueTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustTsValueAdmission } from "../../target-model/types/carriers/traits.js";
-import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "./program-error.js";
 
 export function rustUnionPayloadAdmission(
   source: TargetTypeRef,

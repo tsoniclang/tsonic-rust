@@ -1,6 +1,6 @@
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { Node_Expression } from "@tsonic/target-api/source";

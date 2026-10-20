@@ -9,7 +9,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
-import { rustProgramErrorConversionMatches } from "../../target-model/conversions/program-error.js";
+import { rustProgramErrorConversionMatches } from "../../policy/conversions/program-error.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
