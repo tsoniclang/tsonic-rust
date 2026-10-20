@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import { targetStronglyConnectedComponents } from "@tsonic/target-api/analysis";
 
@@ -51,14 +52,14 @@ export function deadComponentRoots(
 ): ReadonlySet<Node> {
   const position = (node: Node): number => {
     const selected = order.get(node);
-    if (selected === undefined) throw new Error("A standalone source declaration requires its sealed source order.");
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "A standalone source declaration requires its sealed source order.");
     return selected;
   };
   const dead = new Set([...units].filter(declaration => !reachable.has(declaration))
     .sort((left, right) => position(left) - position(right)));
   const edgeCount = [...dead].reduce((total, owner) => total + (edges.get(owner)?.size ?? 0), 0);
   const selection = targetStronglyConnectedComponents(dead, owner => edges.get(owner) ?? [], 1 + 4 * dead.size + 6 * edgeCount);
-  if (selection.kind === "unresolved") throw new Error(selection.reason);
+  if (selection.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust", selection.reason);
   const componentByNode = new Map<Node, number>();
   for (const [index, component] of selection.components.entries()) {
     for (const node of component) componentByNode.set(node, index);
