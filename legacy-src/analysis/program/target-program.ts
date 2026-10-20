@@ -110,6 +110,7 @@ import { analyzeRustOptionalStorageEmission } from "../project-types/optional-st
 import { analyzeRustClassValueEmission } from "../objects/class-value-emission.js";
 import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustProviderMutableEmission } from "../storage/provider-mutable-emission.js";
+import { analyzeRustProviderEvaluation } from "../storage/provider-evaluation.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -589,6 +590,8 @@ export function analyzeRustTargetProgram(
   analyzeRustSourceBindingEmission(program, context.nativeNodes, context.records.sourceBindingEmissionPlans);
   const providerMutableIssues = analyzeRustProviderMutableEmission(program, context.nativeNodes, context.records.providerEvaluationPlans);
   if (providerMutableIssues.length !== 0) return rejectedTargetStage(providerMutableIssues);
+  const providerEvaluationIssues = analyzeRustProviderEvaluation(program, context.records.providerEvaluationPlans);
+  if (providerEvaluationIssues.length !== 0) return rejectedTargetStage(providerEvaluationIssues);
   const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans);
