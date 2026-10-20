@@ -22,7 +22,7 @@ import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js"
 import { analyzeRustReadOwnership } from "../ownership/reads.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
-import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
+import { analyzeRustBorrowedElementReads } from "../storage/borrowed-element-reads.js";
 import { analyzeRustBorrowEffects } from "../ownership/effects.js";
 import { analyzeRustBinaryHooks, analyzeRustDispatchContextCatalog, analyzeRustDispatchContextDemand, analyzeRustRuntimeReferences } from "../project/index.js";
 import { analyzeRustSourcePackageFacades } from "./source-package-facades.js";

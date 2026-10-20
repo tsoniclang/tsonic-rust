@@ -3,7 +3,7 @@ import { BinaryExpression_Right, Node_Expression, type SourceProgramNavigation }
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { analyzeRustBorrowedElementLocals } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
-import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
+import { rustBorrowedStringInputs } from "./provider-borrows.js";
 import { analyzeRustBorrowedIterationBindings } from "./borrowed-iteration-bindings.js";
 import type { RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
 

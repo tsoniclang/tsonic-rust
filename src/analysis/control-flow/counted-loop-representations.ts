@@ -21,7 +21,7 @@ import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-mod
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustBorrowedElementReads } from "../program/borrowed-element-reads.js";
+import type { RustBorrowedElementReads } from "../storage/borrowed-element-reads.js";
 import type { RustCountedLoopRepresentation } from "../../target-model/records/counted-loops.js";
 
 interface RustCountedLoopAnalysisContext {

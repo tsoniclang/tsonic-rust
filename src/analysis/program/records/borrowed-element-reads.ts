@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustBorrowedElementRecords, RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../../target-model/records/borrowed-element-reads.js";
-import type { RustBorrowedElementReads } from "../borrowed-element-reads.js";
+import type { RustBorrowedElementReads } from "../../storage/borrowed-element-reads.js";
 import { createRustRecordFamily } from "./family.js";
 
 export interface RustBorrowedElementProducer {
