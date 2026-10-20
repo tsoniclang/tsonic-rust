@@ -1,11 +1,8 @@
 import type { AstReader, SourceFile } from "@tsonic/tsts";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
+import type { RustNativeCallableDispatchPlan } from "../../target-model/records/native-dispatch.js";
+import { sealRustNativeCallableDispatch } from "../program/records/native-dispatch.js";
 import { Node_Expression, type SourceProgramNavigation } from "@tsonic/target-api/source";
-
-export interface RustNativeCallableDispatchPlan {
-  requiredFor(protocol: RustNativeCallableProtocol): boolean;
-}
 
 export function createRustNativeCallableDispatchPlan(input: {
   readonly ast: AstReader;
@@ -22,7 +19,7 @@ export function createRustNativeCallableDispatchPlan(input: {
         Node_Expression(input.ast, parent) !== use.reference;
     })) invoked.add(selected.protocol);
   }
-  const owned = new Set(input.native.protocols);
-  return Object.freeze({ requiredFor: (protocol: RustNativeCallableProtocol) =>
-    !owned.has(protocol) || !closed.has(protocol.ownerFileName) || invoked.has(protocol) });
+  const required = new Map(input.native.protocols.map(protocol =>
+    [protocol, !closed.has(protocol.ownerFileName) || invoked.has(protocol)] as const));
+  return sealRustNativeCallableDispatch(required);
 }

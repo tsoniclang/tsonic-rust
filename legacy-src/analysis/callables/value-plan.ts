@@ -35,7 +35,8 @@ import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdenti
   type RustGenericCallableIdentityPlan } from "./generic-identities.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
-import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
+import { createRustNativeCallableDispatchPlan } from "./native-dispatch.js";
+import type { RustNativeCallableDispatchPlan } from "../../target-model/records/native-dispatch.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
