@@ -8,7 +8,7 @@ import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeF
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import type { RustSourceErrorBindings, RustSourceErrorEffectSelection } from "./source-error-effects.js";
+import type { RustSourceErrorBindings, RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 import type { RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import { finalizedConversionIsValid } from "../operations/finalized-operation/conversions.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
