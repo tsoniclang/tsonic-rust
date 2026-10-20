@@ -1,4 +1,23 @@
-import type { Node } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
+import type { RustErrorRegionSelection } from "./error-regions.js";
+export interface RustSourcePackageModuleInitializer {
+  readonly sourceFile: SourceFile;
+  readonly fileName: string;
+  readonly componentId: string;
+  readonly crateName?: string;
+  readonly implementationModuleName: string;
+  readonly implementationFunctionName: string;
+  readonly facadeModuleName: string;
+  readonly facadeFunctionName: string;
+  readonly asynchronous: boolean;
+  readonly errorRegion: RustErrorRegionSelection;
+}
+
+export interface RustSourcePackageInitializerPlan {
+  readonly functionNameByFileName: ReadonlyMap<string, string>;
+  readonly byFileName: ReadonlyMap<string, RustSourcePackageModuleInitializer>;
+  readonly facadeModuleNameByComponent: ReadonlyMap<string, string>;
+}
 import type { RustErrorDomain } from "../operations/error-boundary.js";
 import type { RustSourcePackageErrorRecords } from "./source-package-errors.js";
 export interface RustSourcePackageComponentPlan {
@@ -55,6 +74,7 @@ export interface RustSourcePackageFacadePlan {
 }
 
 export interface RustSourcePackageEmissionRecords extends RustSourcePackageErrorRecords {
+  readonly sourcePackageInitializers: { readonly get: () => RustSourcePackageInitializerPlan | undefined };
   readonly sourcePackageComponents: { readonly get: () => readonly RustSourcePackageComponentPlan[] | undefined };
   readonly sourcePackageFacades: { readonly get: () => RustSourcePackageFacadePlan | undefined };
 }

@@ -10,7 +10,7 @@ import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";
-import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
+import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import {
   planRustCrateInitializer,

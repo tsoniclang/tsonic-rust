@@ -1,57 +1,26 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
-import type { SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
-
-import {
-  allocateRustComponentSupportModuleName,
-} from "../../../policy/names/support-modules.js";
-import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
-import type { RustPlanningContext } from "../context.js";
-import {
-  allocateRustSyntheticName,
-  createRustSyntheticNameState,
-} from "../names/synthetic.js";
-
-export interface RustSourcePackageModuleInitializer {
-  readonly sourceFile: SourceFile;
-  readonly fileName: string;
-  readonly componentId: string;
-  readonly crateName?: string;
-  readonly implementationModuleName: string;
-  readonly implementationFunctionName: string;
-  readonly facadeModuleName: string;
-  readonly facadeFunctionName: string;
-  readonly asynchronous: boolean;
-  readonly errorRegion: RustErrorRegionSelection;
-}
-
-export interface RustSourcePackageInitializerPlan {
-  readonly byFileName: ReadonlyMap<string, RustSourcePackageModuleInitializer>;
-  readonly facadeModuleNameByComponent: ReadonlyMap<string, string>;
-}
-
-export function planRustSourcePackageInitializers(
-  input: RustPlanningContext,
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustSourcePackageComponentPlan, RustSourcePackageInitializerPlan, RustSourcePackageModuleInitializer } from "../../target-model/records/source-packages.js";
+import { allocateRustComponentSupportModuleName } from "../../policy/names/support-modules.js";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import { rustTargetIdentifier } from "../../target-model/names/identifiers.js";
+export function analyzeRustSourcePackageInitializers(
+  program: Pick<RustTargetProgram, "source" | "sourceFiles" | "sourcePackageComponents" | "moduleInitialization" | "errorRegions">,
+  components: readonly RustSourcePackageComponentPlan[],
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): {
   readonly plan?: RustSourcePackageInitializerPlan;
   readonly diagnostics: readonly TargetDiagnostic[];
 } {
   const diagnostics: TargetDiagnostic[] = [];
+  const functionNameByFileName = new Map<string, string>();
   const facadeModuleNameByComponent = new Map<string, string>();
-  for (const component of input.program.sourcePackageComponents.components) {
-    const shapesName = allocateRustComponentSupportModuleName(
-      identitiesByFileName,
-      component.componentId,
-      "shapes",
-    );
-    const programName = allocateRustComponentSupportModuleName(
-      identitiesByFileName,
-      component.componentId,
-      "program",
-      [shapesName],
-    );
+  for (const component of components) {
+    const shapesName = component.structuralShapesModuleName;
+    const programName = component.programModuleName;
     facadeModuleNameByComponent.set(
       component.componentId,
       allocateRustComponentSupportModuleName(
@@ -64,8 +33,10 @@ export function planRustSourcePackageInitializers(
   }
 
   const pending: Omit<RustSourcePackageModuleInitializer, "facadeFunctionName">[] = [];
-  for (const sourceFile of input.program.sourceFiles) {
-    const fileName = input.program.source.ast.getFileName(sourceFile);
+  for (const sourceFile of program.sourceFiles) {
+    const fileName = program.source.ast.getFileName(sourceFile);
+    const functionName = moduleInitializerFunctionName(program.source.ast, sourceFile);
+    functionNameByFileName.set(fileName, functionName);
     const identity = identitiesByFileName.get(fileName);
     if (identity === undefined) {
       diagnostics.push(initializerDiagnostic(
@@ -74,7 +45,7 @@ export function planRustSourcePackageInitializers(
       ));
       continue;
     }
-    const requirement = input.program.moduleInitialization.requirementFor(sourceFile);
+    const requirement = program.moduleInitialization.requirementFor(sourceFile);
     if (requirement.kind === "unresolved") {
       diagnostics.push({
         ...initializerDiagnostic(
@@ -96,9 +67,9 @@ export function planRustSourcePackageInitializers(
       ));
       continue;
     }
-    const selected = input.program.errorRegions.initialization.moduleFor(sourceFile);
+    const selected = program.errorRegions.initialization.moduleFor(sourceFile);
     if (selected === undefined) {
-      failRustPlannerInvariant(
+      failTargetAnalysisInvariant("tsonic-rust", 
         `Source module '${fileName}' has no exact finalized initializer error effects.`,
         sourceFile);
     }
@@ -110,7 +81,7 @@ export function planRustSourcePackageInitializers(
         ? {}
         : { crateName: identity.externalCrateName }),
       implementationModuleName: identity.moduleName,
-      implementationFunctionName: rustModuleInitializerFunctionName(input, sourceFile),
+      implementationFunctionName: functionName,
       facadeModuleName,
       asynchronous: selected.asynchronous,
       errorRegion: selected.region,
@@ -144,20 +115,25 @@ export function planRustSourcePackageInitializers(
   return {
     diagnostics: Object.freeze([]),
     plan: Object.freeze({
+      functionNameByFileName,
       byFileName: new Map(byFileName),
       facadeModuleNameByComponent: new Map(facadeModuleNameByComponent),
     }),
   };
 }
 
-export function rustModuleInitializerFunctionName(
-  input: RustPlanningContext,
-  sourceFile: SourceFile,
-): string {
-  return allocateRustSyntheticName(
-    createRustSyntheticNameState(input.program.source.ast, sourceFile, []),
-    "module_init",
-  );
+function moduleInitializerFunctionName(ast: AstReader, sourceFile: SourceFile): string {
+  const reserved = new Set<string>();
+  const visit = (node: Node): void => {
+    if (ast.is.IsIdentifier(node)) {
+      const name = ast.text(node);
+      reserved.add(name);
+      reserved.add(rustTargetIdentifier(name));
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(sourceFile);
+  return allocateRustGeneratedName(reserved, "module_init");
 }
 
 function initializerFacadeFunctionBase(moduleName: string): string {

@@ -21,7 +21,7 @@ import type {
   RustSourcePackageFacadeExport,
   RustSourcePackageFacadePlan,
 } from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
+import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";

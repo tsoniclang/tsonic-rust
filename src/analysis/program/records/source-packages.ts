@@ -1,6 +1,7 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustSourcePackageFacadePlan, RustSourcePackageEmissionRecords } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
+import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustProgramErrorRoute } from "../../../target-model/records/source-package-errors.js";
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
@@ -8,6 +9,7 @@ import type { RustProgramErrorOwner } from "../../../target-model/types/model.js
 export function createRustSourcePackageEmissionProducer(assertOpen: () => void) {
   let facades: RustSourcePackageFacadePlan | undefined;
   let components: readonly RustSourcePackageComponentPlan[] | undefined;
+  let initializers: RustSourcePackageInitializerPlan | undefined;
   let errors: RustSourcePackageErrorPlan | undefined;
   const boundaries = new Map<string, Map<string, RustSourcePackageErrorBoundary>>();
   const physical = new Map<string, Map<string, RustSourcePackageErrorBoundary>>();
@@ -22,6 +24,7 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
     table.set(consumer, selected);
   };
   const records: RustSourcePackageEmissionRecords = Object.freeze({
+    sourcePackageInitializers: Object.freeze({ get: () => initializers }),
     sourcePackageErrors: Object.freeze({ get: () => errors }),
     sourcePackageErrorBoundary: Object.freeze({ get: (consumer: string, owner: string) => boundaries.get(consumer)?.get(owner) }),
     physicalProgramErrorBoundary: Object.freeze({ get: (consumer: string, owner: RustProgramErrorOwner) =>
@@ -32,6 +35,11 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
     sourcePackageFacades: Object.freeze({ get: () => facades }),
   });
   return Object.freeze({ records,
+    initializers(value: RustSourcePackageInitializerPlan): void {
+      assertOpen();
+      if (initializers !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native source-package initializer paths have one owner.");
+      initializers = Object.freeze(value);
+    },
     errors(value: RustSourcePackageErrorPlan): void {
       assertOpen();
       if (errors !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Native source-package error domains have one owner.");

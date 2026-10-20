@@ -76,21 +76,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         evidence: ["target.capability=rust.backend.source-package-components"],
       }]);
   }
-  const initializerResult = planRustSourcePackageInitializers(input, identities);
-  diagnostics.push(...initializerResult.diagnostics);
-  if (initializerResult.plan === undefined || diagnostics.length > 0) {
-    return rejectedTargetStage(diagnostics);
-  }
-  const packageInitializers = initializerResult.plan;
-  const sourcePackageErrorResult = planRustSourcePackageErrors(
-    input,
-    componentPlans,
-  );
-  diagnostics.push(...sourcePackageErrorResult.diagnostics);
-  if (sourcePackageErrorResult.plan === undefined || diagnostics.length > 0) {
-    return rejectedTargetStage(diagnostics);
-  }
-  const sourcePackageErrors = sourcePackageErrorResult.plan;
+  const packageInitializers = planRustSourcePackageInitializers(input);
+  const sourcePackageErrors = planRustSourcePackageErrors(input);
   const structuralShapesModuleName = rootComponentPlan.structuralShapesModuleName;
   const componentPlanById = new Map(componentPlans.map((component) =>
     [component.componentId, component] as const));

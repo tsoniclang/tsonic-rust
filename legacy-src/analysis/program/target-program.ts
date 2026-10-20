@@ -42,6 +42,7 @@ import {
 } from "./source-package-facades.js";
 import { analyzeRustSourcePackageFacadeEmission } from "../source-modules/package-facades.js";
 import { analyzeRustSourcePackageComponentEmission } from "../source-modules/package-components.js";
+import { analyzeRustSourcePackageInitializers } from "../source-modules/package-initializers.js";
 import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries } from "../errors/source-packages.js";
 import { analyzeRustDeclarationErrorOwners } from "../errors/declaration-owners.js";
 import { analyzeRustSourceBindingEmission } from "../storage/binding-paths.js";
@@ -551,6 +552,9 @@ export function analyzeRustTargetProgram(
     evidence: ["target.capability=rust.backend.source-package-components"],
   }]);
   context.records.sourcePackageEmission.components(componentEmission.components);
+  const initializerEmission = analyzeRustSourcePackageInitializers(program, componentEmission.components, sourceOutputIdentities.identities);
+  if (initializerEmission.plan === undefined) return rejectedTargetStage(initializerEmission.diagnostics);
+  context.records.sourcePackageEmission.initializers(initializerEmission.plan);
   const errorEmission = analyzeRustSourcePackageErrors(program, componentEmission.components);
   if (errorEmission.plan === undefined) return rejectedTargetStage(errorEmission.diagnostics);
   analyzeRustSourcePackageErrorBoundaries(program, errorEmission.plan, context.records.sourcePackageEmission);

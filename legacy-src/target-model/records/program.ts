@@ -65,6 +65,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
   readonly sourcePackageComponents: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageComponents"];
+  readonly sourcePackageInitializers: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageInitializers"];
   readonly sourcePackageErrors: import("./source-package-errors.js").RustSourcePackageErrorRecords["sourcePackageErrors"];
   readonly sourceBindingEmission: import("./binding-paths.js").RustSourceBindingEmissionRecords["sourceBindingEmission"];
   readonly errorDeclarationOwner: RustErrorEmissionRecords["errorDeclarationOwner"];
