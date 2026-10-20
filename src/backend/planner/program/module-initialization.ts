@@ -4,7 +4,6 @@ import type { SourceFile } from "@tsonic/tsts";
 import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
-import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
@@ -23,20 +22,16 @@ export interface RustModuleInitializer {
 }
 
 export function planRustModuleInitializers(
-  plannedSources: readonly PlannedRustSourceFile[],
   selection: RustInitializerSelection,
   packageInitializers: RustSourcePackageInitializerPlan,
   rendering: RustTypeRenderingContext,
 ): readonly RustModuleInitializer[] {
-  const plannedBySourceFile = new Map(plannedSources.map(source => [source.sourceFile, source]));
   const ordered: RustModuleInitializer[] = [];
   for (const selected of selection.modules) {
-    const planned = plannedBySourceFile.get(selected.sourceFile);
-    const initialization = planned?.moduleInitialization;
     const contract = packageInitializers.byFileName.get(selected.identity);
-    const path = planned !== undefined && initialization !== undefined
-      ? `crate::${planned.moduleName}::${initialization.functionName}`
-      : planned === undefined && contract?.crateName !== undefined
+    const path = contract?.componentId === rendering.sourcePackageComponentId
+      ? `crate::${contract.implementationModuleName}::${contract.implementationFunctionName}`
+      : contract?.crateName !== undefined
         ? `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}` : undefined;
     const region = planRustSelectedErrorRegion(selected.region, rendering);
     if (path === undefined || region === undefined) {
@@ -69,7 +64,8 @@ export function planRustCrateInitializer(
   const selected = selection.error;
   const owner = selected.kind === "infallible" || rendering.sourcePackageErrors === undefined ? undefined
     : resolveRustPhysicalProgramErrorBoundary(rendering.input.program.records, rendering.sourcePackageComponentId, selected.owner);
-  if (selected.kind !== "infallible" && owner === undefined) return undefined;
+  if (selected.kind !== "infallible" && owner === undefined)
+    failRustPlannerInvariant("An admitted initializer requires its exact physical error owner.", selection.modules[0]?.sourceFile);
   const names = new Set(occupiedNames);
   names.add(functionName);
   const errorName = selected.kind === "native" ? allocateRustGeneratedName(names, "InitializationError") : undefined;
@@ -80,7 +76,8 @@ export function planRustCrateInitializer(
     const errorType = source.kind === "package" ? rustErrorType(owner!) : bySourceFile.get(source.sourceFile)?.errorBoundary?.errorType;
     return errorType === undefined ? undefined : { identity: source.identity, variant: source.variant, errorType };
   }) : [];
-  if (sources.some(source => source === undefined)) return undefined;
+  if (sources.some(source => source === undefined))
+    failRustPlannerInvariant("An admitted initializer requires its finalized native error-source syntax.", selection.modules[0]?.sourceFile);
   const join = selected.kind !== "native" ? undefined : planRustNativeErrorJoin({
     identity: `initializer:${rendering.sourcePackageComponentId}:${functionName}`, name: joinName!,
     referencePath: `crate::${joinName!}`, visibility: "public", sources: sources as NonNullable<typeof sources[number]>[],
@@ -88,7 +85,8 @@ export function planRustCrateInitializer(
   const boundary = selected.kind === "infallible" ? undefined : selected.kind === "package"
     ? rustPackageFallibleBoundary(owner!) : join === undefined ? undefined : rustNativeFallibleBoundary(join,
       local === undefined ? undefined : { owner: owner!, source: { identity: local.identity, errorType: rustErrorType(owner!) } });
-  if (selected.kind !== "infallible" && boundary === undefined) return undefined;
+  if (selected.kind !== "infallible" && boundary === undefined)
+    failRustPlannerInvariant("An admitted initializer requires its exact native error boundary.", selection.modules[0]?.sourceFile);
   const items: RustItem[] = [...(join?.items ?? [])];
   const errorType: Extract<RustType, { readonly kind: "named" }> | undefined = selected.kind === "infallible" ? undefined
     : errorName === undefined ? rustErrorType(owner!) : {
@@ -99,7 +97,7 @@ export function planRustCrateInitializer(
   const statements: RustStmt[] = [];
   for (const selectedModule of selection.modules) {
     const initializer = bySourceFile.get(selectedModule.sourceFile);
-    if (initializer === undefined) return undefined;
+    if (initializer === undefined) failRustPlannerInvariant("An admitted initializer requires its exact sealed module invocation.", selectedModule.sourceFile);
     const call = { kind: "call" as const, path: initializer.path, args: [] };
     const execution = selectedModule.asynchronous ? { kind: "await" as const, expr: call } : call;
     const propagated = selectedModule.region.kind === "infallible" ? execution
@@ -108,7 +106,7 @@ export function planRustCrateInitializer(
           ? rustPropagateLocalError(boundary, initializer.errorBoundary.errorType, execution)
           : rustPropagateNativeError(boundary, { identity: selectedModule.identity,
             errorType: initializer.errorBoundary.errorType }, execution);
-    if (propagated === undefined) return undefined;
+    if (propagated === undefined) failRustPlannerInvariant("An admitted initializer requires its selected native error propagation.", selectedModule.sourceFile);
     statements.push({ kind: "expr", expr: propagated });
   }
   if (errorType !== undefined) statements.push({ kind: "tail", expr: { kind: "call", path: "Ok",

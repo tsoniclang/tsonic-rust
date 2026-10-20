@@ -103,7 +103,6 @@ export function planRustWorkerEntries(input: {
         "A worker initializer has no completed exact error composition.", target.sourceFile);
     }
     const initializers = planRustModuleInitializers(
-      content.sources,
       selection,
       input.packageInitializers,
       input.typeRenderingContextFor(component),

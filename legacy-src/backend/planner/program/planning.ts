@@ -223,7 +223,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const moduleInitializers = initialization.root.modules.length === 0
     ? []
     : planRustModuleInitializers(
-        rootPlannedSources,
         initialization.root,
         packageInitializers,
         typeRenderingContextFor(rootComponentPlan),
