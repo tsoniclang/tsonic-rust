@@ -23,7 +23,7 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { readRustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
-import { readRustRawLocation } from "../../policy/operations/pointers/native-memory.js";
+import { readRustRawLocation } from "../../source/extension/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "./flow-read.js";

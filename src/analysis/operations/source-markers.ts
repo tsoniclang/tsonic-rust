@@ -20,7 +20,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
 import { readRustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
-import { readRustRawLocation } from "../../policy/operations/pointers/native-memory.js";
+import { readRustRawLocation } from "../../source/extension/native-memory.js";
 import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
 import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";

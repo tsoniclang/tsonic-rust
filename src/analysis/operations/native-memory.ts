@@ -4,7 +4,8 @@ import { createTsonicClosedArrayStorageQueries } from "@tsonic/source-core/facts
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
-import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/pointers/native-memory.js";
+import { selectRustNativeMemoryLayout } from "./pointers/native-memory.js";
+import { readRustRawLocation } from "../../source/extension/native-memory.js";
 
 import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
 

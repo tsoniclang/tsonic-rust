@@ -1,13 +1,13 @@
-import type { AstReader, ExtensionFactSubject, ReadonlySourceFactResolver } from "@tsonic/tsts";
-import { countTsonicMemoryLayoutValues, selectTsonicRawLocationOperation } from "@tsonic/source-core/facts";
-import type { TsonicMemoryLayoutFact, TsonicRawLocationSelection } from "@tsonic/source-core/facts";
+import { countTsonicMemoryLayoutValues } from "@tsonic/source-core/facts";
+import type { TsonicMemoryLayoutFact } from "@tsonic/source-core/facts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/index.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/model.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
 import { resolveRustFixedArrayTargetType } from "../../types/resolution/target.js";
-import { resolveProviderTypeIdentity, providerCarrierFromRelations } from "../../types/resolution/providers.js";
-import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "../provider-selection.js";
+import { providerCarrierFromRelations } from "../../../policy/types/project/provider-instantiation.js";
+import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";
+import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "../../../policy/operations/provider-selection.js";
 import { isRustCopyCarrier, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
@@ -15,10 +15,6 @@ type RustNativeMemorySelection = RustNativeMemoryLayout | {
   readonly kind: "unsupported-array";
   readonly reason: string;
 };
-
-export function readRustRawLocation(ast: AstReader, facts: ReadonlySourceFactResolver, subject: ExtensionFactSubject): TsonicRawLocationSelection | undefined {
-  return selectTsonicRawLocationOperation(ast, facts, subject);
-}
 
 export function resolveRustMemoryLayoutPointee(
   layout: TsonicMemoryLayoutFact, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,

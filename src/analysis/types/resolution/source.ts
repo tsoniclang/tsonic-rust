@@ -21,7 +21,8 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveRustLifetimeSourceType, rustSourceLifetimeTypeContract } from "./lifetimes.js";
 
-import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "../../../policy/operations/pointers/native-memory.js";
+import { resolveRustMemoryLayoutPointee } from "../../operations/pointers/native-memory.js";
+import { readRustRawLocation } from "../../../source/extension/native-memory.js";
 
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { resolveRustInferredUnion } from "./inferred-unions.js";
