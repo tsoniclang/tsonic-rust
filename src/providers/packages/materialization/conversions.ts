@@ -157,7 +157,7 @@ export function materializeProviderValueConversion(
     }
     case "option-some":
       return { ...conversion,
-        elementConversion: conversion.elementConversion === null ? null : materializeProviderValueConversion(conversion.elementConversion, carrierPaths, carrierTraits, typeDeclarations),
+        elementConversion: conversion.elementConversion === null ? null : materializeProviderValueConversion(conversion.elementConversion, carrierPaths, carrierTraits, typeDeclarations) as typeof conversion.elementConversion,
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits, typeDeclarations),
         element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits, typeDeclarations),
       };

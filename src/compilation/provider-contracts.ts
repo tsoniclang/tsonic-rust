@@ -5,6 +5,7 @@ import { rustProviderOperationFormContractViolation } from "../policy/operations
 
 export const rustProviderContractValidation: RustProviderContractValidation = Object.freeze({
   conversion: rustValueConversionContract,
-  numericPromotion: (source, target) => rustNumericPromotionKind(source, target) !== undefined,
+  numericPromotion: (source: SourcePrimitiveKind, target: SourcePrimitiveKind) => rustNumericPromotionKind(source, target) !== undefined,
   operation: rustProviderOperationFormContractViolation,
 });
+import type { SourcePrimitiveKind } from "@tsonic/tsts";

@@ -43,7 +43,7 @@ export function createRustSourceVirtualModulesProvider(): SourceDeclarationProvi
       numericCode: 9300002,
     },
   },
-}),;
+  });
 }
 
 export function rustProviderExportsForModule(

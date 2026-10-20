@@ -1,4 +1,4 @@
-import type { RustFinalizedOperationKind, RustProviderOperationForm } from "./model.js";
+import type { RustArgumentMode, RustFinalizedOperationKind, RustProviderOperationForm } from "./model.js";
 
 export function rustProviderOperationFormAcceptsTargetGenericArguments(
   form: RustProviderOperationForm,
