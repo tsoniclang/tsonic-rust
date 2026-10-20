@@ -33,7 +33,7 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     if (values.some(member => member === undefined)) failTargetAnalysisInvariant("tsonic-rust", "An admitted project type requires its dense checked member inventory.", definition.declaration);
     const selected = values as readonly Node[];
     members.set(definition, selected);
-    const accessors = selected.flatMap(member => ast.hasModifierKind(member, "static") ? []
+    const accessors = selected.flatMap<{ readonly declaration: Node; readonly role: "read" | "write" }>(member => ast.hasModifierKind(member, "static") ? []
       : ast.kindName(member) === "KindGetAccessor" ? [{ declaration: member, role: "read" as const }]
         : ast.kindName(member) === "KindSetAccessor" ? [{ declaration: member, role: "write" as const }] : []);
     producer.members(definition, Object.freeze([...selected]), Object.freeze(accessors));
