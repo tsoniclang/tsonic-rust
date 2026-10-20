@@ -26,7 +26,6 @@ export function parseRustdocDocument(
   return parsed as unknown as RustdocDocument;
 }
 
-
 export function itemById(document: RustdocDocument, id: unknown): Readonly<Record<string, unknown>> {
   const key = String(id);
   const item = requireRecord(document.index[key], `rustdoc item '${key}'`);
@@ -37,17 +36,14 @@ export function itemById(document: RustdocDocument, id: unknown): Readonly<Recor
   return item;
 }
 
-
 export function hasInnerKind(item: Readonly<Record<string, unknown>>, kind: string): boolean {
   return isRecord(item.inner) && isRecord(item.inner[kind]);
 }
-
 
 export function requireInnerRecord(item: Readonly<Record<string, unknown>>, kind: string, where: string): Readonly<Record<string, unknown>> {
   const inner = requireRecord(item.inner, `${where}.inner`);
   return requireRecord(inner[kind], `${where}.${kind}`);
 }
-
 
 export function requireRecord(value: unknown, where: string): Readonly<Record<string, unknown>> {
   if (!isRecord(value)) {
@@ -56,7 +52,6 @@ export function requireRecord(value: unknown, where: string): Readonly<Record<st
   return value;
 }
 
-
 export function requireArray(value: unknown, where: string): readonly unknown[] {
   if (!Array.isArray(value)) {
     throw new Error(`${where} is not an array.`);
@@ -64,14 +59,12 @@ export function requireArray(value: unknown, where: string): readonly unknown[] 
   return value;
 }
 
-
 export function requireBoolean(value: unknown, where: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`${where} is not boolean.`);
   }
   return value;
 }
-
 
 export function normalizeAbi(value: unknown, where: string): string {
   if (typeof value === "string") {
@@ -94,7 +87,6 @@ export function normalizeAbi(value: unknown, where: string): string {
   return options.unwind === true ? `${name}-unwind` : name;
 }
 
-
 export function requireString(value: unknown, where: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`${where} is not a non-empty string.`);
@@ -102,11 +94,9 @@ export function requireString(value: unknown, where: string): string {
   return value;
 }
 
-
 export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
 
 export function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
