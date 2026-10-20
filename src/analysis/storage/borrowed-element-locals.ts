@@ -1,14 +1,11 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import {
-  BinaryExpression_Left, BinaryExpression_Right, BreakOrContinueStatement_Label, Node_Expression, Node_Initializer, Node_Operand,
-  VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceProgramNavigation,
-} from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, BreakOrContinueStatement_Label, Node_Expression, Node_Initializer, Node_Operand, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceProgramNavigation } from "@tsonic/target-api/source";
 
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustBorrowedElementLocal } from "../../target-model/records/borrowed-element-reads.js";
 import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
-import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
+import { rustBorrowedStringInputs } from "./provider-borrows.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 export function analyzeRustBorrowedElementLocals(
