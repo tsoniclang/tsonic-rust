@@ -7,7 +7,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TsonicPointerReturnQueries, TsonicMemoryBindingIndex } from "@tsonic/source-core/facts";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustSourceCallableQueries } from "../ownership/source-borrowed-return.js";
+import type { RustSourceCallableQueries } from "../../target-model/records/source-callables.js";
 import type { RustRetainedEnvironmentQueries } from "../ownership/retained-environment-queries.js";
 
 export interface RustSourcePolicyContext {

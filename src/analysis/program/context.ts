@@ -44,7 +44,7 @@ import { createRustRetainedErrorDemandSelection } from "../objects/retained-erro
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
-import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
+import { createRustSourceCallableQueries } from "../callables/borrowed-returns.js";
 import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";

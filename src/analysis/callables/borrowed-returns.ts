@@ -1,31 +1,24 @@
 import type { Node } from "@tsonic/tsts";
-import { forEachSourceImmediateEvaluationChild, sourceBindingHasMutableExposure,
-  type TargetSourceProgram } from "@tsonic/target-api/source";
+import { forEachSourceImmediateEvaluationChild, sourceBindingHasMutableExposure, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { createRustSourceLexicalCallableQueries,
-  type RustSourceLexicalCallableQueries } from "./source-lexical-callable.js";
-import { rustSourceValueWrapperContains } from "./source-value-wrappers.js";
+import { createRustSourceLexicalCallableQueries, type RustSourceLexicalCallableQueries } from "./lexical-bindings.js";
+import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
-export interface RustSourceCallableQueries {
-  directLexicalBinding(declaration: Node): Node | undefined;
-  borrowedReturnParameter(declaration: Node): Node | undefined;
-}
+import type { RustSourceCallableQueries } from "../../target-model/records/source-callables.js";
 
 export function createRustSourceCallableQueries(sourceStorage: SourceStorageQueries): RustSourceCallableQueries {
   const source = sourceStorage.source;
-  const lexical = createRustSourceLexicalCallableQueries(source);
+  const lexical = createRustSourceLexicalCallableQueries(source, sourceStorage.nodes);
   const returns = new WeakMap<Node, Node | null>();
   const stableBindings = new WeakMap<Node, boolean>();
+  for (const declaration of sourceStorage.nodes) {
+    if (!source.ast.is.IsArrowFunction(declaration) && !source.ast.is.IsFunctionDeclaration(declaration)) continue;
+    const selected = selectSourceBorrowedReturnParameter(declaration, sourceStorage, lexical, stableBindings);
+    returns.set(declaration, selected ?? null);
+  }
   return Object.freeze({
     directLexicalBinding: lexical.bindingFor,
-    borrowedReturnParameter(declaration: Node): Node | undefined {
-      if (!source.ast.is.IsArrowFunction(declaration) && !source.ast.is.IsFunctionDeclaration(declaration)) return undefined;
-      const cached = returns.get(declaration);
-      if (cached !== undefined) return cached ?? undefined;
-      const selected = selectSourceBorrowedReturnParameter(declaration, sourceStorage, lexical, stableBindings);
-      returns.set(declaration, selected ?? null);
-      return selected;
-    },
+    borrowedReturnParameter: (declaration: Node) => returns.get(declaration) ?? undefined,
   });
 }
 
@@ -74,9 +67,7 @@ function selectSourceBorrowedReturnParameter(
         resultUse.role !== "comparison" && resultUse.role !== "condition")) return undefined;
     let value = call;
     let consumer = ast.parent(value);
-    let depth = 0;
     while (consumer !== undefined && rustSourceValueWrapperContains(consumer, value, ast)) {
-      if (++depth > 256) return undefined;
       value = consumer;
       consumer = ast.parent(value);
     }

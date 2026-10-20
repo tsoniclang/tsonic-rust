@@ -10,7 +10,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
 
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
-import type { RustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
+import type { RustSourceCallableQueries } from "../../target-model/records/source-callables.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 
 import type { RustNativeStorageConstruction } from "./native-storage.js";

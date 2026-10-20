@@ -1,10 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalCaptures, sourceMayReadBeforeInitialization, type TargetSourceProgram } from "@tsonic/target-api/source";
 
-export interface RustSourceLexicalCallableQueries {
-  bindingFor(declaration: Node): Node | undefined;
-  callsFor(binding: Node, implementation: Node): readonly Node[] | undefined;
-}
+import type { RustSourceLexicalCallableQueries } from "../../target-model/records/source-callables.js";
 
 export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram, nodes: readonly Node[]): RustSourceLexicalCallableQueries {
   const bindings = new WeakMap<Node, Node | null>();
