@@ -111,6 +111,8 @@ export function analyzeRustSourcePackageErrors(
         errorOwnerComponentId: dependency.errorOwnerComponentId,
         crateName: dependency.crateName,
         typePath: `${dependency.crateName}::${dependency.programModuleName}::TsonicError`,
+        sourceErrorTypePath: `${dependency.crateName}::${dependency.programModuleName}::SourceError`,
+        writableSourceErrorTypePath: `${dependency.crateName}::${dependency.programModuleName}::WritableSourceError`,
         variant,
       });
       dependencyErrors.push(external);
@@ -248,6 +250,8 @@ function selectRustProgramErrorRoute(
         kind: "external",
         consumerVariant: external.variant,
         ownerTypePath: external.typePath,
+        sourceErrorTypePath: external.sourceErrorTypePath,
+        writableSourceErrorTypePath: external.writableSourceErrorTypePath,
         ownerVariant,
       });
 }

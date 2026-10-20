@@ -44,7 +44,7 @@ export function planRustProgramErrorConstruction(conversion: RustProgramErrorCon
   if (selected === undefined) failRustPlannerInvariant("An admitted project error requires its exact native package transport route.", node);
   if (sourceError) {
     const payload: RustExpr = selected.kind === "local" ? value : { kind: "call",
-      path: `${selected.ownerTypePath.slice(0, -"TsonicError".length)}${storage.writable ? "WritableSourceError" : "SourceError"}::from`, args: [value] };
+      path: `${storage.writable ? selected.writableSourceErrorTypePath : selected.sourceErrorTypePath}::from`, args: [value] };
     return { kind: "call", path: `${path}::from`, args: [payload] };
   }
   return selected.kind === "local" ? { kind: "call", path: `${boundary.errorTypePath}::${selected.variant}`, args: [value] }

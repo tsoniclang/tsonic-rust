@@ -4,8 +4,8 @@ import type { Node } from "@tsonic/tsts";
 
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { rustSourceBindingPath } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustCallableConstructionType } from "./fundamentals.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -14,15 +14,13 @@ import { rustSuspendedCallableStateType } from "../types/suspended-callables.js"
 import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./receiver-captures.js";
 
 export function planRustSuspendedCallableConstruction(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const implementation = context.input.program.callableValues.suspended.implementationFor(node);
-  const carrier = implementation === undefined ? undefined :
-    context.input.program.callableValues.nativeProducers.physicalFor(node, implementation.carrier);
-  const ownerType = carrier === undefined ? undefined : rustCallableConstructionType(carrier, context);
+  const selected = context.input.program.records.suspendedDeclaration.get(node)
+    ?? failRustPlannerInvariant("An admitted suspended callable requires its sealed native state declaration.", node);
+  const implementation = selected.implementation;
+  const ownerType = rustCallableConstructionType(selected.physicalCarrier, context);
   const stateType = implementation === undefined ? undefined : rustSuspendedCallableStateType(implementation, context);
   if (implementation === undefined || ownerType === undefined || stateType === undefined || context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-      "rust.backend.suspended-callable-state", "A suspended callable has no sealed native state declaration."));
-    return undefined;
+    return failRustPlannerInvariant("An admitted suspended callable requires its rendered state, owner and hygienic scope.", node);
   }
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   for (const [index, capture] of implementation.captures.entries()) {

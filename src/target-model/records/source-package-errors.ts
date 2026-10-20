@@ -7,6 +7,8 @@ export interface RustExternalSourcePackageError {
   readonly errorOwnerComponentId: string;
   readonly crateName: string;
   readonly typePath: string;
+  readonly sourceErrorTypePath: string;
+  readonly writableSourceErrorTypePath: string;
   readonly variant: string;
 }
 
@@ -43,6 +45,8 @@ export type RustProgramErrorRoute =
       readonly kind: "external";
       readonly consumerVariant: string;
       readonly ownerTypePath: string;
+      readonly sourceErrorTypePath: string;
+      readonly writableSourceErrorTypePath: string;
       readonly ownerVariant: string;
     };
 

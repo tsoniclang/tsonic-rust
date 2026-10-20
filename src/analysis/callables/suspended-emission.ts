@@ -34,8 +34,8 @@ export function analyzeRustSuspendedCallableEmission(input: {
     const physical = program.callableValues.nativeProducers.physicalFor(declaration, implementation.carrier);
     const signature = physical === undefined ? undefined : rustCallablePhysicalSignature(implementation.elision === undefined ? physical
       : substituteElidedLifetime(physical, implementation.elision.lifetime));
-    if (signature === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted suspended callable requires its exact physical invocation result.", declaration);
-    input.producer.declaration(declaration, { implementation, parameters: (bound ?? protocol).parameters,
+    if (signature === undefined || physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted suspended callable requires its exact physical invocation result.", declaration);
+    input.producer.declaration(declaration, { implementation, physicalCarrier: physical, parameters: (bound ?? protocol).parameters,
       result: rustNamedTargetType("rust.core.Result", "Result", [{ kind: "type", type: signature.result }, { kind: "type", type: signature.error }]),
       captures: Object.freeze(captured) });
   }

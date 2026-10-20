@@ -21,6 +21,7 @@ export interface RustSuspendedCallableImplementation {
 
 export interface RustSuspendedCallableEmission {
   readonly implementation: RustSuspendedCallableImplementation;
+  readonly physicalCarrier: TargetTypeRef;
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
   readonly captures: readonly TargetTypeRef[];
