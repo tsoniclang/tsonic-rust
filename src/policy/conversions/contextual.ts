@@ -4,7 +4,7 @@ import type { RustValueConversionContract } from "../../target-model/conversions
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierSupportsTrait } from "../../target-model/types/carriers/traits.js";
 import { rustProviderRecordCopyMatches } from "../../target-model/conversions/provider-record.js";
-import { rustEmptyRecordConversionMatches } from "../../target-model/conversions/empty-record.js";
+import { rustEmptyRecordConversionMatches } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableConversionMatches } from "../../target-model/conversions/generic-callable.js";
 import { rustIntegerTruncationConversionMatches } from "../../target-model/conversions/integer-truncation.js";

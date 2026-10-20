@@ -10,7 +10,7 @@ import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
-import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
+import { rustEmptyRecordCarrier } from "../conversions/empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustProjectProjection } from "./project/project-projections.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";

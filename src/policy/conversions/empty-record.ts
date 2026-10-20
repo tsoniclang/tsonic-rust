@@ -1,13 +1,8 @@
-import type { TargetTypeRef } from "../types/model.js";
-import { rustEmptyObjectTargetType, rustStructuralObjectCarrierValue } from "../types/index.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustEmptyObjectTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-export interface RustEmptyRecordConversion {
-  readonly kind: "empty-record";
-  readonly source: TargetTypeRef;
-  readonly target: TargetTypeRef;
-}
-
+import type { RustEmptyRecordConversion } from "../../target-model/conversions/empty-record.js";
 export function rustEmptyRecordCarrier(type: TargetTypeRef): boolean {
   if (rustTargetTypeRefEquals(type, rustEmptyObjectTargetType())) return true;
   const structural = rustStructuralObjectCarrierValue(type);
