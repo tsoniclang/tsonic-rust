@@ -1,4 +1,4 @@
-import { rustProviderContractValidation } from "./provider-contracts.js";
+import { rustProviderContractValidation } from "../providers/packages/contracts.js";
 import type { TargetCompilationSession, TargetCompilationSessionContext, TargetCompileInput, TargetSourceCompilerContributions, TargetSourceProfileContributions } from "@tsonic/target-api";
 import type { TargetCompileResult, TargetRuntimeContributions } from "@tsonic/target-api/artifacts";
 import { compileRustTarget } from "../backend/compile.js";

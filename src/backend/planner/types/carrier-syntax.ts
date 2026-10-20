@@ -7,7 +7,7 @@ import { rustNativeErrorJoinReference, type RustNativeErrorJoinReference } from 
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
-import { bindRustCallableInputLifetimes } from "../../../policy/types/callables/input-lifetimes.js";
+import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustBuiltInCarrierDefinitions,
   rustCallableTargetId, rustCallableInputTargetId, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustPrimitiveTypeName,
   rustStringTargetId, rustStrTargetId, isRustNeverCarrier, isRustAbsenceCarrier, rustOnlyTypeGenericArguments,

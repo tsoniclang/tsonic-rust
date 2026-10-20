@@ -12,7 +12,7 @@ import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, isRust
 
 import { rustResolutionContext } from "../program/walk.js";
 
-import { rustUnparenthesizedExpression } from "../../source/extension/expressions.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { resolveExpressionCarrier, resolveExpressionCarrierBeforeFlowReadProjection } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 

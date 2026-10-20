@@ -1,5 +1,5 @@
-import { createRustTargetPack } from "../descriptor/target-pack.js";
-import { createRustStarterProject } from "../descriptor/starter-project.js";
+import { createRustTargetPack } from "./target-pack.js";
+import { createRustStarterProject } from "./starter-project.js";
 
 export function createTsonicPlugin(): import("@tsonic/target-api").TsonicTargetPlugin {
   return {

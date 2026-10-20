@@ -176,9 +176,9 @@ export const callablesCarrierRegistry: readonly TargetCarrierRegistryEntry<Targe
     frozen: true,
   },
   {
-    id: "src/policy/types/callables/absence-witness.js#rustCallableInputAbsenceWitness",
+    id: "src/target-model/types/carriers/callable-input-witness.js#rustCallableInputAbsenceWitness",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/policy/types/callables/absence-witness.js", symbol: "rustCallableInputAbsenceWitness" },
+    declaration: { module: "src/target-model/types/carriers/callable-input-witness.js", symbol: "rustCallableInputAbsenceWitness" },
     counterpart: { module: "src/target-model/types/carriers/nullable.ts", symbol: "csharpNullableReferenceTargetType" },
     frozen: true,
   },

@@ -1,4 +1,4 @@
-export { createRustProviderPackage } from "../compilation/provider-packages.js";
+export { createRustProviderPackage } from "../providers/packages/composition.js";
 export { rustJsTimerDispatchContextId } from "../providers/model/js-dispatch.js";
 export type {
   RustProviderBinaryHookDefinition,

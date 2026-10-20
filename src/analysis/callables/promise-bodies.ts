@@ -9,7 +9,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureTargetType } from "../../target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
-import { rustUnparenthesizedExpression } from "../../source/extension/expressions.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { selectRustPromiseBodyRecursion } from "./promise-recursion.js";
 

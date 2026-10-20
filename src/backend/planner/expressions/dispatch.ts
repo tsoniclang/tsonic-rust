@@ -24,7 +24,7 @@ import { planRustRuntimeCategory } from "./runtime-category.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
 import { planRustVoidExpression } from "./expression-void.js";
-import { rustUnparenthesizedExpression } from "../../../source/extension/expressions.js";
+import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 import { planElementAccess } from "./elements.js";
 import { planArrayLiteral } from "./array-literals/planning.js";
 import { planBinaryExpression } from "./binary.js";

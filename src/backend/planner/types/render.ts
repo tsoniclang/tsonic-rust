@@ -17,7 +17,7 @@ import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/r
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { rustOptionalStorageTypeArguments } from "./type-projections.js";
-import { rustCallableInputAbsenceWitness } from "../../../policy/types/callables/absence-witness.js";
+import { rustCallableInputAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
 import { rustTypeFromCarrier, rustGenericArgumentsFromCarrier, rustConstArgumentToAst, typeGenericArguments, type RustSourceTypeRendering } from "./carrier-syntax.js";
 
 export { rustStrRefType, rustTypeFromCarrier, rustReturnTypeFromCarrier, isFloatCarrier, rustLifetimeBinderToAst } from "./carrier-syntax.js";

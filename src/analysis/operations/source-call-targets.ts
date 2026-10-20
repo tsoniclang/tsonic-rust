@@ -24,7 +24,7 @@ import { substituteRustValueConversion } from "../../target-model/conversions/su
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 
-import { rustMemberAccessReceiver } from "../../source/extension/expressions.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 

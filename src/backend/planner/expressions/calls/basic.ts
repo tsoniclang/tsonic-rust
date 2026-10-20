@@ -4,7 +4,7 @@ import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustNativeHandler } from "../../../../target-model/records/native-handlers.js";
-import { rustMemberAccessReceiver } from "../../../../source/extension/expressions.js";
+import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";

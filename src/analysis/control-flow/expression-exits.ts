@@ -4,7 +4,7 @@ import { Node_Expression, Node_Operand, ObjectLiteralProperty_Value, SpreadAssig
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustExpressionExitProducer } from "../program/records/expression-exits.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
-import { rustMemberAccessReceiver } from "../../source/extension/expressions.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
 export function analyzeRustExpressionExits(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustExpressionExitProducer): void {

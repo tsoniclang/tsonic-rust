@@ -9,7 +9,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
 import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
-import { rustMemberAccessReceiver } from "../../source/extension/expressions.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import type { RustStatementCompletionRecords } from "../../target-model/records/statement-completion.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;

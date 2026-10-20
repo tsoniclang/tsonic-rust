@@ -4,7 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNumericLiteralIsFinite } from "../numeric/literal-admission.js";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { getRustTypeofRuntimeKind } from "../../policy/operations/syntax/runtime-kind.js";
-import { rustUnparenthesizedExpression } from "../../source/extension/expressions.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustBigIntTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../target-model/types/index.js";
 import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation, type RustFactWalk, rustOperationContext } from "../program/walk.js";

@@ -19,7 +19,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { rustMemberAccessReceiver } from "../../source/extension/expressions.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
