@@ -17,7 +17,7 @@ import {
 import {
   isValidRustIdentifier,
 } from "../../target-model/names/identifiers.js";
-import { materializeCargoCrate } from "./cargo-package.js";
+import { materializeCargoCrate } from "../../providers/runtime/materialization.js";
 import {
   isRustFoundation,
   rustFoundationIncludes,
