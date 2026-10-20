@@ -18,6 +18,7 @@ import type {
 } from "../../target-model/lifetimes/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustSourceLifetimeTypeContract } from "../../policy/types/resolution/lifetimes.js";
+import { createRustLifetimeRecords } from "../program/records/lifetimes.js";
 
 interface RustSourceGenericParameterEvidence {
   readonly parameter: Node;
@@ -60,7 +61,7 @@ export function analyzeRustLifetimes(
       )],
     };
   }
-  const parameterByDeclaration = new WeakMap<Node, RustSourceGenericParameterContract>();
+  const parameterByDeclaration = new Map<Node, RustSourceGenericParameterContract>();
   const parameterEvidence = new WeakMap<Node, RustSourceGenericParameterEvidence>();
   const contracts: RustSourceGenericContract[] = [];
   const unresolved = new Map<Node, {
@@ -244,21 +245,16 @@ export function analyzeRustLifetimes(
   }
 
   if (diagnostics.length > 0) return { diagnostics: Object.freeze(diagnostics) };
-  const contractByDeclaration = new WeakMap<Node, RustSourceGenericContract>();
-  for (const contract of contracts) contractByDeclaration.set(contract.declaration, contract);
+  const resolutions = new Map<Node, RustLifetimeRef>();
+  const pending: Node[] = [...input.source.navigation.sourceFiles];
+  while (pending.length !== 0) {
+    const node = pending.pop()!;
+    const selected = resolve(node);
+    if (selected !== undefined) resolutions.set(node, selected);
+    input.ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
   return {
-    index: Object.freeze({
-      contractFor(declaration: Node | undefined) {
-        return declaration === undefined ? undefined : contractByDeclaration.get(declaration);
-      },
-      parameterFor(declaration: Node | undefined) {
-        return declaration === undefined ? undefined : parameterByDeclaration.get(declaration);
-      },
-      resolve,
-      allContracts() {
-        return Object.freeze([...contracts]);
-      },
-    }),
+    index: createRustLifetimeRecords(contracts, parameterByDeclaration, resolutions),
     diagnostics: Object.freeze([]),
   };
 }
