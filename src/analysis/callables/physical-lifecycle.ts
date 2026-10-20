@@ -32,9 +32,8 @@ import type { RustNativeCallableProducerConstruction } from "./native-producers.
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
 import { rustEmissionSourceIdentity } from "./emission-contexts.js";
 
-export type RustPhysicalCallableStorage = Pick<RustNativeStoragePlan,
-  "issues" | "parameterFor" | "futureEnvironmentFor" | "returnFor" | "valueFor" | "operandFor" |
-  "invocationCallableFor" | "invocationWitnessFor" | "invocationArgumentWitnessFor">;
+import type { RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";
+import { sealRustPhysicalCallableStorage } from "../program/records/physical-callable-storage.js";
 
 export interface RustPhysicalCallablePublication {
   readonly nativeStorage: RustPhysicalCallableStorage;
@@ -81,8 +80,8 @@ const unpreparedStorage: RustNativeStorageSelection = Object.freeze({ kind: "unr
   reason: "Native callable storage was not prepared for this owned source query before publication." });
 
 export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableLifecycleInput): RustPhysicalCallableLifecycle {
-  if (!Array.isArray(input.requests)) throw new Error("Physical callable storage requires its complete selecting-owner request vector.");
-  if (!Array.isArray(input.sourceOccurrences)) throw new Error("Physical callable storage requires its original selected source occurrence vector.");
+  if (!Array.isArray(input.requests)) failTargetAnalysisInvariant("tsonic-rust", "Physical callable storage requires its complete selecting-owner request vector.");
+  if (!Array.isArray(input.sourceOccurrences)) failTargetAnalysisInvariant("tsonic-rust", "Physical callable storage requires its original selected source occurrence vector.");
   const { ast, records, nativeStorage: queries } = input;
   const diagnostics: TargetDiagnostic[] = [];
   const sourceNodes = new Map<object, Node>(input.sourceStorage.nodes.map(node => [node, node]));
@@ -254,7 +253,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   return Object.freeze({
     prepared,
     complete(physical: RustGenericCallablePhysicalConstruction): TargetStageResult<RustPhysicalCallablePublication> {
-      if (complete) throw new Error("Physical callable storage and applications complete exactly once.");
+      if (complete) failTargetAnalysisInvariant("tsonic-rust", "Physical callable storage and applications complete exactly once.");
       complete = true;
       if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
       storageReady = true;
@@ -336,7 +335,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         }));
       }
       if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
-      const nativeStorage: RustPhysicalCallableStorage = Object.freeze({ ...prepared, issues: queries.issues,
+      const nativeStorage = sealRustPhysicalCallableStorage({ ...prepared, issues: queries.issues,
         parameterFor: queries.parameterFor,
         futureEnvironmentFor: queries.futureEnvironmentFor,
         invocationWitnessFor: queries.invocationWitnessFor,

@@ -9,7 +9,8 @@ import type { RustProjectConstructionPlan } from "../project-types/construction-
 import type { RustConstructionLayer } from "../../target-model/records/construction.js";
 import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage } from "./physical-lifecycle.js";
+import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
+import type { RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";
 
 export type RustEmissionSourceOwner =
   | { readonly kind: "declaration" }

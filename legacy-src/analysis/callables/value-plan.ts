@@ -45,8 +45,8 @@ import type { RustNativeCallableDispatchPlan } from "../../target-model/records/
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
-import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle,
-  type RustPhysicalCallableEmissionRequest, type RustPhysicalCallableStorage } from "./physical-lifecycle.js";
+import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle, type RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
+import { type RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";
 import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
