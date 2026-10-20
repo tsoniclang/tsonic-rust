@@ -12,6 +12,7 @@ import { isRustNeverCarrier, rustProgramErrorTargetType } from "../../target-mod
 import { rustCallableInvocationResult } from "../callables/results.js";
 import { selectRustProjectCallableSignature } from "../../policy/objects/project-dispatch-callables.js";
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
@@ -126,6 +127,7 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     if (carrier !== undefined) pending.push(carrier);
   }
   const seen = new Set<string>();
+  const aliases = new Set<string>();
   for (let index = 0; index < pending.length; index++) {
     const carrier = pending[index]!;
     const key = closedMetadataKey(carrier);
@@ -134,6 +136,25 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     pending.push(...rustTargetTypeChildren(carrier));
     const definition = program.projectTypes.definitionForCarrier(carrier);
     if (definition === undefined || !members.has(definition)) continue;
+    const ancestors = [carrier];
+    const visitedAncestors = new Set<string>();
+    for (let ancestorIndex = 0; ancestorIndex < ancestors.length; ancestorIndex++) {
+      const ancestor = ancestors[ancestorIndex]!;
+      const ancestorKey = closedMetadataKey(ancestor);
+      if (visitedAncestors.has(ancestorKey)) continue;
+      visitedAncestors.add(ancestorKey);
+      const target = program.projectTypes.definitionForCarrier(ancestor);
+      const relationship = target === undefined ? undefined : program.projectTypes.relationship(carrier, target);
+      if (target !== undefined && relationship?.kind === "related" && rustTargetTypeRefEquals(relationship.targetType, ancestor)) {
+        const aliasKey = closedMetadataKey([carrier, ancestor]);
+        if (!aliases.has(aliasKey)) {
+          aliases.add(aliasKey);
+          producer.alias(carrier, ancestor, { same: rustTargetTypeRefEquals(carrier, ancestor),
+            polymorphic: program.projectTypes.isPolymorphic(definition) && program.projectTypes.isPolymorphic(target) });
+        }
+      }
+      ancestors.push(...(program.projectTypes.directSupertypes(ancestor) ?? []));
+    }
     instance(definition, carrier);
     pending.push(...(program.projectTypes.directSupertypes(carrier) ?? []));
     if (definition.kind !== "class") continue;

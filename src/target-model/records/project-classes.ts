@@ -38,6 +38,7 @@ export interface RustProjectCallableSignature {
 }
 
 export interface RustProjectClassRecords {
+  readonly receiverAlias: { readonly get: (source: TargetTypeRef, target: TargetTypeRef) => { readonly same: boolean; readonly polymorphic: boolean } | undefined };
   readonly projectClassMembers: { readonly get: (definition: RustProjectTypeDefinition) => readonly Node[] | undefined };
   readonly projectClassAccessors: { readonly get: (definition: RustProjectTypeDefinition) => readonly { readonly declaration: Node; readonly role: "read" | "write" }[] | undefined };
   readonly projectClassFields: { readonly get: (definition: RustProjectTypeDefinition, carrier: TargetTypeRef) => readonly RustProjectFieldEmission[] | undefined };

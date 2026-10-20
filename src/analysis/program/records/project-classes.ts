@@ -6,6 +6,7 @@ import type { RustProjectClassRecords, RustProjectCallableSignature, RustProject
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export interface RustProjectClassProducer {
+  alias(source: TargetTypeRef, target: TargetTypeRef, value: { readonly same: boolean; readonly polymorphic: boolean }): void;
   readonly records: RustProjectClassRecords;
   members(definition: RustProjectTypeDefinition, members: readonly Node[], accessors: readonly { readonly declaration: Node; readonly role: "read" | "write" }[]): void;
   instance(definition: RustProjectTypeDefinition, carrier: TargetTypeRef, fields: readonly RustProjectFieldEmission[], properties: readonly RustProjectMethodPropertyEmission[]): void;
@@ -25,7 +26,9 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
   const propertyPaths = new WeakMap<RustProjectTypeDefinition, ReadonlyMap<Node, readonly string[]>>();
   const implementations = new WeakMap<RustProjectTypeDefinition, ReadonlyMap<Node, Node>>();
   const callables = new WeakMap<Node, RustProjectCallableSignature>();
+  const aliases = new Map<string, { readonly same: boolean; readonly polymorphic: boolean }>();
   return Object.freeze({ records: Object.freeze({
+    receiverAlias: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => aliases.get(closedMetadataKey([source, target])) }),
     projectClassMembers: Object.freeze({ get: (definition: RustProjectTypeDefinition) => members.get(definition) }),
     projectClassAccessors: Object.freeze({ get: (definition: RustProjectTypeDefinition) => accessors.get(definition) }),
     projectClassFields: Object.freeze({ get: (definition: RustProjectTypeDefinition, carrier: TargetTypeRef) => fields.get(definition)?.get(closedMetadataKey(carrier)) }),
@@ -36,6 +39,12 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
     projectMemberImplementation: Object.freeze({ get: (definition: RustProjectTypeDefinition, member: Node) => implementations.get(definition)?.get(member) }),
     projectCallableSignature: Object.freeze({ get: (member: Node) => callables.get(member) }),
   }),
+    alias(source: TargetTypeRef, target: TargetTypeRef, value: { readonly same: boolean; readonly polymorphic: boolean }): void {
+      assertOpen();
+      const key = closedMetadataKey([source, target]);
+      if (aliases.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native receiver alias has one exact source relationship owner.");
+      aliases.set(key, Object.freeze(value));
+    },
     members(definition: RustProjectTypeDefinition, values: readonly Node[], selected: readonly { readonly declaration: Node; readonly role: "read" | "write" }[]): void {
       assertOpen();
       if (members.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A native class member inventory has one source owner.", definition.declaration);

@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -14,16 +14,11 @@ export function planRustReceiverAlias(
   context: RustPlanContext,
   nativeRoot = false,
 ): RustExpr | undefined {
-  const receiverDefinition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
-  const resultDefinition = context.input.program.projectTypes.definitionForCarrier(resultCarrier);
-  const relation = resultDefinition === undefined ? undefined
-    : context.input.program.projectTypes.relationship(receiverCarrier, resultDefinition);
+  const selected = context.input.program.records.receiverAlias.get(receiverCarrier, resultCarrier);
   const resultType = rustTypeFromCarrierInContext(resultCarrier, context);
-  if (receiverDefinition === undefined || relation?.kind !== "related" ||
-    !rustTargetTypeRefEquals(relation.targetType, resultCarrier) || resultType?.kind !== "named") return undefined;
-  if (!nativeRoot && rustTargetTypeRefEquals(receiverCarrier, resultCarrier)) return receiver;
-  if (!context.input.program.projectTypes.isPolymorphic(receiverDefinition) ||
-    !context.input.program.projectTypes.isPolymorphic(resultDefinition!)) return undefined;
+  if (selected === undefined || resultType?.kind !== "named") failRustPlannerInvariant("An admitted native receiver alias requires its exact sealed relationship and named target.", context.sourceFile);
+  if (!nativeRoot && selected.same) return receiver;
+  if (!selected.polymorphic) failRustPlannerInvariant("An admitted native root alias requires its sealed polymorphic relationship.", context.sourceFile);
   return renderRustReceiverAlias(receiver, resultType, nativeRoot);
 }
 
