@@ -1,21 +1,12 @@
 import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier, validateValueConversion } from "./carriers.js";
 import { closedMetadataKey, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { isRustDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../policy/operations/dispatch-contexts.js";
+import { isRustDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../target-model/operations/dispatch-contexts.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import {
-  rustProviderOperationFormAcceptsTargetGenericArguments,
-  rustProviderOperationFormContractViolation,
-  rustProviderOperationFormDeclaresWritableInput,
-} from "../../../policy/operations/forms.js";
+import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormDeclaresWritableInput } from "../../../target-model/operations/form-inputs.js";
 import { isRustUnitCarrier, rustTargetGenericReferences } from "../../../target-model/types/index.js";
 import { validateOperationForm } from "./forms.js";
-import {
-  genericArgumentCarriers,
-  validateGenericReferences,
-  validateProviderGenericParameters,
-  validateTargetGenericArguments,
-} from "./generics.js";
+import { genericArgumentCarriers, validateGenericReferences, validateProviderGenericParameters, validateTargetGenericArguments } from "./generics.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { RustProviderPackageDefinition } from "../model.js";
@@ -230,7 +221,7 @@ export function validateOperationRows(
       validateValueConversion(row.resultConversion, definition, `${label}.resultConversion`, undefined, row.resultCarrier, fail);
     }
     validateOperationForm(row.operationKind, row.target, definition, label, row.parameterCarriers, fail);
-    const operationFormContractViolation = rustProviderOperationFormContractViolation(
+    const operationFormContractViolation = fail.contracts.operation(
       row.operationKind,
       row.target,
       row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
@@ -349,7 +340,7 @@ function validateProviderCallback(
     row.parameterCarriers,
     fail,
   );
-  const violation = rustProviderOperationFormContractViolation(
+  const violation = fail.contracts.operation(
     row.operationKind,
     callback.fallibleTarget,
     callback.fallibleTarget.form === "call-value-slice" ||

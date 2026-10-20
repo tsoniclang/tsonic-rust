@@ -2,7 +2,7 @@ import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustAddressOfSourceOperation, selectRustBindPointerSourceOperation } from "../../source/extension/typed-locations.js";
 import { KindCallExpression, KindElementAccessExpression, KindNewExpression, KindPropertyAccessExpression, Node_Expression } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
-import { rustProviderOperationSourceArgumentMayMutate, rustProviderOperationSourceReceiverMayMutate } from "../../policy/operations/forms.js";
+import { rustProviderOperationSourceArgumentMayMutate, rustProviderOperationSourceReceiverMayMutate } from "../../target-model/operations/form-inputs.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";

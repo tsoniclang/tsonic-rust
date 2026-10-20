@@ -8,7 +8,8 @@ import { rustRestSequenceForm } from "../../../../target-model/operations/rest-a
 import { isRustFallibleErrorBoundary, isRustOperationErrorBoundary } from "../../../../target-model/operations/error-boundary.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../../target-model/types/index.js";
-import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../forms.js";
+import { rustProviderOperationFormContractViolation } from "../../forms.js";
+import { rustProviderOperationFormAcceptsTargetGenericArguments } from "../../../../target-model/operations/form-inputs.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
 import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../../target-model/operations/model.js";
 import { rustLengthEmptinessContractIsValid } from "../../../../target-model/operations/length-emptiness.js";

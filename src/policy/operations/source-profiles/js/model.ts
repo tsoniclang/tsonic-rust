@@ -1,7 +1,7 @@
 import type { RustBorrowedIndexOperation, RustCallbackOperationTemplate, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetTemplate, RustValueConversion } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
-import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
+import { rustProviderOperationFormDeclaresWritableInput } from "../../../../target-model/operations/form-inputs.js";
 import type { RustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isRustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isClosedMetadata, isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
