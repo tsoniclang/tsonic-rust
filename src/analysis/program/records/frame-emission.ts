@@ -5,8 +5,10 @@ import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCa
 import type { RustClassFrameFieldEmission } from "../../../target-model/records/frame-emission.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import type { RustFrameTypeEmission } from "../../../target-model/records/frame-emission.js";
 
 export interface RustFrameEmissionProducer {
+  type(carrier: TargetTypeRef, value: RustFrameTypeEmission): void;
   bindingDeclaration(subject: Node, value: RustFrameCallableBinding): void;
   owner(subject: Node, value: RustFrameCallableDefinition): void;
   classField(subject: Node, carrier: TargetTypeRef, value: RustClassFrameFieldEmission): void;
@@ -31,7 +33,9 @@ export function createRustFrameEmissionProducer(assertOpen: () => void): RustFra
   const bindingDeclarations = new WeakMap<Node, RustFrameCallableBinding>();
   const owners = new WeakMap<Node, RustFrameCallableDefinition>();
   const fields = new WeakMap<Node, Map<string, RustClassFrameFieldEmission>>();
+  const types = new Map<string, RustFrameTypeEmission>();
   return Object.freeze({ records: Object.freeze({
+    frameType: Object.freeze({ get: (carrier: TargetTypeRef) => types.get(closedMetadataKey(carrier)) }),
     frameBindingDeclaration: Object.freeze({ get: (subject: Node) => bindingDeclarations.get(subject) }),
     frameOwner: Object.freeze({ get: (subject: Node) => owners.get(subject) }),
     classFrameField: Object.freeze({ get: (subject: Node, carrier: TargetTypeRef) => fields.get(subject)?.get(closedMetadataKey(carrier)) }),
@@ -43,6 +47,12 @@ export function createRustFrameEmissionProducer(assertOpen: () => void): RustFra
     frameDeclaration: Object.freeze({ get: (subject: RustFrameCallableDefinition) => definitions.get(subject) }),
     frameDeclarations: Object.freeze({ get: (subject: SourceFile) => sources.get(subject) }),
   }),
+    type(carrier: TargetTypeRef, value: RustFrameTypeEmission): void {
+      assertOpen();
+      const key = closedMetadataKey(carrier);
+      if (types.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native frame carrier has one exact environment and owner selection.");
+      types.set(key, Object.freeze(value));
+    },
     bindingDeclaration(subject: Node, value: RustFrameCallableBinding): void {
       assertOpen();
       if (bindingDeclarations.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A canonical native frame binding has one declaration owner.", subject);

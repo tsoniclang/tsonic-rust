@@ -8,6 +8,9 @@ import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import type { RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
@@ -98,5 +101,47 @@ export function analyzeRustFrameEmission(input: {
     if (frame === undefined) continue;
     const receiver = program.projectTypes.openCarrier(definition);
     for (const binding of frame.bindings) field(binding.declaration, receiver);
+  }
+  const pending = input.nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node));
+  for (const context of program.physicalEmissionContexts.contexts) pending.push(...context.operands);
+  for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
+    ...(operand.destination === undefined ? [] : [operand.destination]));
+  for (const definition of frames.definitions) pending.push(...definition.bindings.map(binding => binding.carrier),
+    ...definition.entries.flatMap(entry => entry.implementations.map(implementation => implementation.carrier)));
+  const seenTypes = new Set<string>();
+  for (let index = 0; index < pending.length; index++) {
+    const carrier = pending[index]!;
+    const key = closedMetadataKey(carrier);
+    if (seenTypes.has(key)) continue;
+    seenTypes.add(key);
+    pending.push(...rustTargetTypeChildren(carrier));
+    const value = rustFrameCallableValue(carrier);
+    if (value === undefined) continue;
+    const definition = frames.definitionFor(carrier);
+    const entry = frames.entryFor(carrier);
+    if (definition === undefined || entry === undefined || value.environment.length !== entry.environmentIndexes.length)
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact physical entry and environment correspondence.");
+    const environment: (TargetTypeRef | undefined)[] = Array.from({ length: definition.environmentParameters.length }, () => undefined);
+    value.environment.forEach((parameter, index) => {
+      const destination = entry.environmentIndexes[index];
+      if (destination === undefined || destination < 0 || destination >= environment.length)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its exact environment parameter positions.");
+      environment[destination] = parameter;
+    });
+    if (environment.some(parameter => parameter === undefined))
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted native frame requires its complete environment parameter inventory.");
+    let owner: import("../../target-model/records/frame-emission.js").RustFrameTypeEmission["owner"];
+    if (definition.storage.kind !== "standalone") {
+      if (value.owner.kind !== "class" || definition.activation.kind !== "class")
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted object frame requires its checked class activation.");
+      const instance = value.owner.instance;
+      const selected = program.projectTypes.definitionForCarrier(instance);
+      const representation = program.objectRepresentations.representationFor(selected);
+      if (selected?.kind !== "class" || selected.declaration !== definition.activation.ownerDeclaration || representation === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted object frame requires its exact native class owner and representation.");
+      owner = Object.freeze({ instance, representation,
+        environment: program.classValues.forDeclaration(selected.declaration)?.environment?.instancesUseEnvironment === true });
+    }
+    input.producer.type(carrier, { definition, entry, environment: Object.freeze(environment as TargetTypeRef[]), owner });
   }
 }

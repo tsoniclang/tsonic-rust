@@ -3,6 +3,15 @@ import type { RustFrameCallableBinding, RustFrameCallableDefinition, RustFrameCa
 import type { RustGenericRequirement, RustAssociatedTypeRequirement } from "./generic-requirements.js";
 import type { RustProjectProjectionRequirement } from "../types/project-projections.js";
 import type { TargetTypeRef } from "../types/model.js";
+import type { RustFrameCallableEntryDefinition } from "./frame-callables.js";
+import type { RustObjectRepresentation } from "./object-representation.js";
+
+export interface RustFrameTypeEmission {
+  readonly definition: RustFrameCallableDefinition;
+  readonly entry: RustFrameCallableEntryDefinition;
+  readonly environment: readonly TargetTypeRef[];
+  readonly owner: { readonly instance: TargetTypeRef; readonly representation: RustObjectRepresentation; readonly environment: boolean } | undefined;
+}
 
 export interface RustClassFrameFieldEmission {
   readonly binding: RustFrameCallableBinding;
@@ -18,6 +27,7 @@ export interface RustFrameDefinitionEmission {
 }
 
 export interface RustFrameEmissionRecords {
+  readonly frameType: { readonly get: (carrier: TargetTypeRef) => RustFrameTypeEmission | undefined };
   readonly frameBindingDeclaration: { readonly get: (subject: Node) => RustFrameCallableBinding | undefined };
   readonly frameOwner: { readonly get: (subject: Node) => RustFrameCallableDefinition | undefined };
   readonly classFrameField: { readonly get: (subject: Node, carrier: TargetTypeRef) => RustClassFrameFieldEmission | undefined };
