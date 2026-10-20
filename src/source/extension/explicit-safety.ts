@@ -1,17 +1,6 @@
-import {
-  tsonicNativePointerOperationFactKey,
-  tsonicSafetyBuilderFactKey,
-  tsonicUnsafeContextFactKey,
-} from "@tsonic/source-core/facts";
-import type {
-  TsonicNativePointerOperationFact,
-  TsonicSafetyBuilderFact,
-  TsonicUnsafeContextFact,
-} from "@tsonic/source-core/facts";
-import type {
-  ExtensionFactSubject,
-  ReadonlySourceFactResolver,
-} from "@tsonic/tsts";
+import { tsonicNativePointerOperationFactKey, tsonicSafetyBuilderFactKey, tsonicUnsafeContextFactKey } from "@tsonic/source-core/facts";
+import type { TsonicNativePointerOperationFact, TsonicSafetyBuilderFact, TsonicUnsafeContextFact } from "@tsonic/source-core/facts";
+import type { ExtensionFactSubject, ReadonlySourceFactResolver } from "@tsonic/tsts";
 
 export function readRustSourceUnsafeContext(
   sourceFacts: ReadonlySourceFactResolver,

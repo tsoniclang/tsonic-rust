@@ -4,7 +4,7 @@ import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../target-
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 
-import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/operations/safety/source-explicit-safety.js";
+import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../source/extension/explicit-safety.js";
 
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 

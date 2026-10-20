@@ -15,7 +15,7 @@ import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import {
   readRustSourceSafetyBuilder,
   readRustSourceUnsafeContext,
-} from "../../policy/operations/safety/source-explicit-safety.js";
+} from "../../source/extension/explicit-safety.js";
 
 import type { RustSafetyApplication } from "../../target-model/records/safety.js";
 
