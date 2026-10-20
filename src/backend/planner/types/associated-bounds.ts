@@ -1,3 +1,4 @@
+import { failRustPlannerInvariant } from "../../invariants.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import type { RustAssociatedTypeRequirement } from "../../../target-model/records/generic-requirements.js";
@@ -14,8 +15,8 @@ export function rustDeclarationAssociatedPredicates(
   context: RustPlanContext,
   inScope: (carrier: TargetTypeRef) => boolean = () => true,
 ): readonly RustWherePredicate[] {
-  const contract = context.input.program.declarationGenericRequirements.contractFor(declaration, context.promiseBody);
-  if (contract === undefined) throw new Error("A Rust declaration has no sealed generic requirement contract.");
+  const contract = context.input.program.records.declarationRequirements.get(declaration, context.promiseBody);
+  if (contract === undefined) failRustPlannerInvariant("A Rust declaration has no sealed generic requirement contract.", declaration);
   return [...rustAssociatedPredicates(contract.associatedTypes.filter(requirement => inScope(requirement.carrier)), context),
     ...rustProjectProjectionPredicates(contract.projectProjections.filter(requirement =>
       inScope(requirement.sourceCarrier) && inScope(requirement.targetCarrier)), context)];
@@ -32,7 +33,7 @@ export function rustAssociatedPredicates(
     const selectedTrait = rustTypeFromCarrierInContext(projection.trait, context);
     const output = selected.output === undefined ? undefined : rustTypeFromCarrierInContext(selected.output, context);
     if (selected.output !== undefined && (output === undefined || selectedTrait?.kind !== "named")) {
-      throw new Error("A sealed field constraint lost its exact associated output equality.");
+      failRustPlannerInvariant("A sealed field constraint lost its exact associated output equality.");
     }
     const trait = output === undefined || selectedTrait?.kind !== "named" ? selectedTrait : {
       ...selectedTrait, genericArguments: [...selectedTrait.genericArguments ?? [],
@@ -40,14 +41,14 @@ export function rustAssociatedPredicates(
     };
     const type = rustTypeFromCarrierInContext(projection, context);
     if (owner === undefined || trait === undefined || type === undefined) {
-      throw new Error("A sealed dependent type obligation has no native syntax.");
+      failRustPlannerInvariant("A sealed dependent type obligation has no native syntax.");
     }
     predicates.push({ kind: "type", type: owner, bounds: [{ kind: "trait-type", reference: { trait } }] });
     for (const access of selected.fieldAccess ?? []) {
       const key = projection.trait?.genericArguments[0];
       const keyType = key?.kind === "type" ? rustTypeFromCarrierInContext(key.type, context) : undefined;
       const errorType = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-      if (keyType === undefined || errorType === undefined) throw new Error("A dependent field operation lost its key or error contract.");
+      if (keyType === undefined || errorType === undefined) failRustPlannerInvariant("A dependent field operation lost its key or error contract.");
       predicates.push({ kind: "type", type: owner, bounds: [{ kind: "trait-type", reference: {
         trait: { kind: "named", path: access === "read" ? "rt::ReadField" : "rt::WriteField", genericArguments: [
           { kind: "type", type: keyType }, { kind: "type", type: errorType },
