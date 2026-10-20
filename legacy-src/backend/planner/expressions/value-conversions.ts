@@ -276,10 +276,9 @@ export function lowerRustValueConversion(
         });
     }
     case "union-map":
-      return planRustUnionMapping(node ?? context.sourceFile, source, contract.source, contract.target,
-        contract.arms, contract.coverage, true, false, false, context);
+      return planRustUnionMapping(node ?? context.sourceFile, source, contract.emission, true, context);
     case "union-project":
-      return planRustUnionProjection(node ?? context.sourceFile, source, contract.source, contract.target, "move", context);
+      return planRustUnionProjection(node ?? context.sourceFile, source, contract.emission, "move", context);
     case "source-union-variant": {
       const payload = contract.payloadConversion === null ? source :
         lowerRustValueConversion(contract.payloadConversion, source, context, node);

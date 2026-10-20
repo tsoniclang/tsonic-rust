@@ -55,13 +55,15 @@ import {
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericValueConversionIsSupported } from "./numeric-promotion.js";
 import { rustExactIntegerConversionMatches } from "./exact-integer.js";
+import { selectRustUnionMappingEmission, selectRustUnionProjectionEmission } from "../../policy/conversions/union-mappings.js";
+import type { RustUnionMappingEmission, RustUnionProjectionEmission } from "../records/union-mappings.js";
 import { rustUnsignedIntegerCounterpart } from "./integer-refinement.js";
 import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray, hasExactObjectKeys } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
-import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
+import { selectRustUnionArmMapping, rustUnionLeaves, type RustUnionLeaf, type RustUnionArmMapping, type RustUnionPathStep } from "../types/union-relations.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -96,8 +98,8 @@ export type RustValueConversionContract = RustValueConversionContractBase & Rust
   | { readonly lowering: "project-closed-value"; readonly ownerPath: "rt::TsValue" | "js_abi::JsValue" }
   | { readonly lowering: "js-array-backing"; readonly element: TargetTypeRef; readonly method: "cast" | "cast_array" }
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
-  | { readonly lowering: "union-project"; readonly path: readonly RustUnionPathStep[] }
-  | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[] }
+  | { readonly lowering: "union-project"; readonly path: readonly RustUnionPathStep[]; readonly emission: RustUnionProjectionEmission }
+  | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[]; readonly emission: RustUnionMappingEmission }
   | { readonly lowering: "exact-integer"; readonly targetElement: TargetTypeRef;
       readonly optional: boolean; readonly lift: boolean }
   | {
@@ -624,16 +626,17 @@ export function rustValueConversionContract(
   }
   if (value.kind === "union-map") {
     const expected = selectRustUnionArmMapping(value.source, value.target, value.coverage, definitions);
-    return expected === undefined || !closedMetadataEquals(expected, value.arms) ? undefined : {
+    const emission = expected === undefined ? undefined : selectRustUnionMappingEmission(value.source, value.target, expected, value.coverage, false, false, definitions);
+    return expected === undefined || emission === undefined || !closedMetadataEquals(expected, value.arms) ? undefined : {
       category: "exact", lowering: "union-map", sourceMode: "value", source: value.source,
-      target: value.target, coverage: value.coverage, arms: expected, fallible: false,
+      target: value.target, coverage: value.coverage, arms: expected, emission, fallible: false,
     };
   }
   if (value.kind === "union-project") {
-    const projection = rustUnionProjectionContract(value.source, value.target, definitions);
+    const projection = selectRustUnionProjectionEmission(value.source, value.target, definitions);
     return projection === undefined ? undefined : {
       category: "projection", lowering: "union-project", sourceMode: "value", source: value.source,
-      target: value.target, path: projection.path, fallible: false,
+      target: value.target, path: projection.path, emission: projection, fallible: false,
     };
   }
   if (value.kind === "raw-pointer-mut-to-const") {
