@@ -1,30 +1,15 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import type {
-  RustCompilerDependency,
-  RustCompilerModuleModel,
-  RustCompilerProjectSnapshot,
-  RustCompilerStandardLibrarySnapshot,
-} from "../model/model.js";
+import type { RustCompilerDependency, RustCompilerModuleModel, RustCompilerProjectSnapshot, RustCompilerStandardLibrarySnapshot } from "../model/model.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import { createRustCompilerCacheDirectory } from "./cache-directory.js";
-import type {
-  RustCompilerWorkerRequest,
-  RustCompilerWorkerResponse,
-} from "./protocol.js";
+import type { RustCompilerWorkerRequest, RustCompilerWorkerResponse } from "./protocol.js";
 
 const startupTimeoutMilliseconds = 30_000;
 const requestTimeoutMilliseconds = 600_000;
