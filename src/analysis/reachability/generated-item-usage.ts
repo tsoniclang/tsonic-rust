@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustRecordContributions } from "./record-contributions.js";
 import type { RustRecordContributionEvidence, RustRecordContributionFact } from "../../target-model/records/record-contributions.js";
 
@@ -11,9 +12,7 @@ import type { RustContextualValueConversion } from "../../target-model/conversio
 
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../target-model/operations/finalized-inputs.js";
 import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import {
-  rustValueConversionContract,
-} from "../../target-model/conversions/contracts.js";
+
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 import type { RustClosedTypeTestPlan } from "../../target-model/operations/type-tests.js";
@@ -21,18 +20,10 @@ import { rustClosedTypeTestConstant } from "../../target-model/operations/type-t
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { analyzeRustProjectThisReferences, rustProjectRootThisCarrier } from "./this-references.js";
-import {
-  isRustPreconstructionThisOperation,
-  isRustArrayFieldContentAssignment,
-  markBinaryProjectIdentityUsed,
-  visitConversionContract,
-} from "./generated-item-usage-helpers.js";
+import { isRustPreconstructionThisOperation, isRustArrayFieldContentAssignment, markBinaryProjectIdentityUsed, visitConversionContract } from "./generated-item-usage-helpers.js";
 
-import type {
-  RustGeneratedItemUsage,
-  RustGeneratedItemUsageInput,
-  RustGeneratedOperationAbi,
-} from "./generated-item-usage-model.js";
+import type { RustGeneratedItemUsageInput, RustGeneratedOperationAbi } from "./generated-item-usage-model.js";
+import type { RustGeneratedItemUsage } from "../../target-model/records/reachability.js";
 
 import { createRustGeneratedItemUsageState } from "./generated-item-usage-state.js";
 import { admitRustConversionEmission } from "../conversions/emission.js";
@@ -558,12 +549,12 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       : input.projectTypes.objectLayoutForDefinition(definition)?.fields.find(candidate =>
         candidate.storageIndex + (input.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === field.storageIndex)?.declaration;
     const subject = definition?.declaration ?? input.sourceFiles[0];
-    if (subject === undefined) throw new Error("An emitted indexed field has no owning source file.");
+    if (subject === undefined) failTargetAnalysisInvariant("tsonic-rust", "An emitted indexed field has no owning source file.");
     const dispatched = definition !== undefined && declaration !== undefined && input.projectTypes.isPolymorphic(definition);
     const read = dispatched ? input.projectTypes.memberSlotName(declaration, "read") : undefined;
     const write = dispatched ? input.projectTypes.memberSlotName(declaration, "write") : undefined;
     if (dispatched && (read === undefined || write === undefined)) {
-      throw new Error("An emitted indexed field lost its exact native dispatch slots.");
+      failTargetAnalysisInvariant("tsonic-rust", "An emitted indexed field lost its exact native dispatch slots.");
     }
     visitFact(subject, {
       kind: "source-field", operationId: "indexed-field-implementation", declaration,
