@@ -5,7 +5,6 @@ import type { RustProviderConstantArgument, RustProviderOperationForm } from "..
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { validateTargetGenericArguments } from "./generics.js";
-import { rustNumericPromotionKind } from "../../../target-model/conversions/numeric-promotion.js";
 
 export function validateOperationForm(
   operationKind: RustProviderPackageDefinition["operations"][number]["operationKind"],
@@ -21,7 +20,7 @@ export function validateOperationForm(
     case "numeric-cast":
       requireExactKeys(record, ["form", "target"], `${label}.target`, fail);
       if (operationKind !== "method" || parameterCarriers?.length !== 1 ||
-        rustNumericPromotionKind(form.target, form.target) === undefined) {
+        !fail.contracts.numericPromotion(form.target, form.target)) {
         fail(`${label}.target numeric-cast requires one parameter and an exact numeric target`);
       }
       return;
