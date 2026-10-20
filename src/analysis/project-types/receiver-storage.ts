@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { SourceProgramNavigation, SourceProgramSemantics } from "@tsonic/target-api/source";
-import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./type-policy.js";
+import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.js";
 import { analyzeRustReceiverFieldAliases, type RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
 import { analyzeRustConstructionEffects } from "./construction-effects.js";
 import { analyzeRustReceiverFieldCaptures, type RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
