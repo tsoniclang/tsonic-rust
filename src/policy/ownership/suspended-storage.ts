@@ -1,6 +1,6 @@
 import type { RustLifetimeRef, RustSourceGenericContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime, rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
-import { rustSingleElidedInput } from "../../target-model/types/carriers/lifetime-elision.js";
+import { rustSingleElidedInput } from "../types/callables/lifetime-elision.js";
 import { rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

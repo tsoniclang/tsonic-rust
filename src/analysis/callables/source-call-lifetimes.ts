@@ -5,7 +5,7 @@ import { rustLifetimeKey, rustLifetimesEqual, rustPlaceholderLifetime } from "..
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { instantiateRustElidedCallResult } from "../../target-model/types/carriers/lifetime-elision.js";
+import { instantiateRustElidedCallResult } from "../../policy/types/callables/lifetime-elision.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
