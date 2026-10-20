@@ -1,7 +1,8 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceFileSemantics, SourceProgramNavigation } from "@tsonic/target-api/source";
 import { createTargetGraphComponentQuery, type SourceStorageBudget } from "@tsonic/target-api/analysis";
-import type { RustProjectTypePolicy } from "./type-policy.js";
+import type { RustProjectTypePolicy } from "./index.js";
 
 export interface RustProjectMethodPropertyUsage {
   readonly declaration: Node;
@@ -38,14 +39,14 @@ export function createRustProjectMethodPropertyPlanRegistry(): RustProjectMethod
   let initialized = false;
   const requireCurrent = (): RustProjectMethodPropertyPlan => {
     if (current === undefined) {
-      throw new Error("Rust project method-property plan was read before source analysis initialized it.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust project method-property plan was read before source analysis initialized it.");
     }
     return current;
   };
   return Object.freeze({
     get usages() { return requireCurrent().usages; },
     initialize(input: Parameters<RustProjectMethodPropertyPlanRegistry["initialize"]>[0]) {
-      if (initialized) throw new Error("Rust project method-property plan can be initialized only once.");
+      if (initialized) failTargetAnalysisInvariant("tsonic-rust", "Rust project method-property plan can be initialized only once.");
       initialized = true;
       const { ast, navigation, projectTypes, budget } = input;
       const unresolved = () => Object.freeze({ kind: "unresolved" as const,
