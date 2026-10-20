@@ -1,7 +1,7 @@
 import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { resolveProviderTypeIdentity } from "../../policy/types/resolution/providers.js";
+import { resolveProviderTypeIdentity } from "../../policy/identities/provider-types.js";
 import {
   rustLangModule,
   rustSourceProviderVersion,

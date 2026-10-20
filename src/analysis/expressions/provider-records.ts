@@ -2,9 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
-import {
-  selectRustProviderObjectLiteralConstruction,
-} from "../../policy/types/resolution/providers.js";
+import { selectRustProviderObjectLiteralConstruction } from "../types/resolution/providers.js";
 import {
   resolveSelectedProviderDeclaration,
 } from "../../policy/identities/selected-source.js";

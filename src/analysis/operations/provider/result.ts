@@ -11,7 +11,7 @@ import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers
 
 import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
 import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
-import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
+import { selectRustProviderObjectLiteralConstruction } from "../../types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

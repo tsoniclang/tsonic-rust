@@ -4,7 +4,7 @@ import { isSourceCallableBodyBoundary, Node_Initializer, sourceLexicalEnvironmen
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
-import type { RustRetainedEnvironmentSelection } from "./retained-values.js";
+import type { RustRetainedEnvironmentSelection } from "../../target-model/records/retained-environments.js";
 
 type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
   readonly declarations: readonly Node[];

@@ -7,7 +7,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { resolveSelectedProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { rustProviderOperationOwnerMatches } from "../../../../policy/operations/provider-selection.js";
-import { providerCarrierFromRelations } from "../../../../policy/types/resolution/providers.js";
+import { providerCarrierFromRelations } from "../../../../policy/types/project/provider-instantiation.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../../../../target-model/conversions/provider-record.js";
 import { selectRustProviderRecordField } from "../../../../policy/operations/members/record-fields.js";
 import type { RustProviderRecordAbsentField } from "../../../../target-model/conversions/provider-record-absence.js";
