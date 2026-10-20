@@ -6,7 +6,7 @@ import { planNativeModuleFunction } from "../declarations/callables/functions.js
 import { planExpression } from "../expressions/index.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { planRustModuleCell } from "../project/module-storage.js";
+import { planRustModuleCell, rustModuleCellCallableAlias } from "../project/module-storage.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { normalizeRustBindingValue, planRustBindingProjection } from "../bindings/binding-patterns.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
@@ -97,6 +97,7 @@ export function planTopLevelVariableStatement(
         value,
         visibility,
         context.syntheticNames,
+        rustModuleCellCallableAlias(physical, context.input),
         [
           ...(isUpperSnakeName(binding.value.name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
         ],
@@ -142,6 +143,7 @@ export function planTopLevelVariableStatement(
       value,
       visibility,
       context.syntheticNames,
+      rustModuleCellCallableAlias(binding.valueCarrier, context.input),
       [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
       ],
@@ -188,6 +190,7 @@ function planModuleBindingPattern(
     const { name, visibility } = emission;
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(name, type, normalized, visibility, context.syntheticNames,
+      rustModuleCellCallableAlias(leaf.valueCarrier, context.input),
       isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]);
     items.push(...planned.items);
     initialization.push(planned.initialization);

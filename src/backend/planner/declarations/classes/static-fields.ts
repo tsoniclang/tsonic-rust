@@ -3,7 +3,7 @@ import type { RustItem, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
 import { planExpression } from "../../expressions/index.js";
 import { planBlockLike } from "../../statements/index.js";
-import { planRustModuleCell } from "../../project/module-storage.js";
+import { planRustModuleCell, rustModuleCellCallableAlias } from "../../project/module-storage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustClassValues } from "../../objects/class-values.js";
@@ -43,6 +43,7 @@ export function planRustClassInitialization(
       value,
       "crate",
       context.syntheticNames,
+      rustModuleCellCallableAlias(selected.carrier, context.input),
       [],
     );
     items.push(...planned.items);

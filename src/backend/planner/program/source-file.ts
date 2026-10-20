@@ -61,6 +61,7 @@ import {
 import {
   planRustModuleCell,
   planRustHoistedModuleCell,
+  rustModuleCellCallableAlias,
   type PlannedRustModuleCell,
 } from "../project/module-storage.js";
 import { planRustClassInitialization } from "../declarations/classes/static-fields.js";
@@ -284,6 +285,7 @@ function planModuleItems(
               value,
               ast.hasModifierKind(statement, "export") ? "public" : "crate",
               syntheticNames,
+              rustModuleCellCallableAlias(physical, context.input),
               [],
             ));
           }
@@ -485,5 +487,6 @@ function planDefaultExportAssignment(
   if (rustType === undefined || value === undefined || context.syntheticNames === undefined)
     failRustPlannerInvariant("An admitted default export requires its renderable native value and name scope.", declaration);
   context.usedAliases?.add("rt");
-  return planRustModuleCell(selected.name, rustType, value, "public", context.syntheticNames);
+  return planRustModuleCell(selected.name, rustType, value, "public", context.syntheticNames,
+    rustModuleCellCallableAlias(selected.carrier, context.input));
 }

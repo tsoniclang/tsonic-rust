@@ -1,4 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustPlanningContext } from "../context.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
 import type {
   RustExpr,
@@ -19,15 +22,22 @@ export interface PlannedRustModuleCell {
   readonly initialization: RustStmt;
 }
 
+export function rustModuleCellCallableAlias(carrier: TargetTypeRef, input: RustPlanningContext): boolean {
+  const selected = input.program.records.typeEmission.get(carrier);
+  if (selected === undefined) failRustPlannerInvariant("An admitted module cell requires its exact native type emission selection.");
+  return selected.moduleCallableAlias;
+}
+
 export function planRustHoistedModuleCell(
   name: string,
   type: RustType,
   value: RustExpr,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
+  useCallableAlias: boolean,
   attrs: readonly RustAttribute[] = [],
 ): readonly RustItem[] {
-  const callableAlias = type.kind === "named" && type.path === "rt::Callable"
+  const callableAlias = useCallableAlias
     ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
     : undefined;
   const storedType: RustType = callableAlias === undefined
@@ -69,11 +79,12 @@ export function planRustModuleCell(
   value: RustExpr | undefined,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
+  useCallableAlias: boolean,
   attrs: readonly RustAttribute[] = [],
 ): PlannedRustModuleCell {
   const cellName = allocateRustSyntheticName(syntheticNames, "module_binding");
   const valueName = allocateRustSyntheticName(syntheticNames, "module_value");
-  const callableAlias = type.kind === "named" && type.path === "rt::Callable"
+  const callableAlias = useCallableAlias
     ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
     : undefined;
   const storedType: RustType = callableAlias === undefined

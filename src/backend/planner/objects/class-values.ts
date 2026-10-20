@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustItem, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustModuleCell } from "../project/module-storage.js";
+import { planRustModuleCell, rustModuleCellCallableAlias } from "../project/module-storage.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustClassEnvironmentValue, rustClassEnvironmentForCall } from "./class-environments.js";
 import { rustClassEnvironmentHandleType } from "./class-environment-types.js";
@@ -30,6 +30,7 @@ export function planRustClassValues(declaration: Node, context: RustPlanContext)
   const type = rustClassEnvironmentHandleType(selected.environment.carrier, context);
   const value = planRustClassEnvironmentValue(declaration, context);
   if (type === undefined || value === undefined) failRustPlannerInvariant("An admitted class module value requires its exact native type and initializer.", declaration);
-  const storage = planRustModuleCell(selected.environment.bindingName, type, value, selected.visibility, context.syntheticNames);
+  const storage = planRustModuleCell(selected.environment.bindingName, type, value, selected.visibility, context.syntheticNames,
+    rustModuleCellCallableAlias(selected.environment.carrier, context.input));
   return { items: storage.items, initialization: [storage.initialization] };
 }

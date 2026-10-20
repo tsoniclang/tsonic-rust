@@ -8,6 +8,7 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly moduleCallableAlias: boolean;
   readonly callArgumentInfer: boolean;
   readonly positions: RustTypePositions;
   readonly constructionArguments: readonly boolean[] | undefined;
