@@ -1,13 +1,11 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type {
-  RustProjectTypeDefinition,
-  RustProjectTypePolicy,
-} from "./type-policy.js";
+import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/index.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
@@ -54,14 +52,14 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
   let current: RustProjectMethodDispatchPlan | undefined;
   const requireCurrent = (): RustProjectMethodDispatchPlan => {
     if (current === undefined) {
-      throw new Error("Rust project method dispatch plan was read before source analysis initialized it.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust project method dispatch plan was read before source analysis initialized it.");
     }
     return current;
   };
   const registry: RustProjectMethodDispatchPlanRegistry = {
     record(declaration, targetTypeArguments, ast, projectTypes, sourceLifetimes) {
       if (current !== undefined) {
-        throw new Error("Rust project method dispatch requests cannot be recorded after initialization.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust project method dispatch requests cannot be recorded after initialization.");
       }
       const owner = projectTypes.definitionContainingDeclaration(declaration);
       const parameters = denseNodes(ast.typeParameters(declaration));
@@ -96,7 +94,7 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
     },
     initialize(input) {
       if (current !== undefined) {
-        throw new Error("Rust project method dispatch plan can be initialized only once.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust project method dispatch plan can be initialized only once.");
       }
       current = createRustProjectMethodDispatchPlan(pending, input);
       return current;
