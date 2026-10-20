@@ -1,9 +1,10 @@
+import { createRustPromiseBodyProducer } from "../program/records/promise-bodies.js";
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustPromiseBodies, RustPromiseBodyDeclaration } from "../../target-model/records/callables-and-resources.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureTargetType } from "../../target-model/types/carriers/primitives.js";
@@ -28,10 +29,7 @@ export interface RustPromiseBodySelection {
 }
 
 export function createRustPromiseBodySelection(): RustPromiseBodySelection {
-  const declarations = new Map<Node, RustPromiseBodyDeclaration>();
   const demands = new Map<Node, Set<Node>>();
-  const objects = new Map<Node, readonly Node[]>();
-  const pinnedInvocations = new Map<Node, ReadonlyMap<string, ReadonlySet<Node>>>();
   const nativeDeclarations = new Map<Node, {
     readonly name: string; readonly form: "function" | "method" | "static-method";
   }>();
@@ -41,13 +39,14 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   const assertOpen = (): void => {
     if (closed) failTargetAnalysisInvariant("tsonic-rust", "Promise body selection is closed.");
   };
+  const producer = createRustPromiseBodyProducer(assertOpen);
   const recordDemand = (declaration: Node, demand: Node): void => {
     const selected = demands.get(declaration) ?? new Set<Node>();
     selected.add(demand);
     demands.set(declaration, selected);
   };
   return Object.freeze({
-    plan: Object.freeze({ declarations, objects, pinnedInvocations }),
+    plan: producer.records,
     get namesReady() { return namesReady; },
     initializeNames(context: RustAnalysisContext): void {
       assertOpen();
@@ -126,14 +125,14 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
           evidence: ["target.capability=rust.async.native-body-layout"] }));
         return;
       }
-      for (const [declaration, entries] of recursion.invocations) pinnedInvocations.set(declaration, entries);
+      for (const [declaration, entries] of recursion.invocations) producer.pinned(declaration, entries);
       for (const declaration of context.nativeNodes) {
         const asynchronous = context.records.asyncFunction.get(declaration);
         if (asynchronous?.kind !== "js-promise") continue;
         const name = rustPromiseBodyNativeName(context, declaration);
         const selectedDemands = new Set(demands.get(declaration));
         if (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration)) selectedDemands.add(declaration);
-        if (selectedDemands.size > 0) objects.set(declaration, Object.freeze([...selectedDemands].sort((left, right) => {
+        if (selectedDemands.size > 0) producer.object(declaration, Object.freeze([...selectedDemands].sort((left, right) => {
           const leftFile = context.ast.getSourceFile(left);
           const rightFile = context.ast.getSourceFile(right);
           const leftName = leftFile === undefined ? "" : context.ast.getFileName(leftFile);
@@ -141,7 +140,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
           return leftName.localeCompare(rightName, "en") || context.ast.pos(left) - context.ast.pos(right);
         })));
         if (name === undefined) continue;
-        declarations.set(declaration, Object.freeze({ name,
+        producer.declaration(declaration, Object.freeze({ name,
           visibility: context.ast.is.IsFunctionDeclaration(declaration) &&
             !sourceDeclarationIsModuleScoped(declaration, context.ast) ? "private" : "crate" }));
       }
