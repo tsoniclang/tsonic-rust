@@ -10,7 +10,7 @@ import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
-import { planRustCargoProject } from "../project/cargo.js";
+import { planRustCargoProject } from "../project/project-artifacts.js";
 import type { RustPlanningContext } from "../context.js";
 import { reconstructRustSourceFiles } from "../artifacts/reconstruction.js";
 import {
@@ -137,10 +137,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   // Activation: a runtime crate is a dependency only when planned code
   // references it (directly or through a declared alias). Surface-selected
   // crates without carrier/operation use stay out of the manifest.
-  const cargoProject = planRustCargoProject(
-    emission.configuration,
-    emission.runtimeReferences,
-  );
+  const cargoProject = planRustCargoProject(input);
   const sourcePackageCargo = cargoProject.kind === "generated"
     ? planRustSourcePackageCargo(input)
     : undefined;
