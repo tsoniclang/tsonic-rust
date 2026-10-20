@@ -12,7 +12,6 @@ import {
 } from "../program/plan-context.js";
 import {
   getRustGeneratorProtocol,
-  isRustNeverCarrier,
   isRustAbsenceCarrier,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
@@ -80,6 +79,7 @@ import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
+import { planRustVoidExpression } from "./expression-void.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 
@@ -377,40 +377,8 @@ export function planExpressionInner(
             value: { kind: "string-literal", value: fact.result },
           };
     }
-    case KindVoidExpression: {
-      const fact = rustOperationFact(node, context);
-      const operandNode = Node_Expression(context.input.program.source.ast, node);
-      if (fact?.kind !== "void-expression" || operandNode === undefined ||
-        !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.void-carrier") ||
-        !selectedOperationMatches(
-          context.input.program.records.selectedOperation.get(node),
-          fact.operationId,
-          "operator",
-          fact.resultCarrier,
-          "void",
-        )) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, node),
-          "rust.backend.void",
-          "void requires one exact finalized operand and undefined-result operation.",
-        ));
-        return undefined;
-      }
-      const discarded = planRustDiscardedValue(operandNode, context);
-      const operand = discarded?.expression;
-      if (operand !== undefined && isRustNeverCarrier(expressionCarrier(operandNode, context))) {
-        return { kind: "bottom", expression: operand };
-      }
-      context.usedAliases?.add("rt");
-      return operand === undefined
-        ? undefined
-        : {
-            kind: "evaluate-then",
-            effect: operand,
-            discard: discarded!.discard,
-            value: { kind: "tuple-literal", elements: [] },
-          };
-    }
+    case KindVoidExpression:
+      return planRustVoidExpression(node, context);
     case KindDeleteExpression:
       return planDeleteExpression(node, context);
     case "KindArrayLiteralExpression": {
