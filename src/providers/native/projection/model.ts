@@ -1,10 +1,6 @@
-import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
+import { rustSourcePrimitiveTargetType } from "../../../target-model/types/carriers/native.js";
 import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/tsts";
-import type {
-  RustCompilerDependency,
-  RustCompilerGenericParameter,
-  RustCompilerStandardTypeLocation,
-} from "../model/model.js";
+import type { RustCompilerDependency, RustCompilerGenericParameter, RustCompilerStandardTypeLocation } from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition } from "../../packages/model.js";
 import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/identities/provider-relations.js";
