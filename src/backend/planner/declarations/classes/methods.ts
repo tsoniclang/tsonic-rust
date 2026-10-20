@@ -6,7 +6,6 @@ import {
 } from "../../program/plan-context.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import { failRustPlannerInvariant } from "../../../invariants.js";
-import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../../statements/index.js";
 import { planExpression } from "../../expressions/index.js";
 import { planRustCallableGenerics, rustCallableSpecialization } from "../callables/generics.js";
@@ -92,7 +91,6 @@ export function planProjectMethod(
   }
   const environmentParameter = planMethodEnvironmentParameter(member, context);
   const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
-  const returnTypeNode = Node_Type(ast, member);
   const returnsJsPromise = asyncFact?.kind === "js-promise" && options?.promiseBody !== true;
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
