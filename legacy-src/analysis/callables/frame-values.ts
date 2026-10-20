@@ -119,9 +119,12 @@ export function createRustFrameCallablePlan(input: {
         groups.set(key, group);
       }
       const identity = createHash("sha256").update(`${owner.fileName}:${input.ast.pos(declaration)}:${input.ast.end(declaration)}`).digest("hex").slice(0, 16);
-      const entryCaptures = Object.freeze(capture.captures.filter(selected => !frameDeclarations.has(selected.declaration)));
-      const receiverFields = Object.freeze(capture.receiverFields.filter(selected => !frameDeclarations.has(selected.declaration)));
-      const receivers = Object.freeze(capture.receivers.filter(selected => selected.owner !== classDefinition?.declaration));
+      const entryCaptures = Object.freeze(capture.captures.filter(selected => !frameDeclarations.has(selected.declaration))
+        .map(selected => Object.freeze({ ...selected, storageCarrier: selected.carrier })));
+      const receiverFields = Object.freeze(capture.receiverFields.filter(selected => !frameDeclarations.has(selected.declaration))
+        .map(selected => Object.freeze({ ...selected, storageCarrier: selected.carrier })));
+      const receivers = Object.freeze(capture.receivers.filter(selected => selected.owner !== classDefinition?.declaration)
+        .map(selected => Object.freeze({ ...selected, storageCarrier: selected.carrier })));
       const independent = input.ownership.isIndependentCallable(declaration);
       if (independent && (capture.captures.length !== 0 || capture.receiverFields.length !== 0 || capture.receivers.length !== 0)) {
         issue(declaration, "An independent frame alternative requires its exact capture-free environment.");

@@ -11,9 +11,9 @@ export interface RustFrameCallableImplementation {
   readonly variantName: string;
   readonly functionName: string;
   readonly stateName: string;
-  readonly captures: RustClosureCaptureFact["captures"];
-  readonly receiverFields: RustClosureCaptureFact["receiverFields"];
-  readonly receivers: RustClosureCaptureFact["receivers"];
+  readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
+  readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
+  readonly receivers: readonly (RustClosureCaptureFact["receivers"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly copy: boolean;
   readonly independent: boolean;
 }

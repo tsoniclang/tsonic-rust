@@ -108,11 +108,11 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
         targetName: unionDefinition.targetName, arguments: unionArguments!, handle: false })
         : shape === undefined ? undefined : Object.freeze({ ownerFileName: shape.ownerFileName, targetName: shape.targetName,
           arguments: shape.genericArguments, handle: rustStructuralObjectCarrierValue(carrier)?.representation !== "value" && shape.dispatchName === undefined }) });
+    const frame = program.records.frameType.get(carrier);
     const children = [...rustTargetTypeChildren(carrier), ...(producerError === undefined ? [] : [producerError]),
       ...(unionArguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(value.generic?.arguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
-      ...(program.records.frameType.get(carrier)?.environment ?? []),
-      ...(program.records.frameType.get(carrier)?.independentCarrier === undefined ? [] : [program.records.frameType.get(carrier)!.independentCarrier!]),
+      ...(frame?.environment ?? []), ...(frame?.independentCarrier === undefined ? [] : [frame.independentCarrier]),
       ...(program.records.optionalStorageTypeArguments.get(carrier) ?? [])];
     selections.set(key, { carrier, value, children });
     pending.push(...children);
