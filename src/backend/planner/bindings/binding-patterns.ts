@@ -16,7 +16,7 @@ import { planRustLocalBindingStorage } from "./local-storage.js";
 export type RustBindingExpressionPlanner = (node: Node, context: RustPlanContext) => RustExpr | undefined;
 
 export function planRustBindingPattern(
-  pattern: Node, source: RustExpr, sourceCarrier: RustBindingProjectionFact["sourceCarrier"],
+  pattern: Node, source: RustExpr, _sourceCarrier: RustBindingProjectionFact["sourceCarrier"],
   context: RustPlanContext, planExpression: RustBindingExpressionPlanner,
 ): readonly RustStmt[] {
   const ast = context.input.program.source.ast;
