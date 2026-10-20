@@ -32,7 +32,7 @@ import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/s
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 
 import { selectRustSourceCallResult } from "../types/resolution/call-results.js";
-import { resolveRustTypeComponentEvidence } from "../../policy/types/resolution/source-evidence.js";
+import { resolveRustTypeComponentEvidence } from "../types/resolution/source-evidence.js";
 import { bindRustSelectedCallTypeArguments } from "../types/resolution/generic-arguments.js";
 import { bindRustSelectedReceiverContext } from "./provider/member-carriers.js";
 

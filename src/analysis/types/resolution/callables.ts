@@ -1,7 +1,7 @@
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../../policy/types/resolution/source-unions.js";
 import { asNode } from "../../../policy/identities/selected-source.js";
 import { denseDefined } from "./project.js";
-import { resolveRustCallableEvidence } from "../../../policy/types/resolution/source-evidence.js";
+import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "../../../policy/types/resolution/target.js";
 import { resolveRustInferredUnion } from "./inferred-unions.js";
 import { rustAbsenceTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";

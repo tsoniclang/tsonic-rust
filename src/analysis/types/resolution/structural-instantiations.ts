@@ -7,7 +7,7 @@ import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../target-model/types/carriers/js.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";
+import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { bindRustCallableTypeParameters, bindRustSourceAliasArguments } from "./generic-arguments.js";

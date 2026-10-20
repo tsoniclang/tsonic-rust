@@ -1,6 +1,6 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
-import { resolveRustTypeComponentEvidence } from "../../../../policy/types/resolution/source-evidence.js";
+import { resolveRustTypeComponentEvidence } from "../../../types/resolution/source-evidence.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";

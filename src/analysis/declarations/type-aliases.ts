@@ -11,7 +11,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { RustTypeAliasDeclarationFact } from "../../target-model/records/callables-and-resources.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../types/resolution/type-families.js";
-import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { resolveRustEvidenceNodesToCommonCarrier } from "../types/resolution/source-evidence.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/identities/source-union-members.js";
 import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";

@@ -10,7 +10,7 @@ import { resolveRustCallableEnvironment, bindRustCallableEnvironment } from "../
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { resolveRustCallableStorageCarrier } from "../types/resolution/source-evidence.js";
 import { rustRetainedValueLifetime } from "./retained-values.js";
 
 export function rustSourceClosureValueCarrier(

@@ -2,7 +2,7 @@ import type { TypeSignatureInfo, Type } from "@tsonic/tsts";
 import { sourceCallableParameterEvidence } from "@tsonic/target-api/source";
 import type { RustSourceObjectShape } from "../../../target-model/records/source-types.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { resolveRustCallableEvidence } from "../../../policy/types/resolution/source-evidence.js";
+import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

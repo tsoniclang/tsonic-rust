@@ -1,86 +1,28 @@
-import { resolveRustSourceUnionCarrier } from "./source-unions.js";
-import {
-  isRustJsArrayCarrier,
-  rustCallableTargetType,
-  rustCallableProtocol,
-  rustJsArrayLikeElementTargetType,
-  rustJsArrayTargetType,
-  rustOptionElementCarrier,
-  rustSourceOptionalTargetType,
-  rustSourceUnionCarrierValue,
-  rustTupleTargetType,
-  rustVecTargetType,
-} from "../../../target-model/types/index.js";
+import { resolveRustSourceUnionCarrier } from "../../../policy/types/resolution/source-unions.js";
+import { rustCallableTargetType, rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";
-import {
-  resolveRustExactNullishValueCarrier,
-  resolveRustTargetType,
-} from "./target.js";
+import { resolveRustExactNullishValueCarrier, resolveRustTargetType } from "../../../policy/types/resolution/target.js";
 import type { Node, Type } from "@tsonic/tsts";
-import type {
-  SourceCallableTypeEvidence,
-  SourceTypeComponentEvidence,
-} from "@tsonic/target-api/source";
-import type {
-  RustTargetTypeResolutionContext,
-  RustTargetTypeResolutionOptions,
-} from "./model.js";
+import type { SourceCallableTypeEvidence, SourceTypeComponentEvidence } from "@tsonic/target-api/source";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { selectRustPointerReturnCarrier } from "../../operations/pointers/return.js";
+import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointers/return.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetGenericBindings, inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { resolveBoundSourceTypeParameter } from "./callables.js";
-import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
-import { rustCallableOrigin } from "../callables/callable-origins.js";
-import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
+import { rustCallableOrigin } from "../../../policy/types/callables/callable-origins.js";
+import { closeRustSuspendedStorage } from "../../../policy/types/storage/suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
-import { rustRetainedValueLifetime } from "../../ownership/retained-environments.js";
-
-export function resolveRustSignatureParameterListTarget(
-  parameters: SourceCallableTypeEvidence["parameters"],
-  elements: readonly TargetTypeRef[],
-  options: RustTargetTypeResolutionOptions,
-): TargetTypeRef | undefined {
-  const restIndexes = parameters.flatMap((parameter, index) =>
-    parameter.parameterKind === "rest" ? [index] : []
-  );
-  if (restIndexes.length === 0) {
-    return rustTupleTargetType(elements);
-  }
-  if (restIndexes.length !== 1) {
-    return undefined;
-  }
-  const restIndex = restIndexes[0]!;
-  const restCarrier = elements[restIndex];
-  const restElement = restCarrier?.kind === "array"
-    ? restCarrier.element
-    : isRustJsArrayCarrier(restCarrier)
-      ? rustJsArrayLikeElementTargetType(restCarrier)
-      : undefined;
-  if (restElement === undefined) {
-    return undefined;
-  }
-  const homogeneous = elements.every((element, index) => {
-    const value = index === restIndex
-      ? restElement
-      : rustOptionElementCarrier(element) ?? element;
-    return rustTargetTypeRefEquals(value, restElement);
-  });
-  if (!homogeneous) {
-    return undefined;
-  }
-  return options.jsEnabled
-    ? rustJsArrayTargetType(restElement)
-    : rustVecTargetType(restElement);
-}
+import { rustRetainedValueLifetime } from "../../callables/retained-values.js";
 
 export function resolveRustCallableEvidence(
   callable: SourceCallableTypeEvidence,

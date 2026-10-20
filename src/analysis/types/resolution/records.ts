@@ -4,7 +4,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustIntegerCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { rustRecordTargetType } from "../../../target-model/types/carriers/records.js";
-import { resolveRustEvidenceNodesToCommonCarrier, resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";
+import { resolveRustEvidenceNodesToCommonCarrier, resolveRustTypeComponentEvidence } from "./source-evidence.js";
 
 export function resolveRustIndexedRecordType(
   type: Type,
