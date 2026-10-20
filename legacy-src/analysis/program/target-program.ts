@@ -130,6 +130,7 @@ import { analyzeRustNullishCoalescing } from "../expressions/nullish-coalescing.
 import { analyzeRustObjectReferenceEmission } from "../objects/object-reference-views.js";
 import { analyzeRustSourceCallArguments } from "../callables/source-call-arguments.js";
 import { analyzeRustBinaryEmission } from "../expressions/expression-binary.js";
+import { analyzeRustAssignmentEvaluation } from "../storage/assignment-evaluation.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
@@ -681,6 +682,8 @@ export function analyzeRustTargetProgram(
   analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
   const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans);
   if (directStorageIssues.length !== 0) return rejectedTargetStage(directStorageIssues);
+  const assignmentEvaluationIssues = analyzeRustAssignmentEvaluation(program, context.nativeNodes, context.records.assignmentEvaluationPlans);
+  if (assignmentEvaluationIssues.length !== 0) return rejectedTargetStage(assignmentEvaluationIssues);
   const unaryIssues = analyzeRustUnaryEmission(program, context.nativeNodes, context.records.unaryEmissionPlans);
   if (unaryIssues.length !== 0) return rejectedTargetStage(unaryIssues);
   const computedMemberIssues = admitRustComputedMembers(program, context.nativeNodes);

@@ -89,7 +89,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   if (fact.kind === "nullish-identity") return planExpression(leftNode, context);
   if (fact.kind === "option-equality") return planRustOptionEquality(node, fact, context);
   if (selected.compound && (fact.kind === "operator-token" || fact.kind === "operator-call"))
-    return planCompoundAssignmentExpression(node, fact, context);
+    return planCompoundAssignmentExpression(node, context);
   if (fact.kind === "program-error-type-test") {
     const left = planExpression(leftNode, context);
     return left === undefined ? undefined : planRustProgramErrorTypeTest(node, left, fact, context);
