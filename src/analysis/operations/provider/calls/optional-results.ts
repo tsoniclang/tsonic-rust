@@ -9,7 +9,7 @@ import { selectRustOptionalChain } from "../../../../policy/operations/optional-
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustOptionalCallGuard } from "./selection.js";
+import type { RustOptionalCallGuard } from "../../../../target-model/records/optional-calls.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 import { selectedCallReceiverValueCarrier } from "./instantiation.js";

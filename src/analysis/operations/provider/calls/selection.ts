@@ -1,42 +1,28 @@
-import { requireRustRecord } from "../../../program/records/required-records.js";
+import { selectRustNativeStringOperation } from "../../../../policy/operations/source-profiles/native-string.js";
+import { acceptRuntimeCallableCall, acceptStructuralRuntimeMethodCall, acceptRuntimeCallableCarrierCall } from "../../runtime-callables.js";
+
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
-import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
-import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
+
 import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
-import {
-  asNode,
-  isProjectSourceDeclaration,
-  resolveSelectedSourceProfileMember,
-} from "../../../../policy/identities/selected-source.js";
-import {
-  rustJsErrorTargetType,
-  rustCallableProtocol,
-  rustStructuralMethodCallableCarrier,
-  rustStructuralObjectCarrierValue,
-  rustStringTargetType,
-  rustSourcePrimitiveTargetType,
-  rustOptionTargetType,
-  rustUnitTargetType,
-  rustTargetGenericBindingsForArguments,
-  substituteRustTargetGenerics,
-} from "../../../../target-model/types/index.js";
+import { asNode, isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
+import { rustJsErrorTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import { readRustSourceKeepAlive } from "../../../../policy/operations/pointers/reachability.js";
-import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
+import { mapSelectedJsSpecialCall } from "../../object-projections.js";
+import { acceptProjectSourceCall } from "../../project-call-signatures.js";
 import { selectRustArrayTypeTest } from "../type-tests.js";
 import { isRustArrayTypeTestMember } from "../../../../policy/operations/source-profiles/js/type-tests.js";
-import { checkedPropertySelectionInput } from "../properties.js";
-import { selectRustCheckedPropertyAccess } from "../../selected-members.js";
+
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor, selectRustOptionalCallResult } from "./instantiation.js";
+import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./instantiation.js";
+
 import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
-import { substituteProviderOperationForm } from "./template-instantiation.js";
-import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
+import { substituteProviderOperationForm } from "../../../../policy/types/callables/provider-templates.js";
+
 import { mapRustSourceMarkerCall } from "./deferred.js";
-import { providerIdentityText, providerOperationFact, rejectSelectedOperation } from "../result.js";
+import { providerIdentityText, rejectSelectedOperation } from "../result.js";
+import { providerOperationFact } from "../../../../policy/operations/members/provider-templates.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
-
-import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration } from "../operators.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
@@ -49,17 +35,15 @@ import { selectRustProviderPointerResult } from "../../../../policy/operations/p
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../../../../source/profiles/call-markers.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
-import { selectRustRuntimeCallableGenerics } from "../../../../policy/types/callables/runtime-callable-generics.js";
-import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
-import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
+
 import { rustClassConstructorInstance } from "../../../../target-model/types/carriers/class-constructors.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../../target-model/types/carriers/source-error.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../../policy/operations/contracts.js";
-import type { Node } from "@tsonic/tsts";
+
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function resolveRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -226,25 +210,10 @@ export function resolveRustCheckedCall(
       options,
     );
     if (selectedSourceMember.profile === "native" && selectedSourceMember.ownerName === "String") {
-      const name = selectedSourceMember.memberName;
-      const noArgument = name === "len" || name === "is_empty";
-      const search = name === "find" || name === "rfind";
-      const boolean = name === "is_empty" || name === "contains" || name === "starts_with" || name === "ends_with";
-      const parameters = noArgument ? [] : [rustStringTargetType()];
-      if ((!search && !boolean && name !== "len") || receiverCarrier === undefined ||
-        !rustTargetTypeRefEquals(receiverCarrier, rustStringTargetType()) ||
-        selectedCallArgumentNodes(request).length !== parameters.length) {
-        return rejectSelectedOperation(request.source.call, context, "RUST_NATIVE_STRING_CONTRACT",
-          "Native String operations require their exact selected declaration and native string operands.");
-      }
-      const index = rustSourcePrimitiveTargetType("native-uint");
-      return acceptSelectedCall(request, {
-        kind: "provider-operation", operationId: `tsonic.rust.native-string.${name}`, operationKind: "method",
-        target: { form: "receiver-method", name, argModes: parameters.map(() => "ref" as const) },
-        parameterCarriers: parameters,
-        resultCarrier: search ? rustOptionTargetType(index) : boolean ? rustSourcePrimitiveTargetType("bool") : index,
-        isAsync: false, isFallible: false, errorBoundary: "none",
-      }, parameters, context, options, { sourceName: name });
+      const template = selectRustNativeStringOperation(selectedSourceMember.memberName, receiverCarrier, selectedCallArgumentNodes(request).length);
+      if (template === undefined) return rejectSelectedOperation(request.source.call, context, "RUST_NATIVE_STRING_CONTRACT",
+        "Native String operations require their exact selected declaration and native string operands.");
+      return acceptSelectedCall(request, template, template.parameterCarriers, context, options, { sourceName: selectedSourceMember.memberName });
     }
     const generator = selectRustGeneratorSourceCall({
       ownerName: selectedSourceMember.ownerName,
@@ -436,272 +405,4 @@ export function resolveRustCheckedCall(
     "RUST_SELECTED_CALL_EVIDENCE_MISSING",
     "Checked call has no exact provider, source-profile, or project-source selection that Rust can lower.",
   );
-}
-
-function acceptRuntimeCallableCall(
-  request: RustCheckedCallSelectionInput,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  if (checkedCallIsConstruction(request, context)) {
-    return undefined;
-  }
-  const callee = request.source.sourceCallee.expression;
-  if (context.ast.kindName(callee) === "KindPropertyAccessExpression") {
-    const property = context.currentSemantics.operations.propertyAccess(callee);
-    if (property === undefined) return undefined;
-    const selection = selectRustCheckedPropertyAccess(
-      checkedPropertySelectionInput(context, callee, property),
-      context,
-      options,
-    );
-    if (selection.kind === "reject") return selection;
-  }
-  const optionalInvocation = context.ast.as.AsCallExpression(request.source.call)?.QuestionDotToken !== undefined;
-  const selectedCarrier = selectedValueCarrier(
-    request.source.sourceCallee.expression,
-    request.source.sourceCallee.type,
-    context,
-    options,
-  );
-  const calleeCarrier = optionalInvocation
-    ? rustOptionElementCarrier(selectedCarrier) ?? selectedCarrier : selectedCarrier;
-  return acceptRuntimeCallableCarrierCall(
-    request,
-    calleeCarrier,
-    context,
-    options,
-  );
-}
-
-function acceptStructuralRuntimeMethodCall(
-  request: RustCheckedCallSelectionInput,
-  selectedDeclaration: Node,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  if (checkedCallIsConstruction(request, context)) {
-    return undefined;
-  }
-  const receiverCarrier = selectedCallReceiverValueCarrier(
-    request,
-    context,
-    options,
-  );
-  if (receiverCarrier === undefined ||
-    rustStructuralObjectCarrierValue(receiverCarrier) === undefined) {
-    return undefined;
-  }
-  const projection = options.sourceTypes.structuralFieldProjectionForDeclaration(
-    selectedDeclaration,
-    receiverCarrier,
-  );
-  if (projection === undefined) {
-    return undefined;
-  }
-  if (projection.field.method !== true) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_STRUCTURAL_METHOD_CONTRACT_INVALID",
-      "The selected structural call declaration resolves to a non-method storage field.",
-    );
-  }
-  const callableCarrier = rustStructuralMethodCallableCarrier(
-    projection.field.resultCarrier,
-    projection.field.presence,
-  );
-  if (callableCarrier === undefined) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_STRUCTURAL_METHOD_CONTRACT_INVALID",
-      "The selected structural method does not have one exact public callable contract.",
-    );
-  }
-  if (projection.field.presence === "optional" && !request.source.optionalChain) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_OPTIONAL_STRUCTURAL_METHOD_CALL_NOT_PROVEN",
-      "An optional structural method call requires exact optional-call evidence for its callable field.",
-    );
-  }
-  const optionalGuard = projection.field.presence === "optional"
-    ? {
-        guard: request.source.sourceCallee.expression,
-        sourceGuardCarrier: projection.field.resultCarrier,
-        selectedGuardCarrier: callableCarrier,
-      }
-    : undefined;
-  return acceptRuntimeCallableCarrierCall(
-    request,
-    callableCarrier,
-    context,
-    options,
-    receiverCarrier,
-    {
-      receiverCarrier,
-      storageIndex: projection.field.storageIndex,
-    },
-    selectedDeclaration,
-    optionalGuard,
-  );
-}
-
-export interface RustOptionalCallGuard {
-  readonly guard: Node;
-  readonly sourceGuardCarrier: TargetTypeRef;
-  readonly selectedGuardCarrier: TargetTypeRef;
-}
-
-function acceptRuntimeCallableCarrierCall(
-  request: RustCheckedCallSelectionInput,
-  calleeCarrier: TargetTypeRef | undefined,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-  sourceSelectedReceiverCarrier?: TargetTypeRef,
-  sourceStructuralMethod?: RustSelectedTargetSignature["sourceStructuralMethod"],
-  sourceDeclaration?: Node,
-  optionalGuard?: RustOptionalCallGuard,
-  sourceConstructorCarrier?: TargetTypeRef,
-): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  const generic = rustGenericCallableValue(calleeCarrier);
-  const selectedGenerics = request.source.sourceSelectedMethodTypeArguments ?? [];
-  const sourceParameters = rustSelectedCallTypeParameters(selectedGenerics, context);
-  if (sourceParameters === undefined) return undefined;
-  const protocol = generic === undefined ? runtimeCallableProtocol(calleeCarrier)
-    : rustGenericCallableProtocol(calleeCarrier, sourceParameters);
-  if (calleeCarrier === undefined || protocol === undefined) {
-    return undefined;
-  }
-  const genericTypes = generic === undefined ? undefined : selectedGenerics.map(argument =>
-    resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
-  const targetGenericArguments = genericTypes === undefined ? selectRustRuntimeCallableGenerics(request, calleeCarrier, context)
-    : genericTypes.some(type => type === undefined) ? undefined
-      : genericTypes.map(type => ({ kind: "type" as const, type: type! }));
-  if (targetGenericArguments === undefined) {
-    return rejectSelectedOperation(request.source.call, context,
-      "RUST_RUNTIME_CALLABLE_GENERIC_CONTRACT_CONFLICT",
-      "Runtime callable generic arguments require the exact selected lifetime binder; runtime type generics are not erased.");
-  }
-  const genericParameters = generic !== undefined
-    ? sourceParameters.map(parameter => ({ kind: "type" as const, targetIdentity: parameter.identity, sourceName: parameter.name }))
-    : calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
-    : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
-        kind: "lifetime" as const,
-        sourceName: request.source.sourceSelectedMethodTypeArguments![index]!.typeParameterName,
-        targetIdentity: rustLifetimeKey(parameter.lifetime),
-      }));
-  const substitutions = rustTargetGenericBindingsForArguments(genericParameters, targetGenericArguments);
-  if (substitutions === undefined) return undefined;
-  const instantiate = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(
-    carrier, substitutions.types, substitutions.lifetimes, substitutions.consts,
-  );
-  const resultCarrier = instantiate(protocol.result);
-  const parameterPlan = runtimeCallableTargetParameters(
-    request,
-    generic === undefined ? protocol.parameters.map(instantiate) : protocol.parameters,
-    context,
-  );
-  if (parameterPlan === undefined) {
-    return undefined;
-  }
-  const optionalResult = sourceStructuralMethod === undefined && sourceConstructorCarrier === undefined
-    ? { kind: "resolved" as const, resultCarrier }
-    : selectRustOptionalCallResult(
-    request,
-    resultCarrier,
-    context,
-    options,
-    optionalGuard,
-  );
-  if (optionalResult.kind === "rejected") {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
-      optionalResult.message,
-    );
-  }
-  const member: RustTargetMember = {
-    id: `tsonic.rust.runtime-callable:${closedMetadataKey(calleeCarrier)}`,
-    sourceName: "call",
-    targetName: "call",
-    kind: "method",
-    parameters: parameterPlan.parameters,
-    returnType: generic === undefined ? resultCarrier : protocol.result,
-    ...(genericParameters.length === 0 ? {} : { genericParameters }),
-  };
-  const selectedSignature = selectedRustCallSignature(request, member, {
-    sourceCallableCarrier: calleeCarrier,
-    ...(sourceConstructorCarrier === undefined ? {} : { sourceConstructorCarrier }),
-    ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
-    sourceCallableParameterIndexes: parameterPlan.sourceParameterIndexes,
-    ...(sourceSelectedReceiverCarrier === undefined
-      ? {}
-      : { sourceSelectedReceiverCarrier }),
-    ...(sourceStructuralMethod === undefined
-      ? {}
-      : { sourceStructuralMethod }),
-    ...((sourceDeclaration ?? request.sourceSelectedDeclaration) === undefined ? {}
-      : { sourceDeclaration: sourceDeclaration ?? request.sourceSelectedDeclaration }),
-  });
-  if (optionalResult.fact !== undefined) {
-    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/calls/selection.ts");
-    context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
-      optionalResult.fact.operationKind, optionalResult.fact);
-  }
-  return acceptRustPolicy({ selectedSignature,
-    ...(optionalGuard === undefined ? {} : { sourceGuard: optionalGuard }) }, [{
-    message: "rust selected exact runtime-callable invocation",
-  }]);
-}
-
-function runtimeCallableTargetParameters(
-  request: RustCheckedCallSelectionInput,
-  targetParameters: readonly TargetTypeRef[],
-  context: RustOperationAnalysisContext,
-): {
-  readonly parameters: readonly NonNullable<RustTargetMember["parameters"]>[number][];
-  readonly sourceParameterIndexes: readonly number[];
-} | undefined {
-  const expanded = context.currentSemantics.operations.callParameterSlots(request.source);
-  if (expanded === undefined) {
-    return undefined;
-  }
-  if (expanded.length !== targetParameters.length) {
-    return undefined;
-  }
-  const parameters = expanded.map((parameter, index) => {
-    const type = targetParameters[index];
-    return type === undefined
-      ? undefined
-      : {
-          name: parameter.sourceParameterName || `arg${index}`,
-          type,
-          passingMode: "by-value" as const,
-          ...(parameter.form === "optional" ? { optional: true as const } : {}),
-          ...(parameter.form === "rest" ? { paramsArray: true as const } : {}),
-        };
-  });
-  if (parameters.some((parameter) => parameter === undefined)) {
-    return undefined;
-  }
-  return {
-    parameters: parameters as readonly NonNullable<typeof parameters[number]>[],
-    sourceParameterIndexes: expanded.map((parameter) => parameter.sourceParameterIndex),
-  };
-}
-
-function runtimeCallableProtocol(
-  carrier: TargetTypeRef | undefined,
-): {
-  readonly parameters: readonly TargetTypeRef[];
-  readonly result: TargetTypeRef;
-} | undefined {
-  if (carrier?.kind === "function-pointer" || carrier?.kind === "closure") {
-    return { parameters: carrier.args, result: carrier.result };
-  }
-  return rustGenericCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
 }
