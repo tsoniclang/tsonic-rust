@@ -4,13 +4,13 @@ import { planRustCallableParameterPrelude, planRustCallableParameters,
   type RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
 import type { RustConstructionBody } from "../../declarations/classes/construction-body.js";
 import { planExpression, planRustSelectedSourceCallArguments } from "../../expressions/index.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
+import type { RustPlanContext } from "../../program/plan-context.js";
 import { planStatementSequence } from "../../statements/index.js";
 import { planRustExternalProjectInitialization } from "./external-construction.js";
 import { planRustImplicitConstructorParameters } from "./construction-parameters.js";
-import { projectTypeSubstitutions, projectLifetimeSubstitutions, type ProjectClassStateLayer } from "./model.js";
+import type { ProjectClassStateLayer } from "./model.js";
 
 export function planRustConstructionLayers(
   plan: RustAdmittedConstruction,
@@ -19,33 +19,37 @@ export function planRustConstructionLayers(
   construction: RustConstructionBody,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  if (context.syntheticNames === undefined || context.controlFlow === undefined) return undefined;
+  if (context.syntheticNames === undefined || context.controlFlow === undefined) failRustPlannerInvariant("An admitted construction requires its native name and control-flow scopes.", plan.definition.declaration);
   const syntheticNames = context.syntheticNames;
   const controlFlow = context.controlFlow;
   const planLayer = (index: number, parameterPlan: RustCallableParameterPlan): readonly RustStmt[] | undefined => {
     const layer = plan.layers[index];
     const storage = layers[index];
-    if (layer === undefined || storage?.definition !== layer.definition) return undefined;
+    if (layer === undefined || storage?.definition !== layer.definition) failRustPlannerInvariant("An admitted construction layer requires its exact native storage owner.", plan.definition.declaration);
+    const bindings = context.input.program.records.classImplementationContext.get(layer.definition.declaration, storage.carrier);
+    if (bindings === undefined) failRustPlannerInvariant("An admitted construction layer requires its exact generic correspondence.", layer.definition.declaration);
     const selectedContext: RustPlanContext = { ...context, sourceFile: layer.definition.sourceFile,
       typeParameterSubstitutions: new Map([...context.typeParameterSubstitutions ?? [],
-        ...projectTypeSubstitutions(layer.definition, storage.carrier)]),
+        ...bindings.types]),
       lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
-        ...projectLifetimeSubstitutions(layer.definition, storage.carrier)]),
+        ...bindings.lifetimes]),
     };
     const label = !plan.earlyReturnLayers.has(layer.definition) ? undefined
       : { id: controlFlow.nextLoopId++, label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
     const layerContext = construction.contextForLayer(selectedContext, label);
     const prelude = planRustCallableParameterPrelude(parameterPlan, layerContext, planExpression);
-    if (prelude === undefined) return undefined;
+    if (prelude === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
     const statements: RustStmt[] = [...prelude];
     if (index > 0) {
       const base = plan.layers[index - 1]!;
       const baseStorage = layers[index - 1]!;
+      const baseBindings = context.input.program.records.classImplementationContext.get(base.definition.declaration, baseStorage.carrier);
+      if (baseBindings === undefined) failRustPlannerInvariant("An admitted native base layer requires its exact generic correspondence.", base.definition.declaration);
       const baseContext: RustPlanContext = { ...context,
         typeParameterSubstitutions: new Map([...context.typeParameterSubstitutions ?? [],
-          ...projectTypeSubstitutions(base.definition, baseStorage.carrier)]),
+          ...baseBindings.types]),
         lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
-          ...projectLifetimeSubstitutions(base.definition, baseStorage.carrier)]),
+          ...baseBindings.lifetimes]),
       };
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
@@ -54,9 +58,7 @@ export function planRustConstructionLayers(
         ? parameterPlan.params.map(parameter => ({ kind: "path" as const, path: parameter.name }))
         : planRustSelectedSourceCallArguments(layer.baseCall, layerContext);
       if (baseParameters === undefined || args === undefined || args.length !== baseParameters.params.length) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, layer.constructor ?? layer.definition.declaration),
-          "rust.backend.constructor-base-parameters", "Native base construction has no exact selected argument/parameter ABI."));
-        return undefined;
+        failRustPlannerInvariant("Native base construction requires its exact selected argument and parameter ABI.", layer.constructor ?? layer.definition.declaration);
       }
       const temporaries: RustStmt[] = [];
       const bindings: RustStmt[] = [];
@@ -68,22 +70,22 @@ export function planRustConstructionLayers(
           type: parameter.type, init: { kind: "path", path: name } });
       }
       const body = planLayer(index - 1, baseParameters);
-      if (body === undefined) return undefined;
+      if (body === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
       statements.push(...temporaries, ...construction.exportInitialized(
         plan.layers.slice(0, index).flatMap(layer => layer.fields.map(field => field.declaration)), [...bindings, ...body]));
       if (!plan.completingLayers.has(base.definition)) return statements;
     } else {
-      const external = context.input.program.projectTypes.externalBaseForDefinition(layer.definition);
+      const external = context.input.program.records.externalProjectBase.get(layer.definition);
       if (external !== undefined) {
         const initializers = planRustExternalProjectInitialization(external, layer.signature,
           layer.definition.declaration, layer.baseCall, layerContext);
-        if (initializers === undefined) return undefined;
+        if (initializers === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
         for (const [fieldIndex, field] of external.fields.entries()) {
           const target = construction.values.get(field.declaration);
           const value = initializers[fieldIndex];
-          if (target === undefined || value === undefined) return undefined;
+          if (target === undefined || value === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
           const initialization = construction.initialize(field.declaration, value);
-          if (initialization === undefined) return undefined;
+          if (initialization === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
           statements.push(...initialization);
         }
       }
@@ -91,22 +93,22 @@ export function planRustConstructionLayers(
     for (const field of layer.fields) {
       if (field.externallyInitialized) continue;
       const target = construction.values.get(field.declaration);
-      if (target === undefined) return undefined;
+      if (target === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
       if (field.initializer !== undefined) {
         const prepared = construction.prepare(field.initializer, layerContext);
-        if (prepared === undefined) return undefined;
+        if (prepared === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
         const value = construction.input(field.declaration, field.initializer, prepared.context,
           () => planExpression(field.initializer!, prepared.context));
-        if (value === undefined) return undefined;
+        if (value === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
         const initialization = construction.initialize(field.declaration, value);
-        if (initialization === undefined) return undefined;
+        if (initialization === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
         statements.push(...prepared.before, ...prepared.finish(initialization));
       }
     }
     const body = layer.constructor === undefined ? undefined : context.input.program.source.ast.body(layer.constructor);
     if (body !== undefined) {
       const planned = planStatementSequence(layer.statements, body, layerContext);
-      if (planned === undefined) return undefined;
+      if (planned === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
       statements.push(...planned.statements);
     }
     return label === undefined ? statements : [{ kind: "scope", label: label.label, body: { statements } }];

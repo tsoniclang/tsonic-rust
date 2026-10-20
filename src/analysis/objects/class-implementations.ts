@@ -14,8 +14,9 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
 import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
-export function analyzeRustClassImplementations(program: Omit<RustTargetProgram, "reachability">, producer: RustClassEmissionProducer): void {
+export function analyzeRustClassImplementations(program: Omit<RustTargetProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {
   const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
   const genericCarriers = new Set<string>();
   const contextFor = (definition: RustProjectTypeDefinition, carrier: TargetTypeRef): RustClassImplementationContext => {
@@ -128,4 +129,23 @@ export function analyzeRustClassImplementations(program: Omit<RustTargetProgram,
     genericsFor(view.sourceCarrier, selected, contextFor(definition, view.sourceCarrier), view.declaration);
   }
   for (const [declaration, files] of instances) for (const [file, views] of files) producer.instanceViews(declaration, file, views);
+  const pending = [...program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition)),
+    ...program.classValues.instanceViewImplementations.map(view => view.sourceCarrier),
+    ...program.classValues.constructorViewImplementations.map(view => view.sourceCarrier)];
+  for (const node of nodes) {
+    const carrier = program.records.runtimeCarrier.get(node)?.carrier;
+    if (carrier !== undefined) pending.push(carrier);
+  }
+  const seen = new Set<string>();
+  for (let index = 0; index < pending.length; index++) {
+    const carrier = pending[index]!;
+    const key = closedMetadataKey(carrier);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pending.push(...rustTargetTypeChildren(carrier));
+    const definition = program.projectTypes.definitionForCarrier(carrier);
+    if (definition === undefined) continue;
+    contextFor(definition, carrier);
+    pending.push(...program.projectTypes.directSupertypes(carrier) ?? []);
+  }
 }

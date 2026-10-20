@@ -13,7 +13,7 @@ export function analyzeRustClassValueEmission(input: {
   readonly producer: RustClassEmissionProducer;
 }): void {
   const { program, producer } = input;
-  analyzeRustClassImplementations(program, producer);
+  analyzeRustClassImplementations(program, producer, input.nodes);
   const forwarders = new WeakMap<RustClassValueCallable, Set<boolean>>();
   const forwarder = (callable: RustClassValueCallable, construction: boolean): void => {
     let modes = forwarders.get(callable);
