@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import type { Node } from "@tsonic/tsts";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
-import { selectRustPointerReturnCarrier } from "../../../../policy/operations/pointers/return.js";
+import { selectRustPointerReturnCarrier } from "../../../callables/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, substituteRustTargetGenerics } from "../../../../target-model/types/index.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";

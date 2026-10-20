@@ -7,7 +7,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { SourceCallableTypeEvidence, SourceTypeComponentEvidence } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointers/return.js";
+import { selectRustPointerReturnCarrier } from "../../callables/pointer-return.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetGenericBindings, inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";

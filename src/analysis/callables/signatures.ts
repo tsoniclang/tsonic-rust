@@ -20,7 +20,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { rustSourceFunctionValueCarrier, rustSourceClosureValueCarrier } from "./function-values.js";
-import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
+import { selectRustPointerReturnContract } from "./pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";

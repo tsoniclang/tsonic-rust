@@ -1,22 +1,14 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/index.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import {
-  rustSourceLocationTargetType,
-  rustSourceOptionalTargetType,
-  rustAbsenceTargetType,
-} from "../../../target-model/types/index.js";
-import { resolveRustExactNullishValueCarrier } from "../../types/resolution/target.js";
-import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "./native-memory.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../types/resolution/model.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustSourceLocationTargetType, rustSourceOptionalTargetType, rustAbsenceTargetType } from "../../target-model/types/index.js";
+import { resolveRustExactNullishValueCarrier } from "../types/resolution/target.js";
+import { readRustRawLocation } from "../../source/extension/native-memory.js";
+import { resolveRustMemoryLayoutPointee } from "../operations/pointers/native-memory.js";
 
-export interface RustPointerReturnContract {
-  readonly returnCarrier: TargetTypeRef;
-  readonly undefinedReturn: boolean;
-  readonly fallthroughUndefined: boolean;
-}
-
+import type { RustPointerReturnContract } from "../../target-model/records/pointer-return.js";
 export function selectRustPointerReturnCarrier(
   declaration: Node,
   context: RustTargetTypeResolutionContext,
