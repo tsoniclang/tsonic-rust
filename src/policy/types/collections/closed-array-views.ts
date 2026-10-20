@@ -1,6 +1,6 @@
 import type { Type } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../resolution/model.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../../analysis/types/resolution/model.js";
 import { resolveOwnedSourceProfileTypeName } from "../resolution/providers.js";
 import { rustJsArrayValueTargetType } from "../../../target-model/types/index.js";
 

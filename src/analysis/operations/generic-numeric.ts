@@ -8,7 +8,7 @@ import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric/union.js";
 
-import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/model.js";
+import type { RustTargetTypeResolutionContext } from "../types/resolution/model.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 
 export function rustOperandSupportsSourceNumeric(

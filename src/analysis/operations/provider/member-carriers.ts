@@ -8,7 +8,7 @@ import { mapRustTargetTypes } from "../../../target-model/types/carriers/substit
 import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
 import { resolveRustTypeFamilyApplication } from "../../../policy/types/resolution/type-families.js";
 import { bindRustSourceGenericArguments } from "../../../policy/types/resolution/generic-arguments.js";
-import type { RustTargetTypeResolutionContext } from "../../../policy/types/resolution/model.js";
+import type { RustTargetTypeResolutionContext } from "../../types/resolution/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 
 export function bindRustSelectedReceiverContext(

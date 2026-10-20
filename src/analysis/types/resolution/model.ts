@@ -1,7 +1,7 @@
 import type { RustProviderOperationRow, RustProviderTypeRow } from "../../../target-model/identities/provider-relations.js";
-import type { RustSourcePolicyContext } from "../../model/context.js";
-import type { RustSourceProfileRegistry } from "../model/source-profile.js";
-import type { RustSourceTypeRegistry } from "../model/source-type-registry.js";
+import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
+import type { RustSourceProfileRegistry } from "../../../policy/types/model/source-profile.js";
+import type { RustSourceTypeRegistry } from "../../project-types/source-type-model.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { Node, SourceFile, Type, TypePropertyInfo } from "@tsonic/tsts";
