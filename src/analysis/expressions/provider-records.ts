@@ -11,7 +11,7 @@ import {
 import {
   rustProviderOperationOwnerMatches,
 } from "../../policy/operations/provider-selection.js";
-import { selectRustProviderRecordField, selectRustProviderRecordFields } from "../operations/provider/calls/record-fields.js";
+import { selectRustProviderRecordField, selectRustProviderRecordFields } from "../../policy/operations/members/record-fields.js";
 import type { RustProviderRecordAbsentField } from "../../target-model/conversions/provider-record-absence.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";

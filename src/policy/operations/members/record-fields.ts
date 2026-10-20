@@ -1,13 +1,17 @@
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustProviderTypeRow } from "../../../../target-model/identities/provider-relations.js";
-import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
-import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustUnitTargetType } from "../../../../target-model/types/index.js";
-import { instantiateProviderOperationTemplate } from "./template-instantiation.js";
-import { providerOperationTemplate } from "../result.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustProviderOperationRow } from "../../../target-model/identities/provider-relations.js";
+
+interface RustProviderRecordFieldContext {
+  readonly providerRows: readonly RustProviderOperationRow[];
+}
+import type { RustProviderTypeRow } from "../../../target-model/identities/provider-relations.js";
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { selectRustProviderOperation } from "../provider-selection.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustUnitTargetType } from "../../../target-model/types/index.js";
+import { instantiateProviderOperationTemplate } from "../../types/callables/provider-templates.js";
+import { providerOperationTemplate } from "./provider-templates.js";
 
 export interface RustProviderRecordField {
   readonly memberId: string;
@@ -18,7 +22,7 @@ export interface RustProviderRecordField {
 export function selectRustProviderRecordField(
   identity: ProviderDeclarationIdentity,
   target: TargetTypeRef,
-  options: RustOperationsProviderOptions,
+  options: RustProviderRecordFieldContext,
   definitions: RustTypeDefinitions,
   sourceMemberCarrier?: TargetTypeRef,
 ): RustProviderRecordField | undefined {
@@ -46,7 +50,7 @@ export function selectRustProviderRecordField(
 export function selectRustProviderRecordFields(
   row: RustProviderTypeRow,
   target: TargetTypeRef,
-  options: RustOperationsProviderOptions,
+  options: RustProviderRecordFieldContext,
   definitions: RustTypeDefinitions,
 ): readonly RustProviderRecordField[] | undefined {
   const rows = options.providerRows.filter(candidate => candidate.providerId === row.providerId &&

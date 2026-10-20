@@ -9,7 +9,7 @@ import { resolveSelectedProviderDeclaration } from "../../../../policy/identitie
 import { rustProviderOperationOwnerMatches } from "../../../../policy/operations/provider-selection.js";
 import { providerCarrierFromRelations } from "../../../../policy/types/resolution/providers.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../../../../target-model/conversions/provider-record.js";
-import { selectRustProviderRecordField } from "./record-fields.js";
+import { selectRustProviderRecordField } from "../../../../policy/operations/members/record-fields.js";
 import type { RustProviderRecordAbsentField } from "../../../../target-model/conversions/provider-record-absence.js";
 import { selectRustStructuralFieldProjection } from "../../../../policy/types/objects/structural-fields.js";
 import { selectRustExactIntegerConversion } from "../../../../target-model/conversions/exact-integer.js";
