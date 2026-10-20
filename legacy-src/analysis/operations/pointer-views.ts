@@ -13,7 +13,7 @@ import {
 } from "../../target-model/types/index.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import { recordRustTypedLocationCall } from "./typed-locations.js";
-import { rustLocationCallbackCarrier } from "./location-callbacks.js";
+import { rustLocationCallbackCarrier } from "../../policy/operations/callables/location-callbacks.js";
 import { rejectSelectedOperation } from "./provider/result.js";
 
 export function selectRustPointerViewCall(

@@ -42,7 +42,7 @@ import {
   isRustAbsenceCarrier,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustLocationCallbackCarrier } from "./location-callbacks.js";
+import { rustLocationCallbackCarrier } from "../../policy/operations/callables/location-callbacks.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import {
   resolveRustTargetTypeRef,
