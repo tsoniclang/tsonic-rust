@@ -4,7 +4,7 @@ import type { RustFactWalk } from "../program/walk.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
-import { rustSourceErrorEffectEdgeEquals } from "../errors/source-error-effects.js";
+import { rustSourceErrorEffectEdgeEquals } from "./source-error-effects.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
