@@ -66,6 +66,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
   readonly sourceArtifacts: import("./artifacts.js").RustSourceArtifactRecords["sourceArtifacts"];
   readonly propertyValueProjection: import("./property-value-projection.js").RustPropertyValueProjectionRecords["propertyValueProjection"];
+  readonly optionalChainEmission: import("./optional-chain-emission.js").RustOptionalChainEmissionRecords["optionalChainEmission"];
   readonly borrowedSequenceEmission: import("./array-literals.js").RustArrayLiteralRecords["borrowedSequenceEmission"];
   readonly safetyOperation: import("./safety-emission.js").RustSafetyEmissionRecords["safetyOperation"];
   readonly declarationSafety: import("./safety-emission.js").RustSafetyEmissionRecords["declarationSafety"];
@@ -227,7 +228,6 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly genericCallableErrors: RustErrorEmissionRecords["genericCallableErrors"];
   readonly nativeErrorJoinName: RustErrorEmissionRecords["nativeErrorJoinName"];
   readonly projectMemberError: RustErrorEmissionRecords["projectMemberError"];
-  readonly optionalChainBodyFallible: RustErrorEmissionRecords["optionalChainBodyFallible"];
   readonly sourceTypeIdentity: import("./project-emission.js").RustProjectEmissionRecords["sourceTypeIdentity"];
   readonly optionalStorageTypeArguments: import("./project-emission.js").RustProjectEmissionRecords["optionalStorageTypeArguments"];
   readonly optionalStorageCallArguments: import("./project-emission.js").RustProjectEmissionRecords["optionalStorageCallArguments"];

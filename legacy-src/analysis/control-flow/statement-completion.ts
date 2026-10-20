@@ -44,7 +44,6 @@ import type { RustOwnershipRecords } from "../../target-model/records/ownership.
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
 export interface RustStatementCompletionInput {
-  readonly optionalChainEffects: import("../program/records/error-emission.js").RustErrorEmissionProducer;
   readonly structuralShapes: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["structural"];
   readonly frozenDataWrites: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["frozen"];
   readonly source: TargetSourceProgram;
@@ -436,11 +435,15 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     if (optional !== undefined) {
       const fallible = analyzeRustOptionalChainBodyFallibility({ ast, records, structural: input.structuralShapes,
         dispatch: input.projectFieldDispatch, frozen: input.frozenDataWrites, definitions: input.typeDefinitions }, node, optional.guard);
-      input.optionalChainEffects.optionalChain(node, fallible);
       if (fallible && !frame(node).fallible) diagnostics.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
         message: `Fallible optional-chain operations require a finalized fallible lowering context. Node kind: ${ast.kindName(node)}.`,
         evidence: ["target.capability=rust.error.optional-chain"] });
     }
+    if (operation?.kind === "regexp-create" && !frame(node).fallible) diagnostics.push({
+      code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `Fallible calls require a fallible lowering context (a throwing function or a try block). Node kind: ${ast.kindName(node)}.`,
+      evidence: ["target.capability=rust.error.call"],
+    });
     if (operation?.kind === "source-field" || operation?.kind === "source-union-field") {
       const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch }, node, operation);
       if (issue !== undefined) diagnostics.push(issue);

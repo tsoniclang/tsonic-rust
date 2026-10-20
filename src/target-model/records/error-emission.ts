@@ -29,7 +29,6 @@ export interface RustErrorEmissionRecords {
   readonly nativeErrorJoinDeclarations: { readonly get: (fileName: string) => readonly RustErrorJoinDeclaration[] | undefined };
   readonly errorDeclarationOwner: RustRecordFamily<string>;
   readonly errorMemberOwner: RustRecordFamily<RustPhysicalErrorOwner>;
-  readonly optionalChainBodyFallible: RustRecordFamily<boolean>;
   readonly projectMemberError: RustRecordFamily<RustProjectMemberError>;
   readonly genericCallableErrors: { readonly get: (definition: RustGenericCallablePhysicalDefinition) => RustGenericCallableErrorEmission | undefined };
   readonly nativeErrorJoinName: { readonly get: (fileName: string, arity: number) => string | undefined };

@@ -53,6 +53,7 @@ import { analyzeRustSourceArtifacts } from "../source-modules/artifacts.js";
 import { analyzeRustSafetyEmission } from "../safety/emission.js";
 import { analyzeRustArrayLiterals } from "../expressions/array-literals.js";
 import { analyzeRustPropertyValueProjection } from "../conversions/property-value-projection.js";
+import { analyzeRustOptionalChainEmission } from "../expressions/optional-chains.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
 import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
@@ -434,7 +435,7 @@ export function analyzeRustTargetProgram(
     safetyApplications: context.safetyApplications,
     components: sourcePackageComponents,
     ownership: ownership.ownership, projectTypes, projectFieldDispatch: context.projectFieldDispatch,
-    optionalChainEffects: context.records.errorEmissionPlans, structuralShapes: context.structuralShapes, frozenDataWrites: context.frozenDataWrites,
+    structuralShapes: context.structuralShapes, frozenDataWrites: context.frozenDataWrites,
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
@@ -617,6 +618,8 @@ export function analyzeRustTargetProgram(
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
   const propertyProjectionIssues = analyzeRustPropertyValueProjection(program, context.nativeNodes, context.records.propertyValueProjectionPlans);
   if (propertyProjectionIssues.length !== 0) return rejectedTargetStage(propertyProjectionIssues);
+  const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
+  if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
