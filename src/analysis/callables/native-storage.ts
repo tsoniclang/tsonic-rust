@@ -36,8 +36,7 @@ import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
-import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings,
-  rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
+import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
 import { type RustNativeFutureEnvironmentSelection } from "../../target-model/records/native-future-inputs.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
@@ -606,7 +605,9 @@ export function createRustNativeStorageQueries(input: {
 
 function callableValueCarrier(carrier: TargetTypeRef): TargetTypeRef | undefined {
   let current = carrier;
-  for (let depth = 0; depth <= 128; depth += 1) {
+  const visited = new Set<TargetTypeRef>();
+  while (!visited.has(current)) {
+    visited.add(current);
     const optional = rustOptionElementCarrier(current);
     if (optional !== undefined) current = optional;
     else if (current.kind === "reference") current = current.referent;
