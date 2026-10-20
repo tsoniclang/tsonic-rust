@@ -1,11 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
-import {
-  getRustGeneratorProtocol,
-  getRustIteratorResultProtocol,
-  rustIteratorResultTargetType,
-  rustSourcePrimitiveTargetType,
-} from "../../../target-model/types/index.js";
+import { getRustGeneratorProtocol, getRustIteratorResultProtocol, rustIteratorResultTargetType, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 
 export interface RustGeneratorSourceCallRequest {
   readonly ownerName: string;
