@@ -15,7 +15,7 @@ import type { RustExpressionResultUse } from "../entry.js";
 import { planRustSharedReceiver } from "../typed-locations.js";
 import { planRustTypedLocationCall } from "../typed-location-calls.js";
 import { planRustSourceCallArgumentEvaluation, requireProviderArgumentPassingFacts } from "./arguments.js";
-import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
+import { planSelectedSourceCall } from "./source.js";
 import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
 import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
@@ -86,11 +86,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
     ));
     return undefined;
   }
-  const sourceCallEffects = fact?.kind === "source-call"
-    ? context.input.program.records.sourceCallEffects.get(node)
-    : undefined;
-  if (fact?.kind === "source-call" && !sourceCallEffectsMatch(fact, sourceCallEffects,
-    context.input.program.typeDefinitions, context.input.program.callableValues.native.callFor(node))) {
+  if (fact?.kind === "source-call" && context.input.program.records.sourceCall.get(node) === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.source-call-effects",

@@ -108,6 +108,8 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly objectReferenceEmission: RustRecordFamily<import("./object-reference-views.js").RustObjectReferenceEmission>;
   readonly sourceCallArgument: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallArgumentEmission>;
   readonly sourceCallEvaluation: RustRecordFamily<import("./source-call-arguments.js").RustSourceCallEvaluationEmission>;
+  readonly sourceCall: import("./source-calls.js").RustSourceCallRecords["sourceCall"];
+  readonly sourceCallSpecialization: import("./source-calls.js").RustSourceCallRecords["sourceCallSpecialization"];
   readonly sourceCallParameters: { readonly get: (fact: import("./source-call-arguments.js").RustSourceCallFact) => readonly import("./source-call-arguments.js").RustSourceParameterEmission[] | undefined };
   readonly providerArguments: { readonly get: (abi: import("./finalized-operation.js").RustFinalizedOperationAbi) => boolean };
   readonly binaryEmission: RustRecordFamily<import("./expression-binary.js").RustBinaryEmission>;
