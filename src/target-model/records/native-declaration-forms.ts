@@ -3,11 +3,7 @@ import type { RustShapeGenericRequirementContract } from "./generic-requirements
 import type { RustTargetGenericArgument } from "../types/model.js";
 import type { RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustSourceTypeFamilyImplementation } from "../types/type-families.js";
-import type {
-  RustNativeAliasDeclaration,
-  RustNativeEnumDeclaration,
-  RustNativeInterfaceDeclaration,
-} from "./native-value-declarations.js";
+import type { RustNativeAliasDeclaration, RustNativeEnumDeclaration, RustNativeInterfaceDeclaration } from "./native-value-declarations.js";
 
 export type RustNativeDeclarationForm =
   | RustNativeEnumDeclaration
