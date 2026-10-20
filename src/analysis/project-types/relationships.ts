@@ -1,6 +1,6 @@
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectTypeDefinition, RustProjectTypePolicy, RustProjectTypeRelationship } from "../../../target-model/types/project-types.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProjectTypeDefinition, RustProjectTypePolicy, RustProjectTypeRelationship } from "../../target-model/types/project-types.js";
 
 export function selectRustProjectRelationship(
   queries: Pick<RustProjectTypePolicy, "definitionForCarrier" | "directSupertypes">,
@@ -63,21 +63,4 @@ export function selectRustProjectCommonSupertype(
       candidate.definition,
     ).kind === "related"));
   return mostSpecific.length === 1 ? mostSpecific[0]!.targetType : undefined;
-}
-
-export function heritageKindIssue(
-  source: RustProjectTypeDefinition,
-  relation: "extends" | "implements",
-  target: RustProjectTypeDefinition,
-): string | undefined {
-  if (source.kind === "interface") {
-    return relation !== "extends"
-      ? `Project interface '${source.sourceName}' requires an exact extends instance contract.`
-      : undefined;
-  }
-  return relation === "extends"
-    ? target.kind === "class"
-      ? undefined
-      : `Project class '${source.sourceName}' can extend only another project class.`
-    : undefined;
 }
