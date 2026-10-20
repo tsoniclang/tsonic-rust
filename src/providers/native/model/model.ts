@@ -243,17 +243,6 @@ export interface RustCompilerParameter {
   readonly type: RustCompilerType;
 }
 
-export type RustCompilerBorrowOrigin =
-  | { readonly kind: "static" }
-  | { readonly kind: "receiver" }
-  | { readonly kind: "parameter"; readonly index: number };
-
-export interface RustCompilerBorrowedResultProjection {
-  readonly sourceType: RustCompilerType;
-  readonly origin: RustCompilerBorrowOrigin;
-  readonly conversion: "copy" | "owned-string" | "optional-copy" | "optional-owned-string";
-}
-
 export type RustCompilerReceiver =
   | { readonly kind: "value" }
   | { readonly kind: "shared"; readonly lifetime: RustCompilerLifetime }
@@ -277,7 +266,6 @@ export interface RustCompilerFunction {
   readonly typeRequirements: readonly RustCompilerTypeParameter[];
   readonly receiver?: RustCompilerReceiver;
   readonly traitDispatch?: RustCompilerTraitDispatch;
-  readonly borrowedResult?: RustCompilerBorrowedResultProjection;
   readonly asynchronous: boolean;
   readonly unsafe: boolean;
   readonly abi: string;
