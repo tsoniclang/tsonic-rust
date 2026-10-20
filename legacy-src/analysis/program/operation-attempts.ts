@@ -1,5 +1,5 @@
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
-import type { RustPreparedDeferredCheckedCall } from "../operations/provider/calls/deferred.js";
+import type { RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 
 type AcceptedCall = Extract<RustPolicySelection<RustCheckedCallSelectionResult>, { readonly kind: "accept" }>;

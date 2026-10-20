@@ -1,8 +1,9 @@
 import { type Node } from "@tsonic/tsts";
-import { type RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { type TargetTypeRef, type RustSelectedTargetOperation } from "../../../target-model/types/model.js";
 import { rustTargetOperationText } from "../../../target-model/operations/text.js";
-import { acceptDeclarationOperation, acceptRustOperation } from "../../operations/provider/result.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperatorSelectionInput } from "../../../policy/operations/contracts.js";
+import { rustPostCheckBinaryOperationId, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../target-model/operations/model.js";
 import { acceptRustPolicy, type RustCheckedOperationSelectionResult, type RustPolicySelection, type RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 
 export function rustSelectedOperatorOperation(

@@ -1,5 +1,7 @@
-import type { Node } from "@tsonic/tsts";
-import type { RustLexicalFunctionEnvironmentSelection, RustLexicalFunctionSelection, RustLexicalFunctionEnvironmentPlan, RustLexicalFunctionQueries } from "../../../target-model/records/lexical-functions.js";
+import { type Node } from "@tsonic/tsts";
+import { type RustLexicalFunctionEnvironmentSelection, type RustLexicalFunctionSelection, type RustLexicalFunctionEnvironmentPlan, type RustLexicalFunctionQueries, type RustLexicalFunctionEmission } from "../../../target-model/records/lexical-functions.js";
+import { type RustRecordFamily } from "../../../target-model/records/program.js";
+import { createRustRecordFamily } from "./family.js";
 
 export function sealRustLexicalFunctionEnvironments(
   declarations: readonly Node[], selections: ReadonlyMap<Node, RustLexicalFunctionEnvironmentSelection>,
@@ -20,4 +22,16 @@ export function sealRustLexicalFunctionQueries(
   valueDeclarationsAt: (statement: Node) => readonly Node[],
 ): RustLexicalFunctionQueries {
   return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration), valueDeclarationsAt });
+}
+
+export interface RustLexicalFunctionProducer {
+  readonly records: RustRecordFamily<RustLexicalFunctionEmission>;
+  declaration(subject: Node, value: RustLexicalFunctionEmission): void;
+}
+
+export function createRustLexicalFunctionProducer(assertOpen: () => void): RustLexicalFunctionProducer {
+  const family = createRustRecordFamily<RustLexicalFunctionEmission>({ id: "tsonic.rust.lexicalFunction", equals: (left, right) => left === right }, assertOpen);
+  return Object.freeze({ records: family.reader,
+    declaration: (subject: Node, value: RustLexicalFunctionEmission): void => family.writer.set(subject, Object.freeze(value)),
+  });
 }

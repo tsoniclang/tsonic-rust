@@ -1,17 +1,12 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries, TargetUseSiteRef } from "@tsonic/target-api/analysis";
-import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage,
-  type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue,
-  Node_Expression, Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, Node_Expression, Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot }
-  from "../../target-model/records/physical-emission-contexts.js";
-import type { RustPhysicalCallableFlowApplication }
-  from "../../target-model/records/physical-callables.js";
+import type { RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustPhysicalCallableFlowApplication } from "../../target-model/records/physical-callables.js";
 import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
-import { rustGenericCallableConversionMatches, type RustGenericCallableConversion }
-  from "../../target-model/conversions/generic-callable.js";
+import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
@@ -19,14 +14,13 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
-  from "../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { type RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustGenericCallablePhysicalConstruction } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
-import type { RustNativeStorageConstruction, RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeStorageConstruction } from "./native-storage.js";
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
 import type { RustNativeCallableProducerConstruction } from "./native-producers.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";

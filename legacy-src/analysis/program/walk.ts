@@ -35,7 +35,7 @@ import { resolveRegExpCreation } from "../expressions/regexp.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { checkedPropertySelectionInput } from "../operations/provider/properties.js";
+import { checkedPropertySelectionInput } from "../operations/member-access.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingPolicy } from "./module-bindings.js";
 

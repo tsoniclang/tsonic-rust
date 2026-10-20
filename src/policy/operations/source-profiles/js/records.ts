@@ -13,7 +13,7 @@ export function selectRustRecordObjectOperation(
     kind === "assign" ? [carrier, carrier] : [carrier];
   return {
     kind: "provider-operation", operationId: `tsonic.rust.record.${kind}`, operationKind: "method",
-    target: kind === "has-own" && !projection.static ? { form: "receiver-method", name: "contains_key", argModes: ["ref"] } :
+    target: kind === "has-own" && !staticCall ? { form: "receiver-method", name: "contains_key", argModes: ["ref"] } :
       { form: "call", path: kind === "has-own" ? "rt::Record::contains_key" : `js_abi::record_${kind}`,
         argModes: parameters.map(() => "ref") },
     parameterCarriers: parameters, resultCarrier: result,

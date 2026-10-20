@@ -6,7 +6,6 @@ import { selectRustSourceValueConversion } from "../../../conversions/selection.
 import { type RustSourceObjectField } from "../../../types/model/source-type-registry.js";
 import { type RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import { type TargetTypeRef } from "../../../../target-model/types/model.js";
-import { selectObjectAssignmentFields, selectObjectShapeProjectionFields, type SelectedObjectShapeProjection } from "../../../../analysis/operations/provider/object-shape-fields.js";
 
 export interface SelectedObjectShapeProjection {
   readonly projection: Extract<

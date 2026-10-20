@@ -5,7 +5,7 @@ import type { RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-export function selectRustCheckedUnaryOperation(operator: RustOperatorToken, operand: TargetTypeRef | undefined): RustTargetOperationFact | undefined {
+export function selectRustCheckedUnaryOperation(operator: string, operand: TargetTypeRef | undefined): RustTargetOperationFact | undefined {
   let targetOperator: RustOperatorToken | undefined;
   let resultCarrier: TargetTypeRef | undefined;
   if (operator === "!" && isRustBoolCarrier(operand)) {

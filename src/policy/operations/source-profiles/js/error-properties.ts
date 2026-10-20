@@ -5,7 +5,7 @@ import { rustSourceOptionalTargetType, rustStringTargetType } from "../../../../
 import { rustCarrierProvidesErrorMutation } from "../../../../target-model/types/carriers/error-protocols.js";
 
 export function selectRustBuiltinErrorPropertyForm(
-  memberName: string, accessMode: Extract<RustTargetOperationFact, { readonly kind: "builtin-error-property" }>["accessMode"],
+  memberName: string, accessMode: Extract<RustTargetOperationFact, { readonly kind: "builtin-error-property" }>["accessMode"] | "delete",
   receiverCarrier: TargetTypeRef, definitions: RustTypeDefinitions,
 ): { readonly kind: "selected"; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "builtin-error-property" }> }
  | { readonly kind: "rejected"; readonly code: string; readonly message: string } {

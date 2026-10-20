@@ -62,7 +62,7 @@ export interface RustTargetProgram {
   readonly reachability: import("../reachability/model.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
   readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;
-  readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;
+  readonly lexicalFunctions: import("../../target-model/records/lexical-functions.js").RustLexicalFunctionQueries;
   readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
   readonly promiseBodies: import("../../target-model/records/callables-and-resources.js").RustPromiseBodies;
@@ -88,7 +88,7 @@ export interface RustTargetProgram {
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly ownership: import("../../target-model/records/ownership.js").RustOwnershipRecords;
-  readonly retainedCallableInputs: import("../callables/retained-inputs.js").RustRetainedCallableInputPlan;
+  readonly retainedCallableInputs: import("../../target-model/records/retained-inputs.js").RustRetainedCallableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly frozenDataWrites: import("../../target-model/records/frozen-data.js").RustFrozenDataWritePlan;
   readonly classValues: import("../../target-model/records/class-values.js").RustClassValuePlan;
