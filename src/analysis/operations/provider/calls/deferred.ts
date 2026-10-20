@@ -4,11 +4,8 @@ import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalC
 import { defaultValueFactKey, fieldFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation, replaceRustInferCarrier, rustCallbackProtocol } from "../../../../policy/operations/members/callbacks.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
-import {
-  applyRustRegExpReplacementCallbackConversion,
-  finalizeRustRegExpReplacementCallbackContract,
-  selectedRustRegExpReplacementCallbackEvidence,
-} from "../regexp-replacement-callback.js";
+import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
+import { applyRustRegExpReplacementCallbackConversion, finalizeRustRegExpReplacementCallbackContract } from "../../../../policy/operations/members/regexp-callbacks.js";
 import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 
@@ -19,26 +16,15 @@ import { selectedRustCallSignature } from "../../../program/records/selected-cal
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
+
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type {
-  RustTargetMember,
-  TargetTypeRef,
-} from "../../../../target-model/types/model.js";
-import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
+import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+
 import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 
-export interface RustPreparedDeferredCheckedCall {
-  readonly sourceName: string;
-  readonly providerDeclaration?: ProviderDeclarationIdentity;
-  readonly callback: import("../../../../target-model/operations/model.js").RustCallbackOperationTemplate;
-  readonly template: RustProviderOperationTemplate;
-  readonly parameterCarriers: readonly TargetTypeRef[];
-  readonly resultCarrier: TargetTypeRef;
-  readonly replacementCallback?: RustRegExpReplacementCallbackContract;
-}
-
+import type { RustPreparedDeferredCheckedCall } from "../../../../target-model/records/deferred-callbacks.js";
+import { callbackFallibleTemplate } from "../../../../policy/operations/members/deferred-callbacks.js";
 export function prepareRustDeferredCheckedCall(
   request: RustCheckedCallSelectionInput,
   deferred: Extract<
@@ -254,21 +240,6 @@ export function resolveRustPreparedCheckedCall(
         : { providerDeclaration: prepared.providerDeclaration }),
     },
   );
-}
-
-function callbackFallibleTemplate(
-  prepared: RustPreparedDeferredCheckedCall,
-): RustProviderOperationTemplate {
-  if (prepared.callback.failure.kind === "returned-future") {
-    return prepared.template;
-  }
-  const { errorCarrier: _providerErrorCarrier, ...template } = prepared.template;
-  return {
-    ...template,
-    target: prepared.callback.failure.fallibleTarget,
-    isFallible: true,
-    errorBoundary: "source-program",
-  };
 }
 
 export function mapRustSourceMarkerCall(

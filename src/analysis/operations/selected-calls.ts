@@ -2,7 +2,8 @@ import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, Rus
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import { resolveRustCheckedCall } from "./provider/calls/selection.js";
-import { resolveRustPreparedCheckedCall, type RustPreparedDeferredCheckedCall } from "./provider/calls/deferred.js";
+import { resolveRustPreparedCheckedCall } from "./provider/calls/deferred.js";
+import { type RustPreparedDeferredCheckedCall } from "../../target-model/records/deferred-callbacks.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustCheckedCallRequestsEqual } from "./call-request-correspondence.js";
 import { admitRustOperationSelection } from "./operation-admission.js";
