@@ -1,14 +1,6 @@
 import { canonicalItemId, canonicalItemPath } from "../rustdoc-items.js";
-import {
-  isRecord,
-  requireArray,
-  requireRecord,
-} from "../rustdoc-schema.js";
-import type {
-  RustCompilerDependency,
-  RustCompilerGenericParameter,
-  RustCompilerItemIdentity,
-} from "../model.js";
+import { isRecord, requireArray, requireRecord } from "../rustdoc-schema.js";
+import type { RustCompilerDependency, RustCompilerGenericParameter, RustCompilerItemIdentity } from "../model.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 
