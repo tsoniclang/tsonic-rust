@@ -7,7 +7,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import type { RustGenericCallablePhysicalDefinition } from "../../target-model/records/generic-callables.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
+import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
 import type { RustStructuralStorageLookup } from "../operations/target-operation.js";

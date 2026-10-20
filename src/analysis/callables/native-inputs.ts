@@ -27,7 +27,7 @@ import type { RustDeclarationGenericRequirementIndex } from "../declarations/gen
 
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
-import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
+import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import type { RustRetainedCallableInputPlan } from "../../target-model/records/retained-inputs.js";
 import { rustNativeCallableInputPhysicalSignature } from "../../policy/conversions/native-callables.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";

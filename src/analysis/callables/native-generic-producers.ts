@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+
 import { closedMetadataEquals, closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -16,34 +16,6 @@ import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
-
-export interface RustNativeGenericProducerBinding {
-  readonly inputs: readonly RustNativeCallableInput[];
-  readonly definition: RustGenericCallablePhysicalDefinition;
-}
-
-export interface RustNativeGenericProducerForwarding {
-  readonly owner: Node;
-  readonly input: RustNativeCallableInput;
-  readonly trait: TargetTypeRef;
-}
-
-export interface RustNativeGenericProducerPlan {
-  readonly bindings: readonly RustNativeGenericProducerBinding[];
-  readonly open: readonly { readonly invocation: Node; readonly input: RustNativeCallableInput;
-    readonly inputs: readonly RustNativeCallableInput[] }[];
-  readonly unresolved: readonly { readonly invocation: Node; readonly input: RustNativeCallableInput; readonly reason: string }[];
-  forProtocol(protocol: RustNativeCallableProtocol): readonly RustNativeGenericProducerBinding[];
-  forwardingFor(owner: Node): readonly RustNativeGenericProducerForwarding[];
-  errorAritiesFor(fileName: string): readonly number[] | undefined;
-}
-
-export interface RustNativeGenericProducerRequests {
-  readonly bindings: readonly { readonly input: RustNativeCallableInput; readonly definition: RustGenericCallablePhysicalDefinition }[];
-  readonly forwarding: ReadonlyMap<Node, readonly RustNativeGenericProducerForwarding[]>;
-  readonly open: RustNativeGenericProducerPlan["open"];
-  readonly unresolved: RustNativeGenericProducerPlan["unresolved"];
-}
 
 export function prepareRustNativeGenericProducerRequests(input: {
   readonly ast: AstReader;
@@ -188,30 +160,27 @@ export function createRustNativeGenericProducerPlan(input: {
   }
   const selectedBindings = new Map([...bindings].map(([protocol, values]) => [protocol, Object.freeze(
     [...values].map(([definition, inputs]) => Object.freeze({ definition, inputs: Object.freeze([...inputs]) })))]));
-  const aritiesFor = (fileName: string): readonly number[] | undefined => {
-    const arities = new Set<number>();
-    for (const definition of inventory) {
-      if (definition.ownerFileName !== fileName) continue;
-      const effects = definition.implementations.map(implementation => input.records.sourceCallEffects.get(implementation.declaration));
-      if (effects.some(effect => effect === undefined)) return undefined;
-      for (const channel of ["invocation", "awaiting"] as const) {
-        const arity = effects.filter(effect => effect?.[channel] === "fallible").length;
-        if (arity > 1) arities.add(arity);
-      }
-    }
-    return Object.freeze([...arities].sort((left, right) => left - right));
-  };
-  const errorArities = new Map<string, readonly number[] | undefined>();
+  const aritiesByFile = new Map<string, Set<number> | undefined>();
   for (const definition of inventory) {
-    if (!errorArities.has(definition.ownerFileName)) errorArities.set(definition.ownerFileName, aritiesFor(definition.ownerFileName));
+    const file = definition.ownerFileName;
+    if (!aritiesByFile.has(file)) aritiesByFile.set(file, new Set());
+    const arities = aritiesByFile.get(file);
+    if (arities === undefined) continue;
+    const effects = definition.implementations.map(implementation => input.records.sourceCallEffects.get(implementation.declaration));
+    if (effects.some(effect => effect === undefined)) {
+      aritiesByFile.set(file, undefined);
+      continue;
+    }
+    for (const channel of ["invocation", "awaiting"] as const) {
+      const arity = effects.filter(effect => effect?.[channel] === "fallible").length;
+      if (arity > 1) arities.add(arity);
+    }
   }
-  const emptyBindings: readonly RustNativeGenericProducerBinding[] = Object.freeze([]);
-  const emptyForwarding: readonly RustNativeGenericProducerForwarding[] = Object.freeze([]);
-  const emptyArities: readonly number[] = Object.freeze([]);
-  return Object.freeze({ bindings: Object.freeze([...selectedBindings.values()].flat()), open,
-    unresolved: Object.freeze(unresolved),
-    forProtocol: (protocol: RustNativeCallableProtocol) => selectedBindings.get(protocol) ?? emptyBindings,
-    forwardingFor: (owner: Node) => input.requests.forwarding.get(owner) ?? emptyForwarding,
-    errorAritiesFor: (fileName: string) => errorArities.has(fileName) ? errorArities.get(fileName) : emptyArities,
-  });
+  const errorArities = new Map([...aritiesByFile].map(([file, arities]) =>
+    [file, arities === undefined ? undefined : Object.freeze([...arities].sort((left, right) => left - right))] as const));
+  return sealRustNativeGenericProducers({ bindingsByProtocol: selectedBindings, open, unresolved,
+    forwarding: input.requests.forwarding, errorArities });
 }
+
+import type { RustNativeGenericProducerForwarding, RustNativeGenericProducerPlan, RustNativeGenericProducerRequests } from "../../target-model/records/native-generic-producers.js";
+import { sealRustNativeGenericProducers } from "../program/records/native-generic-producers.js";

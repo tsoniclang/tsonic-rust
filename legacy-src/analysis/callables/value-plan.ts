@@ -28,8 +28,8 @@ import { createRustNativeStorageQueries, type RustNativeStorageConstruction, typ
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
-import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests,
-  type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
+import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests } from "./native-generic-producers.js";
+import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import { createRustNativeCapturePlan } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
