@@ -14,17 +14,17 @@ import { rustCallableInvocationSignaturesMatch } from "../../target-model/conver
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableProtocolRegistry } from "./native-protocols.js";
-import type { RustNativeCallableProtocol, RustNativeCallableProtocolBinding } from "../../target-model/records/native-protocols.js";
+import type { RustNativeCallableProtocol } from "../../target-model/records/native-protocols.js";
 import { rustNativeCallableErrorType } from "../../policy/types/callables/native-protocols.js";
-import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
-import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
-import type { RustDeclarationTypeParameterRequirements } from "../../target-model/records/generic-requirements.js";
+
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
