@@ -9,7 +9,7 @@ import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, sele
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../operations/literal-plans.js";
+import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../program/records/target-operation-literals.js";
 import { rustSelectedOperatorOperation } from "../operations/target-operation.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";

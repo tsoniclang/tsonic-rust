@@ -1,7 +1,7 @@
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
-import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../../operations/literal-plans.js";
+import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "./target-operation-literals.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
