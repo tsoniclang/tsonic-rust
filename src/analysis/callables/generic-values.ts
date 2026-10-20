@@ -10,12 +10,9 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 
-import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
-
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { isRustCopyCarrier } from "../../target-model/types/index.js";
 
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
@@ -156,12 +153,9 @@ export function createRustGenericCallablePlan(
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName,
           creation,
-          storage: (!identityFamilies.has(identity) || creation === "declaration") &&
-            (records.asyncFunction.get(node) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined ||
-              captures.length === 0 && receiverFields.length === 0 && receivers.length === 0) &&
-            records.generator.get(node) === undefined &&
-            receiverFields.length === 0 && receivers.length === 0 && captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
-              ? "value" as const : "shared" as const,
+          storage: selectRustGenericCallableStorage(Object.freeze({ identityObserved: identityFamilies.has(identity),
+            creation, asynchronous: records.asyncFunction.get(node) !== undefined, generator: records.generator.get(node) !== undefined,
+            result: value.signature.result, captures, receiverFields, receivers })),
           captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), receivers: Object.freeze(receivers), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);
@@ -199,7 +193,7 @@ export function createRustGenericCallablePlan(
   let physical: RustGenericCallablePhysicalPlan | undefined;
   const plan: RustGenericCallablePlan = Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues), definitionFor,
     get physical(): RustGenericCallablePhysicalPlan {
-      if (physical === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
+      if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical storage requires its finalized declaration inputs.");
       return physical;
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
@@ -207,15 +201,17 @@ export function createRustGenericCallablePlan(
   let published = false;
   return Object.freeze({ plan,
     initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction {
-      if (physical !== undefined) throw new Error("A generic callable physical environment is initialized exactly once.");
+      if (physical !== undefined) failTargetAnalysisInvariant("tsonic-rust", "A generic callable physical environment is initialized exactly once.");
       const construction = createRustGenericCallablePhysicalPlan(definitions, definitionFor, input);
       physical = construction.plan;
       return construction;
     },
     publishPhysical(selected: RustGenericCallablePhysicalPlan): void {
-      if (physical === undefined || published) throw new Error("Generic callable physical data publishes exactly once after construction.");
+      if (physical === undefined || published) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical data publishes exactly once after construction.");
       physical = selected;
       published = true;
     },
   });
 }
+
+import { selectRustGenericCallableStorage } from "../../policy/ownership/generic-callables.js";
