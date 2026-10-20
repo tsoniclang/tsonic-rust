@@ -8,14 +8,13 @@ import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustExpr, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
-import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
-import type { RustStructuralShapeField } from "../../../target-model/records/structural-shapes.js";
+import { requireRustCarrierRead } from "../types/carrier-reads.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
+import { readRustStructuralObjectProperty, writeRustStructuralObjectProperty, mutateRustStructuralObjectProperty } from "./structural-properties.js";
 import { readRustBoundRecordField, writeRustBoundRecordField, mutateRustBoundRecordField } from "./record-fields.js";
 import {
   createRustStructuralObject,
@@ -32,17 +31,7 @@ import {
   allocateRustSyntheticName,
 } from "../names/synthetic.js";
 import {
-  rustCallableProtocol,
   rustProgramErrorTargetType,
-  isRustCopyCarrier,
-  rustStructuralObjectCarrierValue,
-  rustLocationTargetType,
-  rustOptionElementCarrier,
-  rustOptionTargetType,
-  rustStructuralPropertyGetterStorageCarrier,
-  rustStructuralPropertySetterStorageCarrier,
-  rustStructuralPropertyValueCarrier,
-  rustStructuralMethodCallableCarrier,
 } from "../../../target-model/types/index.js";
 
 export type RustStructuralObjectFieldInitializer =
@@ -62,13 +51,13 @@ export function createRustStructuralObjectFromCarrier(
   identity?: RustExpr,
   constructor?: RustExpr,
 ): RustExpr | undefined {
-  const definition = context.input.program.structuralShapes.definitionForCarrier(carrier);
+  const definition = context.input.program.records.structuralShape.get(carrier);
   if (definition === undefined || definition.fields.length !== initializers.length) {
-    return undefined;
+    failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   }
-  if ((definition.construction === undefined) !== (constructor === undefined)) return undefined;
-  if (rustStructuralObjectCarrierValue(carrier)?.representation === "value" &&
-    definition.fields.some(field => field.nativeLayout !== undefined)) return undefined;
+  if ((definition.construction === undefined) !== (constructor === undefined)) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
+  if (context.input.program.records.structuralObjectStorage.get(carrier)?.value === true &&
+    definition.fields.some(field => field.nativeLayout !== undefined)) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   const fields = definition.fields.flatMap((field, index) => {
     const initializer = initializers[index];
     if (initializer === undefined ||
@@ -120,14 +109,14 @@ export function createRustStructuralObjectFromCarrier(
         }])];
   });
   if (fields.some((field) => field === undefined)) {
-    return undefined;
+    failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   }
   if (definition.construction !== undefined && constructor !== undefined) {
     fields.push({ name: definition.construction.targetName, value: constructor });
   }
-  if (rustStructuralObjectCarrierValue(carrier)?.representation === "value") {
+  if (context.input.program.records.structuralObjectStorage.get(carrier)?.value === true) {
     const type = rustTypeFromCarrierInContext(carrier, context);
-    return identity !== undefined || type?.kind !== "named" ? undefined : {
+    return identity !== undefined || type?.kind !== "named" ? failRustPlannerInvariant("An admitted native value object requires its named carrier and no shared identity.", context.sourceFile) : {
       kind: "struct-literal",
       path: type.path,
       fields: fields as readonly { readonly name: string; readonly value: RustExpr }[],
@@ -146,20 +135,7 @@ export function rustDirectProjectFieldStoragePath(
   storageIndex: number,
   context: RustPlanContext,
 ): readonly string[] | undefined {
-  const definition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
-  if (definition === undefined || context.input.program.projectTypes.isPolymorphic(definition)) {
-    return undefined;
-  }
-  const external = context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields ?? [];
-  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
-  const declaration = storageIndex < external.length
-    ? external.find((field) => field.storageIndex === storageIndex)?.declaration
-    : layout?.fields.find((field) =>
-        external.length + field.storageIndex === storageIndex)?.declaration;
-  const name = declaration === undefined
-    ? undefined
-    : context.input.program.projectTypes.fieldStorageName(definition, declaration);
-  return name === undefined ? undefined : [name];
+  return context.input.program.records.storedField.get("project-object", receiverCarrier, storageIndex)?.path;
 }
 
 export function readRustStoredObjectField(
@@ -173,42 +149,43 @@ export function readRustStoredObjectField(
   receiverIsBorrowed = false,
 ): RustExpr | undefined {
   if (storage === "structural-object") {
-    const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+    const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
     if (field === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
-    if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
+    if (context.input.program.records.structuralShape.get(receiverCarrier)?.dispatchName !== undefined) {
       const region = context.fallibleBoundary;
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
       if (field.property === undefined || region === undefined || operand === undefined || projection.length !== 0 ||
-        context.syntheticNames === undefined) return undefined;
+        context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
       const name = allocateRustSyntheticName(context.syntheticNames, "property_receiver");
       const dispatch: RustExpr = { kind: "field", receiver: { kind: "path", path: name }, name: "dispatch" };
       const selected = rustPropagateLocalError(region, operand, {
         kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch : cloneExpression(dispatch),
         method: field.property.getterTargetName, args: [],
       });
-      return selected === undefined ? undefined : rustValueBlock([{ name, value: { kind: "reference", expr: receiver } }], selected);
+      return selected === undefined ? failRustPlannerInvariant("An admitted field read requires its exact native error propagation.", context.sourceFile) : rustValueBlock([{ name, value: { kind: "reference", expr: receiver } }], selected);
     }
     if (field.method === true && field.receiverIndependent !== true) {
-      return undefined;
+      failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
-    if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
+    if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     const path = [field.targetName, ...projection];
     if (field.storage === "bound") return readRustBoundRecordField(receiver, field, context, receiverIsBorrowed);
-    if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
-      if (field.storage !== "stored" || field.nativeLayout !== undefined) return undefined;
+    if (context.input.program.records.structuralObjectStorage.get(receiverCarrier)?.value === true) {
+      if (field.storage !== "stored" || field.nativeLayout !== undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
       const selected = path.reduce<RustExpr>((value, name) => ({ kind: "field", receiver: value, name }), receiver);
-      return isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
+      return requireRustCarrierRead(resultCarrier, context).copy ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
     }
     if (field.nativeLayout !== undefined) return { kind: "method-call",
-      receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier), context),
+      receiver: readRustStructuralObjectField(receiver, field.targetName, context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)!.location!, context),
       method: "load", args: [] };
     return field.storage === "property"
       ? readRustStructuralObjectProperty(
           receiverCarrier,
           receiver,
           field,
+          storageIndex,
           resultCarrier,
           context,
         )
@@ -217,7 +194,7 @@ export function readRustStoredObjectField(
   const dispatch = rustStoredProjectFieldDispatch(receiverCarrier, storageIndex, context);
   if (dispatch !== undefined) {
     const role = planRustProjectFieldDispatchRole(dispatch.plan, "read", context);
-    return role === undefined || projection.length !== 0 ? undefined
+    return role === undefined || projection.length !== 0 ? failRustPlannerInvariant("An admitted dispatched field requires its exact read role and direct projection.", context.sourceFile)
       : readRustProjectDispatchedField(receiver, dispatch.read, role);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
@@ -225,7 +202,7 @@ export function readRustStoredObjectField(
   const declaration = rustStoredProjectFieldDeclaration(receiverCarrier, storageIndex, context);
   const captured = declaration === undefined ? undefined : rustCapturedFieldStorage(declaration, context);
   return path === undefined || representation === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted project field requires its native storage path and representation.", context.sourceFile)
     : readRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, resultCarrier, representation, context,
       captured, captured === undefined ? [] : projection);
 }
@@ -234,28 +211,15 @@ export function rustStoredObjectFieldSupportsBorrowedRead(
   storage: "project-object" | "structural-object", receiverCarrier: TargetTypeRef, storageIndex: number,
   context: RustPlanContext,
 ): boolean {
-  if (storage === "project-object") return rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context) !== undefined;
-  const definition = context.input.program.structuralShapes.definitionForCarrier(receiverCarrier);
-  const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
-  return definition !== undefined && definition.dispatchName === undefined && field?.storage === "stored" &&
-    field.method !== true && field.nativeLayout === undefined;
+  return context.input.program.records.storedField.get(storage, receiverCarrier, storageIndex)?.borrowedRead === true;
 }
 
 function rustStoredProjectFieldDeclaration(carrier: TargetTypeRef, storageIndex: number, context: RustPlanContext): Node | undefined {
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  return definition === undefined ? undefined
-    : context.input.program.projectTypes.objectLayoutForDefinition(definition)?.fields.find(field =>
-      field.storageIndex + (context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields.length ?? 0) === storageIndex)?.declaration;
+  return context.input.program.records.storedField.get("project-object", carrier, storageIndex)?.declaration;
 }
 
 function rustStoredProjectFieldDispatch(carrier: TargetTypeRef, storageIndex: number, context: RustPlanContext) {
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  if (definition === undefined || !context.input.program.projectTypes.isPolymorphic(definition)) return undefined;
-  const declaration = rustStoredProjectFieldDeclaration(carrier, storageIndex, context);
-  const plan = declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(declaration);
-  const read = declaration === undefined ? undefined : context.input.program.projectTypes.memberSlotName(declaration, "read");
-  const write = declaration === undefined ? undefined : context.input.program.projectTypes.memberSlotName(declaration, "write");
-  return plan === undefined || read === undefined || write === undefined ? undefined : { plan, read, write };
+  return context.input.program.records.storedField.get("project-object", carrier, storageIndex)?.dispatch;
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -264,11 +228,11 @@ export function readRustStructuralObjectMethodStorage(
   storageIndex: number,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+  const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
   if (field?.nativeMethod === true) return undefined;
   const storageCarrier = field?.methodStorageCarrier;
   if (field === undefined || storageCarrier === undefined) {
-    return undefined;
+    failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   }
   return field.receiverIndependent === true
     ? readRustStoredObjectField("structural-object", receiverCarrier, receiver, storageIndex, storageCarrier, context)
@@ -291,31 +255,17 @@ export function invokeRustStructuralObjectMethod(
   typeArguments: readonly TargetTypeRef[] = [],
   genericArguments: readonly RustCallGenericArgument[] = [],
 ): RustExpr | undefined {
-  const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
-  const callableCarrier = field?.method === true
-    ? rustStructuralMethodCallableCarrier(field.carrier, field.presence)
-    : undefined;
-  const generic = rustGenericCallableValue(callableCarrier);
-  const callable = generic === undefined ? rustCallableProtocol(callableCarrier) : rustGenericCallableProtocol(callableCarrier, typeArguments);
-  const storageCarrier = field?.methodStorageCarrier;
-  const rawStorageCarrier = field?.presence === "optional"
-    ? rustOptionElementCarrier(storageCarrier)
-    : storageCarrier;
-  if (field === undefined || callable === undefined ||
-    rawStorageCarrier === undefined ||
-    callable.parameters.length !== arguments_.length ||
-    !rustTargetTypeRefEquals(callable.result, resultCarrier) ||
-    (field.presence === "required") !== (storageOverride === undefined) ||
-    (storageOverride !== undefined &&
-      !rustTargetTypeRefEquals(storageOverride.carrier, rawStorageCarrier)) ||
-    context.syntheticNames === undefined) {
-    return undefined;
-  }
-  if (field.nativeMethod === true) {
-    if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored") return undefined;
+  const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
+  const selected = context.input.program.records.structuralMethodInvocation.get(receiverCarrier, storageIndex, typeArguments);
+  if (field === undefined || selected === undefined || selected.parameterCount !== arguments_.length ||
+    !rustTargetTypeRefEquals(selected.result, resultCarrier) || (field.presence === "required") !== (storageOverride === undefined) ||
+    storageOverride !== undefined && !rustTargetTypeRefEquals(storageOverride.carrier, selected.rawStorage) || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted structural method invocation requires its exact sealed signature, storage and name scope.");
+  if (selected.native) {
+    if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored")
+      failRustPlannerInvariant("A native structural method requires its admitted direct storage.");
     const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
-    return { kind: "method-call", receiver: context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.construction === undefined
-      ? cloneExpression(dispatch) : dispatch,
+    return { kind: "method-call", receiver: selected.cloneDispatch ? cloneExpression(dispatch) : dispatch,
       method: field.targetName, args: arguments_, ...(genericArguments.length === 0 ? {} : { genericArguments }) };
   }
   const receiverName = allocateRustSyntheticName(
@@ -328,7 +278,7 @@ export function invokeRustStructuralObjectMethod(
   );
   const receiverPath: RustExpr = { kind: "path", path: receiverName };
   const method = storageOverride?.expression ?? readRustStructuralObjectMethodStorage(receiverCarrier, receiverPath, storageIndex, context);
-  if (method === undefined) return undefined;
+  if (method === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [
     cloneExpression(receiverPath),
   ]), ...arguments_];
@@ -340,7 +290,7 @@ export function invokeRustStructuralObjectMethod(
       receiver: { kind: "path", path: methodName },
       method: "call",
       ...(genericArguments.length === 0 ? {} : { genericArguments }),
-      args: generic === undefined ? [{ kind: "tuple-literal", elements: inputs }] : inputs,
+      args: !selected.generic ? [{ kind: "tuple-literal", elements: inputs }] : inputs,
     });
 }
 
@@ -356,21 +306,21 @@ export function writeRustStoredObjectField(
   receiverIsBorrowed = false,
 ): RustExpr | undefined {
   const check = projection.length === 0
-    ? context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex)
+    ? context.input.program.records.storedField.get(storage, receiverCarrier, storageIndex)?.check
     : undefined;
-  if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
+  if (storage === "structural-object" && context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field?.storage === "property") {
     return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
   }
   if (check === undefined) return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
   const region = context.fallibleBoundary;
-  if (region === undefined || context.syntheticNames === undefined) return undefined;
+  if (region === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
     { kind: "path", path: valueName }, context, projection, receiverIsBorrowed);
   const checked = effect === undefined ? undefined : checkRustDataWrite(check, selected, effect, region);
-  return checked === undefined ? undefined : rustValueBlock([
+  return checked === undefined ? failRustPlannerInvariant("An admitted frozen field write requires its exact native error propagation.", context.sourceFile) : rustValueBlock([
     { name: receiverName, value: receiverIsBorrowed ? receiver : cloneExpression(receiver) }, { name: valueName, value },
   ], checked);
 }
@@ -387,36 +337,36 @@ function writeRustStoredObjectFieldStorage(
   receiverIsBorrowed = false,
 ): RustExpr | undefined {
   if (storage === "structural-object") {
-    const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+    const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
     if (field === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
-    if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
+    if (context.input.program.records.structuralShape.get(receiverCarrier)?.dispatchName !== undefined) {
       const region = context.fallibleBoundary;
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
       if (field.property?.setterTargetName === undefined || region === undefined || operand === undefined ||
-        projection.length !== 0 || operator !== "=") return undefined;
+        projection.length !== 0 || operator !== "=") failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
       const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
       return rustPropagateLocalError(region, operand, { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
         : cloneExpression(dispatch),
         method: field.property.setterTargetName, args: [value] });
     }
     if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
-      return undefined;
+      failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
-    if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
+    if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     const path = [field.targetName, ...projection];
     if (field.storage === "bound") return writeRustBoundRecordField(receiver, field, operator, value, context, receiverIsBorrowed);
-    if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
-      return field.storage !== "stored" || field.nativeLayout !== undefined ? undefined : {
+    if (context.input.program.records.structuralObjectStorage.get(receiverCarrier)?.value === true) {
+      return field.storage !== "stored" || field.nativeLayout !== undefined ? failRustPlannerInvariant("An admitted native value field requires its exact direct storage.", context.sourceFile) : {
         kind: "assignment", operator,
         target: path.reduce<RustExpr>((selected, name) => ({ kind: "field", receiver: selected, name }), receiver), value,
       };
     }
     if (field.nativeLayout !== undefined) {
-      const location = readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier), context);
+      const location = readRustStructuralObjectField(receiver, field.targetName, context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)!.location!, context);
       if (operator === "=") return { kind: "method-call", receiver: location, method: "store", args: [value] };
-      if (context.syntheticNames === undefined) return undefined;
+      if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
       const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
       return { kind: "method-call", receiver: location, method: "with_mut", args: [{ kind: "closure",
         params: [{ name: valueName, byRefCopy: false }], body: { kind: "assignment", operator,
@@ -437,7 +387,7 @@ function writeRustStoredObjectFieldStorage(
   const dispatch = rustStoredProjectFieldDispatch(receiverCarrier, storageIndex, context);
   if (dispatch !== undefined) {
     const roles = planRustProjectFieldDispatchRoles(dispatch.plan, context);
-    if (roles?.write === undefined || projection.length !== 0 || context.syntheticNames === undefined) return undefined;
+    if (roles?.write === undefined || projection.length !== 0 || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     return writeRustProjectDispatchedField(receiver, allocateRustSyntheticName(context.syntheticNames, "field_owner"),
       dispatch.read, dispatch.write, operator, value, { read: roles.read, write: roles.write });
   }
@@ -446,7 +396,7 @@ function writeRustStoredObjectFieldStorage(
   const declaration = rustStoredProjectFieldDeclaration(receiverCarrier, storageIndex, context);
   const captured = declaration === undefined ? undefined : rustCapturedFieldStorage(declaration, context);
   return path === undefined || representation === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted writable project field requires its native storage path and representation.", context.sourceFile)
     : writeRustProjectObjectField(receiver, captured === undefined ? [...path, ...projection] : path, operator, value, representation,
       captured, captured === undefined ? [] : projection);
 }
@@ -461,13 +411,13 @@ export function mutateRustStoredObjectField(
   access: "property" | "content" = "property",
 ): RustExpr | undefined {
   if (access === "content") return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context, access);
-  const check = context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex);
-  if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
+  const check = context.input.program.records.storedField.get(storage, receiverCarrier, storageIndex)?.check;
+  if (storage === "structural-object" && context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field?.storage === "property") {
     return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
   }
   if (check === undefined) return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
   const region = context.fallibleBoundary;
-  if (region === undefined || context.syntheticNames === undefined) return undefined;
+  if (region === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = mutateRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, mutation, context);
@@ -485,25 +435,25 @@ function mutateRustStoredObjectFieldStorage(
   access: "property" | "content" = "property",
 ): RustExpr | undefined {
   if (storage === "structural-object") {
-    const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+    const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
     if (field === undefined) {
-      return undefined;
+      failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
     if (field.storage === "bound") return mutateRustBoundRecordField(receiver, field, mutation, context);
-    if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
+    if (context.input.program.records.structuralObjectStorage.get(receiverCarrier)?.value === true) {
       return field.storage !== "stored" || field.method === true || access === "property" && field.readonly || field.nativeLayout !== undefined
-        ? undefined : mutation({ kind: "field", receiver, name: field.targetName });
+        ? failRustPlannerInvariant("An admitted native value mutation requires its writable direct storage.", context.sourceFile) : mutation({ kind: "field", receiver, name: field.targetName });
     }
     if (field.nativeLayout !== undefined) {
-      if (context.syntheticNames === undefined) return undefined;
+      if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
       const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
       const body = mutation({ kind: "dereference", pointer: { kind: "path", path: valueName } });
-      return body === undefined ? undefined : { kind: "method-call",
-        receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier), context),
+      return body === undefined ? failRustPlannerInvariant("An admitted native location mutation requires its finalized body.", context.sourceFile) : { kind: "method-call",
+        receiver: readRustStructuralObjectField(receiver, field.targetName, context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)!.location!, context),
         method: "with_mut", args: [{ kind: "closure", params: [{ name: valueName, byRefCopy: false }], body }] };
     }
     if (field.method === true || access === "property" && field.readonly) {
-      return undefined;
+      failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
     return field.storage === "property"
       ? mutateRustStructuralObjectProperty(
@@ -519,7 +469,7 @@ function mutateRustStoredObjectFieldStorage(
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
   return path === undefined || representation === undefined
-    ? undefined
+    ? failRustPlannerInvariant("An admitted project field mutation requires its native storage path and representation.", context.sourceFile)
     : mutateRustProjectObjectField(receiver, path, mutation, representation);
 }
 
@@ -527,286 +477,5 @@ export function rustProjectObjectRepresentation(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ) {
-  return context.input.program.objectRepresentations.representationFor(
-    context.input.program.projectTypes.definitionForCarrier(carrier),
-  );
-}
-
-function readRustStructuralObjectProperty(
-  receiverCarrier: TargetTypeRef,
-  receiver: RustExpr,
-  field: RustStructuralShapeField,
-  resultCarrier: TargetTypeRef,
-  context: RustPlanContext,
-): RustExpr | undefined {
-  const valueCarrier = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
-  const storedCarrier = valueCarrier === undefined ? undefined : rustOptionTargetType(valueCarrier);
-  const getterCarrier = rustStructuralPropertyGetterStorageCarrier(
-    receiverCarrier,
-    field.carrier,
-    field.presence,
-  );
-  if (context.syntheticNames === undefined || field.property === undefined ||
-    valueCarrier === undefined || storedCarrier === undefined || getterCarrier === undefined ||
-    !rustTargetTypeRefEquals(resultCarrier, field.carrier)) {
-    return undefined;
-  }
-  const receiverName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_receiver",
-  );
-  const getterName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_getter",
-  );
-  const storedName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_value",
-  );
-  const receiverPath: RustExpr = { kind: "path", path: receiverName };
-  const getterCall = callRustStructuralObjectAccessor(
-    getterName,
-    [cloneExpression(receiverPath)],
-    context,
-  );
-  if (getterCall === undefined) {
-    return undefined;
-  }
-  const presentValue = field.presence === "optional"
-    ? { kind: "call" as const, path: "Some", args: [getterCall] }
-    : getterCall;
-  const storedValue = readRustStructuralObjectField(
-    receiverPath,
-    field.targetName,
-    storedCarrier,
-    context,
-  );
-  const absentGetterValue: RustExpr = field.presence === "optional"
-    ? storedValue
-    : {
-        kind: "match",
-        expression: storedValue,
-        arms: [{
-          pattern: {
-            kind: "tuple-variant",
-            path: "Some",
-            elements: [{ kind: "binding", name: storedName }],
-          },
-          expression: { kind: "path", path: storedName },
-        }, {
-          pattern: { kind: "path", path: "None" },
-          expression: {
-            kind: "unreachable",
-            message: "required structural property has neither stored data nor a getter",
-          },
-        }],
-      };
-  return rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }], {
-      kind: "match",
-      expression: readRustStructuralObjectField(
-        receiverPath,
-        field.property.getterTargetName,
-        getterCarrier,
-        context,
-      ),
-      arms: [{
-        pattern: {
-          kind: "tuple-variant",
-          path: "Some",
-          elements: [{ kind: "binding", name: getterName }],
-        },
-        expression: presentValue,
-      }, {
-        pattern: { kind: "path", path: "None" },
-        expression: absentGetterValue,
-      }],
-    });
-}
-
-function writeRustStructuralObjectProperty(
-  receiverCarrier: TargetTypeRef,
-  receiver: RustExpr,
-  field: RustStructuralShapeField,
-  storageIndex: number,
-  operator: RustAssignmentOperator,
-  value: RustExpr,
-  context: RustPlanContext,
-): RustExpr | undefined {
-  const valueCarrier = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
-  const setterCarrier = rustStructuralPropertySetterStorageCarrier(
-    receiverCarrier,
-    field.carrier,
-    field.presence,
-  );
-  if (context.syntheticNames === undefined || field.property?.setterTargetName === undefined ||
-    valueCarrier === undefined || setterCarrier === undefined) {
-    return undefined;
-  }
-  const receiverName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_receiver",
-  );
-  const setterName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_setter",
-  );
-  const valueName = allocateRustSyntheticName(context.syntheticNames, "property_value");
-  const receiverPath: RustExpr = { kind: "path", path: receiverName };
-  const bindings: {
-    readonly name: string;
-    readonly value: RustExpr;
-    readonly mutable?: boolean;
-  }[] = [{ name: receiverName, value: cloneExpression(receiver) }];
-  const selectedValue: RustExpr = { kind: "path", path: valueName };
-  let update: RustExpr | undefined;
-  if (operator !== "=") {
-    const currentValue = readRustStructuralObjectProperty(
-      receiverCarrier,
-      receiverPath,
-      field,
-      field.carrier,
-      context,
-    );
-    if (currentValue === undefined) {
-      return undefined;
-    }
-    bindings.push({
-      name: valueName,
-      mutable: true,
-      value: currentValue,
-    });
-    update = {
-      kind: "assignment",
-      operator,
-      target: { kind: "path", path: valueName },
-      value,
-    };
-  } else {
-    bindings.push({ name: valueName, value });
-  }
-  const setterCall = callRustStructuralObjectAccessor(
-    setterName,
-    [cloneExpression(receiverPath), selectedValue],
-    context,
-  );
-  if (setterCall === undefined) {
-    return undefined;
-  }
-  let storedWrite = writeRustStructuralObjectField(
-    receiverPath,
-    field.targetName,
-    "=",
-    { kind: "call", path: "Some", args: [selectedValue] },
-  );
-  if (context.input.program.frozenDataWrites.receiverFor("structural-object", receiverCarrier, storageIndex) !== undefined) {
-    const region = context.fallibleBoundary;
-    const checked = region === undefined ? undefined : checkRustDataWrite("receiver", receiverPath, storedWrite, region);
-    if (checked === undefined) return undefined;
-    storedWrite = checked;
-  }
-  const write: RustExpr = {
-    kind: "match",
-    expression: readRustStructuralObjectField(
-      receiverPath,
-      field.property.setterTargetName,
-      setterCarrier,
-      context,
-    ),
-    arms: [{
-      pattern: {
-        kind: "tuple-variant",
-        path: "Some",
-        elements: [{ kind: "binding", name: setterName }],
-      },
-      expression: setterCall,
-    }, {
-      pattern: { kind: "path", path: "None" },
-      expression: storedWrite,
-    }],
-  };
-  return rustValueBlock(bindings, update === undefined
-      ? write
-      : {
-          kind: "evaluate-then",
-          effect: update,
-          discard: "unit",
-          value: write,
-        });
-}
-
-function mutateRustStructuralObjectProperty(
-  receiverCarrier: TargetTypeRef,
-  receiver: RustExpr,
-  field: RustStructuralShapeField,
-  storageIndex: number,
-  mutation: (field: RustExpr) => RustExpr | undefined,
-  context: RustPlanContext,
-): RustExpr | undefined {
-  if (context.syntheticNames === undefined) {
-    return undefined;
-  }
-  const receiverName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_receiver",
-  );
-  const valueName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "property_value",
-  );
-  const resultName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "accessor_result",
-  );
-  const receiverPath: RustExpr = { kind: "path", path: receiverName };
-  const currentValue = readRustStructuralObjectProperty(
-    receiverCarrier,
-    receiverPath,
-    field,
-    field.carrier,
-    context,
-  );
-  const storedValue = writeRustStructuralObjectProperty(
-    receiverCarrier,
-    receiverPath,
-    field,
-    storageIndex,
-    "=",
-    { kind: "path", path: valueName },
-    context,
-  );
-  if (currentValue === undefined || storedValue === undefined) {
-    return undefined;
-  }
-  const changed = mutation({ kind: "path", path: valueName });
-  if (changed === undefined) {
-    return undefined;
-  }
-  return rustValueBlock([{ name: receiverName, value: cloneExpression(receiver) }, {
-      name: valueName,
-      mutable: true,
-      value: currentValue,
-    }, {
-      name: resultName,
-      value: changed,
-    }], {
-      kind: "evaluate-then",
-      effect: storedValue,
-      discard: "unit",
-      value: { kind: "path", path: resultName },
-    });
-}
-
-function callRustStructuralObjectAccessor(
-  bindingName: string,
-  arguments_: readonly RustExpr[],
-  context: RustPlanContext,
-): RustExpr | undefined {
-  const region = context.fallibleBoundary;
-  if (region === undefined) {
-    return undefined;
-  }
-  return rustPropagateLocalError(region, rustTargetRuntimeErrorType, {
-    kind: "method-call", receiver: { kind: "path", path: bindingName }, method: "call",
-    args: [{ kind: "tuple-literal", elements: arguments_ }],
-  });
+  return context.input.program.records.objectRepresentation.get(context.input.program.records.projectType.get(carrier));
 }

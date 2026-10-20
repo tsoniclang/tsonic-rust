@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import { Node_Expression } from "@tsonic/target-api/source";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustCarrierReadProducer } from "../program/records/carrier-reads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -17,7 +19,12 @@ export function analyzeRustCarrierReads(program: Omit<RustTargetProgram, "reacha
     if (operation !== undefined) {
       const result = rustTargetOperationResultCarrier(operation);
       if (result !== undefined) pending.push(result);
-      if (operation.kind === "source-field" || operation.kind === "source-accessor") pending.push(operation.receiverCarrier);
+      if (operation.kind === "source-field") pending.push(operation.receiverCarrier);
+      if (operation.kind === "source-accessor" && operation.receiver.kind === "instance") {
+        const receiver = Node_Expression(program.source.ast, node);
+        const carrier = receiver === undefined ? undefined : rustEffectiveValueCarrier(program.records, receiver);
+        if (carrier !== undefined) pending.push(carrier);
+      }
     }
     const captures = program.records.closureCapture.get(node);
     if (captures !== undefined) pending.push(...captures.captures.map(capture => capture.carrier), ...captures.receiverFields.map(capture => capture.carrier),

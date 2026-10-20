@@ -101,6 +101,7 @@ import { createRustCarrierReadProducer } from "./carrier-reads.js";
 import { createRustIndexedRecordProducer } from "./indexed-records.js";
 import { createRustObjectProjectionProducer } from "./object-projections.js";
 import { createRustStructuralEmissionProducer } from "./structural-emission.js";
+import { createRustStoredFieldProducer } from "./stored-fields.js";
 import { createRustNativeDeclarationProducer } from "./native-declarations.js";
 import { createRustNativeLivenessProducer } from "./native-liveness.js";
 import { createRustNativeGenericProducer } from "./native-generics.js";
@@ -215,6 +216,7 @@ export function createRustProgramRecordBuilder(
   const indexedRecordPlans = createRustIndexedRecordProducer(assertOpen);
   const objectProjectionPlans = createRustObjectProjectionProducer(assertOpen);
   const structuralEmissionPlans = createRustStructuralEmissionProducer(assertOpen);
+  const storedFieldPlans = createRustStoredFieldProducer(assertOpen);
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
@@ -256,6 +258,7 @@ export function createRustProgramRecordBuilder(
     ...indexedRecordPlans.records,
     ...objectProjectionPlans.records,
     ...structuralEmissionPlans.records,
+    ...storedFieldPlans.records,
     ...statementCompletions.records,
     ...resourceScopes.records,
     localBinding: localBindings.records,
@@ -366,6 +369,7 @@ export function createRustProgramRecordBuilder(
     indexedRecordPlans,
     objectProjectionPlans,
     structuralEmissionPlans,
+    storedFieldPlans,
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,

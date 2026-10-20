@@ -26,6 +26,7 @@ import type { RustCarrierReadProducer } from "./carrier-reads.js";
 import type { RustIndexedRecordProducer } from "./indexed-records.js";
 import type { RustObjectProjectionProducer } from "./object-projections.js";
 import type { RustStructuralEmissionProducer } from "./structural-emission.js";
+import type { RustStoredFieldProducer } from "./stored-fields.js";
 import type { RustBorrowedInitializerProducer } from "./borrowed-initializers.js";
 import type { RustCaptureStorageProducer } from "./capture-storage.js";
 import type { RustBindingEmissionProducer } from "./binding-emission.js";
@@ -146,6 +147,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly indexedRecordPlans: RustIndexedRecordProducer;
   readonly objectProjectionPlans: RustObjectProjectionProducer;
   readonly structuralEmissionPlans: RustStructuralEmissionProducer;
+  readonly storedFieldPlans: RustStoredFieldProducer;
   readonly nativeDeclarations: RustNativeDeclarationProducer;
   readonly nativeLiveness: RustNativeLivenessProducer;
   readonly nativeGenericPlans: RustNativeGenericProducer;

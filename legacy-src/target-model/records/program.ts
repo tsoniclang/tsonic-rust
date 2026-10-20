@@ -94,6 +94,12 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly projectProjection: import("./object-projections.js").RustObjectProjectionRecords["projectProjection"];
   readonly projectClosedValue: import("./object-projections.js").RustObjectProjectionRecords["projectClosedValue"];
   readonly structuralShapeEmission: import("./structural-emission.js").RustStructuralEmissionRecords["structuralShapeEmission"];
+  readonly storedField: import("./stored-fields.js").RustStoredFieldRecords["storedField"];
+  readonly structuralFieldStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralFieldStorage"];
+  readonly structuralObjectStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralObjectStorage"];
+  readonly structuralMethodInvocation: import("./stored-fields.js").RustStoredFieldRecords["structuralMethodInvocation"];
+  readonly fieldValueReceiver: import("./stored-fields.js").RustStoredFieldRecords["fieldValueReceiver"];
+  readonly capturedReceiverStable: import("./stored-fields.js").RustStoredFieldRecords["capturedReceiverStable"];
   readonly structuralShape: import("./project-emission.js").RustProjectEmissionRecords["structuralShape"];
   readonly projectStateConstruction: import("./project-emission.js").RustProjectEmissionRecords["projectStateConstruction"];
   readonly projectProjectionImplementations: import("./project-emission.js").RustProjectEmissionRecords["projectProjectionImplementations"];

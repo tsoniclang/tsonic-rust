@@ -96,6 +96,7 @@ import { analyzeRustCarrierReads } from "../ownership/carrier-reads.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
+import { analyzeRustStoredFields } from "../storage/stored-fields.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -530,6 +531,7 @@ export function analyzeRustTargetProgram(
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);
   if (structuralEmissionIssues.length !== 0) return rejectedTargetStage(structuralEmissionIssues);
+  analyzeRustStoredFields(program, context.nativeNodes, context.records.storedFieldPlans);
   const indexedRecordIssues = analyzeRustIndexedRecords(program, context.nativeNodes, context.records.indexedRecordPlans);
   if (indexedRecordIssues.length !== 0) return rejectedTargetStage(indexedRecordIssues);
   analyzeRustObjectProjections(program, context.nativeNodes, context.records.objectProjectionPlans);
