@@ -14,20 +14,7 @@ import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js"
 
 import type { RustProjectFieldDispatchPlan } from "../../target-model/records/field-writes.js";
 
-export type RustProjectFieldImplementation =
-  | {
-      readonly kind: "receiver-alias";
-      readonly declaration: Node;
-    }
-  | {
-      readonly kind: "stored";
-      readonly declaration: Node;
-    }
-  | {
-      readonly kind: "accessor";
-      readonly getter: Node;
-      readonly setter?: Node;
-    };
+import type { RustProjectFieldImplementation } from "../../target-model/records/field-writes.js";
 
 export interface RustProjectFieldDispatchQueries {
   planFor(declaration: Node): RustProjectFieldDispatchPlan | undefined;

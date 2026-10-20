@@ -99,6 +99,7 @@ import { analyzeRustStructuralEmission } from "../objects/structural-emission.js
 import { analyzeRustStoredFields } from "../storage/stored-fields.js";
 import { analyzeRustProjectClassLayouts } from "../project-types/class-layouts.js";
 import { analyzeRustObjectLiteralEmission } from "../objects/object-literal-emission.js";
+import { analyzeRustProjectMemberErrors } from "../errors/member-emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";
@@ -551,6 +552,7 @@ export function analyzeRustTargetProgram(
   const classEmissionIssues = analyzeRustClassEmission({ program, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
+  analyzeRustProjectMemberErrors(program, context.nativeNodes, context.records.errorEmissionPlans);
   const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans);

@@ -116,6 +116,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly projectMethodArguments: import("./project-classes.js").RustProjectClassRecords["projectMethodArguments"];
   readonly projectThisReferences: import("./project-classes.js").RustProjectClassRecords["projectThisReferences"];
   readonly projectForwarder: import("./project-classes.js").RustProjectClassRecords["projectForwarder"];
+  readonly projectRootEmission: import("./project-classes.js").RustProjectClassRecords["projectRootEmission"];
   readonly structuralFieldStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralFieldStorage"];
   readonly structuralObjectStorage: import("./stored-fields.js").RustStoredFieldRecords["structuralObjectStorage"];
   readonly structuralMethodInvocation: import("./stored-fields.js").RustStoredFieldRecords["structuralMethodInvocation"];
@@ -177,6 +178,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly nativeProtocol: RustNativeProtocolReader;
   readonly genericCallableErrors: RustErrorEmissionRecords["genericCallableErrors"];
   readonly nativeErrorJoinName: RustErrorEmissionRecords["nativeErrorJoinName"];
+  readonly projectMemberError: RustErrorEmissionRecords["projectMemberError"];
   readonly nativeErrorRegion: RustRecordFamily<RustErrorRegionSelection>;
   readonly classInitialization: RustRecordFamily<readonly RustClassInitializationEntry[]>;
   readonly staticFieldStorage: RustRecordFamily<RustStaticFieldStorageSelection>;

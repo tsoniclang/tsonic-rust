@@ -8,15 +8,15 @@ import type { RustProjectTypeDefinition } from "../../target-model/types/project
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { isRustNeverCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { isRustNeverCarrier } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "../callables/results.js";
 import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/objects/project-dispatch-callables.js";
-import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
 import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
 import type { RustReachability } from "../reachability/model.js";
 import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
+import { analyzeRustProjectRootEmission } from "./root-emission.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
   const { ast } = program.source;
@@ -57,14 +57,10 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     };
     let error: TargetTypeRef | undefined;
     if (effects.invocation === "fallible") {
-      const contracts = program.sourceNavigation.memberContracts(member);
-      if (contracts.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact native error contracts.", member);
-      const declarations = contracts.contracts.length === 0 ? [member] : contracts.contracts;
-      const owners = declarations.map(declaration => selectRustPhysicalProgramErrorOwner(declaration, { ast, components: program.sourcePackageComponents }));
-      const first = owners[0];
-      if (first === undefined || owners.some(owner => owner === undefined || closedMetadataKey(owner) !== closedMetadataKey(first)))
+      const selected = program.records.projectMemberError.get(member);
+      if (selected === undefined)
         failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires one exact declaration-owned native error ABI.", member);
-      error = rustProgramErrorTargetType(first);
+      error = selected.carrier;
     }
     const signature = selectRustProjectCallableSignature({ typeParameters, result, effects, error,
       generator: program.records.generator.get(member) !== undefined, asynchronous: asynchronous?.kind, authoredAsync: ast.hasModifierKind(member, "async"),
@@ -145,6 +141,7 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
   }
   const seen = new Set<string>();
   const aliases = new Set<string>();
+  const roots: { readonly definition: RustProjectTypeDefinition; readonly carrier: TargetTypeRef }[] = [];
   const methodArguments = new WeakMap<Node, Set<string>>();
   const forwarders = new WeakMap<Node, Set<Node>>();
   const methodRequest = (member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef): void => {
@@ -229,6 +226,8 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
           program.objectRepresentations.receiverCaptures.storageDeclaration(field.declaration) === field.declaration && !ast.hasModifierKind(field.declaration, "abstract"))) });
     });
     producer.state(definition, carrier, Object.freeze(layers));
+    const native = program.records.nativeClass.get(definition.declaration);
+    if (native?.kind === "polymorphic" && !native.abstract) roots.push({ definition, carrier });
   }
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class" || !members.has(definition)) continue;
@@ -258,5 +257,6 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     }
     producer.implementations(definition, implementations);
   }
+  for (const root of roots) analyzeRustProjectRootEmission(program, root.definition, root.carrier, producer, methodRequest);
   return Object.freeze(issues);
 }

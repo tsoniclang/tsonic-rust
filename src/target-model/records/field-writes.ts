@@ -19,6 +19,10 @@ export interface RustProjectFieldDispatchPlan {
   readonly write?: RustProjectFieldDispatchRole;
 }
 
+export type RustProjectFieldImplementation =
+  | { readonly kind: "receiver-alias" | "stored"; readonly declaration: Node }
+  | { readonly kind: "accessor"; readonly getter: Node; readonly setter?: Node };
+
 export interface RustMethodWriteReceiver {
   readonly representation: RustObjectRepresentation;
   readonly check: RustFrozenWriteReceiver | undefined;

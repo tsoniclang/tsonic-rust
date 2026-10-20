@@ -2,6 +2,9 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../types/project-types.js";
 import type { RustProjectCallableAdapter } from "./project-callable-adapters.js";
+import type { RustProjectDowncastRoute } from "../types/project-types.js";
+import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
+import type { RustProjectFieldImplementation, RustProjectFieldDispatchPlan } from "./field-writes.js";
 
 export type RustProjectCallableAdapterIndex = ReadonlyMap<Node, ReadonlyMap<Node, ReadonlyMap<string, RustProjectCallableAdapter>>>;
 
@@ -41,6 +44,7 @@ export interface RustProjectCallableSignature {
 }
 
 export interface RustProjectClassRecords {
+  readonly projectRootEmission: { readonly get: (carrier: TargetTypeRef) => RustProjectRootEmission | undefined };
   readonly projectRelationship: { readonly get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => TargetTypeRef | undefined };
   readonly projectMethodArguments: { readonly get: (member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef) => readonly TargetTypeRef[] | undefined };
   readonly projectThisReferences: { readonly get: (method: Node) => ReadonlyMap<Node, readonly Node[]> | undefined };
@@ -57,4 +61,40 @@ export interface RustProjectClassRecords {
   readonly projectMethodPropertyPath: { readonly get: (definition: RustProjectTypeDefinition, member: Node) => readonly string[] | undefined };
   readonly projectMemberImplementation: { readonly get: (definition: RustProjectTypeDefinition, member: Node) => Node | undefined };
   readonly projectCallableSignature: { readonly get: (member: Node) => RustProjectCallableSignature | undefined };
+}
+
+export interface RustProjectRootFieldEmission {
+  readonly private: boolean;
+  readonly implementation: RustProjectFieldImplementation;
+  readonly dispatch: RustProjectFieldDispatchPlan;
+  readonly read: string;
+  readonly write: string | undefined;
+  readonly capture: string | undefined;
+  readonly contentMutation: boolean;
+  readonly readWrap: boolean;
+  readonly writeWrap: boolean;
+}
+
+export interface RustProjectRootMethodEmission {
+  readonly member: Node;
+  readonly variant: RustProjectMethodDispatchVariant;
+  readonly virtual: { readonly declaration: Node; readonly variant: RustProjectMethodDispatchVariant };
+  readonly exact: { readonly declaration: Node; readonly variant: RustProjectMethodDispatchVariant } | undefined;
+  readonly overridePath: readonly string[] | undefined;
+  readonly write: { readonly slot: string; readonly path: readonly string[]; readonly property: RustProjectMethodPropertyEmission } | undefined;
+}
+
+export interface RustProjectRootContractEmission {
+  readonly definition: RustProjectTypeDefinition;
+  readonly carrier: TargetTypeRef;
+  readonly projectionSlot: string | undefined;
+  readonly routes: readonly RustProjectDowncastRoute[];
+  readonly fields: ReadonlyMap<Node, RustProjectRootFieldEmission>;
+  readonly accessors: readonly { readonly declaration: Node; readonly role: "read" | "write"; readonly implementation: Node; readonly slot: string }[];
+  readonly methods: readonly RustProjectRootMethodEmission[];
+}
+
+export interface RustProjectRootEmission {
+  readonly projections: readonly TargetTypeRef[];
+  readonly contracts: readonly RustProjectRootContractEmission[];
 }

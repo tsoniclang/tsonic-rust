@@ -5,8 +5,10 @@ import type { RustErrorRegionSelection } from "../../../target-model/records/err
 import type { RustErrorEmissionRecords, RustGenericCallableErrorEmission } from "../../../target-model/records/error-emission.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { createRustRecordFamily } from "./family.js";
+import type { RustProjectMemberError } from "../../../target-model/records/error-emission.js";
 
 export interface RustErrorEmissionProducer {
+  member(declaration: Node, value: RustProjectMemberError): void;
   readonly records: RustErrorEmissionRecords;
   readonly regions: RustRecordFamily<RustErrorRegionSelection>;
   generic(definition: RustGenericCallablePhysicalDefinition, value: RustGenericCallableErrorEmission): void;
@@ -18,10 +20,13 @@ export function createRustErrorEmissionProducer(assertOpen: () => void): RustErr
   const generics = new WeakMap<RustGenericCallablePhysicalDefinition, RustGenericCallableErrorEmission>();
   const names = new Map<string, Map<number, string>>();
   const regions = createRustRecordFamily<RustErrorRegionSelection>({ id: "tsonic.rust.nativeErrorRegion", equals: (left, right) => left === right }, assertOpen);
+  const members = createRustRecordFamily<RustProjectMemberError>({ id: "tsonic.rust.projectMemberError", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ regions: regions.reader, records: Object.freeze({
+    projectMemberError: members.reader,
     genericCallableErrors: Object.freeze({ get: (definition: RustGenericCallablePhysicalDefinition) => generics.get(definition) }),
     nativeErrorJoinName: Object.freeze({ get: (fileName: string, arity: number) => names.get(fileName)?.get(arity) }),
   }),
+    member: (declaration: Node, value: RustProjectMemberError): void => members.writer.set(declaration, Object.freeze(value)),
     generic(definition: RustGenericCallablePhysicalDefinition, value: RustGenericCallableErrorEmission): void {
       assertOpen();
       if (generics.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A generic callable error emission admits exactly once.");

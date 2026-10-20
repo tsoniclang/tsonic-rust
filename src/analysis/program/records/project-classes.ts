@@ -5,8 +5,10 @@ import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../
 import type { RustProjectClassRecords, RustProjectCallableSignature, RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../../target-model/records/project-classes.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustProjectCallableAdapterIndex } from "../../../target-model/records/project-classes.js";
+import type { RustProjectRootEmission } from "../../../target-model/records/project-classes.js";
 
 export interface RustProjectClassProducer {
+  root(carrier: TargetTypeRef, value: RustProjectRootEmission): void;
   relationship(receiver: TargetTypeRef, owner: RustProjectTypeDefinition, value: TargetTypeRef): void;
   arguments(member: Node, arguments_: readonly TargetTypeRef[], receiver: TargetTypeRef, values: readonly TargetTypeRef[]): void;
   thisReferences(method: Node, values: ReadonlyMap<Node, readonly Node[]>): void;
@@ -40,7 +42,9 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
   const arguments_ = new WeakMap<Node, Map<string, readonly TargetTypeRef[]>>();
   const thisReferences = new WeakMap<Node, ReadonlyMap<Node, readonly Node[]>>();
   const forwarders = new WeakMap<Node, WeakMap<Node, "adapter" | "direct">>();
+  const roots = new Map<string, RustProjectRootEmission>();
   return Object.freeze({ records: Object.freeze({
+    projectRootEmission: Object.freeze({ get: (carrier: TargetTypeRef) => roots.get(closedMetadataKey(carrier)) }),
     projectRelationship: Object.freeze({ get: (receiver: TargetTypeRef, owner: RustProjectTypeDefinition) => relationships.get(owner)?.get(closedMetadataKey(receiver)) }),
     projectMethodArguments: Object.freeze({ get: (member: Node, selected: readonly TargetTypeRef[], receiver: TargetTypeRef) => arguments_.get(member)?.get(closedMetadataKey([selected, receiver])) }),
     projectThisReferences: Object.freeze({ get: (method: Node) => thisReferences.get(method) }),
@@ -58,6 +62,12 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
     projectMemberImplementation: Object.freeze({ get: (definition: RustProjectTypeDefinition, member: Node) => implementations.get(definition)?.get(member) }),
     projectCallableSignature: Object.freeze({ get: (member: Node) => callables.get(member) }),
   }),
+    root(carrier: TargetTypeRef, value: RustProjectRootEmission): void {
+      assertOpen();
+      const key = closedMetadataKey(carrier);
+      if (roots.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native class instance has one exact root implementation owner.");
+      roots.set(key, Object.freeze(value));
+    },
     relationship(receiver: TargetTypeRef, owner: RustProjectTypeDefinition, value: TargetTypeRef): void {
       assertOpen();
       let instances = relationships.get(owner);

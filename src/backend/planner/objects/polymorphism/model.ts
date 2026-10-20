@@ -100,7 +100,7 @@ export function projectOwnMethodProperties(
   return properties.map(property => renderProjectMethodProperty(property, context));
 }
 
-function renderProjectMethodProperty(property: RustProjectMethodPropertyEmission, context: RustPlanContext): ProjectMethodPropertyPlan {
+export function renderProjectMethodProperty(property: RustProjectMethodPropertyEmission, context: RustPlanContext): ProjectMethodPropertyPlan {
   const bindings = context.input.program.records.classImplementationContext.get(property.owner.declaration, property.ownerCarrier);
   if (bindings === undefined) failRustPlannerInvariant("An admitted writable method requires its exact native generic correspondence.", property.declaration);
   const shape = projectCallableShape(property.declaration, { ...context,
