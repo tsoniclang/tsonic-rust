@@ -3,9 +3,9 @@ import { rustFixedArrayTargetType, rustNamedTargetType, rustNeverTargetType, rus
 import { canonicalCompilerTypePathKey, importedSourceType, isRustOptionPath, isRustStringPath, requireCurrentType, requireSourceGenericName, rustCompilerTypeText, standardSourceGenericArguments, targetGenericArgumentsForApplication, targetGenericDefaultsForApplication } from "./utilities.js";
 import { compilerAssociatedSourceExportName } from "../model/rustdoc-items.js";
 import { compilerModuleSpecifier, compilerTargetTypeId, providerFunctionPointerAbi, recordCarrierPath, rustPath } from "./operations.js";
-import { rustConstPointerExport, rustMutPointerExport } from "../../../source/extension/source-extension.js";
-import { rustTypesModule } from "../../../source/profiles/source-modules.js";
-import { rustSourceTypeExportIds } from "../../../source/extension/identity.js";
+import { rustConstPointerExport, rustMutPointerExport } from "../../../target-model/identities/source.js";
+import { rustTypesModule } from "../../../target-model/identities/source.js";
+import { rustSourceTypeExportIds } from "../../../target-model/identities/source.js";
 import { sourcePrimitiveByRustName } from "./model.js";
 import type { ProjectionContext } from "./model.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";

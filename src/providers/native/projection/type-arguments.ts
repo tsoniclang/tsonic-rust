@@ -1,8 +1,8 @@
 import { importedSourceType, requireSourceGenericName, withProjectionGenericParameters } from "./utilities.js";
 import { compilerModuleSpecifier } from "./operations.js";
 import { sourceTypeFor, targetTypeFor } from "./types.js";
-import { rustTypesModule } from "../../../source/profiles/source-modules.js";
-import { rustSourceTypeExportIds } from "../../../source/extension/identity.js";
+import { rustTypesModule } from "../../../target-model/identities/source.js";
+import { rustSourceTypeExportIds } from "../../../target-model/identities/source.js";
 import type { ProviderTypeExpression, ProviderTypeParameterDeclaration } from "@tsonic/tsts";
 import type { RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerLifetimeBinder } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";

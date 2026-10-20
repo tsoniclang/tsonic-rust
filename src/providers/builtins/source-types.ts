@@ -1,5 +1,5 @@
 import { tsonicCoreNativePointerProviderNames, tsonicCoreProviderVersion, tsonicCoreTypesModule, tsonicCoreVirtualModulesProviderId } from "@tsonic/source-core/facts";
-import { rustConstPointerExport, rustMutPointerExport, rustSourceProviderVersion, rustSourceTypeExportIds, rustSourceVirtualModulesProviderId, rustTypesModule } from "../../source/extension/identity.js";
+import { rustConstPointerExport, rustMutPointerExport, rustSourceProviderVersion, rustSourceTypeExportIds, rustSourceVirtualModulesProviderId, rustTypesModule } from "../../target-model/identities/source.js";
 import type { RustProviderTypeRow } from "../../target-model/identities/provider-relations.js";
 import type { RustProviderSemantics } from "../../target-model/metadata/provider-metadata.js";
 import { rustNativeScalarTargetId } from "../../target-model/types/index.js";

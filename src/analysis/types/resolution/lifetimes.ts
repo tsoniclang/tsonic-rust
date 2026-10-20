@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
-import { rustSourceProviderVersion, rustSourceVirtualModulesProviderId, rustTypesModule } from "../../../source/extension/identity.js";
+import { rustSourceProviderVersion, rustSourceVirtualModulesProviderId, rustTypesModule } from "../../../target-model/identities/source.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
 import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";

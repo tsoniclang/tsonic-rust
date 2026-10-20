@@ -1,5 +1,5 @@
 import { canonicalPathKey, importedSourceType, withDefaultGenericBindings, withProjectionGenericParameters } from "./utilities.js";
-import { rustSourceTypeExportIds, rustTypesModule } from "../../../source/extension/identity.js";
+import { rustSourceTypeExportIds, rustTypesModule } from "../../../target-model/identities/source.js";
 import { compilerExportId, compilerTargetTypeId, materializeImports, operationRow, projectCompilerTraitContract, recordCarrierPath, recordCarrierTraits, typeRequirements } from "./operations.js";
 import { projectFunction, selectUnambiguousMembers } from "./functions.js";
 import { sourceTypeFor, targetTraitFor, targetTypeFor } from "./types.js";

@@ -2,11 +2,7 @@ import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveProviderTypeIdentity } from "../../policy/identities/provider-types.js";
-import {
-  rustLangModule,
-  rustSourceProviderVersion,
-  rustSourceVirtualModulesProviderId,
-} from "../../source/extension/identity.js";
+import { rustLangModule, rustSourceProviderVersion, rustSourceVirtualModulesProviderId } from "../../target-model/identities/source.js";
 
 export interface RustLanguageCall {
   readonly selection: ResolvedSourceCallInfo;

@@ -3,7 +3,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { readRustLanguageCall, type RustLanguageCall } from "./native-language-call.js";
-import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../source/extension/identity.js";
+import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../target-model/identities/source.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";

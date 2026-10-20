@@ -14,7 +14,7 @@ import { resolveExpressionCarrier } from "./carriers.js";
 import { recordBindingWrite } from "../ownership/source-writes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustEquivalentAssignment } from "../../policy/operations/operators/rules.js";
-import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../source/extension/identity.js";
+import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../target-model/identities/source.js";
 import { readRustLanguageCall } from "./native-language-call.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
