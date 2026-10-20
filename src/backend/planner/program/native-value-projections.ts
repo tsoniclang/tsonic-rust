@@ -4,6 +4,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustStructuralViewIntoRoot } from "../objects/project-structural-roots.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planCheckedNativeValueProjection } from "../objects/checked-project-projections.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustNativeValueProjections(
   delegatedVariants: readonly string[],
@@ -23,7 +24,7 @@ export function planRustNativeValueProjections(
         const value: RustExpr = { kind: "path", path: "value" };
         const root = shared ? rustStructuralViewIntoRoot({ kind: "method-call", receiver: value,
           method: "clone", args: [] }, variant.representation) : undefined;
-        if (shared && root === undefined) continue;
+        if (shared && root === undefined) failRustPlannerInvariant("An admitted shared error payload requires its exact native identity root.");
         arms.push({ pattern: { kind: "tuple-variant", path: `Self::${variant.name}`,
           elements: [{ kind: "binding", name: "value" }] },
           expression: shared ? rustValueBlock([{ name: "selected", mutable: true, value: { kind: "none" } }],
