@@ -11,8 +11,7 @@ export function selectRustInlineModuleCallableAliases(
 ): { readonly declarations: readonly Node[]; readonly references: readonly Node[] } | undefined {
   const { ast, source, records } = walk.context;
   const flow = source.navigation.expressionValueFlow(expression);
-  if (flow.aliasDeclarations.length === 0 || flow.aliasDeclarations.length > 1_024 ||
-    flow.uses.length > 131_072 || flow.memberWritten || flow.receiverUsed || flow.identityCompared ||
+  if (flow.aliasDeclarations.length === 0 || flow.memberWritten || flow.receiverUsed || flow.identityCompared ||
     flow.captured || flow.returned || flow.yielded || flow.storedOutsideBinding || flow.exported || flow.hasUnclassifiedUse) return undefined;
   const aliases = new Set(flow.aliasDeclarations);
   for (const declaration of aliases) {
