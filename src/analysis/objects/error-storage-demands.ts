@@ -32,7 +32,7 @@ export function createRustErrorStorageDemandQuery(
       }
       for (const declaration of VariableDeclarationList_Declarations(ast, VariableStatement_DeclarationList(ast, statement)) ?? []) {
         if (declaration === undefined) continue;
-        const root = resolveRustSourceErrorDeclaration(declaration, ast, profiles);
+        const root = resolveRustSourceErrorDeclaration(declaration, profiles);
         if (root === undefined) continue;
         for (const field of root.fields) fields.add(field.declaration);
         for (const constructor of root.constructorDeclarations) constructors.add(constructor);

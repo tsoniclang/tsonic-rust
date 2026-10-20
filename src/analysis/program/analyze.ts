@@ -12,7 +12,6 @@ import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 
 import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
 import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
-import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -80,15 +79,10 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     appendMalformedSourceAstDiagnostic(context, "Checked source program contains an undefined or non-data source-file slot.");
     return;
   }
-  const allSourceFiles = rawSourceFiles as readonly SourceFile[];
   const providerSemantics = context.providerSemantics;
   const providerRows = providerSemantics.operations;
   const jsEnabled = context.jsEnabled;
-  const sourceProfiles = createRustSourceProfileRegistry(
-    allSourceFiles,
-    ast,
-    jsEnabled,
-  );
+  const sourceProfiles = context.sourceProfiles;
   const sourceTypes = createRustSourceTypeRegistry(context.typeFamilies, context.typeDefinitions);
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
@@ -252,7 +246,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       );
     },
     resolveExternalHeritage(edge) {
-      return resolveRustExternalProjectBase(edge, ast, sourceProfiles);
+      return resolveRustExternalProjectBase(edge, sourceProfiles);
     },
   });
   finalizedProjectTypes = projectTypes;

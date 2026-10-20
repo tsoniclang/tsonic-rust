@@ -54,6 +54,7 @@ import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { selectRustSourcePackageComponentIdentities, type SelectRustSourcePackageComponentIdentitiesResult } from "../source-modules/component-semantics.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
+  readonly sourceProfiles: import("../../policy/types/model/source-profile.js").RustSourceProfileRegistry;
   readonly sourceStorage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
   readonly isNativeNode: (node: Node) => boolean;
@@ -125,7 +126,7 @@ export function createRustAnalysisContext(
     navigation: input.source.navigation,
     safetyApplications,
   });
-  const sourceProfiles = createRustSourceProfileRegistry(input.source.sourceFiles, ast, jsEnabled);
+  const sourceProfiles = createRustSourceProfileRegistry(input.source, jsEnabled);
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
@@ -171,6 +172,7 @@ export function createRustAnalysisContext(
   return resolvedTargetStage<RustAnalysisContext>(Object.freeze({
     callableRepresentation: "storage" as const,
     literalValues,
+    sourceProfiles,
     sourceStorage,
     nativeNodes,
     isNativeNode,

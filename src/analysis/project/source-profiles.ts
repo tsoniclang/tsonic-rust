@@ -1,13 +1,15 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import { readRustSourceProfileErrorContract } from "../../source/profiles/error-declarations.js";
 import { isTsonicSourceProfileDeclarationPath } from "@tsonic/target-api/provider";
 import { rustJsSourceProfileOwnerId, rustSourceProfileOwnerId } from "../../source/profiles/declarations.js";
 import type { RustSourceProfileKind, RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 
 export function createRustSourceProfileRegistry(
-  sourceFiles: readonly SourceFile[],
-  ast: AstReader,
+  source: TargetSourceProgram,
   jsEnabled: boolean,
 ): RustSourceProfileRegistry {
+  const { ast, sourceFiles } = source;
   const sourceFileByProfile = new Map<RustSourceProfileKind, SourceFile>();
   const ambiguousProfiles = new Set<RustSourceProfileKind>();
   for (const sourceFile of sourceFiles) {
@@ -24,7 +26,12 @@ export function createRustSourceProfileRegistry(
     sourceFileByProfile.set(profile, sourceFile);
   }
   const profiles = new WeakMap([...sourceFileByProfile].map(([profile, file]) => [file, profile] as const));
+  const errorContracts = new Map([...sourceFileByProfile.values()].flatMap(file => {
+    const contract = readRustSourceProfileErrorContract(source, file);
+    return contract === undefined ? [] : [[contract.value, contract] as const];
+  }));
   return Object.freeze({
+    errorForDeclaration: (declaration: Node) => errorContracts.get(declaration),
     profileForNode(node: Node, nodeAst: AstReader) {
       const sourceFile = nodeAst.getSourceFile(node);
       if (sourceFile === undefined) {
