@@ -3,7 +3,7 @@ import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustBinaryHookPlan } from "../../../target-model/records/binary-execution.js";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { applyRustDispatchContextBindings, projectRustDispatchContext, rustDispatchContextRootName } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextBinding } from "../project/dispatch-contexts.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";

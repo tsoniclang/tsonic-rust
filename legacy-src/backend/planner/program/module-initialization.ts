@@ -68,7 +68,7 @@ export function planRustCrateInitializer(
   if (selection.modules.length === 0) return undefined;
   const selected = selection.error;
   const owner = selected.kind === "infallible" || rendering.sourcePackageErrors === undefined ? undefined
-    : resolveRustPhysicalProgramErrorBoundary(rendering.sourcePackageErrors, rendering.sourcePackageComponentId, selected.owner);
+    : resolveRustPhysicalProgramErrorBoundary(rendering.input.program.records, rendering.sourcePackageComponentId, selected.owner);
   if (selected.kind !== "infallible" && owner === undefined) return undefined;
   const names = new Set(occupiedNames);
   names.add(functionName);

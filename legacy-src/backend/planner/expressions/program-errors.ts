@@ -5,7 +5,8 @@ import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
-import { resolveRustProgramErrorRoute, type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
+import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustUnionFold } from "./union-folds.js";
 import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier,
@@ -73,7 +74,7 @@ export function planRustProgramErrorConstruction(
     sourceError && !context.input.program.projectTypes.sourceErrorDefinitions.includes(definition) ||
     context.input.program.projectTypes.programErrorVariant(definition) !== variant ||
     !rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), conversion.source)
-    ? undefined : resolveRustProgramErrorRoute(context.sourcePackageErrors, boundary.componentId, definition, variant);
+    ? undefined : resolveRustProgramErrorRoute(context.input.program.records, boundary.componentId, definition, variant);
   if (route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.throw-project-error-route", "Project error construction has no exact route through the selected source-package error domain."));

@@ -24,7 +24,7 @@ export function planRustJsRejectionRegion(
   if (rejection.local === undefined && rejection.sources.length === 0) return Object.freeze({ boundary: undefined });
   registerAliasFromPath(context, "js_abi::JsValue");
   const owner = selected.localOwner === undefined ? undefined : resolveRustPhysicalProgramErrorBoundary(
-    context.sourcePackageErrors, context.sourcePackageComponentId, selected.localOwner);
+    context.input.program.records, context.sourcePackageComponentId, selected.localOwner);
   if (selected.localOwner !== undefined && owner === undefined) return undefined;
   const local = owner === undefined ? undefined : Object.freeze({ owner,
     source: Object.freeze({ identity: `package:${owner.errorTypeIdentity}`, errorType: rustErrorType(owner) }) });
@@ -47,7 +47,7 @@ export function planRustJsRejectionRegion(
       case "uninhabited": return { kind: "match", expression: error, arms: [] };
       case "retained-error": return { kind: "call", path: "js_abi::JsValue::from_error", args: [error] };
       case "program-error": {
-        const boundary = resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors,
+        const boundary = resolveRustPhysicalProgramErrorBoundary(context.input.program.records,
           context.sourcePackageComponentId, conversion.owner);
         return boundary === undefined ? undefined
           : planRustProgramErrorClosedValue(error, rustJsValueTargetType(), declaration, context, boundary);

@@ -42,6 +42,7 @@ import {
 } from "./source-package-facades.js";
 import { analyzeRustSourcePackageFacadeEmission } from "../source-modules/package-facades.js";
 import { analyzeRustSourcePackageComponentEmission } from "../source-modules/package-components.js";
+import { analyzeRustSourcePackageErrors, analyzeRustSourcePackageErrorBoundaries } from "../errors/source-packages.js";
 import {
   validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
@@ -548,6 +549,9 @@ export function analyzeRustTargetProgram(
     evidence: ["target.capability=rust.backend.source-package-components"],
   }]);
   context.records.sourcePackageEmission.components(componentEmission.components);
+  const errorEmission = analyzeRustSourcePackageErrors(program, componentEmission.components);
+  if (errorEmission.plan === undefined) return rejectedTargetStage(errorEmission.diagnostics);
+  analyzeRustSourcePackageErrorBoundaries(program, errorEmission.plan, context.records.sourcePackageEmission);
   analyzeRustProjectEmission({ program, nodes: context.nativeNodes, producer: context.records.projectEmissionPlans });
   analyzeRustOptionalStorageEmission(program, context.nativeNodes, context.records.projectEmissionPlans);
   const structuralEmissionIssues = analyzeRustStructuralEmission(program, context.records.structuralEmissionPlans);

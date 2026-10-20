@@ -81,7 +81,7 @@ export function planRustSelectedErrorRegion(
   render: (carrier: TargetTypeRef) => RustType | undefined = carrier => rustTypeFromCarrierInContext(carrier, context),
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
   const owner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
-    : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, selected.localOwner);
+    : resolveRustPhysicalProgramErrorBoundary(context.input.program.records, context.sourcePackageComponentId, selected.localOwner);
   if (selected.localOwner !== undefined && owner === undefined) return undefined;
   if (owner !== undefined) registerAliasFromPath(context, owner.errorTypePath);
   if (selected.sources.length === 0) return Object.freeze({ boundary: owner === undefined

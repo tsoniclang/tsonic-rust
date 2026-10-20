@@ -79,7 +79,7 @@ import { completeRustAuthoredStructScopes } from "../../target-ast/normalization
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;

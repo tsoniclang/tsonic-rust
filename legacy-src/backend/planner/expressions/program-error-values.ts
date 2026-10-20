@@ -10,8 +10,8 @@ import { diagnosticInput, registerAliasFromPath,
   type RustPlanContext } from "../program/plan-context.js";
 import { planRustBoundaryErrorVariants } from "../program/error-variants.js";
 import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
-import { resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
+import { resolveRustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 
 export function planRustProgramErrorClosedValue(
@@ -80,7 +80,7 @@ export function planRustProgramErrorClosedValue(
         if (!add(variant.name, payload => {
           if (variant.kind === "retained") return error(payload);
           if (variant.kind === "project" || variant.kind === "closed") return convert(variant, payload);
-          const external = resolveRustSourcePackageErrorBoundary(context.sourcePackageErrors,
+          const external = resolveRustSourcePackageErrorBoundary(context.input.program.records,
             domain.componentId, variant.external.componentId);
           return external === undefined ? reject(
             "A sealed external thrown payload has no exact source-package error boundary.")

@@ -65,6 +65,10 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
   readonly sourcePackageComponents: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageComponents"];
+  readonly sourcePackageErrors: import("./source-package-errors.js").RustSourcePackageErrorRecords["sourcePackageErrors"];
+  readonly sourcePackageErrorBoundary: import("./source-package-errors.js").RustSourcePackageErrorRecords["sourcePackageErrorBoundary"];
+  readonly physicalProgramErrorBoundary: import("./source-package-errors.js").RustSourcePackageErrorRecords["physicalProgramErrorBoundary"];
+  readonly programErrorRoute: import("./source-package-errors.js").RustSourcePackageErrorRecords["programErrorRoute"];
   readonly nativeMemberVisibility: import("./native-member-names.js").RustNativeMemberVisibilityRecords["nativeMemberVisibility"];
   readonly classEnvironment: import("./class-environments.js").RustClassEnvironmentRecords["classEnvironment"];
   readonly classValueForwarder: import("./class-value-callables.js").RustClassValueForwarderRecords["classValueForwarder"];

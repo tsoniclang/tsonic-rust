@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustErrorDomain } from "../operations/error-boundary.js";
+import type { RustSourcePackageErrorRecords } from "./source-package-errors.js";
 export interface RustSourcePackageComponentPlan {
   readonly componentId: string;
   readonly sourceFileNames: ReadonlySet<string>;
@@ -53,7 +54,7 @@ export interface RustSourcePackageFacadePlan {
   >;
 }
 
-export interface RustSourcePackageEmissionRecords {
+export interface RustSourcePackageEmissionRecords extends RustSourcePackageErrorRecords {
   readonly sourcePackageComponents: { readonly get: () => readonly RustSourcePackageComponentPlan[] | undefined };
   readonly sourcePackageFacades: { readonly get: () => RustSourcePackageFacadePlan | undefined };
 }

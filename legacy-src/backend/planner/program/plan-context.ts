@@ -9,11 +9,8 @@ import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import type { RustFrameOwner } from "./frame-owners.js";
 import type { RustBlockPlanner } from "../statements/model.js";
-import {
-  resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorPlan,
-} from "./source-package-errors.js";
+import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
+import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 export { rustErrorType } from "./fallible-boundaries.js";
@@ -151,7 +148,8 @@ export interface RustPlanContext {
 export function rustErrorBoundaryForDeclaration(
   declaration: Node,
   context: Pick<RustPlanContext, "sourcePackageErrors" | "sourcePackageComponentId"> & {
-    readonly input: { readonly program: { readonly source: { readonly ast: import("@tsonic/tsts").AstReader } } };
+    readonly input: { readonly program: { readonly source: { readonly ast: import("@tsonic/tsts").AstReader };
+      readonly records: import("../../../target-model/records/program.js").RustProgramRecords } };
   },
 ): RustSourcePackageErrorBoundary | undefined {
   const sourceFile = context.input.program.source.ast.getSourceFile(declaration);
@@ -164,7 +162,7 @@ export function rustErrorBoundaryForDeclaration(
   return ownerComponentId === undefined
     ? undefined
     : resolveRustSourcePackageErrorBoundary(
-        context.sourcePackageErrors,
+        context.input.program.records,
         context.sourcePackageComponentId,
         ownerComponentId,
       );
@@ -203,10 +201,12 @@ export function rustErrorBoundaryForProjectMember(
 }
 
 export function rustCurrentErrorBoundary(
-  context: Pick<RustPlanContext, "sourcePackageErrors" | "sourcePackageComponentId">,
+  context: Pick<RustPlanContext, "sourcePackageErrors" | "sourcePackageComponentId"> & {
+    readonly input: { readonly program: { readonly records: import("../../../target-model/records/program.js").RustProgramRecords } };
+  },
 ): RustSourcePackageErrorBoundary | undefined {
   return resolveRustSourcePackageErrorBoundary(
-    context.sourcePackageErrors,
+    context.input.program.records,
     context.sourcePackageComponentId,
     context.sourcePackageComponentId,
   );

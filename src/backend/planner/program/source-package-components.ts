@@ -1,6 +1,6 @@
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 

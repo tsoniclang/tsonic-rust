@@ -1,47 +1,14 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
-import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
-import type { RustPlanningContext } from "../context.js";
-import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
-import type {
-  RustErrorDomain,
-} from "../../../target-model/operations/error-boundary.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
-import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
-import { isRustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
-
-export interface RustExternalSourcePackageError {
-  readonly componentId: string;
-  readonly errorOwnerComponentId: string;
-  readonly crateName: string;
-  readonly typePath: string;
-  readonly variant: string;
-}
-
-export interface RustSourcePackageErrorDomainPlan {
-  readonly componentId: string;
-  readonly errorDomain: RustErrorDomain;
-  readonly errorTypeIdentity: string;
-  readonly errorOwnerComponentId: string | undefined;
-  readonly forwardModulePath?: string;
-  readonly definitions: readonly RustProjectTypeDefinition[];
-  readonly externalErrors: readonly RustExternalSourcePackageError[];
-}
-
-export interface RustSourcePackageErrorPlan {
-  readonly componentIdByFileName: ReadonlyMap<string, string>;
-  readonly componentIdByDefinition: ReadonlyMap<RustProjectTypeDefinition, string>;
-  readonly domainsByComponentId: ReadonlyMap<string, RustSourcePackageErrorDomainPlan>;
-  readonly dependencyErrorsByComponentId: ReadonlyMap<string, readonly RustExternalSourcePackageError[]>;
-}
-
-export interface RustSourcePackageErrorBoundary {
-  readonly componentId: string;
-  readonly errorDomain: RustErrorDomain;
-  readonly errorTypePath: string;
-  readonly errorTypeIdentity: string;
-}
-
+import type { RustTargetProgram } from "../program/model.js";
+import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
+import type { RustSourcePackageComponentPlan } from "../../target-model/records/source-packages.js";
+import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan, RustExternalSourcePackageError, RustProgramErrorRoute } from "../../target-model/records/source-package-errors.js";
+import type { RustErrorDomain } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
+import type { RustProgramErrorOwner } from "../../target-model/types/model.js";
+import { isRustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
+import { rustPascalCaseIdentifier } from "../../target-model/names/identifiers.js";
+import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
 export function rustSourcePackageErrorTypeIdentity(
   componentId: string,
   errorDomain: RustErrorDomain,
@@ -51,20 +18,8 @@ export function rustSourcePackageErrorTypeIdentity(
     : `tsonic-source-package:${componentId}:TsonicError`;
 }
 
-export type RustProgramErrorRoute =
-  | {
-      readonly kind: "local";
-      readonly variant: string;
-    }
-  | {
-      readonly kind: "external";
-      readonly consumerVariant: string;
-      readonly ownerTypePath: string;
-      readonly ownerVariant: string;
-    };
-
-export function planRustSourcePackageErrors(
-  input: RustPlanningContext,
+export function analyzeRustSourcePackageErrors(
+  program: Pick<RustTargetProgram, "projectTypes" | "sourcePackageComponents" | "errorStorageDemands" | "source">,
   components: readonly RustSourcePackageComponentPlan[],
 ): {
   readonly plan?: RustSourcePackageErrorPlan;
@@ -76,7 +31,7 @@ export function planRustSourcePackageErrors(
       [fileName, component.componentId] as const)));
   const componentIdByDefinition = new Map<RustProjectTypeDefinition, string>();
   const definitionsByComponentId = new Map<string, RustProjectTypeDefinition[]>();
-  for (const definition of input.program.projectTypes.programErrorDefinitions) {
+  for (const definition of program.projectTypes.programErrorDefinitions) {
     const componentId = componentIdByFileName.get(definition.fileName);
     if (componentId === undefined) {
       diagnostics.push(errorPlanDiagnostic(
@@ -86,7 +41,7 @@ export function planRustSourcePackageErrors(
       ));
       continue;
     }
-    const variant = input.program.projectTypes.programErrorVariant(definition);
+    const variant = program.projectTypes.programErrorVariant(definition);
     if (variant === undefined) {
       diagnostics.push(errorPlanDiagnostic(
         "RUST_PROGRAM_ERROR_VARIANT_MISSING",
@@ -119,7 +74,7 @@ export function planRustSourcePackageErrors(
       "ClosedNative",
       "ClosedJs",
       "Suppressed",
-      ...definitions.map((definition) => input.program.projectTypes.programErrorVariant(definition)!),
+      ...definitions.map((definition) => program.projectTypes.programErrorVariant(definition)!),
     ]);
     const externalErrors: RustExternalSourcePackageError[] = [];
     const dependencyErrors: RustExternalSourcePackageError[] = [];
@@ -167,18 +122,18 @@ export function planRustSourcePackageErrors(
     const owner = component.errorOwnerComponentId;
     const forwarding = owner === undefined || owner === component.componentId
       ? undefined : externalByOwner.get(owner);
-    const demand = input.program.sourcePackageComponents.forComponent(component.componentId)?.closedErrorDemand;
+    const demand = program.sourcePackageComponents.forComponent(component.componentId)?.closedErrorDemand;
     const validDemand = demand !== undefined && typeof demand.sourceView === "boolean" && typeof demand.retained === "boolean";
     const validDomain = validDemand && (component.errorDomain === "runtime"
       ? owner === undefined && definitions.length === 0 && externalErrors.length === 0 && !demand.sourceView && !demand.retained
       : owner !== undefined && (owner === component.componentId
         ? definitions.length > 0 || externalErrors.length > 1 ||
           demand.retained || demand.sourceView ||
-          input.program.errorStorageDemands.retainedBoundaries.some(boundary =>
-          component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(boundary)!))) ||
-          input.program.errorStorageDemands.nativeConstructors.some(constructor =>
-          input.program.errorStorageDemands.storageFor(constructor).kind === "writable" &&
-          component.sourceFileNames.has(input.program.source.ast.getFileName(input.program.source.ast.getSourceFile(constructor.node)!)))
+          program.errorStorageDemands.retainedBoundaries.some(boundary =>
+          component.sourceFileNames.has(program.source.ast.getFileName(program.source.ast.getSourceFile(boundary)!))) ||
+          program.errorStorageDemands.nativeConstructors.some(constructor =>
+          program.errorStorageDemands.storageFor(constructor).kind === "writable" &&
+          component.sourceFileNames.has(program.source.ast.getFileName(program.source.ast.getSourceFile(constructor.node)!)))
         : forwarding !== undefined && definitions.length === 0 && externalErrors.length === 1 && !demand.sourceView && !demand.retained));
     if (!validDomain) {
       diagnostics.push(errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT",
@@ -212,7 +167,7 @@ export function planRustSourcePackageErrors(
   };
 }
 
-export function resolveRustSourcePackageErrorBoundary(
+function selectRustSourcePackageErrorBoundary(
   plan: RustSourcePackageErrorPlan,
   consumerComponentId: string,
   ownerComponentId: string,
@@ -249,7 +204,7 @@ export function resolveRustSourcePackageErrorBoundary(
       });
 }
 
-export function resolveRustPhysicalProgramErrorBoundary(
+function selectRustPhysicalProgramErrorBoundary(
   plan: RustSourcePackageErrorPlan,
   consumerComponentId: string,
   owner: RustProgramErrorOwner,
@@ -258,7 +213,7 @@ export function resolveRustPhysicalProgramErrorBoundary(
   const consumer = plan.domainsByComponentId.get(consumerComponentId);
   if (consumer === undefined) return undefined;
   if (owner.domain === "runtime" && consumer.errorDomain === "runtime")
-    return resolveRustSourcePackageErrorBoundary(plan, consumerComponentId, consumerComponentId);
+    return selectRustSourcePackageErrorBoundary(plan, consumerComponentId, consumerComponentId);
   if (owner.domain === "runtime") return Object.freeze({ componentId: consumerComponentId,
     errorDomain: "runtime", errorTypePath: "tsonic_rust_runtime::TsonicError",
     errorTypeIdentity: rustRuntimeErrorTypeIdentity });
@@ -267,11 +222,11 @@ export function resolveRustPhysicalProgramErrorBoundary(
   const visible = consumer.errorOwnerComponentId === owner.componentId ? consumerComponentId
     : plan.dependencyErrorsByComponentId.get(consumerComponentId)
       ?.find(dependency => dependency.errorOwnerComponentId === owner.componentId)?.componentId;
-  const boundary = visible === undefined ? undefined : resolveRustSourcePackageErrorBoundary(plan, consumerComponentId, visible);
+  const boundary = visible === undefined ? undefined : selectRustSourcePackageErrorBoundary(plan, consumerComponentId, visible);
   return boundary?.errorTypeIdentity === actualOwner.errorTypeIdentity ? boundary : undefined;
 }
 
-export function resolveRustProgramErrorRoute(
+function selectRustProgramErrorRoute(
   plan: RustSourcePackageErrorPlan,
   componentId: string,
   definition: RustProjectTypeDefinition,
@@ -321,4 +276,28 @@ function errorPlanDiagnostic(
     ...(definition === undefined ? {} : { sourceNode: definition.declaration }),
     evidence: ["target.capability=rust.error.source-package-conversion"],
   };
+}
+
+export function analyzeRustSourcePackageErrorBoundaries(
+  program: Pick<RustTargetProgram, "projectTypes">,
+  plan: RustSourcePackageErrorPlan,
+  producer: RustSourcePackageEmissionProducer,
+): void {
+  producer.errors(plan);
+  for (const consumer of plan.domainsByComponentId.keys()) {
+    for (const owner of plan.domainsByComponentId.keys()) {
+      const boundary = selectRustSourcePackageErrorBoundary(plan, consumer, owner);
+      if (boundary !== undefined) producer.boundary(consumer, owner, boundary);
+      const physical = selectRustPhysicalProgramErrorBoundary(plan, consumer, { kind: "physical", domain: "project", componentId: owner });
+      if (physical !== undefined) producer.physicalBoundary(consumer, owner, physical);
+    }
+    const runtime = selectRustPhysicalProgramErrorBoundary(plan, consumer, { kind: "physical", domain: "runtime" });
+    if (runtime !== undefined) producer.runtimeBoundary(consumer, runtime);
+    for (const definition of program.projectTypes.programErrorDefinitions) {
+      const variant = program.projectTypes.programErrorVariant(definition);
+      if (variant === undefined) continue;
+      const route = selectRustProgramErrorRoute(plan, consumer, definition, variant);
+      if (route !== undefined) producer.route(consumer, definition, variant, route);
+    }
+  }
 }

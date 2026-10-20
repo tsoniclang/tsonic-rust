@@ -22,7 +22,7 @@ import type {
   RustSourcePackageFacadePlan,
 } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import { rustRuntimeAliasImports, rustRuntimeAliasUseItems } from "./plan-context.js";

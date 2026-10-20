@@ -1,6 +1,6 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { registerAliasFromPath, rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
-import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "../program/source-package-errors.js";
 import { collectAliasesFromRustType } from "./type-observations.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
@@ -91,7 +91,7 @@ export function rustTypeFromCarrierInContext(
     programErrorType: owner => {
       const boundary = context.sourcePackageErrors === undefined ? undefined : owner.kind === "logical"
         ? rustCurrentErrorBoundary(context)
-        : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, owner);
+        : resolveRustPhysicalProgramErrorBoundary(context.input.program.records, context.sourcePackageComponentId, owner);
       return boundary === undefined ? undefined : rustErrorType(boundary);
     },
     producerErrorType: carrier => {

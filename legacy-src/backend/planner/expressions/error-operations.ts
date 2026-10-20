@@ -15,10 +15,8 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
-import {
-  resolveRustProgramErrorRoute,
-  type RustProgramErrorRoute,
-} from "../program/source-package-errors.js";
+import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
+import type { RustProgramErrorRoute } from "../../../target-model/records/source-package-errors.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "../objects/checked-project-projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
@@ -274,7 +272,7 @@ function resolveProgramErrorFactRoute(
     return undefined;
   }
   return resolveRustProgramErrorRoute(
-    context.sourcePackageErrors,
+    context.input.program.records,
     context.sourcePackageComponentId,
     definition,
     variant,
