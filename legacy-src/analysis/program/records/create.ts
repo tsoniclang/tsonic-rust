@@ -44,6 +44,7 @@ import { createRustProviderEvaluationProducer } from "./provider-evaluation.js";
 import { createRustProviderInputProducer } from "./provider-inputs.js";
 import { createRustLambdaEmissionProducer } from "./lambda-emission.js";
 import { createRustIntegerTruncationProducer } from "./integer-truncation.js";
+import { createRustProviderFormProducer } from "./provider-forms.js";
 import { createRustConversionEmissionProducer } from "./conversion-emission.js";
 import { createRustErrorTransportEmissionProducer } from "./error-transport.js";
 import { createRustDispatchContextEmissionProducer } from "./dispatch-contexts.js";
@@ -298,6 +299,7 @@ export function createRustProgramRecordBuilder(
   const providerInputPlans = createRustProviderInputProducer(assertOpen);
   const lambdaEmissionPlans = createRustLambdaEmissionProducer(assertOpen);
   const integerTruncationPlans = createRustIntegerTruncationProducer(assertOpen);
+  const providerFormPlans = createRustProviderFormProducer(assertOpen);
   const conversionEmissionPlans = createRustConversionEmissionProducer(assertOpen);
   const errorTransportEmissionPlans = createRustErrorTransportEmissionProducer(assertOpen);
   const dispatchContextEmissionPlans = createRustDispatchContextEmissionProducer(assertOpen);
@@ -392,6 +394,7 @@ export function createRustProgramRecordBuilder(
     ...providerInputPlans.records,
     ...lambdaEmissionPlans.records,
     ...integerTruncationPlans.records,
+    ...providerFormPlans.records,
     ...conversionEmissionPlans.records,
     ...errorTransportEmissionPlans.records,
     ...dispatchContextEmissionPlans.records,
@@ -549,6 +552,7 @@ export function createRustProgramRecordBuilder(
     providerInputPlans,
     lambdaEmissionPlans,
     integerTruncationPlans,
+    providerFormPlans,
     conversionEmissionPlans,
     errorTransportEmissionPlans,
     dispatchContextEmissionPlans,

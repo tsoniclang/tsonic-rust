@@ -1,17 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import { isRustCopyCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProviderChainStep } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
-import { isRustFinalizedSourceInput } from "../../../analysis/operations/finalized-operation/conversions.js";
 import type { RustCallGenericArgument, RustExpr, RustGenericArgument } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
-import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
+import { registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,
   rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 
 export function planRustFinalizedOperationForm(
@@ -24,6 +19,8 @@ export function planRustFinalizedOperationForm(
 ): RustExpr | undefined {
   const abiResultCarrier = abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier;
   const form = abi.target;
+  const selected = context.input.program.records.providerForm.get(operationNode, abi, context.promiseBody)
+    ?? failRustPlannerInvariant("An admitted provider operation requires its exact native form and read contract.", operationNode);
   const receiverMode = abi.targetReceiver.kind === "input"
     ? abi.targetReceiver.input.mode
     : undefined;
@@ -33,40 +30,23 @@ export function planRustFinalizedOperationForm(
     return planned === undefined ? [undefined] : [planned];
   });
   if (targetGenericArguments.some((argument) => argument === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, operationNode),
-      "rust.backend.provider-target-generic-arguments",
-      "Provider operation target generic arguments do not have exact Rust target forms.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Provider operation target generic arguments do not have exact Rust target forms.", operationNode);
   }
   const concreteTargetGenericArguments = targetGenericArguments.length === 0
     ? undefined
     : targetGenericArguments as readonly RustCallGenericArgument[];
   switch (form.form) {
     case "numeric-cast":
-      return args[0];
+      return args[0] ?? failRustPlannerInvariant("An admitted numeric cast requires its exact source operand.", operationNode);
     case "marker":
-      return undefined;
+      return failRustPlannerInvariant("An erased native marker cannot reach operation formatting.", operationNode);
     case "arg-method": {
       if (receiver === undefined || abi.targetReceiver.kind !== "input") {
-        return undefined;
-      }
-      const typedReceiver = typeNumericMethodReceiverLiteral(
-        receiver,
-        abi.targetReceiver.input.parameterCarrier,
-      );
-      if (typedReceiver === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.arg-method-receiver-type",
-          "Argument-method literal receiver requires an explicit finalized Rust numeric receiver carrier.",
-        ));
-        return undefined;
+        failRustPlannerInvariant("An admitted native argument method requires its finalized receiver.", operationNode);
       }
       return {
         kind: "method-call",
-        receiver: typedReceiver,
+        receiver,
         method: form.name,
         args,
         ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
@@ -83,45 +63,13 @@ export function planRustFinalizedOperationForm(
       }, form.chain);
     }
     case "source-module-construction": {
-      const construction = context.input.program.sourceModuleConstructions.construction(
-        operationNode,
-      );
-      if (construction === undefined ||
-        construction.sourceArgumentIndex !== form.sourceArgumentIndex ||
-        construction.targetArgumentIndex !== form.targetArgumentIndex) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.source-module-construction",
-          "Selected source-module constructor has no matching sealed source-module construction.",
-        ));
-        return undefined;
-      }
-      const targetFileName = context.input.program.source.ast.getFileName(
-        construction.targetSourceFile,
-      );
-      const entryIdentity = context.workerEntryIdentityByFileName.get(targetFileName);
-      const moduleArgumentIndex = abi.targetArguments.findIndex(input =>
-        isRustFinalizedSourceInput(input) && input.source.kind === "argument" &&
-        input.source.sourceIndex === form.sourceArgumentIndex);
-      const moduleInput = abi.targetArguments[moduleArgumentIndex];
-      const moduleIdentity = moduleInput !== undefined && isRustFinalizedSourceInput(moduleInput) &&
-          moduleInput.source.kind === "argument" &&
-          moduleInput.source.sourceIndex === form.sourceArgumentIndex
-        ? moduleInput.mode === "ref"
-          ? { kind: "str-literal" as const, value: entryIdentity ?? "" }
-          : moduleInput.mode === "value"
-            ? { kind: "string-literal" as const, value: entryIdentity ?? "" }
-            : undefined
-        : undefined;
-      if (entryIdentity === undefined || args[moduleArgumentIndex] === undefined ||
-        moduleIdentity === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.source-module-entry-identity",
-          "Selected source-module constructor has no exact generated worker-entry identity and immutable target argument mode.",
-        ));
-        return undefined;
-      }
+      const worker = selected.worker ?? failRustPlannerInvariant("An admitted source-module constructor requires its native worker operand.", operationNode);
+      const entryIdentity = context.workerEntryIdentityByFileName.get(worker.fileName);
+      const moduleArgumentIndex = worker.argumentIndex;
+      if (entryIdentity === undefined || args[moduleArgumentIndex] === undefined)
+        failRustPlannerInvariant("An admitted source-module constructor requires its generated worker entry identity.", operationNode);
+      const moduleIdentity: RustExpr = worker.mode === "ref" ? { kind: "str-literal", value: entryIdentity }
+        : { kind: "string-literal", value: entryIdentity };
       registerAliasFromPath(context, form.path);
       return {
         kind: "call",
@@ -143,7 +91,7 @@ export function planRustFinalizedOperationForm(
             path: form.path,
             fields: form.fields.map((name, index) => ({ name, value: args[index]! })),
           }
-        : undefined;
+        : failRustPlannerInvariant("An admitted native struct variant requires its exact field operands.", operationNode);
     case "expression-macro":
       registerAliasFromPath(context, form.path);
       return {
@@ -175,7 +123,8 @@ export function planRustFinalizedOperationForm(
     }
     case "path": {
       registerAliasFromPath(context, form.path);
-      return args.length === 0 ? { kind: "path", path: form.path } : undefined;
+      return args.length === 0 ? { kind: "path", path: form.path }
+        : failRustPlannerInvariant("An admitted native path has no runtime operands.", operationNode);
     }
     case "reference-path": {
       registerAliasFromPath(context, form.path);
@@ -185,7 +134,7 @@ export function planRustFinalizedOperationForm(
             expr: { kind: "path", path: form.path },
             mutable: form.mutable,
           }
-        : undefined;
+        : failRustPlannerInvariant("An admitted native reference path has no runtime operands.", operationNode);
     }
     case "static": {
       registerAliasFromPath(context, form.path);
@@ -194,14 +143,15 @@ export function planRustFinalizedOperationForm(
         if (value === undefined || args.length !== 1) failRustPlannerInvariant("Admitted static setter requires its finalized native value.", operationNode);
         return { kind: "assignment", operator: "=", target: { kind: "path", path: form.path }, value };
       }
-      return args.length === 0 ? { kind: "path", path: form.path } : undefined;
+      return args.length === 0 ? { kind: "path", path: form.path }
+        : failRustPlannerInvariant("An admitted native static read has no runtime operands.", operationNode);
     }
     case "method":
     case "arg-receiver-method":
     case "receiver-value-array":
     case "receiver-tagged-array":
       return receiver === undefined
-        ? undefined
+        ? failRustPlannerInvariant("An admitted native method requires its finalized receiver.", operationNode)
         : {
             kind: "method-call",
             receiver,
@@ -212,7 +162,7 @@ export function planRustFinalizedOperationForm(
           };
     case "arg-structural-method": {
       if (receiver === undefined || abi.targetReceiver.kind !== "input") {
-        return undefined;
+        failRustPlannerInvariant("An admitted structural method requires its finalized receiver.", operationNode);
       }
       return invokeRustStructuralObjectMethod(
         abi.targetReceiver.input.parameterCarrier,
@@ -225,7 +175,7 @@ export function planRustFinalizedOperationForm(
     }
     case "receiver-method":
       return receiver === undefined
-        ? undefined
+        ? failRustPlannerInvariant("An admitted native receiver method requires its finalized receiver.", operationNode)
         : applyProviderOperationChain(
             {
               kind: "method-call",
@@ -249,38 +199,32 @@ export function planRustFinalizedOperationForm(
         return { kind: "assignment", operator: "=", target, value };
       }
       if (receiver === undefined || args.length !== (form.form === "field" ? 0 : 1)) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native storage read requires its exact receiver and index operands.", operationNode);
       }
       const place: RustExpr | undefined = form.form === "field"
         ? { kind: "field", receiver, name: form.name }
         : args[0] === undefined ? undefined : { kind: "index", receiver, index: args[0] };
-      if (place === undefined) return undefined;
+      if (place === undefined) failRustPlannerInvariant("An admitted native storage read requires its selected place.", operationNode);
       if (options.resultUse === "storage") {
         return place;
       }
-      if (isRustCopyCarrier(abiResultCarrier)) {
+      if (selected.read === "copy") {
         return place;
       }
-      if (!rustCarrierHasCloneContract(abiResultCarrier, context)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, operationNode),
-          `rust.backend.provider-${form.form}-read-ownership`,
-          `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract.`,
-        ));
-        return undefined;
-      }
+      if (selected.read !== "clone") failRustPlannerInvariant("An admitted native value read requires its preselected Copy or Clone contract.", operationNode);
       return { kind: "method-call", receiver: place, method: "clone", args: [] };
     }
     case "binary-operator": {
       const [left, right] = args;
       if (left === undefined || right === undefined || args.length !== 2) {
-        return undefined;
+        failRustPlannerInvariant("An admitted binary operation requires its two finalized operands.", operationNode);
       }
       return { kind: "binary", operator: form.operator, left, right };
     }
     case "associated-call": {
       const owner = rustCallTypeFromCarrierInContext(form.owner, context);
-      return owner === undefined ? undefined : {
+      if (owner === undefined) failRustPlannerInvariant("An admitted native associated call requires its rendered owner.", operationNode);
+      return {
         kind: "associated-call", owner, method: form.method, args,
         ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
       };
@@ -290,7 +234,7 @@ export function planRustFinalizedOperationForm(
       const traitGenericArguments = form.traitGenericArguments.map((argument) =>
         rustTargetGenericArgumentToAstInContext(argument, context));
       if (owner === undefined || traitGenericArguments.some((argument) => argument === undefined)) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native trait call requires its rendered owner and arguments.", operationNode);
       }
       registerAliasFromPath(context, form.traitPath);
       return {
@@ -315,7 +259,7 @@ export function planRustFinalizedOperationForm(
       const traitGenericArguments = form.traitGenericArguments.map((argument) =>
         rustTargetGenericArgumentToAstInContext(argument, context));
       if (owner === undefined || traitGenericArguments.some((argument) => argument === undefined) || args.length !== 0) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native trait constant requires its exact owner and generic arguments.", operationNode);
       }
       registerAliasFromPath(context, form.traitPath);
       return {
@@ -336,7 +280,7 @@ export function planRustFinalizedOperationForm(
     case "associated-value": {
       const owner = rustTypeFromCarrierInContext(form.owner, context);
       if (owner === undefined || args.length !== 0) {
-        return undefined;
+        failRustPlannerInvariant("An admitted native constant requires its exact rendered owner and no runtime arguments.", operationNode);
       }
       return {
         kind: "associated-value",
@@ -345,26 +289,6 @@ export function planRustFinalizedOperationForm(
       };
     }
   }
-}
-
-function typeNumericMethodReceiverLiteral(
-  expression: RustExpr,
-  carrier: TargetTypeRef,
-): RustExpr | undefined {
-  if (expression.kind === "unary" && expression.operator === "-") {
-    const operand = typeNumericMethodReceiverLiteral(expression.operand, carrier);
-    return operand === undefined ? undefined : { ...expression, operand };
-  }
-  if (expression.kind !== "float-literal" && expression.kind !== "int-literal") {
-    return expression;
-  }
-  if (carrier.kind !== "source-primitive") {
-    return undefined;
-  }
-  const suffix = rustPrimitiveTypeName(carrier.name);
-  return suffix === undefined
-    ? undefined
-    : { ...expression, text: `${expression.text}${suffix}` };
 }
 
 function applyProviderOperationChain(

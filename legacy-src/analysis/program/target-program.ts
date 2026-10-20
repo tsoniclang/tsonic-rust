@@ -150,6 +150,7 @@ import { analyzeRustProviderEvaluation } from "../storage/provider-evaluation.js
 import { analyzeRustProviderInputs } from "../operations/provider-inputs.js";
 import { analyzeRustLambdaEmission } from "../callables/lambda-emission.js";
 import { analyzeRustIntegerTruncation } from "../expressions/integer-truncation.js";
+import { analyzeRustProviderForms } from "../operations/provider-forms.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -650,6 +651,8 @@ export function analyzeRustTargetProgram(
     node => context.semanticsFor(node).propertyNames.get(node));
   if (objectLiteralIssues.length !== 0) return rejectedTargetStage(objectLiteralIssues);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
+  const providerFormIssues = analyzeRustProviderForms(program, context.records.providerFormPlans);
+  if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const sourceFileEmissionIssues = analyzeRustSourceFileEmission(program, context.records.sourceFileEmissionPlans);
   if (sourceFileEmissionIssues.length !== 0) return rejectedTargetStage(sourceFileEmissionIssues);
   const dispatchRootIssues = analyzeRustDispatchRootEmission(program, errorEmission.plan, context.nativeNodes, context.records.dispatchContextEmissionPlans);

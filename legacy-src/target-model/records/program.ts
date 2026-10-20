@@ -66,6 +66,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly providerSlice: import("./provider-inputs.js").RustProviderInputRecords["providerSlice"];
   readonly lambdaBody: import("./lambda-emission.js").RustLambdaEmissionRecords["lambdaBody"];
   readonly integerTruncation: import("./integer-truncation.js").RustIntegerTruncationRecords["integerTruncation"];
+  readonly providerForm: import("./provider-forms.js").RustProviderFormRecords["providerForm"];
   readonly conversionContract: import("./conversion-emission.js").RustConversionEmissionRecords["conversionContract"];
   readonly programErrorClosedValue: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorClosedValue"];
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
