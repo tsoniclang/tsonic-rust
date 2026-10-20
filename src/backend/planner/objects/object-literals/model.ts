@@ -94,11 +94,6 @@ export interface RustObjectLiteralImplementationRegistry {
   forReferenceView(expression: Node): RustStructuralLiteralImplementation | undefined;
 }
 
-export type RustRecordLiteralFact = Extract<
-  import("../../../../target-model/records/operations.js").RustTargetOperationFact,
-  { readonly kind: "record-literal" }
->;
-
 export function rustObjectLiteralRequiresDispatchImplementation(node: Node, context: RustPlanContext): boolean {
   return context.input.program.records.objectLiteralEmission.get(node) !== undefined;
 }
