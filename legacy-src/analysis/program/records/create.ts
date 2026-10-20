@@ -276,6 +276,7 @@ export function createRustProgramRecordBuilder(
     fieldProjectionAssignment: fieldProjectionAssignments.records,
     assignmentWrite: assignmentWrites.records,
     statementExit: statementExits.records,
+    moduleFallthrough: statementExits.modules,
     loopForm: statementExits.forms,
     nativeHandler: nativeHandlers.records,
     typeAliasDeclaration: typeAliasDeclarations.records,

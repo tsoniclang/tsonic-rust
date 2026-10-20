@@ -105,6 +105,6 @@ export function planProjectClassConstructor(
     ...(boundary === undefined ? {} : { errorType: rustErrorType(boundary) }), returnType: wrapperType,
     body: applyFallibleShape({ statements: [...construction.declarations, ...body, ...construction.finish()] },
       fallible ? { fallible: true, hasReturnValue: true, errorType: rustErrorType(boundary!),
-        inferErrorTypeFromReturnType: true } : { fallible: false, hasReturnValue: true }),
+        inferErrorTypeFromReturnType: true, canFallThrough: false } : { fallible: false, hasReturnValue: true }),
   } };
 }

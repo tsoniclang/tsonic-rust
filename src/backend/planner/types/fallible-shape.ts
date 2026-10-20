@@ -3,9 +3,6 @@ import type {
   RustExpr,
   RustStmt,
 } from "../../target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
-import { rustStatementExpressions } from "../../target-ast/inspection/source-usage.js";
 import { mapRustExpressionChildren } from "../../target-ast/syntax/expression-children.js";
 import type { RustFallibleBoundary } from "../program/fallible-boundaries.js";
 
@@ -18,110 +15,8 @@ export type RustFallibleShapeOptions =
       readonly fallible: true;
       readonly hasReturnValue: boolean;
       readonly inferErrorTypeFromReturnType: boolean;
+      readonly canFallThrough: boolean;
     });
-
-export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): boolean {
-  switch (expression.kind) {
-    case "try":
-      return expression.nativeReturn !== true || rustExpressionUsesTryInCurrentRegion(expression.expr);
-    case "option-try":
-      return rustExpressionUsesTryInCurrentRegion(expression.expr);
-    case "bottom":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression);
-    case "owned-string-from-borrowed-str":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression);
-    case "unary":
-      return rustExpressionUsesTryInCurrentRegion(expression.operand);
-    case "dereference":
-      return rustExpressionUsesTryInCurrentRegion(expression.pointer);
-    case "numeric-cast":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression);
-    case "binary":
-      return rustExpressionUsesTryInCurrentRegion(expression.left) ||
-        rustExpressionUsesTryInCurrentRegion(expression.right);
-    case "range":
-      return rustExpressionUsesTryInCurrentRegion(expression.start) ||
-        rustExpressionUsesTryInCurrentRegion(expression.end);
-    case "conditional":
-      return rustExpressionUsesTryInCurrentRegion(expression.condition) ||
-        rustExpressionUsesTryInCurrentRegion(expression.whenTrue) ||
-        rustExpressionUsesTryInCurrentRegion(expression.whenFalse);
-    case "if-let":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression) ||
-        rustExpressionUsesTryInCurrentRegion(expression.whenTrue) ||
-        expression.whenFalse !== undefined && rustExpressionUsesTryInCurrentRegion(expression.whenFalse);
-    case "match":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression) ||
-        expression.arms.some((arm) => rustExpressionUsesTryInCurrentRegion(arm.expression));
-    case "matches":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression);
-    case "assignment":
-      return rustExpressionUsesTryInCurrentRegion(expression.target) ||
-        rustExpressionUsesTryInCurrentRegion(expression.value);
-    case "macro-invocation":
-      return expression.args.some(rustExpressionUsesTryInCurrentRegion);
-    case "call":
-    case "associated-call":
-      return expression.args.some(rustExpressionUsesTryInCurrentRegion);
-    case "invoke":
-      return rustExpressionUsesTryInCurrentRegion(expression.callee) ||
-        expression.args.some(rustExpressionUsesTryInCurrentRegion);
-    case "method-call":
-      return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
-        expression.args.some(rustExpressionUsesTryInCurrentRegion);
-    case "option-presence":
-    case "field":
-      return rustExpressionUsesTryInCurrentRegion(expression.receiver);
-    case "index":
-      return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
-        rustExpressionUsesTryInCurrentRegion(expression.index);
-    case "block":
-      return expression.body.statements.flatMap(rustStatementExpressions).some(rustExpressionUsesTryInCurrentRegion);
-    case "unsafe":
-      return rustExpressionUsesTryInCurrentRegion(expression.expression);
-    case "evaluate-then":
-      return rustExpressionUsesTryInCurrentRegion(expression.effect) ||
-        rustExpressionUsesTryInCurrentRegion(expression.value);
-    case "string-concat":
-      return expression.parts.some(rustExpressionUsesTryInCurrentRegion);
-    case "format-write":
-      return rustExpressionUsesTryInCurrentRegion(expression.writer) ||
-        expression.args.some(rustExpressionUsesTryInCurrentRegion);
-    case "reference":
-      return rustExpressionUsesTryInCurrentRegion(expression.expr);
-    case "vec-literal":
-    case "slice-literal":
-      return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
-    case "array-repeat":
-      return rustExpressionUsesTryInCurrentRegion(expression.element);
-    case "await":
-      return rustExpressionUsesTryInCurrentRegion(expression.expr);
-    case "break-expression":
-    case "return-expression":
-      return expression.expr !== undefined && rustExpressionUsesTryInCurrentRegion(expression.expr);
-    case "struct-literal":
-      return expression.fields.some((field) =>
-        rustExpressionUsesTryInCurrentRegion(field.value)) ||
-        (expression.base !== undefined &&
-          rustExpressionUsesTryInCurrentRegion(expression.base));
-    case "tuple-literal":
-      return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
-    case "closure":
-    case "closure-block":
-    case "async-block":
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "char-literal":
-    case "string-literal":
-    case "str-literal":
-    case "path":
-    case "associated-value":
-    case "unreachable":
-      return false;
-  }
-}
 
 export function applyRustFallibleResultExpression(
   expression: RustExpr,
@@ -150,22 +45,6 @@ function applyRustResultExpression(
 ): RustExpr {
   if (expression.kind === "bottom") {
     return expression;
-  }
-  if (expression.kind === "try" && expression.nativeReturn !== true &&
-    rustTypeEquals(expression.resultErrorType, boundary.errorType)) {
-    if (rustTypeEquals(expression.operandErrorType, boundary.errorType)) {
-      return expression.expr;
-    }
-    return {
-      kind: "method-call",
-      receiver: expression.expr,
-      method: "map_err",
-      args: [{
-        kind: "associated-value",
-        owner: boundary.errorType,
-        name: "from",
-      }],
-    };
   }
   return {
     kind: "call",
@@ -240,7 +119,7 @@ export function applyFallibleShape(
     }
   };
   const wrapped = body.statements.map(statement => wrap(statement));
-  if (!options.hasReturnValue && !rustBlockTerminates({ statements: wrapped })) {
+  if (!options.hasReturnValue && options.canFallThrough) {
     wrapped.push({ kind: "tail", expr: result({ kind: "path", path: "()" }) });
   }
   return { ...body, statements: wrapped };

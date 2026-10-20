@@ -566,6 +566,7 @@ export function planRustCallableExpressionBody(
         hasReturnValue: !isRustUnitCarrier(bodyResultCarrier),
         errorType: bodyErrorType!,
         inferErrorTypeFromReturnType: nativeClosureProtocol?.fallible === true && !fallible,
+        canFallThrough: context.input.program.records.callableDeclaration.get(node)?.canFallThrough === true,
       }
     : { fallible: false, hasReturnValue: !isRustUnitCarrier(bodyResultCarrier) }) : block;
   let finalizedBlock: RustBlock = loweredBody;
@@ -598,6 +599,7 @@ export function planRustCallableExpressionBody(
     finalizedBlock = applyFallibleShape(finalizedBlock, {
       fallible: true, hasReturnValue: true,
       errorType: invocationErrorType!, inferErrorTypeFromReturnType: false,
+      canFallThrough: false,
     });
   }
   const closure: RustExpr = {

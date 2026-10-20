@@ -100,7 +100,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("rc"),
           params, returnType: result, errorType: rustErrorType(boundary), body: applyFallibleShape({ statements: [...arguments_.statements,
             { kind: "tail", expr: value }] }, { fallible: true, hasReturnValue: result.kind !== "unit",
-            errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true }) });
+            errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true, canFallThrough: false }) });
         continue;
       }
       const source = member.field;
@@ -139,7 +139,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
             returnType: role === "read" ? type : { kind: "unit" }, errorType: rustErrorType(boundary), body: applyFallibleShape({ statements: [
               { kind: "tail", expr: value },
             ] }, { fallible: true, hasReturnValue: role === "read" && type.kind !== "unit",
-              errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true }) });
+              errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true, canFallThrough: false }) });
         }
         continue;
       }

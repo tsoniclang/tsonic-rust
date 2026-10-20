@@ -397,7 +397,7 @@ export function analyzeRustTargetProgram(
     jsEnabled, asynchronous: initializationErrors.value.root.asynchronous ||
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
-  analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, records,
+  analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
     producer: context.records.statementExits, required: context.requiredRecords });
   analyzeRustResourceScopes({ ast: context.ast, nodes: context.nativeNodes, records,
     producer: context.records.resourceScopes, required: context.requiredRecords });
@@ -412,6 +412,7 @@ export function analyzeRustTargetProgram(
     safetyApplications: context.safetyApplications,
     components: sourcePackageComponents,
     ownership: ownership.ownership, projectTypes, projectFieldDispatch: context.projectFieldDispatch,
+    optionalChainEffects: context.records.errorEmissionPlans, structuralShapes: context.structuralShapes, frozenDataWrites: context.frozenDataWrites,
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);

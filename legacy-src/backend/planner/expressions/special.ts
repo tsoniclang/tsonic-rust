@@ -1,7 +1,7 @@
 
 
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
+import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { expressionCarrier, providerSelectedCallMatches, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
@@ -17,7 +17,6 @@ import { planExpression, planRawExpression } from "./entry.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
-import { rustTargetOperationIsFallible } from "../../../analysis/operations/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
@@ -213,27 +212,14 @@ export function planOptionalChainExpression(
   if (body === undefined) {
     return undefined;
   }
-  const sourceCallEffects = context.input.program.records.sourceCallEffects.get(node);
-  const sourceAccessorEffects = context.input.program.records.sourceAccessorEffects.get(node);
-  const innerFallible = rustTargetOperationIsFallible(
-    rustOperationFact(node, context),
-    context.input.program.structuralShapes,
-    context.input.program.projectFieldDispatch,
-    context.input.program.frozenDataWrites, context.input.program.typeDefinitions,
-  ) ||
-    sourceCallEffects?.invocation === "fallible" ||
-    sourceAccessorEffects?.read === "fallible" || rustExpressionUsesTryInCurrentRegion(body);
+  const innerFallible = context.input.program.records.optionalChainBodyFallible.get(node);
+  if (innerFallible === undefined) failRustPlannerInvariant("An admitted optional chain requires its exact sealed guarded-body effects.", node);
   if (innerFallible) {
     context.usedAliases?.add("rt");
   }
   const activeErrorType = rustActiveErrorType(context);
   if (innerFallible && activeErrorType === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.error.optional-chain",
-      "Fallible optional-chain operations require a finalized fallible lowering context.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("An admitted fallible optional chain requires its finalized native error context.", node);
   }
   const fallibleBody = applyRustFallibleResultExpression(body, {
     errorType: activeErrorType!,

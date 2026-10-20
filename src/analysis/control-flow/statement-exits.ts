@@ -1,4 +1,4 @@
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { analyzeSourceStatementExits } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
@@ -8,6 +8,7 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 export function analyzeRustStatementExits(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
+  readonly sourceFiles: readonly SourceFile[];
   readonly records: RustProgramRecords;
   readonly producer: RustStatementExitProducer;
   readonly required: RustRequiredRecord[];
@@ -29,4 +30,6 @@ export function analyzeRustStatementExits(input: {
       input.producer.loop(subject, { kind: unconditional ? "unconditional" : "conditional", neverFallsThrough: alwaysExits });
     }
   }
+  for (const file of input.sourceFiles) input.producer.module(file,
+    !input.ast.statements(file).some(statement => statement !== undefined && exits.get(statement) === true));
 }

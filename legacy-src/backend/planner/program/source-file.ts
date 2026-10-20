@@ -479,6 +479,8 @@ function planModuleItems(
   if (fallible) {
     context.usedAliases?.add("rt");
   }
+  const sourceFallthrough = context.input.program.records.moduleFallthrough.get(sourceFile);
+  if (sourceFallthrough === undefined) failRustPlannerInvariant("An admitted module initializer requires its sealed source completion.", sourceFile);
   const initialization: NonNullable<PlannedRustModuleItems["initialization"]> = {
     functionName: initializationFunctionName,
     asynchronous,
@@ -504,6 +506,7 @@ function planModuleItems(
             hasReturnValue: false,
             errorType: errorBoundary!.errorType,
             inferErrorTypeFromReturnType: true,
+            canFallThrough: sourceFallthrough,
           }
         : { fallible: false, hasReturnValue: false },
     ),

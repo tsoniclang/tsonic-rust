@@ -34,6 +34,7 @@ import type { RustSafetyApplicationFactIndex } from "../safety/application-index
 import { rustSourceHasExplicitUnsafeContext } from "../safety/regions.js";
 import { admitRustThrowCompletion } from "../errors/throw-admission.js";
 import { admitRustProjectFieldDispatch } from "../errors/field-dispatch.js";
+import { analyzeRustOptionalChainBodyFallibility } from "../errors/optional-chains.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustThrowCompletion, RustCatchBinding } from "../../target-model/records/exception-flow.js";
@@ -43,6 +44,9 @@ import type { RustOwnershipRecords } from "../../target-model/records/ownership.
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
 export interface RustStatementCompletionInput {
+  readonly optionalChainEffects: import("../program/records/error-emission.js").RustErrorEmissionProducer;
+  readonly structuralShapes: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["structural"];
+  readonly frozenDataWrites: Parameters<typeof analyzeRustOptionalChainBodyFallibility>[0]["frozen"];
   readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
   readonly isNativeNode: (node: Node) => boolean;
@@ -428,6 +432,15 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     }
     const operation = records.targetOperation.get(node);
     const compound = records.compoundWrite.get(node);
+    const optional = records.optionalChain.get(node);
+    if (optional !== undefined) {
+      const fallible = analyzeRustOptionalChainBodyFallibility({ ast, records, structural: input.structuralShapes,
+        dispatch: input.projectFieldDispatch, frozen: input.frozenDataWrites, definitions: input.typeDefinitions }, node, optional.guard);
+      input.optionalChainEffects.optionalChain(node, fallible);
+      if (fallible && !frame(node).fallible) diagnostics.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: node,
+        message: `Fallible optional-chain operations require a finalized fallible lowering context. Node kind: ${ast.kindName(node)}.`,
+        evidence: ["target.capability=rust.error.optional-chain"] });
+    }
     if (operation?.kind === "source-field" || operation?.kind === "source-union-field") {
       const issue = admitRustProjectFieldDispatch({ ast, region: frame(node).region, dispatch: input.projectFieldDispatch }, node, operation);
       if (issue !== undefined) diagnostics.push(issue);

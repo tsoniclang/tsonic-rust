@@ -8,6 +8,7 @@ import { createRustRecordFamily } from "./family.js";
 import type { RustProjectMemberError } from "../../../target-model/records/error-emission.js";
 
 export interface RustErrorEmissionProducer {
+  optionalChain(node: Node, fallible: boolean): void;
   member(declaration: Node, value: RustProjectMemberError): void;
   readonly records: RustErrorEmissionRecords;
   readonly regions: RustRecordFamily<RustErrorRegionSelection>;
@@ -21,12 +22,15 @@ export function createRustErrorEmissionProducer(assertOpen: () => void): RustErr
   const names = new Map<string, Map<number, string>>();
   const regions = createRustRecordFamily<RustErrorRegionSelection>({ id: "tsonic.rust.nativeErrorRegion", equals: (left, right) => left === right }, assertOpen);
   const members = createRustRecordFamily<RustProjectMemberError>({ id: "tsonic.rust.projectMemberError", equals: (left, right) => left === right }, assertOpen);
+  const optionalChains = createRustRecordFamily<boolean>({ id: "tsonic.rust.optionalChainBodyFallible", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ regions: regions.reader, records: Object.freeze({
+    optionalChainBodyFallible: optionalChains.reader,
     projectMemberError: members.reader,
     genericCallableErrors: Object.freeze({ get: (definition: RustGenericCallablePhysicalDefinition) => generics.get(definition) }),
     nativeErrorJoinName: Object.freeze({ get: (fileName: string, arity: number) => names.get(fileName)?.get(arity) }),
   }),
     member: (declaration: Node, value: RustProjectMemberError): void => members.writer.set(declaration, Object.freeze(value)),
+    optionalChain: (node: Node, fallible: boolean): void => optionalChains.writer.set(node, fallible),
     generic(definition: RustGenericCallablePhysicalDefinition, value: RustGenericCallableErrorEmission): void {
       assertOpen();
       if (generics.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A generic callable error emission admits exactly once.");
