@@ -67,6 +67,7 @@ import { analyzeRustIndexedLocations } from "../storage/indexed-locations.js";
 import { admitRustComputedMembers } from "../operations/computed-members.js";
 import { analyzeRustLocationCallbacks } from "../callables/location-callbacks.js";
 import { analyzeRustDirectStorage } from "../storage/direct-storage.js";
+import { analyzeRustUnaryEmission } from "../expressions/expression-unary.js";
 import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
 import { analyzeRustStringComparisonViews } from "../expressions/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
@@ -651,6 +652,8 @@ export function analyzeRustTargetProgram(
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans);
   const directStorageIssues = analyzeRustDirectStorage(program, context.nativeNodes, context.records.directStoragePlans);
   if (directStorageIssues.length !== 0) return rejectedTargetStage(directStorageIssues);
+  const unaryIssues = analyzeRustUnaryEmission(program, context.nativeNodes, context.records.unaryEmissionPlans);
+  if (unaryIssues.length !== 0) return rejectedTargetStage(unaryIssues);
   const computedMemberIssues = admitRustComputedMembers(program, context.nativeNodes);
   if (computedMemberIssues.length !== 0) return rejectedTargetStage(computedMemberIssues);
   analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);

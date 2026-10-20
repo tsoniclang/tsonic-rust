@@ -21,6 +21,7 @@ import { createRustOptionEqualityProducer } from "./option-equality.js";
 import { createRustIndexedLocationProducer } from "./indexed-locations.js";
 import { createRustLocationCallbackProducer } from "./location-callbacks.js";
 import { createRustDirectStorageProducer } from "./direct-storage.js";
+import { createRustUnaryEmissionProducer } from "./expression-unary.js";
 import { createRustErrorFieldProducer } from "./error-field-borrows.js";
 import { createRustStringComparisonViewProducer } from "./string-comparison-views.js";
 import { createRustGenericCallableFlowProducer } from "./generic-callable-flow.js";
@@ -259,6 +260,7 @@ export function createRustProgramRecordBuilder(
   const indexedLocationPlans = createRustIndexedLocationProducer(assertOpen);
   const locationCallbackPlans = createRustLocationCallbackProducer(assertOpen);
   const directStoragePlans = createRustDirectStorageProducer(assertOpen);
+  const unaryEmissionPlans = createRustUnaryEmissionProducer(assertOpen);
   const errorFieldPlans = createRustErrorFieldProducer(assertOpen);
   const stringComparisonPlans = createRustStringComparisonViewProducer(assertOpen);
   const genericFlowApplications = createRustGenericCallableFlowProducer(assertOpen);
@@ -335,6 +337,7 @@ export function createRustProgramRecordBuilder(
     ...indexedLocationPlans.records,
     ...locationCallbackPlans.records,
     ...directStoragePlans.records,
+    ...unaryEmissionPlans.records,
     ...errorFieldPlans.records,
     ...stringComparisonPlans.records,
     ...genericFlowApplications.records,
@@ -476,6 +479,7 @@ export function createRustProgramRecordBuilder(
     indexedLocationPlans,
     locationCallbackPlans,
     directStoragePlans,
+    unaryEmissionPlans,
     errorFieldPlans,
     stringComparisonPlans,
     genericFlowApplications,

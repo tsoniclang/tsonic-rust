@@ -66,7 +66,7 @@ import { planExpression, planExpressionBeforeValueProjections } from "./entry.js
 import { planNewExpression, planRegExpCreate } from "./special.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRecordLiteral } from "./records.js";
-import { planUnaryExpression } from "./updates/source.js";
+import { planUnaryExpression } from "./expression-unary.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustExpressionContainsStatementBlock } from "../../target-ast/syntax/expressions.js";

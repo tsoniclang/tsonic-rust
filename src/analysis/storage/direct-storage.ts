@@ -6,7 +6,7 @@ import type { RustDirectStorageProducer } from "../program/records/direct-storag
 import type { RustDirectStorageEmission, RustDirectStorageIdentity } from "../../target-model/records/direct-storage.js";
 import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
 import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
-import type { RustUpdateProjectField, RustUpdateProjectionArgument } from "../../target-model/records/direct-storage.js";
+import type { RustUpdateProjectField, RustUpdateProjectionArgument, RustUpdateMember, RustLocationStorageRoot } from "../../target-model/records/direct-storage.js";
 
 export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reachability">,
   nodes: readonly Node[], producer: RustDirectStorageProducer): readonly TargetDiagnostic[] {
@@ -137,6 +137,41 @@ export function analyzeRustDirectStorage(program: Omit<RustTargetProgram, "reach
   for (const node of nodes) { select(node); effect(node); }
   for (const node of nodes) {
     let current: Node | undefined = node;
+    let memberNode: Node | undefined = node;
+    const memberVisited = new Set<Node>();
+    let member: RustUpdateMember | null = null;
+    while (memberNode !== undefined && !memberVisited.has(memberNode)) {
+      memberVisited.add(memberNode);
+      const fact = program.records.targetOperation.get(memberNode);
+      if (fact?.kind === "source-accessor") { member = { kind: "accessor", expression: memberNode, fact }; break; }
+      if (fact?.kind === "source-static-field") { member = { kind: "static", expression: memberNode, fact }; break; }
+      if (fact?.kind === "source-index-signature") { member = { kind: "index", expression: memberNode, fact }; break; }
+      if (!ast.is.IsParenthesizedExpression(memberNode)) break;
+      memberNode = Node_Expression(ast, memberNode);
+    }
+    producer.member(node, member);
+    let rootNode: Node | undefined = node;
+    let root: RustLocationStorageRoot | null = null;
+    const rootVisited = new Set<Node>();
+    while (rootNode !== undefined && !rootVisited.has(rootNode)) {
+      rootVisited.add(rootNode);
+      const native = program.records.nativeArrayStorage.get(rootNode);
+      if (native !== undefined) {
+        if (native.kind === "element") root = { expression: rootNode, declaration: native.declaration };
+        break;
+      }
+      if (ast.is.IsIdentifier(rootNode)) {
+        const binding = program.records.sourceBinding.get(rootNode);
+        const module = binding === undefined ? undefined : program.records.moduleBinding.get(binding.sourceDeclaration);
+        if (binding !== undefined && (program.records.bindingStorage.get(binding.sourceDeclaration) !== undefined ||
+          module?.storage === "module-cell" || module?.storage === "native-callable" && module.value !== undefined))
+          root = { expression: rootNode, declaration: binding.sourceDeclaration };
+        break;
+      }
+      if (!ast.is.IsPropertyAccessExpression(rootNode) && !ast.is.IsElementAccessExpression(rootNode) && !ast.is.IsParenthesizedExpression(rootNode)) break;
+      rootNode = Node_Expression(ast, rootNode);
+    }
+    producer.root(node, root);
     let field: RustUpdateProjectField | null = null;
     const arguments_: RustUpdateProjectionArgument[] = [];
     const visited = new Set<Node>();

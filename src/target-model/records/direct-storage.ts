@@ -30,3 +30,13 @@ export interface RustUpdateProjectionArgument {
   readonly carrier: TargetTypeRef;
   readonly targetInput: RustFinalizedSourceInput | undefined;
 }
+
+export type RustUpdateMember =
+  | { readonly kind: "accessor"; readonly expression: Node; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }> }
+  | { readonly kind: "static"; readonly expression: Node; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }> }
+  | { readonly kind: "index"; readonly expression: Node; readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }> };
+
+export interface RustLocationStorageRoot {
+  readonly expression: Node;
+  readonly declaration: Node;
+}
