@@ -17,12 +17,7 @@ import {
   planRustCrateInitializer,
   planRustModuleInitializers,
 } from "./module-initialization.js";
-import {
-  allocateRustComponentSupportModuleName,
-} from "../../../policy/names/support-modules.js";
-import { rustErrorBoundaryOperandType, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
-import { rustTypeFromCarrier } from "../types/render.js";
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type {
@@ -47,14 +42,15 @@ import {
   type RustWorkerEntryPlan,
 } from "./worker-entries.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
-import { verifyRustFoundationPlan } from "../foundation/verify.js";
 import { applyRustFoundationImports } from "../foundation/imports.js";
 import { planRustAsyncExecution } from "./async-execution.js";
 import { planRustOwnedBinaryEntry, rustBinaryExitCodeType } from "./owned-entry.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
-  const identities = input.program.sourceOutputIdentities;
+  const emission = input.program.records.programEmission.get();
+  if (emission === undefined) failRustPlannerInvariant("An admitted program requires its complete sealed native output contract.");
+  const identities = emission.identities;
   const moduleNameByFileName = new Map(
     [...identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
   );
@@ -67,17 +63,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const componentPlans = planRustSourcePackageComponents(input);
   const rootComponentPlan = componentPlans.find((component) => component.root);
   if (rootComponentPlan === undefined) {
-    return rejectedTargetStage([...diagnostics, {
-        code: "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING",
-        category: "error",
-        source: "tsonic-rust",
-        message: "Rust artifact planning has no exact root source-package component.",
-        evidence: ["target.capability=rust.backend.source-package-components"],
-      }]);
+    failRustPlannerInvariant("An admitted program requires its root native source component.");
   }
   const packageInitializers = planRustSourcePackageInitializers(input);
   const sourcePackageErrors = planRustSourcePackageErrors(input);
-  const structuralShapesModuleName = rootComponentPlan.structuralShapesModuleName;
   const componentPlanById = new Map(componentPlans.map((component) =>
     [component.componentId, component] as const));
   const externalStructuralShapeModuleByFileName = new Map(
@@ -100,46 +89,11 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     facadePlan.rootComponentId,
   );
   if (initializerFacadeModuleName === undefined) {
-    diagnostics.push({
-      code: "RUST_SOURCE_PACKAGE_INITIALIZER_COMPONENT_MISSING",
-      category: "error",
-      source: "tsonic-rust",
-      message: "The root source-package component has no exact initializer facade identity.",
-      evidence: ["target.capability=rust.backend.source-package-initialization"],
-    });
-    return rejectedTargetStage(diagnostics);
+    failRustPlannerInvariant("An admitted root source component requires its initializer facade identity.");
   }
-  const crateInitializerFunctionBase = allocateRustComponentSupportModuleName(
-    identities,
-    facadePlan.rootComponentId,
-    "initialize",
-    [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
-  );
-  const activeHooks = input.program.binaryHooks;
-  const binaryExecution = input.program.binaryExecution;
-  const hookErrorTypes = new Map<
-    (typeof activeHooks)[number],
-    import("../../target-ast/syntax/nodes.js").RustType
-  >();
-  for (const epilogue of activeHooks) {
-    if (epilogue.errorBoundary === "provider-native") {
-      const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
-      if (errorType === undefined) {
-        diagnostics.push({
-          code: "RUST_PROVIDER_EPILOGUE_ERROR_TYPE_MISSING",
-          category: "error",
-          source: "tsonic-rust",
-          message: `Binary epilogue '${epilogue.path}' has no exact renderable provider error type.`,
-          evidence: ["target.capability=rust.error.provider-conversion"],
-        });
-      } else {
-        hookErrorTypes.set(epilogue, errorType);
-      }
-    }
-  }
-  if (diagnostics.length > 0) {
-    return rejectedTargetStage(diagnostics);
-  }
+  const crateInitializerFunctionBase = emission.initializerFunctionBase;
+  const activeHooks = emission.hooks;
+  const binaryExecution = emission.execution;
   const reconstructedSources = reconstructRustSourceFiles(
     input,
     identities,
@@ -179,25 +133,24 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   if (rootCrateContent === undefined || diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);
   }
-  const rootPlannedSources = rootCrateContent.sources;
 
   // Activation: a runtime crate is a dependency only when planned code
   // references it (directly or through a declared alias). Surface-selected
   // crates without carrier/operation use stay out of the manifest.
   const cargoProject = planRustCargoProject(
-    input.program.configuration,
-    input.program.runtimeReferences,
+    emission.configuration,
+    emission.runtimeReferences,
   );
   const sourcePackageCargo = cargoProject.kind === "generated"
     ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans, diagnostics,
-      input.program.configuration.outputType === "bin" ? input.program.binaryDispatchDemand.linkedComponentIds : [])
+      emission.linkedComponentIds)
     : undefined;
   if (cargoProject.kind === "generated" && sourcePackageCargo === undefined) {
     return rejectedTargetStage(diagnostics);
   }
 
-  const outputType = input.program.configuration.outputType;
-  const initialization = input.program.errorRegions.initialization;
+  const outputType = emission.configuration.outputType;
+  const initialization = emission.initialization;
   const entrySourceFile = initialization.entrySourceFile;
   const moduleInitializers = initialization.root.modules.length === 0
     ? []
@@ -215,14 +168,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     facadePlan.rootComponentId,
   );
   if (rootErrorDomain === undefined) {
-    diagnostics.push({
-      code: "RUST_SOURCE_PACKAGE_ERROR_DOMAIN_MISSING",
-      category: "error",
-      source: "tsonic-rust",
-      message: "The root source-package component has no exact error-domain plan.",
-      evidence: ["target.capability=rust.backend.source-package-errors"],
-    });
-    return rejectedTargetStage(diagnostics);
+    failRustPlannerInvariant("An admitted root source component requires its exact physical error domain.", entrySourceFile);
   }
   const rootErrorTypeIdentity = rootErrorDomain.errorTypeIdentity;
   const rootCrateErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
@@ -239,7 +185,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     packageInitializers,
     sourcePackageErrors,
     rootComponentId: facadePlan.rootComponentId,
-    rootCrateName: input.program.configuration.crateName,
+    rootCrateName: emission.configuration.crateName,
     rootErrorType: rootCrateErrorType,
     typeRenderingContextFor,
   });
@@ -264,7 +210,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
     kind: "named",
     path: rootErrorDomain.errorDomain === "runtime"
-      ? "tsonic_rust_runtime::TsonicError" : `${input.program.configuration.crateName}::${programModuleName}::TsonicError`,
+      ? "tsonic_rust_runtime::TsonicError" : `${emission.configuration.crateName}::${programModuleName}::TsonicError`,
     identity: rootErrorTypeIdentity,
   };
   const rootArtifacts = materializeRustSourcePackageCrateArtifacts(
@@ -295,14 +241,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         component.componentId,
       );
       if (content === undefined || cargo === undefined) {
-        diagnostics.push({
-          code: "RUST_SOURCE_PACKAGE_CRATE_ARTIFACT_MISSING",
-          category: "error",
-          source: "tsonic-rust",
-          message: `Source-package component '${component.componentId}' has no exact generated crate artifact plan.`,
-          evidence: ["target.capability=rust.backend.source-package-crates"],
-        });
-        continue;
+        failRustPlannerInvariant("An admitted source component requires its generated crate artifact plan.");
       }
       const externalArtifacts = materializeRustSourcePackageCrateArtifacts(
         input,
@@ -326,7 +265,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   if (outputType === "bin" && entrySourceFile !== undefined) {
-    const crateName = input.program.configuration.crateName;
+    const crateName = emission.configuration.crateName;
     const initializerError = initialization.root.error.kind !== "native" ? undefined : {
       identity: "initialization", errorType: {
         ...crateInitializer!.errorType!, path: `${crateName}::${crateInitializer!.errorName}`,
@@ -404,12 +343,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       input,
       workerEntries.entries,
       errors,
-      lifecycleErrorType,
       completionType,
       successfulCompletion,
       binaryExecution.kind === "owned" ? [] : epilogueStatements,
       executeAsync,
-      diagnostics,
     );
     if (workerDispatchStatements === undefined || diagnostics.length > 0) {
       return rejectedTargetStage(diagnostics);
@@ -448,22 +385,16 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",
-      createRustCrateRootSourceFile(input.program.configuration.foundation, [...errors.items, mainItem]),
+      createRustCrateRootSourceFile(emission.configuration.foundation, [...errors.items, mainItem]),
     ));
   }
   const finalizedArtifacts = Object.freeze(artifacts.map((artifact) =>
     finalizeRustPlannedArtifact(
       artifact,
-      input.program.configuration.foundation,
+      emission.configuration.foundation,
     )));
-  const foundationDiagnostics = verifyRustFoundationPlan(
-    input.program,
-    finalizedArtifacts,
-  );
-  return foundationDiagnostics.length > 0
-    ? rejectedTargetStage(foundationDiagnostics)
-    : resolvedTargetStage(Object.freeze({
-        edition: input.program.configuration.edition,
+  return resolvedTargetStage(Object.freeze({
+        edition: emission.configuration.edition,
         artifacts: finalizedArtifacts,
       }));
 }
@@ -488,60 +419,25 @@ function planRustWorkerDispatch(
   input: RustPlanningContext,
   entries: readonly RustWorkerEntryPlan[],
   errors: RustBinaryErrorPlan,
-  lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType,
   completionType: import("../../target-ast/syntax/nodes.js").RustType,
   successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr,
   epilogueStatements: readonly import("../../target-ast/syntax/nodes.js").RustStmt[],
   executeAsync: (future: import("../../target-ast/syntax/nodes.js").RustExpr) => import("../../target-ast/syntax/nodes.js").RustExpr,
-  diagnostics: TargetDiagnostic[],
 ): readonly import("../../target-ast/syntax/nodes.js").RustStmt[] | undefined {
   if (entries.length === 0) return Object.freeze([]);
   const mainErrorType = errors.errorType;
   const entryBySourceFile = new Map(entries.map((entry) =>
     [entry.sourceFile, entry] as const));
-  const constructionsByBootstrapId = new Map<string, Set<RustWorkerEntryPlan>>();
-  for (const construction of input.program.sourceModuleConstructions.entries()) {
-    const entry = entryBySourceFile.get(construction.targetSourceFile);
-    if (entry === undefined) {
-      diagnostics.push({
-        code: "RUST_WORKER_ENTRY_DISPATCH_IDENTITY_MISSING",
-        category: "error",
-        source: "tsonic-rust",
-        message: "A selected source-module construction has no exact worker dispatch entry.",
-        sourceNode: construction.expression,
-        evidence: ["target.capability=rust.backend.source-module-construction"],
-      });
-      continue;
-    }
-    const selected = constructionsByBootstrapId.get(construction.bootstrap.id) ??
-      new Set<RustWorkerEntryPlan>();
-    selected.add(entry);
-    constructionsByBootstrapId.set(construction.bootstrap.id, selected);
-  }
-  if (diagnostics.length > 0) return undefined;
-
+  const emission = input.program.records.programEmission.get();
+  if (emission === undefined) failRustPlannerInvariant("An admitted worker dispatcher requires its sealed source contract.");
   const statements: import("../../target-ast/syntax/nodes.js").RustStmt[] = [];
-  const bootstraps = [...input.program.sourceModuleConstructions.bootstraps()]
-    .sort((left, right) => left.id.localeCompare(right.id, "en"));
-  for (const [bootstrapIndex, bootstrap] of bootstraps.entries()) {
-    const selectedEntries = [...(constructionsByBootstrapId.get(bootstrap.id) ?? [])]
-      .sort((left, right) => left.identity.localeCompare(right.identity, "en"));
-    if (selectedEntries.length === 0) continue;
-    const providerErrorType = bootstrap.errorBoundary === "provider-native"
-      ? bootstrap.errorCarrier === undefined
-        ? undefined
-        : rustTypeFromCarrier(bootstrap.errorCarrier)
-      : undefined;
-    if (bootstrap.errorBoundary === "provider-native" && providerErrorType === undefined) {
-      diagnostics.push({
-        code: "RUST_WORKER_BOOTSTRAP_ERROR_TYPE_MISSING",
-        category: "error",
-        source: "tsonic-rust",
-        message: `Source-module bootstrap '${bootstrap.id}' has no exact renderable provider error type.`,
-        evidence: ["target.capability=rust.backend.source-module-construction"],
-      });
-      continue;
-    }
+  for (const [bootstrapIndex, selected] of emission.workerDispatch.entries()) {
+    const bootstrap = selected.bootstrap;
+    const selectedEntries = selected.targets.map(sourceFile => {
+      const entry = entryBySourceFile.get(sourceFile);
+      if (entry === undefined) failRustPlannerInvariant("An admitted worker dispatcher requires its selected entry.", sourceFile);
+      return entry;
+    }).sort((left, right) => left.identity.localeCompare(right.identity, "en"));
     const entryName = `worker_entry_selection_${bootstrapIndex + 1}`;
     const bootstrapCall = errors.lifecycle(
       { kind: "call", path: bootstrap.path, args: [] },
@@ -603,7 +499,7 @@ function planRustWorkerDispatch(
         ],
       } } } });
   }
-  return diagnostics.length === 0 ? Object.freeze(statements) : undefined;
+  return Object.freeze(statements);
 }
 
 function okReturn(

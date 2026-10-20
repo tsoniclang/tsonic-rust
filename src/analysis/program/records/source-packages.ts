@@ -5,6 +5,7 @@ import type { RustSourcePackageInitializerPlan } from "../../../target-model/rec
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustProgramErrorRoute } from "../../../target-model/records/source-package-errors.js";
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
+import type { RustProgramEmission } from "../../../target-model/records/program-emission.js";
 
 export function createRustSourcePackageEmissionProducer(assertOpen: () => void) {
   let facades: RustSourcePackageFacadePlan | undefined;
@@ -12,6 +13,7 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
   let initializers: RustSourcePackageInitializerPlan | undefined;
   let errors: RustSourcePackageErrorPlan | undefined;
   let workers: readonly RustWorkerEntryEmission[] | undefined;
+  let program: RustProgramEmission | undefined;
   const boundaries = new Map<string, Map<string, RustSourcePackageErrorBoundary>>();
   const physical = new Map<string, Map<string, RustSourcePackageErrorBoundary>>();
   const runtime = new Map<string, RustSourcePackageErrorBoundary>();
@@ -26,6 +28,7 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
   };
   const records: RustSourcePackageEmissionRecords = Object.freeze({
     workerEntries: Object.freeze({ get: () => workers }),
+    programEmission: Object.freeze({ get: () => program }),
     sourcePackageInitializers: Object.freeze({ get: () => initializers }),
     sourcePackageErrors: Object.freeze({ get: () => errors }),
     sourcePackageErrorBoundary: Object.freeze({ get: (consumer: string, owner: string) => boundaries.get(consumer)?.get(owner) }),
@@ -37,6 +40,11 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
     sourcePackageFacades: Object.freeze({ get: () => facades }),
   });
   return Object.freeze({ records,
+    program(value: RustProgramEmission): void {
+      assertOpen();
+      if (program !== undefined) failTargetAnalysisInvariant("tsonic-rust", "A program has one exact sealed native output contract.");
+      program = Object.freeze(value);
+    },
     workers(value: readonly RustWorkerEntryEmission[]): void {
       assertOpen();
       if (workers !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Worker entries have one exact closed source inventory.");
