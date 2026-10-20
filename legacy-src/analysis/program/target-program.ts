@@ -1,8 +1,8 @@
 import {
   rejectedTargetStage,
   resolvedTargetStage,
-  type TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
+import type { Node } from "@tsonic/tsts";
 import {
   snapshotTargetPlanningSourceNavigation,
   targetSourceSyntaxProgram,
