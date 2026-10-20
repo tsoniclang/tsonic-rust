@@ -136,7 +136,7 @@ export function lowerRustValueConversion(
       registerAliasFromPath(context, contract.ownerPath);
       return planRustProjectClosedValue(source, contract.ownerPath, contract.source, node, context);
     case "exact-integer":
-      return lowerRustExactIntegerConversion({ kind: "exact-integer", source: contract.source, target: contract.target }, source, context);
+      return lowerRustExactIntegerConversion(contract, source, context, node ?? context.sourceFile);
     case "rest-sequence":
       return planRustSequenceValue(contract, source, context, node,
         (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));

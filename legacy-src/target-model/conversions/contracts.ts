@@ -98,7 +98,8 @@ export type RustValueConversionContract = RustValueConversionContractBase & Rust
   | { readonly lowering: "source-optional"; readonly element: TargetTypeRef }
   | { readonly lowering: "union-project"; readonly path: readonly RustUnionPathStep[] }
   | { readonly lowering: "union-map"; readonly coverage: "source" | "target"; readonly arms: readonly RustUnionArmMapping[] }
-  | { readonly lowering: "exact-integer" }
+  | { readonly lowering: "exact-integer"; readonly targetElement: TargetTypeRef;
+      readonly optional: boolean; readonly lift: boolean }
   | {
       readonly lowering: "rest-sequence";
       readonly collection: "vec" | "js-array" | "fixed-array" | "tuple" | "slice";
@@ -207,10 +208,13 @@ export function rustValueConversionContract(
           source: value.source, target: value.target, route: value.route } : undefined;
   }
   if (value.kind === "exact-integer") {
+    const targetElement = rustOptionElementCarrier(value.target);
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
       rustExactIntegerConversionMatches(value.source, value.target, value)
       ? { category: "checked-range", lowering: "exact-integer", sourceMode: "value",
-          source: value.source, target: value.target, fallible: true, errorBoundary: "target-runtime" }
+          source: value.source, target: value.target, targetElement: targetElement ?? value.target,
+          optional: targetElement !== undefined, lift: targetElement !== undefined && rustOptionElementCarrier(value.source) === undefined,
+          fallible: true, errorBoundary: "target-runtime" }
       : undefined;
   }
   if (value.kind === "native-representation") {
