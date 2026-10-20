@@ -159,6 +159,7 @@ import { analyzeRustUnionCalls } from "../callables/union-calls.js";
 import { analyzeRustPropertyReads } from "../expressions/property-reads.js";
 import { analyzeRustSourceCalls } from "../callables/source-calls.js";
 import { admitRustCalls } from "../operations/call-admission.js";
+import { analyzeRustExpressionSyntax } from "../expressions/syntax.js";
 import { analyzeRustIndexedRecords } from "../objects/indexed-records.js";
 import { analyzeRustObjectProjections } from "../objects/projection-emission.js";
 import { analyzeRustStructuralEmission } from "../objects/structural-emission.js";
@@ -691,6 +692,8 @@ export function analyzeRustTargetProgram(
   if (sourceCallIssues.length !== 0) return rejectedTargetStage(sourceCallIssues);
   const callAdmissionIssues = admitRustCalls(program, context.nativeNodes);
   if (callAdmissionIssues.length !== 0) return rejectedTargetStage(callAdmissionIssues);
+  const expressionSyntaxIssues = analyzeRustExpressionSyntax(program, context.nativeNodes, context.records.expressionSyntaxPlans);
+  if (expressionSyntaxIssues.length !== 0) return rejectedTargetStage(expressionSyntaxIssues);
   const integerTruncationIssues = analyzeRustIntegerTruncation(program, context.nativeNodes, context.records.integerTruncationPlans);
   if (integerTruncationIssues.length !== 0) return rejectedTargetStage(integerTruncationIssues);
   const providerInputIssues = analyzeRustProviderInputs(program, context.records.providerInputPlans);

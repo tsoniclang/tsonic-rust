@@ -128,6 +128,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly unionCallPlans: import("./union-calls.js").RustUnionCallProducer;
   readonly propertyReadPlans: import("./property-reads.js").RustPropertyReadProducer;
   readonly sourceCallPlans: import("./source-calls.js").RustSourceCallProducer;
+  readonly expressionSyntaxPlans: import("./expression-syntax.js").RustExpressionSyntaxProducer;
   readonly providerInputPlans: import("./provider-inputs.js").RustProviderInputProducer;
   readonly conversionEmissionPlans: import("./conversion-emission.js").RustConversionEmissionProducer;
   readonly sourceBindingEmissionPlans: import("./binding-paths.js").RustSourceBindingEmissionProducer;
