@@ -1,32 +1,14 @@
+import type { RustProviderContractValidation } from "../../model/contract-validation.js";
 import { isProviderWellKnownSymbolName } from "@tsonic/tsts";
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import {
-  isRustNamedTypeTraitContract,
-  isRustBuiltInTargetCarrierId,
-  rustNamedTypeCarrierValue,
-  rustTargetGenericReferences,
-} from "../../../target-model/types/index.js";
+import { isRustBuiltInTargetCarrierId, rustTargetGenericReferences } from "../../../target-model/types/index.js";
+import { isRustNamedTypeTraitContract, rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
-import {
-  typeRequirementCarriers,
-  validateOperationRows,
-  validateTypeParameterRequirements,
-} from "./operations.js";
-import {
-  genericArgumentCarriers,
-  validateGenericReferences,
-  validateProviderGenericParameters,
-} from "./generics.js";
-import type {
-  ProviderExportDeclaration,
-  ProviderMemberDeclaration,
-  ProviderParameterDeclaration,
-  ProviderSignatureDeclaration,
-  ProviderTypeExpression,
-  ProviderTypeParameterDeclaration,
-} from "@tsonic/tsts";
+import { typeRequirementCarriers, validateOperationRows, validateTypeParameterRequirements } from "./operations.js";
+import { genericArgumentCarriers, validateGenericReferences, validateProviderGenericParameters } from "./generics.js";
+import type { ProviderExportDeclaration, ProviderMemberDeclaration, ProviderParameterDeclaration, ProviderSignatureDeclaration, ProviderTypeExpression, ProviderTypeParameterDeclaration } from "@tsonic/tsts";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -34,10 +16,10 @@ import { isRustFoundation } from "../../../target-model/foundation/model.js";
 import { validateDispatchContexts, validateDispatchContextGroups } from "./dispatch-contexts.js";
 import { isRustBinaryHookPhase } from "../../../target-model/operations/binary-hooks.js";
 
-export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
-  const fail: Fail = (message) => {
+export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition, contracts: RustProviderContractValidation): void {
+  const fail: Fail = Object.assign((message: string): never => {
     throw new Error(`Provider package '${definition.id}': ${message}`);
-  };
+  }, { contracts });
   if (!isClosedMetadata(definition)) {
     fail("package metadata must be dense, finite, acyclic plain data");
   }
