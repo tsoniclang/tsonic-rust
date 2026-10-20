@@ -1,6 +1,5 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { Node_Type } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { readRustLanguageCall, type RustLanguageCall } from "./native-language-call.js";
@@ -62,10 +61,9 @@ export function resolveRustNativeControl(
     }
   } else {
     const declaration = walk.currentCallableDeclaration;
-    const returnCarrier = declaration === undefined ? undefined :
-      walk.context.records.asyncFunction.get(declaration)?.outputCarrier ??
-      walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier ??
-      resolveRustTargetTypeRef(Node_Type(walk.context.ast, declaration), resolution, walk.operationOptions);
+    const asynchronous = declaration === undefined ? undefined : walk.context.records.asyncFunction.get(declaration);
+    const returnCarrier = declaration === undefined ? undefined : asynchronous === undefined
+      ? walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier : asynchronous.outputCarrier;
     const operandCarrier = carriers[0];
     const operand = rustNamedTypeCarrierValue(operandCarrier);
     const target = rustNamedTypeCarrierValue(returnCarrier);
