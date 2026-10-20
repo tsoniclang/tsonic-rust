@@ -64,6 +64,8 @@ export interface RustRecordFamily<T> {
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
+  readonly sourceArtifacts: import("./artifacts.js").RustSourceArtifactRecords["sourceArtifacts"];
+  readonly externalSourceItems: import("./artifacts.js").RustSourceArtifactRecords["externalSourceItems"];
   readonly workerEntries: import("./source-packages.js").RustSourcePackageEmissionRecords["workerEntries"];
   readonly programEmission: import("./program-emission.js").RustProgramEmissionRecords["programEmission"];
   readonly packageCargo: import("./source-package-crates.js").RustPackageCargoRecords["packageCargo"];

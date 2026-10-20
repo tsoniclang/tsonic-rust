@@ -124,6 +124,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly errorTransportEmissionPlans: import("./error-transport.js").RustErrorTransportEmissionProducer;
   readonly dispatchContextEmissionPlans: import("./dispatch-contexts.js").RustDispatchContextEmissionProducer;
   readonly sourcePackageEmission: import("./source-packages.js").RustSourcePackageEmissionProducer;
+  readonly sourceArtifactPlans: import("./artifacts.js").RustSourceArtifactProducer;
   readonly statementExits: RustStatementExitProducer;
   readonly statementCompletions: RustStatementCompletionProducer;
   readonly resourceScopes: RustResourceScopeProducer;

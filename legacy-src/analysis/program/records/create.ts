@@ -5,6 +5,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { createRustConversionProducer } from "./conversion.js";
 import { createRustSourcePackageEmissionProducer } from "./source-packages.js";
+import { createRustSourceArtifactProducer } from "./artifacts.js";
 import { createRustSourceBindingEmissionProducer } from "./binding-paths.js";
 import { createRustSourceFileEmissionProducer } from "./source-file-emission.js";
 import { createRustProviderEvaluationProducer } from "./provider-evaluation.js";
@@ -222,6 +223,7 @@ export function createRustProgramRecordBuilder(
   const classEmissionPlans = createRustClassEmissionProducer(assertOpen);
   const projectEmissionPlans = createRustProjectEmissionProducer(assertOpen);
   const sourcePackageEmission = createRustSourcePackageEmissionProducer(assertOpen);
+  const sourceArtifactPlans = createRustSourceArtifactProducer(assertOpen);
   const sourceBindingEmissionPlans = createRustSourceBindingEmissionProducer(assertOpen);
   const sourceFileEmissionPlans = createRustSourceFileEmissionProducer(assertOpen);
   const providerEvaluationPlans = createRustProviderEvaluationProducer(assertOpen);
@@ -277,6 +279,7 @@ export function createRustProgramRecordBuilder(
     ...classEmissionPlans.implementationRecords,
     ...projectEmissionPlans.records,
     ...sourcePackageEmission.records,
+    ...sourceArtifactPlans.records,
     ...sourceBindingEmissionPlans.records,
     ...sourceFileEmissionPlans.records,
     ...providerEvaluationPlans.records,
@@ -397,6 +400,7 @@ export function createRustProgramRecordBuilder(
     classEmissionPlans,
     projectEmissionPlans,
     sourcePackageEmission,
+    sourceArtifactPlans,
     sourceBindingEmissionPlans,
     sourceFileEmissionPlans,
     providerEvaluationPlans,

@@ -12,7 +12,7 @@ import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-s
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/project-artifacts.js";
 import type { RustPlanningContext } from "../context.js";
-import { reconstructRustSourceFiles } from "../artifacts/reconstruction.js";
+import { planRustSourceFiles } from "../artifacts/source-files.js";
 import {
   planRustCrateInitializer,
   planRustModuleInitializers,
@@ -94,10 +94,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const crateInitializerFunctionBase = emission.initializerFunctionBase;
   const activeHooks = emission.hooks;
   const binaryExecution = emission.execution;
-  const reconstructedSources = reconstructRustSourceFiles(
+  const reconstructedSources = planRustSourceFiles(
     input,
     identities,
-    facadePlan.externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName,
     workerEntryIdentityByFileName,
     componentPlans,
