@@ -1,10 +1,7 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
-import {
-  rustCallableProtocol,
-  rustFutureOutputCarrier,
-} from "../../../target-model/types/index.js";
+import { rustCallableProtocol, rustFutureOutputCarrier } from "../../../target-model/types/index.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 
 export interface RustCallbackOperationSelection {

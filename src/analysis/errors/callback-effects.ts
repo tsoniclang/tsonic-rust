@@ -4,7 +4,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustEffectsWorkBudget } from "./effects-work-budget.js";
-import { rustCallbackProtocol } from "../operations/provider/callbacks.js";
+import { rustCallbackProtocol } from "../../policy/operations/members/callbacks.js";
 import { rustErrorEffectsAreFallible } from "./error-effects.js";
 
 interface CallbackValueAnalysis {
