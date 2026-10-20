@@ -76,6 +76,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly unionEquality: RustRecordFamily<import("./union-equality.js").RustUnionEqualityEmission>;
   readonly closedTypeTestEmission: RustRecordFamily<import("./type-tests.js").RustClosedTypeTestSource>;
   readonly optionEquality: RustRecordFamily<import("./option-equality.js").RustOptionEqualityEmission>;
+  readonly indexedLocation: RustRecordFamily<import("./indexed-locations.js").RustIndexedLocationEmission>;
   readonly errorFieldEmission: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldEmission"];
   readonly errorFieldSnapshot: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldSnapshot"];
   readonly stringComparisonView: RustRecordFamily<import("./string-comparison-views.js").RustStringComparisonView>;

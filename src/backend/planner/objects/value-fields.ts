@@ -13,7 +13,7 @@ import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpress
   rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
 import { rustRecordFieldResult, readRustBoundRecordField, writeRustBoundRecordField } from "./record-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { planRustIndexedFieldLocation } from "../expressions/indexed-fields.js";
+import { planRustIndexedFieldLocation } from "../expressions/indexed-locations.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjectRepresentation, rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { rustCapturedFieldStorage, rustCapturedFieldLocation } from "./captured-fields.js";

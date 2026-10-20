@@ -137,6 +137,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly unionEqualityPlans: import("./union-equality.js").RustUnionEqualityProducer;
   readonly closedTypeTestPlans: import("./type-tests.js").RustClosedTypeTestProducer;
   readonly optionEqualityPlans: import("./option-equality.js").RustOptionEqualityProducer;
+  readonly indexedLocationPlans: import("./indexed-locations.js").RustIndexedLocationProducer;
   readonly errorFieldPlans: import("./error-field-borrows.js").RustErrorFieldProducer;
   readonly stringComparisonPlans: import("./string-comparison-views.js").RustStringComparisonViewProducer;
   readonly genericFlowApplications: import("./generic-callable-flow.js").RustGenericCallableFlowProducer;

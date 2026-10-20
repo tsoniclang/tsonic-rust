@@ -63,6 +63,7 @@ import { analyzeRustNativeMemoryEmission } from "../operations/native-memory-emi
 import { admitRustUnionProjections } from "../operations/union-projections.js";
 import { analyzeRustUnionEquality } from "../operations/union-equality.js";
 import { analyzeRustOptionEquality } from "../operations/option-equality.js";
+import { analyzeRustIndexedLocations } from "../storage/indexed-locations.js";
 import { analyzeRustErrorFieldBorrows } from "../expressions/error-field-borrows.js";
 import { analyzeRustStringComparisonViews } from "../expressions/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../expressions/type-tests.js";
@@ -643,6 +644,7 @@ export function analyzeRustTargetProgram(
   analyzeRustUnionEquality(program, context.nativeNodes, context.records.unionEqualityPlans);
   analyzeRustClosedTypeTests(program, context.nativeNodes, context.records.closedTypeTestPlans);
   analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
+  analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustNativeComparisons(program, context.nativeNodes, context.records.nativeComparisonPlans);
   const literalIssues = analyzeRustLiteralEmission(program, context.nativeNodes, context.records.literalEmissionPlans);
   if (literalIssues.length !== 0) return rejectedTargetStage(literalIssues);
