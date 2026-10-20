@@ -1,5 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
-import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 

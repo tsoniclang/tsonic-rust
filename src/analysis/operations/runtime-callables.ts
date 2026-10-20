@@ -15,7 +15,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 import { rejectSelectedOperation } from "./provider/result.js";
 
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
 

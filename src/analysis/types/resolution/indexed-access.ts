@@ -4,7 +4,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { providerCarrierFromRelations, instantiateProviderTargetType } from "../../../policy/types/project/provider-instantiation.js";
 import { resolveProviderTypeIdentity } from "../../../policy/identities/provider-types.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "./source.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustNamedTypeCarrierValue, substituteRustTargetGenerics, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

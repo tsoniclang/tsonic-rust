@@ -9,7 +9,7 @@ import { asNode, resolveSelectedSourceProfilePropertyMembers } from "../../../po
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 
-import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
 import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import { selectRustProviderObjectLiteralConstruction } from "../../types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";

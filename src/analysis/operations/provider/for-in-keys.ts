@@ -5,7 +5,7 @@ import { Node_Expression, Node_Initializer, orderEnumerableOwnStringProperties }
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
 
 export function selectedRustForInKeys(
   expression: Node,

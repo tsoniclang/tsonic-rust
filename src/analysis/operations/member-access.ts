@@ -7,7 +7,7 @@ import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } fr
 
 import { selectStructuralSourceProperty } from "./provider/structural-properties.js";
 import { selectRustFixedArrayLengthProperty } from "./fixed-arrays.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 
 import { resolveRustProjectField } from "./provider/project-fields.js";
 import { rustSourceTypeCarrier } from "../../target-model/types/index.js";

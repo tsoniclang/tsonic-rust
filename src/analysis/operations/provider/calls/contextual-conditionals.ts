@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 import type { RustOperationsProviderOptions } from "../model.js";

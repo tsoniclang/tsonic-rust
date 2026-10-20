@@ -25,7 +25,7 @@ import { recordFutureValueFacts } from "../callables/suspension.js";
 import { recordResourceManagementFacts } from "../control-flow/resource-management.js";
 import { recordRustDeferredProducerEffects } from "../errors/deferred-producer-effects.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";

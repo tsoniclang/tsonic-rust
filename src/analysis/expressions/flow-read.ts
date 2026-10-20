@@ -26,7 +26,7 @@ import { selectRustFlowReadProjection } from "../../policy/types/resolution/valu
 
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

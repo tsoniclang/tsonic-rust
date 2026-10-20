@@ -5,7 +5,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustCallableParameterAbi, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import type { RustClassValueCallable } from "../../target-model/records/class-value-callables.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { resolveParameterAbi } from "../callables/parameter-facts.js";

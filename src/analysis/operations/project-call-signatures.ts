@@ -8,7 +8,7 @@ import { asNode } from "../../policy/identities/selected-source.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./provider/result.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 

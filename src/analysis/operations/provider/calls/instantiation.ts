@@ -14,7 +14,7 @@ import { KindCallExpression, KindNewExpression, sourceNodeIdentity, sourceConstr
 import { rejectSelectedOperation } from "../result.js";
 
 import { recordRustValueCarrierReconciliation } from "../../../program/records/value-carrier-admission.js";
-import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
 
 import { rustArgumentPassingMode } from "../../../../policy/ownership/argument-passing.js";
 import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";
@@ -23,7 +23,7 @@ import { rustTargetOperationText } from "../../../../target-model/operations/tex
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 
-import { resolveRustProviderGenericArgument } from "../../../../policy/types/resolution/source.js";
+import { resolveRustProviderGenericArgument } from "../../../types/resolution/provider-arguments.js";
 import { instantiateProviderOperationTemplate } from "../../../../policy/types/callables/provider-templates.js";
 import { finalizeProviderOperationFact } from "../../../program/records/provider-operations.js";
 import { selectReceiverReferenceReborrow } from "./reference-reborrows.js";

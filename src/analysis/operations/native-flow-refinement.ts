@@ -8,7 +8,7 @@ import type { RustTargetTypeResolutionOptions } from "../types/resolution/model.
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../types/resolution/native-flow-refinement.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { resolveRustInstanceType } from "../types/resolution/instance-tests.js";

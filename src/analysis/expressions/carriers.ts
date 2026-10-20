@@ -7,7 +7,7 @@ import { rustSourceValueWrapperContains } from "../../policy/ownership/source-va
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
 
 import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operators/rules.js";

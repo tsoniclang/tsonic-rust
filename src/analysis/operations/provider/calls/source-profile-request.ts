@@ -1,6 +1,6 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
-import { resolveRustTargetTypeRef } from "../../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueDomainHasTargetType } from "../../../objects/value-domain-carriers.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes } from "../operators.js";
