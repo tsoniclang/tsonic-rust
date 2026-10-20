@@ -32,7 +32,7 @@ import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/r
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/binding-normalization.js";
 
-import { rustAwaitValueRequirements } from "../callables/await-values.js";
+import { rustAwaitValueRequirements } from "../../policy/ownership/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
 import type { RustGenericRequirement } from "../../target-model/records/generic-requirements.js";

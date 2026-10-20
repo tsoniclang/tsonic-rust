@@ -12,15 +12,8 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
 import { rustFutureValueMatchesCarrier } from "./future-values.js";
-import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
+
 import type { RustAwaitValueLeafFact, RustAwaitValueFact } from "../../target-model/records/await-values.js";
-
-const sharedPromisePayload: readonly "clone"[] = Object.freeze(["clone"]);
-
-export function rustAwaitValueRequirements(leaf: RustAwaitValueLeafFact): readonly "clone"[] {
-  return leaf.future === undefined || leaf.carrier.kind !== "target-named" || leaf.carrier.id !== rustJsPromiseTargetId
-    ? [] : sharedPromisePayload;
-}
 
 function admitsAbsentCompletion(carrier: TargetTypeRef): boolean {
   return isRustUnitCarrier(carrier) || rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined;
