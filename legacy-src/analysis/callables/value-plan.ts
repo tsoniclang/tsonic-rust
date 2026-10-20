@@ -63,7 +63,7 @@ import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
 import { prepareRustProviderSourceOccurrences } from "../operations/provider-source-inputs.js";
 import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
-import { assertRustNativeCallableProtocolResults } from "./native-protocols.js";
+
 import { analyzeRustNativeCallableGenerics } from "./native-inputs.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
 import type { RustRetainedCallableInputPlan } from "../../target-model/records/retained-inputs.js";
@@ -420,7 +420,6 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       if (physicalLifecycle === undefined || selectedPlan === undefined || frameConstruction === undefined ||
         emissionRequests === undefined || sourceOccurrences === undefined)
         throw new Error("Physical callable publication requires completed source-selected families and effects.");
-      assertRustNativeCallableProtocolResults(native.protocols, input.typeDefinitions);
       const publication = physicalLifecycle.complete(physical);
       if (publication.kind === "rejected") {
         sealResult = rejectedTargetStage(publication.diagnostics);

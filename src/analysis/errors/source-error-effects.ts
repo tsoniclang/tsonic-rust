@@ -16,7 +16,7 @@ import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/me
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import type { RustNativeCallableProducer } from "../callables/native-producers.js";
-import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
+import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import type { SourceStorageBindings } from "@tsonic/target-api/analysis";
