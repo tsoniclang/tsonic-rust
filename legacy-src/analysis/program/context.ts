@@ -24,7 +24,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
 import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
-import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
+import { createRustClassValueRegistry, type RustClassValueRegistry } from "./records/class-value-registry.js";
 import { createRustProgramRecordBuilder } from "./records/create.js";
 import type { RustRequiredRecord } from "./records/required-records.js";
 import type { RustProgramRecordBuilder } from "./records/model.js";

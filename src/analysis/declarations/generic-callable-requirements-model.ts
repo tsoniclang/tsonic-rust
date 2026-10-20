@@ -19,7 +19,7 @@ import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
-import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 

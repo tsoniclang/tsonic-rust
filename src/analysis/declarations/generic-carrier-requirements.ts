@@ -6,7 +6,7 @@ import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime } from "../..
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../target-model/records/frame-callables.js";
-import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";

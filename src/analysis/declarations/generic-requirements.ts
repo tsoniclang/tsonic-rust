@@ -45,7 +45,7 @@ import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
-import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 

@@ -39,7 +39,7 @@ import type { RustSourceObjectField, RustSourceTypeRegistry } from "../../policy
 import type { RustNativeCaptureConstruction, RustNativeCaptureSelection } from "./native-captures.js";
 import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustFrameCallablePlan } from "./frame-values.js";
-import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";

@@ -91,7 +91,7 @@ export interface RustTargetProgram {
   readonly retainedCallableInputs: import("../callables/retained-inputs.js").RustRetainedCallableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
-  readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
+  readonly classValues: import("../../target-model/records/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextDeclarations;
   readonly dispatchContextDemand: import("../project/dispatch-demand.js").RustDispatchContextDemandPlan;

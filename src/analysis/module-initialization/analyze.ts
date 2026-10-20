@@ -15,7 +15,7 @@ import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js
 import type { RustAnalysisContext } from "../program/context.js";
 import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { rustModuleInitializationIsStateIndependent } from "./independence.js";
-import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 
 import type { RustModuleInitializationPlan, RustModuleInitializationRequirement } from "../../target-model/records/module-initialization.js";
 import { createRustModuleInitializationRecords } from "../program/records/module-initialization.js";

@@ -5,11 +5,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProjectObjectField, RustProjectObjectIndexSignature, RustProjectObjectLayout } from "../../target-model/types/project-types.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
-export interface RustProjectStaticFieldStorage {
-  readonly declaration: Node;
-  readonly fileName: string;
-  readonly targetName: string;
-}
+import type { RustProjectStaticFieldStorage } from "../../target-model/records/project-fields.js";
 
 export function rustProjectObjectLayout(
   declaration: Node,

@@ -53,7 +53,7 @@ import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
-import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 import type { RustCallableEmissionContexts, RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
 import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
