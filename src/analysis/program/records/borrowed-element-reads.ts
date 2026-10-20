@@ -12,11 +12,12 @@ export interface RustBorrowedElementProducer {
 export function createRustBorrowedElementProducer(assertOpen: () => void): RustBorrowedElementProducer {
   let published = false;
   const reads = createRustRecordFamily<RustBorrowedElementRead>({ id: "tsonic.rust.borrowedElementRead", equals: (left, right) => left === right }, assertOpen);
+  const appends = createRustRecordFamily<boolean>({ id: "tsonic.rust.borrowedElementAppend", equals: (left, right) => left === right }, assertOpen);
   const elements = createRustRecordFamily<RustBorrowedElementRead>({ id: "tsonic.rust.borrowedElement", equals: (left, right) => left === right }, assertOpen);
   const locals = createRustRecordFamily<RustBorrowedElementLocal>({ id: "tsonic.rust.borrowedElementLocal", equals: (left, right) => left === right }, assertOpen);
   const endings = createRustRecordFamily<readonly RustBorrowedElementLocal[]>({ id: "tsonic.rust.borrowedElementEnds", equals: (left, right) => left === right }, assertOpen);
   const iterations = createRustRecordFamily<RustBorrowedIterationBinding>({ id: "tsonic.rust.borrowedIterationBinding", equals: (left, right) => left === right }, assertOpen);
-  return Object.freeze({ records: Object.freeze({ borrowedElementRead: reads.reader, borrowedElement: elements.reader,
+  return Object.freeze({ records: Object.freeze({ borrowedElementAppend: appends.reader, borrowedElementRead: reads.reader, borrowedElement: elements.reader,
     borrowedElementLocal: locals.reader, borrowedElementEnds: endings.reader, borrowedIterationBinding: iterations.reader }),
     publish(nodes: readonly Node[], selected: RustBorrowedElementReads): void {
       assertOpen();
@@ -28,7 +29,7 @@ export function createRustBorrowedElementProducer(assertOpen: () => void): RustB
         const local = selected.forStatement(node);
         const ending = selected.endingAt(node);
         const iteration = selected.forIteration(node);
-        if (read !== undefined) reads.writer.set(node, read);
+        if (read !== undefined) { reads.writer.set(node, read); appends.writer.set(node, selected.isAppend(node)); }
         if (element !== undefined) elements.writer.set(node, element);
         if (local !== undefined) locals.writer.set(node, local);
         if (ending.length !== 0) endings.writer.set(node, Object.freeze([...ending]));

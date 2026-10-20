@@ -21,6 +21,7 @@ export interface RustBorrowedIterationBinding {
 }
 
 export interface RustBorrowedElementRecords {
+  readonly borrowedElementAppend: RustRecordFamily<boolean>;
   readonly borrowedElementRead: RustRecordFamily<RustBorrowedElementRead>;
   readonly borrowedElement: RustRecordFamily<RustBorrowedElementRead>;
   readonly borrowedElementLocal: RustRecordFamily<RustBorrowedElementLocal>;

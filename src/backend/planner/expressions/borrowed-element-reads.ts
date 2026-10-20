@@ -8,7 +8,7 @@ import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
 import type { RustBorrowedElementLocal } from "../../../target-model/records/borrowed-element-reads.js";
-import { rustBorrowedStringAppend } from "../../../analysis/program/borrowed-element-purity.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustBorrowedElementRead(
   node: Node,
@@ -16,12 +16,13 @@ export function planRustBorrowedElementRead(
   context: RustPlanContext,
   planRead: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): RustExpr | undefined {
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted borrowed element requires its native name scope.", node);
   const elementName = allocateRustSyntheticName(context.syntheticNames, "element");
   const bindings = borrowedElementBindings(read, elementName, context);
-  if (bindings === undefined) return undefined;
+  if (bindings === undefined) failRustPlannerInvariant("An admitted borrowed element requires its selected native inputs.", node);
   const overrides = new Map(context.expressionOverrides ?? []);
-  const append = rustBorrowedStringAppend(node, context.input.program.source.ast, context.input.program.records);
+  const append = context.input.program.records.borrowedElementAppend.get(node);
+  if (append === undefined) failRustPlannerInvariant("An admitted borrowed element requires its selected consumption mode.", node);
   overrides.set(read.receiver, {
     expression: append ? { kind: "reference", expr: { kind: "path", path: elementName } }
       : { kind: "dereference", pointer: { kind: "path", path: elementName } },
@@ -36,9 +37,9 @@ export function planRustBorrowedElementLocal(
   context: RustPlanContext,
 ): { readonly statements: readonly RustStmt[]; readonly context: RustPlanContext } | undefined {
   const name = context.input.program.names.nameForDeclaration(local.declaration);
-  if (name === undefined) return undefined;
+  if (name === undefined) failRustPlannerInvariant("An admitted borrowed local requires its authored native name.", local.declaration);
   const bindings = borrowedElementBindings(local, name, context);
-  if (bindings === undefined) return undefined;
+  if (bindings === undefined) failRustPlannerInvariant("An admitted borrowed local requires its native inputs.", local.declaration);
   const overrides = new Map(context.expressionOverrides ?? []);
   for (const reference of local.references) overrides.set(reference, {
     expression: { kind: "dereference", pointer: { kind: "path", path: name } },
@@ -55,10 +56,10 @@ function borrowedElementBindings(
   name: string,
   context: RustPlanContext,
 ): readonly { readonly name: string; readonly value: RustExpr }[] | undefined {
-  if (context.syntheticNames === undefined) return undefined;
+  if (context.syntheticNames === undefined) failRustPlannerInvariant("An admitted borrowed element requires its native name scope.", read.element);
   const array = planExpression(read.array, context);
   const index = planExpression(read.index, context);
-  if (array === undefined || index === undefined) return undefined;
+  if (array === undefined || index === undefined) failRustPlannerInvariant("An admitted borrowed element requires its native array and index.", read.element);
   const arrayName = allocateRustSyntheticName(context.syntheticNames, "array_receiver");
   const indexName = allocateRustSyntheticName(context.syntheticNames, "array_index");
   return [

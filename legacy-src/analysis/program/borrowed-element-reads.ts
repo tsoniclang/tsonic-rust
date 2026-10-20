@@ -8,6 +8,7 @@ import { analyzeRustBorrowedIterationBindings } from "./borrowed-iteration-bindi
 import type { RustBorrowedElementRead, RustBorrowedElementLocal, RustBorrowedIterationBinding } from "../../target-model/records/borrowed-element-reads.js";
 
 export interface RustBorrowedElementReads {
+  isAppend(node: Node): boolean;
   forExpression(node: Node): RustBorrowedElementRead | undefined;
   forRead(node: Node): RustBorrowedElementRead | undefined;
   forStatement(node: Node): RustBorrowedElementLocal | undefined;
@@ -23,6 +24,7 @@ export function analyzeRustBorrowedElementReads(
 ): RustBorrowedElementReads {
   const reads = new WeakMap<Node, RustBorrowedElementRead>();
   const indexedReads = new WeakMap<Node, RustBorrowedElementRead>();
+  const appends = new Set<Node>();
   const locals = analyzeRustBorrowedElementLocals(ast, nativeNodes, records, navigation);
   const select = (consumer: Node, read: RustBorrowedElementRead): void => {
     reads.set(consumer, read);
@@ -36,7 +38,7 @@ export function analyzeRustBorrowedElementReads(
       Node_Expression(ast, parent) === node && rustBorrowedStringAppend(node, ast, records)) {
       const right = BinaryExpression_Right(ast, node);
       const read = right === undefined ? undefined : rustBorrowedElementRead(right, ast, records);
-      if (read !== undefined) select(node, read);
+      if (read !== undefined) { select(node, read); appends.add(node); }
     }
     const operation = rustBorrowPureOperation(node, records);
     if (operation !== undefined) {
@@ -57,7 +59,7 @@ export function analyzeRustBorrowedElementReads(
   };
   nativeNodes.forEach(visit);
   const forIteration = analyzeRustBorrowedIterationBindings(ast, nativeNodes, records, navigation);
-  return Object.freeze({ forExpression: (node: Node) => reads.get(node),
+  return Object.freeze({ isAppend: (node: Node) => appends.has(node), forExpression: (node: Node) => reads.get(node),
     forRead: (node: Node) => indexedReads.get(node), ...locals, forIteration });
 }
 
