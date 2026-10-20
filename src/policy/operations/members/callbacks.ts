@@ -1,3 +1,4 @@
+import type { JsOperationSelection } from "../source-profiles/js/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
@@ -138,4 +139,20 @@ function rustCallbackCarrierMatchesTemplate(
       rustCallbackCarrierMatchesTemplate(templateProtocol.result, actualProtocol.result);
   }
   return rustTargetTypeRefEquals(template, actual);
+}
+
+export function selectRustBorrowedCallbackOperation(selection: JsOperationSelection, carrier: Extract<TargetTypeRef, { readonly kind: "closure" }>): JsOperationSelection {
+  const callback = selection.callback;
+  const borrowed = callback?.borrowedParameters;
+  if (callback === undefined || borrowed === undefined || selection.fact.kind !== "provider-operation") return selection;
+  const parameterCarriers = selection.parameterCarriers!.map((parameter, index) =>
+    index !== callback.sourceArgumentIndex ? parameter : {
+      ...carrier,
+      args: carrier.args.map(referent => ({ kind: "reference" as const, referent, mutable: false })),
+    });
+  return {
+    ...selection, parameterCarriers,
+    fact: { ...selection.fact, target: borrowed.target, parameterCarriers },
+    callback: { ...callback, failure: { kind: "invocation", fallibleTarget: borrowed.fallibleTarget } },
+  };
 }
