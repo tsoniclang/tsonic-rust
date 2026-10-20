@@ -59,7 +59,7 @@ export function createRustTypeOnlyDeclarationProducer(
       const families = new Set(walk.context.typeFamilies.families().flatMap(selected =>
         selected.kind === "conditional" ? [selected.declaration] : []));
       for (const file of files) for (const statement of walk.context.ast.statements(file)) {
-        if (statement === undefined) throw new Error("Type-only declaration analysis received an incomplete checked source file.");
+        if (statement === undefined) failTargetAnalysisInvariant("tsonic-rust", "Type-only declaration analysis received an incomplete checked source file.", file);
         finalizeStatement(walk, statement, families);
       }
     },
