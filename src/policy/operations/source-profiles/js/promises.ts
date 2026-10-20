@@ -1,10 +1,6 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { JsOperationRequest, JsOperationSelection } from "./model.js";
-import {
-  rustCallableTargetType, rustClosureProtocol, rustCallableProtocol,
-  rustJsPromiseOutputTargetType, rustJsPromiseResolutionTargetType, rustJsPromiseTargetType,
-  rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType,
-} from "../../../../target-model/types/index.js";
+import { rustCallableTargetType, rustClosureProtocol, rustCallableProtocol, rustJsPromiseOutputTargetType, rustJsPromiseResolutionTargetType, rustJsPromiseTargetType, rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import { rustInferCarrier } from "./rows.js";
 import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
 
