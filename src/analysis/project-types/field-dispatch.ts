@@ -1,3 +1,5 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { selectRustProjectFieldDispatch } from "../../policy/operations/declarations/field-dispatch.js";
 import type {
   AstReader,
   Node,
@@ -7,7 +9,7 @@ import { sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
-} from "./type-policy.js";
+} from "./index.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 import type { RustFrozenDataWritePlan } from "../../target-model/records/frozen-data.js";
 import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
@@ -55,7 +57,7 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
   > | undefined;
   const requirePlans = (): WeakMap<Node, RustProjectFieldDispatchPlan> => {
     if (plans === undefined) {
-      throw new Error("Rust project field dispatch plan was read before source analysis initialized it.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust project field dispatch plan was read before source analysis initialized it.");
     }
     return plans;
   };
@@ -64,14 +66,14 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
     WeakMap<Node, RustProjectFieldImplementation>
   > => {
     if (implementations === undefined) {
-      throw new Error("Rust project field implementations were read before source analysis initialized them.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust project field implementations were read before source analysis initialized them.");
     }
     return implementations;
   };
   const registry: RustProjectFieldDispatchPlanRegistry = {
     recordObjectLiteralAccessor(declarations, role) {
       if (plans !== undefined) {
-        throw new Error("Rust project object-literal accessor roles cannot be recorded after initialization.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust project object-literal accessor roles cannot be recorded after initialization.");
       }
       for (const declaration of declarations) {
         const current = pending.get(declaration) ?? { read: false, write: false };
@@ -83,7 +85,7 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
     },
     initialize(input) {
       if (plans !== undefined || implementations !== undefined) {
-        throw new Error("Rust project field dispatch plan can be initialized only once.");
+        failTargetAnalysisInvariant("tsonic-rust", "Rust project field dispatch plan can be initialized only once.");
       }
       const nextPlans = new WeakMap<Node, RustProjectFieldDispatchPlan>();
       const nextImplementations = new WeakMap<
@@ -133,23 +135,11 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
           }
           const readonly = input.ast.hasModifierKind(field.declaration, "readonly");
           const receiverAlias = input.receiverFieldAliases.aliasFor(field.declaration) !== undefined;
-          nextPlans.set(field.declaration, Object.freeze({
-            declaration: field.declaration,
-            readonly,
-            stored: !receiverAlias && !accessorRead && !accessorWrite,
+          nextPlans.set(field.declaration, selectRustProjectFieldDispatch({
+            declaration: field.declaration, readonly,
+            receiverAlias, receiverAliasRead, accessorRead, accessorWrite,
             mutableContent: input.mutableContentFields.has(field.declaration),
-            read: Object.freeze({
-              selfMode: accessorRead || receiverAlias || receiverAliasRead ? "rc" : "ref",
-              fallible: accessorRead,
-            }),
-            ...(readonly
-              ? {}
-              : {
-                  write: Object.freeze({
-                    selfMode: accessorWrite ? "rc" as const : "ref" as const,
-                    fallible: accessorWrite || input.frozenDataWrites.receiverForDeclaration(field.declaration) !== undefined,
-                  }),
-                }),
+            frozenWrite: input.frozenDataWrites.receiverForDeclaration(field.declaration) !== undefined,
           }));
         }
       }
