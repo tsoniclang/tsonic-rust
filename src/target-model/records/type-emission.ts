@@ -24,6 +24,8 @@ export interface RustTypePositions {
 }
 
 export interface RustTypeEmission {
+  readonly option: boolean;
+  readonly string: boolean;
   readonly optionPayload: Readonly<Record<"str" | "shared", RustOptionPayloadView>> | undefined;
   readonly completion: "unit" | "never" | "value";
   readonly promiseObject: boolean;
