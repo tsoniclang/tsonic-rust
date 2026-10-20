@@ -14,9 +14,9 @@ import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./rec
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 
 export function planRustGenericCallableValue(
-  node: Node, _carrier: TargetTypeRef, context: RustPlanContext,
+  node: Node, carrier: TargetTypeRef, context: RustPlanContext,
 ): RustExpr | undefined {
-  const selected = context.input.program.records.genericValue.get(node)
+  const selected = context.input.program.records.genericValue.get(node, carrier)
     ?? failRustPlannerInvariant("An admitted generic callable requires its native construction plan.", node);
   const { implementation, member } = selected;
   const rendered = rustTypeFromCarrierInContext(selected.carrier, context);

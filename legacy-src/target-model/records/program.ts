@@ -88,6 +88,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly flowReadEmission: import("./flow-read-emission.js").RustFlowReadEmissionRecords["flowReadEmission"];
   readonly projectUnionMapping: import("./project-union-mappings.js").RustProjectUnionMappingRecords["projectUnionMapping"];
   readonly capturedFieldIdentity: import("./receiver-captures.js").RustReceiverCaptureEmissionRecords["capturedFieldIdentity"];
+  readonly sourceCallableEmission: import("./source-callable-value.js").RustSourceCallableEmissionRecords["sourceCallableEmission"];
   readonly updateProjection: { readonly get: (operand: import("@tsonic/tsts").Node, field: import("@tsonic/tsts").Node) => readonly import("./direct-storage.js").RustUpdateProjectionArgument[] | undefined };
   readonly errorFieldEmission: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldEmission"];
   readonly errorFieldSnapshot: import("./error-field-borrows.js").RustErrorFieldRecords["errorFieldSnapshot"];

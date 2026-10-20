@@ -54,7 +54,7 @@ export interface RustGenericIdentityEmission {
 
 export interface RustGenericEmissionRecords {
   readonly genericIdentity: { readonly get: (node: Node) => RustGenericIdentityEmission | undefined };
-  readonly genericValue: { readonly get: (node: Node) => RustGenericValueEmission | undefined };
+  readonly genericValue: { readonly get: (node: Node, carrier: TargetTypeRef) => RustGenericValueEmission | undefined };
   readonly genericImplementation: { readonly get: (implementation: RustGenericCallableImplementation) => RustGenericImplementationEmission | undefined };
   readonly genericDefinition: { readonly get: (definition: RustGenericCallablePhysicalDefinition) => RustGenericDefinitionEmission | undefined };
   readonly genericDeclarations: { readonly get: (sourceFile: SourceFile) => RustGenericDeclarationInventory | undefined };

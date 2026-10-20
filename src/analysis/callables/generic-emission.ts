@@ -8,12 +8,16 @@ import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutu
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 export function analyzeRustGenericEmission(input: {
   readonly program: Omit<RustTargetProgram, "reachability">;
   readonly sourceFiles: readonly SourceFile[];
   readonly nodes: readonly Node[];
   readonly producer: RustGenericEmissionProducer;
+  readonly sourceValues: readonly RustSourceCallableValueFact[];
 }): void {
   const { program, producer } = input;
   const generic = program.callableValues.generic;
@@ -30,6 +34,13 @@ export function analyzeRustGenericEmission(input: {
       suspended: program.records.asyncFunction.get(implementation.declaration) !== undefined || program.records.generator.get(implementation.declaration) !== undefined });
   }
   const physical = generic.physical.definitions();
+  const requests = new Map<Node, Map<string, TargetTypeRef>>();
+  const request = (node: Node, carrier: TargetTypeRef): void => {
+    if (rustGenericCallableProtocol(carrier) === undefined) return;
+    const rows = requests.get(node) ?? new Map<string, TargetTypeRef>();
+    rows.set(closedMetadataKey(carrier), carrier);
+    requests.set(node, rows);
+  };
   for (const node of input.nodes) {
     const comparison = program.callableValues.genericIdentities.forComparison(node);
     if (comparison !== undefined) {
@@ -48,13 +59,19 @@ export function analyzeRustGenericEmission(input: {
     if (implementation === undefined) continue;
     const selected = program.callableValues.nativeStorage.operandFor(node);
     if (selected.kind === "unresolved") continue;
-    const definition = generic.physical.definitionFor(selected.carrier);
+    request(node, selected.carrier);
+  }
+  for (const value of input.sourceValues) request(value.sourceDeclaration, value.carrier);
+  for (const [node, carriers] of requests) for (const carrier of carriers.values()) {
+    const implementation = generic.implementationFor(node);
+    if (implementation === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted generic source callable requires its exact native implementation.", node);
+    const definition = generic.physical.definitionFor(carrier);
     if (definition === undefined) continue;
     const member = definition.members.length === 1 ? definition.members[0] : undefined;
     const environment = generic.physical.environmentFor(implementation);
-    if (member?.implementation !== implementation || environment === undefined || !rustGenericCallableSignaturesMatch(implementation.carrier, selected.carrier))
+    if (member?.implementation !== implementation || environment === undefined || !rustGenericCallableSignaturesMatch(implementation.carrier, carrier))
       failTargetAnalysisInvariant("tsonic-rust", "A generic callable requires one sealed native implementation and environment.", node);
-    producer.value(node, { carrier: selected.carrier, implementation, member,
+    producer.value(node, { carrier, implementation, member,
       marker: definition.signature.environmentParameters.length + environment.parameters.length > 0 });
   }
   for (const definition of physical) {

@@ -144,6 +144,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly flowReadEmissionPlans: import("./flow-read-emission.js").RustFlowReadEmissionProducer;
   readonly projectUnionMappingPlans: import("./project-union-mappings.js").RustProjectUnionMappingProducer;
   readonly receiverCaptureEmissionPlans: import("./receiver-captures.js").RustReceiverCaptureEmissionProducer;
+  readonly sourceCallableEmissionPlans: import("./source-callable-emission.js").RustSourceCallableEmissionProducer;
   readonly errorFieldPlans: import("./error-field-borrows.js").RustErrorFieldProducer;
   readonly stringComparisonPlans: import("./string-comparison-views.js").RustStringComparisonViewProducer;
   readonly genericFlowApplications: import("./generic-callable-flow.js").RustGenericCallableFlowProducer;

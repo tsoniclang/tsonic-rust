@@ -124,6 +124,7 @@ import { analyzeRustLexicalValues } from "../callables/lexical-values.js";
 import { analyzeRustNativeProtocolEmission } from "../callables/native-protocol-emission.js";
 import { analyzeRustGenericErrorEmission } from "../callables/generic-error-emission.js";
 import { analyzeRustGenericEmission } from "../callables/generic-emission.js";
+import { analyzeRustSourceCallableEmission } from "../callables/source-callable-value.js";
 import { analyzeRustLexicalFunctionEmission } from "../callables/lexical-emission.js";
 import { analyzeRustCallableDeclarationEmission } from "../callables/declaration-emission.js";
 import { analyzeRustMethodEmission } from "../declarations/classes/methods.js";
@@ -561,7 +562,10 @@ export function analyzeRustTargetProgram(
   analyzeRustGenericErrorEmission({ ast: context.ast, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
     regions: program.errorRegions, index: genericCallableErrors.value, physical: program.callableValues.generic.physical,
     producer: context.records.errorEmissionPlans });
-  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes, producer: context.records.genericEmissionPlans });
+  const sourceCallableEmission = analyzeRustSourceCallableEmission(program, context.nativeNodes, context.records.sourceCallableEmissionPlans);
+  if (sourceCallableEmission.issues.length !== 0) return rejectedTargetStage(sourceCallableEmission.issues);
+  analyzeRustGenericEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes,
+    producer: context.records.genericEmissionPlans, sourceValues: sourceCallableEmission.values });
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
@@ -674,7 +678,7 @@ export function analyzeRustTargetProgram(
   if (assertionIssues.length !== 0) return rejectedTargetStage(assertionIssues);
   analyzeRustStringComparisonViews(program, context.nativeNodes, context.records.stringComparisonPlans);
   const nativeLayoutTypes = analyzeRustNativeMemoryEmission(program, context.nativeNodes, context.records.nativeLayoutPlans);
-  analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans, nativeLayoutTypes);
+  analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans, [...nativeLayoutTypes, ...sourceCallableEmission.types]);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
   analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>

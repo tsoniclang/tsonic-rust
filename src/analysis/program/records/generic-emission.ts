@@ -1,5 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustGenericCallableImplementation, RustGenericCallablePhysicalDefinition } from "../../../target-model/records/generic-callables.js";
 import type { RustGenericDeclarationInventory, RustGenericDefinitionEmission, RustGenericEmissionRecords,
   RustGenericImplementationEmission, RustGenericValueEmission, RustGenericIdentityEmission } from "../../../target-model/records/generic-emission.js";
@@ -15,13 +17,13 @@ export interface RustGenericEmissionProducer {
 
 export function createRustGenericEmissionProducer(assertOpen: () => void): RustGenericEmissionProducer {
   const identities = new WeakMap<Node, RustGenericIdentityEmission>();
-  const values = new WeakMap<Node, RustGenericValueEmission>();
+  const values = new WeakMap<Node, Map<string, RustGenericValueEmission>>();
   const implementations = new WeakMap<RustGenericCallableImplementation, RustGenericImplementationEmission>();
   const definitions = new WeakMap<RustGenericCallablePhysicalDefinition, RustGenericDefinitionEmission>();
   const inventories = new WeakMap<SourceFile, RustGenericDeclarationInventory>();
   return Object.freeze({ records: Object.freeze({
     genericIdentity: Object.freeze({ get: (node: Node) => identities.get(node) }),
-    genericValue: Object.freeze({ get: (node: Node) => values.get(node) }),
+    genericValue: Object.freeze({ get: (node: Node, carrier: TargetTypeRef) => values.get(node)?.get(closedMetadataKey(carrier)) }),
     genericImplementation: Object.freeze({ get: (subject: RustGenericCallableImplementation) => implementations.get(subject) }),
     genericDefinition: Object.freeze({ get: (subject: RustGenericCallablePhysicalDefinition) => definitions.get(subject) }),
     genericDeclarations: Object.freeze({ get: (subject: SourceFile) => inventories.get(subject) }),
@@ -33,8 +35,11 @@ export function createRustGenericEmissionProducer(assertOpen: () => void): RustG
     },
     value(subject: Node, value: RustGenericValueEmission): void {
       assertOpen();
-      if (values.has(subject)) failTargetAnalysisInvariant("tsonic-rust", "A generic callable value has one native construction owner.", subject);
-      values.set(subject, Object.freeze(value));
+      const rows = values.get(subject) ?? new Map<string, RustGenericValueEmission>();
+      const key = closedMetadataKey(value.carrier);
+      if (rows.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A generic callable value has one native construction owner.", subject);
+      rows.set(key, Object.freeze(value));
+      values.set(subject, rows);
     },
     implementation(subject: RustGenericCallableImplementation, value: RustGenericImplementationEmission): void {
       assertOpen();
