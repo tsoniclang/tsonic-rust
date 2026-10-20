@@ -5,10 +5,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { createRustRecordFamily } from "./family.js";
 
-type RustTypedLocationOperandsFor<Plan> = Plan extends RustTypedLocationPlan
-  ? Omit<Plan, "call" | "pointeeCarrier" | "locationCarrier"> : never;
-
-export type RustTypedLocationOperands = RustTypedLocationOperandsFor<RustTypedLocationPlan>;
+import type { RustTypedLocationOperands } from "../../../target-model/records/typed-location-operands.js";
 
 export interface RustTypedLocationProducer {
   readonly records: RustRecordFamily<RustTypedLocationPlan>;
