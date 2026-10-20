@@ -13,8 +13,10 @@ import type { RustGeneratedUnionDefinition } from "../../../target-model/records
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustCheckedProjectProjectionEmission } from "../../../target-model/records/project-emission.js";
 import type { RustProjectProjectionImplementation } from "../../../target-model/records/project-projections.js";
+import type { RustProjectErrorEmission } from "../../../target-model/records/project-emission.js";
 
 export interface RustProjectEmissionProducer {
+  error(definition: RustProjectTypeDefinition, value: RustProjectErrorEmission): void;
   memberSlots(declaration: Node, values: ReadonlyMap<RustProjectMemberSlotRole, string>): void;
   projections(definition: RustProjectTypeDefinition, values: readonly RustProjectProjectionImplementation[]): void;
   stateConstruction(definition: RustProjectTypeDefinition, value: { readonly baseName: string; readonly visibility: "public" | "crate" }): void;
@@ -45,9 +47,11 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
   const checkedProjections = new Map<string, RustCheckedProjectProjectionEmission>();
   const projections = new WeakMap<RustProjectTypeDefinition, readonly RustProjectProjectionImplementation[]>();
   const slots = new WeakMap<Node, ReadonlyMap<RustProjectMemberSlotRole, string>>();
+  const errors = new WeakMap<RustProjectTypeDefinition, RustProjectErrorEmission>();
   const genericKey = (indexes: readonly number[], outlives: readonly RustLifetimeRef[], body: true | undefined): string =>
     JSON.stringify([indexes, outlives.map(rustLifetimeKey), body === true]);
   return Object.freeze({ records: Object.freeze({
+    projectError: Object.freeze({ get: (definition: RustProjectTypeDefinition) => errors.get(definition) }),
     projectMemberSlot: Object.freeze({ get: (declaration: Node, role: RustProjectMemberSlotRole) => slots.get(declaration)?.get(role) }),
     projectProjectionImplementations: Object.freeze({ get: (definition: RustProjectTypeDefinition) => projections.get(definition) }),
     projectStateConstruction: Object.freeze({ get: (definition: RustProjectTypeDefinition) => stateConstruction.get(definition) }),
@@ -67,6 +71,11 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
     projectGenerics: Object.freeze({ get: (definition: RustProjectTypeDefinition, indexes?: readonly number[], outlives: readonly RustLifetimeRef[] = [], body?: true) =>
       generics.get(definition)?.get(genericKey(indexes ?? definition.genericParameters.map((_, index) => index), outlives, body)) }),
   }),
+    error(definition: RustProjectTypeDefinition, value: RustProjectErrorEmission): void {
+      assertOpen();
+      if (errors.has(definition)) failTargetAnalysisInvariant("tsonic-rust", "A native project error has one exact field and inheritance owner.", definition.declaration);
+      errors.set(definition, Object.freeze(value));
+    },
     memberSlots(declaration: Node, values: ReadonlyMap<RustProjectMemberSlotRole, string>): void {
       assertOpen();
       if (slots.has(declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native member slot inventory has one source owner.", declaration);

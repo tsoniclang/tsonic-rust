@@ -20,6 +20,7 @@ export interface RustProjectGenericEmission {
 }
 
 export interface RustProjectEmissionRecords {
+  readonly projectError: { readonly get: (definition: RustProjectTypeDefinition) => RustProjectErrorEmission | undefined };
   readonly projectMemberSlot: { readonly get: (declaration: Node, role: RustProjectMemberSlotRole) => string | undefined };
   readonly projectProjectionImplementations: { readonly get: (definition: RustProjectTypeDefinition) => readonly RustProjectProjectionImplementation[] | undefined };
   readonly projectStateConstruction: { readonly get: (definition: RustProjectTypeDefinition) => { readonly baseName: string; readonly visibility: "public" | "crate" } | undefined };
@@ -37,3 +38,9 @@ export interface RustProjectEmissionRecords {
 }
 
 export type RustCheckedProjectProjectionEmission = { readonly kind: "structural" | "project" | "excluded" };
+
+export interface RustProjectErrorEmission {
+  readonly superTrait: boolean;
+  readonly inherited: boolean;
+  readonly fields: readonly { readonly name: "name" | "message" | "stack"; readonly declaration: Node; readonly read: string | undefined; readonly write: string | undefined }[];
+}

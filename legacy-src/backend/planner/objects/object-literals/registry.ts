@@ -10,7 +10,6 @@ import { allocateMemberFieldName, planContractImplementation } from "./contracts
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 
-import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -48,11 +47,7 @@ export function createImplementationPlan(
   if (definition?.kind !== "interface" || sourceValue === undefined || wrapperType === undefined) {
     return undefined;
   }
-  const contracts = rustProjectInstanceContracts(
-    context.input.program.projectTypes,
-    definition,
-    fact.resultCarrier,
-  );
+  const contracts = context.input.program.records.projectInstanceContracts.get(fact.resultCarrier);
   if (contracts === undefined) {
     return undefined;
   }

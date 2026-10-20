@@ -33,7 +33,7 @@ import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } fro
 import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
-import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
+import { rustProjectInstanceContracts } from "../project-types/instance-contracts.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";

@@ -81,6 +81,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly classValueRead: import("./class-environments.js").RustClassEnvironmentRecords["classValueRead"];
   readonly classValueModule: import("./class-environments.js").RustClassEnvironmentRecords["classValueModule"];
   readonly projectType: import("./project-emission.js").RustProjectEmissionRecords["projectType"];
+  readonly projectError: import("./project-emission.js").RustProjectEmissionRecords["projectError"];
   readonly projectDeclaration: import("./project-emission.js").RustProjectEmissionRecords["projectDeclaration"];
   readonly projectMemberOwner: import("./project-emission.js").RustProjectEmissionRecords["projectMemberOwner"];
   readonly projectMemberSlot: import("./project-emission.js").RustProjectEmissionRecords["projectMemberSlot"];
@@ -101,6 +102,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly objectLiteralEmission: import("./object-literal-emission.js").RustObjectLiteralEmissionRecords["objectLiteralEmission"];
   readonly objectLiteralEmissions: import("./object-literal-emission.js").RustObjectLiteralEmissionRecords["objectLiteralEmissions"];
   readonly receiverAlias: import("./project-classes.js").RustProjectClassRecords["receiverAlias"];
+  readonly projectInstanceContracts: import("./project-classes.js").RustProjectClassRecords["projectInstanceContracts"];
   readonly projectClassAccessors: import("./project-classes.js").RustProjectClassRecords["projectClassAccessors"];
   readonly projectClassFields: import("./project-classes.js").RustProjectClassRecords["projectClassFields"];
   readonly projectMethodProperties: import("./project-classes.js").RustProjectClassRecords["projectMethodProperties"];

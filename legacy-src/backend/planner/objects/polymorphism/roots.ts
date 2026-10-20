@@ -39,7 +39,6 @@ import { rustCapturedFieldStorage } from "../captured-fields.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import { checkedProjectProjectionTypes, planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
-import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
@@ -61,7 +60,7 @@ export function planProjectRootImplementations(
   const errorImplementations = planRustProjectErrorRoot(concrete, concreteCarrier, rootType, layers, context);
   if (errorImplementations === undefined) return undefined;
   const generics = rustProjectRepresentationGenerics(representation, context);
-  const instanceContracts = rustProjectInstanceContracts(context.input.program.projectTypes, concrete, concreteCarrier);
+  const instanceContracts = context.input.program.records.projectInstanceContracts.get(concreteCarrier);
   const projectionTypes = instanceContracts === undefined ? undefined
     : checkedProjectProjectionTypes(instanceContracts,
       context.input.program.classValues.instanceViewImplementations.filter(view =>
@@ -187,7 +186,7 @@ function planRootContractFunctions(
   const functions: RustImplFunction[] = [];
   const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(contract);
   if (projectionSlot !== undefined) {
-    const contracts = rustProjectInstanceContracts(context.input.program.projectTypes, concrete, concreteCarrier);
+    const contracts = context.input.program.records.projectInstanceContracts.get(concreteCarrier);
     const projection = contracts === undefined ? undefined
       : planCheckedProjectProjectionImplementation(projectionSlot, contracts,
         context.input.program.classValues.instanceViewImplementations.filter(view =>

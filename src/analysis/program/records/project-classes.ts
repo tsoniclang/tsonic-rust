@@ -1,11 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
+import type { RustProjectTypeDefinition, RustProjectInstanceContract } from "../../../target-model/types/project-types.js";
 import type { RustProjectClassRecords, RustProjectCallableSignature, RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../../target-model/records/project-classes.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export interface RustProjectClassProducer {
+  contracts(carrier: TargetTypeRef, values: readonly RustProjectInstanceContract[]): void;
   alias(source: TargetTypeRef, target: TargetTypeRef, value: { readonly same: boolean; readonly polymorphic: boolean }): void;
   readonly records: RustProjectClassRecords;
   members(definition: RustProjectTypeDefinition, members: readonly Node[], accessors: readonly { readonly declaration: Node; readonly role: "read" | "write" }[]): void;
@@ -27,7 +28,9 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
   const implementations = new WeakMap<RustProjectTypeDefinition, ReadonlyMap<Node, Node>>();
   const callables = new WeakMap<Node, RustProjectCallableSignature>();
   const aliases = new Map<string, { readonly same: boolean; readonly polymorphic: boolean }>();
+  const contracts = new Map<string, readonly RustProjectInstanceContract[]>();
   return Object.freeze({ records: Object.freeze({
+    projectInstanceContracts: Object.freeze({ get: (carrier: TargetTypeRef) => contracts.get(closedMetadataKey(carrier)) }),
     receiverAlias: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => aliases.get(closedMetadataKey([source, target])) }),
     projectClassMembers: Object.freeze({ get: (definition: RustProjectTypeDefinition) => members.get(definition) }),
     projectClassAccessors: Object.freeze({ get: (definition: RustProjectTypeDefinition) => accessors.get(definition) }),
@@ -39,6 +42,12 @@ export function createRustProjectClassProducer(assertOpen: () => void): RustProj
     projectMemberImplementation: Object.freeze({ get: (definition: RustProjectTypeDefinition, member: Node) => implementations.get(definition)?.get(member) }),
     projectCallableSignature: Object.freeze({ get: (member: Node) => callables.get(member) }),
   }),
+    contracts(carrier: TargetTypeRef, values: readonly RustProjectInstanceContract[]): void {
+      assertOpen();
+      const key = closedMetadataKey(carrier);
+      if (contracts.has(key)) failTargetAnalysisInvariant("tsonic-rust", "A native project instance has one exact contract graph owner.");
+      contracts.set(key, Object.freeze(values));
+    },
     alias(source: TargetTypeRef, target: TargetTypeRef, value: { readonly same: boolean; readonly polymorphic: boolean }): void {
       assertOpen();
       const key = closedMetadataKey([source, target]);

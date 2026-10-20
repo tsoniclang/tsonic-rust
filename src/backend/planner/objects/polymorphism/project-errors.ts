@@ -6,7 +6,7 @@ import { projectFieldStoragePath, type ProjectClassStateLayer } from "./model.js
 import { rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
-import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
+import { failRustPlannerInvariant } from "../../../invariants.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustErrorObjectFormatting } from "../../program/error-formatting.js";
 
@@ -25,7 +25,9 @@ export function rustProjectErrorSuperTraits(
   definition: RustProjectTypeDefinition,
   context: RustPlanContext,
 ): readonly RustType[] {
-  return context.input.program.projectTypes.externalBaseForDefinition(definition)?.programError === true
+  const selected = context.input.program.records.projectError.get(definition);
+  if (selected === undefined) failRustPlannerInvariant("An admitted project type requires its sealed native error classification.", definition.declaration);
+  return selected.superTrait
     ? [{ kind: "named", path: "rt::WritableRetainedErrorObject" }] : [];
 }
 
@@ -36,16 +38,17 @@ export function planRustProjectErrorRoot(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const inherited = context.input.program.projectTypes.inheritedExternalBaseForDefinition(definition);
-  if (inherited?.base.programError !== true) return [];
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
-  if (representation === undefined) return undefined;
+  const error = context.input.program.records.projectError.get(definition);
+  if (error === undefined) failRustPlannerInvariant("An admitted project type requires its sealed native error classification.", definition.declaration);
+  if (!error.inherited) return [];
+  const representation = context.input.program.records.objectRepresentation.get(definition);
+  if (representation === undefined) failRustPlannerInvariant("An admitted native error requires its exact object representation.", definition.declaration);
   const functions: RustImplFunction[] = [];
   const setters: RustImplFunction[] = [];
-  for (const name of ["name", "message", "stack"] as const) {
-    const selected = inherited.base.fields.find(candidate => candidate.sourceName === name);
-    const storage = selected === undefined ? undefined : projectFieldStoragePath(selected.declaration, layers, context);
-    if (storage === undefined) return undefined;
+  for (const selected of error.fields) {
+    const { name } = selected;
+    const storage = projectFieldStoragePath(selected.declaration, layers, context);
+    if (storage === undefined) failRustPlannerInvariant("An admitted native error field requires its exact physical storage path.", selected.declaration);
     const value = storage.reduce(field, path("state"));
     const read: RustExpr = name === "stack"
       ? method(method({ kind: "call", path: "core::cell::Ref::filter_map", args: [
@@ -71,10 +74,10 @@ export function planRustProjectErrorRoot(
     path("rt::JsErrorKind::Error")));
   functions.push(errorFunction("error_identity_key", { kind: "primitive", name: "usize" },
     method(field(path("self"), rustProjectObjectIdentityField), "key")));
-  const contracts = rustProjectInstanceContracts(context.input.program.projectTypes, definition, carrier);
+  const contracts = context.input.program.records.projectInstanceContracts.get(carrier);
   const projection = contracts === undefined ? undefined
     : planCheckedProjectProjectionImplementation("project_error", contracts, [], context);
-  if (projection === undefined) return undefined;
+  if (projection === undefined) failRustPlannerInvariant("An admitted native error requires its checked project projection implementation.", definition.declaration);
   const generics = rustProjectRepresentationGenerics(representation, context);
   return [...planRustErrorObjectFormatting(rootType, generics), { kind: "impl", generics,
     trait: { kind: "named", path: "rt::ErrorObject" }, target: rootType, members: functions },
@@ -95,9 +98,11 @@ export function planRustProjectErrorWrapper(
   wrapperType: RustType,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  if (context.input.program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base.programError !== true) return [];
-  const representation = context.input.program.objectRepresentations.representationFor(definition);
-  if (representation === undefined) return undefined;
+  const error = context.input.program.records.projectError.get(definition);
+  if (error === undefined) failRustPlannerInvariant("An admitted project type requires its sealed native error classification.", definition.declaration);
+  if (!error.inherited) return [];
+  const representation = context.input.program.records.objectRepresentation.get(definition);
+  if (representation === undefined) failRustPlannerInvariant("An admitted native error requires its exact object representation.", definition.declaration);
   const receiver = field(path("self"), rustProjectObjectDispatchField);
   const generics = rustProjectRepresentationGenerics(representation, context);
   const retentionGenerics = { ...generics, wherePredicates: [...generics.wherePredicates,

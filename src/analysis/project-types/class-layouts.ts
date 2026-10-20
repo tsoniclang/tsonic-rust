@@ -13,6 +13,7 @@ import { rustCallableInvocationResult } from "../callables/results.js";
 import { selectRustProjectCallableSignature } from "../../policy/objects/project-dispatch-callables.js";
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustProjectInstanceContracts } from "./instance-contracts.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer): readonly TargetDiagnostic[] {
   const { ast } = program.source;
@@ -136,6 +137,9 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustTargetProgram, 
     pending.push(...rustTargetTypeChildren(carrier));
     const definition = program.projectTypes.definitionForCarrier(carrier);
     if (definition === undefined || !members.has(definition)) continue;
+    const contracts = rustProjectInstanceContracts(program.projectTypes, definition, carrier);
+    if (contracts === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native instance requires its exact checked contract graph.", definition.declaration);
+    producer.contracts(carrier, contracts);
     const ancestors = [carrier];
     const visitedAncestors = new Set<string>();
     for (let ancestorIndex = 0; ancestorIndex < ancestors.length; ancestorIndex++) {

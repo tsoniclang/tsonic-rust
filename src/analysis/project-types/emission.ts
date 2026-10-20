@@ -51,6 +51,14 @@ export function analyzeRustProjectEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     const representation = program.objectRepresentations.representationFor(definition);
     producer.definition(definition, representation);
+    const inheritedError = program.projectTypes.inheritedExternalBaseForDefinition(definition)?.base;
+    producer.error(definition, { superTrait: program.projectTypes.externalBaseForDefinition(definition)?.programError === true,
+      inherited: inheritedError?.programError === true, fields: inheritedError?.programError !== true ? Object.freeze([])
+        : Object.freeze((["name", "message", "stack"] as const).map(name => {
+          const field = inheritedError.fields.find(field => field.sourceName === name);
+          if (field === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native error requires its exact provider field identity.", definition.declaration);
+          return Object.freeze({ name, declaration: field.declaration, read: program.projectTypes.memberSlotName(field.declaration, "read"), write: program.projectTypes.memberSlotName(field.declaration, "write") });
+        })) });
     producer.projections(definition, program.declarationGenericRequirements.projectionImplementationsFor(definition));
     const component = program.sourcePackageComponents.componentForFile(definition.fileName);
     const publicState = component !== undefined && (component.publishesImplementationAbi ||
