@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../types/resolution/model.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../analysis/types/resolution/model.js";
 import { resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "./selected-source.js";
 
 export function rustSourceUnionMemberDeclarationIsOwned(
