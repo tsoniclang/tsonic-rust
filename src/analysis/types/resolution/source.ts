@@ -1,4 +1,4 @@
-import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../../policy/types/resolution/source-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import { ArrayTypeNode_ElementType, Node_Type, TypeReferenceNode_TypeName, TypeOperatorNode_Type, sourceIntegerInduction } from "@tsonic/target-api/source";
 import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsArrayTargetType, rustJsStringTargetType, rustSourceLocationTargetType, rustRawPointerTargetType, rustAbsenceTargetType, isRustAbsenceCarrier, isRustUnitCarrier, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTupleTargetType, rustUnitTargetType, rustVecTargetType } from "../../../target-model/types/index.js";
 import { asNode } from "../../../policy/identities/selected-source.js";

@@ -16,7 +16,7 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../
 import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
 import { isRustErasedNominalMember } from "../../../policy/types/objects/source-shapes.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
-import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "../../../policy/types/resolution/source-unions.js";
+import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "./source-unions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export function retainRustStructuralInstantiation(

@@ -16,7 +16,7 @@ import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { resolveRustTupleElementTargetType } from "../types/resolution/index.js";
 import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
 import { resolveRustInferredUnion } from "../types/resolution/inferred-unions.js";
-import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../policy/types/resolution/source-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../types/resolution/source-unions.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";

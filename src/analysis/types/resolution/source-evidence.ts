@@ -1,4 +1,4 @@
-import { resolveRustSourceUnionCarrier } from "../../../policy/types/resolution/source-unions.js";
+import { resolveRustSourceUnionCarrier } from "./source-unions.js";
 import { rustCallableTargetType, rustCallableProtocol, rustOptionElementCarrier, rustSourceOptionalTargetType, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";

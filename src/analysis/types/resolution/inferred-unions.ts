@@ -5,7 +5,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../../policy/identities/source-union-members.js";
 import type { RustSourceUnionVariant } from "../../../target-model/records/source-types.js";
-import { rustSourceUnionMemberTypes } from "../../../policy/types/resolution/source-unions.js";
+import { rustSourceUnionMemberTypes } from "./source-unions.js";
 
 export function resolveRustInferredUnion(
   sourceType: Type,

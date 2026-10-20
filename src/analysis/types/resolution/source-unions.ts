@@ -1,24 +1,16 @@
+import { selectRustImmediateUnionCarrier } from "../../../policy/types/source-unions.js";
 import type { Node, Type } from "@tsonic/tsts";
 import { sourceBoundTypeRelationship, type SourceFileSemantics } from "@tsonic/target-api/source";
-import type { RustSourceUnion } from "../model/source-type-registry.js";
+import type { RustSourceUnion } from "../../../target-model/records/source-types.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustSourceUnionMemberDeclarationIsOwned } from "../../identities/source-union-members.js";
-import {
-  isRustAbsenceCarrier,
-  isRustUnitCarrier,
-  rustAbsenceTargetType,
-  isRustBigIntCarrier,
-  rustJsNumericTargetType,
-  rustJsStringNumberTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-} from "../../../target-model/types/index.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../../policy/identities/source-union-members.js";
+import { isRustAbsenceCarrier, isRustUnitCarrier, rustAbsenceTargetType } from "../../../target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../target-model/types/projections.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
-import { rustGenericCallableSignaturesMatch } from "../../../target-model/conversions/generic-callable.js";
+
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 
@@ -58,15 +50,8 @@ export function resolveRustUnionValueCarrier(
   options: RustTargetTypeResolutionOptions,
   resolveInferred: () => TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const callable = values[0];
-  if (callable !== undefined && values.every(value => rustGenericCallableSignaturesMatch(value, callable))) return callable;
-  if (options.jsEnabled && values.length === 2 &&
-    values.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
-    if (values.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType()))) {
-      return rustJsStringNumberTargetType();
-    }
-    if (values.some(isRustBigIntCarrier)) return rustJsNumericTargetType();
-  }
+  const direct = selectRustImmediateUnionCarrier(values, options.jsEnabled);
+  if (direct !== undefined) return direct;
   const common = options.resolveProjectUnionCarrier(values);
   return common !== undefined && values.some(carrier => rustTargetTypeRefEquals(carrier, common))
     ? common

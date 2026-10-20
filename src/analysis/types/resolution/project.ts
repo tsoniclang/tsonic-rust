@@ -3,7 +3,7 @@ import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarri
 import type { Node, Symbol, Type } from "@tsonic/tsts";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
+import { retainRustSourceUnionInstantiation } from "./source-unions.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";

@@ -13,7 +13,7 @@ import type { RustTypeAliasDeclarationFact } from "../../target-model/records/ca
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../types/resolution/type-families.js";
 import { resolveRustEvidenceNodesToCommonCarrier } from "../types/resolution/source-evidence.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/identities/source-union-members.js";
-import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
+import { rustSourceUnionValueTypes } from "../types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
