@@ -30,7 +30,7 @@ import {
 } from "../../target-model/types/index.js";
 import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
+import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";

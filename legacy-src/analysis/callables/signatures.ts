@@ -30,7 +30,7 @@ import {
 import { rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
+import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 

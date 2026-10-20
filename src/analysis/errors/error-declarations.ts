@@ -4,7 +4,7 @@ import { KindFunctionDeclaration, KindVariableStatement, Node_Initializer,
 import type { RustFactWalk } from "../program/walk.js";
 
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
+import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
 
 export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFiles: readonly SourceFile[]) {

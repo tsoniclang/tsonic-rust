@@ -17,7 +17,7 @@ import { finalizeRustCallableSignature } from "../callables/signature-query.js";
 import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "../callables/parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
+import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";

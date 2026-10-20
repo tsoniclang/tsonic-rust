@@ -15,7 +15,7 @@ import { rustCallableInvocationResult } from "./results.js";
 import { recordCallableParameterInputFacts, recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
+import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { selectRustCallableSuspension } from "./suspension.js";
 import type { RustCallableSuspensionSelection } from "./suspension.js";
 import { selectRustCallableLogicalReturn } from "./signatures.js";

@@ -16,7 +16,7 @@ import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.j
 import { resolveExpressionCarrier } from "./carriers.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
-import { resolveRecordLiteralCarrier } from "./records.js";
+import { resolveRecordLiteralCarrier } from "../objects/object-literals.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";

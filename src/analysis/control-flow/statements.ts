@@ -63,7 +63,7 @@ import { recordBindingPatternFacts } from "./binding-patterns.js";
 import { recordCallableDefaultParameterFacts } from "../callables/parameter-facts.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../errors/thrown-values.js";
-import { requireDenseSourceNodes } from "../expressions/records.js";
+import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";

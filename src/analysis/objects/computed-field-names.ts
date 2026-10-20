@@ -17,3 +17,13 @@ export function rustNativePropertyNameIssue(
       : "A unique-symbol property can describe an erased type contract but has no static native named-field representation.",
   });
 }
+
+import type { RustFactWalk } from "../program/walk.js";
+
+export function rustRecordPropertySourceName(walk: RustFactWalk, name: Node | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  const { ast } = walk.context;
+  if (!ast.is.IsComputedPropertyName(name) && !ast.is.IsNumericLiteral(name)) return ast.text(name);
+  const selected = walk.context.semanticsFor(name).propertyNames.get(name);
+  return selected?.kind === "resolved" ? selected.name : undefined;
+}
