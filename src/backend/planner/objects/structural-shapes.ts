@@ -28,7 +28,7 @@ export function planRustStructuralShapeModule(
   sourcePackageErrors: RustSourcePackageErrorPlan,
   programModuleName: string | undefined,
   publicShapeNames: ReadonlySet<string>,
-  diagnostics: TargetDiagnostic[],
+  _diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
   const definitions = input.program.records.structuralDeclarations.get(rootComponentId) ?? [];
   const unions = input.program.records.sourceUnionDeclarations.get(rootComponentId) ?? [];
