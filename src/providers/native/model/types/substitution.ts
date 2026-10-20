@@ -1,14 +1,4 @@
-import type {
-  RustCompilerAssociatedConstraint,
-  RustCompilerConstArgument,
-  RustCompilerGenericArgument,
-  RustCompilerGenericParameter,
-  RustCompilerLifetime,
-  RustCompilerLifetimeBinder,
-  RustCompilerTraitDispatch,
-  RustCompilerType,
-  RustCompilerTypeRequirement,
-} from "../model.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerLifetimeBinder, RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeRequirement } from "../model.js";
 
 export interface RustCompilerSubstitutions {
   readonly types: ReadonlyMap<string, RustCompilerType>;
