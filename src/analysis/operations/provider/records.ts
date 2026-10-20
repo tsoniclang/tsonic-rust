@@ -10,7 +10,7 @@ import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js"
 import { acceptRustOperation, elementProvenance } from "../../program/records/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
-import type { SelectedObjectShapeProjection } from "./object-shape-fields.js";
+import type { SelectedObjectShapeProjection } from "../../../policy/operations/source-profiles/js/object-fields.js";
 
 import { acceptSelectedCall } from "./calls/instantiation.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
