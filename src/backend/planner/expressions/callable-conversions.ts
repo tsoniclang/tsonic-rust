@@ -7,7 +7,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustCallableConstructionType } from "./fundamentals.js";
+import { rustCallableConstructionType } from "../types/constructions.js";
 
 import { planRustSourceCallableValueConstruction } from "./source-callable-value.js";
 import { planRustCallableExpressionBody } from "./callable.js";

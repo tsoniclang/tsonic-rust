@@ -15,12 +15,9 @@ import { planRustAbsentValue } from "./optional-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustTailShape, retainRustCheckedCompletion } from "../../target-ast/normalization/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
-import {
-  finishRuntimeCallableExpression,
-  requireExpressionCarrier,
-  rustCallableConstructionType,
-  rustOperationFact,
-} from "./fundamentals.js";
+import { rustOperationFact } from "./fundamentals.js";
+import { finishRuntimeCallableExpression } from "./lambda-creation.js";
+import { rustCallableConstructionType } from "../types/constructions.js";
 import { failRustPlannerInvariant } from "../../invariants.js";
 import { planExpression, type RustExpressionResultUse } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/binding-patterns.js";
@@ -79,9 +76,6 @@ export function planRustCallableExpressionBody(
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {
     failRustPlannerInvariant("Callable expressions require a finalized closure fact.", node);
-  }
-  if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
-    return undefined;
   }
   const captureFact = context.input.program.records.closureCapture.get(node);
   if (captureFact === undefined) {
