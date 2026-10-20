@@ -1,10 +1,5 @@
 import type { RustLifetimeRef } from "../lifetimes/index.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  RustTargetGenericParameter,
-  TargetTypeRef,
-} from "./model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "./model.js";
 import type { RustTargetGenericBindings } from "./carriers/generic-inference.js";
 
 export function rustTypeGenericArgument(type: TargetTypeRef): RustTargetGenericArgument {
