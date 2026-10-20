@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 
 export function resolveRustEnclosingGenericParameters(
   declaration: Node,
@@ -15,7 +15,7 @@ export function resolveRustEnclosingGenericParameters(
   const visited = new Set<Node>();
   let rows = 0;
   for (let owner: Node | undefined = declaration; owner !== undefined; owner = ast.parent(owner)) {
-    if (visited.has(owner) || visited.size >= 128) return undefined;
+    if (visited.has(owner)) return undefined;
     visited.add(owner);
     for (const parameter of parametersFor(owner)) {
       if (++rows > 65_536) return undefined;

@@ -11,7 +11,7 @@ import type { RustSourceCallableSpecializationIssue } from "../../target-model/r
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
-import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
+import { resolveRustEnclosingGenericParameters } from "./generic-environment.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 
