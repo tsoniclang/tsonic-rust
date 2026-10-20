@@ -6,7 +6,8 @@ import { asSourceNode } from "@tsonic/target-api/source";
 
 import { rustOptionElementCarrier, rustCallableProtocol, rustNativeCallableProtocol, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments, setCarrierFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
+import { prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments } from "../operations/source-call-arguments.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
