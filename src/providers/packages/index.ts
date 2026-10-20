@@ -29,10 +29,6 @@ export type {
   RustProviderTypeRequirement,
 } from "../../target-model/operations/model.js";
 export {
-  collectRustProviderOperationRows,
-  createRustProviderPackage,
-} from "./package.js";
-export {
   collectRustProviderSemantics,
   collectRustProviderSemanticsFromDefinitions,
   composeRustProviderSemantics,
