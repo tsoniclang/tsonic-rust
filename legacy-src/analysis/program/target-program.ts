@@ -52,6 +52,7 @@ import { analyzeRustProgramEmission } from "../source-modules/program-emission.j
 import { analyzeRustSourceArtifacts } from "../source-modules/artifacts.js";
 import { analyzeRustSafetyEmission } from "../safety/emission.js";
 import { analyzeRustArrayLiterals } from "../expressions/array-literals.js";
+import { analyzeRustPropertyValueProjection } from "../conversions/property-value-projection.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";
 import { analyzeRustSignatureVisibility } from "../reachability/signature-visibility.js";
 import { analyzeRustErrorVariantEmission } from "../errors/transport-emission.js";
@@ -614,6 +615,8 @@ export function analyzeRustTargetProgram(
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   const arrayLiteralIssues = analyzeRustArrayLiterals(program, context.nativeNodes, context.records.arrayLiteralPlans);
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
+  const propertyProjectionIssues = analyzeRustPropertyValueProjection(program, context.nativeNodes, context.records.propertyValueProjectionPlans);
+  if (propertyProjectionIssues.length !== 0) return rejectedTargetStage(propertyProjectionIssues);
   analyzeRustTypeEmission(program, context.nativeNodes, context.records.typeEmissionPlans);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);

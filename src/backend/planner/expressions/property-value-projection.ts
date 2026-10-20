@@ -3,13 +3,9 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
-import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { registerAliasFromPath } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { readRustProjectDispatchedField } from "../objects/project-objects.js";
@@ -23,30 +19,16 @@ export function planRustPropertyValueProjection(
   node: Node | undefined,
   convert: (conversion: RustValueConversionContract, source: RustExpr) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const fact = node === undefined ? undefined : context.input.program.records.propertyProjection.get(node);
-  const candidates = fact?.cases.filter(projection => rustTargetTypeRefEquals(projection.source, contract.source));
-  const projection = candidates?.length === 1 ? candidates[0] : undefined;
-  const selected = projection === undefined ? undefined : rustValueConversionContract(projection.conversion, context.input.program.typeDefinitions);
-  if (node === undefined || projection === undefined || selected === undefined ||
-    !closedMetadataEquals(selected, contract) || projection.reads.length !== contract.fields.length || context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node ?? context.sourceFile),
-      "rust.backend.property-projection", "Native property projection requires its exact sealed selected-parameter member reads."));
-    return undefined;
-  }
+  if (node === undefined) failRustPlannerInvariant("An admitted native property projection requires its source subject.", context.sourceFile);
+  const selected = context.input.program.records.propertyValueProjection.get(node, contract.source);
+  if (selected === undefined || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted native property projection requires its sealed member reads and native bindings.", node);
+  const { projection } = selected;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "property_source");
   const receiver: RustExpr = { kind: "path", path: receiverName };
   const entries: RustExpr[] = [];
-  for (const [index, field] of contract.fields.entries()) {
+  for (const [index, field] of selected.contract.fields.entries()) {
     const read = projection.reads[index]!;
-    const readCarrier = field.presence === "optional" ? rustOptionElementCarrier(read.resultCarrier) : read.resultCarrier;
-    if (readCarrier === undefined || !rustTargetTypeRefEquals(readCarrier, field.sourceCarrier) ||
-      read.kind === "source-field" && !rustTargetTypeRefEquals(read.receiverCarrier, contract.source) ||
-      read.kind === "source-accessor" && (read.receiver.kind !== "instance" || read.read === undefined ||
-        !rustTargetTypeRefEquals(read.read.resultCarrier, read.resultCarrier))) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.property-projection-member", "Selected native property read conflicts with its exact projection carrier."));
-      return undefined;
-    }
     let value: RustExpr | undefined;
     if (read.kind === "source-accessor") {
       const selectedRead = read.read;
@@ -56,7 +38,7 @@ export function planRustPropertyValueProjection(
         : finishRustSourceAccessorEffect(node, selectedRead.declaration, raw, context,
           context.input.program.records.fallible.get(selectedRead.declaration)?.fallible === true ? "fallible" : "infallible");
     } else if (read.dispatch !== undefined) {
-      const plan = read.declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(read.declaration);
+      const plan = read.declaration === undefined ? undefined : context.input.program.records.projectFieldDispatch.get(read.declaration);
       const role = plan === undefined ? undefined : planRustProjectFieldDispatchRole(plan, "read", context);
       value = role === undefined ? undefined : readRustProjectDispatchedField(receiver, read.dispatch.read, role);
     } else {
