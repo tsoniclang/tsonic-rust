@@ -1,13 +1,11 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { RustObjectReferenceView } from "../../../target-model/records/object-reference-views.js";
-import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustOptionElementCarrier, rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../../target-model/types/index.js";
 import { createRustStructuralObjectFromCarrier, readRustStoredObjectField, writeRustStoredObjectField,
   type RustStructuralObjectFieldInitializer } from "../objects/project-storage.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
@@ -15,42 +13,42 @@ import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from 
 import { planRustProjectStructuralConversion } from "../objects/project-structural-views.js";
 import type { Node } from "@tsonic/tsts";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
+import { failRustPlannerInvariant } from "../../invariants.js";
 
 export function planRustObjectReferenceView(
-  node: Node, value: RustExpr, fact: RustObjectReferenceView, context: RustPlanContext,
+  node: Node, value: RustExpr, _fact: RustObjectReferenceView, context: RustPlanContext,
 ): RustExpr | undefined {
-  if (fact.kind === "project") return planRustProjectStructuralConversion(value, fact.sourceCarrier, fact.targetCarrier, context);
-  if (fact.kind === "constructor") {
-    const instance = rustClassConstructorInstance(fact.sourceCarrier);
-    const view = instance === undefined ? undefined : context.input.program.classValues.viewFor(fact.declaration, instance, fact.targetCarrier);
-    const type = view === undefined ? undefined : rustTypeFromCarrierInContext(fact.targetCarrier, context);
-    return type?.kind !== "named" ? undefined : { kind: "struct-literal", path: type.path, fields: [{ name: "dispatch", value }] };
+  const selected = context.input.program.records.objectReferenceEmission.get(node)
+    ?? failRustPlannerInvariant("An admitted object reference view requires its native construction plan.", node);
+  const fact = selected.view;
+  if (selected.kind === "project") return planRustProjectStructuralConversion(value, fact.sourceCarrier, fact.targetCarrier, context);
+  if (selected.kind === "constructor") {
+    const type = rustTypeFromCarrierInContext(fact.targetCarrier, context);
+    if (type?.kind !== "named") failRustPlannerInvariant("An admitted constructor view requires its native named storage.", node);
+    return { kind: "struct-literal", path: type.path, fields: [{ name: "dispatch", value }] };
   }
-  const shape = context.input.program.structuralShapes.definitionForCarrier(fact.targetCarrier);
   const boundary = rustCurrentErrorBoundary(context);
-  if (shape === undefined || shape.fields.length !== fact.fields.length || boundary === undefined ||
-    context.syntheticNames === undefined) return undefined;
+  if (boundary === undefined || context.syntheticNames === undefined)
+    failRustPlannerInvariant("An admitted object reference view requires its native error boundary and name scope.", node);
   const callbackContext: RustPlanContext = { ...context, fallibleBoundary: rustPackageFallibleBoundary(boundary) };
   const ownerName = allocateRustSyntheticName(context.syntheticNames, "view_owner");
   const owner: RustExpr = {kind: "path", path: ownerName};
   const clone = (expression: RustExpr): RustExpr => ({kind: "method-call", receiver: expression, method: "clone", args: []});
   const bindings: {name: string; value: RustExpr}[] = [{name: ownerName, value: clone(value)}];
   const initializers: RustStructuralObjectFieldInitializer[] = [];
-  for (const [index, field] of fact.fields.entries()) {
-    const target = shape.fields[index];
-    if (target === undefined || field.destinationIndex !== index || target.storage !== "property") return undefined;
-    const getterType = rustTypeFromCarrierInContext(rustOptionElementCarrier(rustStructuralPropertyGetterStorageCarrier(
-      fact.targetCarrier, target.carrier, target.presence)), callbackContext);
-    const setterType = !field.writable ? undefined : rustTypeFromCarrierInContext(rustOptionElementCarrier(
-      rustStructuralPropertySetterStorageCarrier(fact.targetCarrier, target.carrier, target.presence)), callbackContext);
-    if (getterType === undefined || field.writable && setterType === undefined) return undefined;
+  for (const field of selected.fields) {
+    const getterType = rustTypeFromCarrierInContext(field.getter, callbackContext);
+    const setterType = field.setter === undefined ? undefined : rustTypeFromCarrierInContext(field.setter, callbackContext);
+    if (getterType === undefined || field.setter !== undefined && setterType === undefined)
+      failRustPlannerInvariant("An admitted object reference field requires its native getter and setter storage types.", node);
     const readerName = allocateRustSyntheticName(context.syntheticNames, "view_reader");
     const reader: RustExpr = {kind: "path", path: readerName};
     bindings.push({name: readerName, value: clone(owner)});
     const source = field.source;
-    const dispatch = source.declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(source.declaration);
+    const dispatch = source.declaration === undefined ? undefined : context.input.program.records.projectFieldDispatch.get(source.declaration);
     const roles = dispatch === undefined ? undefined : planRustProjectFieldDispatchRoles(dispatch, callbackContext);
-    if (source.dispatch !== undefined && (roles === undefined || field.writable && roles.write === undefined)) return undefined;
+    if (source.dispatch !== undefined && (roles === undefined || field.setter !== undefined && roles.write === undefined))
+      failRustPlannerInvariant("An admitted object reference field requires its native dispatch roles.", node);
     const read = source.dispatch === undefined
       ? readRustStoredObjectField(source.storage, fact.sourceCarrier, reader, source.storageIndex, source.resultCarrier, callbackContext)
       : readRustProjectDispatchedField(reader, source.dispatch.read, roles!.read);
@@ -59,7 +57,7 @@ export function planRustObjectReferenceView(
       kind: "closure", move: true, params: [{name: "_receiver", byRefCopy: false}], body: {kind: "call", path: "Ok", args: [read]},
     }]};
     let setter: RustExpr | undefined;
-    if (field.writable) {
+    if (field.setter !== undefined) {
       const writerName = allocateRustSyntheticName(context.syntheticNames, "view_writer");
       const argumentsName = allocateRustSyntheticName(context.syntheticNames, "view_arguments");
       const writer: RustExpr = {kind: "path", path: writerName};
@@ -80,7 +78,7 @@ export function planRustObjectReferenceView(
   context.usedAliases?.add("rt");
   const identity = clone({kind: "call", path: "rt::ObjectIdentityCarrier::object_identity", args: [{kind: "reference", expr: owner}]});
   const implementation = context.objectLiteralImplementations?.forReferenceView(node);
-  const constructed = shape.dispatchName === undefined ? createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity)
+  const constructed = !selected.dispatch ? createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity)
     : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, identity) : undefined;
   return constructed === undefined ? undefined : rustValueBlock(bindings, constructed);
 }

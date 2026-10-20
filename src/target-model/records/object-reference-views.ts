@@ -18,3 +18,14 @@ export type RustObjectReferenceView = RustObjectReferenceViewCarriers & (
     readonly writable: boolean;
   }[];
 });
+
+export type RustObjectReferenceEmission = {
+  readonly view: RustObjectReferenceView;
+} & (
+  | { readonly kind: "project" | "constructor" }
+  | { readonly kind: "structural"; readonly dispatch: boolean; readonly fields: readonly {
+      readonly source: Extract<RustObjectReferenceView, { readonly kind: "structural" }>["fields"][number]["source"];
+      readonly getter: TargetTypeRef;
+      readonly setter: TargetTypeRef | undefined;
+    }[] }
+);
