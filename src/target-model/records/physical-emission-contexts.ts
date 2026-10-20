@@ -1,7 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageBoundActivation,
-  SourceStorageConstructionSelection, SourceStorageDomainBoundary, SourceStorageProducer,
-  SourceStorageSubject, TargetUseSiteRef } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageBoundActivation, SourceStorageConstructionSelection, SourceStorageDomainBoundary, SourceStorageProducer, SourceStorageSubject, TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustTargetGenericBindings } from "../types/carriers/generic-inference.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustErrorRegionSelection, RustInitializerSelection, RustModuleErrorInitializer } from "./error-regions.js";
