@@ -3,22 +3,11 @@ import { rustGenericCallableValue } from "./generic-callables.js";
 import { rustFrameCallableValue } from "./frame-callables.js";
 import type { RustCallableSignatureBinding } from "./callable-signatures.js";
 import { rustClassConstructorContract, rustClassConstructorFreeArguments } from "./class-constructors.js";
-import {
-  rustFixedArrayCarrierValue,
-  rustNamedTypeCarrierValue,
-} from "./native.js";
-import {
-  rustSourceTypeCarrierValue,
-  rustSourceUnionCarrierValue,
-  rustStructuralObjectCarrierValue,
-} from "./source-types.js";
+import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
+import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "./source-types.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustProgramErrorOwner } from "./program-errors.js";
-import type {
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  TargetTypeRef,
-} from "../model.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../lifetimes/index.js";
 import { isRustAbsenceCarrier } from "./native.js";
 import { substituteRustTargetTypeParameters } from "./substitution.js";
