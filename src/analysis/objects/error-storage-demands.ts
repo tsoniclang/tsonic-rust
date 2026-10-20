@@ -4,6 +4,7 @@ import { createSourceErrorStorageDemandQuery, type SourceErrorRetainedDemand, ty
 import { resolveRustSourceErrorDeclaration } from "../../policy/types/project/external-project-types.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import { rustSourceErrorConstructors } from "../../target-model/identities/source-errors.js";
+import { resolveSelectedSourceProfileMember } from "../../policy/identities/selected-source.js";
 
 export function createRustErrorStorageDemandQuery(
   source: TargetSourceProgram,
@@ -15,15 +16,18 @@ export function createRustErrorStorageDemandQuery(
   const fields = new Set<Node>();
   const constructors = new Set<Node>();
   const stackCaptures = new Set<Node>();
+  const context = { ast, source, semanticsFor: (node: Node) => source.semantics.forNode(node) };
   for (const file of source.sourceFiles) {
     for (const statement of ast.statements(file)) {
       if (statement === undefined || profiles.profileForNode(statement, ast) === undefined) continue;
-      if (ast.is.IsInterfaceDeclaration(statement) && rustSourceErrorConstructors.some(constructor =>
-        constructor.ownerName === ast.text(ast.name(statement)))) {
+      if (ast.is.IsInterfaceDeclaration(statement)) {
         for (const member of ast.members(statement)) {
           if (member === undefined) continue;
-          if (ast.is.IsConstructSignatureDeclaration(member) || ast.is.IsCallSignatureDeclaration(member)) constructors.add(member);
-          if (ast.text(ast.name(statement)) === "ErrorConstructor" && ast.text(ast.name(member)) === "captureStackTrace") stackCaptures.add(member);
+          const identity = resolveSelectedSourceProfileMember(context, member, profiles);
+          if (identity === undefined) continue;
+          if ((identity.memberName === "constructor" || identity.memberName === "call") &&
+            rustSourceErrorConstructors.some(constructor => constructor.ownerName === identity.ownerName)) constructors.add(member);
+          if (identity.ownerName === "ErrorConstructor" && identity.memberName === "captureStackTrace") stackCaptures.add(member);
         }
       }
       for (const declaration of VariableDeclarationList_Declarations(ast, VariableStatement_DeclarationList(ast, statement)) ?? []) {
