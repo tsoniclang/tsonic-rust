@@ -14,6 +14,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceUnionPayloadArguments } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
@@ -104,7 +105,7 @@ export function analyzeRustTypeEmission(program: Omit<RustTargetProgram, "reacha
         path: isRustWritableRetainedErrorCarrier(carrier) ? "tsonic_rust_runtime::WritableRetainedError" : "tsonic_rust_runtime::RetainedError" })
         : isRustSourceErrorCarrier(carrier) ? Object.freeze({ kind: "source", writable: isRustWritableSourceErrorCarrier(carrier),
           path: isRustWritableSourceErrorCarrier(carrier) ? "rt::WritableSourceError" : "rt::SourceError" }) : undefined,
-      option: isRustOptionCarrier(carrier), string: isRustStringCarrier(carrier),
+      option: isRustOptionCarrier(carrier), anonymousOptional: rustNativeFutureCallableResult(carrier)?.optional === true, string: isRustStringCarrier(carrier),
       sharedStringReference: carrier.kind === "reference" && !carrier.mutable && isRustStringCarrier(carrier.referent),
       optionPayload: optionalElement === undefined ? undefined : Object.freeze({ str: payloadView(true), shared: payloadView(false) }),
       completion: isRustUnitCarrier(carrier) ? "unit" : isRustNeverCarrier(carrier) ? "never" : "value",

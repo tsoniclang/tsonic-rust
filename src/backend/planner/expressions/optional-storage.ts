@@ -42,7 +42,12 @@ export function planRustAbsentValue(carrier: TargetTypeRef, context: RustTypeRen
   const storage = context.input.program.records.typeEmission.get(carrier)?.optionalStorage;
   switch (storage?.kind) {
     case "unit": return { kind: "tuple-literal", elements: [] };
-    case "option": return { kind: "none" };
+    case "option": {
+      if (context.input.program.records.typeEmission.get(carrier)?.anonymousOptional === true) return { kind: "none" };
+      const owner = rustTypeFromCarrierInContext(carrier, context, "absence")
+        ?? failRustPlannerInvariant("An admitted absence requires its exact native Option type.");
+      return { kind: "associated-value", owner, name: "None" };
+    }
     case "custom": return planRustOptionalStorageOperation(carrier, "absent", [], context);
     case "union": if (storage.absence !== undefined) return planRustUnionConstruction(storage.absence,
       { kind: "tuple-literal", elements: [] }, context) ?? failRustPlannerInvariant("An admitted union absence requires its native construction.");

@@ -8,7 +8,8 @@ export function rustCallableAdapterValues(callable: {
     switch (parameter.kind) {
       case "runtime-value":
       case "logical-value":
-      case "rest-element": return [parameter.adapter];
+        return [parameter.adapter];
+      case "rest-element": return parameter.optionalAdapter === undefined ? [parameter.adapter] : [parameter.adapter, parameter.optionalAdapter];
       case "rest": return parameter.segments.map(segment => segment.adapter);
       case "omitted": return [];
     }

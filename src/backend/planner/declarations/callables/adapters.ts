@@ -59,7 +59,7 @@ export function applyRustCallableValueAdapterRaw(
       return { expression, fallible: false };
     case "conversion": {
       if (adapter.upcast !== undefined) {
-        const projected = planRustProjectUpcast(node, expression, adapter.upcast, adapter.sourceCarrier, context, "owned");
+        const projected = planRustProjectUpcast(node, expression, adapter.upcast, context, "owned");
         if (projected === undefined) failRustPlannerInvariant("An admitted callable adapter requires its native upcast expression.", node);
         expression = projected;
       }
@@ -73,7 +73,7 @@ export function applyRustCallableValueAdapterRaw(
       if (adapter.conversion.kind === "project-union-map") {
         const converted = planRustProjectUnionMapping(node, expression, adapter.conversion,
           adapter.upcast?.targetCarrier ?? adapter.sourceCarrier, adapter.targetCarrier, context, true,
-          (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
+          (value, upcast, owned) => planRustProjectUpcast(node, value, upcast,
             context, owned ? "owned" : "borrowed"));
         if (converted === undefined) failRustPlannerInvariant("An admitted callable union conversion requires its native expression.", node);
         return { expression: converted, fallible: false };
@@ -115,7 +115,6 @@ export function applyRustCallableValueAdapterRaw(
           sourceCarrier: adapter.sourceCarrier,
           targetCarrier: adapter.targetCarrier,
         },
-        adapter.sourceCarrier,
         context,
         "owned",
       );

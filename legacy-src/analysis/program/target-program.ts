@@ -682,7 +682,10 @@ export function analyzeRustTargetProgram(
   if (propertyProjectionIssues.length !== 0) return rejectedTargetStage(propertyProjectionIssues);
   const optionalChainIssues = analyzeRustOptionalChainEmission(program, context.nativeNodes, context.records.optionalChainEmissionPlans);
   if (optionalChainIssues.length !== 0) return rejectedTargetStage(optionalChainIssues);
-  analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans);
+  const valueReadIssues = analyzeRustValueReads(program, context.nativeNodes, context.records.valueReadPlans,
+    context.records.valueProjectionPlans, context.records.conversionEmissionPlans);
+  if (valueReadIssues.length !== 0) return rejectedTargetStage(valueReadIssues);
+  context.records.valueReadPlans.promises(promiseResults.results);
   const propertyReadIssues = analyzeRustPropertyReads(program, context.nativeNodes, context.records.propertyReadPlans);
   if (propertyReadIssues.length !== 0) return rejectedTargetStage(propertyReadIssues);
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);

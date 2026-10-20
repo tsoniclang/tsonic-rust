@@ -28,6 +28,7 @@ export interface RustTypeEmission {
     readonly observed: boolean; readonly optional: TargetTypeRef | undefined };
   readonly errorStorage: { readonly kind: "source" | "retained"; readonly path: string; readonly writable: boolean } | undefined;
   readonly option: boolean;
+  readonly anonymousOptional: boolean;
   readonly string: boolean;
   readonly sharedStringReference: boolean;
   readonly optionPayload: Readonly<Record<"str" | "shared", RustOptionPayloadView>> | undefined;

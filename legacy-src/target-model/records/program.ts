@@ -85,6 +85,9 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly readOwnership: import("./ownership-emission.js").RustOwnershipEmissionRecords["readOwnership"];
   readonly captureOwnership: import("./ownership-emission.js").RustOwnershipEmissionRecords["captureOwnership"];
   readonly valueRead: import("./value-read.js").RustValueReadRecords["valueRead"];
+  readonly valueProjection: import("./value-projection.js").RustValueProjectionRecords["valueProjection"];
+  readonly projectUpcastEmission: import("./value-projection.js").RustValueProjectionRecords["projectUpcastEmission"];
+  readonly promiseResult: RustRecordFamily<import("./promise-results.js").RustPromiseResult>;
   readonly nativeComparison: import("./native-comparisons.js").RustNativeComparisonRecords["nativeComparison"];
   readonly unionEquality: RustRecordFamily<import("./union-equality.js").RustUnionEqualityEmission>;
   readonly closedTypeTestEmission: RustRecordFamily<import("./type-tests.js").RustClosedTypeTestSource>;

@@ -27,6 +27,9 @@ export function analyzeRustSafetyEmission(program: RustSafetyAnalysisInput["prog
     if (pointer?.kind === "native-pointer" && !explicit.has(node)) issues.push(targetDiagnostic(
       "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", `Rust native-pointer '${pointer.operation}' requires an explicit unsafecontext() source region.`, node));
     const handler = program.records.nativeHandler.get(node);
+    if ((handler === undefined || handler.kind === "js-string-conversion" || handler.kind === "typed-location") &&
+      nodeRequiresUnsafe(node, input) && !explicit.has(node)) issues.push({ code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED", category: "error", source: "tsonic-rust",
+      message: "The selected Rust operation requires an explicit unsafecontext() source region at this use site.", sourceNode: node });
     if (handler?.kind === "native-pointer" && handler.selection.kind === "raw-location" &&
       handler.selection.plan.operation === "reinterpret" && !explicit.has(node)) issues.push(targetDiagnostic(
         "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", "Raw memory reinterpretation requires an explicit unsafecontext() source region.", node));
