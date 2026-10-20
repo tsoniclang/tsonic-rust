@@ -1,6 +1,7 @@
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
 import { ArrayTypeNode_ElementType, Node_Type, TypeReferenceNode_TypeName, TypeOperatorNode_Type, sourceIntegerInduction } from "@tsonic/target-api/source";
-import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsArrayTargetType, rustJsStringTargetType, rustSourceLocationTargetType, rustRawPointerTargetType, rustAbsenceTargetType, isRustAbsenceCarrier, isRustUnitCarrier, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTupleTargetType, rustUnitTargetType, rustVecTargetType } from "../../../target-model/types/index.js";
+import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsArrayTargetType, rustJsStringTargetType, rustSourceLocationTargetType, rustRawPointerTargetType, rustAbsenceTargetType, isRustAbsenceCarrier, isRustUnitCarrier, rustNeverTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustUnitTargetType, rustVecTargetType } from "../../../target-model/types/index.js";
+import { rustTupleTargetType } from "../../../policy/types/collections/tuple-carrier.js";
 import { asNode } from "../../../policy/identities/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { fieldFactKey, functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";

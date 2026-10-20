@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSelectedBindingProjection } from "../../../target-model/records/value-projections.js";
-import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, isRustVecCarrier, rustFixedArrayCarrierValue,
-  rustFixedArrayTargetType, rustTargetConstInteger, rustOptionTargetType, rustTupleTargetType } from "../../../target-model/types/index.js";
+import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, isRustVecCarrier, rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustOptionTargetType } from "../../../target-model/types/index.js";
+import { rustTupleTargetType } from "../collections/tuple-carrier.js";
 
 export function selectRustBindingPatternProjection(
   sourceCarrier: TargetTypeRef,

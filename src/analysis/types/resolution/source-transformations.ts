@@ -1,4 +1,5 @@
-import { rustNeverTargetType, rustOptionElementCarrier, rustTupleTargetType } from "../../../target-model/types/index.js";
+import { rustNeverTargetType, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustTupleTargetType } from "../../../policy/types/collections/tuple-carrier.js";
 
 import { resolveCallableType } from "./callables.js";
 import { resolveRustTupleElementTargetTypeWithState } from "./tuples.js";

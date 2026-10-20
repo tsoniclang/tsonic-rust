@@ -1,22 +1,9 @@
-import {
-  hasExactObjectKeys,
-  isDenseDataArray,
-  isClosedMetadata,
-  closedMetadataKey,
-} from "../../metadata/closed-data.js";
+import { hasExactObjectKeys, isDenseDataArray, isClosedMetadata, closedMetadataKey } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals, rustNativeTraitTypeRefEquals } from "../equality.js";
-import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustAbsenceTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId} from "./source-types.js";
+import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustAbsenceTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId } from "./source-types.js";
 import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
-import type {
-  RustNamedTypeTraitContract,
-  RustNamedTypeTraitImplementation,
-  RustNamedTypeTraitRequirement,
-  RustTargetConstArgument,
-  RustTargetGenericArgument,
-  RustTargetTraitRef,
-  TargetTypeRef,
-} from "../model.js";
+import type { RustNamedTypeTraitContract, RustNamedTypeTraitImplementation, RustNamedTypeTraitRequirement, RustTargetConstArgument, RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../model.js";
 import { rustTargetGenericTypeArguments } from "../generic-arguments.js";
 import { isRustLifetimeRef } from "../../lifetimes/index.js";
 
@@ -86,18 +73,8 @@ export function isRustAbsenceCarrier(carrier: TargetTypeRef | undefined): boolea
   return carrier?.kind === "target-named" && carrier.id === rustAbsenceTargetId;
 }
 
-
 export function rustVecTargetType(element: TargetTypeRef): TargetTypeRef {
   return { kind: "array", element };
-}
-
-export function rustTupleTargetType(elements: readonly TargetTypeRef[]): TargetTypeRef {
-  const [first] = elements;
-  if (elements.length >= 2 && first?.kind === "source-primitive" && elements.every((element) =>
-    element.kind === "source-primitive" && element.name === first.name)) {
-    return rustFixedArrayTargetType(first, elements.length);
-  }
-  return { kind: "tuple", elements };
 }
 
 export interface RustFixedArrayCarrierValue {

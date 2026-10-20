@@ -1,4 +1,5 @@
-import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustJsArrayTargetType, rustOptionElementCarrier, rustTupleTargetType, rustVecTargetType } from "../../../target-model/types/index.js";
+import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustJsArrayTargetType, rustOptionElementCarrier, rustVecTargetType } from "../../../target-model/types/index.js";
+import { rustTupleTargetType } from "../collections/tuple-carrier.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
