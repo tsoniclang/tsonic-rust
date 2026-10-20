@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustSourcePolicyContext } from "../../model/context.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustOwnedStorageChildren } from "../storage/owned-storage.js";
-import { rustRetainedEnvironment } from "../../ownership/retained-environments.js";
-import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
-import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
-import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
+import type { RustSourcePolicyContext } from "../../policy/model/context.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
+import { rustRetainedEnvironment } from "./retained-values.js";
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
+import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 
 export function closeRustRetainedResult(
   declaration: Node, result: TargetTypeRef, parameters: readonly (TargetTypeRef | undefined)[], context: RustSourcePolicyContext,
