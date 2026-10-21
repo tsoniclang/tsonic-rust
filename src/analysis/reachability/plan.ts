@@ -1,5 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustReachabilityInput } from "./model.js";
 import type { RustReachability } from "../../target-model/records/reachability.js";
@@ -17,7 +18,8 @@ type DeclarationOwner =
   | { readonly kind: "root" };
 
 export function analyzeRustReachability(program: RustReachabilityInput, nativeNodes: readonly Node[],
-  conversionEmission: import("../program/records/conversion-emission.js").RustConversionEmissionProducer): RustReachability {
+  conversionEmission: import("../program/records/conversion-emission.js").RustConversionEmissionProducer,
+  semanticsFor: (node: Node) => SourceFileSemantics): RustReachability {
   const ast = program.source.ast;
   const nativeNodeSet = new Set(nativeNodes);
   const declarations = collectDeclarationUnits(ast, nativeNodes);
@@ -96,7 +98,20 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
     edges.set(selectedOwner, owned);
   };
 
+  const useSubjects = new Set(declarations);
   for (const declaration of declarations) {
+    if (!isCallableDeclaration(ast, declaration)) continue;
+    const implementation = program.sourceNavigation.callableImplementation(declaration);
+    if (implementation.kind !== "resolved" || implementation.implementation.symbol === undefined) continue;
+    const semantics = semanticsFor(declaration);
+    for (const contract of semantics.declarations.symbolDeclarations(implementation.implementation.symbol)) {
+      if (contract !== undefined && isCallableDeclaration(ast, contract) && canonical(contract) === canonical(declaration)) {
+        useSubjects.add(contract);
+      }
+    }
+  }
+
+  for (const declaration of useSubjects) {
     const selected = canonical(declaration);
     if (!graphUnits.has(selected)) continue;
     const summary = program.sourceNavigation.declarationUseSummary(declaration);
