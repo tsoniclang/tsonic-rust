@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRust, compileRust, int32Carrier } from "../../helpers/rust-session.mjs";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { selectRustGenericCallableIdentity } from "../../../dist/analysis/callables/generic-identities.js";
-import { createRustEffectsWorkBudget } from "../../../dist/analysis/resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
 
 function fixture(source, fileName = "index.ts") {
   const { program } = analyzeRust({ surfaces: [], entryPoint: fileName, files: { [fileName]: source } });

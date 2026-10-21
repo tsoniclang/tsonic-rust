@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceAbsenceUse } from "@tsonic/target-api/source";
-import { rustSourceAbsenceReadCarrier } from "../../../dist/analysis/expressions/absence-use.js";
+import { rustSourceAbsenceReadCarrier } from "../../../dist/policy/operations/flow/absence-use.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";

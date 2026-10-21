@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
+import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/source-modules/component-semantics.js";
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";

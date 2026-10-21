@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustEmptyRecordCarrier, rustEmptyRecordConversionMatches } from "../../../dist/target-model/conversions/empty-record.js";
+import { rustEmptyRecordCarrier, rustEmptyRecordConversionMatches } from "../../../dist/policy/conversions/empty-record.js";
 import { rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustJsValueTargetType, rustStructuralObjectTargetType, rustSourcePrimitiveTargetType, rustJsArrayTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 
 test("empty-record transitions retain exact carriers and exclude data-bearing or reference records", () => {

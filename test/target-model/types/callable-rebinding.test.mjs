@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rebindRustCallableCarrier } from "../../../dist/target-model/types/carriers/callable-rebinding.js";
+import { rebindRustCallableCarrier } from "../../../dist/policy/types/callables/method-values.js";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
-import { rustCarrierSupportsClone } from "../../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSupportsClone } from "../../../dist/policy/constraints/native-traits.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 

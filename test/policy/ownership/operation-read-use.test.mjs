@@ -5,7 +5,7 @@ import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigatio
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, computedMember: undefined, nativeInputs: [], argumentModes: [],

@@ -5,8 +5,8 @@ import { rustCallableProtocol, rustCallableTargetType, rustUnitTargetType, rustS
 import { rustStaticLifetime } from "../../dist/target-model/lifetimes/index.js";
 import { rustTypeFromCarrier } from "../../dist/backend/planner/types/render.js";
 import { printRustType } from "../../dist/print/source/types.js";
-import { rebindRustCallableCarrier } from "../../dist/target-model/types/carriers/callable-rebinding.js";
-import { rustCallableInvocationSignaturesMatch } from "../../dist/target-model/conversions/callable-input.js";
+import { rebindRustCallableCarrier } from "../../dist/policy/types/callables/method-values.js";
+import { rustCallableInvocationSignaturesMatch } from "../../dist/policy/conversions/callable-input.js";
 
 test("owned callable carriers have one explicit error slot and reject the superseded arity", () => {
   const result = rustSourcePrimitiveTargetType("uint64");

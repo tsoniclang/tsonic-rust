@@ -13,11 +13,8 @@ import {
   rustTargetTypeRefEquals,
   rustTargetTypeRefEqualsWithinLifetimeBinders,
 } from "../../dist/target-model/types/equality.js";
-import {
-  selectRustNativeTraitObjectUpcast,
-  selectRustCallScopedLifetimeReconciliation,
-} from "../../dist/policy/types/resolution/value-carrier-reconciliation.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
+import { selectRustNativeTraitObjectUpcast, selectRustCallScopedLifetimeReconciliation } from "../../dist/policy/types/value-carrier-reconciliation.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../dist/policy/conversions/contextual.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/index.js";
 
 const int32 = Object.freeze({ kind: "source-primitive", name: "int32" });

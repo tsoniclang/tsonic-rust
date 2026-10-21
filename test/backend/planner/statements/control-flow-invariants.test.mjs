@@ -2,13 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
-import {
-  createRustBreakTarget,
-  createRustLoopTarget,
-  planDoStatement,
-  planIfStatement,
-  planLabeledStatement,
-} from "../../../../dist/backend/planner/statements/control-flow.js";
+import { createRustBreakTarget, createRustLoopTarget } from "../../../../dist/backend/planner/statements/loop-regions.js";
+import { planDoStatement, planIfStatement } from "../../../../dist/backend/planner/statements/statement-conditionals.js";
+import { planLabeledStatement } from "../../../../dist/backend/planner/statements/statement-labels.js";
 import { planSwitchStatement } from "../../../../dist/backend/planner/statements/switch-statements.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 

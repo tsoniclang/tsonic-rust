@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustValueConversionContract } from "../../dist/target-model/conversions/contracts.js";
-import { rustNativeRepresentationMatches } from "../../dist/target-model/conversions/native-representation.js";
+import { rustValueConversionContract } from "../../dist/policy/conversions/contracts.js";
+import { rustNativeRepresentationMatches } from "../../dist/policy/conversions/native-representation.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustJsPromiseTargetType, rustCallableTargetType,
   rustProgramErrorTargetType, rustJsErrorTargetType, rustSourcePrimitiveTargetType } from "../../dist/target-model/types/index.js";
 import { rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../../dist/analysis/callables/future-values.js";

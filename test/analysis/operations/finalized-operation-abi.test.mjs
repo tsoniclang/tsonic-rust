@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeRust, acmeVectorsPackage } from "../../helpers/rust-session.mjs";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { createInputFactory, finalizeSourceArguments } from "../../../dist/analysis/operations/finalized-operation/inputs.js";
-import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { createInputFactory, finalizeSourceArguments } from "../../../dist/policy/operations/members/abi/inputs.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import {
   closedMetadataKey,
   isClosedMetadata,
@@ -13,14 +13,12 @@ import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
 } from "../../../dist/target-model/types/equality.js";
-import {
-  rustProviderOperationFormDeclaresWritableInput,
-} from "../../../dist/policy/operations/forms.js";
+import { rustProviderOperationFormDeclaresWritableInput } from "../../../dist/target-model/operations/form-inputs.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
 import { rustStrTargetType, rustOptionTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { rustProviderSourceArgumentMode } from "../../../dist/analysis/operations/provider/calls/provider-argument-shape.js";
+import { rustProviderSourceArgumentMode } from "../../../dist/policy/types/callables/provider-argument-shape.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };

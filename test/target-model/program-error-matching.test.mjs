@@ -6,7 +6,7 @@ import { inferRustTargetTypeParameterBindings, rustTargetTypePatternsAreNominall
 import { rustIndexedFieldKey, rustIndexedFieldTrait } from "../../dist/target-model/types/carriers/indexed-fields.js";
 import { createRustSourceTypeFamilyRegistry } from "../../dist/analysis/project-types/type-families.js";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustPhysicalPayloadFor } from "../../dist/target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../dist/policy/conversions/physical-payloads.js";
 import { rustSourceUnionTargetType } from "../../dist/target-model/types/carriers/source-types.js";
 
 const owners = [{ kind: "logical" }, { kind: "physical", domain: "runtime" },

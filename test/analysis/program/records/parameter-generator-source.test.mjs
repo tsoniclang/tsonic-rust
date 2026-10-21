@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { getRustGeneratorProtocol, rustGeneratorStorageTargetType } from "../../../../dist/target-model/types/index.js";
+import { getRustGeneratorProtocol } from "../../../../dist/target-model/types/index.js";
+import { rustGeneratorStorageTargetType } from "../../../../dist/policy/types/callables/generators.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 const integer = 'import type { int32 } from "@tsonic/core/types.js";';

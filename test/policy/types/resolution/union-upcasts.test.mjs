@@ -2,11 +2,12 @@ import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/reco
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
-import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/control-flow/flow-read-projections.js";
 
 import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/value-carrier-admission.js";
+import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";

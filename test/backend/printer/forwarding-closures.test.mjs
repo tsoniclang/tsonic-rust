@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { collapseRustForwardingClosure } from "../../../dist/backend/target-ast/normalization/forwarding-closures.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/syntax/module-references.js";
 
 const parameter = name => ({ name, byRefCopy: false });
 const path = name => ({ kind: "path", path: name });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyRustFoundationImports } from "../../../../dist/backend/planner/foundation/imports.js";
+import { applyRustFoundationImports } from "../../../../dist/backend/target-ast/normalization/foundation-imports.js";
 import { createRustSourceFile } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustValueAttribute } from "../../../../dist/backend/target-ast/syntax/attributes.js";
 

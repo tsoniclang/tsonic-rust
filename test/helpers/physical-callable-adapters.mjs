@@ -7,8 +7,8 @@ import { createRustPlanningContext } from "../../dist/backend/planner/context.js
 import { analyzeRustErrorRegions } from "../../dist/analysis/errors/regions.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
-import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
-import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
+import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
+import { selectRustExactIntegerConversion } from "../../dist/policy/conversions/exact-integer.js";
 import { planRustCallableConversion } from "../../dist/backend/planner/expressions/callable-conversions.js";
 
 export function nativeFallibleAdapterFixture() {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { printRustPattern } from "../../../../dist/print/source/patterns.js";
 import { rustPatternBindsPath } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
-import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../../../dist/backend/target-ast/normalization/lint-policy.js";

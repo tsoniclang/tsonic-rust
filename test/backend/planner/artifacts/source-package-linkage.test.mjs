@@ -5,10 +5,7 @@ import assert from "node:assert/strict";
 import {
   planRustSourcePackageComponents,
 } from "../../../../dist/backend/planner/program/source-package-components.js";
-import {
-  analyzeRustSourcePackageComponents,
-  selectRustSourcePackageComponentIdentities,
-} from "../../../../dist/analysis/program/source-package-components.js";
+import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/source-modules/component-semantics.js";
 import {
   planRustSourcePackageCargo,
 } from "../../../../dist/backend/planner/program/source-package-crates.js";

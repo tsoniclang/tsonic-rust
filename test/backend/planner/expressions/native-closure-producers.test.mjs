@@ -11,7 +11,7 @@ import { printRustType } from "../../../../dist/print/source/types.js";
 import { rustSourcePrimitiveTargetType, rustClosureTargetType, rustCallableInputProtocol, rustCallableInputTargetType }
   from "../../../../dist/target-model/types/index.js";
 import { rustGenericCallableValue } from "../../../../dist/target-model/types/carriers/generic-callables.js";
-import { rustCallableConstructionType } from "../../../../dist/backend/planner/expressions/fundamentals.js";
+import { rustCallableConstructionType } from "../../../../dist/backend/planner/types/constructions.js";
 import { rustNativeCompletionFutureType } from "../../../../dist/target-model/types/callable-completions.js";
 import { rustTypeGenericArguments } from "../../../../dist/target-model/types/generic-arguments.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";

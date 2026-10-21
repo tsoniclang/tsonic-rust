@@ -3,7 +3,7 @@ import test from "node:test";
 import { classifyCarrierRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { rustRuntimeErrorTargetType } from "../../../dist/target-model/operations/error-boundary.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { rustCarrierSatisfiesTraitRef } from "../../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSatisfiesTraitRef } from "../../../dist/policy/constraints/native-traits.js";
 import { rustMutableJsErrorTargetType, rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableRetainedErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";

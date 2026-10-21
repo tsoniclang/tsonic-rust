@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizedConversionIsValid, finalizeValueConversion } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
-import { isFinalizedConversion } from "../../../dist/analysis/operations/finalized-operation/conversion-shape.js";
+import { finalizedConversionIsValid, finalizeValueConversion } from "../../../dist/policy/operations/members/abi/conversions.js";
+import { isFinalizedConversion } from "../../../dist/policy/operations/members/abi/conversion-shape.js";
 import { rustAbsenceTargetType, rustJsPromiseTargetType, rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 

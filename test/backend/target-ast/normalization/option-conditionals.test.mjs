@@ -5,7 +5,7 @@ import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/nor
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustExpressionChildren, rustExpressionReferencesPath } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
 import { maxWritesInStatements, firstAccessesInStatements } from "../../../../dist/backend/target-ast/inspection/source-dataflow.js";
-import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
 import { rustExpressionExitsCallable } from "../../../../dist/backend/target-ast/inspection/callable-exits.js";
 import { rustExpressionUsesTryInCurrentRegion } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustSourceCallableAbiResolver } from "../../../dist/policy/ownership/source-callable-abi.js";
+import { createRustSourceCallableAbiResolver } from "../../../dist/analysis/callables/source-callable-abi.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 

@@ -11,9 +11,9 @@ import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await
 import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
-import { selectRustAwaitSourceErrors } from "../../../dist/analysis/resources/await-source-effects.js";
-import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
-import { createRustEffectsWorkBudget } from "../../../dist/analysis/resources/effects-work-budget.js";
+import { selectRustAwaitSourceErrors } from "../../../dist/analysis/errors/await-source-effects.js";
+import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
+import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { asyncCallableInterfaceFiles } from "../../../../tsonic/test/fixtures/callable-interfaces.mjs";

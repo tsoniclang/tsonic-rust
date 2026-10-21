@@ -4,7 +4,7 @@ import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { planRustProgramErrorClosedValue } from "../../../../dist/backend/planner/expressions/program-error-values.js";
 import { planRustErrorVariants } from "../../../../dist/backend/planner/program/error-variants.js";
-import { analyzeRustErrorTransport } from "../../../../dist/analysis/program/error-transport.js";
+import { analyzeRustErrorTransport } from "../../../../dist/analysis/errors/transport.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCarrierReferentMutationRequiresMutableBinding, rustOptionTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../dist/policy/types/storage/referent-mutation.js";
+import { rustOptionTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustMutableJsErrorTargetType, rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
 

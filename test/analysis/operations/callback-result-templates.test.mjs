@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { finalizeRustCallbackOperation } from "../../../dist/analysis/operations/provider/callbacks.js";
+import { finalizeRustCallbackOperation } from "../../../dist/policy/operations/members/callbacks.js";
 import {
   rustCallableTargetType, rustJsArrayTargetType, rustJsPromiseTargetType,
   rustJsValueTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
   rustUnitTargetType,
 } from "../../../dist/target-model/types/index.js";
-import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
+import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };

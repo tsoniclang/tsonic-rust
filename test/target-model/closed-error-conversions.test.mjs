@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustProgramErrorConversionMatches, selectRustProgramErrorConversion,
-  mapRustProgramErrorRoute, rustProgramErrorRouteCarriers } from "../../dist/target-model/conversions/program-error.js";
-import { rustValueConversionContract } from "../../dist/target-model/conversions/contracts.js";
+import { rustProgramErrorConversionMatches, selectRustProgramErrorConversion } from "../../dist/policy/conversions/program-error.js";
+import { mapRustProgramErrorRoute, rustProgramErrorRouteCarriers } from "../../dist/target-model/conversions/program-error.js";
+import { rustValueConversionContract } from "../../dist/policy/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
 import { isRustClosedValueCarrier } from "../../dist/target-model/types/carriers/closed-value-kind.js";
 import { rustClosedValueRetainsError } from "../../dist/target-model/types/carriers/closed-values.js";

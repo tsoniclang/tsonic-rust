@@ -6,7 +6,8 @@ import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/c
 import { rustTargetTypeParameterIdentities } from "../../dist/target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsObjectIdentity } from "../../dist/target-model/types/carriers/traits.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../dist/policy/constraints/native-traits.js";
+import { rustCarrierSupportsObjectIdentity } from "../../dist/policy/operations/js-values/carrier-protocols.js";
 import { selectRustBinaryOperator } from "../../dist/policy/operations/operators/rules.js";
 
 const instance = (name, parameter) => rustSourceTypeCarrier("/src/model.ts", name, "object",

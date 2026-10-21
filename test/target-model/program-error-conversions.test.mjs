@@ -2,10 +2,10 @@ import { createRustRecordFixture } from "../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rustProgramErrorConversionMatches } from "../../dist/target-model/conversions/program-error.js";
+import { rustProgramErrorConversionMatches } from "../../dist/policy/conversions/program-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier } from "../../dist/target-model/types/index.js";
-import { selectRustValueCarrierReconciliation } from "../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../dist/policy/types/value-carrier-reconciliation.js";
 import { planRustProgramErrorConstruction } from "../../dist/backend/planner/expressions/program-errors.js";
 import { collectRustDeclaredProviderErrorCarriers, analyzeRustProviderErrorCarriers } from "../../dist/analysis/program/provider-errors.js";
 

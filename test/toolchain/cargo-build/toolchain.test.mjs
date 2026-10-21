@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createCargoToolchain } from "../../../dist/toolchain/cargo-toolchain.js";
+import { createCargoToolchain } from "../../../dist/toolchain/native.js";
 
 test("cargo toolchain reports deterministic source-to-source artifacts without building", () => {
   const toolchain = createCargoToolchain({

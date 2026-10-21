@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
-import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
+import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/storage/borrowed-element-reads.js";
 import { analyzeRustCountedLoopRepresentations } from "../../../dist/analysis/control-flow/counted-loop-representations.js";
 
 const sourceText = `

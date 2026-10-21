@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRustErrorTransport } from "../../../dist/analysis/program/error-transport.js";
+import { analyzeRustErrorTransport } from "../../../dist/analysis/errors/transport.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { rustJsValueTargetType, rustTsValueTargetType, rustSourceTypeCarrier } from "../../../dist/target-model/types/index.js";
 
 function input(thrownCarriers = [rustTsValueTargetType()], retained = true) {

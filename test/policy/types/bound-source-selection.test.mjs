@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustSourceSelectionUsesExactBindings } from "../../../dist/policy/types/resolution/bound-source-selection.js";
+import { rustSourceSelectionUsesExactBindings } from "../../../dist/analysis/types/resolution/bound-source-selection.js";
 
 function fixture() {
   const parameter = { kind: "parameter", declaration: {} };

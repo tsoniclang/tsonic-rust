@@ -4,7 +4,7 @@ import { planRustClosedThrowAdmission } from "../../../../dist/backend/planner/p
 import { planRustErrorTransport } from "../../../../dist/backend/planner/program/error-transport.js";
 import { planRustErrorObservations } from "../../../../dist/backend/planner/program/error-observations.js";
 import { planRustProgramErrorConstruction } from "../../../../dist/backend/planner/expressions/program-errors.js";
-import { selectRustProgramErrorConversion } from "../../../../dist/target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../../../dist/policy/conversions/program-error.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 

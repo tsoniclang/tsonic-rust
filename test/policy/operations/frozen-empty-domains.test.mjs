@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/selection.js";
-import { rustValueDomainHasTargetType } from "../../../dist/policy/types/objects/value-domain-carrier.js";
+import { rustValueDomainHasTargetType } from "../../../dist/analysis/objects/value-domain-carriers.js";
 import { rustEmptyObjectTargetType, rustFixedArrayTargetType, rustJsArrayTargetType, rustJsValueTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
 
 for (const carrier of [rustTsValueTargetType(), rustJsValueTargetType()]) {

@@ -3,7 +3,7 @@ import test from "node:test";
 import { lowerRustCompletionScope } from "../../../../dist/backend/target-ast/normalization/completion-regions.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
-import { printRustBlockStatements } from "../../../../dist/print/source/blocks.js";
+import { printRustBlockStatements } from "../../../../dist/print/source/statements.js";
 
 const path = name => ({ kind: "path", path: name });
 const error = { kind: "named", path: "rt::TsonicError" };

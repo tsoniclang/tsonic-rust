@@ -15,7 +15,7 @@ import { rustCallablePhysicalSignature } from "../../../dist/target-model/conver
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustGenericCallableIdentitySources, prepareRustGenericCallableIdentityRequests,
   createRustGenericCallableIdentityPlan } from "../../../dist/analysis/callables/generic-identities.js";
-import { createRustEffectsWorkBudget } from "../../../dist/analysis/resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget } from "../../../dist/analysis/errors/effects-work-budget.js";
 import { rustEmissionIdentityBindings, rustEmissionSourceIdentity } from "../../../dist/analysis/callables/emission-contexts.js";
 import { prepareRustProviderSourceOccurrences } from "../../../dist/analysis/operations/provider-source-inputs.js";
 

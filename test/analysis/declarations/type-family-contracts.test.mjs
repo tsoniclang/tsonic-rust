@@ -4,23 +4,23 @@ import { createRustSourceTypeFamilyRegistry } from "../../../dist/analysis/proje
 import { createRustAssociatedRequirementCollector } from "../../../dist/analysis/declarations/associated-requirements.js";
 import { analyzeRustShapeGenericRequirements } from "../../../dist/analysis/declarations/generic-shape-requirements.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustCarrierSupportsTrait } from "../../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
 import { rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../dist/target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/model/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../../dist/analysis/project-types/type-family-normalization.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
-import { selectRustFlowReadProjection } from "../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustOptionTargetType, rustSourceLocationTargetType } from "../../../dist/target-model/types/index.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
-import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorChannel, rustNativeCallableErrorType }
-  from "../../../dist/analysis/callables/native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native-protocols.js";
+import { rustNativeCallableErrorChannel, rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
+import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/source-modules/component-semantics.js";
 import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 
 const signed = { kind: "source-primitive", name: "int32" };

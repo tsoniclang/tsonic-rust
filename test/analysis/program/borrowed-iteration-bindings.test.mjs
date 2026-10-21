@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/program/borrowed-iteration-bindings.js";
+import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/storage/borrowed-iteration-bindings.js";
 
 import { rustBorrowedStrTargetType, rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 

@@ -4,7 +4,7 @@ import test from "node:test";
 import { rustExpressionExitsCallable } from "../../../../dist/backend/target-ast/inspection/callable-exits.js";
 import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { rustExpressionReferencesPath } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
-import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
 import { maxWritesInStatements } from "../../../../dist/backend/target-ast/inspection/source-dataflow.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 

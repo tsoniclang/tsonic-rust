@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectVariableDeclarations } from "../../../../dist/backend/planner/statements/resources.js";
+import { collectVariableDeclarations } from "../../../../dist/backend/planner/statements/resource-management.js";
 
 function context() {
   return { input: { program: { source: { ast: {

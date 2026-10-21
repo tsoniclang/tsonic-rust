@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { applyFinalizedValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
-import { finalizeValueConversion } from "../../../../dist/analysis/operations/finalized-operation/conversions.js";
+import { finalizeValueConversion } from "../../../../dist/policy/operations/members/abi/conversions.js";
 import { rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
 import { rustTargetRuntimeErrorType } from "../../../../dist/backend/planner/types/error-boundary.js";

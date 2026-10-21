@@ -7,14 +7,13 @@ import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/proj
 import { rustSourceTypeCarrier, rustSourceUnionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType,
   rustOptionTargetType, rustJsPromiseTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
-import { composeRustUnionArmMappings, selectRustUnionArmMapping } from "../../../../dist/target-model/types/union-relations.js";
-import { selectRustProjectUnionMapConversion, isRustProjectUnionMapConversion, rustProjectUnionMapConversionMatches } from "../../../../dist/target-model/conversions/project-union.js";
-import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract,
-  rustContextualValueConversionIsFallible } from "../../../../dist/target-model/conversions/contextual.js";
+import { composeRustUnionArmMappings, selectRustUnionArmMapping } from "../../../../dist/policy/conversions/union-relations.js";
+import { selectRustProjectUnionMapConversion, isRustProjectUnionMapConversion, rustProjectUnionMapConversionMatches } from "../../../../dist/policy/conversions/project-union.js";
+import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract, rustContextualValueConversionIsFallible } from "../../../../dist/policy/conversions/contextual.js";
 import { selectRustProjectUnionMapping } from "../../../../dist/policy/types/project/project-union-mappings.js";
 import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";
-import { rustProjectUnionUpcastRelation } from "../../../../dist/target-model/conversions/project-union-relations.js";
-import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { rustProjectUnionUpcastRelation } from "../../../../dist/policy/model/project-union-relations.js";
+import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
 import { planRustProjectUnionMapping } from "../../../../dist/backend/planner/expressions/project-union-mappings.js";
 import { planExpression, planRustProjectUpcast } from "../../../../dist/backend/planner/expressions/entry.js";
 import { applyRustCallableValueAdapterRaw } from "../../../../dist/backend/planner/declarations/callables/adapters.js";

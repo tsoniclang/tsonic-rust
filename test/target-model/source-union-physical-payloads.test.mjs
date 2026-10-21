@@ -11,8 +11,9 @@ import { rustTargetGenericReferences } from "../../dist/target-model/types/carri
 import { substituteRustTargetTypeParameters, mapRustTargetTypes } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
 import { instantiateRustSourceUnionPayloads, rustSourceUnionPayloadArguments } from "../../dist/target-model/types/source-union-definitions.js";
-import { rustCarrierSupportsClone } from "../../dist/target-model/types/carriers/traits.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
+import { rustCarrierSupportsClone } from "../../dist/policy/constraints/native-traits.js";
+import { rustAwaitSelection } from "../../dist/policy/operations/flow/await.js";
+import { rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
 import { planRustSourceUnionPayloadTemplate } from "../../dist/backend/planner/types/source-union-payloads.js";
 import { rustTypeFromCarrier } from "../../dist/backend/planner/types/render.js";
 

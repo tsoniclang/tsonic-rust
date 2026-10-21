@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectRustAsyncBodyPromise } from "../../../dist/policy/types/callables/async-results.js";
 import * as asyncBodyAnalysis from "../../../dist/analysis/callables/async-results.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustNativeRepresentationMatches } from "../../../dist/target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "../../../dist/policy/conversions/native-representation.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 import {

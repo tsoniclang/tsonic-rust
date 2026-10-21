@@ -5,7 +5,7 @@ import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/c
 import { rustTargetTypeParameterIdentities } from "../../dist/target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
-import { structuralStorageKey } from "../../dist/analysis/objects/structural-shape-plan.js";
+import { structuralStorageKey } from "../../dist/policy/types/objects/structural-storage.js";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 const number = { kind: "source-primitive", name: "float64" };

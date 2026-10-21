@@ -3,7 +3,7 @@ import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/di
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
-import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/program/source-package-components.js";
+import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/source-modules/component-semantics.js";
 import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary, resolveRustPhysicalProgramErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { selectRustPhysicalProgramErrorOwner } from "../../../../dist/analysis/errors/error-types.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";

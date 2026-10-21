@@ -7,7 +7,7 @@ import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carr
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { suspendedCallbackInputsSource } from "../../../../tsonic/test/fixtures/suspended-callback-inputs.mjs";
-import { selectRustSourcePackageComponentIdentities } from "../../../dist/analysis/program/source-package-components.js";
+import { selectRustSourcePackageComponentIdentities } from "../../../dist/analysis/source-modules/component-semantics.js";
 import { sourcePackageGraphFixture } from "../../../../tsonic/test/fixtures/source-package-graph.mjs";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";

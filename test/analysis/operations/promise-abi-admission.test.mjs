@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustJsPromiseTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 

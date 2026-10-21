@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustBindingNormalizationContract } from "../../../dist/target-model/types/binding-normalization.js";
+import { rustBindingNormalizationContract } from "../../../dist/policy/types/storage/binding-normalization.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import { rustAbsenceTargetType, rustOptionTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 

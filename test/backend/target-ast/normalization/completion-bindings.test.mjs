@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { closeRustCompletionBindings } from "../../../../dist/backend/target-ast/normalization/completion-bindings.js";
 import { lowerRustCompletionScope } from "../../../../dist/backend/target-ast/normalization/completion-regions.js";
-import { printRustBlockStatements } from "../../../../dist/print/source/blocks.js";
+import { printRustBlockStatements } from "../../../../dist/print/source/statements.js";
 
 const path = name => ({ kind: "path", path: name });
 const errorType = { kind: "named", path: "rt::TsonicError" };

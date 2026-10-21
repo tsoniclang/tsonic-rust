@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { selectRustProgramErrorConversion } from "../../../dist/target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../../dist/policy/conversions/program-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
 import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustProgramErrorConversionMatches } from "../../../dist/target-model/conversions/program-error.js";
+import { rustProgramErrorConversionMatches } from "../../../dist/policy/conversions/program-error.js";
 
 const builtin = rustJsErrorTargetType();
 const native = { kind: "target-named", id: "native.Failure" };

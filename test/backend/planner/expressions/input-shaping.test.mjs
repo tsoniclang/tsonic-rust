@@ -7,7 +7,7 @@ import { rustStringTargetType } from "../../../../dist/target-model/types/index.
 
 import { planRustSharedReceiver } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { lowerRustValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
-import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../../dist/public/provider.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 

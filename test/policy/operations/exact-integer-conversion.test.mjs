@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustExactIntegerConversionMatches } from "../../../dist/target-model/conversions/exact-integer.js";
-import { rustContextualValueConversionIsFallible } from "../../../dist/target-model/conversions/contextual.js";
+import { rustExactIntegerConversionMatches } from "../../../dist/policy/conversions/exact-integer.js";
+import { rustContextualValueConversionIsFallible } from "../../../dist/policy/conversions/contextual.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { selectRustSourceAssertionConversion, selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustNumericPromotionKind } from "../../../dist/target-model/conversions/numeric-promotion.js";
+import { rustNumericPromotionKind } from "../../../dist/policy/conversions/numeric-promotion.js";
 
 const primitive = name => ({ kind: "source-primitive", name });
 

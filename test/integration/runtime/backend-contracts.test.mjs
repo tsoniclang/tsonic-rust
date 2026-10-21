@@ -6,17 +6,15 @@ import assert from "node:assert/strict";
 import { acmeTelemetryCapability, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
 import { rustBlockTerminates } from "../../../dist/backend/target-ast/normalization/block-flow.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
-import {
-  requireProviderArgumentPassingFacts,
-  sourceCallSelectedMemberMatches,
-} from "../../../dist/backend/planner/expressions/index.js";
+import { requireProviderArgumentPassingFacts } from "../../../dist/backend/planner/expressions/index.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import {
   isRustNamedTypeTraitContract,
   rustNamedTypeCarrierValue,

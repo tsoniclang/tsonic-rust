@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustProviderRecordCopyMatches } from "../../dist/target-model/conversions/provider-record.js";
-import { rustContextualValueConversionIsFallible } from "../../dist/target-model/conversions/contextual.js";
+import { rustProviderRecordCopyMatches } from "../../dist/policy/conversions/provider-record.js";
+import { rustContextualValueConversionIsFallible } from "../../dist/policy/conversions/contextual.js";
 import { rustStructuralObjectTargetType, rustNamedTargetType, rustSourcePrimitiveTargetType, rustSourceOptionalTargetType } from "../../dist/target-model/types/index.js";
 
 const number = rustSourcePrimitiveTargetType("float64");

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/syntax/nodes.js";
-import { printRustItem } from "../../../dist/print/source/items.js";
+import { printRustItem } from "../../../dist/print/source/declarations.js";
 import { printRustType } from "../../../dist/print/source/types.js";
-import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/syntax/module-references.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustSourceFileContractCandidate } from "../../../dist/backend/planner/artifacts/source-file-contract.js";
 import { rustLintAttributes } from "../../../dist/backend/target-ast/normalization/lint-policy.js";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustRuntimeCategory } from "../../../../dist/backend/planner/expressions/runtime-category.js";
-import { getRustTypeofRuntimeKind } from "../../../../dist/target-model/types/runtime-kind.js";
+import { getRustTypeofRuntimeKind } from "../../../../dist/policy/operations/syntax/runtime-kind.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 

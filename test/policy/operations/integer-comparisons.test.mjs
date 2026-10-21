@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustNumericComparisonPromotion } from "../../../dist/policy/operations/numeric/promotion.js";
 import { selectRustBinaryOperator } from "../../../dist/policy/operations/operators/rules.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
-import { rustNumericPromotionKind } from "../../../dist/target-model/conversions/numeric-promotion.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
+import { rustNumericPromotionKind } from "../../../dist/policy/conversions/numeric-promotion.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 

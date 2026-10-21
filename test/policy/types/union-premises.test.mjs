@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
-import { rustUnionLeaves, rustUnionProjectionContract } from "../../../dist/target-model/types/union-relations.js";
+import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
+import { rustUnionProjectionContract } from "../../../dist/policy/conversions/union-relations.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const boolean = rustSourcePrimitiveTargetType("bool");

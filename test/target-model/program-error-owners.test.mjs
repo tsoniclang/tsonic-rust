@@ -6,7 +6,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../dist/target-
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/children.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../dist/target-model/metadata/closed-data.js";
-import { rustNativeRepresentationMatches } from "../../dist/target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "../../dist/policy/conversions/native-representation.js";
 
 test("program errors have one explicit logical or exact physical owner identity throughout target metadata", () => {
   const selections = [{ kind: "logical" }, { kind: "physical", domain: "runtime" },

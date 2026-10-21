@@ -12,7 +12,7 @@ import { acmeFilesPackage, analyzeRust } from "../../../helpers/rust-session.mjs
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustCapturedBindingStorage } from "../../../../dist/analysis/callables/capture-storage.js";
 import { rustRetainedCallSubstitutions } from "../../../../dist/analysis/callables/retained-call-lifetimes.js";
-import { rustArgumentPassingMode } from "../../../../dist/analysis/callables/parameter-passing.js";
+import { rustArgumentPassingMode } from "../../../../dist/policy/ownership/argument-passing.js";
 import { rustLifetimeKey } from "../../../../dist/target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../../dist/target-model/types/carriers/optional.js";

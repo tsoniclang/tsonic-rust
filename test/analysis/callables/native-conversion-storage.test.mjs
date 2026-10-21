@@ -6,8 +6,10 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/conversions/value-carrier-queries.js";
-import { rustNativeCallableOperand, rustNativeCallablePhysicalSource } from "../../../dist/analysis/callables/native-conversions.js";
-import { rustCallableConversionPhysical, rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustNativeCallableOperand } from "../../../dist/analysis/callables/native-conversions.js";
+import { rustNativeCallablePhysicalSource } from "../../../dist/policy/conversions/native-callables.js";
+import { rustCallableConversionPhysical } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";

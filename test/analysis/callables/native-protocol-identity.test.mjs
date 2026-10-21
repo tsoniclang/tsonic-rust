@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustNativeCallableErrorType } from "../../../dist/analysis/callables/native-protocols.js";
+import { rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 

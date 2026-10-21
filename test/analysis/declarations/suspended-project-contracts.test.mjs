@@ -5,7 +5,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 
 
-import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
+import { rustCallableInvocationResult } from "../../../dist/policy/types/callables/return-contexts.js";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

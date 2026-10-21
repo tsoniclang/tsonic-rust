@@ -3,7 +3,8 @@ import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType,
   rustJsPromiseTargetType } from "../../dist/target-model/types/index.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
+import { rustAwaitSelection } from "../../dist/policy/operations/flow/await.js";
+import { rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { createRustGeneratedUnionPlan } from "../../dist/analysis/objects/generated-union-plan.js";
 

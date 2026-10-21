@@ -6,7 +6,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../dist/target-model/types/carriers/runtime-unions.js";
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
-import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
+import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-read-projections.js";
 
 test("Intl exact integer, optional precision and grouping contracts execute in Rust", { timeout: 300_000 }, () => {
   const { result } = compileRust({

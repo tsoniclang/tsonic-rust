@@ -7,7 +7,7 @@ import {
   createRustCallableOwnershipComponentQueries, defaultRustCallableOwnershipLimits,
 } from "../../../dist/analysis/callables/ownership-components.js";
 import { analyzeRustReceiverFieldCaptures } from "../../../dist/analysis/project-types/receiver-captures.js";
-import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/type-policy.js";
+import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/catalog/resolution.js";
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";

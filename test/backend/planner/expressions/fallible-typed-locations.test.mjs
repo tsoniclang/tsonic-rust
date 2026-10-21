@@ -3,7 +3,7 @@ import test from "node:test";
 import { falliblePointerFiles, falliblePointerPackageFiles, falliblePointerPackageGraph } from "../../../../../tsonic/test/fixtures/fallible-pointer-views.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
-import { rustLocationCallbackCarrier } from "../../../../dist/analysis/operations/location-callbacks.js";
+import { rustLocationCallbackCarrier } from "../../../../dist/policy/operations/callables/location-callbacks.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 

@@ -10,7 +10,7 @@ import {
   rustExpressionChildren,
   rustExpressionReferencesPath,
 } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
-import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";
+import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustExpressionUsesTryInCurrentRegion } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";

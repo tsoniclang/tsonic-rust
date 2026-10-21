@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustCallableTargetType, rustCallableProtocol } from "../../dist/target-model/types/carriers/callables.js";
-import { rebindRustCallableCarrier } from "../../dist/target-model/types/carriers/callable-rebinding.js";
+import { rebindRustCallableCarrier } from "../../dist/policy/types/callables/method-values.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustCallablePhysicalSignature } from "../../dist/target-model/conversions/callable-physical.js";
-import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
-import { rustNativeRepresentationMatches } from "../../dist/target-model/conversions/native-representation.js";
+import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
+import { rustNativeRepresentationMatches } from "../../dist/policy/conversions/native-representation.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };

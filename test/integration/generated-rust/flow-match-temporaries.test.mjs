@@ -4,7 +4,7 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
+import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-read-projections.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";

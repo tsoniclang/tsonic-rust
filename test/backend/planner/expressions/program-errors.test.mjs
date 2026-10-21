@@ -2,7 +2,7 @@ import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/di
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
-import { selectRustProgramErrorConversion } from "../../../../dist/target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../../../dist/policy/conversions/program-error.js";
 import { planRustProgramErrorConstruction } from "../../../../dist/backend/planner/expressions/program-errors.js";
 import { rustJsErrorTargetType, rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";

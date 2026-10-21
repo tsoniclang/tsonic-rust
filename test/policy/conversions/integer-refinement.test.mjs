@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 
 test("integer refinements preserve width and require the exact signed/unsigned pair", () => {

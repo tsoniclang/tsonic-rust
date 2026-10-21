@@ -5,7 +5,7 @@ import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/nor
 import { rustLintAttributes } from "../../../../dist/backend/target-ast/normalization/lint-policy.js";
 import { rustListAttribute, rustWordAttribute } from "../../../../dist/backend/target-ast/syntax/attributes.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
-import { printRustSourceFile } from "../../../../dist/print/source/items.js";
+import { printRustSourceFile } from "../../../../dist/print/source/declarations.js";
 
 test("native naming rules preserve Unicode, raw spellings and unmodified conforming names", () => {
   for (const [style, accepted, rejected] of [

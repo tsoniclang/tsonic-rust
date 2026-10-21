@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustFlowReadProjection } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/control-flow/flow-read-projections.js";
 import { rustJsValueTargetType, rustJsErrorTargetType, rustProgramErrorTargetType,
   rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";

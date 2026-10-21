@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { selectRustCheckedElementAccess, selectRustCheckedPropertyAccess } from "../../../dist/analysis/operations/selected-members.js";
-import { checkedPropertySelectionInput } from "../../../dist/analysis/operations/provider/properties.js";
+import { checkedPropertySelectionInput } from "../../../dist/analysis/operations/member-access.js";
 import { rustOperationContext } from "../../../dist/analysis/program/walk.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 

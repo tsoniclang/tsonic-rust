@@ -7,7 +7,7 @@ import { rustRecordCarrierValue, rustRecordTargetType, rustRecordReadAdmitsAbsen
 import { rustAbsenceTargetType, rustJsValueTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
 import { rustOptionalStorageProjection } from "../../../dist/target-model/types/projections.js";
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
-import { rustCarrierSupportsTrait } from "../../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
 import { selectRustBinaryOperator } from "../../../dist/policy/operations/operators/rules.js";
 
 test("indexed record absence reads use exact native optional storage", () => {

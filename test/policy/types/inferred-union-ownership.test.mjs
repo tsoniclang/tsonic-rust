@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustInferredUnion } from "../../../dist/policy/types/resolution/inferred-unions.js";
+import { resolveRustInferredUnion } from "../../../dist/analysis/types/resolution/inferred-unions.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 test("ambient signature inspection cannot register a source-owned union", () => {

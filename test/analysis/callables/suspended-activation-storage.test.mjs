@@ -4,7 +4,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { suspendedActivationCallableSource } from "../../../../tsonic/test/fixtures/suspended-activation-callables.mjs";
 
 
-import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
+import { rustCallableInvocationResult } from "../../../dist/policy/types/callables/return-contexts.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

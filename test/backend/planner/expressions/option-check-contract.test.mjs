@@ -5,7 +5,7 @@ import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
-import { planOptionalChainExpression } from "../../../../dist/backend/planner/expressions/special.js";
+import { planOptionalChainExpression } from "../../../../dist/backend/planner/expressions/optional-chains.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 
 test("sealed option checks reject missing, duplicate, unordered and impossible nullish depths", () => {

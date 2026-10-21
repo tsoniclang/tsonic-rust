@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { recordRustParameterAbiSelection } from "../../../dist/analysis/declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection } from "../../../dist/analysis/callables/parameter-facts.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };

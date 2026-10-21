@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustFinalizedSourceInputs } from "../../../../dist/analysis/operations/finalized-operation/conversions.js";
+import { rustFinalizedSourceInputs } from "../../../../dist/target-model/operations/finalized-inputs.js";
 import { providerTargetRuntimeSlotKeys, sourceRuntimeSlots } from "../../../../dist/backend/planner/project/provider-source-inputs.js";
 import { selectRustProviderSourceOccurrence } from "../../../../dist/analysis/operations/provider-source-inputs.js";
 

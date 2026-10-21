@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
-import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit }
-  from "../../../dist/analysis/resources/effects-work-budget.js";
+import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit } from "../../../dist/analysis/errors/effects-work-budget.js";
 import { mergeRustErrorEffects } from "../../../dist/analysis/errors/error-effects.js";
 
 test("effects use the canonical finite source-analysis work default", () => {

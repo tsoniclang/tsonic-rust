@@ -8,7 +8,7 @@ import { collectTargetSourceProfileContributions } from "../../../../tsonic/pack
 import { errorConstructorFootprintSource, errorOriginDomainSource, errorRecoveryDomainSource } from "../../../../tsonic/test/fixtures/error-origin-domains.mjs";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
-import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
+import { createRustSourceProfileStorageEffects } from "../../../dist/analysis/source-profiles/source-storage-effects.js";
 import { rustNativeSourceProfileContributions, rustJsSurfaceSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 

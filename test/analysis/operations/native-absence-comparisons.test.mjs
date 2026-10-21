@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectedOptionNullishRelationship } from "../../../dist/analysis/operations/nullish-comparisons.js";
+import { selectedOptionNullishRelationship } from "../../../dist/policy/operations/operators/nullish-comparisons.js";
 import { rustAbsenceTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType,
   rustJsValueTargetType } from "../../../dist/target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";

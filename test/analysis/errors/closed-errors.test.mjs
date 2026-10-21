@@ -7,7 +7,7 @@ import { rustClosedErrorTransportDemand } from "../../../dist/analysis/errors/cl
 
 
 
-import { selectRustProgramErrorConversion } from "../../../dist/target-model/conversions/program-error.js";
+import { selectRustProgramErrorConversion } from "../../../dist/policy/conversions/program-error.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustJsErrorTargetType, rustJsValueTargetType, rustTsValueTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustRetainedErrorTargetType, rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";

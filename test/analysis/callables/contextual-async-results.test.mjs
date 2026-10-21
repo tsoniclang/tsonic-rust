@@ -6,12 +6,13 @@ import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 
 
 
-import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
+import { rustCallableInvocationResult } from "../../../dist/policy/types/callables/return-contexts.js";
+import { rustAwaitSelection } from "../../../dist/policy/operations/flow/await.js";
+import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { finalizedConversionIsValid } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
+import { finalizedConversionIsValid } from "../../../dist/policy/operations/members/abi/conversions.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`module suspension return facts use their exact generator or async protocol in ${surfaces[0] ?? "native"}`, () => {

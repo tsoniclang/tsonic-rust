@@ -6,7 +6,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 
 
 
-import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
+import { selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustModuleInitializationPlan } from "../../../dist/analysis/module-initialization/analyze.js";
 

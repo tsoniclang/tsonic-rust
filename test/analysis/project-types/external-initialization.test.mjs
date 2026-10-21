@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustExternalInitialization } from "../../../dist/analysis/project-types/external-initialization.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 
 
 import { rustSourceErrorConstructorOperation } from "../../../dist/policy/operations/source-profiles/error-source-profile.js";

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableConversionPhysical, rustCallableConversionErrorArities, rustCallablePhysicalSignature }
-  from "../../dist/target-model/conversions/callable-physical.js";
-import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
-import { selectRustExactIntegerConversion } from "../../dist/target-model/conversions/exact-integer.js";
+import { rustCallableConversionPhysical, rustCallableConversionErrorArities } from "../../dist/policy/conversions/callable-physical.js";
+import { rustCallablePhysicalSignature } from "../../dist/target-model/conversions/callable-physical.js";
+import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
+import { selectRustExactIntegerConversion } from "../../dist/policy/conversions/exact-integer.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../dist/target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetId, rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";

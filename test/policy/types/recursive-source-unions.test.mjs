@@ -2,12 +2,12 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustCallableTargetType,
-  rustCarrierSupportsClone, rustCarrierSupportsTrait, rustJsArrayTargetType } from "../../../dist/target-model/types/index.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustCallableTargetType, rustJsArrayTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { recursiveSourceUnionFiles, recursiveCollectionUnionFiles, recursiveCollectionUnionIdentitySource,

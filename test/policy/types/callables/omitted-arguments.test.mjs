@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { materializeRustOmittedCallArguments } from "../../../../dist/policy/types/callables/omitted-arguments.js";
-import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../../dist/policy/operations/members/abi/validation.js";
 import { rustOptionTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
-import { substituteProviderOperationForm } from "../../../../dist/analysis/operations/provider/calls/template-instantiation.js";
+import { substituteProviderOperationForm } from "../../../../dist/policy/types/callables/provider-templates.js";
 
 test("omitted provider arguments require checked optional slots and exact native Option carriers", () => {
   const string = rustStringTargetType();

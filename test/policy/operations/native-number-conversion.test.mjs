@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 

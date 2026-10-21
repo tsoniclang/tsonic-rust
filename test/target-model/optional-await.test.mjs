@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustAwaitCarrier, rustCallableTargetType, rustJsPromiseTargetType, rustSourceOptionalTargetType,
-  rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
+import { rustAwaitCarrier } from "../../dist/policy/operations/flow/await.js";
+import { rustCallableTargetType, rustJsPromiseTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustFutureValueMatchesCarrier } from "../../dist/analysis/callables/future-values.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
-import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../dist/policy/conversions/contextual.js";
+import { selectRustCallableConversion } from "../../dist/policy/conversions/callable.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const boolean = rustSourcePrimitiveTargetType("bool");

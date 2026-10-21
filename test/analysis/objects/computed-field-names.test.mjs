@@ -396,6 +396,7 @@ export function make(): number {
 }
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { rustSourcePrimitiveTargetType, rustTupleTargetType } from "../../../dist/target-model/types/index.js";
+import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { rustTupleTargetType } from "../../../dist/policy/types/collections/tuple-carrier.js";
 import { recordRustValueStructDeclaration } from "../../../dist/analysis/declarations/value-structs.js";
 import { structFactKey } from "@tsonic/tsts";

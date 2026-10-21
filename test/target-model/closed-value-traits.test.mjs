@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCarrierSupportsTrait, rustJsValueTargetType, rustTsValueTargetType } from "../../dist/target-model/types/index.js";
-import { isRustCopyCarrier } from "../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSupportsTrait } from "../../dist/policy/constraints/native-traits.js";
+import { rustJsValueTargetType, rustTsValueTargetType } from "../../dist/target-model/types/index.js";
+import { isRustCopyCarrier } from "../../dist/policy/constraints/native-traits.js";
 import { rustOptionTargetType } from "../../dist/target-model/types/carriers/optional.js";
 import { rustFixedArrayTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustStructuralObjectTargetType } from "../../dist/target-model/types/carriers/source-types.js";

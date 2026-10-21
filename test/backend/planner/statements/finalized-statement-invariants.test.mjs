@@ -9,15 +9,15 @@ import { createRustSyntheticNameState } from "../../../../dist/backend/planner/n
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { planRustSourcePackageErrors } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { rustCurrentErrorBoundary } from "../../../../dist/backend/planner/program/plan-context.js";
-import { planThrowStatement, planTryStatement } from "../../../../dist/backend/planner/statements/errors.js";
-import { planForInStatement, planForOfStatement, planRuntimeSetStatement } from "../../../../dist/backend/planner/statements/iteration.js";
-import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "../../../../dist/backend/planner/statements/resources.js";
+import { planThrowStatement, planTryStatement } from "../../../../dist/backend/planner/statements/statement-try.js";
+import { planForInStatement, planForOfStatement, planRuntimeSetStatement } from "../../../../dist/backend/planner/statements/statement-loops.js";
+import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "../../../../dist/backend/planner/statements/resource-management.js";
 import { planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment } from "../../../../dist/backend/planner/statements/assignments.js";
-import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statements/expression-statements.js";
-import { validateRustFinalizedOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/validation.js";
+import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statements/assignment-writes.js";
+import { validateRustFinalizedOperationAbi } from "../../../../dist/policy/operations/members/abi/validation.js";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
-import { planStatement } from "../../../../dist/backend/planner/statements/core.js";
-import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { planStatement } from "../../../../dist/backend/planner/statements/planning.js";
+import { finalizeRustProviderOperationAbi } from "../../../../dist/policy/operations/members/abi/finalize.js";
 import { finishProviderOperationExpression } from "../../../../dist/backend/planner/expressions/conversions.js";
 
 const source = `

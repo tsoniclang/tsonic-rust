@@ -3,10 +3,11 @@ import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorresponde
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/program/records/source-parameter-abi.js";
-import { getRustGeneratorProtocol, rustGeneratorStorageTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
+import { getRustGeneratorProtocol, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustGeneratorStorageTargetType } from "../../../../dist/policy/types/callables/generators.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
 import { rustFoundationForCarrier } from "../../../../dist/analysis/foundation/requirements.js";
 import { rustFoundationForValueConversion } from "../../../../dist/analysis/foundation/conversion-requirements.js";
 import { maximumRustFoundation } from "../../../../dist/target-model/foundation/model.js";

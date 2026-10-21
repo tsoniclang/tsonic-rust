@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustContextualLiteralCarrier } from "../../../dist/policy/types/resolution/contextual-literals.js";
-import { resolveRustBranchUnion } from "../../../dist/policy/types/resolution/branch-unions.js";
+import { resolveRustContextualLiteralCarrier } from "../../../dist/policy/types/collections/literal-construction.js";
+import { resolveRustBranchUnion } from "../../../dist/analysis/types/resolution/branch-unions.js";
 import { rustJsArrayTargetType, rustNeverTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustVecTargetType,
   rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
-import { rustBorrowedElementRead, rustBorrowPureProviderInputs } from "../../../dist/analysis/program/borrowed-element-purity.js";
+import { rustBorrowedElementRead, rustBorrowPureProviderInputs } from "../../../dist/analysis/storage/borrowed-element-purity.js";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 

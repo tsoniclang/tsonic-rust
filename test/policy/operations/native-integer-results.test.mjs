@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustIntegerTruncationConversionMatches } from "../../../dist/target-model/conversions/integer-truncation.js";
+import { rustIntegerTruncationConversionMatches } from "../../../dist/policy/conversions/integer-truncation.js";
 import { rustBigIntTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { nativeNumericTextFunctions } from "../../../../tsonic/test/fixtures/native-numeric-text.mjs";
 import { numericApiFormattingSource } from "../../../../tsonic/test/fixtures/numeric-api-formatting.mjs";

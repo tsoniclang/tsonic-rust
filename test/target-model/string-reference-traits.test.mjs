@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCarrierSatisfiesTraitRef } from "../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSatisfiesTraitRef } from "../../dist/policy/constraints/native-traits.js";
 import { rustNamedTargetType, rustStringTargetType, rustStrTargetType } from "../../dist/target-model/types/carriers/native.js";
-import { instantiateProviderOperationTemplate } from "../../dist/analysis/operations/provider/calls/template-instantiation.js";
+import { instantiateProviderOperationTemplate } from "../../dist/policy/types/callables/provider-templates.js";
 
 const bytes = { kind: "slice", element: { kind: "source-primitive", name: "uint8" } };
 const path = rustNamedTargetType("compiler.path", "std::path::Path");

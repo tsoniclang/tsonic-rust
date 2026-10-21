@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustWritableErrorRecoveryOriginMatches, selectRustProgramErrorConversion } from "../../../dist/target-model/conversions/program-error.js";
+import { rustWritableErrorRecoveryOriginMatches, selectRustProgramErrorConversion } from "../../../dist/policy/conversions/program-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourceTypeCarrier, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
 import { rustMutableJsErrorTargetType, rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";

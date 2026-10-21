@@ -4,9 +4,9 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { selectRustKnownNumericValueConversion, selectRustSourceAssertionConversion,
   selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { selectedSourceLiteralIsRepresentable } from "../../../dist/policy/types/resolution/selected-numeric-literal.js";
+import { selectedSourceLiteralIsRepresentable } from "../../../dist/policy/conversions/literals.js";
 
 const header = 'import type { float32, float64 } from "@tsonic/core/types.js";\n';
 const midpoint = "1.00000005960464477539062500000001";

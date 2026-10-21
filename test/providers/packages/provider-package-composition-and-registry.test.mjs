@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { collectRustProviderOperationRows, collectRustProviderSemantics, createRustProviderPackageSourceProvider } from "../../../dist/providers/packages/index.js";
+import { collectRustProviderOperationRows } from "../../../dist/providers/packages/composition.js";
+import { collectRustProviderSemantics, createRustProviderPackageSourceProvider } from "../../../dist/providers/packages/index.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 

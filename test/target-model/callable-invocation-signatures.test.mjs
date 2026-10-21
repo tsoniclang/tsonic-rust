@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableInvocationSignaturesMatch } from "../../dist/target-model/conversions/callable-input.js";
+import { rustCallableInvocationSignaturesMatch } from "../../dist/policy/conversions/callable-input.js";
 import { rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
 import { rustJsPromiseTargetType } from "../../dist/target-model/types/carriers/promises.js";
 

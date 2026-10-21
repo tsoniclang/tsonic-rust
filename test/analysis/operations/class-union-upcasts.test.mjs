@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustValueCarrierReconciliation } from "../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustProjectUpcastSourceMatches } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 
 const carrier = name => ({ kind: "target-named", id: `proof.${name}` });

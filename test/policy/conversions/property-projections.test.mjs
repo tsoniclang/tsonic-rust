@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
-import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
+import { rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustSourcePrimitiveTargetType, rustJsValueTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";

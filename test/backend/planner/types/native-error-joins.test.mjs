@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
-import { rustTypeEquals } from "../../../../dist/backend/target-ast/inspection/type-equality.js";
+import { rustTypeEquals } from "../../../../dist/backend/target-ast/syntax/type-equality.js";
 import { applyRustFallibleResultExpression } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { printRustType } from "../../../../dist/print/source/types.js";

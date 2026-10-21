@@ -7,7 +7,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
-import { rustNativeCallableCompletion } from "../../../dist/target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../../dist/policy/types/callables/native-completion.js";
 import { mergeRustDeferredProducerChannels } from "../../../dist/analysis/callables/deferred-producer-effects.js";
 import { finiteCompletionSequencingSource } from "../../../../tsonic/test/fixtures/finite-completion-sequencing.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }

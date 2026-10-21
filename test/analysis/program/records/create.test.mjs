@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import { createRustProgramRecordBuilder, createRustProgramRecords } from "../../../../dist/analysis/program/records/create.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/value-carrier-admission.js";
+import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
 
 
@@ -13,10 +14,10 @@ import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/so
 import { rustSourceUnionTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { closedMetadataEquals } from "../../../../dist/target-model/metadata/closed-data.js";
-import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
 
 
-import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment } from "../../../../dist/analysis/operations/target-operation.js";
+import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment } from "../../../../dist/policy/operations/native-contracts.js";
 import { rustTargetOperationText } from "../../../../dist/target-model/operations/text.js";
 
 function createModel() {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../../dist/policy/types/resolution/source-unions.js";
+import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../../dist/analysis/types/resolution/source-unions.js";
 import { rustAbsenceTargetType, rustBigIntTargetType, rustJsNumericTargetType, rustJsStringNumberTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 test("authored and inferred union values retain the surface's exact scalar carrier", () => {

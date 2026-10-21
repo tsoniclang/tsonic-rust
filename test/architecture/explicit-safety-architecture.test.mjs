@@ -32,7 +32,7 @@ test("shared explicit-safety fact keys have one Rust source-boundary reader", ()
       files
         .filter((path) => readFileSync(path, "utf8").includes(key))
         .map((path) => path.slice(repositoryRoot.length + 1)),
-      ["src/policy/operations/safety/source-explicit-safety.ts"],
+      ["src/source/extension/explicit-safety.ts"],
       key,
     );
   }

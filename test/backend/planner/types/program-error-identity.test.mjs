@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustProgramErrorTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustSourcePackageErrorTypeIdentity } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { rustSourcePackageErrorTypeIdentity } from "../../../../dist/analysis/errors/source-packages.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
-import { rustTypeEquals } from "../../../../dist/backend/target-ast/inspection/type-equality.js";
+import { rustTypeEquals } from "../../../../dist/backend/target-ast/syntax/type-equality.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
 function context(componentId, errorDomain) {

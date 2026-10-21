@@ -7,7 +7,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
-import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../../dist/policy/operations/members/abi/finalize.js";
 import { rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustProviderEvaluationScope } from "../../../../dist/backend/planner/project/provider-evaluation-scope.js";
 import { selectRustProviderSourceOccurrence } from "../../../../dist/analysis/operations/provider-source-inputs.js";

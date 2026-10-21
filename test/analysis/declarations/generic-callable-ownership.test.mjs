@@ -6,21 +6,21 @@ import { rustGenericCallableTargetType } from "../../../dist/target-model/types/
 
 
 import { createRustGenericCallableFlowIndex } from "../../../dist/analysis/callables/generic-callable-flow.js";
-import { rustGenericCallableConversionMatches } from "../../../dist/target-model/conversions/generic-callable.js";
+import { rustGenericCallableConversionMatches } from "../../../dist/policy/conversions/generic-callable.js";
 import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/callables/value-plan.js";
 import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
-import { createRustSourceCallableQueries } from "../../../dist/policy/ownership/source-borrowed-return.js";
+import { createRustSourceCallableQueries } from "../../../dist/analysis/callables/borrowed-returns.js";
 import { createRustRuntimeValueUsePlan } from "../../../dist/analysis/program/runtime-value-uses.js";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/type-policy.js";
+import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/catalog/resolution.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types/receiver-storage.js";
 import { createRustObjectRepresentationPlan } from "../../../dist/analysis/project-types/object-representation.js";
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/structural-shape-plan.js";
-import { createRustRetainedEnvironmentQueries } from "../../../dist/policy/ownership/retained-environment-queries.js";
+import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 

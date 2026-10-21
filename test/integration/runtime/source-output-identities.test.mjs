@@ -11,9 +11,7 @@ import {
 import {
   rustModuleNameForSourcePath,
 } from "../../../dist/target-model/names/source-output-identities.js";
-import {
-  analyzeRustSourcePackageFacades,
-} from "../../../dist/analysis/program/source-package-facades.js";
+import { analyzeRustSourcePackageFacades } from "../../../dist/analysis/source-modules/facade-contracts.js";
 import {
   fakeAstReader,
   fakeSourcePackageGraph,

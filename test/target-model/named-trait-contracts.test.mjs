@@ -4,7 +4,7 @@ import {
   isRustNamedTypeTraitContract, rustNamedTargetType, rustNamedTypeCarrierValue,
   rustNativeTraitRef, rustNativeTraitRefEquals, rustNamedTypeTraitContract,
 } from "../../dist/target-model/types/carriers/native.js";
-import { rustCarrierSatisfiesTraitRef, rustNamedTypeSupportsTrait } from "../../dist/target-model/types/carriers/traits.js";
+import { rustCarrierSatisfiesTraitRef, rustNamedTypeSupportsTrait } from "../../dist/policy/constraints/native-traits.js";
 import { rustRetainedErrorTargetType } from "../../dist/target-model/types/carriers/source-error.js";
 import { substituteRustTargetGenerics } from "../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences, rustTargetCaptureArguments } from "../../dist/target-model/types/carriers/generic-references.js";

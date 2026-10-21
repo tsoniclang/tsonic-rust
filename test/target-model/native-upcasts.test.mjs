@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../dist/target-model/types/carriers/native.js";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../dist/policy/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../dist/target-model/conversions/substitution.js";
 import { rustJsTypedArrayTargetType } from "../../dist/target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
-import { finalizeRustProviderOperationAbi } from "../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../dist/policy/operations/members/abi/validation.js";
 import { rustUnitTargetType } from "../../dist/target-model/types/index.js";
 
 const bytes = rustJsTypedArrayTargetType("Uint8Array");

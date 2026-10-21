@@ -6,7 +6,7 @@ import { createRustPlanningContext } from "../../../../dist/backend/planner/cont
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { planElementAccess } from "../../../../dist/backend/planner/expressions/elements.js";
 import { planPropertyAccess } from "../../../../dist/backend/planner/expressions/properties.js";
-import { planOptionalChainExpression } from "../../../../dist/backend/planner/expressions/special.js";
+import { planOptionalChainExpression } from "../../../../dist/backend/planner/expressions/optional-chains.js";
 import { planRustPromotedStorageWrite } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { planRustCallArguments } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";

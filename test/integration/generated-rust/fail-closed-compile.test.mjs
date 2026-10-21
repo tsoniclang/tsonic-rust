@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { dirname } from "node:path";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
+import { createRustTargetConfiguration } from "../../../dist/options/target.js";
 import {
   fakeCompileInput,
   fakeSourceFile,

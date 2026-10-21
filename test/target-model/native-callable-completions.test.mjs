@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustNativeCallableCompletion, instantiateRustNativeCompletion, rustNativeCompletionFutureType }
-  from "../../dist/target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../dist/policy/types/callables/native-completion.js";
+import { instantiateRustNativeCompletion, rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
 import { rustSourcePrimitiveTargetType, rustSourceOptionalTargetType, rustSourceUnionTargetType,
   rustUnitTargetType, rustFutureTargetType } from "../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";

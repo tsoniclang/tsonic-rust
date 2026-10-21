@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "../../../dist/policy/types/resolution/callable-environments.js";
-import { rustSourceTypeParameter } from "../../../dist/target-model/names/type-parameters.js";
+import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "../../../dist/analysis/types/resolution/callable-environments.js";
+import { rustSourceTypeParameter } from "../../../dist/source/extension/type-parameters.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
-import { bindRustCallableResultTypeParameters } from "../../../dist/policy/types/resolution/generic-arguments.js";
+import { bindRustCallableResultTypeParameters } from "../../../dist/analysis/types/resolution/generic-arguments.js";
 
 function input() {
   const file = { path: "/callable.ts" };

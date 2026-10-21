@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
-import { finalizeProviderOperationFact } from
-  "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
+import { finalizeProviderOperationFact } from "../../../dist/analysis/program/records/provider-operations.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const native = { kind: "target-named", id: "acme.NativeError" };

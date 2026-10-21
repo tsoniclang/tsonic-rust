@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planBlockLike } from "../../../../dist/backend/planner/statements/core.js";
+import { planBlockLike } from "../../../../dist/backend/planner/statements/planning.js";
 
 function context(children) {
   const sourceFile = {};

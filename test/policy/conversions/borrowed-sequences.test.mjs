@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustRestSequenceElements } from "../../../dist/target-model/operations/rest-assembly.js";
 import { rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustRestSequenceConversion } from "../../../dist/policy/conversions/rest-sequence.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 
 test("borrowed readonly native slices reuse the canonical rest sequence element conversion contract", () => {
   const element = rustStringTargetType();

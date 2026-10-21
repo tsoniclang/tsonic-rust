@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
-import { rustContextualRuntimeConversionContract } from "../../../dist/target-model/conversions/contextual.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
+import { rustContextualRuntimeConversionContract } from "../../../dist/policy/conversions/contextual.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import { rustJsArrayTargetType, rustJsArrayValueTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustOptionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 const broad = rustJsValueTargetType();

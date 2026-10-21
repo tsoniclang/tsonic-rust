@@ -5,7 +5,7 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { receiverFieldStorageCases } from "../../../../tsonic/test/fixtures/receiver-field-storage-cases.mjs";
 import { generalizeRustProjectStructuralView } from "../../../dist/analysis/objects/project-structural-views-generics.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources } from "../../../dist/analysis/objects/project-structural-views-members.js";
-import { rustProjectViewMatches } from "../../../dist/analysis/objects/view-implementations.js";
+import { rustProjectViewMatches } from "../../../dist/policy/types/objects/project-view-bindings.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";

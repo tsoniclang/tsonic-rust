@@ -5,7 +5,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustSourceCallableReturnProducer } from "../../../dist/analysis/program/records/source-callable-return.js";
 import { createRustRetainedEnvironmentProducer } from "../../../dist/analysis/program/records/retained-environment.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../dist/policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../dist/analysis/types/resolution/source.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/signatures.js";
 

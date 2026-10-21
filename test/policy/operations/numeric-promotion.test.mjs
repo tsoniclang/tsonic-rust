@@ -4,13 +4,8 @@ import assert from "node:assert/strict";
 import {
   rustNumericPromotionConversion,
 } from "../../../dist/policy/operations/numeric/promotion.js";
-import {
-  rustIntegerKindIsExactlyRepresentableAsFloat64,
-  rustNumericPromotionKind,
-} from "../../../dist/target-model/conversions/numeric-promotion.js";
-import {
-  rustValueConversionContract,
-} from "../../../dist/target-model/conversions/contracts.js";
+import { rustIntegerKindIsExactlyRepresentableAsFloat64, rustNumericPromotionKind } from "../../../dist/policy/conversions/numeric-promotion.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import {
   selectRustSourceValueConversion,
   selectRustSourceAssertionConversion,

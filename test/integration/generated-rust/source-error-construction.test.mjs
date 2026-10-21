@@ -13,7 +13,7 @@ import { planRustExternalProjectInitialization } from "../../../dist/backend/pla
 
 import { rustBorrowedStrTargetType, rustSourceOptionalTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustOptionalStringToBorrowedStrValueConversion } from "../../../dist/target-model/conversions/model.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 
 for (const surfaces of [[], ["js"]]) {

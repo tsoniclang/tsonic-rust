@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
-import { planRustValueProjection } from "../../../../dist/backend/planner/expressions/flow-reads.js";
+import { planRustValueProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 

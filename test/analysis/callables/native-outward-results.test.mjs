@@ -9,11 +9,11 @@ import { createRustNativeOutwardResults } from "../../../dist/analysis/callables
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
-import { rustNativeCallableInputPhysicalSignature } from "../../../dist/analysis/callables/native-conversions.js";
-import { rustNativeCallableInvocationArguments } from "../../../dist/analysis/callables/native-invocations.js";
-import { rustPhysicalPayloadFor } from "../../../dist/target-model/types/physical-payloads.js";
+import { rustNativeCallableInputPhysicalSignature } from "../../../dist/policy/conversions/native-callables.js";
+import { rustNativeCallableInvocationArguments } from "../../../dist/policy/operations/callables/native-invocations.js";
+import { rustPhysicalPayloadFor } from "../../../dist/policy/conversions/physical-payloads.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
-import { rustNativeCallableCompletion } from "../../../dist/target-model/types/callable-completions.js";
+import { rustNativeCallableCompletion } from "../../../dist/policy/types/callables/native-completion.js";
 
 function fixture(text, surfaces = []) {
   const context = analyzeRustErrorEffects(text, { surfaces });

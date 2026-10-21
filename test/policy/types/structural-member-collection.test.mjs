@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
-import { resolveStructuralObjectType } from "../../../dist/policy/types/resolution/target.js";
+import { resolveStructuralObjectType } from "../../../dist/analysis/types/resolution/target.js";
 
 function scenario(count) {
   const foreign = { kind: "KindClassDeclaration" };

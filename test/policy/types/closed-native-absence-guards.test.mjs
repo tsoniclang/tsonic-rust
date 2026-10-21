@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { closedNativeAbsenceGuardPolicySource } from "../../../../tsonic/test/fixtures/closed-native-absence-guards.mjs";
-import { selectRustNativeGuardResult } from "../../../dist/policy/types/resolution/native-flow-refinement.js";
+import { selectRustNativeGuardResult } from "../../../dist/analysis/types/resolution/native-flow-refinement.js";
 import { rustAbsenceTargetType, rustTsValueTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";

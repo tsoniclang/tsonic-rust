@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nameRustSignatureTypes } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
-import { printRustItem } from "../../../dist/print/source/items.js";
+import { printRustItem } from "../../../dist/print/source/declarations.js";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native opaque output aliases preserve higher-ranked lifetime and type binders", { timeout: 300_000 }, () => {

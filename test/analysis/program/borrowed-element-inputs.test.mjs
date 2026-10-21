@@ -2,7 +2,7 @@ import { createRustRecordFixture, rustNativeFixtureNodes } from "../../helpers/r
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
+import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/storage/borrowed-element-reads.js";
 
 
 for (const expression of ["values[0]", "values[0]!"]) {

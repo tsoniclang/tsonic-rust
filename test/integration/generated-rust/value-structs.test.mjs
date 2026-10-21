@@ -8,7 +8,8 @@ import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
 
-import { isRustCopyCarrier, rustCarrierSupportsTrait, rustOptionTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
+import { rustOptionTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { writeRustStoredObjectField } from "../../../dist/backend/planner/objects/project-storage.js";
 import { rustNativeMemoryLayoutsEqual } from "../../../dist/target-model/operations/native-memory.js";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustOptionEqualityContract } from "../../../dist/target-model/operations/option-equality.js";
+import { rustOptionEqualityContract } from "../../../dist/policy/operations/operators/option-equality.js";
 import { isRustStringViewCarrier } from "../../../dist/target-model/types/carriers/native.js";
 import { rustBorrowedStrTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStrTargetType,
   rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";

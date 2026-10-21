@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
+import { rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustOptionTargetType, rustFutureTargetType,
   rustJsPromiseTargetType, rustSourcePrimitiveTargetType, rustJsErrorTargetType,
   rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType,
   rustStrTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { finalizeValueConversion, finalizedConversionIsValid } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
+import { finalizeValueConversion, finalizedConversionIsValid } from "../../../dist/policy/operations/members/abi/conversions.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 

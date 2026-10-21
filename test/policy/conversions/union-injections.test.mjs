@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
-import { rustUnionPayloadAdmission } from "../../../dist/target-model/conversions/union-injection.js";
-import { rustUnionInjectionPath } from "../../../dist/target-model/types/union-relations.js";
+import { rustUnionPayloadAdmission } from "../../../dist/policy/conversions/union-injection.js";
+import { rustUnionInjectionPath } from "../../../dist/policy/conversions/union-relations.js";
 import {
   rustAbsenceTargetType, rustJsErrorTargetType, rustJsPromiseTargetType,
   rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType,

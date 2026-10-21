@@ -7,7 +7,7 @@ import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-p
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { selectRustInferredReturn } from "../../../dist/analysis/callables/inferred-return.js";
 import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/signatures.js";
-import { resolveRustTargetTypeRef } from "../../../dist/policy/types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../../dist/analysis/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";

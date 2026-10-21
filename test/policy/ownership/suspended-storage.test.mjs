@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../../dist/policy/ownership/suspended-storage.js";
-import { bindRustElidedCallableInput, instantiateRustElidedCallResult, rustSingleElidedInput, substituteElidedLifetime } from "../../../dist/target-model/types/carriers/lifetime-elision.js";
+import { bindRustElidedCallableInput, instantiateRustElidedCallResult, rustSingleElidedInput } from "../../../dist/policy/types/callables/lifetime-elision.js";
+import { substituteElidedLifetime } from "../../../dist/target-model/types/carriers/lifetime-elision.js";
 import { requirementUseHasValidStorage } from "../../../dist/analysis/declarations/generic-requirement-contract.js";
-import { rustNativeRepresentationMatches } from "../../../dist/target-model/conversions/native-representation.js";
+import { rustNativeRepresentationMatches } from "../../../dist/policy/conversions/native-representation.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustUnitTargetType, rustAbsenceTargetType,
   rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/source-call-lifetimes.js";
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 

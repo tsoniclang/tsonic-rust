@@ -6,7 +6,7 @@ import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-c
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/promise-recursion.js";
 import { rustDirectPromiseBodyCallee } from "../../../dist/analysis/callables/promise-bodies.js";
-import { rustAwaitSelection } from "../../../dist/target-model/types/await.js";
+import { rustAwaitSelection } from "../../../dist/policy/operations/flow/await.js";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";`;

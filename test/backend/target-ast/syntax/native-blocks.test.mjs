@@ -4,7 +4,7 @@ import { rustValueBlock } from "../../../../dist/backend/target-ast/syntax/value
 import { mapRustExpressionChildren } from "../../../../dist/backend/target-ast/syntax/expression-children.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
-import { printRustBlockStatements } from "../../../../dist/print/source/blocks.js";
+import { printRustBlockStatements } from "../../../../dist/print/source/statements.js";
 import { applyFallibleShape } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { rustBlockTerminates } from "../../../../dist/backend/target-ast/normalization/block-flow.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyCarrierRequirements, rustFinalContractSupportsStatic } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustLifetimeOutlives } from "../../../dist/target-model/lifetimes/outlives.js";
-import { rustGenericCallablePhysicalBindings } from "../../../dist/analysis/callables/generic-bindings.js";
+import { rustLifetimeOutlives } from "../../../dist/policy/constraints/lifetime-outlives.js";
+import { rustGenericCallablePhysicalBindings } from "../../../dist/policy/types/callables/generic-bindings.js";
 import { rustCallableTargetType, rustFixedArrayTargetType, rustNamedTargetType, rustStringTargetType, rustStructuralObjectTargetType,
   rustSourceTypeCarrier } from "../../../dist/target-model/types/index.js";
 import { rustNativeFutureOutputType } from "../../../dist/target-model/types/callable-completions.js";

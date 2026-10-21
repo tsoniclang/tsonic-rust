@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../dist/policy/conversions/contracts.js";
 import { rustProgramErrorTargetType, rustSourcePrimitiveTargetType, rustTsValueTargetType,
   rustJsValueTargetType } from "../../dist/target-model/types/index.js";
 import { rustClosedValueRetainsError } from "../../dist/target-model/types/carriers/closed-values.js";

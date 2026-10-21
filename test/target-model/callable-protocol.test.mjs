@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustCallableProtocol, rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
-import { rustTupleTargetType } from "../../dist/target-model/types/carriers/native.js";
+import { rustTupleTargetType } from "../../dist/policy/types/collections/tuple-carrier.js";
 
 const number = { kind: "source-primitive", name: "float64" };
 const boolean = { kind: "source-primitive", name: "bool" };

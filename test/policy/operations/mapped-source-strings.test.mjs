@@ -5,7 +5,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { rustClosureTargetType, rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 
 test("mapped string rows retain callback arity and explicit target result constraints", () => {
   const string = rustStringTargetType();

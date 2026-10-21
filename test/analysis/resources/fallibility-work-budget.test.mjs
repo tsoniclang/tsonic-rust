@@ -5,7 +5,7 @@ import { createRustAnalysisContext } from "../../../dist/analysis/program/contex
 import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
 import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { recordFallibilityFacts } from "../../../dist/analysis/resources/fallibility.js";
+import { recordFallibilityFacts } from "../../../dist/analysis/errors/fallibility.js";
 import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 

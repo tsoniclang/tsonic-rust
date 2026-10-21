@@ -7,7 +7,7 @@ import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../../di
 import { rustLifetimeKey } from "../../../../dist/target-model/lifetimes/index.js";
 import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../../../../dist/policy/types/storage/owned-storage.js";
 import { closeRustSuspendedStorage } from "../../../../dist/policy/types/storage/suspended-storage.js";
-import { closeRustRetainedResult } from "../../../../dist/policy/types/callables/retained-result.js";
+import { closeRustRetainedResult } from "../../../../dist/analysis/callables/retained-result.js";
 
 const integer = { kind: "source-primitive", name: "int64" };
 const parameter = { kind: "type-parameter", identity: "owned:Value", name: "Value" };

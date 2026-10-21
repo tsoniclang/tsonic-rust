@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getRustTypeofRuntimeKind } from "../../dist/target-model/types/runtime-kind.js";
+import { getRustTypeofRuntimeKind } from "../../dist/policy/operations/syntax/runtime-kind.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustJsValueTargetType, rustJsSymbolTargetType, rustJsStringTargetType, rustJsArrayTargetType } from "../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../dist/target-model/types/source-union-definitions.js";
 import { planRustRuntimeCategory } from "../../dist/backend/planner/expressions/runtime-category.js";
-import { rustClosedValueCategoryProjection } from "../../dist/target-model/types/carriers/closed-values.js";
-import { rustUnionLeaves, rustUnionProjectionContract } from "../../dist/target-model/types/union-relations.js";
+import { rustClosedValueCategoryProjection } from "../../dist/policy/conversions/closed-values.js";
+import { rustUnionLeaves } from "../../dist/target-model/types/union-relations.js";
+import { rustUnionProjectionContract } from "../../dist/policy/conversions/union-relations.js";
 import { rustJsArrayValueTargetType } from "../../dist/target-model/types/carriers/array-values.js";
 import { rustBorrowedStrTargetType } from "../../dist/target-model/types/carriers/native.js";
 

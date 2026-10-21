@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/source-call-lifetimes.js";
-import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 
 const declared = { kind: "parameter", identity: "read::lifetime", name: "Region" };

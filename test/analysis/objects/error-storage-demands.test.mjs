@@ -8,7 +8,7 @@ import { requiredStorageSubject } from "../../../../tsonic/test/fixtures/source-
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { createRustErrorStorageDemandQuery } from "../../../dist/analysis/objects/error-storage-demands.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
-import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
+import { createRustSourceProfileStorageEffects } from "../../../dist/analysis/source-profiles/source-storage-effects.js";
 import { rustNativeSourceProfileContributions, rustJsSurfaceSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { liveErrorBaseWriteSource, liveErrorStorageFiles } from "../../../../tsonic/test/fixtures/live-error-storage.mjs";
 import { implicitErrorInterfaceSource } from "../../../../tsonic/test/fixtures/implicit-error-interfaces.mjs";

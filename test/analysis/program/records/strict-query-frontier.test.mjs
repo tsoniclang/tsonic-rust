@@ -4,7 +4,8 @@ import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { createRustCarrierProbe } from "../../../../dist/analysis/program/carrier-probe.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { recordProjectSourceBinding, resolveIdentifierCarrier } from "../../../../dist/analysis/expressions/references.js";
+import { recordProjectSourceBinding } from "../../../../dist/analysis/storage/source-bindings.js";
+import { resolveIdentifierCarrier } from "../../../../dist/analysis/expressions/references.js";
 import { recordExportAssignmentFacts } from "../../../../dist/analysis/control-flow/statements.js";
 import { finalizeRustCallableSignature } from "../../../../dist/analysis/callables/signature-query.js";
 import { recordPredeclaredNativeFunctionBindingFacts } from "../../../../dist/analysis/callables/signatures.js";

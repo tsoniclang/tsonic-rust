@@ -6,7 +6,7 @@ import { planRustCallableInputProducer, planRustCallableConversion }
 
 import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
-import { selectRustCallableConversion } from "../../../../dist/target-model/conversions/callable.js";
+import { selectRustCallableConversion } from "../../../../dist/policy/conversions/callable.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";

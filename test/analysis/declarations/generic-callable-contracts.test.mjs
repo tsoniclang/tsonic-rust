@@ -6,7 +6,8 @@ import { substituteRustTargetTypeParameters } from "../../../dist/target-model/t
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
-import { rustStructuralMethodCallableCarrier, rustStructuralMethodStorageCarrier } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStructuralMethodCallableCarrier } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStructuralMethodStorageCarrier } from "../../../dist/policy/types/objects/member-storage.js";
 
 const parameter = name => ({ kind: "type-parameter", identity: name, name });
 const number = { kind: "source-primitive", name: "float64" };

@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { providerIndexedPolicyFixture } from "../../../../tsonic/test/fixtures/provider-indexed-policy.mjs";
-import { resolveRustProviderIndexedAccess } from "../../../dist/policy/types/resolution/indexed-access.js";
+import { resolveRustProviderIndexedAccess } from "../../../dist/analysis/types/resolution/indexed-access.js";
 import { rustNamedTargetType, rustOptionTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "uint64" };

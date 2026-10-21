@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
-import { rustBroadSourceValueTargetType } from "../../../dist/policy/types/resolution/broad-values.js";
-import { rustEmptyObjectTargetType, rustJsArrayTargetType, rustTupleTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
+import { rustBroadSourceValueTargetType } from "../../../dist/policy/types/broad-values.js";
+import { rustEmptyObjectTargetType, rustJsArrayTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
+import { rustTupleTargetType } from "../../../dist/policy/types/collections/tuple-carrier.js";
 import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

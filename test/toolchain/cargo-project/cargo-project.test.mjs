@@ -5,11 +5,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
-import {
-  planCargoManifest as planSealedCargoManifest,
-  planRustCargoProject,
-} from "../../../dist/backend/planner/project/cargo.js";
+import { createRustTargetConfiguration } from "../../../dist/options/target.js";
+import { planCargoManifest as planSealedCargoManifest } from "../../../dist/backend/planner/project/cargo.js";
+import { planRustCargoProject } from "../../../dist/backend/planner/project/project-artifacts.js";
 import {
   analyzeRustRuntimeReferences,
 } from "../../../dist/analysis/project/index.js";

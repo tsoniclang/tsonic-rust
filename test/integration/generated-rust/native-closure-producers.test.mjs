@@ -8,7 +8,7 @@ import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosure
   from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustCallableConstructionType } from "../../../dist/backend/planner/expressions/fundamentals.js";
+import { rustCallableConstructionType } from "../../../dist/backend/planner/types/constructions.js";
 import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustNativeCompletionFutureType } from "../../../dist/target-model/types/callable-completions.js";

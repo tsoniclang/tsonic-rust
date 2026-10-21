@@ -16,7 +16,7 @@ test("Rust package delegates product documentation to the canonical Tsonic tree"
 });
 
 test("canonical Rust configuration lists every accepted option", () => {
-  const source = readFileSync(resolve(repositoryRoot, "src/options/rust-target-options.ts"), "utf8");
+  const source = readFileSync(resolve(repositoryRoot, "src/options/target.ts"), "utf8");
   const reference = readFileSync(resolve(referenceRoot, "configuration.md"), "utf8");
   for (const option of extractFrozenStringList(source, "supportedRustTargetOptionKeys")) {
     assert.ok(reference.includes("| `" + option + "` |"), option);
@@ -25,7 +25,7 @@ test("canonical Rust configuration lists every accepted option", () => {
 
 test("canonical Rust source-module reference lists every public source alias", () => {
   const modules = readFileSync(resolve(repositoryRoot, "src/source/profiles/source-modules.ts"), "utf8");
-  const identities = readFileSync(resolve(repositoryRoot, "src/source/extension/identity.ts"), "utf8");
+  const identities = readFileSync(resolve(repositoryRoot, "src/target-model/identities/source.ts"), "utf8");
   const reference = readFileSync(resolve(referenceRoot, "source-modules.md"), "utf8");
   const names = new Set([
     ...[...modules.matchAll(/sourcePrimitive\("([^"]+)"/gu)].map((match) => match[1]),

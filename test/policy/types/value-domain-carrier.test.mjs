@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { rustValueDomainHasTargetType } from "../../../dist/policy/types/objects/value-domain-carrier.js";
+import { rustValueDomainHasTargetType } from "../../../dist/analysis/objects/value-domain-carriers.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { rustEmptyObjectTargetType, rustJsValueTargetType, rustOptionTargetType, rustStructuralObjectTargetType,
   rustSourceTypeCarrier } from "../../../dist/target-model/types/index.js";

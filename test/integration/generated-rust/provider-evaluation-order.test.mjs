@@ -7,7 +7,7 @@ import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../.
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { planExpression } from "../../../dist/backend/planner/expressions/entry.js";
 import { planProviderOperationExpression } from "../../../dist/backend/planner/expressions/conversions.js";
 import { planRustProviderEvaluationScope } from "../../../dist/backend/planner/project/provider-evaluation-scope.js";

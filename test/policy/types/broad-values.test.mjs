@@ -9,9 +9,7 @@ import {
   rustStringTargetType,
   rustTsValueTargetType,
 } from "../../../dist/target-model/types/index.js";
-import {
-  rustValueConversionContract,
-} from "../../../dist/target-model/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import {
   selectRustSourceValueConversion,
 } from "../../../dist/policy/conversions/selection.js";

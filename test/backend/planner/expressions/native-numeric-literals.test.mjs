@@ -3,7 +3,7 @@ import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/di
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
-import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/fundamentals.js";
+import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/literal-conversions.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 

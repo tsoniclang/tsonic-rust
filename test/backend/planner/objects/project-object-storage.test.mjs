@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  enterRustProjectObjectMutableState, withRustProjectStoredField, readRustStructuralObjectField,
-  writeRustProjectObjectField, readRustProjectPrivateField, writeRustProjectPrivateField,
-  readRustProjectMethodOverride, writeRustProjectMethodOverride, readRustProjectObjectIndex,
-  copyRustProjectObjectIndexStorage, writeRustProjectObjectIndex, mutateRustProjectObjectIndex,
-  writeRustStructuralObjectField, mutateRustProjectObjectField, mutateRustStructuralObjectField, createRustProjectObject,
-} from "../../../../dist/backend/planner/objects/project-objects.js";
+import { enterRustProjectObjectMutableState, withRustProjectStoredField, readRustStructuralObjectField, writeRustProjectObjectField, readRustProjectPrivateField, writeRustProjectPrivateField, readRustProjectMethodOverride, writeRustProjectMethodOverride, writeRustStructuralObjectField, mutateRustProjectObjectField, mutateRustStructuralObjectField, createRustProjectObject } from "../../../../dist/backend/planner/objects/project-objects.js";
+import { readRustProjectObjectIndex, copyRustProjectObjectIndexStorage, writeRustProjectObjectIndex, mutateRustProjectObjectIndex } from "../../../../dist/backend/planner/objects/project-index-storage.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
 import { maxWritesInStatements } from "../../../../dist/backend/target-ast/inspection/source-dataflow.js";

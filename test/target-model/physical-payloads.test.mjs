@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustPhysicalPayloadFor } from "../../dist/target-model/types/physical-payloads.js";
+import { rustPhysicalPayloadFor } from "../../dist/policy/conversions/physical-payloads.js";
 import { rustSourceUnionTargetType } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../dist/target-model/types/carriers/primitives.js";
 import { rustSourceOptionalTargetType } from "../../dist/target-model/types/projections.js";

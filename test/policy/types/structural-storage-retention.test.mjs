@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainRustStructuralInstantiation } from "../../../dist/policy/types/resolution/structural-instantiations.js";
-import { retainRustSourceUnionInstantiation } from "../../../dist/policy/types/resolution/source-unions.js";
+import { retainRustStructuralInstantiation } from "../../../dist/analysis/types/resolution/structural-instantiations.js";
+import { retainRustSourceUnionInstantiation } from "../../../dist/analysis/types/resolution/source-unions.js";
 import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType,
   rustCallableTargetType, rustVecTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";

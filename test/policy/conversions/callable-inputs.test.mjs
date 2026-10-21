@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableInputMatches } from "../../../dist/target-model/conversions/callable-input.js";
-import { selectRustCallableConversion, rustCallableConversionMatches } from "../../../dist/target-model/conversions/callable.js";
-import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
+import { rustCallableInputMatches } from "../../../dist/policy/conversions/callable-input.js";
+import { selectRustCallableConversion, rustCallableConversionMatches } from "../../../dist/policy/conversions/callable.js";
+import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustCallableTargetType, rustCallableInputTargetType, rustCallableInputProtocol, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
-import { rebindRustCallableCarrier } from "../../../dist/target-model/types/carriers/callable-rebinding.js";
+import { rebindRustCallableCarrier } from "../../../dist/policy/types/callables/method-values.js";
 
 const integer = { kind: "source-primitive", name: "int64" };
 const number = { kind: "source-primitive", name: "float64" };

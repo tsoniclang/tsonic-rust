@@ -9,7 +9,8 @@ import {
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
-import { isRustCallableCarrier, rustCallableProtocol, rustCallableTargetType, rustStructuralMethodStorageCarrier } from "../../../dist/target-model/types/carriers/callables.js";
+import { isRustCallableCarrier, rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStructuralMethodStorageCarrier } from "../../../dist/policy/types/objects/member-storage.js";
 import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";

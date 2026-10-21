@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableConversionMatches, selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
-import { rustCompilerOwnedContextualConversionMatches } from "../../../dist/target-model/conversions/contextual.js";
-import { selectRustValueCarrierReconciliation } from "../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { rustCallableConversionMatches, selectRustCallableConversion } from "../../../dist/policy/conversions/callable.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../../dist/policy/conversions/contextual.js";
+import { selectRustValueCarrierReconciliation } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";

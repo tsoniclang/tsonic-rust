@@ -4,7 +4,7 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { acmeTestingPackage, checkRustSession, compileRust, createRustSession } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
-import { checkedPropertySelectionInput } from "../../../dist/analysis/operations/provider/properties.js";
+import { checkedPropertySelectionInput } from "../../../dist/analysis/operations/member-access.js";
 import { isIntrinsicSourceQualifier } from "../../../dist/analysis/operations/provider/source-qualifiers.js";
 
 test("qualified source builtins preserve static operations and local shadow implementations", { timeout: 300_000 }, () => {

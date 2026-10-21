@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { recordRustConversionSelection, recordRustOptionProjection,
-  recordRustValueCarrierReconciliation } from "../../../dist/analysis/conversions/value-carrier-queries.js";
+import { recordRustConversionSelection, recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../../../dist/analysis/program/records/value-carrier-admission.js";
 import { rustOptionTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 const source = { kind: "source-primitive", name: "uint8" };

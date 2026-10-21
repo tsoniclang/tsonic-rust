@@ -7,7 +7,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
+import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/errors/source-error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";

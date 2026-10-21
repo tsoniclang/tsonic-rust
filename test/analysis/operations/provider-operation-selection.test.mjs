@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { selectRustProviderOperation } from "../../../dist/policy/operations/provider-selection.js";
-import { instantiateProviderOperationTemplate } from "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
-import { rustBorrowedStringTypeParameterNames } from "../../../dist/analysis/operations/provider/calls/provider-argument-shape.js";
+import { instantiateProviderOperationTemplate } from "../../../dist/policy/types/callables/provider-templates.js";
+import { rustBorrowedStringTypeParameterNames } from "../../../dist/policy/types/callables/provider-argument-shape.js";
 import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,

@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
-import {
-  parseSourceBigIntLiteral,
-  parseSourceIntegerLiteral,
-  sourceCharCodeUnit,
-} from "../../../../dist/target-model/syntax/literals.js";
-import { selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../../../dist/policy/types/resolution/selected-numeric-literal.js";
+import { parseSourceBigIntLiteral, parseSourceIntegerLiteral, sourceCharCodeUnit } from "../../../../dist/source/extension/literals.js";
+import { selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../../../dist/policy/conversions/literals.js";
 import { checkedSource, projectSourceFile } from "../../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { rustUnionLeaves } from "../../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";

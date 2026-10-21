@@ -11,7 +11,7 @@ import {
   compilerProviderModuleId,
   compilerTargetTypeId,
 } from "../../../../dist/providers/native/projection/operations.js";
-import { resolveStandardLibraryItem } from "../../../../dist/providers/native/projection/standard-library.js";
+import { resolveStandardLibraryItem } from "../../../../dist/providers/native/acquisition/standard-library.js";
 
 const dependency = {
   alias: "widget_alias",
