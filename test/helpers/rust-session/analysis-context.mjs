@@ -4,7 +4,7 @@ import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
 import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
 
 export function analyzeRustCheckedContext(request, configureContext) {
-  const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation);
+  const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation, request.runtimeCrates);
   assert.equal(references.kind, "resolved");
   const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, references.plan.activeCrates);
   assert.equal(dispatch.kind, "resolved");

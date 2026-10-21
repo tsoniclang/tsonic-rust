@@ -7,6 +7,8 @@ import { rustCallableTargetType } from "../../../../dist/target-model/types/inde
 import { rustRecursiveReceiverFieldContext } from "../../../../dist/backend/planner/expressions/receiver-captures.js";
 import { analyzeRustReceiverCaptureEmission } from "../../../../dist/analysis/storage/receiver-captures.js";
 import { createRustReceiverCaptureEmissionProducer } from "../../../../dist/analysis/program/records/receiver-captures.js";
+import { analyzeRustConstructionEmission } from "../../../../dist/analysis/project-types/construction-emission.js";
+import { createRustConstructionProducer } from "../../../../dist/analysis/program/records/construction.js";
 import { planRustConstructionBody } from "../../../../dist/backend/planner/declarations/classes/construction-body.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
@@ -44,6 +46,7 @@ function admit(capture, selected) {
     projectTypes: { definitionForCarrier: () => undefined },
     lexicalFunctions: { forDeclaration: () => undefined },
     names: { callableValueNameForDeclaration: () => undefined },
+    frozenDataWrites: { capturesFieldIdentity: () => false },
     objectRepresentations: { representationFor: () => undefined,
       receiverCaptures: { ...program.objectRepresentations.receiverCaptures,
         receiversFor: () => [], capturesFor: () => [] } },
@@ -109,36 +112,42 @@ test("source admission proves the exact field origin and reference carriers befo
   assert.equal(admit(fact, unselected), false);
 });
 
-function construction(expression, issues = []) {
+function construction(expression, projection, issues = []) {
   const selected = context();
   selected.syntheticNames = { reserved: new Set(), nextSuffixByBase: new Map() };
-  selected.input.program.frozenDataWrites = { capturesFieldIdentity: () => false };
-  selected.input.program.callableValues = { frames: {
-    definitionForOwner: () => undefined, bindingFor: () => undefined,
-  } };
-  selected.input.program.records = { ...selected.input.program.records, closureCapture: { get: () => undefined } };
-  selected.input.program.objectRepresentations.receiverCaptures = {
-    fixedSelfForReference: reference => references.includes(reference) ? field : undefined,
-    isCaptured: () => false,
-    storageDeclaration: selectedDeclaration => selectedDeclaration,
-  };
-  const definition = { declaration };
-  const sourceField = { declaration, owner: definition, initializer: callable };
-  const point = { initializedFields: [], possiblyInitializedFields: [], published: false,
-    publishBefore: false, publishAfter: false, publishMissingElse: false };
-  const plan = { definition, fields: [sourceField], layers: [], issues,
-    layerHasEarlyReturn: () => false, pointFor: () => point,
-    expressions: [expression], expressionsWithin: () => [expression] };
+  const classNode = {};
+  const definition = { declaration: classNode, kind: "class" };
+  const sourceField = { declaration, owner: definition, initializer: callable, carrier, absenceDefault: false, externallyInitialized: false };
+  const layer = { definition, constructor: callable, signature: { parameters: [] }, fields: [sourceField], statements: [] };
+  const point = { node: callable, layer: definition, initializedFields: [], possiblyInitializedFields: [],
+    published: false, publishBefore: false, publishAfter: false, publishMissingElse: false };
+  const preparation = { point, layer, retainsFrame: false, projections: [projection] };
+  const plan = { definition, fields: [sourceField], layers: [layer], issues, points: [point], expressions: [expression],
+    completesNormally: true, publishesReceiver: false, mutatesPublishedFields: false,
+    layerHasEarlyReturn: () => false, layerCompletes: () => true, mutatesUnpublishedField: () => false,
+    returnLayerFor: () => undefined,
+    emission: { issues: [], frame: undefined, exposure: undefined, preparationFor: node => node === callable ? preparation : undefined } };
+  const producer = createRustConstructionProducer(() => {});
+  selected.diagnostics.push(...analyzeRustConstructionEmission({ program: {
+    source: selected.input.program.source,
+    records: createRustRecordFixture({ classDeclaration: { get: node => node === classNode ? {} : undefined } }),
+    projectTypes: { definitions: [definition], openCarrier: () => carrier, externalBaseForDefinition: () => undefined },
+    projectConstructions: { forDefinition: candidate => candidate === definition ? plan : undefined },
+    physicalEmissionContexts: { contexts: [{ use: { role: "constructor-layer", subject: layer } }] },
+    objectRepresentations: { receiverCaptures: { storageDeclaration: node => node } },
+    frozenDataWrites: { capturesFieldIdentity: () => false },
+  }, producer }));
+  const admitted = producer.records.get(classNode);
   const type = { kind: "named", path: "Callable" };
-  const body = planRustConstructionBody(plan,
+  const body = admitted === undefined ? undefined : planRustConstructionBody(admitted,
     [{ declaration, storageIndex: 0, targetName: "recurse", carrier, type, storageType: type }],
-    carrier, type, () => ({ kind: "path", path: "constructed" }), selected);
+    type, () => ({ kind: "path", path: "constructed" }), selected);
   return { body, selected };
 }
 
-test("fixed self construction skips only the proven deferred edge, not readiness or other field uses", () => {
+test("fixed self rendering reads admitted projections while construction refusals never reach the planner", () => {
   const expression = { kind: "capture", node: references[0], declaration, receiver };
-  const { body, selected } = construction(expression);
+  const { body, selected } = construction(expression, { kind: "fixed-self", expression });
   assert.equal(body !== undefined, true);
   const prepared = body.prepare(callable, selected);
   assert.equal(prepared !== undefined, true);
@@ -146,18 +155,21 @@ test("fixed self construction skips only the proven deferred edge, not readiness
   assert.equal(prepared.context.valueFieldLocations.size, 0);
   assert.equal(prepared.context.expressionOverrides.has(references[0]), false, "the callable invocation owns its self override");
   assert.equal(selected.diagnostics.length, 0);
-  const direct = construction({ ...expression, kind: "field" });
+  const fieldRead = { ...expression, kind: "field" };
+  const direct = construction(fieldRead, { kind: "local", expression: fieldRead, declaration, storage: "value" });
   const read = direct.body.prepare(callable, direct.selected);
-  assert.equal(read.context.expressionOverrides.has(references[0]), true, "ordinary field reads keep their construction projection");
-  const altered = construction({ ...expression, declaration: {} });
-  assert.equal(altered.body.prepare(callable, altered.selected) === undefined, true, "a changed readiness declaration cannot elide a field owner");
-  assert.equal(altered.selected.diagnostics.length, 1);
-  const unproved = construction({ ...expression, node: {} });
-  assert.equal(unproved.body.prepare(callable, unproved.selected) === undefined, true, "an unknown capture still requires its physical contract");
-  assert.equal(unproved.selected.diagnostics.length, 1);
-  const incomplete = construction(expression, [{ node: callable, reason: "required storage is not initialized" }]);
-  assert.equal(incomplete.body === undefined, true, "the existing readiness rejection remains authoritative");
-  assert.equal(incomplete.selected.diagnostics.length, 1);
+  assert.equal(read.context.expressionOverrides.has(references[0]), true, "ordinary field reads retain their admitted local projection");
+  for (const [changed, reason] of [
+    [{ ...expression, declaration: {} }, "A fixed field self lost its exact construction declaration."],
+    [{ ...expression, node: {} }, "A captured native field lost its exact physical owner contract."],
+    [expression, "required storage is not initialized"],
+  ]) {
+    const refused = construction(changed, { kind: "fixed-self", expression: changed }, [{ node: callable, reason }]);
+    assert.equal(refused.body === undefined, true, "the source refusal prevents native construction planning");
+    assert.equal(refused.selected.diagnostics.length, 1);
+    assert.equal(refused.selected.diagnostics[0].code, "RUST_UNSUPPORTED_AST");
+    assert.equal(refused.selected.diagnostics[0].message.startsWith(reason), true, "the exact readiness refusal is retained");
+  }
 });
 
 test("ordinary and lexical recursive callables do not inherit field-self evidence", () => {

@@ -54,6 +54,14 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
     ...definition.signature.parameters, definition.signature.result, ...definition.members.flatMap(member => member.arguments.flatMap(argument => argument.kind === "type" ? [argument.type] : [])));
   for (const node of nodes) {
+    const parameter = program.records.callableParameter.get(node);
+    if (parameter !== undefined) pending.push(parameter.carrier);
+    const returned = program.records.callableReturn.get(node);
+    if (returned !== undefined) {
+      if (returned.invocation !== undefined) pending.push(returned.invocation);
+      if (returned.outward !== undefined) pending.push(returned.outward);
+      if (returned.destination.kind === "selected") pending.push(returned.destination.carrier);
+    }
     const callable = program.records.projectCallableSignature.get(node);
     if (callable !== undefined) pending.push(callable.returnCarrier,
       ...(callable.errorCarrier === undefined ? [] : [callable.errorCarrier]));

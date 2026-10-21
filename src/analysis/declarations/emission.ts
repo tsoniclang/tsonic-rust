@@ -71,7 +71,8 @@ export function analyzeRustDeclarationEmission(input: {
     requireRustRecord(input.required, "classDeclaration", node, "native class declaration", "analyzeRustDeclarationEmission");
   }
   const declarations = new Set(program.callableValues.nativeProducers.producers.map(producer => producer.declaration));
-  for (const node of input.nodes) if (program.records.sourceCallableReturn.get(node) !== undefined) declarations.add(node);
+  for (const node of input.nodes) if (ast.body(node) !== undefined &&
+    program.records.sourceCallableReturn.get(node) !== undefined) declarations.add(node);
   for (const declaration of declarations) {
     const destination = program.callableValues.nativeStorage.returnFor(declaration);
     if (destination.kind === "unresolved") {

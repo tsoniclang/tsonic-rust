@@ -28,7 +28,9 @@ export function analyzeRustMethodEmission(input: {
     const owner = program.projectTypes.definitionContainingDeclaration(member);
     if (owner === undefined) continue;
     if (owner.kind === "class" && program.records.classDeclaration.get(owner.declaration) === undefined) continue;
-    const name = program.projectTypes.callableTargetName(member);
+    const name = ast.is.IsGetAccessorDeclaration(member) ? program.projectTypes.memberSlotName(member, "read")
+      : ast.is.IsSetAccessorDeclaration(member) ? program.projectTypes.memberSlotName(member, "write")
+      : program.projectTypes.callableTargetName(member);
     if (name === undefined || !isValidRustIdentifier(name)) {
       issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: member,
         message: `Method name '${name ?? ""}' is not a valid Rust identifier. Node kind: ${ast.kindName(member)}.`,
