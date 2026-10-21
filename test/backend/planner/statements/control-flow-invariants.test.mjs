@@ -43,7 +43,7 @@ function findNode(program, predicate) {
     }
     for (const child of ast.children(node)) visit(child);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(found !== undefined, true, "the checked fixture contains the planned construct");
   return found;
 }

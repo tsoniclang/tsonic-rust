@@ -19,7 +19,7 @@ for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests rej
     if (fact?.kind === "closed-type-test") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.equal(fact.test.kind, "option");

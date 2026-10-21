@@ -32,7 +32,7 @@ export function create(): (value: int32) => int64 {
   const selectedRecords = createRustRecordFixture({ contextualValueConversion: { get: node => node === current.node
     ? { sourceCarrier: source, targetCarrier: target, conversion } : records.contextualValueConversion.get(node) } }, records);
   const nativeNodes = new Set(rustNativeFixtureNodes(current.program));
-  const regions = analyzeRustErrorRegions({ ast: current.program.source.ast, sourceFiles: current.program.sourceFiles,
+  const regions = analyzeRustErrorRegions({ ast: current.program.source.ast, sourceFiles: current.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile),
     isNativeNode: node => nativeNodes.has(node), records: selectedRecords, names: current.program.names,
     components: current.program.sourcePackageComponents, producers: current.program.callableValues.nativeProducers,
     definitions: current.program.typeDefinitions, callables: current.program.callableValues,

@@ -15,7 +15,7 @@ test("disposal lifecycle consumes the one selected fact and rejects missing evid
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": resourceSource } });
   const nodes = [];
   const visit = node => { nodes.push(node); program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   const declaration = nodes.find(node => program.source.ast.is.IsVariableDeclaration(node) &&
     program.source.ast.variableDeclarationKind(node) === "using");
   assert.equal(declaration !== undefined, true, "real checked resource declaration");
@@ -63,7 +63,7 @@ main();
   const { program } = analyzeRust({ surfaces: [], packages, files: { "index.ts": source } });
   const nodes = [];
   const visit = node => { nodes.push(node); program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   const callable = nodes.find(node => program.source.ast.is.IsFunctionDeclaration(node) &&
     program.source.ast.text(program.source.ast.name(node)) === "run");
   const protectedBody = nodes.find(node => program.source.ast.is.IsTryStatement(node));
@@ -209,7 +209,7 @@ test("provider disposal retains source borrowing before its converted native arg
   const visit = node => { if (program.source.ast.is.IsVariableDeclaration(node) &&
     program.source.ast.variableDeclarationKind(node) === "using") declarations.push(node);
   program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(declarations.length, 1, "the one checked optional resource is retained");
   const fact = program.records.resourceManagement.get(declarations[0]);
   assert.equal(fact.disposal.target.receiverMode, "ref", "the source String is borrowed before conversion");
@@ -241,7 +241,7 @@ test("fallible disposer input conversion participates before the seal without in
   const visit = node => { if (program.source.ast.is.IsVariableDeclaration(node) &&
     program.source.ast.variableDeclarationKind(node) === "using") declarations.push(node);
   program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(declarations.length, 2, "both checked conversions have their actual resource declaration");
   for (const declaration of declarations) {
     const fact = program.records.resourceManagement.get(declaration);

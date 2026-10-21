@@ -80,14 +80,14 @@ function compileObserved(options) {
 function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records, wrapStorage = storage => storage) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
-  const storage = wrapStorage(createSourceStorageQuery(source, program.sourceFiles));
+  const storage = wrapStorage(createSourceStorageQuery(source, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)));
   const records = wrapRecords(program.records);
   const participation = sourceNodesOutsideErasedSubtrees(source.ast, storage.nodes,
     node => program.records.nativeParticipation.get(node) === "erased");
   assert.equal(participation.kind, "resolved", "the checked family domain has complete native participation");
   const nativeNodes = participation.nodes;
   const nativeNodeSet = new Set(nativeNodes);
-  const registry = createRustGenericCallablePlan(source.ast, program.sourceFiles, records, program.names, source.navigation,
+  const registry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records, program.names, source.navigation,
     node => nativeNodeSet.has(node));
   let physical;
   const input = { ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
@@ -666,7 +666,7 @@ test("published capture environments are the completed required declarations onl
     nodes.push(node);
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   const make = nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === "make");
   assert.match(nativeCaptures.forDeclaration(make).reason, /required generic or suspended declarations/u);

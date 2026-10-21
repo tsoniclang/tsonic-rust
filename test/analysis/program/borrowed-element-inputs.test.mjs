@@ -17,7 +17,7 @@ export function read(values: string[]): number { return parseInt(${expression}, 
       if (ast.is.IsCallExpression(node)) call = node;
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     assert.equal(call !== undefined, true);
     const selected = program.borrowedElementReads.forExpression(call);
     assert.equal(selected !== undefined, true);

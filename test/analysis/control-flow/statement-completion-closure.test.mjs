@@ -8,7 +8,7 @@ import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
 
 function checkedGuardNodes(program) {
   const nodes = [];
-  const pending = [...program.sourceFiles];
+  const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
   while (pending.length !== 0) {
     const node = pending.pop();
     nodes.push(node);
@@ -193,13 +193,13 @@ function checked(text = source, options = {}) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
   const nodes = [];
   const visit = node => { nodes.push(node); program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   return { program, nodes, ast: program.source.ast };
 }
 
 function select(program, records = program.records) {
   const nativeNodes = new Set(rustNativeFixtureNodes(program));
-  return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.sourceFiles, records,
+  return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records,
     isNativeNode: node => nativeNodes.has(node),
     names: program.names, typeDefinitions: program.typeDefinitions, errorRegions: program.errorRegions,
     projectFlowReadSelections: program.projectFlowReadSelections });

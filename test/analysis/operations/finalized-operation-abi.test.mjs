@@ -43,7 +43,7 @@ export function add(left: Vector, right: Vector): Vector { return Vector.add(lef
     if (fact?.kind === "provider-operation" && fact.abi.target.form === "binary-operator") operations.push(fact.abi);
     for (const child of program.source.ast.children(node)) visit(child);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(operations.length, 1, "one real selected binary operation");
   const abi = operations[0];
   assert.equal(abi.target.operator, "+");

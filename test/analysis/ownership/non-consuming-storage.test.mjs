@@ -31,7 +31,7 @@ test("native storage borrowing is selected before planning without a Clone requi
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.deepEqual(selected.get("count"), ["borrow"]);
   assert.deepEqual(selected.get("compare"), ["borrow", "borrow"]);
   assert.deepEqual(selected.get("single"), ["move"]);

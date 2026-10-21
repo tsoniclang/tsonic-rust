@@ -29,7 +29,7 @@ export function observed(source: string, fail: boolean): boolean {
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   const receiver = Node_Expression(ast, Node_Expression(ast, node));
@@ -74,7 +74,7 @@ export function observed(): number { return target(first(), second()); }
     if (ast.is.IsCallExpression(current) && ast.arguments(current).length === 2) node = current;
     ast.forEachChild(current, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(node !== undefined, true, "checked call supplies the original occurrence identities");
   const argumentsList = ast.arguments(node);
   const number = { kind: "source-primitive", name: "float64" };

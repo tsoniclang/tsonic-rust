@@ -110,7 +110,7 @@ test("the JS string root uses the finalized ABI and shadows remain ordinary in a
     }
     checked.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   const call = selections.find(([name]) => name === "exactJsString")[1];
   const shadow = selections.find(([name]) => name === "jsstr")[1];
   const selected = program.records.nativeHandler.get(call);

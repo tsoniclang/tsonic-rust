@@ -18,7 +18,7 @@ test("borrowed indexed reads require their own exact pure operation, not owned C
     if (source.ast.is.IsElementAccessExpression(node)) element = node;
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.ok(receiver);
   assert.ok(element);
   const operation = program.records.targetOperation.get(element);
@@ -81,7 +81,7 @@ test("provider purity includes the evaluation-only receiver of an actual pure na
     if (source.ast.is.IsCallExpression(node) && program.records.targetOperation.get(node)?.abi?.sourceArguments.length === 1) call = node;
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(property !== undefined, true, "the checked source contains its selected native read");
   const operation = program.records.targetOperation.get(property);
   assert.equal(operation?.kind, "provider-operation");

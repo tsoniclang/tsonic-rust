@@ -20,7 +20,7 @@ function awaitProgram(source) {
       fact: program.records.awaitValue.get(node) });
     for (const child of program.source.ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(operations.length, 1);
   return { program, ...operations[0] };
 }

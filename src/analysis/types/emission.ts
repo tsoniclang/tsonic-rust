@@ -34,6 +34,18 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(...program.providerErrorCarriers);
+  for (const sourceFile of program.sourceFiles) for (const protocol of program.records.nativeProtocols.get(sourceFile) ?? []) {
+    pending.push(...protocol.method.parameters, protocol.method.result, protocol.result, protocol.trait);
+    const emission = program.records.nativeProtocol.get(protocol);
+    if (emission === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native protocol requires its exact sealed emission contract.", sourceFile);
+    pending.push(...emission.genericProducers.map(producer => producer.returnCarrier));
+    const bridge = emission.producer;
+    if (bridge !== undefined) pending.push(bridge.implementation, bridge.invocationError, bridge.arguments,
+      ...bridge.genericTypes, ...bridge.boundTypes, ...bridge.errors.map(error => error.parameter),
+      ...bridge.futureBounds.flatMap(bound => [bound.parameter, bound.output, bound.error]),
+      bridge.concreteResult, bridge.implementationResult,
+      ...bridge.higherRanked === undefined ? [] : [bridge.higherRanked.helperResult, bridge.higherRanked.publicResult, ...bridge.higherRanked.outputs]);
+  }
   for (const hook of program.binaryHooks) {
     const dispatch = program.records.binaryDispatch.get(hook.id);
     if (dispatch === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted binary hook requires its exact dispatch carrier inventory.");

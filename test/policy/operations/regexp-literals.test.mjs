@@ -46,7 +46,7 @@ test("checked regexp literal syntax reaches the one native form and exact source
     if (program.source.ast.kindName(node) === "KindRegularExpressionLiteral") nodes.push(node);
     program.source.ast.forEachChild(node, child => { if (child !== undefined) collect(child); });
   };
-  for (const file of program.sourceFiles) collect(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) collect(file);
   assert.equal(nodes.length, 1);
   const operation = program.records.targetOperation.get(nodes[0]);
   assert.deepEqual(operation, { kind: "regexp-create", operationId: "tsonic.rust.js.regexp.create",

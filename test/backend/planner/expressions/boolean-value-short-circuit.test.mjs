@@ -48,7 +48,7 @@ export function projected(value: boolean | undefined, other: int32): boolean | i
     if (fact?.kind === "logical-value") operations.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(operations.length, 4);
   for (const { node, fact } of operations) {
     const left = BinaryExpression_Left(ast, node);

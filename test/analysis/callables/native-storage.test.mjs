@@ -25,13 +25,13 @@ function fixture(text, options = {}) {
   const checkedSource = createTargetSourceProgram(checked);
   const guardedAst = Proxy.revocable(checkedSource.ast, {});
   const source = { ...checkedSource, ast: guardedAst.proxy };
-  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const storage = createSourceStorageQuery(source, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile));
   const participation = sourceNodesOutsideErasedSubtrees(source.ast, storage.nodes,
     node => program.records.nativeParticipation.get(node) === "erased");
   assert.equal(participation.kind, "resolved", "the checked source has complete native participation");
   const nativeNodes = participation.nodes;
   const nativeNodeSet = new Set(nativeNodes);
-  const genericRegistry = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation,
+  const genericRegistry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), program.records, program.names, source.navigation,
     node => nativeNodeSet.has(node));
   const generic = genericRegistry.plan;
   let physical;

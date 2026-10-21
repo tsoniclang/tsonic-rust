@@ -21,7 +21,7 @@ export function select(value: Base | undefined): Child | undefined {
     if (fact?.kind === "project-downcast") projections.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(projections.length, 1);
   const { node, fact } = projections[0];
   const context = () => ({

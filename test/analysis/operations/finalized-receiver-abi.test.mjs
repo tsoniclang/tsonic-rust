@@ -30,7 +30,7 @@ export function reported(): void {
     if (operation?.kind === "provider-operation" && operation.abi.sourceReceiver.kind === "compile-time") qualifiers += 1;
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(qualifiers, 3, "console and both selected Math qualifiers carry no runtime receiver");
 });
 

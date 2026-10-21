@@ -29,7 +29,7 @@ test("optional equality rejects forged native carriers, borrowed views, presence
     if (fact?.kind === "option-equality") operations.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(operations.length, 3);
   for (const { node, fact } of operations) {
     const context = selected => ({ input: { program: { ...program,
@@ -62,8 +62,8 @@ targetOperation: { get: (subject) => subject === node
 test("nested native non-Copy optional payload views compare without moves or cloning", () => {
   const { program } = analyzeRust({ files: { "index.ts": `export const source = "native";` } });
   const { ast } = program.source;
-  const context = { input: { program }, diagnostics: [], sourceFile: program.sourceFiles[0],
-    syntheticNames: createRustSyntheticNameState(ast, program.sourceFiles[0], []) };
+  const context = { input: { program }, diagnostics: [], sourceFile: program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)[0],
+    syntheticNames: createRustSyntheticNameState(ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)[0], []) };
   const carrier = rustOptionTargetType(rustOptionTargetType(rustOptionTargetType(rustVecTargetType(rustStringTargetType()))));
   const view = planRustOptionPayloadView({ kind: "path", path: "owned" }, carrier, "shared", context);
   const expression = printRustExpr(view);
@@ -116,7 +116,7 @@ test("nested native String optional comparison views retain every presence level
     if (ast.is.IsIdentifier(node) && ast.text(node) === "left") read = node;
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(read !== undefined, true);
   const context = { input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(read),
     syntheticNames: createRustSyntheticNameState(ast, read, []) };

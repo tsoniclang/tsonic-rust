@@ -20,7 +20,7 @@ export function choose(value: string | undefined, candidate: string | undefined)
     if (fact?.kind === "switch") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.clauses) && fact.clauses.every(Object.isFrozen));

@@ -26,7 +26,7 @@ export function compound(text: string): Holder { const holder = new Holder(); ho
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    for (const file of program.sourceFiles) visit(file);
+    for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
     assert.deepEqual([...observed], [["terminal", [true]], ["reused", [false, true]],
       ["repeated", [false]], ["compound", [false, false]]]);
   });

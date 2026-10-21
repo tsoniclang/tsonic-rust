@@ -31,7 +31,7 @@ test("checked value sequences seal independent operand carriers and the exact fi
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(sequences, 9);
 });
 
@@ -47,7 +47,7 @@ export function read(value: int32): int32 { return (effect(), value); }
     if (ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === "KindCommaToken") subject = node;
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.ok(subject);
   const original = program.records.targetOperation.get(subject);
   const selected = program.records.selectedOperation.get(subject);

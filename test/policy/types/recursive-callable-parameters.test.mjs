@@ -106,7 +106,7 @@ for (const surfaces of [[], ["js"]]) {
       if (ast.is.IsFunctionDeclaration(node) && owners.includes(ast.text(ast.name(node)))) declarations.push(node);
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     assert.equal(declarations.length, owners.length);
     for (const declaration of declarations) {
       const parameter = ast.parameters(declaration)[0];

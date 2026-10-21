@@ -17,7 +17,7 @@ for (const fixture of assignmentWriteEffectCases) {
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     assert.equal(evaluations.length > 0, true, "real checked computed write is selected");
     assert.equal(evaluations.every(fact => fact.evaluateKey), true, "selected call keys retain evaluation");
     assert.equal(Array.isArray(result.diagnostics), true, `${fixture.id}: target diagnostics are an array`);

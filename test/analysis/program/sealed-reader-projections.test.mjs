@@ -46,7 +46,7 @@ export function value(limit: number): number {
       nodes.push(node);
       program.source.ast.forEachChild(node, visit);
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     const definitions = program.projectTypes.definitions;
     const item = definitions.find(definition => definition.sourceName === "Item");
     assert.equal(item !== undefined, true, "the checked constructor fixture has a real definition");
@@ -91,7 +91,7 @@ export function value(limit: number): number {
       reader("RustDispatchContextDemandPlan.forComponent", components, component => program.dispatchContextDemand.forComponent(component), () => program.dispatchContextDemand.forComponent("foreign-component")),
       reader("RustSourceModuleConstructionIndex.construction", nodes, node => program.sourceModuleConstructions.construction(node), () => program.sourceModuleConstructions.construction(foreign)),
       reader("RustSourceModuleConstructionIndex.entries", [undefined], () => program.sourceModuleConstructions.entries(), () => program.sourceModuleConstructions.entries(), "collection"),
-      reader("RustSourceModuleConstructionIndex.from", program.sourceFiles, file => program.sourceModuleConstructions.from(file), () => program.sourceModuleConstructions.from(foreign), "empty"),
+      reader("RustSourceModuleConstructionIndex.from", program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), file => program.sourceModuleConstructions.from(file), () => program.sourceModuleConstructions.from(foreign), "empty"),
       reader("RustSourceModuleConstructionIndex.targets", [undefined], () => program.sourceModuleConstructions.targets(), () => program.sourceModuleConstructions.targets(), "collection"),
       reader("RustBorrowedInitializerQueries.forExpression", nodes, node => program.borrowedInitializers.forExpression(node), () => program.borrowedInitializers.forExpression(foreign)),
       reader("RustCaptureStoragePlan.deferredForScope", nodes, node => program.captureStorage.deferredForScope(node), () => program.captureStorage.deferredForScope(foreign), "empty"),
@@ -131,7 +131,7 @@ export function value(limit: number): number {
     assert.equal(gate.afterSeal, 0, "no registered reader queries source or policy services after publication");
     assert.equal(positiveObjects > 10, true, "known keys exercise actual stored objects rather than only absence");
     assert.equal(frozenArrays > nodes.length, true, "nonempty domains and shared immutable empties are exercised");
-    assert.throws(() => guardedSource.ast.kindName(program.sourceFiles[0]), /queried after publication/u);
+    assert.throws(() => guardedSource.ast.kindName(program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)[0]), /queried after publication/u);
     assert.equal(gate.afterSeal, 1, "a lazy source query would be observed and refused");
     assert.throws(() => withoutProducerWrites(() => new Map().set(foreign, foreign)), /mutated after publication/u);
     assert.throws(() => requireStable([], [], "fresh-array negative control"), /changed returned identity/u);

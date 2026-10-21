@@ -22,7 +22,7 @@ for (const surfaces of [[], ["js"]]) {
       if (fact?.kind === "builtin-error-property") operations.push({ node, fact });
       for (const child of ast.children(node)) visit(child);
     };
-    for (const file of program.sourceFiles) visit(file);
+    for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
     assert.equal(operations.length, 3);
     for (const { node, fact } of operations) {
       const optional = program.records.optionalChain.get(node);

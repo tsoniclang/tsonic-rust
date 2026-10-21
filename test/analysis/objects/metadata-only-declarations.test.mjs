@@ -71,7 +71,7 @@ export function run(): boolean {
 
 function namedVariable(program, name, moduleLevel = true) {
   const { ast } = program.source;
-  const pending = [...program.sourceFiles];
+  const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
   while (pending.length !== 0) {
     const node = pending.pop();
     if (ast.is.IsVariableDeclaration(node) && ast.is.IsIdentifier(ast.name(node)) && ast.text(ast.name(node)) === name &&

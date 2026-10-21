@@ -24,7 +24,7 @@ for (const surfaces of [[], ["js"]]) {
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    for (const file of program.sourceFiles) if (ast.getFileName(file).endsWith("/index.ts")) visit(file);
+    for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) if (ast.getFileName(file).endsWith("/index.ts")) visit(file);
     assert.equal(defaults.length, 1, "one authored default initializer");
     const receiver = Node_Expression(ast, defaults[0]);
     assert.equal(receiver !== undefined, true, "exact default receiver expression");
@@ -49,7 +49,7 @@ for (const surfaces of [[], ["js"]]) {
       if (ast.is.IsArrowFunction(node)) callables.push(node);
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    for (const file of program.sourceFiles) if (ast.getFileName(file).endsWith("/index.ts")) visit(file);
+    for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) if (ast.getFileName(file).endsWith("/index.ts")) visit(file);
     assert.equal(callables.length, 1);
     const capture = program.records.closureCapture.get(callables[0]);
     assert.equal(capture !== undefined, true, "sealed exact capture environment");

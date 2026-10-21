@@ -33,7 +33,7 @@ export function run(value: Value): void {
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    for (const sourceFile of program.sourceFiles) visit(sourceFile);
+    for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
     assert.equal(checked, 3);
   });
 }

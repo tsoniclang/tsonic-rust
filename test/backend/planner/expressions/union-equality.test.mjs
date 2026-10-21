@@ -35,7 +35,7 @@ test("inferred cross-file optional unions retain absence and compare literals wi
       '\nexport function main(): void { if (!run()) throw new Error("branch unions"); }\nmain();\n',
   } });
   const { ast } = program.source;
-  const pending = [...program.sourceFiles];
+  const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
   let comparisons = 0;
   while (pending.length !== 0) {
     const node = pending.pop();
@@ -67,7 +67,7 @@ export function same(value: string | Token): boolean { return value === "a"; }
     if (fact?.kind === "union-equality") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.arms) && fact.arms.every(Object.isFrozen));
@@ -109,7 +109,7 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
       if (fact?.kind === "union-equality") operations.push({ node, fact });
       for (const child of ast.children(node)) visit(child);
     };
-    for (const sourceFile of program.sourceFiles) visit(sourceFile);
+    for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
     assert.equal(operations.length, 3);
     for (const { node, fact } of operations) {
       const binary = ast.as.AsBinaryExpression(node);

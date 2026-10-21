@@ -25,7 +25,7 @@ export function read(value: object): number {
       if (projection?.kind === "closed-native") projections.push(projection);
       for (const child of program.source.ast.children(node)) visit(child);
     };
-    for (const file of program.sourceFiles) visit(file);
+    for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
     assert.equal(tests.length, 1, "one exact closed nominal test");
     assert.equal(projections.length, 1, "one exact narrowed nominal read");
     const operation = tests[0];

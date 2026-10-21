@@ -24,7 +24,7 @@ export function main(): void {
     if (proof?.kind === "proved" && proof.inputs.length === 2) calls.push({ node, proof });
     ast.forEachChild(node, visit);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(calls.length, 3, "independent variables, disjoint fields and independently owned temporary values");
   return { program, input: { ast, records: program.records, navigation: program.sourceNavigation,
     statementCompletions: program.statementCompletions }, calls };

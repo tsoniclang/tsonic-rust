@@ -34,7 +34,7 @@ function compile(body, surfaces, synthetic = false) {
           }
           ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
         };
-        for (const file of program.sourceFiles) if (ast.getFileName(file) === "/src/index.ts") visit(file);
+        for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) if (ast.getFileName(file) === "/src/index.ts") visit(file);
       },
     });
   } });

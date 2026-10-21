@@ -16,7 +16,7 @@ function checkedFunctions(text) {
     if (ast.is.IsFunctionDeclaration(node)) declarations.push(node);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   const named = name => declarations.filter(node => ast.text(ast.name(node)) === name);
   return { program, source, ast, declarations, named };
 }
@@ -210,7 +210,7 @@ test("anonymous callable participation is published once from checked creation d
 
 test("an exhausted actual checked source domain publishes no partial native participation", () => {
   const current = checkedFunctions("export function run(): number { return 3; }");
-  const storage = createSourceStorageQuery(createTargetSourceProgram(current.source), current.program.sourceFiles, {
+  const storage = createSourceStorageQuery(createTargetSourceProgram(current.source), current.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), {
     maximumNodes: 1, maximumEdges: 262144, maximumSubjectRows: 1048576,
     maximumTransportRows: 4194304, maximumSteps: 33554432,
   });

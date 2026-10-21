@@ -18,7 +18,7 @@ export function run(first: unknown, second: unknown): unknown {
     if (ast.is.IsObjectLiteralExpression(node)) literal = node;
     for (const child of ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(literal !== undefined, true);
   const fact = program.records.targetOperation.get(literal);
   assert.equal(fact?.kind, "closed-record-literal");

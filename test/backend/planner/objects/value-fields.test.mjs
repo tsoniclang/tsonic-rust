@@ -22,7 +22,7 @@ export function run(): number { const value = new Value(4); return value.count; 
     if (fact?.kind === "source-field") fields.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(fields.length, 3);
   const storage = { kind: "path", path: "prepared_field" };
   const value = { kind: "int-literal", text: "9" };

@@ -15,7 +15,7 @@ export function assertSettledCopiedPromise(result, storageName) {
     if (ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "read") declarations.push(node);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(declarations.length, 1, "one exact read declaration owns the copied result");
   const fact = program.records.asyncFunction.get(declarations[0]);
   assert.equal(fact?.kind === "js-promise" && fact.lowering.kind === "settled", true,

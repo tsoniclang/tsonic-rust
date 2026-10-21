@@ -20,7 +20,7 @@ export function copy(values: int32[]): int32[] { return [...values]; }
     if (fact?.kind === "array-literal") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.contributions));

@@ -31,7 +31,7 @@ for (const surfaces of [[], ["js"]]) {
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     assert.equal(selected.length, 6);
     for (const [index, row] of selected.entries()) {
       let projected = 0;

@@ -260,7 +260,7 @@ export function inspect<Region extends Life>(loan: Ref<int32, Region>) {
     if (ast.is.IsFunctionDeclaration(node) && name !== undefined && ast.text(name) === "inspect") declaration = node;
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(declaration !== undefined, true, "actual lifetime-bearing source owner exists");
   const contract = program.declarationGenericRequirements.contractFor(declaration);
   assert.equal(contract !== undefined, true, "the actual final source contract is published");

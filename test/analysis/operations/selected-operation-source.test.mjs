@@ -10,7 +10,7 @@ function selectedNodes(source, program) {
     if (selected !== undefined) rows.push({ node, selected, kind: source.ast.kindName(node) });
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   return rows;
 }
 

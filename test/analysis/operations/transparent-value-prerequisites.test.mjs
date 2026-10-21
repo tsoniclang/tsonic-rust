@@ -26,7 +26,7 @@ test("transparent call prerequisites preserve the raw optional carrier until des
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(wrappers, 5);
   assert.equal(indexedReads, 3);
 });

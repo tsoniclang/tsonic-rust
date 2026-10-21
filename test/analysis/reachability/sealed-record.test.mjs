@@ -4,10 +4,10 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
 import * as directives from "../../../dist/backend/planner/program/reachability-directives.js";
 
-function fixture(outputType = "bin") {
+function fixture(outputType = "bin", publicBox = false) {
   const { program } = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType } }, files: {
     "index.ts": `import type { int32 } from "@tsonic/core/types.js";
-      class Box {
+      ${publicBox ? "export" : ""} class Box {
         value: int32; unread: int32;
         constructor(value: int32) { this.value = value; this.unread = 0; }
         read(): int32 { return this.value; }
@@ -22,7 +22,7 @@ function fixture(outputType = "bin") {
       ${outputType === "bin" ? "main();" : ""}`,
   } });
   const declarations = new Map();
-  const pending = [...program.sourceFiles];
+  const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
   while (pending.length > 0) {
     const node = pending.pop();
     const name = program.source.ast.name(node);
@@ -40,27 +40,29 @@ function fixture(outputType = "bin") {
 
 test("analysis publishes complete reachability data before creating the planner", () => {
   const { program, declarations } = fixture();
-  const record = program.reachability;
+  const record = program.records.authoredLiveness;
   assert.equal(Object.isFrozen(program), true);
   assert.equal(Object.isFrozen(record), true);
-  for (const [name, value] of Object.entries(record)) {
-    assert.equal(value instanceof Map || value instanceof Set, true, name);
-    assert.equal(typeof value === "function", false, name);
-  }
+  assert.equal(typeof record.get, "function", "the reader exposes only the sealed source decision");
+  assert.equal("reachability" in program, false, "no post-seal reachability engine is published");
   const unused = declarations.get("unused");
   assert.equal(unused.length, 2);
-  assert.equal(record.suppressedDeclarations.has(unused[0]), record.suppressedDeclarations.has(unused[1]),
-    "every overload shares the sealed implementation result, including checked first-class uses");
-  for (const declaration of declarations.get("deadRoot")) assert.equal(record.suppressedDeclarations.has(declaration), true);
-  for (const declaration of declarations.get("active")) assert.equal(record.suppressedDeclarations.has(declaration), false);
+  const unusedSignature = unused.find(node => program.source.ast.body(node) === undefined);
+  const unusedImplementation = unused.find(node => program.source.ast.body(node) !== undefined);
+  assert.equal(record.get(unusedSignature), undefined, "an erased overload signature is never emitted as a second native item");
+  assert.equal(record.get(unusedImplementation).deadCode, "authored-declaration", "the sole emitted overload implementation has the canonical liveness decision");
+  for (const declaration of declarations.get("deadRoot")) assert.equal(record.get(declaration).deadCode, "authored-declaration");
+  for (const declaration of declarations.get("active").filter(node => program.source.ast.body(node) !== undefined)) assert.equal(record.get(declaration).deadCode, undefined);
   const read = declarations.get("read").find(node => program.source.ast.kindName(node) === "KindMethodDeclaration");
-  assert.equal(record.suppressedDeclarations.has(read), false);
+  assert.equal(record.get(read).deadCode, undefined);
   const value = declarations.get("value").find(node => program.source.ast.kindName(node) === "KindPropertyDeclaration");
   const unread = declarations.get("unread").find(node => program.source.ast.kindName(node) === "KindPropertyDeclaration");
   assert.equal(value !== undefined, true);
   assert.equal(unread !== undefined, true);
-  assert.equal(record.readAuthoredFields.has(value), true);
-  assert.equal(record.readAuthoredFields.has(unread), false, "writes and constructor assignments do not invent reads");
+  const owner = declarations.get("Box").find(node => program.source.ast.is.IsClassDeclaration(node));
+  const fields = program.records.nativeClass.get(owner).fields;
+  assert.equal(fields.find(field => field.declaration === value).deadCode, undefined);
+  assert.equal(fields.find(field => field.declaration === unread).deadCode, "authored-unread-field", "writes and constructor assignments do not invent reads");
 });
 
 test("planner creation and warning emission never reopen source reachability evidence", () => {
@@ -68,21 +70,27 @@ test("planner creation and warning emission never reopen source reachability evi
   const inaccessible = new Proxy({}, { get() { throw new Error("post-seal semantic read"); } });
   const isolated = Object.freeze({ ...program,
     source: { ...program.source, ast: { getFileName: program.source.ast.getFileName } },
-    sourceNavigation: inaccessible, records: inaccessible, projectTypes: inaccessible,
+    sourceNavigation: inaccessible, projectTypes: inaccessible,
     structuralShapes: inaccessible, callableValues: inaccessible,
   });
   const input = createRustPlanningContext(isolated);
-  assert.equal(input.program.reachability === program.reachability, true);
+  assert.equal(input.program.records === program.records, true);
+  assert.equal("reachability" in input.program, false, "native liveness has no second read route");
   assert.equal("liveness" in input, false, "no planner-owned analysis object remains");
   const context = { input };
   for (const declaration of declarations.get("deadRoot"))
     assert.equal(directives.rustAuthoredDeadCodeDisposition(context, declaration), "authored-declaration");
-  for (const declaration of declarations.get("active"))
+  for (const declaration of declarations.get("active").filter(node => program.source.ast.body(node) !== undefined))
     assert.equal(directives.rustAuthoredDeadCodeDisposition(context, declaration), undefined);
   const owner = declarations.get("Box").find(node => program.source.ast.kindName(node) === "KindClassDeclaration");
   const unread = declarations.get("unread").find(node => program.source.ast.kindName(node) === "KindPropertyDeclaration");
-  assert.equal(directives.rustAuthoredFieldDeadCodeDisposition(context, owner, unread, false), "authored-unread-field");
-  assert.equal(directives.rustAuthoredFieldDeadCodeDisposition(context, owner, unread, true), undefined);
+  assert.equal(input.program.records.nativeClass.get(owner).fields.find(field => field.declaration === unread).deadCode, "authored-unread-field");
+  const library = fixture("lib", true);
+  const libraryOwner = library.declarations.get("Box").find(node => library.program.source.ast.is.IsClassDeclaration(node));
+  const libraryClass = library.program.records.nativeClass.get(libraryOwner);
+  assert.equal(libraryClass.publiclyReachable, true, "exported native class fields remain externally observable");
+  assert.equal(libraryClass.fields.find(field => field.sourceName === "unread").deadCode, undefined,
+    "externally observable fields never get an internal dead-code disposition");
 });
 
 test("public library reachability and dead binary declarations remain separate", () => {
@@ -90,7 +98,7 @@ test("public library reachability and dead binary declarations remain separate",
   const library = fixture("lib");
   for (const current of [binary, library]) {
     const main = current.declarations.get("main").find(node => current.program.source.ast.kindName(node) === "KindFunctionDeclaration");
-    assert.equal(current.program.reachability.externallyReachable.has(main), current === library);
-    assert.equal(current.program.reachability.suppressedDeclarations.has(main), false);
+    assert.equal(current.program.records.callableDeclaration.get(main).exported, current === library);
+    assert.equal(current.program.records.authoredLiveness.get(main).deadCode, undefined);
   }
 });

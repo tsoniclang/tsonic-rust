@@ -29,7 +29,7 @@ export function run(): boolean {
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    for (const sourceFile of program.sourceFiles) visit(sourceFile);
+    for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
     const broad = rustBroadSourceValueTargetType(surfaces.length !== 0);
     const array = surfaces.length === 0 ? rustVecTargetType : rustJsArrayTargetType;
     for (const [name, expected] of [

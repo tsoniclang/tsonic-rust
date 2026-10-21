@@ -172,7 +172,7 @@ test("native string append and arithmetic carry their exact operand contracts be
     }
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.deepEqual(operations, ["+=", "+"]);
 });
 
@@ -197,7 +197,7 @@ test("generic indexed field reads borrow both the receiver and key without requi
     }
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(selected.length, 1);
 });
 
@@ -269,7 +269,7 @@ export function read(value: Value, key: "value"): number { return value[key]; }
     if (ast.is.IsElementAccessExpression(node)) computed = node;
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(computed !== undefined, true, "the actual checked computed read exists");
   const fact = program.records.computedMember.get(computed);
   assert.equal(fact !== undefined && fact.evaluateKey, true, "the original evaluated-key obligation is retained");

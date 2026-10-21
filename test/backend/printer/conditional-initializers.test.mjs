@@ -5,6 +5,9 @@ import { test } from "node:test";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { cloneRustExpression } from "../../../dist/backend/target-ast/syntax/expressions.js";
 
+const literal = value => ({ kind: "int-literal", text: String(value) });
+const path = value => ({ kind: "path", path: value });
+
 test("conditional printing preserves scoped attributes and discarded-value effects", () => {
   const scoped = rustValueBlock([{ name: "local", value: literal(2) }], literal(3), { inner: [rustListAttribute("allow", [rustWordAttribute("unused_variables")])] });
   const source = printRustExpr({

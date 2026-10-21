@@ -22,7 +22,7 @@ export function missing(values: (number | undefined)[]): boolean {
     if (fact?.kind === "option-check") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.deepEqual(fact.nullishDepths, [0]);
@@ -72,7 +72,7 @@ export function read(values: (string | undefined)[]): void {
     if (fact !== undefined) operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.equal(fact.guardDepth, 1);
@@ -105,7 +105,7 @@ export function read(values: (string | undefined)[]): string {
     if (fact?.kind === "option-coalesce") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
-  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  for (const sourceFile of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(sourceFile);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.equal(fact.leftOptionDepth, 1);

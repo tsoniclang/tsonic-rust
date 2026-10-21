@@ -28,7 +28,7 @@ export function escaped${generic ? "<U>(seed: U)" : "(seed: string)"}: (count: n
   return before;
 }` } });
       const ast = program.source.ast;
-      const pending = [...program.sourceFiles];
+      const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
       let factory;
       let before;
       while (pending.length !== 0) {
@@ -100,7 +100,7 @@ export function escaped(flag: boolean): (count: number) => number {
         assert.equal(result.program !== undefined && result.plan !== undefined, true,
           "different instances with the same concrete layout remain natively representable");
         const ast = result.program.source.ast;
-        const declaration = result.program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+        const declaration = result.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).flatMap(file => ast.statements(file)).find(node =>
           node !== undefined && ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "escaped");
         assert.equal(declaration !== undefined, true, "the exact factory remains published");
         const frame = rustFrameCallableValue(result.program.records.sourceCallableReturn.get(declaration)?.returnCarrier);
@@ -130,7 +130,7 @@ export function run(): number {
         assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
           "the remaining native program is published");
         const ast = result.program.source.ast;
-        const nodes = [...result.program.sourceFiles];
+        const nodes = [...result.program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
         let hidden;
         let external;
         while (nodes.length !== 0) {
@@ -288,7 +288,7 @@ export function run(): number {
         "the complete actual callable program emits native source");
       const program = result.program;
       const ast = program.source.ast;
-      const pending = [...program.sourceFiles];
+      const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
       const nodes = [];
       while (pending.length !== 0) {
         const node = pending.pop();
@@ -350,7 +350,7 @@ main();
       "the real captured throwing closure reaches native planning and emission");
     const program = result.program;
     const ast = program.source.ast;
-    const pending = [...program.sourceFiles];
+    const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
     const nodes = [];
     while (pending.length !== 0) {
       const node = pending.pop();
@@ -403,7 +403,7 @@ export function run(): number {
 }` } });
     const checked = createTargetSourceProgram(source);
     const ast = program.source.ast;
-    const pending = [...program.sourceFiles];
+    const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
     let binding;
     let unused;
     while (pending.length !== 0) {
@@ -446,7 +446,7 @@ if (!run(true) || !run(false)) throw new Error("enum composition");
       "the original consumed enum source reaches native publication without an annotation or erased storage query");
     const { program } = result;
     const ast = program.source.ast;
-    const pending = program.sourceFiles.filter(file => ast.getFileName(file).endsWith("/index.ts"));
+    const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).filter(file => ast.getFileName(file).endsWith("/index.ts"));
     const conditionals = [];
     while (pending.length !== 0) {
       const node = pending.pop();
@@ -514,7 +514,7 @@ if (!run(true) || !run(false)) throw new Error("conditional native domains");
       "the whole native conditional matrix reaches one published program");
     const { program } = result;
     const ast = program.source.ast;
-    const pending = program.sourceFiles.filter(file => ast.getFileName(file).endsWith("/index.ts"));
+    const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).filter(file => ast.getFileName(file).endsWith("/index.ts"));
     let numeric;
     let explicit;
     while (pending.length !== 0) {
@@ -627,7 +627,7 @@ export function run(flag: boolean): number {
       "native absence remains representable without pretending it is erased callable unit");
     const program = result.program;
     const ast = program.source.ast;
-    const pending = [...program.sourceFiles];
+    const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
     const expressions = [];
     while (pending.length !== 0) {
       const node = pending.pop();

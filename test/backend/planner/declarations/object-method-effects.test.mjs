@@ -24,7 +24,7 @@ for (const surfaces of [[], ["js"]]) {
       }
       program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     for (const name of ["reject", "forward", "caught", "plain"]) {
       assert.equal(methods.has(name), true, name);
       const declaration = methods.get(name);

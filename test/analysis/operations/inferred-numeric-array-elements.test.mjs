@@ -30,7 +30,7 @@ function bindings(program) {
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   return result;
 }
 
@@ -358,7 +358,7 @@ export function nested(): number[] {
       }
       ast.forEachChild(node, child => { if (child !== undefined) find(child); });
     };
-    for (const file of program.sourceFiles) find(file);
+    for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) find(file);
     assert.equal(direct?.kind === "array-literal" && direct.elementCarrier.name === "float32", true,
       "a directly returned array consumes the same native async output contract as an aliased return");
   });
@@ -497,7 +497,7 @@ test("C102 unresolved source storage cannot publish a partial aggregate native d
   const { program, source } = analyzeRust({ files: { "index.ts": header + `
 export function inspect(signed: int32) { const values = [signed, 1]; return values; }
 ` } });
-  const storage = createSourceStorageQuery(createTargetSourceProgram(source), program.sourceFiles, {
+  const storage = createSourceStorageQuery(createTargetSourceProgram(source), program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), {
     maximumNodes: 1, maximumEdges: 262144, maximumSubjectRows: 1048576,
     maximumTransportRows: 4194304, maximumSteps: 33554432,
   });

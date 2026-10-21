@@ -29,7 +29,7 @@ function selectedNode(program, family, predicate) {
     if (record !== undefined && predicate(record, node)) nodes.push(node);
     for (const child of program.source.ast.children(node)) visit(child);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(nodes.length, 1, family + ": one actual producer selection");
   return nodes[0];
 }

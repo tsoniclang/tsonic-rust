@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
       if (program.source.ast.is.IsFunctionDeclaration(node)) declarations.set(program.source.ast.text(program.source.ast.name(node)), node);
       program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     for (const name of ["dormant", "forward", "fail", "through"]) {
       assert.equal(declarations.has(name), true, name);
       assert.equal(program.records.fallible.get(declarations.get(name)) !== undefined, true, name);

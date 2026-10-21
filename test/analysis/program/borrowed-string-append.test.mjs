@@ -28,7 +28,7 @@ function functionNodes(source, program, name) {
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.ok(declaration, name);
   const nodes = [];
   const collect = node => {

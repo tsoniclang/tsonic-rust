@@ -309,7 +309,7 @@ function sourceNodes(program) {
     nodes.push(node);
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   return nodes;
 }
 
@@ -705,7 +705,7 @@ export function escaped(): (count: number) => number {
 }
 ` } });
   const source = createTargetSourceProgram(checked);
-  const sourceStorage = createSourceStorageQuery(source, program.sourceFiles);
+  const sourceStorage = createSourceStorageQuery(source, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile));
   const guarded = [];
   const guard = value => {
     const selected = Proxy.revocable(value, {});

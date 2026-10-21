@@ -195,7 +195,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const operation = records.targetOperation.get(node);
     const handler = records.nativeHandler.get(node);
     const flow = records.contextualValueConversion.get(node)?.conversion;
-    if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter")
+    if (flow?.kind === "generic-callable-flow" || flow?.kind === "callable-adapter" || flow?.kind === "callable-input")
       runtime(owner, node, role, sourceOwner);
     if (handler?.kind === "memory-binding") {
       const selected = handler.selection;
@@ -404,6 +404,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
     });
   };
   for (const file of input.sourceFiles) visitConstruct(file, file);
+  for (const producer of input.nativeProducers.producers) visitConstruct(producer.declaration, producer.declaration);
   for (const definition of input.generic.definitions) for (const implementation of definition.implementations) {
     const owner = owners.get(implementation.declaration);
     if (owner === undefined) diagnostics.push(emissionDiagnostic(implementation.declaration, "A selected generic implementation requires its exact emitted creation owner."));

@@ -13,7 +13,7 @@ for (const surfaces of [[], ["js"]]) for (const fresh of [false, true]) {
         export function total(values: readonly int32[]): int32 { let sum: int32 = 0; for (const value of values) sum += value; return sum; }`,
     } });
     const nodes = [];
-    const pending = [...program.sourceFiles];
+    const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
     while (pending.length > 0) {
       const node = pending.pop();
       nodes.push(node);

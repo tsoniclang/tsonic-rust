@@ -27,7 +27,7 @@ ${source}
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
-    program.sourceFiles.forEach(visit);
+    program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
     assert.equal(selected !== undefined, true, "one exact computed native call");
     const original = program.records.computedMember.get(selected);
     assert.equal(original !== undefined, true, "analysis owns the evaluation evidence");
@@ -59,7 +59,7 @@ export function main(): number { const values: number[] = [3]; return accept(val
     if (ast.is.IsElementAccessExpression(node)) selected = node;
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  program.sourceFiles.forEach(visit);
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(selected !== undefined, true, "one exact indexed argument");
   const parent = ast.parent(selected);
   assert.equal(program.records.targetOperation.get(parent)?.kind, "source-call");
