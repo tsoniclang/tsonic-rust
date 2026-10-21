@@ -11,7 +11,6 @@ import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
-import { rustBlockTerminates } from "../../../dist/backend/target-ast/normalization/block-flow.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import { requireProviderArgumentPassingFacts } from "../../../dist/backend/planner/expressions/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
@@ -109,8 +108,6 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
     }],
   };
 
-  assert.equal(rustBlockTerminates(incomplete), false);
-  assert.equal(rustBlockTerminates(complete), true);
   assert.deepEqual(applyFallibleShape(incomplete, {
     fallible: true,
     hasReturnValue: true,

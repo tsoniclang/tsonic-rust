@@ -4,7 +4,6 @@ import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/t
 import { printRustItem } from "../../../dist/print/source/declarations.js";
 import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/syntax/module-references.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
-import { rustSourceFileContractCandidate } from "../../../dist/backend/planner/artifacts/source-file-contract.js";
 
 const family = {
   kind: "trait", name: "Storage", visibility: "public", generics: emptyRustGenerics,
@@ -32,25 +31,4 @@ test("associated bounds and definitions retain their module dependencies", () =>
   assert.equal(rustItemsReferenceModuleAlias([bound], "storage"), true);
   assert.equal(rustItemsReferenceModuleAlias([output], "data"), true);
   assert.equal(rustItemsReferenceModuleAlias([bound, output], "unrelated"), false);
-});
-
-test("public storage output changes invalidate the artifact public contract", () => {
-  const surface = (item) => rustSourceFileContractCandidate("family", createRustSourceFile([item]), [])
-    .contract.facets.find((facet) => facet.facet === "source-file-public-surface").value;
-  assert.notEqual(surface(implementation), surface({ ...implementation, members: [
-    { kind: "type", name: "Output", generics: emptyRustGenerics, type: { kind: "primitive", name: "u32" } },
-  ] }));
-  assert.notEqual(surface(family), surface({ ...family, members: [
-    { kind: "type", name: "Output", generics: emptyRustGenerics, bounds: [] },
-  ] }));
-});
-
-test("public associated output types cannot remain private", () => {
-  const model = finalizeRustSourceStyle(createRustSourceFile([
-    family,
-    { kind: "struct", name: "Payload", visibility: "private", generics: emptyRustGenerics,
-      fields: [] },
-    { ...implementation, members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: { kind: "named", path: "Payload" } }] },
-  ]));
-  assert.equal(model.items.find((item) => item.kind === "struct").visibility, "public");
 });

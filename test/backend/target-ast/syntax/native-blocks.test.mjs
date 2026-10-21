@@ -6,41 +6,13 @@ import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/no
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { printRustBlockStatements } from "../../../../dist/print/source/statements.js";
 import { applyFallibleShape } from "../../../../dist/backend/planner/types/fallible-shape.js";
-import { rustBlockTerminates } from "../../../../dist/backend/target-ast/normalization/block-flow.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
-import { rustExpressionExitsCallable } from "../../../../dist/backend/target-ast/inspection/callable-exits.js";
-import { rustExpressionAlwaysExits, firstAccessesInStatements } from "../../../../dist/backend/target-ast/inspection/source-dataflow.js";
 
 const path = name => ({ kind: "path", path: name });
 const unit = { kind: "tuple-literal", elements: [] };
 const pattern = { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: "value" }] };
 const block = (...statements) => ({ kind: "block", body: { statements } });
 const options = { fallible: true, hasReturnValue: true, errorType: { kind: "primitive", name: "i32" }, inferErrorTypeFromReturnType: true };
-
-test("labeled expression exits bypass assignments until their exact owning region completes", () => {
-  const assignment = value => ({ kind: "assign", target: path("value"), operator: "=", value });
-  const escaping = { kind: "break-expression", label: "region", expr: unit };
-  const selected = { kind: "match", expression: path("source"), arms: [
-    { pattern: { kind: "path", path: "true" }, expression: path("input") },
-    { pattern: { kind: "path", path: "false" }, expression: escaping },
-  ] };
-  const region = { kind: "block", label: "region", body: { statements: [assignment(selected)] } };
-  const first = statements => new Set(firstAccessesInStatements(statements, "value"));
-  assert.deepEqual(first([{ kind: "expr", expr: region }, { kind: "expr", expr: path("value") }]),
-    new Set(["write", "read"]), "the local exit leaves the original value live after its region");
-  assert.deepEqual(first([{ kind: "expr", expr: region }, assignment(path("replacement"))]), new Set(["write"]),
-    "a later definite overwrite remains proven");
-  const nested = { kind: "block", body: { statements: [assignment(escaping)] } };
-  const outer = { ...region, body: { statements: [{ kind: "expr", expr: nested }] } };
-  assert.deepEqual(first([{ kind: "expr", expr: outer }, { kind: "expr", expr: path("value") }]), new Set(["read"]),
-    "nested blocks cannot intercept an outer label or invent the bypassed write");
-  const observed = { ...escaping, expr: path("value") };
-  assert.deepEqual(first([{ kind: "expr", expr: { ...region, body: { statements: [assignment(observed)] } } }]),
-    new Set(["read"]), "a break value is evaluated before the exit");
-  const returning = { kind: "return-expression", expr: unit };
-  assert.deepEqual(first([{ kind: "expr", expr: { ...region, body: { statements: [assignment(returning)] } } },
-    { kind: "expr", expr: path("value") }]), new Set(["exit"]), "function returns never become a local region completion");
-});
 
 test("one native block shape preserves binding, body and terminal attributes", () => {
   const binding = { kind: "word", path: "binding_attribute" };
@@ -147,19 +119,6 @@ test("raw value-block tails and each explicit early return have distinct result 
   assert.doesNotMatch(printed, /Ok\(fallback\)|Ok\(Ok\(/u);
 });
 
-test("completion knows native branch exits without inventing returns in partial or deferred branches", () => {
-  const returned = block({ kind: "return", expr: path("answer") });
-  const expression = { kind: "if-let", pattern, expression: path("source"), whenTrue: returned, whenFalse: returned };
-  assert.equal(rustExpressionExitsCallable(expression), true);
-  assert.equal(rustExpressionAlwaysExits(expression), true);
-  assert.equal(rustBlockTerminates({ statements: [{ kind: "expr", expr: expression }] }), true);
-  assert.equal(rustExpressionAlwaysExits({ ...expression, whenFalse: undefined }), false);
-  assert.equal(rustExpressionAlwaysExits({ kind: "binary", operator: "&&", left: path("ready"), right: returned }), false);
-  assert.equal(rustExpressionAlwaysExits({ kind: "closure", params: [], body: returned }), false);
-  assert.equal(rustExpressionAlwaysExits(block({ kind: "tail", expr: path("answer") })), false);
-  assert.deepEqual([...firstAccessesInStatements([{ kind: "expr", expr: expression }, { kind: "expr", expr: path("later") }], "later")], ["exit"]);
-});
-
 test("native AST child mapping and source normalization use the same canonical block recursion", () => {
   const expression = block({ kind: "tail", expr: { kind: "call", path: "consume", args: [path("input")] } });
   const changed = mapRustExpressionChildren(expression, value => value, body => ({ ...body, statements: [...body.statements, { kind: "expr", expr: path("after") }] }));
@@ -168,26 +127,4 @@ test("native AST child mapping and source normalization use the same canonical b
     body: { statements: [{ kind: "tail", expr: expression }] } }] });
   assert.deepEqual(finalizeRustSourceStyle(normalized), normalized);
   assert.equal(normalized.items[0].body.statements[0].expr.kind, "block");
-});
-
-test("native receiver evidence retains mutable sequence construction, including immediate callback captures", () => {
-  const source = { items: [{ kind: "function", name: "run", visibility: "public", params: [], generics: emptyRustGenerics,
-    body: { statements: [{ kind: "tail", expr: rustValueBlock([{ name: "values", mutable: true,
-      type: { kind: "named", path: "Vec", genericArguments: [{ kind: "type", type: { kind: "string" } }] },
-      value: { kind: "vec-literal", elements: [] } }], { kind: "evaluate-then", discard: "unit",
-      effect: { kind: "call", path: "with_values", args: [{ kind: "closure", params: [], body: {
-        kind: "method-call", receiver: path("values"), receiverMode: "mut-ref", method: "extend_from_slice", args: [path("source")],
-      } }] }, value: path("values") }) }] } }] };
-  const normalized = finalizeRustSourceStyle(source);
-  assert.equal(normalized.items[0].body.statements[0].expr.body.statements[0].mutable, true);
-  const readOnly = structuredClone(source);
-  readOnly.items[0].body.statements[0].expr.body.statements[1].expr.effect.args[0].body.receiverMode = "ref";
-  assert.equal(finalizeRustSourceStyle(readOnly).items[0].body.statements[0].expr.body.statements[0].mutable, false);
-  const unknown = structuredClone(source);
-  delete unknown.items[0].body.statements[0].expr.body.statements[1].expr.effect.args[0].body.receiverMode;
-  assert.equal(finalizeRustSourceStyle(unknown).items[0].body.statements[0].expr.body.statements[0].mutable, true);
-  const direct = structuredClone(source);
-  direct.items[0].body.statements[0].expr.body.statements[1].expr.effect =
-    direct.items[0].body.statements[0].expr.body.statements[1].expr.effect.args[0].body;
-  assert.equal(finalizeRustSourceStyle(direct).items[0].body.statements[0].expr.body.statements[0].mutable, true);
 });

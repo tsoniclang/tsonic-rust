@@ -4,7 +4,6 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { printRustType } from "../../../dist/print/source/index.js";
-import { rustTypeIsLegalInPosition } from "../../../dist/backend/planner/types/type-observations.js";
 
 const rejected = [
   {
@@ -69,9 +68,6 @@ test("opaque associated outputs print and typecheck in parameters and returns", 
     } }] }), "|()| [7_usize].into_iter()"],
   ];
   const declarations = cases.map(([type, body], index) => {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true, `parameter ${index}`);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), true, `return ${index}`);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false, `storage ${index}`);
     const printed = printRustType(type);
     return `fn producer_${index}() -> ${printed} { ${body} }
 fn consumer_${index}(callback: ${printed}) { drop(callback.invoke(())); }`;

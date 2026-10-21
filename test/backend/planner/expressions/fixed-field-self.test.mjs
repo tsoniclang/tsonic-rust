@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { rustCallableTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustRecursiveReceiverFieldContext, validateRustRecursiveReceiverField } from "../../../../dist/backend/planner/expressions/receiver-captures.js";
+import { rustRecursiveReceiverFieldContext } from "../../../../dist/backend/planner/expressions/receiver-captures.js";
+import { analyzeRustReceiverCaptureEmission } from "../../../../dist/analysis/storage/receiver-captures.js";
+import { createRustReceiverCaptureEmissionProducer } from "../../../../dist/analysis/program/records/receiver-captures.js";
 import { planRustConstructionBody } from "../../../../dist/backend/planner/declarations/classes/construction-body.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
@@ -28,6 +30,26 @@ runtimeCarrier: { get: (reference) => {
 } }}),
     objectRepresentations: { receiverCaptures: { fixedSelfFor: node => node === callable ? selected : undefined } },
   } } };
+}
+
+function admit(capture, selected) {
+  const program = selected.input.program;
+  const producer = createRustReceiverCaptureEmissionProducer(() => {});
+  const issues = analyzeRustReceiverCaptureEmission({
+    ...program,
+    records: createRustRecordFixture({
+      closureCapture: { get: node => node === callable ? capture : undefined },
+      runtimeCarrier: { get: node => node === callable ? { carrier } : program.records.runtimeCarrier.get(node) },
+    }, program.records),
+    projectTypes: { definitionForCarrier: () => undefined },
+    lexicalFunctions: { forDeclaration: () => undefined },
+    names: { callableValueNameForDeclaration: () => undefined },
+    objectRepresentations: { representationFor: () => undefined,
+      receiverCaptures: { ...program.objectRepresentations.receiverCaptures,
+        receiversFor: () => [], capturesFor: () => [] } },
+  }, [callable], producer);
+  selected.diagnostics.push(...issues);
+  return selected.diagnostics.length === 0;
 }
 
 test("fixed field self facts carry one exact dense relation without competing field storage", () => {
@@ -55,9 +77,9 @@ test("fixed self schema rejects accessors without reading their hidden values", 
   assert.equal(reads, 0, "metadata validation never executes a getter");
 });
 
-test("planner consumes only the independently sealed field origin and reference carriers", () => {
+test("source admission proves the exact field origin and reference carriers before sealing", () => {
   const exact = context();
-  assert.equal(validateRustRecursiveReceiverField(callable, fact, carrier, exact), true);
+  assert.equal(admit(fact, exact), true);
   assert.equal(exact.diagnostics.length, 0);
   for (const changed of [
     { ...fact, recursiveField: undefined }, { ...fact, recursiveDeclaration: {} },
@@ -73,17 +95,18 @@ test("planner consumes only the independently sealed field origin and reference 
     { ...fact, receiverFields: [{ ...field, storage: { kind: "shared", initialization: "deferred" } }] },
   ]) {
     const selected = context();
-    assert.equal(validateRustRecursiveReceiverField(callable, changed, carrier, selected), false);
-    assert.equal(selected.diagnostics.length, 1, "mismatched self relation rejects before planning");
+    assert.equal(admit(changed, selected), false);
+    assert.equal(selected.diagnostics.filter(issue => issue.evidence.includes("target.capability=rust.backend.fixed-field-self")).length, 1,
+      "mismatched self relation rejects exactly once at its admission owner");
   }
   for (const carriers of [new Map(), new Map([[references[0], carrier], [references[1], stringCarrier]])]) {
     const selected = context({ carriers });
-    assert.equal(validateRustRecursiveReceiverField(callable, fact, carrier, selected), false);
+    assert.equal(admit(fact, selected), false);
     assert.equal(selected.diagnostics.length, 1);
   }
   const unselected = context();
   unselected.input.program.objectRepresentations.receiverCaptures.fixedSelfFor = () => undefined;
-  assert.equal(validateRustRecursiveReceiverField(callable, fact, carrier, unselected), false);
+  assert.equal(admit(fact, unselected), false);
 });
 
 function construction(expression, issues = []) {
@@ -142,7 +165,7 @@ test("ordinary and lexical recursive callables do not inherit field-self evidenc
   selected.input.program.objectRepresentations.receiverCaptures.fixedSelfFor = () => undefined;
   for (const capture of [{ captures: [], receivers: [], receiverFields: [] },
     { captures: [], receivers: [], receiverFields: [], recursiveDeclaration: {} }]) {
-    assert.equal(validateRustRecursiveReceiverField(callable, capture, carrier, selected), true);
+    assert.equal(admit(capture, selected), true);
   }
   assert.equal(selected.diagnostics.length, 0);
 });

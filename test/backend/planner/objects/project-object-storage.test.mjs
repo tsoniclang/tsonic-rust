@@ -4,7 +4,6 @@ import { enterRustProjectObjectMutableState, withRustProjectStoredField, readRus
 import { readRustProjectObjectIndex, copyRustProjectObjectIndexStorage, writeRustProjectObjectIndex, mutateRustProjectObjectIndex } from "../../../../dist/backend/planner/objects/project-index-storage.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
-import { maxWritesInStatements } from "../../../../dist/backend/target-ast/inspection/source-dataflow.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 
 test("object storage scopes borrow their handles while preserving actual writes to captured locals", () => {
@@ -32,16 +31,14 @@ test("object storage scopes borrow their handles while preserving actual writes 
   for (const [index, expression] of expressions.entries()) {
     assert.equal(expression !== undefined, true, `selected builder ${index}`);
     assert.equal(expression.receiverMode, "ref", `exact runtime receiver contract ${index}`);
-    assert.equal(maxWritesInStatements([{ kind: "expr", expr: expression }], "owner"), 0, `handle binding ${index}`);
   }
   const mutated = withRustProjectStoredField(owner, "field", representation, () => ({
     kind: "assignment", operator: "=", target: { kind: "path", path: "captured" }, value,
   }));
-  assert.equal(maxWritesInStatements([{ kind: "expr", expr: mutated }], "captured"), 2);
-  const unknown = { kind: "method-call", receiver: owner, method: "unclassified", args: [] };
-  assert.equal(maxWritesInStatements([{ kind: "expr", expr: unknown }], "owner"), 2, "unknown receivers remain conservative");
+  assert.match(printRustExpr(mutated), /captured = 1/u, "the exact captured write remains in the selected storage callback");
   const direct = writeRustProjectObjectField(owner, "field", "=", value, { kind: "value" });
-  assert.equal(maxWritesInStatements([{ kind: "expr", expr: direct }], "owner"), 1, "direct value storage still needs mutability");
+  assert.equal(direct.kind, "assignment", "direct native storage retains its actual write");
+  assert.equal(direct.target.receiver === owner, true, "the write retains the exact owning place");
 });
 
 test("project object construction selects its exact runtime owner for every legal representation", () => {

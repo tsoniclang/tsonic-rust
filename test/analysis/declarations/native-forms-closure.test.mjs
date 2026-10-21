@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
-import * as backendNames from "../../../dist/backend/planner/names/source-output-identities.js";
+import * as backendNames from "../../../dist/backend/planner/names/synthetic.js";
 
 function declarationNamed(source, name) {
   const file = source.getSourceFile("/src/index.ts");
@@ -33,17 +33,17 @@ export enum Aliased { firstValue = 1, secondValue = 1 }
 ` } });
   const ordinaryNode = declarationNamed(source, "Ordinary");
   const aliasNode = declarationNamed(source, "Aliased");
-  const ordinary = program.nativeDeclarations.get(ordinaryNode);
-  const aliased = program.nativeDeclarations.get(aliasNode);
+  const ordinary = program.records.nativeDeclaration.get(ordinaryNode);
+  const aliased = program.records.nativeDeclaration.get(aliasNode);
   assert.equal(ordinary?.kind, "enum", "ordinary enum is admitted");
   assert.equal(ordinary.representation, "enum", "distinct constants select native enum syntax");
   assert.equal(aliased?.kind, "enum", "duplicate enum is admitted");
   assert.equal(aliased.representation, "constants", "duplicate constants select the existing native wrapper");
   assert.deepEqual(ordinary.variants.map(variant => [variant.name, variant.discriminant]),
     [["firstValue", "1"], ["secondValue", "2"]], "authored spelling and checked values are preserved");
-  assert.equal(program.nativeDeclarations.get(ordinaryNode) === ordinary, true, "reader returns the identical sealed form");
+  assert.equal(program.records.nativeDeclaration.get(ordinaryNode) === ordinary, true, "reader returns the identical sealed form");
   assert.equal(Object.isFrozen(ordinary) && Object.isFrozen(ordinary.variants), true, "admitted declaration data is immutable");
-  assert.equal(Object.isFrozen(program.nativeDeclarations), true, "published declaration reader is frozen");
+  assert.equal(Object.isFrozen(program.records.nativeDeclaration), true, "published declaration reader is frozen");
   assert.equal(Object.hasOwn(program, "enumMemberConstants"), false,
     "the superseded backend constant-reader route is not published alongside declaration admission");
 });
@@ -84,8 +84,8 @@ test("ordinary record interfaces and erased aliases publish their distinct admit
 export interface Entry { firstValue: number; "some-key": string; }
 export type Amount = number;
 ` } });
-  const entry = program.nativeDeclarations.get(declarationNamed(source, "Entry"));
-  const amount = program.nativeDeclarations.get(declarationNamed(source, "Amount"));
+  const entry = program.records.nativeDeclaration.get(declarationNamed(source, "Entry"));
+  const amount = program.records.nativeDeclaration.get(declarationNamed(source, "Amount"));
   assert.equal(entry?.kind, "interface", "record interface has a native admission");
   assert.deepEqual(entry.fields.map(field => [field.sourceName, field.targetName, field.storageIndex]),
     [["firstValue", "firstValue", 0], ["some-key", "some_key", 1]], "exact selected field storage is retained");
@@ -102,7 +102,7 @@ export interface Derived extends Named { write(value: number): void; }
     const declaration = declarationNamed(source, name);
     const definition = program.projectTypes.definitionForDeclaration(declaration);
     assert.equal(program.projectTypes.isPolymorphic(definition), true, `${name}: existing polymorphic selection`);
-    assert.equal(program.nativeDeclarations.get(declaration) === undefined, true,
+    assert.equal(program.records.nativeDeclaration.get(declaration) === undefined, true,
       `${name}: ordinary record admission never rejects or supplants the polymorphic owner`);
   }
 });
@@ -112,8 +112,8 @@ test("literal and runtime unions retain their selected native alias forms", () =
 export type State = "ready" | "done";
 export type Value = { value: number } | { next: Value };
 ` } });
-  const state = program.nativeDeclarations.get(declarationNamed(source, "State"));
-  const value = program.nativeDeclarations.get(declarationNamed(source, "Value"));
+  const state = program.records.nativeDeclaration.get(declarationNamed(source, "State"));
+  const value = program.records.nativeDeclaration.get(declarationNamed(source, "Value"));
   assert.equal(state?.kind, "alias", "string-literal union remains an alias admission");
   assert.equal(state.fact.kind, "string-literal", "existing literal-union representation is preserved");
   assert.equal(value?.kind, "alias", "runtime union remains an alias admission");
@@ -128,11 +128,11 @@ test("source-output identities are published once with the analyzed program", ()
     "index.ts": 'export { value } from "./nested/value.js";',
     "nested/value.ts": "export const value = 1;",
   } });
-  const identity = program.sourceOutputIdentities.get("/src/nested/value.ts");
+  const identity = program.records.sourceOutputIdentity.get("/src/nested/value.ts");
   assert.equal(identity !== undefined, true, "an emitted module has its admitted identity");
   assert.equal(identity.moduleName, "nested::value", "complete native module identity is retained");
-  assert.equal(identity.artifactPath, "src/nested/value.rs", "the selected output path is retained");
-  assert.equal(program.sourceOutputIdentities.get("/src/nested/value.ts") === identity, true,
+  assert.deepEqual(identity.moduleSegments, ["nested", "value"], "the source identity retains its exact native module segments");
+  assert.equal(program.records.sourceOutputIdentity.get("/src/nested/value.ts") === identity, true,
     "consumers receive the identical selected identity without running a selector");
   assert.equal(Object.isFrozen(identity) && Object.isFrozen(identity.moduleSegments), true,
     "published identity and path data are immutable");
@@ -248,7 +248,7 @@ test("sealed family implementations have completed contracts and missing contrac
       elements: [implementation.owner, implementation.output] });
     assert.equal(contract !== undefined, true, "every implementation is covered by the completed generic-requirement closure");
   }
-  assert.equal(program.nativeDeclarations.implementations.length, program.typeFamilies.implementations.length,
+  assert.equal(program.records.nativeDeclaration.implementations.length, program.typeFamilies.implementations.length,
     "admission covers the complete finally sealed implementation domain in its existing order");
   assert.throws(() => analyzeRustNativeDeclarationForms({ ast: source.ast, sourceFiles: program.sourceFiles,
     semanticsFor: createTargetSourceProgram(source).semantics.forNode,

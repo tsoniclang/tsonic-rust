@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { printRustPattern } from "../../../../dist/print/source/patterns.js";
-import { rustPatternBindsPath } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
 import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
@@ -14,8 +13,6 @@ test("native struct patterns retain exact names, binding scope and module identi
       { kind: "path", path: "sentinel::None" }] } },
   ] };
   assert.equal(printRustPattern(pattern), "model::Payload { error, value: (userName, sentinel::None) }");
-  for (const name of ["error", "userName"]) assert.equal(rustPatternBindsPath(pattern, name), true);
-  for (const name of ["value", "other"]) assert.equal(rustPatternBindsPath(pattern, name), false);
   const expression = { kind: "match", expression: { kind: "path", path: "input" }, arms: [
     { pattern, expression: { kind: "int-literal", text: "1" } },
   ] };

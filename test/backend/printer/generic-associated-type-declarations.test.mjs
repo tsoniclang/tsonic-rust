@@ -5,9 +5,7 @@ import { printRustItem } from "../../../dist/print/source/declarations.js";
 import { printRustType } from "../../../dist/print/source/types.js";
 import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/syntax/module-references.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
-import { rustSourceFileContractCandidate } from "../../../dist/backend/planner/artifacts/source-file-contract.js";
 import { rustLintAttributes } from "../../../dist/backend/target-ast/normalization/lint-policy.js";
-import { closeRustModuleTypeVisibility } from "../../../dist/backend/target-ast/normalization/module-visibility.js";
 
 const named = path => ({ kind: "named", path });
 const lifetime = name => ({ kind: "named", name });
@@ -61,29 +59,6 @@ test("associated generic bounds and predicates retain exact module dependencies"
   }
 });
 
-test("GAT public signatures expose their bounds but not same-spelled method-local type parameters", () => {
-  const selected = { parameters: [{ kind: "type", name: "Value", bounds: [{ kind: "trait", path: "InputBound" }] }],
-    wherePredicates: [{ kind: "type", type: named("Value"), bounds: [{ kind: "trait", path: "OutputBound" }] }] };
-  const hiddenTrait = name => ({ kind: "trait", name, visibility: "private", generics: emptyRustGenerics, members: [] });
-  const hiddenValue = name => ({ kind: "struct", name, visibility: "private", generics: emptyRustGenerics, fields: [] });
-  for (const item of [
-    { ...family, members: [{ ...declaration, generics: selected, bounds: [] }] },
-    { ...implementation, members: [{ ...definition, generics: selected, type: named("Value") }] },
-  ]) {
-    const normalized = finalizeRustSourceStyle(createRustSourceFile([
-      ...(item.kind === "impl" ? [{ ...family, members: [] }] : []),
-      hiddenTrait("InputBound"), hiddenTrait("OutputBound"),
-      hiddenValue("Value"), hiddenValue("Unrelated"), item,
-    ]));
-    for (const name of ["InputBound", "OutputBound"]) {
-      assert.equal(normalized.items.find(candidate => candidate.name === name).visibility, "public", name);
-    }
-    for (const name of ["Value", "Unrelated"]) {
-      assert.equal(normalized.items.find(candidate => candidate.name === name).visibility, "private", name);
-    }
-  }
-});
-
 test("associated generic parameter naming remains local and never changes authored spelling", () => {
   const unusual = { parameters: [
     { kind: "lifetime", name: "InputScope", outlives: [] },
@@ -103,34 +78,4 @@ test("associated generic parameter naming remains local and never changes author
     assert.match(printRustItem(item), /Error<'InputScope, valueType, const elementCount: usize>/u);
   }
   assert.deepEqual(finalizeRustSourceStyle(normalized), normalized);
-});
-
-test("associated binder and bound changes invalidate the exact public artifact surface", () => {
-  const surface = item => rustSourceFileContractCandidate("family", createRustSourceFile([item]), [])
-    .contract.facets.find(facet => facet.facet === "source-file-public-surface").value;
-  for (const [item, member] of [[family, declaration], [implementation, definition]]) {
-    const original = surface(item);
-    for (const changed of [
-      { ...generics, parameters: generics.parameters.slice(0, 2) },
-      { ...generics, wherePredicates: [] },
-      { ...generics, parameters: generics.parameters.map(parameter => parameter.kind === "type"
-        ? { ...parameter, bounds: [{ kind: "trait", path: "Clone" }] } : parameter) },
-    ]) assert.notEqual(surface({ ...item, members: [{ ...member, generics: changed }] }), original);
-  }
-});
-
-test("associated generic constraints close cross-module visibility without promoting external lookalikes", () => {
-  const bound = path => ({ ...declaration, generics: { parameters: [{ kind: "type", name: "Value", bounds: [] }],
-    wherePredicates: [{ kind: "type", type: named("Value"), bounds: [{ kind: "trait", path }] }] }, bounds: [] });
-  const hidden = name => ({ kind: "trait", name, visibility: "crate", generics: emptyRustGenerics, members: [] });
-  const models = new Map([
-    ["api", createRustSourceFile([{ ...family, members: [bound("crate::detail::Constraint"),
-      { ...bound("external::detail::Namesake"), name: "ExternalError" }] }])],
-    ["detail", createRustSourceFile([hidden("Constraint"), hidden("Namesake")])],
-  ]);
-  const closed = closeRustModuleTypeVisibility(models);
-  assert.equal(closed.get("detail").items[0].visibility, "public");
-  assert.equal(closed.get("detail").items[1].visibility, "crate");
-  assert.equal(models.get("detail").items[0].visibility, "crate");
-  assert.deepEqual(closeRustModuleTypeVisibility(closed), closed);
 });

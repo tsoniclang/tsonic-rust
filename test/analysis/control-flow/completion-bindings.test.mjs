@@ -12,7 +12,7 @@ for (const [name, body, expected] of [
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 function produce(flag: boolean): string { if (flag) throw "failure"; return "value"; }
 function observe(value: string): void { void value; }
-export function run(flag: boolean): string { let selected: string; let second: string; ${body} }
+export function run(flag: boolean): string { let selected: string${name === "a finally read retains its original scope" ? ' = "initial"' : ""}; let second: string; ${body} }
 ` } });
     const ast = program.source.ast;
     const nodes = [];

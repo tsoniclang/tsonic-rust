@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
 import { createRustTargetConfiguration } from "../../../dist/options/target.js";
-import { planCargoManifest as planSealedCargoManifest } from "../../../dist/backend/planner/project/cargo.js";
+import { analyzeRustPackageCargo } from "../../../dist/analysis/source-modules/package-cargo.js";
+import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/source-packages.js";
+import { materializeRustRuntimeReferences } from "../../../dist/providers/runtime/materialization.js";
 import { planRustCargoProject } from "../../../dist/backend/planner/project/project-artifacts.js";
 import {
   analyzeRustRuntimeReferences,
@@ -53,13 +55,17 @@ const noRuntimeReferences = Object.freeze({
 });
 
 function planCargoManifest(configuration, runtimeReferences) {
-  const analysis = analyzeRustRuntimeReferences(runtimeReferences, configuration.foundation);
-  return analysis.kind === "rejected"
-    ? { manifest: undefined, diagnostics: analysis.diagnostics }
-    : {
-        manifest: planSealedCargoManifest(configuration, analysis.plan),
-        diagnostics: [],
-      };
+  const analysis = analyzeRustRuntimeReferences(runtimeReferences, configuration.foundation,
+    materializeRustRuntimeReferences(runtimeReferences));
+  if (analysis.kind === "rejected") return { manifest: undefined, diagnostics: analysis.diagnostics };
+  const producer = createRustSourcePackageEmissionProducer(() => {});
+  const diagnostics = analyzeRustPackageCargo({
+    configuration, runtimeReferences: analysis.plan,
+    records: { sourcePackageComponents: { get: () => [{ componentId: "root", root: true, dependencyComponentIds: [] }] },
+      programEmission: { get: () => ({ linkedComponentIds: [] }) } },
+  }, producer);
+  const selected = producer.records.packageCargo.get();
+  return { manifest: selected?.kind === "generated" ? selected.plan.rootManifest : undefined, diagnostics };
 }
 
 function compile(input) {
@@ -405,7 +411,9 @@ test("user-owned Cargo mode emits sources without creating or mutating the manif
     dirname(paths.projectFilePath),
     paths.targetOutputRoot,
   );
-  const plan = planRustCargoProject(configuration, noRuntimeReferences);
+  const producer = createRustSourcePackageEmissionProducer(() => {});
+  assert.deepEqual(analyzeRustPackageCargo({ configuration }, producer), []);
+  const plan = planRustCargoProject({ program: { records: producer.records } });
   assert.deepEqual(plan, {
     kind: "user-owned",
     manifestPath,

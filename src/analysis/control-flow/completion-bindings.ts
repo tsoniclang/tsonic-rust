@@ -66,7 +66,15 @@ export function analyzeRustCompletionBindings(program: Omit<RustAnalysisProgram,
           const accesses = new Set(sequence([Node_Expression(ast, node)]));
           if (accesses.delete("none")) accesses.add("exit");
           result = accesses;
-        } else if (ast.is.IsWhileStatement(node) || ast.is.IsForStatement(node) || ast.is.IsForOfStatement(node) || ast.is.IsForInStatement(node) || ast.is.IsDoStatement(node) || ast.is.IsSwitchStatement(node) || ast.is.IsTryStatement(node)) {
+        } else if (ast.is.IsTryStatement(node)) {
+          const body = TryStatement_TryBlock(ast, node);
+          const caught = CatchClause_Block(ast, TryStatement_CatchClause(ast, node));
+          const finalized = TryStatement_FinallyBlock(ast, node);
+          const accesses = new Set(body === undefined ? ["none" as const] : first(body));
+          if (caught !== undefined) for (const access of first(caught)) accesses.add(access);
+          if (finalized !== undefined && accesses.delete("none")) for (const access of first(finalized)) accesses.add(access);
+          result = accesses;
+        } else if (ast.is.IsWhileStatement(node) || ast.is.IsForStatement(node) || ast.is.IsForOfStatement(node) || ast.is.IsForInStatement(node) || ast.is.IsDoStatement(node) || ast.is.IsSwitchStatement(node)) {
           const accesses = new Set(sequence(ast.children(node)));
           accesses.add("none");
           result = accesses;

@@ -2,7 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression, IsTypeSyntaxNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -301,7 +301,7 @@ export function analyzeRustNativeCallableGenerics(input: {
     }
     let failure: { readonly node: Node; readonly reason: string } | undefined;
     const visit = (node: Node): void => {
-      if (failure !== undefined) return;
+      if (failure !== undefined || IsTypeSyntaxNode(input.ast, node)) return;
       for (const error of input.records.errorEffects.get(node)?.nativeErrors ?? []) collect(error.errorType);
       if (input.records.contextualValueConversion.get(node)?.conversion.kind === "callable-adapter") {
         const selected = input.nativeStorage.valueFor(node);

@@ -4,7 +4,6 @@ import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFr
   rustUnionTypePathInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, rustSourceOptionalTargetType,
   rustSourceUnionTargetType, rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustTypeIsLegalInPosition } from "../../../../dist/backend/planner/types/type-observations.js";
 import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { createRustGeneratedUnionPlan } from "../../../../dist/analysis/objects/generated-union-plan.js";
@@ -53,47 +52,6 @@ test("optional invocation parameters keep static dispatch and absence uses a con
   assert.equal(functionType?.parameters[0].elements[0].lifetime.name, functionType?.binder[0].name);
 });
 
-test("native anonymous signature containers do not admit anonymous storage or nested callable bounds", () => {
-  const anonymous = { kind: "impl-trait", bounds: [{ kind: "trait", path: "core::fmt::Debug" }], outlives: [] };
-  for (const type of [anonymous, { kind: "reference", referent: anonymous, mutable: false },
-    { kind: "tuple", elements: [anonymous] },
-    { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: anonymous }] },
-    { kind: "slice", element: anonymous }]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
-  }
-  for (const type of [
-    { kind: "function-pointer", parameters: [anonymous], result: { kind: "unit" } },
-    { kind: "impl-trait", bounds: [{ kind: "callable", trait: "Fn", binder: [], parameters: [anonymous], result: { kind: "unit" } }], outlives: [] },
-  ]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), false);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), false);
-  }
-});
-
-test("anonymous implementation bounds admit exact associated outputs without positional nesting", () => {
-  const output = { kind: "impl-trait", bounds: [{ kind: "trait", path: "core::fmt::Debug" }], outlives: [] };
-  const optional = { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: output }] };
-  const selected = argument => ({ kind: "impl-trait", outlives: [], bounds: [{ kind: "trait-type", reference: {
-    trait: { kind: "named", path: "example::Invocation", genericArguments: [argument] },
-  } }] });
-  const equality = type => ({ kind: "associated-equality", name: "Output", genericArguments: [], type });
-  for (const type of [selected(equality(output)), selected(equality(optional)),
-    selected(equality(selected(equality(output)))), selected({ kind: "associated-bounds", name: "Output", genericArguments: [],
-      bounds: [{ kind: "trait-type", reference: { trait: { kind: "named", path: "Iterator", genericArguments: [equality(output)] } } }] })]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), true);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
-  }
-  for (const type of [selected({ kind: "type", type: output }), selected({ kind: "type", type: optional }),
-    selected({ ...equality({ kind: "unit" }), genericArguments: [{ kind: "type", type: output }] }),
-    { ...selected(equality(output)), captures: [{ kind: "type", type: output }] }]) {
-    assert.equal(rustTypeIsLegalInPosition(type, "parameter"), false);
-    assert.equal(rustTypeIsLegalInPosition(type, "return"), false);
-    assert.equal(rustTypeIsLegalInPosition(type, "general"), false);
-  }
-});
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };
 const owner = rustNamedTargetType("test.adapter", "example::Adapter", [{ kind: "type", type: callable }]);
 

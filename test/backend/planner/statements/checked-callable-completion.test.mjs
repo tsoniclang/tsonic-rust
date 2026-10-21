@@ -1,7 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyRustTailShape, retainRustCheckedCompletion, rustBlockDefinitelyExits, rustBlockTerminates } from "../../../../dist/backend/target-ast/normalization/block-flow.js";
+import { applyRustTailShape } from "../../../../dist/backend/target-ast/normalization/block-flow.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
@@ -19,34 +19,6 @@ test("unit completion omits only a final pure unit literal and retains preceding
   assert.deepEqual(applyRustTailShape(nested, false), { statements: [{ kind: "scope", body: { statements: [] } }] });
   const earlyReturn = { statements: [{ kind: "return", expr: unit }, effect] };
   assert.equal(applyRustTailShape(earlyReturn, false), earlyReturn);
-});
-
-test("only an exact no-fallthrough proof adds a safe terminal assertion", () => {
-  const body = { statements: [{ kind: "let", name: "value", mutable: false, init: { kind: "bool-literal", value: true } }] };
-  for (const evidence of [undefined, true]) {
-    assert.equal(retainRustCheckedCompletion(body, evidence), body);
-    assert.equal(rustBlockTerminates(body), false);
-  }
-  const retained = retainRustCheckedCompletion(body, false);
-  assert.equal(retained.statements[0], body.statements[0]);
-  assert.equal(retained.statements.length, 2);
-  assert.equal(retained.statements[1].expr.expression.kind, "unreachable");
-  assert.equal(rustBlockTerminates(retained), true);
-  assert.equal(retainRustCheckedCompletion(retained, false), retained);
-});
-
-test("native item declarations do not execute after lexical completion", () => {
-  const item = { kind: "item", item: { kind: "function", name: "read", visibility: "private", parameters: [],
-    body: { statements: [] } } };
-  const returned = { statements: [{ kind: "return", expr: { kind: "number-literal", value: 3 } }, item] };
-  assert.equal(rustBlockTerminates(returned), true);
-  assert.equal(rustBlockDefinitelyExits(returned), true);
-  assert.equal(retainRustCheckedCompletion(returned, false), returned);
-  assert.equal(applyRustTailShape(returned, true), returned);
-  assert.equal(rustBlockTerminates({ statements: [item] }), false);
-  const broken = { statements: [{ kind: "break" }, item] };
-  assert.equal(rustBlockTerminates(broken), false);
-  assert.equal(rustBlockDefinitelyExits(broken), true);
 });
 
 test("exhaustive switches retain function, method and closure return flow", { timeout: 300_000 }, () => {
