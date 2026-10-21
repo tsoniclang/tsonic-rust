@@ -5,6 +5,17 @@ export function cloneRustExpression(expression: RustExpr): RustExpr {
 }
 
 export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
+  if (expression.kind === "bool-literal") return { kind: "bool-literal", value: !expression.value };
+  if (expression.kind === "unary" && expression.operator === "!") return expression.operand;
+  if (expression.kind === "option-presence") return { ...expression, present: !expression.present };
+  if (expression.kind === "binary") {
+    const inverse = expression.operator === "==" ? "!=" : expression.operator === "!=" ? "==" : undefined;
+    if (inverse !== undefined) return { ...expression, operator: inverse };
+    if (expression.operator === "&&" || expression.operator === "||") return {
+      kind: "binary", operator: expression.operator === "&&" ? "||" : "&&",
+      left: negateRustBooleanExpression(expression.left), right: negateRustBooleanExpression(expression.right),
+    };
+  }
   return { kind: "unary", operator: "!", operand: expression };
 }
 

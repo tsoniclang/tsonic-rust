@@ -5,7 +5,7 @@ import { sourceNodesOutsideErasedSubtrees, sourceCallableDefinitionIsDiscarded }
 export function rustNativeFixtureNodes(program) {
   const ast = program.source.ast;
   const nodes = [];
-  const pending = [...program.sourceFiles].reverse();
+  const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).reverse();
   const visited = new Set();
   while (pending.length !== 0) {
     const node = pending.pop();
@@ -53,6 +53,6 @@ export function createRustRecordFixture(overrides = {}, base) {
   return Object.freeze(Object.fromEntries(families.map(family => {
     const reader = Object.hasOwn(overrides, family) ? overrides[family] : records[family];
     if (typeof reader?.get !== "function") throw new Error("Missing Rust record reader: " + family);
-    return [family, Object.freeze({ get: subject => reader.get(subject) })];
+    return [family, Object.freeze({ get: (...subjects) => reader.get(...subjects) })];
   })));
 }

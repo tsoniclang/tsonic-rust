@@ -7,7 +7,8 @@ function select(operator, first, second, name = "int32") {
   const expression = {}, left = {}, right = {};
   const producer = createRustNativeComparisonProducer(() => {});
   const literals = new Map([[left, first], [right, second]]);
-  const ast = { is: { IsBinaryExpression: node => node === expression, IsParenthesizedExpression: () => false },
+  const ast = { is: { IsBinaryExpression: node => node === expression, IsParenthesizedExpression: () => false,
+    IsIdentifier: () => false, IsStringLiteral: () => false, IsNoSubstitutionTemplateLiteral: () => false },
     as: { AsBinaryExpression: node => node === expression ? { Left: left, Right: right } : undefined } };
   analyzeRustNativeComparisons({ source: { ast }, records: {
     targetOperation: { get: node => node === expression ? { kind: "operator-token", operator } : undefined },
