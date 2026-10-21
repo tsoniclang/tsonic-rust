@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustValueDestinationContext, rustSelectedValueDestinationContext, rustReturnValueContext }
+import { rustValueDestinationContext, rustReturnValueContext }
   from "../../../../dist/backend/planner/expressions/value-destinations.js";
 
 test("physical destinations apply to the selected expression and preserve unrelated demands", () => {
@@ -21,7 +21,10 @@ test("physical destinations apply to the selected expression and preserve unrela
 test("identity destinations preserve context without allocating a second map", () => {
   const context = {};
   const selection = { kind: "identity", carrier: { kind: "source-primitive", name: "int32" } };
-  assert.equal(rustSelectedValueDestinationContext({}, selection, context) === context, true);
+  const declaration = {};
+  const selectedContext = { ...context, callableDeclaration: declaration,
+    input: { program: { records: { callableReturn: { get: owner => owner === declaration ? { destination: selection } : undefined } } } } };
+  assert.equal(rustReturnValueContext({}, selectedContext) === selectedContext, true);
 });
 
 test("return destinations use the exact owning declaration rather than an operand or enclosing caller", () => {
@@ -29,8 +32,8 @@ test("return destinations use the exact owning declaration rather than an operan
   const declaration = {};
   const requested = [];
   const carrier = { kind: "type-parameter", identity: "returned-physical", name: "Returned" };
-  const context = { callableDeclaration: declaration, input: { program: { callableValues: {
-    nativeStorage: { returnFor(owner) { requested.push(owner); return { kind: "selected", carrier, inputs: [] }; } },
+  const context = { callableDeclaration: declaration, input: { program: { records: {
+    callableReturn: { get(owner) { requested.push(owner); return { destination: { kind: "selected", carrier, inputs: [] } }; } },
   } } } };
   const selected = rustReturnValueContext(expression, context);
   assert.equal(requested.length, 1);

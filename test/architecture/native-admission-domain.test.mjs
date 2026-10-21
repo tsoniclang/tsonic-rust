@@ -6,7 +6,7 @@ import test from "node:test";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const walkerContracts = new Map([
-  ["analysis/program/source-package-components.ts", [1, "mixed"]],
+  ["analysis/source-modules/component-semantics.ts", [1, "mixed"]],
   ["analysis/reachability/generated-item-usage.ts", [1, "native-domain"]],
   ["analysis/callables/lexical-value-environments.ts", [1, "native-domain"]],
   ["analysis/objects/class-values.ts", [1, "native-domain"]],
@@ -21,7 +21,7 @@ const walkerContracts = new Map([
   ["analysis/program/records/module-callable-storage.ts", [1, "native-domain"]],
   ["analysis/project-types/mutable-storage-requirements.ts", [1, "native-domain"]],
   ["analysis/project-types/object-representation.ts", [2, "native-domain"]],
-  ["analysis/resources/thrown-values.ts", [1, "native-domain"]],
+  ["analysis/errors/thrown-values.ts", [1, "native-domain"]],
   ["analysis/callables/async-results.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/callables/specializations.ts", [1, "admitted-name-inventory"]],
   ["analysis/project-types/construction-readiness.ts", [2, "native-domain"]],
@@ -30,7 +30,7 @@ const walkerContracts = new Map([
   ["analysis/errors/closed-errors.ts", [1, "native-domain"]],
   ["analysis/project-types/catalog/helpers.ts", [1, "admitted-name-inventory"]],
   ["analysis/reachability/this-references.ts", [1, "admitted-method-subtrees"]],
-  ["policy/types/model/source-declarations.ts", [1, "native-domain"]],
+  ["analysis/project-types/source-declarations.ts", [1, "native-domain"]],
   ["analysis/callables/generic-values.ts", [1, "native-domain"]],
   ["analysis/callables/ownership-components.ts", [2, "checked-source-identities-and-native-roots"]],
   ["analysis/callables/signatures.ts", [1, "native-domain"]],
@@ -46,8 +46,8 @@ const walkerContracts = new Map([
   ["analysis/project-types/implicit-interfaces.ts", [1, "native-domain"]],
   ["analysis/project-types/type-family-demands.ts", [2, "native-domain"]],
   ["analysis/reachability/plan.ts", [1, "native-domain"]],
-  ["analysis/resources/error-declarations.ts", [1, "native-domain"]],
-  ["analysis/resources/fallibility.ts", [1, "native-domain"]],
+  ["analysis/errors/error-declarations.ts", [1, "native-domain"]],
+  ["analysis/errors/fallibility.ts", [1, "native-domain"]],
   ["analysis/source-modules/analyze.ts", [1, "admitted-module-statements"]],
 ]);
 

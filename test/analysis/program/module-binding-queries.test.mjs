@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { createRustModuleBindingPolicy } from "../../../dist/analysis/program/module-bindings.js";
+import { createRustModuleBindingAnalysis } from "../../../dist/analysis/program/module-bindings.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustTypeOnlyDeclarationProducer } from "../../../dist/analysis/program/records/type-only-declaration.js";
 
@@ -19,7 +19,7 @@ test("module value classification computes one native decision and does not repl
   assert.equal(declaration !== undefined, true);
   let classifications = 0;
   const builder = createRustProgramRecordBuilder();
-  const policy = createRustModuleBindingPolicy({ ...context, records: builder, ast: { ...context.ast, kindName(node) {
+  const policy = createRustModuleBindingAnalysis({ ...context, records: builder, ast: { ...context.ast, kindName(node) {
     classifications++;
     return context.ast.kindName(node);
   } } }, new Set());
@@ -51,7 +51,7 @@ test("address-taken module declarations keep their complete cell classification 
   const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsVariableDeclaration(node));
   assert.equal(declaration !== undefined, true);
   const builder = createRustProgramRecordBuilder();
-  const policy = createRustModuleBindingPolicy({ ...context, records: builder }, new Set([declaration]));
+  const policy = createRustModuleBindingAnalysis({ ...context, records: builder }, new Set([declaration]));
   const carrier = { kind: "source-primitive", name: "float64" };
   const walk = { moduleBindings: policy, context: { requiredRecords: [] } };
   builder.moduleBindings.value(walk, declaration, "const", carrier);

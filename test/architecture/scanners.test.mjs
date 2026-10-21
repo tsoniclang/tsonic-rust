@@ -117,7 +117,7 @@ test("Rust compiler reflection remains isolated from semantic and backend layers
     if (path.includes("/providers/native/")) {
       continue;
     }
-    const semanticText = path.endsWith("/descriptor/rust-starter-project.ts")
+    const semanticText = path.endsWith("/descriptor/starter-project.ts")
       ? text.replace('command: "rustdoc"', "")
       : text;
     assert.doesNotMatch(
@@ -242,7 +242,7 @@ test("project downcasts use closed routes and restrict checked Any to native out
 });
 
 test("Cargo registry patches require explicit runtime-reference provenance", () => {
-  const analysis = readFileSync(join(sourceRoot, "analysis/project/references.ts"), "utf8");
+  const analysis = readFileSync(join(sourceRoot, "analysis/project/classification.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/project/manifest.ts"), "utf8");
   const runtimeReferences = readFileSync(
     join(sourceRoot, "providers/runtime/source-crates.ts"),
@@ -324,7 +324,7 @@ test("Rust emission delegates canonical layout exclusively to bounded rustfmt", 
   const formatter = readFileSync(join(sourceRoot, "toolchain/rustfmt.ts"), "utf8");
   const compiler = readFileSync(join(sourceRoot, "backend/compile.ts"), "utf8");
   const session = readFileSync(join(sourceRoot, "compilation/session.ts"), "utf8");
-  const pack = readFileSync(join(sourceRoot, "descriptor/rust-target-pack.ts"), "utf8");
+  const pack = readFileSync(join(sourceRoot, "descriptor/target-pack.ts"), "utf8");
   assert.doesNotMatch(materializer, /rustfmt|formatRust/u);
   assert.doesNotMatch(compiler, /rustfmt|RustFormattingError|RUST_SOURCE_FORMATTING_FAILED/u);
   assert.match(session, /return formatResult\(compileRequest\(/u);
@@ -595,7 +595,7 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.doesNotMatch(selector, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
   assert.doesNotMatch(selector, /memberName|propertyName|sourceName|targetName/u);
 
-  const backend = readFileSync(join(sourceRoot, "backend/planner/expressions/special.ts"), "utf8");
+  const backend = readFileSync(join(sourceRoot, "backend/planner/expressions/regular-expression-literals.ts"), "utf8");
   const planner = sourceSection(
     backend,
     "export function planOptionalChainExpression(",
@@ -628,7 +628,7 @@ test("type-shape queries are confined to closed target type resolution", () => {
 });
 
 test("compiler Type objects are never treated as source-alias fact identity", () => {
-  const text = readFileSync(join(sourceRoot, "policy/types/resolution/target.ts"), "utf8");
+  const text = readFileSync(join(sourceRoot, "analysis/types/resolution/target.ts"), "utf8");
   assert.doesNotMatch(text, /factResolver\.resolve\(type,\s*runtimeCarrierFactKey\)/u);
   assert.doesNotMatch(text, /factResolver\.resolve\(type,\s*sourcePrimitiveFactKey\)/u);
 });
@@ -672,7 +672,7 @@ test("provider-backed backend lanes require finalized operation facts", () => {
   const lanes = [
     [
       "constructor",
-      readFileSync(join(sourceRoot, "backend/planner/expressions/special.ts"), "utf8"),
+      readFileSync(join(sourceRoot, "backend/planner/expressions/regular-expression-literals.ts"), "utf8"),
       "export function planNewExpression(",
       "export function effectiveMemberResultCarrier(",
     ],
@@ -707,7 +707,7 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
     "utf8",
   );
   const statements = readFileSync(
-    join(sourceRoot, "backend/planner/statements/iteration.ts"),
+    join(sourceRoot, "backend/planner/statements/statement-loops.ts"),
     "utf8",
   );
   const admission = readFileSync(
@@ -813,7 +813,7 @@ test("call-argument conversion consumes the checked expression carrier, not a se
 
 test("backend assignment and nullish checks consume finalized fact details", () => {
   const statements = readFileSync(
-    join(sourceRoot, "backend/planner/statements/expression-statements.ts"),
+    join(sourceRoot, "backend/planner/statements/statement-simple.ts"),
     "utf8",
   );
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions/binary.ts"), "utf8");
@@ -844,7 +844,7 @@ test("counted-loop planning consumes one sealed Rust representation plan", () =>
     "utf8",
   );
   const planning = readFileSync(
-    join(sourceRoot, "backend/planner/statements/control-flow.ts"),
+    join(sourceRoot, "backend/planner/statements/statement-conditionals.ts"),
     "utf8",
   );
   assert.match(targetProgram, /countedLoops: analyzeRustCountedLoopRepresentations\(/u);
@@ -871,7 +871,7 @@ test("provider purity uses one generic operation-form writability policy", () =>
     "utf8",
   );
   const finalization = readFileSync(
-    join(sourceRoot, "analysis/operations/finalized-operation/finalize.ts"),
+    join(sourceRoot, "policy/operations/members/abi/finalize.ts"),
     "utf8",
   );
   assert.match(forms, /export function rustProviderOperationFormDeclaresWritableInput\(/u);
@@ -1000,7 +1000,7 @@ test("value conversions use target-owned semantic ids, never arbitrary helper pa
 
 test("source-package semantics are sealed before physical Rust planning", () => {
   const facadeAnalysis = readFileSync(
-    join(sourceRoot, "analysis/program/source-package-facades.ts"),
+    join(sourceRoot, "analysis/source-modules/facade-contracts.ts"),
     "utf8",
   );
   const facadePlanner = readFileSync(
@@ -1013,7 +1013,7 @@ test("source-package semantics are sealed before physical Rust planning", () => 
   assert.match(facadePlanner, /program\.sourcePackageFacades/u);
 
   const componentAnalysis = readFileSync(
-    join(sourceRoot, "analysis/program/source-package-components.ts"),
+    join(sourceRoot, "analysis/source-modules/component-semantics.ts"),
     "utf8",
   );
   const componentPlanner = readFileSync(

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertRustNativeCallableProtocolResults, createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native-protocols.js";
+import { createRustNativeCallableProtocolRegistry } from "../../../dist/analysis/callables/native-protocols.js";
 import { rustNativeCallableErrorChannel, rustNativeCallableErrorType } from "../../../dist/policy/types/callables/native-protocols.js";
 import { rustCallableTargetType, rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType }
   from "../../../dist/target-model/types/index.js";
@@ -20,7 +20,6 @@ test("equal native signatures share one protocol while implementation and associ
   assert.equal(left.protocol === right.protocol, true);
   assert.equal(left.protocol.result === right.protocol.result, true, "one admitted protocol owns one exact result object");
   assert.equal(Object.isFrozen(left.protocol.result), true, "the complete required result is sealed with the protocol");
-  assertRustNativeCallableProtocolResults(registry.definitions(), emptyRustTypeDefinitions);
   assert.equal(registry.definitions().length, 1);
   assert.equal(left.trait.sourceItem.typeName, left.protocol.targetName);
   assert.equal(isRustTargetTypeRef(left.trait), true);
@@ -108,18 +107,16 @@ test("native protocol registry rejects invalid carriers and ambiguous borrowed r
   assert.equal(registry.definitions().length, 0);
 });
 
-test("native protocol sealing rejects an unequal result instead of replacing the admitted record", () => {
+test("native protocol publication rejects mutation without replacing the admitted result", () => {
   const registry = create();
   const selected = registry.bind("/source.ts", rustCallableTargetType([integer], integer));
   assert.equal(selected !== undefined, true, "the original source protocol is admitted");
   const result = selected.protocol.result;
-  assertRustNativeCallableProtocolResults(registry.definitions(), emptyRustTypeDefinitions);
+  const repeated = registry.bind("/source.ts", rustCallableTargetType([integer], integer));
+  assert.equal(repeated.protocol === selected.protocol, true, "the original protocol is reused");
   assert.equal(selected.protocol.result === result, true, "successful checking never replaces the original result");
-  assert.throws(() => assertRustNativeCallableProtocolResults([
-    Object.freeze({ ...selected.protocol, result: integer }),
-  ], emptyRustTypeDefinitions), {
-    message: "A sealed native callable protocol result differs from its exact admitted result.",
-  });
+  assert.equal(Reflect.set(selected.protocol, "result", integer), false,
+    "the published record cannot accept an unequal result");
   assert.equal(selected.protocol.result === result && Object.isFrozen(result), true,
     "a rejected corrupt copy cannot mutate the canonical original");
 });

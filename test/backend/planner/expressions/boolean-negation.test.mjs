@@ -1,119 +1,39 @@
-import { rustValueBlock } from "../../../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import {
-  rustBooleanLiteralComparison,
-  negateRustBooleanExpression,
-  rustExpressionContainsStatementBlock,
-} from "../../../../dist/backend/target-ast/syntax/expressions.js";
-import {
-  rustExpressionChildren,
-  rustExpressionReferencesPath,
-} from "../../../../dist/backend/target-ast/inspection/source-usage.js";
+import test from "node:test";
+import { negateRustBooleanExpression } from "../../../../dist/backend/target-ast/syntax/expressions.js";
+import { mapRustExpressionChildren } from "../../../../dist/backend/target-ast/syntax/expression-children.js";
 import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
-import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
-import { rustExpressionUsesTryInCurrentRegion } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 
 test("boolean negation preserves ordinary selected methods regardless of spelling", () => {
   for (const method of ["is_some", "is_none", "is_ready"]) {
-    const expression = {
-      kind: "method-call",
-      receiver: { kind: "call", path: "probes::next", args: [] },
-      method,
-      args: [],
-      receiverMode: "mut-ref",
-    };
+    const expression = { kind: "method-call", receiver: { kind: "call", path: "probes::next", args: [] },
+      method, args: [], receiverMode: "mut-ref" };
     const negated = negateRustBooleanExpression(expression);
     assert.deepEqual(negated, { kind: "unary", operator: "!", operand: expression });
-    assert.equal(negated.operand, expression);
+    assert.equal(negated.operand === expression, true, "the selected effect is retained once");
     assert.equal(printRustExpr(negated), `!probes::next().${method}()`);
-    assert.equal(negateRustBooleanExpression(negated), expression);
-    const conjunction = negateRustBooleanExpression({
-      kind: "binary",
-      operator: "&&",
-      left: expression,
-      right: { kind: "bool-literal", value: true },
-    });
-    assert.equal(conjunction.operator, "||");
-    assert.equal(conjunction.left.operand, expression);
-    assert.deepEqual(conjunction.right, { kind: "bool-literal", value: false });
+    assert.equal(printRustExpr(negateRustBooleanExpression(negated)), `!!probes::next().${method}()`);
+    const conjunction = { kind: "binary", operator: "&&", left: expression, right: { kind: "bool-literal", value: true } };
+    assert.equal(negateRustBooleanExpression(conjunction).operand === conjunction, true,
+      "the syntax constructor does not decide or reorder Boolean operations");
   }
 });
 
-test("native Boolean literal comparisons share exact truth and effect identity", () => {
-  for (const operator of ["==", "!="]) {
-    for (const left of [false, true]) {
-      for (const right of [false, true]) {
-        assert.deepEqual(rustBooleanLiteralComparison(operator,
-          { kind: "bool-literal", value: left }, { kind: "bool-literal", value: right }),
-        { kind: "bool-literal", value: operator === "==" ? left === right : left !== right });
-      }
-    }
-    const effect = { kind: "call", path: "observe", args: [] };
-    for (const value of [false, true]) {
-      for (const operands of [[{ kind: "bool-literal", value }, effect], [effect, { kind: "bool-literal", value }]]) {
-        const result = rustBooleanLiteralComparison(operator, ...operands);
-        const negated = operator === "==" ? !value : value;
-        assert.equal((negated ? result.operand : result) === effect, true, "the selected effect remains exactly once");
-      }
-    }
-  }
-  const first = { kind: "call", path: "first", args: [] };
-  const second = { kind: "call", path: "second", args: [] };
-  assert.equal(rustBooleanLiteralComparison("==", first, second), undefined);
-  for (const operator of ["<", "+", "&&", "||"]) {
-    assert.equal(rustBooleanLiteralComparison(operator, { kind: "bool-literal", value: true }, first), undefined);
-  }
-});
-
-test("only explicit native Option presence nodes invert their predicate", () => {
+test("explicit native Option presence keeps its exact receiver and absence meaning", () => {
   const receiver = { kind: "call", path: "values::next", args: [] };
   for (const present of [true, false]) {
     const expression = { kind: "option-presence", receiver, present };
     const negated = negateRustBooleanExpression(expression);
-    assert.deepEqual(negated, { ...expression, present: !present });
-    assert.equal(negated.receiver, receiver);
+    assert.equal(negated.operand === expression, true, "negation cannot substitute another operation");
     assert.equal(printRustExpr(expression), `values::next().${present ? "is_some" : "is_none"}()`);
-    assert.equal(printRustExpr(negated), `values::next().${present ? "is_none" : "is_some"}()`);
-    assert.deepEqual(negateRustBooleanExpression(negated), expression);
+    assert.equal(printRustExpr(negated), `!values::next().${present ? "is_some" : "is_none"}()`);
+    const children = [];
+    const mapped = mapRustExpressionChildren(expression, child => { children.push(child); return child; });
+    assert.deepEqual(children, [receiver]);
+    assert.equal(mapped.receiver === receiver, true, "native syntax mapping preserves the one selected receiver");
+    const items = [{ kind: "const", name: "PRESENT", visibility: "private", type: { kind: "primitive", name: "bool" }, value: expression }];
+    assert.equal(rustItemsReferenceModuleAlias(items, "values"), true);
+    assert.equal(rustItemsReferenceModuleAlias(items, "unrelated"), false);
   }
-});
-
-test("native Option predicates retain receiver regions, dependencies and normalization", () => {
-  const receiver = rustValueBlock([], {
-      kind: "try",
-      expr: {
-        kind: "call",
-        path: "values::next",
-        args: [{ kind: "path", path: "seed" }],
-      },
-    });
-  const expression = { kind: "option-presence", receiver, present: true };
-  assert.deepEqual(rustExpressionChildren(expression), [receiver]);
-  assert.equal(rustExpressionContainsStatementBlock(expression), true);
-  assert.equal(rustExpressionUsesTryInCurrentRegion(expression), true);
-  assert.equal(rustExpressionReferencesPath(expression, "seed"), true);
-  const model = {
-    headerComment: "",
-    items: [{
-      kind: "const",
-      name: "PRESENT",
-      visibility: "private",
-      type: { kind: "primitive", name: "bool" },
-      value: expression,
-    }],
-  };
-  assert.equal(rustItemsReferenceModuleAlias(model.items, "values"), true);
-  assert.equal(rustItemsReferenceModuleAlias(model.items, "unrelated"), false);
-  const normalized = finalizeRustSourceStyle(model).items[0].value;
-  assert.equal(normalized.kind, "option-presence");
-  assert.equal(normalized.present, true);
-  assert.equal(rustExpressionUsesTryInCurrentRegion(normalized), true);
-  assert.equal(rustItemsReferenceModuleAlias([{ ...model.items[0], value: normalized }], "values"), true);
-  assert.equal(rustExpressionUsesTryInCurrentRegion({
-    kind: "option-presence",
-    receiver: { kind: "path", path: "plain" },
-    present: false,
-  }), false);
 });

@@ -8,7 +8,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const sourceRoot = join(repositoryRoot, "src");
 
 const sourceFacts = readFileSync(
-  new URL("../../src/policy/operations/safety/source-explicit-safety.ts", import.meta.url),
+  new URL("../../src/source/extension/explicit-safety.ts", import.meta.url),
   "utf8",
 );
 const nativePlanner = readFileSync(

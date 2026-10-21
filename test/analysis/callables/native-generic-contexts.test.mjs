@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { prepareRustNativeCallableGenericContexts } from "../../../dist/analysis/callables/native-inputs.js";
+import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { retainedPointerInputSource } from "../../../../tsonic/test/fixtures/retained-pointer-inputs.mjs";
 
@@ -26,45 +26,48 @@ for (const [name, source] of [
   ["retained and forwarded native inputs", retainedPointerInputSource],
 ]) {
   test(`native generic contexts publish original-owner data before source revocation: ${name}`, () => {
-    const { program } = analyzeRust({ files: { "index.ts": source } });
-    const owners = program.callableValues.nativeProducers.producers;
-    assert.equal(owners.length > 0, true, "checked concrete callable owners exist");
     const guarded = [];
     const guard = value => {
       const selected = Proxy.revocable(value, {});
       guarded.push(selected);
       return selected.proxy;
     };
-    const result = prepareRustNativeCallableGenericContexts({
-      ast: guard(program.source.ast), records: guard(program.records),
-      native: guard(program.callableValues.native),
-      nativeStorage: guard(program.callableValues.nativeStorage),
-      nativeProducers: guard(program.callableValues.nativeProducers),
-      nativeGenericProducers: guard(program.callableValues.nativeGenericProducers),
-      retainedCallableInputs: guard(program.retainedCallableInputs),
-      declarationGenericRequirements: guard(program.declarationGenericRequirements),
+    let program;
+    const compiled = compileRust({ files: { "index.ts": source }, compileTarget(request) {
+      const analysis = analyzeRustTargetProgram({ ...request, input: { ...request.input, source: {
+        ...request.input.source, ast: guard(request.input.source.ast),
+        navigation: guard(request.input.source.navigation), semantics: guard(request.input.source.semantics),
+      } } });
+      if (analysis.kind === "rejected") return analysis;
+      program = analysis.value;
+      return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+    } });
+    assert.equal(compiled.result.diagnostics.length, 0, "the real producer admits the complete checked fixture");
+    const nodes = [];
+    const visit = node => { nodes.push(node); compiled.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+    visit(compiled.source.getSourceFile("/src/index.ts"));
+    const owners = nodes.filter(node => program.records.nativeGenerics.get(node) !== undefined);
+    assert.equal(owners.length > 0, true, "checked concrete callable owners exist");
+    const reader = program.records.nativeGenerics;
+    const expected = owners.map(declaration => ({ declaration, original: reader.get(declaration), actual: reader.get(declaration) }));
+    const specializations = owners.flatMap(declaration => {
+      const callable = program.records.callableDeclaration.get(declaration);
+      return callable === undefined ? [] : [{ declaration, variants: callable.specializations }];
     });
-    assert.equal(result.kind, "resolved", "the same completed checked inputs admit the same context");
-    const expected = owners.map(({ declaration }) => ({ declaration,
-      original: program.callableValues.nativeGenericContexts.get(declaration),
-      actual: result.value.get(declaration) }));
-    const specializations = owners.map(({ declaration }) => ({ declaration,
-      variants: program.sourceCallableSpecializations.variantsForCallable(declaration) }));
     for (const selected of guarded) selected.revoke();
-    assert.equal(Object.isFrozen(result.value), true, "the published context index is immutable");
-    assert.equal("set" in result.value, false, "publication exposes no writer");
-    assert.equal(result.value.get({}) === undefined, true, "foreign nodes cannot inherit a context");
+    assert.equal(Object.isFrozen(reader), true, "the published context index is immutable");
+    assert.equal("set" in reader, false, "publication exposes no writer");
+    assert.equal(reader.get({}) === undefined, true, "foreign nodes cannot inherit a context");
     for (const { declaration, variants } of specializations) {
       assert.equal(Object.isFrozen(variants), true, "the complete named specialization vector is frozen");
-      assert.equal(program.sourceCallableSpecializations.variantsForCallable(declaration) === variants, true,
+      assert.equal(program.records.callableDeclaration.get(declaration).specializations === variants, true,
         "the published specialization read never filters or allocates another vector");
-      for (const variant of variants) assert.equal(
-        program.sourceCallableSpecializations.variantForCall(declaration, variant.targetTypeArguments) === variant, true,
-        "the exact unique published specialization is a lookup using the original native carrier equality");
+      for (const variant of variants) assert.equal(Object.isFrozen(variant.targetTypeArguments), true,
+        "each specialization retains its exact sealed native argument vector");
     }
     for (const { declaration, original, actual } of expected) {
       assert.equal(original !== undefined && actual !== undefined, true, "every original emitted owner is covered");
-      assert.equal(result.value.get(declaration) === actual, true, "post-revocation access is the same stored value");
+      assert.equal(reader.get(declaration) === actual, true, "post-revocation access is the same stored value");
       assert.equal(Object.isFrozen(actual) && Object.isFrozen(actual.inputs) && Object.isFrozen(actual.implicitLifetimes), true,
         "published vectors and their context are frozen");
       assert.equal(actual.sourceRequirements === original.sourceRequirements, true, "source requirements retain their exact final identity");
