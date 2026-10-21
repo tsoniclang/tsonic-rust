@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression, planRawExpression } from "./entry.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";

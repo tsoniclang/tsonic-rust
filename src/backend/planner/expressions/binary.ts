@@ -3,7 +3,7 @@ import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustStringConcat, type RustStringConcatPart } from "../../target-ast/syntax/expressions.js";
 import { planRustStringConcatOperand } from "./string-concat-parts.js";

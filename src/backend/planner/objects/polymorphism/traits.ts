@@ -28,7 +28,7 @@ import { checkedProjectProjectionSignature } from "../checked-project-projection
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectErrorSuperTraits } from "./project-errors.js";
 import { renderProjectMethodProperty } from "./model.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,

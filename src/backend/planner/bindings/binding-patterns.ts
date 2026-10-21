@@ -4,7 +4,7 @@ import type { RustBindingProjectionFact, RustBindingValueProjectionFact } from "
 import type { RustBindingProjectionOwnership } from "../../../target-model/records/binding-emission.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { createRustStructuralObjectFromCarrier, readRustStoredObjectField } from "../objects/project-storage.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

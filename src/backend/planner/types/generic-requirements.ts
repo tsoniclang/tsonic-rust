@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
 

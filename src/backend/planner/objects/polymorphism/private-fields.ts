@@ -1,6 +1,6 @@
 import { rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import type { ProjectClassStateLayer } from "./model.js";

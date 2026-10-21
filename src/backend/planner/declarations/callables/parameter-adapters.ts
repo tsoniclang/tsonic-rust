@@ -11,7 +11,7 @@ import { rustTargetRuntimeErrorType } from "../../types/error-boundary.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { applyRustCallableValueAdapter, applyRustCallableValueAdapterRaw } from "./adapters.js";
 import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustCallableArguments(
   input: {

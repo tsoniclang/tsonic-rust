@@ -4,7 +4,7 @@ import type { RustExternalProjectBase } from "../../../../target-model/types/ext
 
 import { planFinalizedSourceInput } from "../../expressions/conversions.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
 export function planRustExternalProjectInitialization(

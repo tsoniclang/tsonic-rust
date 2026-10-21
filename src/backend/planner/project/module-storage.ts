@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustPlanningContext } from "../context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
 import type {
   RustExpr,

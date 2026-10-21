@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustSourceUnionPayloadTemplate } from "../../../target-model/types/source-union-definitions.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

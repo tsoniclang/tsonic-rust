@@ -11,7 +11,7 @@ import {
   type RustGenericParameter,
   type RustTypeBound,
 } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { isValidRustIdentifier } from "../../program/plan-context.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

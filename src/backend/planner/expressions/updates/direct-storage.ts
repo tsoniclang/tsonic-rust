@@ -5,7 +5,7 @@ import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../../project/provider-evaluation-scope.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustSourceBindingPath } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustCapturedBinding, type RustExpressionPlanner } from "../typed-locations.js";
 
 export type RustProviderOperationExpressionPlanner = (context: RustPlanContext,

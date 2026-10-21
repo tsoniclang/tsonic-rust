@@ -39,7 +39,7 @@ export function analyzeRustWorkerEntries(program: Omit<RustAnalysisProgram, "rea
       refuse("RUST_WORKER_ENTRY_ERROR_BOUNDARY_MISSING", `Worker source module '${target.fileName}' has no exact error conversion into the root executable.`, target.sourceFile);
       continue;
     }
-    selected.push(Object.freeze({ outputIdentity: identity, sourceFile: target.sourceFile, fileName: target.fileName, componentId: component.componentId,
+    selected.push(Object.freeze({ sourceIdentity: identity, sourceFile: target.sourceFile, fileName: target.fileName, componentId: component.componentId,
       identity: `${identity.componentId.length}:${identity.componentId}:${identity.moduleName}`, initializer }));
   }
   if (issues.length === 0) producer.workers(selected);

@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import type { RustAssociatedTypeRequirement } from "../../../target-model/records/generic-requirements.js";

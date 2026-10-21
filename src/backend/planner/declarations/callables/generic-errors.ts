@@ -7,7 +7,7 @@ import type { RustNativeErrorSource } from "../../../../target-model/types/nativ
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinPlan, type RustNativeErrorJoinSelection,
   type RustNativeErrorJoinSource } from "../../types/native-error-joins.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export interface RustGenericCallableProducerErrors {
   readonly effects: RustSourceCallEffectsFact;

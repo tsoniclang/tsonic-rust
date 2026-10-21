@@ -4,7 +4,7 @@ import type { RustProjectTypeDefinition } from "../../../../target-model/types/p
 
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustConstructionBody } from "../../declarations/classes/construction-body.js";
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";

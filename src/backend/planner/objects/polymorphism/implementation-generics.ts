@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustProjectGenericPlan } from "./names.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function rustProjectImplementationContext(
   definition: RustProjectTypeDefinition, carrier: TargetTypeRef, context: RustPlanContext,

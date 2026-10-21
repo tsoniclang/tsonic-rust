@@ -6,7 +6,7 @@ import type { RustAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustExplicitSafetyExpression(
   node: Node,

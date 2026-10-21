@@ -6,7 +6,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { planExpression as planRustExpression } from "../expressions/entry.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

@@ -14,7 +14,7 @@ import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js
 import { planRustConstructorShape } from "./constructor-shapes.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,

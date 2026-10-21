@@ -8,7 +8,7 @@ import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
 import type { RustBorrowedElementLocal } from "../../../target-model/records/borrowed-element-reads.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustBorrowedElementRead(
   node: Node,

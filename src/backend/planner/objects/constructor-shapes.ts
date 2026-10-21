@@ -5,7 +5,7 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import type { RustConstructorShapeEmission } from "../../../target-model/records/structural-emission.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 

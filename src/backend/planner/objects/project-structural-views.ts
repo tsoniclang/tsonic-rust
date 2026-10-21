@@ -12,7 +12,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { applyRustCallableValueAdapter } from "../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../declarations/callables/parameter-adapters.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { requireRustCarrierRead } from "../types/carrier-reads.js";
 import { rustStructuralViewInstance, rustStructuralViewIntoRoot, rustStructuralViewRootType,
   rustStructuralViewImplementationContext, rustStructuralViewImplementationGenerics } from "./project-structural-roots.js";

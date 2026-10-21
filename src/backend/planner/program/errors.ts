@@ -21,7 +21,7 @@ import { planRustErrorProjectionTransport, planRustSourceErrorProjectionDelegate
 import { planRustClosedThrowAdmission } from "./closed-throws.js";
 import { planRustNativeValueProjections } from "./native-value-projections.js";
 import { planRustErrorVariants } from "./error-variants.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";

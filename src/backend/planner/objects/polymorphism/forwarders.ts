@@ -10,7 +10,7 @@ import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
 } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
 import { planProjectMethod } from "../../declarations/index.js";

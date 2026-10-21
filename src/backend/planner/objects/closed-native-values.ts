@@ -7,7 +7,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
 import { rustStructuralViewInstance, rustStructuralViewRootType } from "./project-structural-roots.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export interface RustClosedNativeProjection {
   readonly expression: RustExpr;

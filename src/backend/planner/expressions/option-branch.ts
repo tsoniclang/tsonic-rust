@@ -4,7 +4,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustOptionBranch(option: RustExpr, carrier: TargetTypeRef, presentName: string,
   present: RustExpr, absent: RustExpr, context: RustPlanContext): RustExpr {

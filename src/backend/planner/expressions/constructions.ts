@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { planCallExpression } from "./calls/basic.js";
 import { planRegExpCreate } from "./regular-expression-literals.js";

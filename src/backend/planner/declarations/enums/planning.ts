@@ -1,5 +1,5 @@
 import { rustDeriveAttributes, rustListAttribute, rustWordAttribute } from "../../../target-ast/syntax/attributes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem } from "../../../target-ast/syntax/nodes.js";

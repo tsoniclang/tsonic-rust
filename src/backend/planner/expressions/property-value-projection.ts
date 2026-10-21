@@ -5,7 +5,7 @@ import type { RustValueConversionContract } from "../../../target-model/conversi
 
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { readRustProjectDispatchedField } from "../objects/project-objects.js";

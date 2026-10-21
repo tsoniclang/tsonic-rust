@@ -9,7 +9,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
 import { rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustStructuralFrameField(
   declaration: Node, member: RustProjectStructuralView["fields"][number],

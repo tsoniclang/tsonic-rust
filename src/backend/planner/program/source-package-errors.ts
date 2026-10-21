@@ -4,7 +4,7 @@ import type { RustProjectTypeDefinition } from "../../../target-model/types/proj
 import type { RustProgramErrorOwner } from "../../../target-model/types/model.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 import type { RustSourcePackageErrorRoute } from "../../../target-model/records/source-package-errors.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustSourcePackageErrors(input: RustPlanningContext): RustSourcePackageErrorPlan {
   const selected = input.program.records.sourcePackageErrors.get();

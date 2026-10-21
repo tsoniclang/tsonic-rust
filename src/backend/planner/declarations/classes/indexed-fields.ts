@@ -6,7 +6,7 @@ import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext } from "../../types/render.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustGenericRequirementBounds } from "../../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";

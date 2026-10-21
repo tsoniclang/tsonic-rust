@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import type { RustDiscardedPromiseLeaf } from "../../../target-model/records/promise-results.js";

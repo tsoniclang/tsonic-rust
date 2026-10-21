@@ -2,7 +2,7 @@ import type { RustProjectTypeDefinition } from "../../../target-model/types/proj
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "./project-objects.js";
 import { rustProjectRepresentationGenerics } from "./polymorphism/names.js";

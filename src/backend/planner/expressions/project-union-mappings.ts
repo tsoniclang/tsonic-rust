@@ -4,7 +4,7 @@ import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../..
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustUnionMapping } from "./union-mappings.js";
 
 export function planRustProjectUnionMapping(node: Node, expression: RustExpr, conversion: RustProjectUnionMapConversion,

@@ -4,7 +4,7 @@ import type { RustEmissionProviderOperation } from "../../../target-model/record
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export type MutableProviderInput =
   | { readonly kind: "promoted"; readonly node: Node; readonly inputs: readonly RustFinalizedSourceInput[];

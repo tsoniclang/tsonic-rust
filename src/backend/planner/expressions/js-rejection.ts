@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
 import { rustJsRejectionErrorIdentity } from "../../../target-model/records/error-effects.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";

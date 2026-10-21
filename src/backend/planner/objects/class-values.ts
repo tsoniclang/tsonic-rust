@@ -5,7 +5,7 @@ import { planRustModuleCell, rustModuleCellCallableAlias } from "../project/modu
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustClassEnvironmentValue, rustClassEnvironmentForCall } from "./class-environments.js";
 import { rustClassEnvironmentHandleType } from "./class-environment-types.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustClassValueRead(node: Node, context: RustPlanContext): RustExpr | undefined {
   const selected = context.input.program.records.classValueRead.get(node);

@@ -4,7 +4,7 @@ import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustUnionEqualityOperand } from "../../../target-model/records/union-equality.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustUnionPattern } from "./union-patterns.js";
 import { planExpression } from "./entry.js";

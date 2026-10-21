@@ -7,7 +7,7 @@ import { planRustDirectStorage } from "../expressions/updates/target.js";
 import { directStorageRemainsSelected } from "../expressions/updates/direct-storage.js";
 import { planRustSharedReceiver } from "../expressions/typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export interface RustAccessorReceiverEvaluation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];

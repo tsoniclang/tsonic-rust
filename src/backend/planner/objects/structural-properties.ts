@@ -11,7 +11,7 @@ import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { readRustStructuralObjectField, writeRustStructuralObjectField } from "./project-objects.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function readRustStructuralObjectProperty(
   receiverCarrier: TargetTypeRef,

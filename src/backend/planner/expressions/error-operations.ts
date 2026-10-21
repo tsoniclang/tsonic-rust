@@ -4,7 +4,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustSourcePackageErrorRoute } from "../../../target-model/records/source-package-errors.js";

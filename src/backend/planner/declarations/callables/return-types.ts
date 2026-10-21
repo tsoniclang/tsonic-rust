@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function resolveRustJsPromiseReturnType(
   declaration: Node, context: RustPlanContext,

@@ -9,7 +9,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustModuleCell, rustModuleCellCallableAlias } from "../project/module-storage.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { normalizeRustBindingValue, planRustBindingProjection } from "../bindings/binding-patterns.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { isUpperSnakeName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "./reachability-directives.js";

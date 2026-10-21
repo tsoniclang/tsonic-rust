@@ -8,7 +8,7 @@ import type { Node } from "@tsonic/tsts";
 import { createRustSharedReferenceArgument } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
 import { rustTypeEmissionInContext } from "../../types/render.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustBorrowedSingletonSlice(
   node: Node,

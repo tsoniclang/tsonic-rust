@@ -2,7 +2,7 @@ import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
 import type { RustStructuralLiteralEmission } from "../../../../target-model/records/object-literal-emission.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField,
   type RustType } from "../../../target-ast/syntax/nodes.js";

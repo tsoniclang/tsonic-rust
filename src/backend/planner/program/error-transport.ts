@@ -1,6 +1,6 @@
 import { rustDeriveAttributes, rustHiddenAttribute, rustListAttribute, rustWordAttribute } from "../../target-ast/syntax/attributes.js";
 import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustPattern, type RustType } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export type RustErrorTransportVariant =
   | { readonly name: string; readonly type: RustType; readonly source: "error" }

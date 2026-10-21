@@ -3,7 +3,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustNativeUnionProjection } from "./union-projections.js";
 import { planExpression } from "./entry.js";
 import { planProviderOperationExpression, finishProviderOperationExpression } from "./conversions.js";

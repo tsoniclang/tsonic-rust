@@ -8,7 +8,7 @@ import type { RustProjectTypeTestPlan } from "../../../target-model/operations/t
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {

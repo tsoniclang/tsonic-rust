@@ -13,7 +13,7 @@ import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { requireRustCarrierRead } from "../types/carrier-reads.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { readRustStructuralObjectProperty, writeRustStructuralObjectProperty, mutateRustStructuralObjectProperty } from "./structural-properties.js";
 import { readRustBoundRecordField, writeRustBoundRecordField, mutateRustBoundRecordField } from "./record-fields.js";
 import {

@@ -1,7 +1,7 @@
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function initializeRustDeferredStorage(owner: RustExpr, payload: RustExpr, message: string): RustExpr {
   return { kind: "macro-invocation", path: "assert", delimiter: "parentheses", args: [{

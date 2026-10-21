@@ -4,7 +4,7 @@ import { negateRustBooleanExpression } from "../../target-ast/syntax/expressions
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustValueFieldLocation } from "../objects/value-fields.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustScopedStringComparison(node: Node, context: RustPlanContext): RustExpr | undefined {
   const selected = context.input.program.records.nativeComparison.get(node);

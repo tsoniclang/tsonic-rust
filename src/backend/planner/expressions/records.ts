@@ -11,7 +11,7 @@ import {
 } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustOperationFact } from "./fundamentals.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { planRustCallableExpressionBody } from "./callable.js";

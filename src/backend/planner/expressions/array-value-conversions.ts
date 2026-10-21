@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustArrayValueConversion(
   contract: Extract<RustValueConversionContract, { readonly lowering: "js-value-from-array" }>,

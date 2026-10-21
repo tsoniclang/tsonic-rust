@@ -5,7 +5,7 @@ import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/synt
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateNativeError } from "../../program/fallible-boundaries.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { createRustSharedReferenceArgument } from "../input-shaping.js";
 
 export function planRustNativeInputInvocation(

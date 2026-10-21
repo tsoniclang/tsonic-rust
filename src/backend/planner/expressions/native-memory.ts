@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustNativeMemoryPaths } from "../../../target-model/names/native-memory.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {
   const layout = context.input.program.records.nativeBacking.get(node);

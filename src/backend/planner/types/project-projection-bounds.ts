@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustProjectProjectionRequirement } from "../../../target-model/types/project-projections.js";
 import type { RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";

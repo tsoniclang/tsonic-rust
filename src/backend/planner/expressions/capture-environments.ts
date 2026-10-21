@@ -5,7 +5,7 @@ import type { RustClosureCaptureFact } from "../../../target-model/records/opera
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustCapturedBinding, RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCaptureValue } from "./typed-locations.js";

@@ -12,7 +12,7 @@ import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from 
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { rustClassFrameFieldLocation } from "../objects/frame-storage.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustExpressionHasReferenceObjectField(expression: Node, context: RustPlanContext): boolean {
   return context.input.program.records.referenceObjectField.get(expression) === true;

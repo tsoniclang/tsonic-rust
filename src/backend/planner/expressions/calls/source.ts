@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTargetGenericTypeArguments, substituteRustTargetGenericArgument } from "../../../../target-model/types/index.js";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import { planPromotedSourceMethodCall, shapeRustSourceCallParameters, type RustSourceArgumentEvaluation } from "./arguments.js";
 import { rustPreparedValueLocation } from "../../objects/value-fields.js";

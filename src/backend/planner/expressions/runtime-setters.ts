@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 
 export function planRustRuntimeSetExpression(expression: Node,

@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustEmptyRecordConversion } from "../../../target-model/conversions/empty-record.js";
 import { createRustStructuralObjectFromCarrier } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustEmptyRecordConversion(
   conversion: RustEmptyRecordConversion,

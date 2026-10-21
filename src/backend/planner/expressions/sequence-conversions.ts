@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 type SequenceContract = Extract<RustValueConversionContract, { readonly lowering: "rest-sequence" }>;
 type ConvertElement = (contract: RustValueConversionContract, value: RustExpr) => RustExpr | undefined;

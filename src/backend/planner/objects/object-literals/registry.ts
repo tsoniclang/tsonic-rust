@@ -11,7 +11,7 @@ import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImpl
 import type { RustProjectLiteralEmission } from "../../../../target-model/records/object-literal-emission.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function createImplementationPlan(
   expression: Node, selected: RustProjectLiteralEmission, context: RustPlanContext, names: RustSyntheticNameState,

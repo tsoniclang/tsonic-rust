@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";

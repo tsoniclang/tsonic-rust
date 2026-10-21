@@ -3,7 +3,7 @@ import type { RustTargetOperationFact } from "../../../../target-model/records/o
 import type { RustSourceCallFact, RustSourceCallInputEmission, RustSourceParameterEmission } from "../../../../target-model/records/source-call-arguments.js";
 import type { RustExpr, RustPattern, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { createRustMutableReferenceArgument, createRustSharedReferenceArgument } from "../input-shaping.js";

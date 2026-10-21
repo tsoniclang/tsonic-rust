@@ -2,7 +2,7 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustNamedClassEnvironment } from "../../../target-model/records/class-values.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath, sourceModuleItemPath } from "../program/plan-context.js";

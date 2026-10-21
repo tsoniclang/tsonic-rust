@@ -10,7 +10,7 @@ import {
   rustActiveErrorType,
   rustCurrentErrorBoundary,
 } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
 import {
   invokeRustStructuralObjectMethod,

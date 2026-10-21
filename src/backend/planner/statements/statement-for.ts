@@ -12,7 +12,7 @@ import { planExpressionAsStatement } from "./statement-simple.js";
 import { planVariableStatement } from "../bindings/locals.js";
 import { createRustLoopTarget, withRustControlTarget } from "./loop-regions.js";
 import { planCondition, planEmbeddedBlock } from "./statement-conditionals.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planForStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const counted = context.input.program.records.countedLoop.get(node);

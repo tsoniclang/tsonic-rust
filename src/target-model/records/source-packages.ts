@@ -84,7 +84,7 @@ export interface RustSourcePackageEmissionRecords extends RustSourcePackageError
 }
 
 export interface RustWorkerEntryEmission {
-  readonly outputIdentity: import("../names/source-output-identities.js").RustSourceFileOutputIdentity;
+  readonly sourceIdentity: import("../names/source-output-identities.js").RustSourceFileOutputIdentity;
   readonly sourceFile: import("@tsonic/tsts").SourceFile;
   readonly fileName: string;
   readonly identity: string;

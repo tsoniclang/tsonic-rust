@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { rustGenericsWithAssociatedBounds, rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { rustGeneratedTypeParameterContext } from "../names/type-parameters.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustStructuralShapeContext<Context extends RustTypeRenderingContext>(
   definition: RustStructuralShapeDefinition, context: Context,

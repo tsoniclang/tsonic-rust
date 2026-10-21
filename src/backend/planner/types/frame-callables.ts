@@ -6,7 +6,7 @@ import { rustTypeFromCarrierInContext } from "./render.js";
 import { rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustProjectObjectSharedStateType } from "../objects/project-objects.js";
 import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export interface RustFrameCallableTypes {
   readonly definition: RustFrameCallableDefinition;

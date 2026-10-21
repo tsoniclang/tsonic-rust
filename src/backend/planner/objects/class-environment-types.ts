@@ -5,7 +5,7 @@ import { rustTargetGenericArgumentToAstInContext } from "../types/render.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { sourceModuleItemPath } from "../program/plan-context.js";
 import { rustOptionalStorageTypeArguments } from "../types/type-projections.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustClassEnvironmentType(carrier: TargetTypeRef, context: RustTypeRenderingContext): RustType | undefined {
   const environment = context.input.program.records.classEnvironmentType.get(carrier)?.environment;

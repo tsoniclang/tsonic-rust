@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustProviderChainStep } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
 import type { RustCallGenericArgument, RustExpr, RustGenericArgument } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,

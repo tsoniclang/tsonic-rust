@@ -1,6 +1,6 @@
 import type { RustBlock, RustExpr, RustPattern, RustStmt, RustType } from "../syntax/nodes.js";
 import { mapRustExpressionChildren } from "../syntax/expression-children.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { applyRustTailShape } from "./block-flow.js";
 import { rustLintAttributes } from "./lint-policy.js";
 
@@ -16,7 +16,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
   if (!("errorType" in scope) || scope.kind === "try-scope" &&
     (!("bodyErrorType" in scope) || scope.catchClause !== undefined && !("errorType" in scope.catchClause) ||
       scope.finallyClause !== undefined && !("errorType" in scope.finallyClause))) {
-    failRustPlannerInvariant("Completion regions require explicit exact error types or explicit pure contracts.");
+    failTargetPlannerInvariant("tsonic-rust", "Completion regions require explicit exact error types or explicit pure contracts.");
   }
   const normalBindings = scope.kind === "try-scope" ? scope.normalBindings ?? [] : [];
   const normalType: RustType = normalBindings.length === 0 ? { kind: "unit" }
@@ -50,7 +50,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
       completionType, normal(), scope.bodyBindings ?? []));
     const caught = scope.catchClause;
     if (caught !== undefined && scope.bodyErrorType === undefined) {
-      failRustPlannerInvariant("A catch completion requires an exact body error type.");
+      failTargetPlannerInvariant("tsonic-rust", "A catch completion requires an exact body error type.");
     }
     let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
@@ -67,7 +67,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
       ] } });
     const finalized = scope.finallyClause;
     if (finalized !== undefined) {
-      if (scope.finallyName === undefined) failRustPlannerInvariant("Finalized completion requires its exact hygienic capture identity.");
+      if (scope.finallyName === undefined) failTargetPlannerInvariant("tsonic-rust", "Finalized completion requires its exact hygienic capture identity.");
       const joinedErrorType = errorType ?? finalized.errorType;
       statements.push(capture(scope.finallyName, finalized.body, finalized.errorType, finalized.terminates, unitCompletionType));
       statements.push({ kind: "let", name: scope.flowName, mutable: false,

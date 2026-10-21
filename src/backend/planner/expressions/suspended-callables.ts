@@ -5,7 +5,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustCallableConstructionType } from "../types/constructions.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";

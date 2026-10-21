@@ -3,7 +3,7 @@ import type { RustFinalizedSourceInput } from "../../../target-model/records/fin
 
 import type { RustArgumentMode } from "../../../target-model/operations/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";

@@ -7,7 +7,7 @@ import { planExpression } from "../entry.js";
 import { planRustSequenceAppend } from "../sequence-conversions.js";
 import { lowerNestedRustValueConversion } from "../value-conversions.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustBorrowedSequenceAppend(node: Node, fact: RustBorrowedSequenceInput, destination: RustExpr,
   elementCarrier: TargetTypeRef, context: RustPlanContext): RustExpr {

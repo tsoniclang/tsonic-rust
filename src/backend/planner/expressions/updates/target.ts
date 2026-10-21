@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustCarrierHasCopyContract } from "../../types/generic-requirements.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";

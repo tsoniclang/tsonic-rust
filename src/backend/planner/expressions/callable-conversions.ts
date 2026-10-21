@@ -11,7 +11,7 @@ import { rustCallableConstructionType } from "../types/constructions.js";
 
 import { planRustSourceCallableValueConstruction } from "./source-callable-value.js";
 import { planRustCallableExpressionBody } from "./callable.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 

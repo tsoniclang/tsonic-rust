@@ -7,7 +7,7 @@ import { rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustRecordFieldStorageType(field: RustStructuralShapeField, context: RustPlanContext): RustType | undefined {
   if (field.boundStorage === undefined) failRustPlannerInvariant("An admitted bound record field requires its exact native storage carrier.");

@@ -2,7 +2,7 @@ import type { RustSuspendedOwnedReceiver } from "../../../../target-model/record
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustSuspendedReceiver(
   receiver: RustSuspendedOwnedReceiver | undefined,

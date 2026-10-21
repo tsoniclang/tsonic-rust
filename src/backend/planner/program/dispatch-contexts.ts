@@ -1,5 +1,5 @@
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustRuntimeAliasUseItems } from "./plan-context.js";

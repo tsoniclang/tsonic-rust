@@ -4,7 +4,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustFlowReadProjectionFact, RustProjectUpcastFact, RustContextualValueConversionFact } from "../../../target-model/records/value-projections.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { requireRustReadOwnership } from "./typed-locations.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";

@@ -4,7 +4,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustOptionBranch } from "./option-branch.js";
 import { planRustPresentValue } from "./optional-storage.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustOptionDefaultValue(option: RustExpr, fallback: RustExpr, carrier: TargetTypeRef,
   context: RustPlanContext, retainStorage: boolean): RustExpr {

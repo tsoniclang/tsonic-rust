@@ -6,7 +6,7 @@ import type { RustTargetOperationFact } from "../../../../target-model/records/o
 import type { RustNativeHandler } from "../../../../target-model/records/native-handlers.js";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planExpression, type RustExpressionResultUse } from "../entry.js";
 import { planOptionalChainExpression } from "../optional-chains.js";

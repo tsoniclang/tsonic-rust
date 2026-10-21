@@ -6,7 +6,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type {
   RustExpressionPlanner,

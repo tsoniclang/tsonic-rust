@@ -6,7 +6,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 
 export function planRustProgramErrorClosedValue(value: RustExpr, target: TargetTypeRef, node: Node | undefined,

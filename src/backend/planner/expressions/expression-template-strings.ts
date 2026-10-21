@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustStringConcat, type RustStringConcatPart } from "../../target-ast/syntax/expressions.js";
 import { planRustStringConcatOperand } from "./string-concat-parts.js";
 import { planExpression } from "./entry.js";

@@ -6,7 +6,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
 import { rustStructuralDispatchType } from "./project-structural-types.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export const rustCheckedNativeProjectionGenerics: RustGenerics = {
   parameters: [],

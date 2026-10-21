@@ -7,7 +7,7 @@ import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
 import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustErrorType,
   rustPropagateLocalError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustJsRejectionValue } from "../js-rejection.js";
 
 export function planRustSourceErrorPropagation(

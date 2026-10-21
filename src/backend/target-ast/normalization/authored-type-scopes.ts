@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustItem } from "../syntax/nodes.js";
 import { rustItemsReferenceModuleAlias } from "../syntax/module-references.js";
 
@@ -26,7 +26,7 @@ export function completeRustAuthoredStructScopes(
     if (item.kind !== "mod-decl" || !scopes.has(item.name)) return item;
     const declaration = item.body?.items[0];
     if (item.body?.items.length !== 1 || declaration?.kind !== "struct") {
-      failRustPlannerInvariant("Authored type scope must contain its one planned struct declaration.");
+      failTargetPlannerInvariant("tsonic-rust", "Authored type scope must contain its one planned struct declaration.");
     }
     const boundNames = new Set([declaration.name,
       ...declaration.generics.parameters.filter(parameter => parameter.kind !== "lifetime")

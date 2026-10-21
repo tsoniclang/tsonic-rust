@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { registerAliasFromPath, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
 import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
 import { rustTypeEmissionInContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 import { planRustUnionFold } from "./union-folds.js";
 

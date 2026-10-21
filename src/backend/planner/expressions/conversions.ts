@@ -9,7 +9,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeEmissionInContext, rustTypeFromCarrierInContext } from "../types/render.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";

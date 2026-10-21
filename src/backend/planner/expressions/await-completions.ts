@@ -3,7 +3,7 @@ import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../target
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { rustPropagateNativeError } from "../program/fallible-boundaries.js";

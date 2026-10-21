@@ -3,7 +3,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustActiveErrorType } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planGeneratorResumeExpression(resume: RustExpr, context: RustPlanContext): RustExpr {
   const activeErrorType = rustActiveErrorType(context);

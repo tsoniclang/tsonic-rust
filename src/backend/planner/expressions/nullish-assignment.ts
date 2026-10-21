@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpressionResultUse } from "./entry.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation } from "../objects/value-fields.js";

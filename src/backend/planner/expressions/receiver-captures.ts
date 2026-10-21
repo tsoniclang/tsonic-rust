@@ -6,7 +6,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
 import { rustCapturedFieldLocation, rustCapturedFieldType } from "../objects/captured-fields.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { planExpression } from "./entry.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";

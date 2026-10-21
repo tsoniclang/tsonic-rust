@@ -3,7 +3,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr {
   const fact = context.input.program.records.targetOperation.get(node);

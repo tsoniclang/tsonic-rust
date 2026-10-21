@@ -4,7 +4,7 @@ import type { RustOptionEqualityView } from "../../../target-model/operations/op
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustStringComparisonView } from "./string-comparison-views.js";

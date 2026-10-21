@@ -9,7 +9,7 @@ import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors
 import { registerAliasFromPath, type RustPlanContext } from "./plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustJsRejectionRegion } from "./js-rejection-regions.js";
 
 export function planRustErrorJoinDeclarations(sourceFile: import("@tsonic/tsts").SourceFile,

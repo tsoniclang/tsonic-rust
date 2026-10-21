@@ -1,5 +1,5 @@
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustNativePointerOperation(node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "native-pointer" }>, context: RustPlanContext,

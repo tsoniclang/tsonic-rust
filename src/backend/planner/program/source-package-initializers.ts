@@ -1,7 +1,7 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustSourcePackageInitializers(input: RustPlanningContext): RustSourcePackageInitializerPlan {
   const selected = input.program.records.sourcePackageInitializers.get();

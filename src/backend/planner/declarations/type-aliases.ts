@@ -1,6 +1,6 @@
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { planRustTypeFamilyDeclaration } from "./type-families.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";

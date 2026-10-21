@@ -5,7 +5,7 @@ import {
   rustCurrentErrorBoundary,
 } from "../../program/plan-context.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
 import { planExpression } from "../../expressions/index.js";
 import { planRustCallableGenerics, rustCallableSpecialization } from "../callables/generics.js";

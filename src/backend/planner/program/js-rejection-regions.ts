@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustErrorRegionSelection, RustJsRejectionConversion } from "../../../target-model/records/error-regions.js";
 import { rustJsValueTargetType } from "../../../target-model/types/carriers/js.js";

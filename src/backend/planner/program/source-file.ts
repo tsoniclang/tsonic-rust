@@ -28,7 +28,7 @@ import type {
   RustSourceFileModel,
 } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanningContext } from "../context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
 import {
   planFunctionDeclarations,

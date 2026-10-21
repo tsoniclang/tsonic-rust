@@ -13,7 +13,7 @@ import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from 
 import { planRustProjectStructuralConversion } from "../objects/project-structural-views.js";
 import type { Node } from "@tsonic/tsts";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustObjectReferenceView(
   node: Node, value: RustExpr, _fact: RustObjectReferenceView, context: RustPlanContext,

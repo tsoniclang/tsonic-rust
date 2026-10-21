@@ -5,7 +5,7 @@ import type { RustItem, RustStructField, RustType } from "../../../target-ast/sy
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,

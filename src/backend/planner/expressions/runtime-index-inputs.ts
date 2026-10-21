@@ -3,7 +3,7 @@ import type { RustEmissionProviderOperation } from "../../../target-model/record
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
 

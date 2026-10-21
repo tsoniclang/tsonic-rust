@@ -4,7 +4,7 @@ import type { RustBindingStorageFact } from "../../../target-model/records/opera
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLocationTargetType } from "../../../target-model/types/index.js";
 

@@ -2,7 +2,7 @@ import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustHiddenAttribute, rustListAttribute, rustWordAttribute } from "../../../target-ast/syntax/attributes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import { rustProjectGenerics, rustProjectStateMarker, rustProjectStateType } from "./names.js";
 

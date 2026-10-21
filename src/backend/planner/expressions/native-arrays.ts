@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustNativeLayout } from "./native-memory.js";
 import { planFinalizedTargetInput } from "./conversions.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function nativeRustArrayType(node: Node, context: RustPlanContext): RustType | undefined {
   const storage = context.input.program.records.nativeArrayStorage.get(node);

@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { Node } from "@tsonic/tsts";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import { createRustSourceFile, type RustItem } from "../../target-ast/syntax/nodes.js";

@@ -16,7 +16,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { planRustIndexedRecordStorage, planRustSourceIndexKey } from "../objects/indexed-records.js";

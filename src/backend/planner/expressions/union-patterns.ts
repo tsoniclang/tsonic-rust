@@ -2,7 +2,7 @@ import type { RustUnionPathStep } from "../../../target-model/types/union-relati
 import type { RustPattern, RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustUnionPattern(
   path: readonly RustUnionPathStep[],

@@ -5,7 +5,7 @@ import { planRustGenericCallableErrorJoin } from "../../declarations/callables/g
 import { rustInjectNativeError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustGenericCallableErrorPropagation(
   node: Node, selection: RustGenericCallableInvocationFact, channel: "invocation" | "awaiting",

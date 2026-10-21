@@ -6,7 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { planRustProviderRecordAbsentFields } from "./provider-record-absence.js";
 

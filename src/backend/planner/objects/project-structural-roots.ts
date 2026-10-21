@@ -12,7 +12,7 @@ import type { RustProjectStructuralView } from "../../../target-model/records/pr
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustStructuralViewImplementationContext(
   carrier: TargetTypeRef, representation: RustObjectRepresentation, context: RustPlanContext,

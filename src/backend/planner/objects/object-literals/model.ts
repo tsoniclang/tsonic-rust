@@ -6,7 +6,7 @@ import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallab
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";
 

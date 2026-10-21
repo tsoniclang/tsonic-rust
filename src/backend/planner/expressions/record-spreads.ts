@@ -8,7 +8,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustObjectLiteralMethodImplementationPlan } from "../objects/object-literal-implementations.js";
 import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
 import type { RustRecordSpreadEvidence } from "../../../target-model/records/record-contributions.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 type RecordFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;
 type Spread = Extract<RecordFact["contributions"][number], { readonly kind: "spread" }>;

@@ -4,7 +4,7 @@ import type { RustSourcePackageComponentPlan } from "../../../target-model/recor
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { planRustSourceFile, type PlannedRustSourceFile } from "../program/source-file.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export interface RustSourceFilePlan {
   readonly sourcesByComponentId: ReadonlyMap<string, readonly PlannedRustSourceFile[]>;

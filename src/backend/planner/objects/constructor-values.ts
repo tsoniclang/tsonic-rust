@@ -13,7 +13,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { readRustSourceStaticField, planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustProjectImplementationContext, rustProjectImplementationGenerics } from "./polymorphism/implementation-generics.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustClassValueImplementations(declaration: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const selected = context.input.program.records.classEnvironment.get(declaration);

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { renderRustReceiverAlias } from "../../objects/polymorphism/receiver-aliases.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

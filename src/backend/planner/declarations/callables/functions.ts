@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
 import {
   rustCurrentErrorBoundary,

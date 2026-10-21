@@ -6,7 +6,7 @@ import { rustInjectNativeError, rustErrorType, type RustFallibleBoundary } from 
 import { planRustJsRejectionRegion } from "../../program/js-rejection-regions.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { wrapRustJsPromiseBody, wrapRustJsPromiseCompletion } from "./async-promise.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function rustPromiseBodyGenericArguments(generics: RustGenerics): readonly RustCallGenericArgument[] {
   return generics.parameters.flatMap((parameter): RustCallGenericArgument[] => parameter.kind === "lifetime" ? []

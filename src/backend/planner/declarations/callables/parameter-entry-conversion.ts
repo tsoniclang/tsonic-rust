@@ -5,7 +5,7 @@ import type { RustExpr, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { lowerRustValueConversion } from "../../expressions/value-conversions.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustParameterEntryConversion(
   parameter: Node,

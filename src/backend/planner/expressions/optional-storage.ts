@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustUnionConstruction } from "./union-patterns.js";
 
 export function planRustOptionalStorageOperation(carrier: TargetTypeRef,

@@ -4,7 +4,7 @@ import { planRustCallableParameterPrelude, planRustCallableParameters,
   type RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
 import type { RustConstructionBody } from "../../declarations/classes/construction-body.js";
 import { planExpression, planRustSelectedSourceCallArguments } from "../../expressions/index.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { planStatementSequence } from "../../statements/index.js";

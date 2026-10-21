@@ -5,7 +5,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "../expressions/entry.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";

@@ -5,7 +5,7 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 
 import type { RustExpr, RustFunctionParam, RustItem, RustPattern, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext, rustTargetCallGenericArgumentToAstInContext } from "../../types/render.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";

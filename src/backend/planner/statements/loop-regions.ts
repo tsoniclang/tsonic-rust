@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function createRustLoopTarget(
   context: RustPlanContext,

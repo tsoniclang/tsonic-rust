@@ -4,7 +4,7 @@ import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustStructuralViewIntoRoot } from "../objects/project-structural-roots.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planCheckedNativeValueProjection } from "../objects/checked-project-projections.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustNativeValueProjections(
   delegatedVariants: readonly string[],

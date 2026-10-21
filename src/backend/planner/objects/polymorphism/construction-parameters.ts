@@ -2,7 +2,7 @@ import type { RustProjectConstructorSignature } from "../../../../target-model/t
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
 import type { RustFunctionParam } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 

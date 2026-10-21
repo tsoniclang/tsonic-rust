@@ -9,7 +9,7 @@ import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustClassFrameFieldLocation(
   declaration: Node, receiverCarrier: TargetTypeRef, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,

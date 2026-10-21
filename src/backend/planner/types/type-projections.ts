@@ -4,7 +4,7 @@ import type { RustOptionalStorageRequirement } from "../../../target-model/recor
 import type { RustGenericParameter, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function rustOptionalStorageParameters(
   requirements: readonly RustOptionalStorageRequirement[], context: RustTypeRenderingContext,

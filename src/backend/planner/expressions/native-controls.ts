@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustNativeControl(call: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "native-range" | "native-propagation" }>,

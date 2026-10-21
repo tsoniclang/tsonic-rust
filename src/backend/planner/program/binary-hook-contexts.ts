@@ -5,7 +5,7 @@ import { applyRustDispatchContextBindings, projectRustDispatchContext } from "..
 import type { RustDispatchContextBinding } from "../project/dispatch-contexts.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import { allocateRustSyntheticName, type RustSyntheticNameState } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface RustBinaryHookCallPlan {

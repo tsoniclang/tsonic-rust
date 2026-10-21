@@ -3,7 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { CargoManifestPlan } from "../../../target-model/project/cargo.js";
 import type { RustSourcePackageCargoPlan } from "../../../target-model/records/source-package-crates.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlannedArtifact } from "../../artifact-model/output.js";
 import {
   createRustSourceFile,
@@ -253,7 +253,7 @@ export function materializeRustSourcePackageCrateArtifacts(
     if (identity === undefined || identity.componentId !== plan.component.componentId) {
       failRustPlannerInvariant("An admitted source module requires its component-owned output identity.", source.sourceFile);
     }
-    sourceArtifacts.push(rustSourceArtifact(identity.artifactPath, source.model));
+    sourceArtifacts.push(rustSourceArtifact(`src/${identity.moduleSegments.join("/")}.rs`, source.model));
   }
   sourceArtifacts.sort((left, right) => compareNames(left.path, right.path));
   artifacts.push(...sourceArtifacts.map((artifact) => ({

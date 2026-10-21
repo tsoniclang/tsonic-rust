@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustBinaryErrorSelection } from "../../../target-model/records/error-regions.js";

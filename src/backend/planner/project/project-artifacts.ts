@@ -1,6 +1,6 @@
 import type { CargoManifestPlan } from "../../../target-model/project/cargo.js";
 import type { RustPlanningContext } from "../context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export type RustCargoProjectPlan =
   | { readonly kind: "generated"; readonly manifest: CargoManifestPlan }

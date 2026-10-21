@@ -3,7 +3,7 @@ import type { RustGenerics, RustWherePredicate } from "../../../target-ast/synta
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustNativeCallableMethodGenerics(
   protocol: RustNativeCallableProtocol,

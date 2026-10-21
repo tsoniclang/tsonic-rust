@@ -6,7 +6,7 @@ import { projectFieldStoragePath, type ProjectClassStateLayer } from "./model.js
 import { rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustErrorObjectFormatting } from "../../program/error-formatting.js";
 

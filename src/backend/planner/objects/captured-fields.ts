@@ -5,7 +5,7 @@ import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../expressions/binding-storage.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "../bindings/deferred-storage.js";
 
 export function rustCapturedFieldStorage(declaration: Node, context: RustPlanContext): RustCapturedFieldStorage | undefined {

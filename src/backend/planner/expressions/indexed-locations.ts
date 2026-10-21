@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustRecordFieldResult } from "../objects/record-fields.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpression } from "./entry.js";

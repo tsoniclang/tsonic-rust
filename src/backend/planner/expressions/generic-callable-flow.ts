@@ -3,7 +3,7 @@ import type { RustGenericCallableConversion } from "../../../target-model/conver
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustGenericCallableFlow(
   node: Node, conversion: RustGenericCallableConversion, expression: RustExpr, context: RustPlanContext,

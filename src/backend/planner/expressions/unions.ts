@@ -10,7 +10,7 @@ import { planRustProjectFieldDispatchRole, planRustProjectFieldDispatchRoles } f
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustNativeUnionProjection } from "./union-projections.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export type RustSourceUnionFieldFact = Extract<
   RustTargetOperationFact,

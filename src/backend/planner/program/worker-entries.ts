@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { RustPlanningContext } from "../context.js";
@@ -54,7 +54,7 @@ export function planRustWorkerEntries(input: {
   const targets = input.planning.program.records.workerEntries.get();
   if (targets === undefined) failRustPlannerInvariant("Worker entries require their admitted exact source inventory.");
   for (const target of targets) {
-    const identity = target.outputIdentity;
+    const identity = target.sourceIdentity;
     const component = componentById.get(target.componentId);
     const content = component === undefined
       ? undefined

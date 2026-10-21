@@ -3,7 +3,7 @@ import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustNativeProducerBridge } from "./native-producer-bridges.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustNativeGenericProducerBridges } from "./native-generic-producers.js";

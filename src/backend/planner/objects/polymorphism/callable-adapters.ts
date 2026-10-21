@@ -11,7 +11,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { readRustProjectMethodOverride } from "../project-objects.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { ProjectCallableShape } from "./model.js";
 
 export function planRootCallableForwarder(

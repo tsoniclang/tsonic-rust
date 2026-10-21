@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustLocalBindingName, type RustPlanContext } from "../program/plan-context.js";
 import { rustUnionTypePathInContext } from "../types/render.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planRustNativeUnionProjection<Variant extends { readonly name: string; readonly carrier: TargetTypeRef }, Selection>(
   node: Node, receiver: RustExpr,

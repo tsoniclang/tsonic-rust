@@ -18,7 +18,7 @@ import { planRustReturnExit } from "../statements/completion-exits.js";
 import { rustOperationFact } from "./fundamentals.js";
 import { finishRuntimeCallableExpression } from "./lambda-creation.js";
 import { rustCallableConstructionType } from "../types/constructions.js";
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression, type RustExpressionResultUse } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/binding-patterns.js";
 import { rustOptionDefaultValue } from "./option-default.js";

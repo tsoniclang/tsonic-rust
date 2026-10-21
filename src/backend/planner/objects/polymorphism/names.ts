@@ -20,7 +20,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";

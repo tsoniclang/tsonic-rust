@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustStmt } from "../../../target-ast/syntax/nodes.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planExpression } from "../../expressions/index.js";
 import { planBlockLike } from "../../statements/index.js";
 import { planRustModuleCell, rustModuleCellCallableAlias } from "../../project/module-storage.js";

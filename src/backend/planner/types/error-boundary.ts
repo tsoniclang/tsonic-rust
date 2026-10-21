@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../../invariants.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustAwaitedErrorBoundary, RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";

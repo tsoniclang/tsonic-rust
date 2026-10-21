@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../target-ast/syntax/nodes.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
-import { failRustPlannerInvariant } from "../../../invariants.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
