@@ -27,7 +27,7 @@ export interface RustRuntimeSetterCompletion {
   readonly sourceArguments: readonly Node[];
 }
 
-interface RustStatementRecord<Value> {
+export interface RustStatementRecord<Value> {
   readonly get: (subject: Node | undefined) => Value | undefined;
 }
 
