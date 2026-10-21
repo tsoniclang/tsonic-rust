@@ -28,8 +28,8 @@ test("typed record families publish one immutable getter and isolate equally nam
   assert.equal(second.reader.get(subject), 2);
 });
 
-test("record admission preserves false, zero and empty strings without losing exact subjects", () => {
-  for (const value of [false, 0, ""]) {
+test("record admission preserves null, false, zero and empty strings without losing exact subjects", () => {
+  for (const value of [null, false, 0, ""]) {
     const family = createRustRecordFamily({ id: "scalar", equals: equal }, open);
     const subject = {};
     family.writer.set(subject, value);
@@ -37,6 +37,20 @@ test("record admission preserves false, zero and empty strings without losing ex
     assert.equal(family.reader.get(subject) === value, true, typeof value);
     assert.equal(family.reader.get({}) === undefined, true, typeof value);
   }
+});
+
+test("an admitted null payload is distinct from missing evidence in inherited scopes", () => {
+  const subject = {};
+  const parent = createRustRecordFamily({ id: "nullable", equals: equal }, open);
+  parent.writer.set(subject, null);
+  const child = createRustRecordFamily({ id: "nullable", equals: equal }, open, parent.reader);
+  assert.equal(child.reader.get(subject), null);
+  child.writer.set(subject, null);
+  assert.equal(child.reader.get(subject), null);
+  assert.equal(child.reader.get({}), undefined);
+  const conflicting = createRustRecordFamily({ id: "nullable", equals: equal }, open, parent.reader);
+  assert.throws(() => conflicting.writer.set(subject, false), /Conflicting Rust semantic plan/u);
+  assert.equal(conflicting.reader.get(subject), null);
 });
 
 test("equivalent admissions retain the first evidence and conflicting provenance is rejected", () => {

@@ -25,8 +25,11 @@ export function createRustRecordFamily<T>(
   readonly admit: (subject: ExtensionFactSubject, value: T) => RustRecordConflict<T> | undefined;
 } {
   let values: WeakMap<ExtensionFactSubject, T> | undefined;
-  const get = (subject: ExtensionFactSubject | undefined): T | undefined =>
-    subject === undefined ? undefined : values?.get(subject) ?? inherited?.get(subject);
+  const get = (subject: ExtensionFactSubject | undefined): T | undefined => {
+    if (subject === undefined) return undefined;
+    const selected = values?.get(subject);
+    return selected === undefined ? inherited?.get(subject) : selected;
+  };
   const admit = (subject: ExtensionFactSubject, value: T): RustRecordConflict<T> | undefined => {
     assertOpen();
     if (values?.has(subject)) {
@@ -35,7 +38,7 @@ export function createRustRecordFamily<T>(
     }
     const existing = inherited?.get(subject);
     if (existing !== undefined && !definition.equals(existing, value)) return { existing, incoming: value };
-    const canonical = existing ?? value;
+    const canonical = existing === undefined ? value : existing;
     onAdmission?.(canonical);
     values ??= new WeakMap<ExtensionFactSubject, T>();
     values.set(subject, canonical);
