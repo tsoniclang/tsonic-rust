@@ -29,7 +29,7 @@ export function run(captured: number): number {
     assert.equal(fact.captures.some(value => ast.text(ast.name(value.declaration)) === "captured"), captured,
       "only a checked authored capture becomes an environment field");
     const text = artifactText(result, "src/index.rs");
-    assert.doesNotMatch(text, /Box::new|Rc::new|Arc::new|RefCell::new/u, "exact native forwarding requires no heap-erased callable");
+    assert.doesNotMatch(text, /Box::new|Rc::new|Arc::new|RefCell::new|\.clone\(/u, "exact native forwarding requires no heap-erased callable or unnecessary copy");
     const expected = name === "reversed argument order" ? /retain\([^)]*second[^)]*first/u
       : name === "captured argument" ? /retain\([^)]*captured[^)]*first/u
       : name === "effectful argument" ? /next\(\)/u : /retain\([^)]*first[^)]*second/u;
