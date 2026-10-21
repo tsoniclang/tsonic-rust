@@ -34,8 +34,18 @@ const walkerContracts = new Map([
   ["analysis/callables/generic-values.ts", [1, "native-domain"]],
   ["analysis/callables/ownership-components.ts", [2, "checked-source-identities-and-native-roots"]],
   ["analysis/callables/signatures.ts", [1, "native-domain"]],
+  ["analysis/callables/emission-requests.ts", [1, "native-domain"]],
+  ["analysis/callables/native-inputs.ts", [1, "admitted-callable-subtrees"]],
+  ["analysis/declarations/emission.ts", [1, "admitted-parameter-subtrees"]],
+  ["analysis/declarations/generic-callable-requirement-uses.ts", [1, "admitted-contract-subtrees"]],
+  ["analysis/objects/object-literal-emission.ts", [1, "checked-identities-filtered-by-native-membership"]],
+  ["analysis/program/records/class-value-registry.ts", [1, "native-domain"]],
+  ["analysis/project/binary-dispatch-emission.ts", [1, "checked-source-name-inventory"]],
+  ["analysis/project-types/construction-plan.ts", [1, "native-domain"]],
+  ["analysis/source-modules/emission.ts", [1, "admitted-module-statements"]],
+  ["analysis/source-modules/package-initializers.ts", [1, "checked-source-name-inventory"]],
   ["analysis/callables/value-plan.ts", [1, "native-domain"]],
-  ["analysis/declarations/lifetimes.ts", [1, "native-domain"]],
+  ["analysis/declarations/lifetimes.ts", [2, "native-domain"]],
   ["analysis/module-initialization/analyze.ts", [1, "admitted-module-statements"]],
   ["analysis/names/plan.ts", [1, "native-domain"]],
   ["analysis/numeric/literal-admission.ts", [1, "native-domain"]],
@@ -52,13 +62,16 @@ const walkerContracts = new Map([
 ]);
 
 const checkedStorageConsumers = new Map([
-  ["analysis/program/context.ts", [1, "checked Promise-result disposition; participation receives the actual storage owner"]],
+  ["analysis/program/context.ts", [2, "checked Promise-result disposition and integer-range identity; participation receives the actual storage owner"]],
   ["analysis/callables/participation.ts", [1, "the sole native-domain producer checks source failure before reading the finite domain"]],
   ["analysis/callables/ownership-components.ts", [1, "checked source foreign-node and binding identity domain"]],
   ["analysis/callables/native-future-inputs.ts", [1, "checked source identity membership; discovery uses nativeNodes"]],
   ["analysis/callables/native-storage.ts", [1, "checked source identity membership; conversion discovery uses nativeNodes"]],
   ["analysis/callables/generic-physical.ts", [1, "complete checked source-file ownership identity"]],
   ["analysis/callables/native-captures.ts", [1, "complete checked capture identity membership"]],
+  ["analysis/callables/borrowed-returns.ts", [2, "checked lexical callable and borrowed-return identities"]],
+  ["analysis/callables/physical-lifecycle.ts", [1, "exact checked source-node identity map"]],
+  ["analysis/callables/promise-results.ts", [1, "checked promise-result disposition identity domain"]],
 ]);
 
 function sourceFiles(directory) {
@@ -137,7 +150,9 @@ test("the native-domain owner refuses incomplete source storage before any callb
 test("discarded native callable rendering precedes every body and capture read", () => {
   const source = readFileSync(join(root, "src/backend/planner/expressions/callable.ts"), "utf8");
   const body = source.slice(source.indexOf("export function planRustCallableExpressionBody("));
-  assert.equal(body.indexOf("sourceCallableDefinitionIsDiscarded(node, ast)") >= 0 &&
-    body.indexOf("sourceCallableDefinitionIsDiscarded(node, ast)") < body.indexOf("const closureFact ="), true,
-  "the one shared source-use predicate reaches unit rendering before missing erased records");
+  assert.equal(body.indexOf('resultUse === "discarded" || rustCallableCreationIsErased(node, context)') >= 0 &&
+    body.indexOf('resultUse === "discarded" || rustCallableCreationIsErased(node, context)') < body.indexOf("const closureFact ="), true,
+  "sealed native participation reaches unit rendering before missing erased records");
+  assert.match(source, /records\.nativeParticipation\.get\(node\)/u);
+  assert.doesNotMatch(source, /sourceCallableDefinitionIsDiscarded/u);
 });

@@ -27,6 +27,7 @@ import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { formatRustCompileResult } from "../../../dist/toolchain/rustfmt.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { analyzeRustCheckedContext } from "./analysis-context.mjs";
+import { repositoryRoot } from "./paths.mjs";
 
 export function createRustSession({
   files,
@@ -81,7 +82,7 @@ export function createRustSession({
     project,
     projectDirectory: "/src",
     target,
-    paths,
+    paths: { ...paths, projectRoot: repositoryRoot },
     selectedSurfaceIds: Object.freeze(selectedSurfaces.map((surface) => surface.id)),
     capabilities: capturedCapabilities,
   }));
@@ -375,7 +376,7 @@ function runtimeContributionsForHarness(harness) {
     targetPackId: harness.pack.id,
     selectedCapabilities: harness.selectedCapabilities,
     selectedSurfaces: harness.selectedSurfaces,
-    paths: harness.paths,
+    paths: { ...harness.paths, projectRoot: repositoryRoot },
     targetContributions: harness.targetSession.runtimeContributions(),
   });
 }

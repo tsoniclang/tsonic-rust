@@ -21,8 +21,9 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
-    const fact = program.records.targetOperation.get(node);
     const { ast } = program.source;
+    if (!ast.is.IsObjectLiteralExpression(node)) continue;
+    const fact = program.records.targetOperation.get(node);
     const properties = ast.properties(node);
     if (fact?.kind === "empty-object-literal" && (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId || properties.length !== 0))
       refuse(node, "rust.backend.empty-object", "Empty object construction requires exact finalized empty syntax and identity storage.");

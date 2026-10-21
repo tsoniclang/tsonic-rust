@@ -418,15 +418,18 @@ test("provider and library identity never flows through local-name recasing", ()
 test("source profile identity comes from the registered compiler SourceFile, never a path substring", () => {
   const identitySources = [
     join(sourceRoot, "policy/identities/selected-source.ts"),
-    ...collectFiles(join(sourceRoot, "policy/types/resolution"), ".ts"),
+    ...collectFiles(join(sourceRoot, "analysis/types/resolution"), ".ts"),
   ];
   for (const path of identitySources) {
     const text = readFileSync(path, "utf8");
-    assert.doesNotMatch(text, /source-profiles|tsonicSourceProfileVirtualDirectory|normalizeTargetSourceProfileSegment/u, `${path} reconstructs source-profile ownership from a path`);
+    const implementation = text.replace(/^import[\s\S]*?from "[^"]+";/gmu, "");
+    assert.doesNotMatch(implementation, /source-profiles|tsonicSourceProfileVirtualDirectory|normalizeTargetSourceProfileSegment/u, `${path} reconstructs source-profile ownership from a path`);
   }
   const registry = readFileSync(join(sourceRoot, "analysis/project/source-profiles.ts"), "utf8");
   assert.doesNotMatch(registry, /\.includes\s*\(/u);
-  assert.match(registry, /sourceFileByProfile\.get\(profile\) === sourceFile/u);
+  assert.match(registry, /sourceFileByProfile\.get\(profile\)/u);
+  assert.match(registry, /existing !== undefined && existing !== sourceFile/u);
+  assert.match(registry, /profiles\.get\(sourceFile\)/u);
   assert.match(registry, /ambiguousProfiles\.add\(profile\)/u);
 });
 
@@ -534,7 +537,7 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
   const selectedCall = sourceSection(
     semantics,
     "function acceptSelectedCall(",
-    "function selectedCallSourceCarriers(",
+    "function selectedCallReceiverCarrier(",
   );
   assert.match(selectedCall, /fact\.abi\.sourceArguments\.map/u);
   assert.match(selectedCall, /passingMode: rustArgumentPassingMode\(argument\.mode\)/u);
@@ -548,9 +551,9 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
   const callPlanner = sourceSection(
     backend,
     "function planCallExpressionInner(",
-    "function planRustDefaultValueCall(",
+    "function planObjectShapeProjectionCall(",
   );
-  assert.match(callPlanner, /requireProviderArgumentPassingFacts\(context, fact, providerArgumentNodes\)/u);
+  assert.match(callPlanner, /requireProviderArgumentPassingFacts\(context, fact, args\)/u);
   const argumentPlanning = readFileSync(
     join(sourceRoot, "backend/planner/expressions/calls/arguments.ts"),
     "utf8",
@@ -558,10 +561,12 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
   const passingGate = argumentPlanning.slice(
     argumentPlanning.indexOf("export function requireProviderArgumentPassingFacts("),
   );
-  assert.match(passingGate, /argumentPassing\.get\(argument\)/u);
-  assert.match(passingGate, /if \(actual === undefined\)/u);
-  assert.match(passingGate, /if \(actual\.mode !== expected\)/u);
-  assert.match(passingGate, /missingFactDiagnostic/u);
+  assert.match(passingGate, /records\.providerArguments\.get\(fact\.abi\) !== true/u);
+  assert.match(passingGate, /arguments_\.length !== fact\.abi\.sourceArguments\.length/u);
+  assert.match(passingGate, /arguments_\.some\(argument => argument === undefined\)/u);
+  assert.match(passingGate, /failRustPlannerInvariant/u);
+  const admission = readFileSync(join(sourceRoot, "analysis/operations/call-admission.ts"), "utf8");
+  assert.match(admission, /argumentPassing\.get\(argument\)/u);
 });
 
 test("optional chains consume exact TSTS evidence through one finalized Option fact", () => {
@@ -595,25 +600,22 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.doesNotMatch(selector, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
   assert.doesNotMatch(selector, /memberName|propertyName|sourceName|targetName/u);
 
-  const backend = readFileSync(join(sourceRoot, "backend/planner/expressions/regular-expression-literals.ts"), "utf8");
-  const planner = sourceSection(
-    backend,
-    "export function planOptionalChainExpression(",
-    "function exactOptionalStructuralMethodGuard(",
-  );
-  assert.match(planner, /optionalChain\.get\(node\)/u);
+  const planner = readFileSync(join(sourceRoot, "backend/planner/expressions/optional-chains.ts"), "utf8");
+  assert.match(planner, /optionalChainEmission\.get\(node\)/u);
   assert.match(planner, /planRawExpression\(fact\.guard, context, "value"\)/u);
   assert.doesNotMatch(planner, /planRustNonConsumingValue|rustReadRequiresClone/u);
   const ownershipUses = readFileSync(join(sourceRoot, "analysis/ownership/uses.ts"), "utf8");
   assert.match(ownershipUses, /records\.optionalChain\.get\(node\)\?\.guard/u);
   assert.match(planner, /overrides\.set\(fact\.guard/u);
-  assert.match(planner, /guardDepth !== fact\.guardDepth/u);
+  const emission = readFileSync(join(sourceRoot, "analysis/expressions/optional-chains.ts"), "utf8");
+  assert.match(emission, /guardDepth/u);
+  assert.doesNotMatch(planner, /rustOptionNestingDepth|resolveRustTargetTypeRef/u);
   assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
 });
 
 test("plain identifier binding cannot become a provider-value identity workaround", () => {
   const semantics = readFileSync(join(sourceRoot, "analysis/expressions/references.ts"), "utf8");
-  const resolver = sourceSection(semantics, "export function resolveIdentifierCarrier(", "export function recordProjectSourceBinding(");
+  const resolver = sourceSection(semantics, "export function resolveIdentifierCarrier(", "export function resolveCallLikeCarrier(");
   assert.match(resolver, /declarationKind === KindParameter \|\| declarationKind === KindVariableDeclaration/u);
   assert.doesNotMatch(resolver, /providerVirtualDeclarationFactKey|moduleSpecifier|exportName|resolveRustTargetTypeRef/u);
 });
@@ -647,8 +649,10 @@ test("native module-function eligibility is finalized before backend planning", 
     join(sourceRoot, "analysis/program/module-bindings.ts"),
     "utf8",
   );
-  assert.match(semantics, /runtimeValueUses\.hasFirstClassUse\(declaration\)/u);
-  assert.match(semantics, /storage: "module-cell"/u);
+  assert.match(semantics, /selectRustModuleValueStorage\(/u);
+  const storage = readFileSync(join(sourceRoot, "policy/operations/declarations/module-bindings.ts"), "utf8");
+  assert.match(semantics, /hasFirstClassUse\(declaration\)/u);
+  assert.match(storage, /storage: "module-cell"/u);
   const runtimeUses = readFileSync(
     join(sourceRoot, "analysis/program/runtime-value-uses.ts"),
     "utf8",
@@ -672,15 +676,15 @@ test("provider-backed backend lanes require finalized operation facts", () => {
   const lanes = [
     [
       "constructor",
-      readFileSync(join(sourceRoot, "backend/planner/expressions/regular-expression-literals.ts"), "utf8"),
+      readFileSync(join(sourceRoot, "backend/planner/expressions/constructions.ts"), "utf8"),
       "export function planNewExpression(",
-      "export function effectiveMemberResultCarrier(",
+      undefined,
     ],
     [
       "property",
       readFileSync(join(sourceRoot, "backend/planner/expressions/properties.ts"), "utf8"),
       "export function planPropertyAccess(",
-      "function planRustSourceMethodPropertyRead(",
+      "function planSourceFieldRead(",
     ],
     [
       "indexer",
@@ -690,9 +694,9 @@ test("provider-backed backend lanes require finalized operation facts", () => {
     ],
   ];
   for (const [lane, text, start, end] of lanes) {
-    const section = sourceSection(text, start, end);
-    assert.match(section, /rustOperationFact\(node, context\)/u, `${lane} must read the finalized Rust operation fact`);
-    assert.match(section, /missingFactDiagnostic/u, `${lane} must diagnose a missing finalized fact`);
+    const section = end === undefined ? text.slice(text.indexOf(start)) : sourceSection(text, start, end);
+    assert.match(text, /(?:rustOperationFact\(node, context\)|records\.targetOperation\.get\(node\))/u, `${lane} must read the finalized Rust operation fact`);
+    assert.match(text, /failRustPlannerInvariant/u, `${lane} must reject a missing admitted fact through the invariant owner`);
     assert.doesNotMatch(section, /selectedTargetSignatureFactKey|providerVirtualDeclarationFactKey/u, `${lane} must not recover provider identity in the backend`);
   }
 });
@@ -721,35 +725,33 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
   );
   const runtimeSet = sourceSection(
     statements,
-    "function planRuntimeSetStatement(",
-    "function planForOfStatement(",
+    "export function planRuntimeSetStatement(",
+    "export function planForOfStatement(",
   );
   const setterAdmission = sourceSection(admission, "  const setter = (", "  const assignment = (");
   const setterInputs = sourceSection(admission, "export function rustRuntimeSetSourceInputs(",
     "export function analyzeRustStatementCompletions(");
-  assert.equal(/if \(!validateRustFinalizedOperationAbi\(fact\.abi, context\.input\.program\.typeDefinitions\)\)/u.test(providerLowering), true,
-    "provider operations and runtime setters share the unconditional total-ABI invariant guard");
-  assert.equal(/fact\.kind === "provider-operation" && !rustTargetTypeRefEquals\(fact\.resultCarrier, abiResultCarrier\)/u.test(providerLowering), true,
-    "only provider expressions require their logical result carrier to equal the native ABI result");
+  const finalization = readFileSync(join(sourceRoot, "policy/operations/members/abi/finalize.ts"), "utf8");
+  assert.match(finalization, /validateRustFinalizedOperationAbi\(abi, definitions\)/u);
+  assert.doesNotMatch(providerLowering, /validateRustFinalizedOperationAbi|rustTargetTypeRefEquals/u);
   for (const [name, section] of [["provider expression", providerLowering], ["runtime setter admission", setterInputs]]) {
     assert.match(section, /\.abi\.(?:targetReceiver|targetArguments|result|sourceArguments)/u, `${name} must consume finalized ABI fields`);
     assert.doesNotMatch(section, /\.argModes|\.argOrder|\.argConversions|\.receiverMode|\.indexConversion|\.resultConversion|\.parameterCarriers|\.sourceArgumentCount/u, `${name} must not interpret sparse authoring metadata`);
   }
-  assert.equal(/statementCompletions\.setterFor\(expression\)/u.test(runtimeSet), true,
-    "runtime setters consume the pre-seal source-operand admission");
-  assert.equal(/const sourceArgumentNodes = admitted\.sourceArguments/u.test(runtimeSet), true,
-    "runtime setter arguments are the admitted source identities");
-  assert.equal(/planProviderOperationExpression\(context, fact, admitted\.receiver, sourceArgumentNodes, expression/u.test(runtimeSet), true,
+  const runtimeExpression = readFileSync(join(sourceRoot, "backend/planner/expressions/runtime-setters.ts"), "utf8");
+  assert.match(runtimeSet, /planRustRuntimeSetExpression\(expression, fact, context\)/u);
+  assert.match(runtimeExpression, /records\.runtimeSetter\.get\(expression\)/u);
+  assert.equal(/planProviderOperationExpression\(context, fact, admitted\.receiver, admitted\.sourceArguments, expression/u.test(runtimeExpression), true,
     "runtime setters use the same total-ABI guard and renderer as provider expressions");
   assert.equal(/planRustFinalizedOperationForm\(context, fact\.abi, receiver, args, operationNode/u.test(providerLowering), true,
     "both finalized operation kinds use the canonical operation-form renderer");
-  assert.match(expressionFacts, /function providerSelectedCallMatches\(/u);
-  assert.match(expressionFacts, /selectedCall\.get\(node\)/u);
+  assert.match(expressionFacts, /records\.targetOperation\.get\(node\)/u);
+  assert.doesNotMatch(expressionFacts, /providerSelectedCallMatches|selectedCall\.get/u);
   assert.match(setterInputs, /operation\.abi\.operationKind !== expectedKind/u);
   assert.match(setterAdmission, /const inputs = rustRuntimeSetSourceInputs\(ast, node, operation\)/u);
   assert.match(setterAdmission, /if \(inputs === undefined\) \{\s*reject\(node, "RUST_SETTER_ABI_NOT_PROVEN"/u);
   assert.match(setterAdmission, /publish\(setters, node, inputs\)/u);
-  assert.match(runtimeSet, /finishProviderOperationExpression\(context, fact, native, expression\)/u);
+  assert.match(runtimeExpression, /finishProviderOperationExpression\(context, fact, native, expression\)/u);
   assert.match(setterAdmission, /runtimeCarrier\.get\(value\)/u);
   assert.equal(/selected\?\.operationKind === "operator"/u.test(setterAdmission), true,
     "setter admission requires the selected operator kind");
@@ -790,9 +792,9 @@ test("operation target shape and source-call effects have one finalized owner", 
 });
 
 test("backend conversion planning never reconstructs assertion kinds from source syntax", () => {
-  const text = readFileSync(join(sourceRoot, "backend/planner/expressions/fundamentals.ts"), "utf8");
+  const text = readFileSync(join(sourceRoot, "backend/planner/expressions/source-conversions.ts"), "utf8");
   assert.doesNotMatch(text, /isConstAssertion|TypeReferenceNode_TypeName/u);
-  assert.match(text, /fact\.kind !== "source-conversion"/u);
+  assert.match(text, /records\.sourceAssertion\.get\(node\)/u);
 });
 
 test("call-argument conversion consumes the checked expression carrier, not a semantic-type reconstruction", () => {
@@ -819,12 +821,13 @@ test("backend assignment and nullish checks consume finalized fact details", () 
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions/binary.ts"), "utf8");
   const semantics = readFileSync(join(sourceRoot, "analysis/operations/operators.ts"), "utf8");
   const operators = readFileSync(join(sourceRoot, "policy/operations/operators/rules.ts"), "utf8");
-  assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
-  assert.equal(/if \(context\.input\.program\.statementCompletions\.assignmentFor\(expression\) !== assignment\)\s*failRustPlannerInvariant\("Assignment requires its admitted native operator selection\.", expression\)/u.test(statements), true,
-    "assignment planning requires the exact selected operation admitted before sealing");
+  assert.match(statements, /records\.assignmentCompletion\.get\(expression\)/u);
+  assert.match(statements, /records\.assignmentWrite\.get\(expression\)/u);
+  assert.match(statements, /if \(completion === undefined\) failRustPlannerInvariant/u);
   assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
-  assert.match(statements, /fact\.writeStrategy === "in-place-string-append-parts"/u);
-  assert.match(statements, /fact\.writeStrategy === "in-place-string-append-value"/u);
+  const writes = readFileSync(join(sourceRoot, "analysis/storage/assignment-writes.ts"), "utf8");
+  assert.match(writes, /"in-place-string-append-parts"/u);
+  assert.match(writes, /"in-place-string-append-value"/u);
   assert.match(semantics, /targetReference\.symbol !== valueReference\.symbol/u);
   assert.match(semantics, /targetReference\.declaration !== valueReference\.declaration/u);
   assert.match(semantics, /"in-place-string-append-parts"/u);
@@ -844,22 +847,22 @@ test("counted-loop planning consumes one sealed Rust representation plan", () =>
     "utf8",
   );
   const planning = readFileSync(
-    join(sourceRoot, "backend/planner/statements/statement-conditionals.ts"),
+    join(sourceRoot, "backend/planner/statements/statement-for.ts"),
     "utf8",
   );
-  assert.match(targetProgram, /countedLoops: analyzeRustCountedLoopRepresentations\(/u);
+  assert.match(targetProgram, /analyzeRustCountedLoopRepresentations\(/u);
   assert.match(analysis, /input\.navigation\.countedLoop\(statement\)/u);
   assert.match(analysis, /fact\.abi\.effects\.evaluation === "pure"/u);
   assert.match(analysis, /carrierHasIndependentScalarValue/u);
   assert.doesNotMatch(analysis, /isRustCopyCarrier/u);
-  assert.match(planning, /program\.countedLoops\.representationFor\(node\)/u);
+  assert.match(planning, /program\.records\.countedLoop\.get\(node\)/u);
   assert.doesNotMatch(planning, /sourceNavigation\.countedLoop|expressionEffects|declarationUseSummary/u);
   assert.doesNotMatch(analysis, /\.text\([^)]*bound|memberName|propertyName|sourceName|targetName/u);
 });
 
 test("provider purity uses one generic operation-form writability policy", () => {
   const forms = readFileSync(
-    join(sourceRoot, "policy/operations/forms.ts"),
+    join(sourceRoot, "target-model/operations/form-inputs.ts"),
     "utf8",
   );
   const providerValidation = readFileSync(
@@ -881,33 +884,24 @@ test("provider purity uses one generic operation-form writability policy", () =>
   assert.doesNotMatch(providerValidation, /function operationFormDeclaresMutableInput/u);
 });
 
-test("backend operation facts cannot override runtime carriers or selected source identity", () => {
-  const expressions = collectFiles(join(sourceRoot, "backend/planner/expressions"), ".ts")
-    .map((path) => readFileSync(path, "utf8"))
-    .join("\n");
-  const requiredLanes = [
-    "rust.backend.conversion-carrier",
-    "rust.backend.operator-carrier",
-    "rust.backend.source-constructor-carrier",
-    "rust.backend.provider-constructor-carrier",
-    "rust.backend.source-field-carrier",
-    "rust.backend.enum-member-carrier",
-    "rust.backend.provider-property-carrier",
-    "rust.backend.tuple-index-carrier",
-    "rust.backend.provider-indexer-carrier",
-    "rust.backend.tuple-literal-carrier",
-    "rust.backend.array-literal-carrier",
-    "rust.backend.record-literal-carrier",
-    "rust.backend.closure-carrier",
-    "rust.backend.await-carrier",
-  ];
-  assert.match(expressions, /function requireExpressionCarrier\(/u);
-  for (const lane of requiredLanes) {
-    assert.match(expressions, new RegExp(lane.replaceAll(".", "\\."), "u"));
+test("operation carriers and selected identities are admitted before native rendering", () => {
+  const calls = readFileSync(join(sourceRoot, "analysis/callables/source-calls.ts"), "utf8");
+  const arguments_ = readFileSync(join(sourceRoot, "analysis/callables/source-call-arguments.ts"), "utf8");
+  const binary = readFileSync(join(sourceRoot, "analysis/expressions/expression-binary.ts"), "utf8");
+  const unary = readFileSync(join(sourceRoot, "analysis/expressions/expression-unary.ts"), "utf8");
+  const closure = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
+  const provider = readFileSync(join(sourceRoot, "analysis/operations/provider-inputs.ts"), "utf8");
+  assert.match(calls, /sourceCallEffectsMatch\(fact, effects, program\.typeDefinitions, native\)/u);
+  assert.match(arguments_, /sourceCallSelectedMemberMatches\(fact, selectedCall/u);
+  for (const source of [binary, unary]) {
+    assert.match(source, /records\.selectedOperation\.get\(node\)/u);
+    assert.match(source, /rustTargetTypeRefEquals\(selected\.resultType, (?:fact\.resultCarrier|carrier)\)/u);
   }
-  assert.equal(/sourceCallEffectsMatch\(fact, sourceCallEffects,\s*context\.input\.program\.typeDefinitions, context\.input\.program\.callableValues\.native\.callFor\(node\)\)/u.test(expressions), true,
-    "source effects retain owned type definitions and exact native input evidence");
-  assert.match(expressions, /providerSelectedCallMatches\(node, fact, context\)/u);
+  assert.match(closure, /rustTargetTypeRefEquals\(protocol\.result, resultCarrier\)/u);
+  assert.match(provider, /rustFinalizedCarrierTransitionMatches\(carrier, converted, input\.sourceCarrier\)/u);
+  const expressions = collectFiles(join(sourceRoot, "backend/planner/expressions"), ".ts")
+    .map(path => readFileSync(path, "utf8")).join("\n");
+  assert.doesNotMatch(expressions, /requireExpressionCarrier|sourceCallEffectsMatch|providerSelectedCallMatches|sourceCallSelectedMemberMatches/u);
   assert.doesNotMatch(expressions, /convertedCarrier === undefined\s*\?\s*rustTargetTypeRefEquals\(sourceCarrier/u);
 });
 
@@ -924,8 +918,13 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   const semantics = collectFiles(join(sourceRoot, "analysis"), ".ts")
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
-  assert.match(expressions, /Fixed-array literal contains a missing or omitted element slot/u);
-  assert.match(expressions, /Callable expression contains an undefined parameter slot/u);
+  const sourceArrays = readFileSync(join(sourceRoot, "analysis/expressions/array-literals.ts"), "utf8");
+  const sourceCallables = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
+  assert.match(sourceArrays, /presentElements\.length/u);
+  assert.match(sourceArrays, /Fixed-array literal has/u);
+  assert.match(sourceCallables, /parameters\.length - leading\.length !== sourceParameters\.length/u);
+  assert.match(sourceCallables, /sourceParameters\.map\(\(parameter, index\) =>/u);
+  assert.match(sourceCallables, /if \(parameter === undefined\) failTargetAnalysisInvariant/u);
   assert.match(declarations, /planBlockLike\(bodyNode, bodyContext\)/u);
   assert.match(statements, /planStatementSequence\(children, node, construction\?\.context \?\? context\)/u);
   assert.equal(/const child = children\[index\];\s*if \(child === undefined\) \{\s*failRustPlannerInvariant\("Statement sequence requires its dense checked source nodes\.", diagnosticNode\)/u.test(statements), true,
@@ -943,31 +942,27 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   assert.doesNotMatch(semantics, /ast\.elements\(expression\)\.filter\(\(element\): element is Node => element !== undefined\)/u);
 });
 
-test("project-source backend calls require the exact finalized selected member ABI", () => {
+test("project-source admission requires the exact finalized selected member ABI", () => {
   const expressions = readFileSync(
-    join(sourceRoot, "backend/planner/expressions/calls/arguments.ts"),
+    join(sourceRoot, "analysis/callables/source-call-evidence.ts"),
     "utf8",
   );
-  const selectedGate = sourceSection(
-    expressions,
-    "export function sourceCallSelectedMemberMatches(",
-    "export function requireProviderArgumentPassingFacts(",
-  );
-  assert.match(selectedGate, /member\.id === fact\.operationId/u);
-  assert.match(selectedGate, /member\.kind === expectedKind/u);
-  assert.match(selectedGate, /member\.targetName === expectedTargetName/u);
+  const selectedGate = expressions.slice(expressions.indexOf("export function sourceCallSelectedMemberMatches("));
+  assert.match(selectedGate, /member\.id !== fact\.operationId/u);
+  assert.match(selectedGate, /member\.kind !== expectedKind/u);
+  assert.match(selectedGate, /member\.targetName !== expectedName/u);
   assert.match(selectedGate, /member\.parameters\.length === fact\.parameters\.length/u);
-  assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
+  assert.match(selectedGate, /selected\.sourceSelectedMethodTypeArguments/u);
   assert.match(selectedGate, /substituteRustTargetGenerics/u);
   assert.match(selectedGate, /fact\.targetGenericArguments/u);
-  assert.match(selectedGate, /const factParameter = fact\.parameters\[index\];/u);
-  assert.match(selectedGate, /if \(factParameter === undefined\) return false;/u);
-  assert.match(selectedGate, /mapRustTargetTypes\(factParameter\.parameterCarrier, normalize\)/u);
-  assert.match(selectedGate, /mapRustTargetTypes\(resultProjection\?\.sourceCarrier \?\? fact\.resultCarrier, normalize\)/u);
+  assert.match(selectedGate, /const selectedParameter = fact\.parameters\[index\];/u);
+  assert.match(selectedGate, /if \(selectedParameter === undefined\) return false;/u);
+  assert.match(selectedGate, /mapRustTargetTypes\(selectedParameter\.parameterCarrier, normalize\)/u);
+  assert.match(selectedGate, /mapRustTargetTypes\(fact\.asyncBody\?\.logicalResultCarrier \?\? resultProjection\?\.sourceCarrier \?\? fact\.resultCarrier, normalize\)/u);
   assert.match(selectedGate, /rustTargetTypeRefEquals\(resultProjection\.selectedCarrier, fact\.resultCarrier\)/u);
   assert.match(selectedGate, /rustSourceCallResultProjectionMatches\(sourceProjection, resultProjection, instantiateResult/u);
   assert.match(selectedGate, /\(sourceProjection === undefined\) !== \(resultProjection === undefined\)/u);
-  assert.match(selectedGate, /mode === factParameter\.mode/u);
+  assert.match(selectedGate, /mode === selectedParameter\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);
 });
 
@@ -992,10 +987,12 @@ test("value conversions use target-owned semantic ids, never arbitrary helper pa
   for (const { path, text } of sourceFiles) {
     assert.doesNotMatch(text, /rustHelperCallValueConversion|kind:\s*["']helper-call["']/u, `${path} exposes arbitrary conversion helpers`);
   }
-  const conversions = readFileSync(join(sourceRoot, "target-model/conversions/contracts.ts"), "utf8");
+  const conversions = readFileSync(join(sourceRoot, "policy/conversions/contracts.ts"), "utf8");
   assert.match(conversions, /function rustValueConversionContract/u);
-  assert.match(conversions, /case "checked-i32-to-usize"/u);
-  assert.match(conversions, /case "js-number-from-usize"/u);
+  assert.match(conversions, /selectRustIntrinsicConversionContract\(value\.id\)/u);
+  const intrinsic = readFileSync(join(sourceRoot, "policy/conversions/intrinsic-contracts.ts"), "utf8");
+  assert.match(intrinsic, /case "checked-i32-to-usize"/u);
+  assert.match(intrinsic, /case "js-number-from-usize"/u);
 });
 
 test("source-package semantics are sealed before physical Rust planning", () => {
@@ -1010,7 +1007,7 @@ test("source-package semantics are sealed before physical Rust planning", () => 
   assert.match(facadeAnalysis, /source\.navigation\.moduleExports/u);
   assert.match(facadeAnalysis, /exportsForComponent/u);
   assert.doesNotMatch(facadePlanner, /moduleExports\s*\(/u);
-  assert.match(facadePlanner, /program\.sourcePackageFacades/u);
+  assert.match(facadePlanner, /program\.records\.sourcePackageFacades\.get/u);
 
   const componentAnalysis = readFileSync(
     join(sourceRoot, "analysis/source-modules/component-semantics.ts"),
@@ -1023,7 +1020,7 @@ test("source-package semantics are sealed before physical Rust planning", () => 
   assert.match(componentAnalysis, /publishesImplementationAbi/u);
   assert.match(componentAnalysis, /errorOwnerComponentId/u);
   assert.match(componentAnalysis, /errorOwners\.get/u);
-  assert.match(componentPlanner, /program\.sourcePackageComponents/u);
+  assert.match(componentPlanner, /program\.records\.sourcePackageComponents\.get/u);
   assert.doesNotMatch(
     componentPlanner,
     /programErrorDefinitions|componentReachesError|errorOwners\.|configuration\.outputType/u,
@@ -1091,12 +1088,16 @@ test("Rust dead-code obligations consume sealed reachability and normalize befor
   assert.doesNotMatch(generatedState, /sourceNavigation|declarationUseSummary|referencesToDeclaration|forEachChild/u);
   assert.match(targetProgram, /readonly reachability:.*RustReachability/u);
   assert.doesNotMatch(planningContext, /createRustPlannerLiveness|analyzeRustReachability|liveness:/u);
-  assert.match(directives, /context\.input\.program\.reachability\.suppressedDeclarations\.has/u);
-  assert.match(directives, /fieldsRead\.has/u);
-  assert.match(directives, /fieldsWritten\.has/u);
-  assert.match(directives, /constructedProjectTypes\.has/u);
-  assert.match(directives, /usedProjectFields\.get/u);
-  assert.match(directives, /structuralCarriers\.get/u);
+  const declarations = readFileSync(join(sourceRoot, "analysis/reachability/declaration-emission.ts"), "utf8");
+  const structures = readFileSync(join(sourceRoot, "analysis/reachability/structural-emission.ts"), "utf8");
+  assert.match(declarations, /reachability\.suppressedDeclarations\.has/u);
+  assert.match(declarations, /reachability\.readAuthoredFields\.has/u);
+  assert.match(declarations, /reachability\.constructedProjectTypes\.has/u);
+  assert.match(declarations, /reachability\.usedProjectFields\.get/u);
+  assert.match(structures, /reachability\.structuralCarriers\.get/u);
+  assert.match(directives, /records\.authoredLiveness\.get/u);
+  assert.match(directives, /records\.structuralLiveness\.get/u);
+  assert.doesNotMatch(directives, /program\.reachability|fieldsRead|fieldsWritten|constructedProjectTypes/u);
   assert.doesNotMatch(directives, /structuralCarriers\.get\([^)]*\)\?\.constructed/u);
   assert.equal(existsSync(join(sourceRoot, "backend/planner/liveness")), false,
     "the superseded planner reachability implementation is removed");
@@ -1105,7 +1106,7 @@ test("Rust dead-code obligations consume sealed reachability and normalize befor
   }
   const reachabilityModel = readFileSync(join(sourceRoot, "analysis/reachability/model.ts"), "utf8");
   const generatedModel = readFileSync(join(sourceRoot, "analysis/reachability/generated-item-usage-model.ts"), "utf8");
-  const recordModel = sourceSection(generatedModel, "export interface RustVariantReachability", "export interface RustGeneratedItemUsageInput");
+  const recordModel = readFileSync(join(sourceRoot, "target-model/records/reachability.ts"), "utf8");
   assert.doesNotMatch(reachabilityModel, /readonly\s+\w+\s*:\s*\([^)]*\)\s*=>|\n\s+\w+\([^)]*\)\s*:/u);
   assert.doesNotMatch(recordModel, /readonly\s+\w+\s*:\s*\([^)]*\)\s*=>|\n\s+\w+\([^)]*\)\s*:/u);
   assert.doesNotMatch(

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compileRust, nodejsCapability } from "../helpers/rust-session.mjs";
+import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 
 test("capability ledger: supported lanes compile a representative program", async () => {
   const { result } = compileRust({
@@ -59,6 +60,6 @@ export function main_lane(flag: boolean): int32 {
 `,
     },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.ok(result.artifacts.length > 0);
 });

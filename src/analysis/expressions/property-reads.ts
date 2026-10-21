@@ -76,6 +76,7 @@ export function analyzeRustPropertyReads(program: Omit<RustAnalysisProgram, "rea
       refuse(node, "rust.backend.enum", "Enum member access does not resolve to a generated Rust enum path.", true);
     if (fact?.kind !== "source-field" && fact?.kind !== "source-accessor" && fact?.kind !== "source-static-field" &&
       fact?.kind !== "source-method-property" && fact?.kind !== "source-union-field" && fact?.kind !== "source-enum-member") continue;
+    if (!ast.is.IsPropertyAccessExpression(node) && !ast.is.IsElementAccessExpression(node)) continue;
     const selected = program.records.selectedOperation.get(node);
     const result = program.records.optionalChain.get(node)?.resultCarrier ?? fact.resultCarrier;
     if (selected === undefined || selected.operationKind !== "property" || selected.operationId !== fact.operationId ||
