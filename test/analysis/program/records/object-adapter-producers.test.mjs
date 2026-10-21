@@ -5,7 +5,7 @@ import { createRustProgramRecordBuilder } from "../../../../dist/analysis/progra
 import { rustCallableTargetType, rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../../../dist/target-model/types/carriers/class-constructors.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
-import { rustObjectReferenceViewEquals } from "../../../../dist/analysis/expressions/object-reference-views.js";
+import { createRustObjectReferenceViewProducer } from "../../../../dist/analysis/program/records/object-reference-view.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -350,16 +350,20 @@ test("structural view equality retains complete ordered native field evidence", 
   const selected = viewFixture(createRustProgramRecordBuilder());
   const fact = selected.select();
   const field = fact.fields[0];
-  assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, source: { ...field.source } }] }), true);
+  const admit = inherited => createRustObjectReferenceViewProducer(() => {}, {
+    get: node => node === selected.expression ? inherited : undefined,
+  }).select(selected.walk, selected.expression, selected.sourceCarrier, selected.targetCarrier);
+  const equivalent = { ...fact, fields: [{ ...field, source: { ...field.source } }] };
+  assert.equal(admit(equivalent) === equivalent, true);
   for (const source of [
     { ...field.source, receiverCarrier: wide }, { ...field.source, resultCarrier: wide },
     { ...field.source, storageIndex: 1 }, { ...field.source, storage: "project-object" },
     { ...field.source, declaration: {} }, { ...field.source, declaration: undefined },
     { ...field.source, dispatch: undefined }, { ...field.source, valueSemantics: { kind: "receiver-alias" } },
     { ...field.source, dispatch: { read: "get", write: "set", ownerCarrier: integer } },
-  ]) assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, source }] }), false, "changed native member proof");
-  assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, writable: !field.writable }] }), false);
-  assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, destinationIndex: 1 }] }), false);
+  ]) assert.throws(() => admit({ ...fact, fields: [{ ...field, source }] }), /Conflicting Rust semantic plan/u, "changed native member proof");
+  assert.throws(() => admit({ ...fact, fields: [{ ...field, writable: !field.writable }] }), /Conflicting Rust semantic plan/u);
+  assert.throws(() => admit({ ...fact, fields: [{ ...field, destinationIndex: 1 }] }), /Conflicting Rust semantic plan/u);
 });
 
 test("class-value reuse is a read of exact inherited evidence, not an invented specialization", () => {
