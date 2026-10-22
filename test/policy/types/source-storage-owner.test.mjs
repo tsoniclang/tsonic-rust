@@ -7,6 +7,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { selectedValueCarrier } from "../../../dist/analysis/operations/selected-values.js";
 import { rustCallableTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 
 for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() => "text")']) {
   test(`selected callable ${expression} uses its value owner, not its enclosing call result`, () => {
@@ -42,11 +43,10 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
       semanticsFor: node => source.semantics.forNode(node),
       callableRepresentation: "storage", typeDefinitions: emptyRustTypeDefinitions,
       sourceLifetimes: { contractFor: () => undefined }, pointerReturns: { resolve: () => undefined },
-      records: createRustRecordFixture({
-conversion: { get: () => undefined },
-runtimeCarrier: { get: (node) => node === operand ? { carrier } : undefined },
-selectedOperation: { get: () => undefined },
-selectedCall: { get: () => undefined }}),
+      requiredRecords: [],
+      records: createRustProgramRecordBuilder(emptyRustTypeDefinitions, createRustRecordFixture({
+        runtimeCarrier: { get: (node) => node === operand ? { carrier } : undefined },
+      })),
     };
     let selections = 0;
     const options = {
