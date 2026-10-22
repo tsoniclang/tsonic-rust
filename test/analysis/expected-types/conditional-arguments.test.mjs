@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { contextualConditionalArgumentMatches } from "../../../dist/analysis/operations/provider/calls/contextual-conditionals.js";
+import { contextualConditionalArgumentMatches } from "../../../dist/analysis/expected-types/conditional-arguments.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const target = { kind: "target-named", id: "proof.Base" };

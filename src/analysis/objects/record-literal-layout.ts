@@ -1,7 +1,7 @@
 import { Node_Type } from "@tsonic/target-api/source";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
-import { selectRustUnionVariantByCheckedType } from "../expressions/union-context.js";
+import { selectRustUnionVariantByCheckedType } from "../expected-types/union-variants.js";
 
 import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
 import { rustProjectInstanceContracts } from "../project-types/instance-contracts.js";

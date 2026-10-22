@@ -19,7 +19,7 @@ import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitiv
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/selection.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
-import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
+import { contextualConditionalArgumentMatches } from "../../expected-types/conditional-arguments.js";
 import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";

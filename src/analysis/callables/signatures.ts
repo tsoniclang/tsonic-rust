@@ -30,7 +30,7 @@ import { resolveRustRetainedResult } from "../types/resolution/retained-results.
 import { selectRustInferredReturn, selectRustRetainedReturn } from "./inferred-return.js";
 import type { RustInferredReturnSelection } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
-import { selectRustClosedCallableContext } from "./contextual-inputs.js";
+import { selectRustClosedCallableContext } from "../expected-types/callable-contexts.js";
 import { finalizeRustCallableSignature } from "./signature-query.js";
 
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {

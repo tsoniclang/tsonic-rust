@@ -35,7 +35,7 @@ import { rustCallableInvocationResult } from "../../policy/types/callables/retur
 import { rustSourceClosureValueCarrier } from "./function-values.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../policy/conversions/callable.js";
-import { selectRustClosedCallableContext } from "./contextual-inputs.js";
+import { selectRustClosedCallableContext } from "../expected-types/callable-contexts.js";
 
 export function resolveFunctionExpressionSignature(
   walk: RustFactWalk,

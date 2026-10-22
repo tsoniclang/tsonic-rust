@@ -1,12 +1,12 @@
-import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
 
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
-import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
-import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
-import type { RustOperationsProviderOptions } from "../model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 
 export function contextualConditionalArgumentMatches(
   expression: Node,

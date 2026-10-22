@@ -28,7 +28,7 @@ import { selectRustMemoryLayoutObservation } from "../../policy/operations/point
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "./flow-read.js";
 import { resolveNativeProviderCallableArguments } from "../operations/provider/calls/native-callables.js";
-import { selectRustUnionVariantByCheckedType } from "./union-context.js";
+import { selectRustUnionVariantByCheckedType } from "../expected-types/union-variants.js";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
