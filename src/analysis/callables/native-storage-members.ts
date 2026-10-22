@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageProducersSelection, SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { Node_Initializer, sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_OperatorToken, BinaryExpression_Right, Node_Initializer, sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
@@ -26,6 +26,18 @@ export function createRustRecordMemberProducers(input: {
     const writes = new Map<Node, Node[]>();
     const properties = new Map<Node, Node>();
     for (const node of input.nativeNodes) {
+      // An assignment to a stored record member writes into the member's family like a literal does.
+      if (ast.is.IsBinaryExpression(node)) {
+        const left = BinaryExpression_Left(ast, node);
+        const right = BinaryExpression_Right(ast, node);
+        const operator = BinaryExpression_OperatorToken(ast, node);
+        const field = left === undefined ? undefined : records.targetOperation.get(left);
+        const generic = field?.kind === "source-field" ? rustGenericCallableValue(field.resultCarrier) : undefined;
+        if (right !== undefined && operator !== undefined && ast.kindName(operator) === "KindEqualsToken" &&
+          field?.kind === "source-field" && field.storage === "project-object" && field.declaration !== undefined &&
+          generic !== undefined && generic.physical === undefined)
+          writes.set(field.declaration, [...writes.get(field.declaration) ?? [], right]);
+      }
       const operation = records.targetOperation.get(node);
       if (operation?.kind !== "record-literal" || operation.storage !== "project-object") continue;
       for (const contribution of operation.contributions) {
@@ -74,7 +86,18 @@ export function createRustRecordMemberProducers(input: {
         if (member === undefined) return selection;
         members.add(member);
       }
-      const producers: SourceStorageProducer[] = [...selection.producers];
+      // A producer that is itself a read of an indexed member stands for that member's stored values.
+      const memberRead = (producer: SourceStorageProducer): Node | undefined => {
+        const operation = producer.subject.kind === "value" && producer.subject.projection.length === 0
+          ? records.targetOperation.get(producer.subject.node) : undefined;
+        return operation?.kind === "source-field" && operation.declaration !== undefined && writes.has(operation.declaration)
+          ? operation.declaration : undefined;
+      };
+      for (const producer of selection.producers) {
+        const member = memberRead(producer);
+        if (member !== undefined) members.add(member);
+      }
+      const producers: SourceStorageProducer[] = selection.producers.filter(producer => memberRead(producer) === undefined);
       const seen = new Set(producers.map(producer => producer.subject));
       const visited = new Set<Node>();
       for (let changed = true; changed;) {
