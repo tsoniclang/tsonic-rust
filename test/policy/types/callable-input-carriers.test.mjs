@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustCallableInputCarrier } from "../../../dist/analysis/types/resolution/callable-inputs.js";
+import { resolveRustCallableInputCarrier } from "../../../dist/analysis/source-evidence/types/resolution/callable-inputs.js";
 import { rustCallableTargetType, rustCallableInputTargetType, rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";

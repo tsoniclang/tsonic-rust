@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustSelectedSourceCallResult } from "../../../dist/analysis/types/resolution/call-results.js";
+import { resolveRustSelectedSourceCallResult } from "../../../dist/analysis/source-evidence/types/resolution/call-results.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
-import { resolveRustUnionValueCarrier } from "../../../dist/analysis/types/resolution/source-unions.js";
+import { resolveRustUnionValueCarrier } from "../../../dist/analysis/source-evidence/types/resolution/source-unions.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 

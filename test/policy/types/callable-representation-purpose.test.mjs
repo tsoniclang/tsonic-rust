@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
-import { resolveRustCallableEvidence } from "../../../dist/analysis/types/resolution/source-evidence.js";
+import { resolveRustCallableEvidence } from "../../../dist/analysis/source-evidence/types/resolution/source-evidence.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
-import { resolveRustConstructSignature } from "../../../dist/analysis/types/resolution/constructors.js";
+import { resolveRustConstructSignature } from "../../../dist/analysis/source-evidence/types/resolution/constructors.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 

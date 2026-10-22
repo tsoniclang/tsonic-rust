@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { selectedRustCallSignature } from "../program/records/selected-call.js";
-import { rustSelectedCallTypeParameters } from "../types/resolution/generic-arguments.js";
+import { rustSelectedCallTypeParameters } from "../source-evidence/types/resolution/generic-arguments.js";
 
 import { rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 
@@ -15,7 +15,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 import { rejectSelectedOperation } from "./provider/result.js";
 
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
 

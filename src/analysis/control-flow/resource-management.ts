@@ -24,7 +24,7 @@ import {
   resolveSelectedProviderDeclaration,
 } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { finalizeRustProviderOperationAbi } from "../../policy/operations/members/abi/finalize.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";

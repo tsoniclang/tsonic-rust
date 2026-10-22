@@ -4,14 +4,14 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import type { Node, Type } from "@tsonic/tsts";
 
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
-import type { RustTargetTypeResolutionOptions } from "../types/resolution/model.js";
+import type { RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/model.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../types/resolution/native-flow-refinement.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../source-evidence/types/resolution/native-flow-refinement.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../source-profiles/js/type-tests.js";
-import { resolveRustInstanceType } from "../types/resolution/instance-tests.js";
+import { resolveRustInstanceType } from "../source-evidence/types/resolution/instance-tests.js";
 
 export function selectRustGuardedValueCarrier(
   reference: Node,

@@ -11,7 +11,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
@@ -25,7 +25,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
-import { resolveRustRetainedResult } from "../types/resolution/retained-results.js";
+import { resolveRustRetainedResult } from "../source-evidence/types/resolution/retained-results.js";
 
 import { selectRustInferredReturn, selectRustRetainedReturn } from "./inferred-return.js";
 import type { RustInferredReturnSelection } from "./inferred-return.js";

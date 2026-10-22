@@ -12,7 +12,7 @@ import {
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectRustAsyncBodyPromise } from "../../policy/types/callables/async-results.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";

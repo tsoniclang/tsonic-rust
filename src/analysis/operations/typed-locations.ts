@@ -5,7 +5,7 @@ import { selectedRustCallSignature } from "../program/records/selected-call.js";
 import type { AstReader, Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "./selected-values.js";
-import { rustSelectedCallTypeParameters } from "../types/resolution/generic-arguments.js";
+import { rustSelectedCallTypeParameters } from "../source-evidence/types/resolution/generic-arguments.js";
 import { acceptRustPolicy, rejectRustPolicy } from "../../policy/operations/contracts.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 
@@ -20,8 +20,8 @@ import { rustCarrierSupportsObjectIdentity } from "../../policy/operations/js-va
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { RustOperationsProviderOptions } from "./provider/model.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
-import type { RustTargetTypeResolutionOptions } from "../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
+import type { RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/index.js";
 import { selectRustTypedLocationSourceOperation } from "../../source/extension/typed-locations.js";
 import type { RustTypedLocationSourceFact } from "../../source/extension/typed-locations.js";
 

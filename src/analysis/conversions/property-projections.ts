@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustJsValueTargetType } from "../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustStructuralFieldProjection } from "../../policy/types/objects/structural-fields.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustProjectedValueConversion } from "../../policy/conversions/property-projection.js";

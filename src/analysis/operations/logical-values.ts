@@ -4,7 +4,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircui
 import { finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { resolveRustBranchUnion } from "../types/resolution/branch-unions.js";
+import { resolveRustBranchUnion } from "../source-evidence/types/resolution/branch-unions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustBoolCarrier } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";

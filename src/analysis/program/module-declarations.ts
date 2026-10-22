@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { KindArrayBindingPattern, KindBindingElement, KindObjectBindingPattern, KindVariableDeclaration, KindVariableStatement, Node_Initializer, Node_Type, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 
-import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
+import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustFactWalk } from "./walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

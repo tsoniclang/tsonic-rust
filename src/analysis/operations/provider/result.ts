@@ -9,9 +9,9 @@ import { asNode, resolveSelectedSourceProfilePropertyMembers } from "../../../po
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
-import { retainRustSourceUnionInstantiation } from "../../types/resolution/source-unions.js";
-import { selectRustProviderObjectLiteralConstruction } from "../../types/resolution/providers.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
+import { retainRustSourceUnionInstantiation } from "../../source-evidence/types/resolution/source-unions.js";
+import { selectRustProviderObjectLiteralConstruction } from "../../source-evidence/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

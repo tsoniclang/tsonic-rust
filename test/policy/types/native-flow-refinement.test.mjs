@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { argumentPassingFactKey, pointerOperationFactKey, createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { selectRustNativeFlowMembers } from "../../../dist/analysis/types/resolution/native-flow-refinement.js";
+import { selectRustNativeFlowMembers } from "../../../dist/analysis/source-evidence/types/resolution/native-flow-refinement.js";
 import { rustJsArrayTargetType, rustJsErrorTargetType, rustJsRegExpTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
-import { resolveRustInstanceType } from "../../../dist/analysis/types/resolution/instance-tests.js";
+import { resolveRustInstanceType } from "../../../dist/analysis/source-evidence/types/resolution/instance-tests.js";
 
 test("subset-kind guards never exclude the complete shared native Error carrier", () => {
   const checked = createCompilerSessionFromFiles({ currentDirectory: "/src", files: { "/src/index.ts": `

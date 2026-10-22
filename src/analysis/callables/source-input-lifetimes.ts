@@ -2,7 +2,7 @@ import { type AstReader, type Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { type RustProgramRecords } from "../../target-model/records/program.js";
 import { rustLifetimeKey, rustLifetimesEqual, type RustSourceGenericParameterContract, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { type RustTargetTypeResolutionContext } from "../types/resolution/model.js";
+import { type RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 
 export function rustCallableImplicitLifetimeParameters(

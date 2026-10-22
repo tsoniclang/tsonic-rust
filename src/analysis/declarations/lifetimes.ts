@@ -17,7 +17,7 @@ import type {
   RustSourceGenericParameterContract,
 } from "../../target-model/lifetimes/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { rustSourceLifetimeTypeContract } from "../types/resolution/lifetimes.js";
+import { rustSourceLifetimeTypeContract } from "../source-evidence/types/resolution/lifetimes.js";
 import { createRustLifetimeRecords } from "../program/records/lifetimes.js";
 
 interface RustSourceGenericParameterEvidence {

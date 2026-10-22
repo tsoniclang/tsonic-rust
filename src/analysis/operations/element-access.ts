@@ -9,7 +9,7 @@ import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedO
 import { acceptDeclarationOperation, elementProvenance } from "../program/records/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../expressions/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./provider/conversions.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustNativeIndex } from "../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../project-types/object-layout.js";
 
@@ -30,7 +30,7 @@ import type { RustProviderOperationTemplate } from "../../target-model/operation
 import { selectRustNumberArrayUnionMember } from "./provider/number-array-unions.js";
 
 import { resolveRustCheckedPropertyAccess } from "./member-access.js";
-import { resolveRustIndexedField } from "../types/resolution/indexed-fields.js";
+import { resolveRustIndexedField } from "../source-evidence/types/resolution/indexed-fields.js";
 import { selectRustRecordElement } from "./provider/records.js";
 
 export function resolveRustCheckedElementAccess(

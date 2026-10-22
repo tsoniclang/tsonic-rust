@@ -1,5 +1,5 @@
 import { analyzeRust } from "./rust-session.mjs";
-import { analyzeRustTypeEmission } from "../../dist/analysis/types/emission.js";
+import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
 import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { planRustSourcePackageComponents } from "../../dist/backend/planner/program/source-package-components.js";

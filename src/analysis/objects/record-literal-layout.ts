@@ -3,7 +3,7 @@ import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructural
 
 import { selectRustUnionVariantByCheckedType } from "../expected-types/union-variants.js";
 
-import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
+import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 import { rustProjectInstanceContracts } from "../project-types/instance-contracts.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

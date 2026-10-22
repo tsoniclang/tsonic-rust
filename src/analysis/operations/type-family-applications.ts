@@ -5,7 +5,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
-import { resolveRustTypeFamilyApplication } from "../types/resolution/type-families.js";
+import { resolveRustTypeFamilyApplication } from "../source-evidence/types/resolution/type-families.js";
 
 export function realizeRustSelectedTypeFamilies(
   walk: RustFactWalk,

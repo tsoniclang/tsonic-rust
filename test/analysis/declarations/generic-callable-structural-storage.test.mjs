@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
-import { retainRustCallableStructuralStorage } from "../../../dist/analysis/types/resolution/structural-instantiations.js";
+import { retainRustCallableStructuralStorage } from "../../../dist/analysis/source-evidence/types/resolution/structural-instantiations.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
-import { resolveRustSelectedSourceCallResult, retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage } from "../../../dist/analysis/types/resolution/call-results.js";
+import { resolveRustSelectedSourceCallResult, retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage } from "../../../dist/analysis/source-evidence/types/resolution/call-results.js";
 import { rustSourceTypeParameter } from "../../../dist/source/extension/type-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

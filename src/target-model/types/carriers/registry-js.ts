@@ -332,10 +332,10 @@ export const jsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTypeRe
     frozen: false,
   },
   {
-    id: "src/analysis/types/resolution/providers.ts#resolveSourceProfileCarrier",
+    id: "src/analysis/source-evidence/types/resolution/providers.ts#resolveSourceProfileCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/analysis/types/resolution/providers.ts", symbol: "resolveSourceProfileCarrier" },
-    counterpart: { module: "src/analysis/types/resolution/source-profiles.ts", symbol: "resolveCsharpSourceProfileBaseType" },
+    declaration: { module: "src/analysis/source-evidence/types/resolution/providers.ts", symbol: "resolveSourceProfileCarrier" },
+    counterpart: { module: "src/analysis/source-evidence/types/resolution/source-profiles.ts", symbol: "resolveCsharpSourceProfileBaseType" },
     frozen: false,
   },
 ]);

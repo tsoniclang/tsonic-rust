@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustIndexedProperty } from "../../../dist/analysis/types/resolution/indexed-fields.js";
+import { resolveRustIndexedProperty } from "../../../dist/analysis/source-evidence/types/resolution/indexed-fields.js";
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 
 function fixture() {

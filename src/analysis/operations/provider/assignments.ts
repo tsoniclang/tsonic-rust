@@ -13,8 +13,8 @@ import { ElementAccessExpression_ArgumentExpression } from "@tsonic/target-api/s
 import { finalizeRustProviderOperationAbi } from "../../../policy/operations/members/abi/finalize.js";
 import { providerFormRequiresSourceReceiver } from "../../../policy/operations/members/call-inputs.js";
 import { instantiateProviderOperationTemplate } from "../../../policy/types/callables/provider-templates.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
-import { resolveRustExactNullishValueCarrier } from "../../types/resolution/target.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
+import { resolveRustExactNullishValueCarrier } from "../../source-evidence/types/resolution/target.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";

@@ -10,7 +10,7 @@ import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js"
 import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 
-import { resolveRustExactNullishValueCarrier } from "../types/resolution/index.js";
+import { resolveRustExactNullishValueCarrier } from "../source-evidence/types/resolution/index.js";
 import { rustPolicyTargetDiagnostic } from "../program/policy-diagnostics.js";
 
 import { resolveRustDeclaredBindingStorage } from "../declarations/binding-storage.js";

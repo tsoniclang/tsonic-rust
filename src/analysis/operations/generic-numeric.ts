@@ -5,10 +5,10 @@ import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric/union.js";
 
-import type { RustTargetTypeResolutionContext } from "../types/resolution/model.js";
+import type { RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 
 export function rustOperandSupportsSourceNumeric(

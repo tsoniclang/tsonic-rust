@@ -7,7 +7,7 @@ import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } fr
 
 import { selectStructuralSourceProperty } from "./provider/structural-properties.js";
 import { selectRustFixedArrayLengthProperty } from "./fixed-arrays.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { resolveRustProjectField } from "./provider/project-fields.js";
 import { rustSourceTypeCarrier } from "../../target-model/types/index.js";
@@ -30,7 +30,7 @@ import { selectRustRecordProperty } from "./provider/records.js";
 import { selectRustUnionProperty } from "./union-properties.js";
 import { selectRustGuardedSourceValueTypes } from "./native-flow-refinement.js";
 import { selectJsSurfaceMemberRead } from "../../policy/operations/source-profiles/js/member-reads.js";
-import { resolveRustIndexedProperty } from "../types/resolution/indexed-fields.js";
+import { resolveRustIndexedProperty } from "../source-evidence/types/resolution/indexed-fields.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationAnalysisContext,

@@ -5,7 +5,7 @@ import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSelectedTargetOperation } from "../../../target-model/records/member-selections.js";
-import { resolveRustInstanceType } from "../../types/resolution/instance-tests.js";
+import { resolveRustInstanceType } from "../../source-evidence/types/resolution/instance-tests.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";

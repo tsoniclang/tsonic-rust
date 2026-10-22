@@ -64,7 +64,7 @@ import { recordCallableDefaultParameterFacts } from "../callables/parameter-fact
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../errors/thrown-values.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

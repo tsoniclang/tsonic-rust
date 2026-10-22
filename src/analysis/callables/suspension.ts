@@ -13,7 +13,7 @@ import { type RustAsyncFunctionFact, type RustGeneratorFact } from "../../target
 import { type RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 import { getRustGeneratorProtocol } from "../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustGeneratorFact } from "../program/records/generator.js";
 import { selectedSourceCallableReturn } from "./signatures.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";

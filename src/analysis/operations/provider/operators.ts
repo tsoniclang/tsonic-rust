@@ -13,8 +13,8 @@ import { asNode } from "../../../policy/identities/selected-source.js";
 
 import { KindBigIntLiteral, sourceSequenceInputIsEmpty } from "@tsonic/target-api/source";
 
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
-import { resolveRustExactNullishValueCarrier } from "../../types/resolution/target.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
+import { resolveRustExactNullishValueCarrier } from "../../source-evidence/types/resolution/target.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";

@@ -14,7 +14,7 @@ import { rustResolutionContext } from "../program/walk.js";
 
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { resolveExpressionCarrier, resolveExpressionCarrierBeforeFlowReadProjection } from "../expressions/carriers.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 

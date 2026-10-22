@@ -6,7 +6,7 @@ import test from "node:test";
 import { planRustFlowReadProjection, planRustValueProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
 import { rustJsValueTargetType, rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
-import { selectRustSourceCallResult } from "../../../../dist/analysis/types/resolution/call-results.js";
+import { selectRustSourceCallResult } from "../../../../dist/analysis/source-evidence/types/resolution/call-results.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";

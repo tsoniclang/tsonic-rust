@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceMarkerFactKey } from "@tsonic/tsts";
-import { resolveRustSourceMarker } from "../../../dist/analysis/types/resolution/markers.js";
+import { resolveRustSourceMarker } from "../../../dist/analysis/source-evidence/types/resolution/markers.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 test("finalized source evidence is fetched once on both present and absent paths without consulting native records", () => {

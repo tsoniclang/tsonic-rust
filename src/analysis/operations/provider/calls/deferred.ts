@@ -4,11 +4,11 @@ import { acceptSelectedCall, mapSelectedTargetTypeArguments } from "./instantiat
 import { selectRustOptionalCallResult } from "./optional-results.js";
 import { defaultValueFactKey, fieldFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation, replaceRustInferCarrier, rustCallbackProtocol } from "../../../../policy/operations/members/callbacks.js";
-import { rustSelectedCallTypeParameters } from "../../../types/resolution/generic-arguments.js";
+import { rustSelectedCallTypeParameters } from "../../../source-evidence/types/resolution/generic-arguments.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { applyRustRegExpReplacementCallbackConversion, finalizeRustRegExpReplacementCallbackContract } from "../../../../policy/operations/members/regexp-callbacks.js";
 import { rejectSelectedOperation } from "../result.js";
-import { resolveRustTargetTypeRef } from "../../../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";

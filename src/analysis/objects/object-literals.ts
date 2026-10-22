@@ -8,7 +8,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact } from "../operations/project-calls.js";

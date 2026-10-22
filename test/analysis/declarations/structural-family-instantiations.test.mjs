@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { rustStructuralGenericCarrier } from "../../../dist/policy/types/objects/structural-generics.js";
-import { retainRustStructuralInstantiation } from "../../../dist/analysis/types/resolution/structural-instantiations.js";
+import { retainRustStructuralInstantiation } from "../../../dist/analysis/source-evidence/types/resolution/structural-instantiations.js";
 import { rustGenericsWithAssociatedBounds } from "../../../dist/backend/planner/types/generic-bounds.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/objects/structural-fields.js";

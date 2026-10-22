@@ -4,16 +4,16 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { Node_Type, sourceTypeSyntaxRoot } from "@tsonic/target-api/source";
 import { rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { RustTypeAliasDeclarationFact } from "../../target-model/records/callables-and-resources.js";
-import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../types/resolution/type-families.js";
-import { resolveRustEvidenceNodesToCommonCarrier } from "../types/resolution/source-evidence.js";
+import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../source-evidence/types/resolution/type-families.js";
+import { resolveRustEvidenceNodesToCommonCarrier } from "../source-evidence/types/resolution/source-evidence.js";
 import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/identities/source-union-members.js";
-import { rustSourceUnionValueTypes } from "../types/resolution/source-unions.js";
+import { rustSourceUnionValueTypes } from "../source-evidence/types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {

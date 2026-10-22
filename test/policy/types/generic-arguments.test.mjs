@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindRustCallableTypeParameters, bindRustSourceAliasArguments, bindRustSourceDeclarationArguments } from "../../../dist/analysis/types/resolution/generic-arguments.js";
+import { bindRustCallableTypeParameters, bindRustSourceAliasArguments, bindRustSourceDeclarationArguments } from "../../../dist/analysis/source-evidence/types/resolution/generic-arguments.js";
 
 function fixture() {
   const declaration = {};

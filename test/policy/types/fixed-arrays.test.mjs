@@ -14,8 +14,8 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { resolveArrayLiteralCarrier } from "../../../dist/analysis/expressions/array-literals.js";
 import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/fixed-arrays.js";
-import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "../../../dist/analysis/types/resolution/source.js";
-import { resolveRustTargetType } from "../../../dist/analysis/types/resolution/target.js";
+import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
+import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";
 import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustTargetConstSafeInteger, rustVecTargetType, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustOptionTargetType, rustAbsenceTargetType, rustCallableTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTupleTargetType } from "../../../dist/policy/types/collections/tuple-carrier.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

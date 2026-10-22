@@ -8,7 +8,7 @@ import { KindArrayLiteralExpression, KindCallExpression, KindNewExpression, Kind
 import { rejectSelectedOperation } from "./provider/result.js";
 import { acceptRustOperation } from "../program/records/selected-operation-values.js";
 
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 

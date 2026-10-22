@@ -3,9 +3,9 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { Node_Type, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
-import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
+import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 
 export function resolveRustDeclaredBindingStorage(
   walk: RustFactWalk,

@@ -1,0 +1,193 @@
+import { Node_Initializer, Node_Type, TypeReferenceNode_TypeName, TypeOperatorNode_Type } from "@tsonic/target-api/source";
+import { resolveOwnedSourceProfileTypeNameForDeclaration } from "../../../../policy/identities/source-types.js";
+import { resolveRustTargetType } from "./target.js";
+import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "./source.js";
+import { resolveRustConditionalAlias } from "./type-families.js";
+import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
+import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+
+import { sourceTransformedTypeFactEvidenceNodes, sourceTupleElementTypeEvidenceNodes } from "@tsonic/target-api/source";
+import type { Node, TypeTupleElementInfo } from "@tsonic/tsts";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+
+export function resolveRustTupleElementTargetType(
+  element: TypeTupleElementInfo,
+  semantics: SourceFileSemantics,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  return resolveRustTupleElementTargetTypeWithState(
+    element,
+    semantics,
+    context,
+    options,
+    new Set<object>(),
+  );
+}
+
+export function resolveRustTupleElementTargetTypeWithState(
+  element: TypeTupleElementInfo,
+  semantics: SourceFileSemantics,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+  authoredRoot?: Node,
+): TargetTypeRef | undefined {
+  const evidenceNodes = [
+    ...sourceTupleElementTypeEvidenceNodes(
+      context.ast,
+      semantics,
+      element,
+    ),
+    ...(authoredRoot === undefined
+      ? []
+      : sourceTransformedTypeFactEvidenceNodes(
+          context.ast,
+          semantics,
+          authoredRoot,
+          element.type,
+        )),
+  ];
+  if (evidenceNodes.length === 0) {
+    return resolveRustTargetType(
+      element.type,
+      context,
+      options,
+      resolving,
+    );
+  }
+  const carriers = [...new Set(evidenceNodes)].map((authoredTypeNode) =>
+    resolveRustTypeComponentEvidence(
+      {
+        selectedType: element.type,
+        ...(element.declaration === undefined
+          ? {}
+          : { declaration: element.declaration }),
+        authoredTypeNode,
+      },
+      context,
+      options,
+      resolving,
+    )
+  );
+  if (carriers.some((carrier) => carrier === undefined)) {
+    return undefined;
+  }
+  const first = carriers[0]!;
+  return carriers.every((carrier) =>
+      carrier !== undefined && rustTargetTypeRefEquals(first, carrier)
+    )
+    ? first
+    : undefined;
+}
+
+export function resolveRustAuthoredTargetType(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  if (resolving.has(node)) return undefined;
+  const ownerFile = context.ast.getSourceFile(node);
+  if (ownerFile !== undefined && context.source.semantics.includes(ownerFile) &&
+    ownerFile !== context.currentSemantics.sourceFile) {
+    context = { ...context, currentSemantics: context.semantics(ownerFile) };
+  }
+  const conditional = resolveRustConditionalAlias(node, context, options, resolving);
+  if (conditional !== undefined) return conditional.carrier;
+  resolving.add(node);
+  try {
+    const syntax = resolveRustTargetTypeSyntax(node, context, options, resolving);
+    if (syntax !== undefined) return syntax;
+    const sourceFile = context.ast.getSourceFile(node);
+    return sourceFile === undefined || !context.source.semantics.includes(sourceFile)
+      ? undefined
+      : resolveRustTargetType(
+        context.semanticsFor(node).types.expressionType(node),
+        context,
+        options,
+        resolving,
+        node,
+      );
+  } finally {
+    resolving.delete(node);
+  }
+}
+
+export function resolveReferencedDeclarationType(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  const { ast } = context;
+  const declaration = context.source.navigation.referenceFor(node)?.declaration;
+  if (declaration !== undefined) {
+      const declarationCarrier = context.records.runtimeCarrier.get(declaration)?.carrier;
+      if (declarationCarrier !== undefined) {
+        return declarationCarrier;
+      }
+      const typeNode = Node_Type(ast, declaration);
+      if (typeNode !== undefined) {
+        const target = resolveRustAuthoredTargetType(typeNode, context, options, new Set<object>());
+        if (target !== undefined) {
+          return ast.kindName(declaration) === "KindParameter"
+            ? rustParameterLaneTargetType(target, typeNode, context, options)
+            : target;
+        }
+      }
+      const initializer = Node_Initializer(ast, declaration);
+      const selectedCall = initializer === undefined
+        ? undefined
+        : context.records.selectedCall.get(initializer);
+      if (selectedCall !== undefined) return resolveRustTargetTypeRef(initializer, context, options);
+  }
+  return undefined;
+}
+
+export function rustParameterLaneTargetType(
+  carrier: TargetTypeRef | undefined,
+  typeNode: Node,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  if (carrier?.kind !== "array") {
+    return carrier;
+  }
+  return sourceParameterTypeIsReadonlyArray(typeNode, context, options)
+    ? rustSliceRefTargetType(carrier.element)
+    : rustSliceMutRefTargetType(carrier.element);
+}
+
+function sourceParameterTypeIsReadonlyArray(
+  typeNode: Node,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): boolean {
+  const { ast } = context;
+  if (ast.kindName(typeNode) === "KindTypeOperator") {
+    const inner = TypeOperatorNode_Type(ast, typeNode);
+    return inner !== undefined && ast.kindName(inner) === "KindArrayType";
+  }
+  if (ast.kindName(typeNode) !== "KindTypeReference") {
+    return false;
+  }
+  const typeName = TypeReferenceNode_TypeName(ast, typeNode);
+  let declaration = typeName === undefined
+    ? undefined
+    : context.source.navigation.sourceReferenceFor(typeName)?.declaration;
+  const seen = new Set<Node>();
+  while (declaration !== undefined && !seen.has(declaration)) {
+    seen.add(declaration);
+    if (resolveOwnedSourceProfileTypeNameForDeclaration(declaration, context, options.sourceProfiles) === "ReadonlyArray") {
+      return true;
+    }
+    if (context.records.typeOnlyDeclaration.get(declaration)?.reason !== "representation-alias") return false;
+    const heritage = context.source.navigation.declaredHeritage(declaration);
+    if (heritage.kind !== "resolved" || heritage.edges.length !== 1 || heritage.edges[0]?.kind !== "extends") return false;
+    declaration = heritage.edges[0].target.declaration;
+  }
+  return false;
+}

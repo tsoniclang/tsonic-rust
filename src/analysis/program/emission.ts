@@ -111,7 +111,7 @@ import { analyzeRustProjectClassLayouts } from "../project-types/class-layouts.j
 import { analyzeRustObjectLiteralEmission } from "../objects/object-literal-emission.js";
 import { analyzeRustProjectMemberErrors } from "../errors/member-emission.js";
 import { analyzeRustGenericRequirementEmission } from "../declarations/requirement-emission.js";
-import { analyzeRustTypeEmission } from "../types/emission.js";
+import { analyzeRustTypeEmission } from "../source-evidence/types/emission.js";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
 import { analyzeRustClassInitialization } from "../project-types/class-initialization.js";
 import { analyzeRustCallableParameterEmission } from "../callables/parameters.js";

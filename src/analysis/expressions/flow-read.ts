@@ -26,7 +26,7 @@ import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-r
 
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -43,7 +43,7 @@ import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedEr
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustWritableErrorRecoveryOriginMatches } from "../../policy/conversions/program-error.js";
 import { rustSourceAbsenceReadCarrier } from "../../policy/operations/flow/absence-use.js";
-import { resolveRustNativeFlowCarrier } from "../types/resolution/native-flow-refinement.js";
+import { resolveRustNativeFlowCarrier } from "../source-evidence/types/resolution/native-flow-refinement.js";
 
 export function applyFlowReadLane(
   walk: RustFactWalk,

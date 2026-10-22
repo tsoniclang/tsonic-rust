@@ -7,7 +7,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan } from "./class-value-callables.js";

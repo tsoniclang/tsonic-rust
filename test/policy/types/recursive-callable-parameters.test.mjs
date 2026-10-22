@@ -7,8 +7,8 @@ import { analyzeRust, checkRustSession, createRustSession } from "../../helpers/
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 
-import { resolveRustTargetTypeRef } from "../../../dist/analysis/types/resolution/source.js";
-import { resolveRustCallableStorageCarrier } from "../../../dist/analysis/types/resolution/source-evidence.js";
+import { resolveRustTargetTypeRef } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
+import { resolveRustCallableStorageCarrier } from "../../../dist/analysis/source-evidence/types/resolution/source-evidence.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 

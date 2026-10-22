@@ -10,13 +10,13 @@ import {
 } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 
 import { finalizeRustCallableSignature } from "../callables/signature-query.js";
 import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "../callables/parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
-import { resolveTypeNodeCarrier } from "../types/source-carriers.js";
+import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 

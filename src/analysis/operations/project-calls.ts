@@ -16,15 +16,15 @@ import { rustTypeFamilyNormalizer } from "../project-types/type-family-normaliza
 import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-parameter-contracts.js";
-import { retainRustStructuralInstantiation } from "../types/resolution/structural-instantiations.js";
-import { bindRustSelectedCallTypeArguments } from "../types/resolution/generic-arguments.js";
+import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
+import { bindRustSelectedCallTypeArguments } from "../source-evidence/types/resolution/generic-arguments.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
-import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../types/resolution/call-results.js";
+import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../source-evidence/types/resolution/call-results.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
 import { rustRetainedEnvironment } from "../callables/retained-values.js";

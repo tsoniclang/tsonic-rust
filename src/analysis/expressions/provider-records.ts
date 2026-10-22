@@ -2,7 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
-import { selectRustProviderObjectLiteralConstruction } from "../types/resolution/providers.js";
+import { selectRustProviderObjectLiteralConstruction } from "../source-evidence/types/resolution/providers.js";
 import {
   resolveSelectedProviderDeclaration,
 } from "../../policy/identities/selected-source.js";
@@ -14,7 +14,7 @@ import type { RustProviderRecordAbsentField } from "../../target-model/conversio
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";

@@ -14,7 +14,7 @@ import type { SelectedObjectShapeProjection } from "../../../policy/operations/s
 
 import { acceptSelectedCall } from "./calls/instantiation.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 
 export function selectRustRecordElement(
   request: RustCheckedElementSelectionInput,

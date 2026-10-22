@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustSourceUnionMemberTypes } from "../../../dist/analysis/types/resolution/source-unions.js";
+import { rustSourceUnionMemberTypes } from "../../../dist/analysis/source-evidence/types/resolution/source-unions.js";
 import { acmeTestingPackage, compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustSourcePrimitiveTargetType, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";

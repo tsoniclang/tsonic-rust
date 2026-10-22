@@ -10,7 +10,7 @@ import * as callableSignatures from "../../../dist/analysis/callables/signature-
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
-import { resolveRustCallableEnvironment } from "../../../dist/analysis/types/resolution/callable-environments.js";
+import { resolveRustCallableEnvironment } from "../../../dist/analysis/source-evidence/types/resolution/callable-environments.js";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`

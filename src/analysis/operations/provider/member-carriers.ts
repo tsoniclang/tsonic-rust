@@ -6,9 +6,9 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../project-types/type-family-normalization.js";
-import { resolveRustTypeFamilyApplication } from "../../types/resolution/type-families.js";
-import { bindRustSourceGenericArguments } from "../../types/resolution/generic-arguments.js";
-import type { RustTargetTypeResolutionContext } from "../../types/resolution/model.js";
+import { resolveRustTypeFamilyApplication } from "../../source-evidence/types/resolution/type-families.js";
+import { bindRustSourceGenericArguments } from "../../source-evidence/types/resolution/generic-arguments.js";
+import type { RustTargetTypeResolutionContext } from "../../source-evidence/types/resolution/model.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 
 export function bindRustSelectedReceiverContext(

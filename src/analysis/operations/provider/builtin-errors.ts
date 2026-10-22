@@ -3,7 +3,7 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import { type RustSelectedSourceMemberSet } from "../../../policy/identities/selected-source.js";
 import { selectRustErrorTypePredicate } from "../../source-profiles/js/type-tests.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { acceptRustMemberOperation, rejectSelectedOperation } from "./result.js";
 import { acceptRustOperation } from "../../program/records/selected-operation-values.js";

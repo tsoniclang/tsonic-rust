@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
-import { resolveProjectSourceCarrier } from "../../../dist/analysis/types/resolution/project.js";
+import { resolveProjectSourceCarrier } from "../../../dist/analysis/source-evidence/types/resolution/project.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

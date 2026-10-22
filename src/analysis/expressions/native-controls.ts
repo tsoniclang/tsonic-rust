@@ -5,7 +5,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { readRustLanguageCall, type RustLanguageCall } from "./native-language-call.js";
 import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../target-model/identities/source.js";
 import { resolveExpressionCarrier } from "./carriers.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 

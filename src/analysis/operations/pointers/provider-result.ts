@@ -1,7 +1,7 @@
 import { selectTsonicProviderPointerResult } from "@tsonic/source-core/facts";
 import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/model.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../source-evidence/types/resolution/model.js";
 import { rustJsArrayTargetType, rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustSourcePrimitiveTargetType, rustVecTargetType } from "../../../target-model/types/index.js";
 import { rustTupleTargetType } from "../../../policy/types/collections/tuple-carrier.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

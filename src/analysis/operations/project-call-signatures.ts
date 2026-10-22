@@ -8,7 +8,7 @@ import { asNode } from "../../policy/identities/selected-source.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./provider/result.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 
@@ -31,9 +31,9 @@ import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionM
 import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 
-import { selectRustSourceCallResult } from "../types/resolution/call-results.js";
-import { resolveRustTypeComponentEvidence } from "../types/resolution/source-evidence.js";
-import { bindRustSelectedCallTypeArguments } from "../types/resolution/generic-arguments.js";
+import { selectRustSourceCallResult } from "../source-evidence/types/resolution/call-results.js";
+import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";
+import { bindRustSelectedCallTypeArguments } from "../source-evidence/types/resolution/generic-arguments.js";
 import { bindRustSelectedReceiverContext } from "./provider/member-carriers.js";
 
 export function acceptProjectSourceCall(

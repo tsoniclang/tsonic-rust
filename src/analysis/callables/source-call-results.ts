@@ -4,7 +4,7 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { selectRustSourceCallResult } from "../types/resolution/call-results.js";
+import { selectRustSourceCallResult } from "../source-evidence/types/resolution/call-results.js";
 
 export function rustSourceCallResultProjectionMatches(
   selected: RustFlowReadProjectionFact,

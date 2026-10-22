@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceNodeIsNativeUnreachable } from "@tsonic/target-api/source";
 
-import { selectRustNativeGuardResult } from "../types/resolution/native-flow-refinement.js";
+import { selectRustNativeGuardResult } from "../source-evidence/types/resolution/native-flow-refinement.js";
 
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 
 export function recordRustNativeGuardResult(walk: RustFactWalk, expression: Node): boolean | undefined {

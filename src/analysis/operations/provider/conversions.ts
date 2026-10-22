@@ -12,7 +12,7 @@ import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../../program/records/value-carrier-admission.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
 import { sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";

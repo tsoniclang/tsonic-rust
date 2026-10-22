@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveRustBranchUnion } from "../../../dist/analysis/types/resolution/branch-unions.js";
+import { resolveRustBranchUnion } from "../../../dist/analysis/source-evidence/types/resolution/branch-unions.js";
 import { rustStringTargetType, rustSourceUnionTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";

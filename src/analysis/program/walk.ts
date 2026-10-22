@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "./operation-context.js";
 import { requireRustRecord } from "./records/required-records.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
-import { rustSourceStorageContext } from "../types/resolution/source-storage-projection.js";
+import { rustSourceStorageContext } from "../source-evidence/types/resolution/source-storage-projection.js";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinaryExpression, KindCallExpression, KindDeleteExpression, KindElementAccessExpression, KindIdentifier, KindNewExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, Node_Expression, Node_Type, ForInOrOfStatement_Initializer, VariableDeclarationList_Declarations } from "@tsonic/target-api/source";
 import { selectRustCheckedCall, selectRustCheckedConversion, selectRustCheckedElementAccess, selectRustCheckedOperator, selectRustCheckedPropertyAccess, selectRustCheckedValue } from "../operations/provider/index.js";
 import { selectRustCheckedDelete } from "../operations/member-access.js";
@@ -21,7 +21,7 @@ import type { RustProviderOperationRow } from "../../target-model/identities/pro
 import type { RustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import type { RustTargetTypeResolutionContext } from "../types/resolution/index.js";
+import type { RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetOperation } from "../../target-model/records/member-selections.js";
 import type { RustCaptureStorage } from "../../target-model/records/capture-storage.js";

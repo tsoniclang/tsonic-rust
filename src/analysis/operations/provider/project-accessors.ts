@@ -3,7 +3,7 @@ import type { RustProjectAccessorSelection } from "../../../target-model/records
 import { Node_Type } from "@tsonic/target-api/source";
 import type { Node, Type } from "@tsonic/tsts";
 
-import { resolveRustTargetTypeRef } from "../../types/resolution/source.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";

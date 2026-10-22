@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../types/resolution/model.js";
-import { resolveRustTargetTypeRef } from "../types/resolution/source.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/model.js";
+import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceLocationTargetType, rustSourceOptionalTargetType, rustAbsenceTargetType } from "../../target-model/types/index.js";
-import { resolveRustExactNullishValueCarrier } from "../types/resolution/target.js";
+import { resolveRustExactNullishValueCarrier } from "../source-evidence/types/resolution/target.js";
 import { readRustRawLocation } from "../../source/extension/native-memory.js";
 import { resolveRustMemoryLayoutPointee } from "../operations/pointers/native-memory.js";
 

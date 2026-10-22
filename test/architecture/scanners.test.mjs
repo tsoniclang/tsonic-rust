@@ -418,7 +418,7 @@ test("provider and library identity never flows through local-name recasing", ()
 test("source profile identity comes from the registered compiler SourceFile, never a path substring", () => {
   const identitySources = [
     join(sourceRoot, "policy/identities/selected-source.ts"),
-    ...collectFiles(join(sourceRoot, "analysis/types/resolution"), ".ts"),
+    ...collectFiles(join(sourceRoot, "analysis/source-evidence/types/resolution"), ".ts"),
   ];
   for (const path of identitySources) {
     const text = readFileSync(path, "utf8");
@@ -630,7 +630,7 @@ test("type-shape queries are confined to closed target type resolution", () => {
 });
 
 test("compiler Type objects are never treated as source-alias fact identity", () => {
-  const text = readFileSync(join(sourceRoot, "analysis/types/resolution/target.ts"), "utf8");
+  const text = readFileSync(join(sourceRoot, "analysis/source-evidence/types/resolution/target.ts"), "utf8");
   assert.doesNotMatch(text, /factResolver\.resolve\(type,\s*runtimeCarrierFactKey\)/u);
   assert.doesNotMatch(text, /factResolver\.resolve\(type,\s*sourcePrimitiveFactKey\)/u);
 });
