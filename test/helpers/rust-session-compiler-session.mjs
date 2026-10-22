@@ -285,6 +285,21 @@ function createRustCompileInputFromSession({
   };
 }
 
+// A real checked program as a TargetCompileInput, with the caller's target options and runtime references (for
+// direct target calls that select their own runtime crates).
+export function checkedRustCompileInput({ files = { "empty.ts": "" }, target, runtimeReferences = [],
+  runtimeActivatedCapabilityIds = [] } = {}) {
+  const harness = createRustSession({ files, ...(target === undefined ? {} : { target }) });
+  try {
+    const sourceDiagnostics = rustSourceDiagnosticsText(harness);
+    if (sourceDiagnostics !== "") throw new Error(`TypeScript diagnostics:\n${sourceDiagnostics}`);
+    return createRustCompileInputFromSession({ source: checkedRustSource(harness), sourcePackages: harness.sourcePackages,
+      project: harness.project, target: harness.target, runtimeReferences, runtimeActivatedCapabilityIds, paths: harness.paths });
+  } finally {
+    harness.targetSession.close();
+  }
+}
+
 export function compileRust(options) {
   const { captureRequiredRecords = false, ...compilationOptions } = options;
   let program;
