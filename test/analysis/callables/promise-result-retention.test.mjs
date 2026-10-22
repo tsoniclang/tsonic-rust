@@ -72,18 +72,6 @@ async function run(): Promise<boolean> {
   const stored = invoke(read, value);
   return await stored === value;
 }`],
-  ["immediate-native-borrow", `
-import type { int32 } from "@tsonic/core/types.js";
-import type { Life, Ref } from "@tsonic/rust/types.js";
-import { load, ref } from "@tsonic/rust/lang.js";
-async function keep<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
-  await pending;
-  return load(value);
-}
-async function run(): Promise<boolean> {
-  const value = 7 as int32;
-  return await keep(ref(value), Promise.resolve(undefined)) === 7;
-}`],
   ["bound-structural-method", `
 function make<Value>(value: Value): { read(): Value } { return { read(): Value { return value; } }; }
 async function keep<Actual>(api: { read(): Actual }, pending: Promise<void>): Promise<Actual> {
@@ -201,7 +189,7 @@ async function run(): Promise<boolean> {
 
 for (const [name, source] of cases) {
   test(`Rust native Promise retention preserves ${name}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces: name === "immediate-native-borrow" ? [] : ["js"],
+    const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "promise_result_retention" } },
       files: { "index.ts": `export {};\n${source}
 async function main(): Promise<void> { if (!await run()) throw new Error("native Promise retention"); }
@@ -215,6 +203,31 @@ await main();` },
       "the complete generated native program builds, lints and executes");
   });
 }
+
+// RULINGS (2026-10-23): the native surface has no Promise.resolve, as at the checkpoint; a native-surface program using
+// it is refused with one source diagnostic at the call and publishes nothing.
+test("native surface refuses Promise.resolve at its call without a follow-on argument refusal", () => {
+  const { result } = compileRust({ surfaces: [],
+    target: { id: "rust", options: { outputType: "bin", crateName: "promise_result_retention" } },
+    files: { "index.ts": `export {};
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+async function keep<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  await pending;
+  return load(value);
+}
+async function run(): Promise<boolean> {
+  const value = 7 as int32;
+  return await keep(ref(value), Promise.resolve(undefined)) === 7;
+}
+async function main(): Promise<void> { if (!await run()) throw new Error("native Promise retention"); }
+await main();` },
+  });
+  assert.deepEqual(result.diagnostics.map(({ code }) => code), ["RUST_SELECTED_CALL_EVIDENCE_MISSING"]);
+  assert.equal(result.diagnostics[0].sourceNode !== undefined, true, "the refusal names the Promise.resolve call");
+  assert.equal(result.program === undefined && result.artifacts.length === 0, true, "a rejected program is never published");
+});
 
 test("native discarded results retain both actual failing call sites", () => {
   const { result } = compileRust({ files: { "index.ts": `
