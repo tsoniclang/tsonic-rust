@@ -231,8 +231,6 @@ export function finalizeRustNativeEmission(
     node => context.semanticsFor(node).propertyNames.get(node));
   if (objectLiteralIssues.length !== 0) return rejectedTargetStage(objectLiteralIssues);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
-  const providerFormIssues = analyzeRustProviderForms(program, context.records.providerFormPlans);
-  if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const sourceFileEmissionIssues = analyzeRustSourceFileEmission(program, context.records.sourceFileEmissionPlans);
   if (sourceFileEmissionIssues.length !== 0) return rejectedTargetStage(sourceFileEmissionIssues);
   const dispatchRootIssues = analyzeRustDispatchRootEmission(program, errorEmission.plan, context.nativeNodes, context.records.dispatchContextEmissionPlans);
@@ -245,6 +243,9 @@ export function finalizeRustNativeEmission(
   if (packageCargoIssues.length !== 0) return rejectedTargetStage(packageCargoIssues);
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
+  // Provider reads select Copy/Clone from the declaration-owned clone guarantees published just above.
+  const providerFormIssues = analyzeRustProviderForms(program, context.records.providerFormPlans);
+  if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const arrayLiteralIssues = analyzeRustArrayLiterals(program, context.nativeNodes, context.records.arrayLiteralPlans);
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);
   const propertyProjectionIssues = analyzeRustPropertyValueProjection(program, context.nativeNodes, context.records.propertyValueProjectionPlans);
