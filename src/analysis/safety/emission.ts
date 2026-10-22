@@ -1,7 +1,8 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { sourceSafetyPositionIssue, createSourceExplicitUnsafeContextIndex } from "@tsonic/target-api/analysis";
+import { sourceSafetyPositionIssue } from "@tsonic/target-api/analysis";
+import { createRustExplicitUnsafeContexts, isRustIndependentSafetyBoundary } from "./explicit-regions.js";
 import type { RustSafetyApplication, RustSafetyOperation } from "../../target-model/records/safety.js";
 import type { RustSafetyPlacement, RustSafetyEmission } from "../../target-model/records/safety-emission.js";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -14,7 +15,7 @@ interface RustSafetyAnalysisInput {
 export function analyzeRustSafetyEmission(program: RustSafetyAnalysisInput["program"], producer: RustSafetyEmissionProducer): readonly TargetDiagnostic[] {
   const input: RustSafetyAnalysisInput = { program };
   const issues: TargetDiagnostic[] = [];
-  const explicit = createSourceExplicitUnsafeContextIndex(program.source.ast, program.sourceFiles,
+  const explicit = createRustExplicitUnsafeContexts(program.source.ast, program.sourceFiles,
     node => program.safetyApplications.operationForExpression(node));
   for (const file of program.sourceFiles) diagnoseRustSafetyApplications(file, input, issues);
   const seen = new Map<Node, RustSafetyEmission>();
@@ -224,18 +225,7 @@ function isIndependentSafetyBoundary(
   node: Node,
   input: RustSafetyAnalysisInput,
 ): boolean {
-  switch (input.program.source.ast.kindName(node)) {
-    case "KindFunctionDeclaration":
-    case "KindMethodDeclaration":
-    case "KindMethodSignature":
-    case "KindConstructor":
-    case "KindConstructorDeclaration":
-    case "KindGetAccessor":
-    case "KindSetAccessor":
-      return true;
-    default:
-      return false;
-  }
+  return isRustIndependentSafetyBoundary(input.program.source.ast, node);
 }
 
 

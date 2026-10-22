@@ -296,6 +296,58 @@ export function read(pointer: NativePointer<int32>): int32 {
   validateGeneratedProject("explicit-safety-closure-requirement", result.artifacts);
 });
 
+test("a nested function declaration does not inherit the enclosing unsafecontext() region", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
+import type { int32, NativePointer } from "@tsonic/core/types.js";
+
+export function read(pointer: NativePointer<int32>): int32 {
+  unsafecontext();
+  function load(): int32 { return loadnativeptr(pointer); }
+  return load();
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0, "a nested function is its own Rust item and needs its own region");
+  assert.deepEqual(
+    result.diagnostics.map(({ code, message }) => ({ code, message })),
+    [{
+      code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
+      message: "Rust native-pointer load requires an explicit unsafecontext() source region.",
+    }],
+  );
+});
+
+test("a nested function declaration with its own unsafecontext() region compiles", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
+import type { int32, NativePointer } from "@tsonic/core/types.js";
+
+export function read(pointer: NativePointer<int32>): int32 {
+  function load(): int32 {
+    unsafecontext();
+    return loadnativeptr(pointer);
+  }
+  return load();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const read = nativeFunction(result, "read");
+  assert.equal(nativeNodes(read, node => node.kind === "dereference").length, 1);
+  validateGeneratedProject("explicit-safety-nested-function-region", result.artifacts);
+});
+
 test("safe-only explicit regions inside closures retain their warning policy", {
   timeout: 300_000,
 }, () => {

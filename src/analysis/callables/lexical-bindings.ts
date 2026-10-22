@@ -1,10 +1,11 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustExplicitUnsafeContexts } from "../safety/explicit-regions.js";
 import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sourceLexicalCaptures, sourceMayReadBeforeInitialization, type TargetSourceProgram } from "@tsonic/target-api/source";
 
 import type { RustSourceLexicalCallableQueries } from "../../target-model/records/source-callables.js";
 
 export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram, nodes: readonly Node[],
-  explicitUnsafe: ReadonlySet<Node>): RustSourceLexicalCallableQueries {
+  explicitUnsafe: RustExplicitUnsafeContexts): RustSourceLexicalCallableQueries {
   const bindings = new WeakMap<Node, Node | null>();
   const calls = new WeakMap<Node, WeakMap<Node, readonly Node[] | null>>();
   const callsFor = (binding: Node, implementation: Node): readonly Node[] | undefined => {
