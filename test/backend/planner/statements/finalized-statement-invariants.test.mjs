@@ -17,6 +17,8 @@ import { planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment 
 import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statements/assignment-writes.js";
 import { validateRustFinalizedOperationAbi } from "../../../../dist/policy/operations/members/abi/validation.js";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
+import { analyzeRustCountedLoopRepresentations } from "../../../../dist/analysis/control-flow/counted-loop-representations.js";
+import { createRustStatementCompletionProducer } from "../../../../dist/analysis/program/records/statement-completion.js";
 import { planStatement } from "../../../../dist/backend/planner/statements/planning.js";
 import { finalizeRustProviderOperationAbi } from "../../../../dist/policy/operations/members/abi/finalize.js";
 import { finishProviderOperationExpression } from "../../../../dist/backend/planner/expressions/conversions.js";
@@ -97,12 +99,20 @@ function assertInvariant(run, context, message, subject) {
   assert.equal(context.diagnostics.length, 0, "no source rejection is appended");
 }
 
+// Re-runs the statement-completion owner over the analysis program with the same inputs the target program passes.
 function admitStatements(program) {
-  const nativeNodes = new Set(rustNativeFixtureNodes(program));
+  const ordered = rustNativeFixtureNodes(program);
+  const nativeNodes = new Set(ordered);
   return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.sourceFiles,
     isNativeNode: node => nativeNodes.has(node),
     records: program.records, names: program.names, typeDefinitions: program.typeDefinitions,
-    errorRegions: program.errorRegions, projectFlowReadSelections: program.projectFlowReadSelections });
+    errorRegions: program.errorRegions, projectFlowReadSelections: program.projectFlowReadSelections,
+    producer: createRustStatementCompletionProducer(() => {}), required: [],
+    safetyApplications: program.safetyApplications, components: program.sourcePackageComponents,
+    ownership: program.ownership, projectTypes: program.projectTypes, projectFieldDispatch: program.projectFieldDispatch,
+    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites,
+    countedLoops: analyzeRustCountedLoopRepresentations({ ast: program.source.ast, nativeNodes: ordered,
+      navigation: program.source.navigation, records: program.records, borrowedElementReads: program.borrowedElementReads }) });
 }
 
 test("checked throw, try and iteration selections plan with complete backend state", () => {
@@ -195,8 +205,9 @@ test("runtime setter selection retains exact operand nodes and prior ABI admissi
       diagnostic.sourceNode === node), true, `${field}: admission retains the exact source identity`);
     assert.equal(selected.plan === undefined, true, `${field}: no incomplete statement plan is published`);
   }
-  const missing = planContext({ ...program, statementCompletions: { ...program.statementCompletions,
-    setterFor: () => undefined } }, node);
+  // The sealed runtime-setter record is the planner's only source of the admitted operands and ABI correspondence.
+  const missing = planContext({ ...program, records: { ...program.records,
+    runtimeSetter: { get: subject => subject === node ? undefined : program.records.runtimeSetter.get(subject) } } }, node);
   assertInvariant(() => planRuntimeSetStatement(node, fact, missing), missing,
     "Runtime setter requires its admitted native source operands and ABI correspondence.", node);
   const malformed = { ...fact, abi: { ...fact.abi,
