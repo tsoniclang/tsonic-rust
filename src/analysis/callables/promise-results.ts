@@ -319,9 +319,18 @@ export function analyzeRustPromiseResults(input: {
         return unresolved(value.node, "A retained native reference requires its concrete source owner or exact formal input contract.");
       }
       const abi = value.kind === "input" ? input.records.sourceParameterAbi.get(value.node) : undefined;
-      if (value.kind === "input" && abi?.parameterCarrier.kind === "reference" && abi.inputLifetime !== undefined &&
-        rustLifetimesEqual(lifetime, abi.inputLifetime) &&
-        rustLifetimesEqual(abi.parameterCarrier.lifetime, abi.inputLifetime)) {
+      // A formal input borrowed for its own duration: either the ABI introduced the input lifetime, or the input is an
+      // authored reference (`Ref<T, Region>`, a transparent alias with no type-argument bindings) whose region is a
+      // lifetime parameter declared by its own owner.
+      const authoredRegion = abi?.inputLifetime === undefined && abi?.parameterCarrier.kind === "reference" &&
+        rustLifetimesEqual(abi.parameterCarrier.lifetime, lifetime) &&
+        input.ast.typeParameters(owner).some(parameter => {
+          const declared = parameter === undefined ? undefined : input.sourceLifetimes.parameterFor(parameter);
+          return declared?.kind === "lifetime" && rustLifetimesEqual(declared.lifetime, lifetime);
+        });
+      if (value.kind === "input" && abi?.parameterCarrier.kind === "reference" && (authoredRegion ||
+        abi.inputLifetime !== undefined && rustLifetimesEqual(lifetime, abi.inputLifetime) &&
+        rustLifetimesEqual(abi.parameterCarrier.lifetime, abi.inputLifetime))) {
         return Object.freeze({ kind: "resolved", premises: Object.freeze([Object.freeze({ ...evidence,
           kind: "formal-borrowed", executionOwner: owner, mode: carrier.mutable ? "mutable" : "shared",
           region: Object.freeze({ kind: "input-duration", parameter: value.node }) })]) });
@@ -442,8 +451,12 @@ export function analyzeRustPromiseResults(input: {
       const nativeOperation = operation?.kind === "provider-operation" || operation?.kind === "reference-operation" ||
         operation?.kind === "flow-marker" || operation?.kind === "typed-location";
       if (isCall && nativeCall === undefined && !nativeOperation) return undefined;
-      return Object.freeze({ kind: future ? "may-suspend" : "never", value,
-        contractDeclaration: declaration ?? value.node, checkedType: checked.type });
+      // A provider declaration file is not part of the checked source program, so its suspension contract is attached to
+      // the exact value, as completionFor does for provider calls.
+      const declarationFile = declaration === undefined ? undefined : input.ast.getSourceFile(declaration);
+      const contractDeclaration = declaration !== undefined && declarationFile !== undefined &&
+        input.source.semantics.includes(declarationFile) ? declaration : value.node;
+      return Object.freeze({ kind: future ? "may-suspend" : "never", value, contractDeclaration, checkedType: checked.type });
     },
   };
   const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises });

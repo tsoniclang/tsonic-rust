@@ -187,7 +187,10 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       optionalStorage: optionalStorage === undefined ? undefined : Object.freeze(optionalStorage), sourceOptional: Object.freeze(sourceOptional),
       emptyRecord: carrier.kind === "target-named" && carrier.id === rustEmptyObjectTargetId ? "native-empty"
         : shape?.fields.length === 0 && rustStructuralObjectCarrierValue(carrier)?.representation === "value" ? "structural" : undefined,
-      moduleCallableAlias: carrier.kind === "target-named" && carrier.id === rustCallableTargetId,
+      // A module cell holding a runtime callable (target-named, or its emitted named-type form) names its long callable
+      // type through an alias, as the checkpoint planner did for every rt::Callable cell (clippy type_complexity).
+      moduleCallableAlias: carrier.kind === "target-named" && carrier.id === rustCallableTargetId ||
+        rustNamedTypeCarrierValue(carrier)?.id === rustCallableTargetId,
       callArgumentInfer: carrier.kind === "target-named" && carrier.id === rustFutureTargetId,
       generic: generic === undefined || physical === undefined ? undefined : Object.freeze({ fileName: physical.definition.ownerFileName,
         name: physical.definition.targetName, arguments: rustGenericCallableStorageArguments(generic.environment, physical.arguments) }),

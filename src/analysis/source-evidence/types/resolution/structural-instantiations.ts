@@ -119,7 +119,9 @@ export function retainRustStructuralInstantiation(
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
     // The authored field type keeps an open callable environment: the selected storage either closes it with its own
-    // lifetime or keeps the target placeholder lifetimes. Either correspondence admits the field (both lanes' rules).
+    // lifetime or keeps the target placeholder lifetimes. A field that itself holds structural storage is closed
+    // separately (its method environments name the new instantiation's lifetimes), so its authored type matches the
+    // template field and the recursive retention below proves and registers the closed nested instantiation.
     let closing: RustLifetimeRef | undefined;
     mapRustTargetTypes(expected, (current, original) => {
       closing ??= rustCallableProtocol(original)?.lifetime;
@@ -127,11 +129,14 @@ export function retainRustStructuralInstantiation(
     });
     const closed = (carrier: TargetTypeRef): TargetTypeRef => closing === undefined ? carrier
       : closeRustRetainedCallableCarrier(carrier, closing);
+    const nestedTemplate = containsStructuralStorage(field.resultCarrier, options) === true
+      ? mapRustTargetTypes(field.resultCarrier, normalize) : undefined;
     if (declared.some(carrier => {
       if (carrier === undefined) return true;
       const authored = mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize);
       return !rustTargetTypeRefEquals(closed(authored), expected) &&
-        !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected);
+        !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected) &&
+        (nestedTemplate === undefined || !rustTargetTypeRefEquals(authored, nestedTemplate));
     })) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
