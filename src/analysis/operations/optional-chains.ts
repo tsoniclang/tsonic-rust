@@ -61,7 +61,22 @@ export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgr
       refuse(fact.guard, "rust.backend.optional-chain-flow-read", "Optional-chain lowering conflicts with the separately finalized receiver projection.");
       continue;
     }
-    producer.publish(node, { fact, structuralGuard, unit: isRustUnitCarrier(fact.innerResultCarrier) });
+    const unit = isRustUnitCarrier(fact.innerResultCarrier);
+    const effects = program.records.errorEffects.get(node);
+    const mapClosure = fact.lowering === "map" && !unit && effects !== undefined && !effects.localErrors &&
+      effects.nativeErrors.length === 0 && !suspendsOrYields(node);
+    producer.publish(node, { fact, structuralGuard, unit, mapClosure });
   }
   return Object.freeze(issues);
+
+  function suspendsOrYields(root: Node): boolean {
+    const pending = [root];
+    for (let index = 0; index < pending.length; index++) {
+      if (index > 4096) return true;
+      const current = pending[index]!;
+      if (ast.is.IsAwaitExpression(current) || ast.is.IsYieldExpression(current)) return true;
+      ast.forEachChild(current, child => { if (child !== undefined) pending.push(child); });
+    }
+    return false;
+  }
 }

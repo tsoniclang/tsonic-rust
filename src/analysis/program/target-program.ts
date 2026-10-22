@@ -231,6 +231,7 @@ export function analyzeRustAnalysisProgram(
       const operation = records.targetOperation.get(reference);
       return operation?.kind === "source-field" && operation.declaration === declaration;
     },
+    lexicalFunctions,
     isOnceCallable: (closure) => {
       const carrier = records.runtimeCarrier.get(closure)?.carrier;
       const selection = lexicalFunctions.forDeclaration(closure);

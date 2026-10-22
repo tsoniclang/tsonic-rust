@@ -20,8 +20,9 @@ export function sealRustLexicalFunctionEnvironments(
 export function sealRustLexicalFunctionQueries(
   selections: ReadonlyMap<Node, RustLexicalFunctionSelection>,
   valueDeclarationsAt: (statement: Node) => readonly Node[],
+  calleesFor: (declaration: Node) => readonly Node[],
 ): RustLexicalFunctionQueries {
-  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration), valueDeclarationsAt });
+  return Object.freeze({ forDeclaration: (declaration: Node) => selections.get(declaration), valueDeclarationsAt, calleesFor });
 }
 
 export interface RustLexicalFunctionProducer {
