@@ -1,10 +1,5 @@
 import type {
-  RustConstArgument,
-  RustGenericArgument,
-  RustLifetime,
-  RustLifetimeParameter,
-  RustTraitReference,
-  RustType,
+  RustConstArgument, RustGenericArgument, RustLifetime, RustLifetimeParameter, RustTraitReference, RustType,
   RustTypeBound,
 } from "../../backend/target-ast/syntax/nodes.js";
 import { escapeRustChar } from "./patterns.js";

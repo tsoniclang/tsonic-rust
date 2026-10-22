@@ -1,10 +1,13 @@
 import { rustProviderContractValidation } from "./contracts.js";
-import { cargoCrateAttributeName, cargoDefaultFeaturesAttributeName, cargoFeaturesAttributeName, cargoPathReferenceKind, cargoRegistryPatchAttributeName, encodeCargoFeatures, rustMinimumFoundationAttributeName } from "../../target-model/project/cargo-reference.js";
+import {
+  cargoCrateAttributeName, cargoDefaultFeaturesAttributeName, cargoFeaturesAttributeName, cargoPathReferenceKind,
+  cargoRegistryPatchAttributeName, encodeCargoFeatures, rustMinimumFoundationAttributeName,
+} from "../../target-model/project/cargo-reference.js";
 import { collectRustProviderSemantics } from "./semantics.js";
 import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId } from "./source-provider.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { validateProviderPackageDefinition } from "./validation.js";
+import { validateProviderPackageDefinition } from "./validation/definitions.js";
 import { rustProviderGlobalDeclarations } from "../../source/profiles/provider-globals.js";
 import type { SelectedTargetCapabilityContributions, TargetRuntimeContributionContext } from "@tsonic/target-api/provider";
 import type { TargetRuntimeContributions, TargetRuntimeReference } from "@tsonic/target-api/artifacts";

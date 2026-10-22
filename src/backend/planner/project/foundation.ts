@@ -1,10 +1,6 @@
 import { rustWordAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
-import {
-  createRustSourceFile,
-  type RustItem,
-  type RustSourceFileModel,
-} from "../../target-ast/syntax/nodes.js";
+import { createRustSourceFile, type RustItem, type RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
 
 export function createRustCrateRootSourceFile(
   foundation: RustFoundation,

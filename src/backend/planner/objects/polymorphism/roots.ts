@@ -3,8 +3,8 @@ import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../ta
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
+import { rustErrorType, rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
@@ -14,8 +14,15 @@ import type { RustProjectMethodDispatchVariant } from "../../../../target-model/
 import type { RustProjectRootContractEmission } from "../../../../target-model/records/project-classes.js";
 import { projectFieldStoragePath, projectOwnFields, renderProjectMethodProperty } from "./model.js";
 import type { ProjectClassStateLayer } from "./model.js";
-import { planProjectDowncastRouteImplementation, planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
-import { readRustProjectObjectField, readRustProjectObjectFieldOwner, readRustProjectPrivateField, writeRustProjectMethodOverride, writeRustProjectObjectField, writeRustProjectPrivateField, mutateRustProjectObjectField } from "../project-objects.js";
+import {
+  planProjectDowncastRouteImplementation, planProjectFieldAccessorCall, planRootAccessorForwarder,
+  planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape,
+} from "./forwarders.js";
+import {
+  readRustProjectObjectField, readRustProjectObjectFieldOwner, readRustProjectPrivateField,
+  writeRustProjectMethodOverride, writeRustProjectObjectField, writeRustProjectPrivateField,
+  mutateRustProjectObjectField,
+} from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustCapturedFieldStorage } from "../captured-fields.js";
 import { checkRustDataWrite } from "../data-writes.js";

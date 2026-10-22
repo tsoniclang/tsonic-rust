@@ -11,7 +11,7 @@ import { rustSourceOptionalTargetType } from "../../../../dist/target-model/type
 import { rustNativeFutureOutputType } from "../../../../dist/target-model/types/callable-completions.js";
 import { rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../../dist/target-model/types/carriers/indexed-fields.js";
-import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/carrier-syntax.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const current = await loadCarrierRegistry(root);

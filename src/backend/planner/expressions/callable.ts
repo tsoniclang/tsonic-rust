@@ -3,11 +3,8 @@ import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import {
   applyFallibleShape,
 } from "../types/fallible-shape.js";
-import {
-  isValidRustIdentifier,
-  rustActiveErrorType,
-  rustErrorBoundaryForDeclaration,
-} from "../program/plan-context.js";
+import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
+import { rustActiveErrorType, rustErrorBoundaryForDeclaration } from "../program/plan-context.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";

@@ -2,7 +2,10 @@ import type { RustProviderContractValidation } from "../model/contract-validatio
 import { TstsSourceProviderContractVersion } from "@tsonic/tsts";
 import { resolve } from "node:path";
 import { refineNativeExportDeclaration } from "./projection/declaration-state.js";
-import type { ExtensionDiagnostic, ProviderDeclarationModel, ProviderDeclarationRequest, ProviderModuleResolution, SourceDeclarationProvider } from "@tsonic/tsts";
+import type {
+  ExtensionDiagnostic, ProviderDeclarationModel, ProviderDeclarationRequest, ProviderModuleResolution,
+  SourceDeclarationProvider,
+} from "@tsonic/tsts";
 import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../target-model/identities/provider-relations.js";
@@ -11,9 +14,10 @@ import type { RustProviderModuleDefinition, RustProviderPackageDefinition } from
 import { mergeRustProviderSemantics, collectRustProviderSemanticsFromDefinitions } from "../packages/semantics.js";
 import { rustProviderBindingProviderId } from "../packages/source-provider.js";
 import type { RustCompilerDependency, RustCompilerProjectSnapshot } from "./model/model.js";
-import { compilerModulePathFromSpecifier, compilerModuleSpecifier, compilerProviderModuleId, compilerProviderVersion, projectRustCompilerModule } from "./projection/projection.js";
+import { compilerModulePathFromSpecifier, compilerModuleSpecifier, compilerProviderModuleId, compilerProviderVersion } from "./projection/operations.js";
+import { projectRustCompilerModule } from "./projection/declarations.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
-import type { RustCompilerProviderProjection } from "./projection/projection.js";
+import type { RustCompilerProviderProjection } from "./projection/model.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./acquisition/worker-client.js";
 import type { RustCompilerWorkerClient } from "./acquisition/worker-client.js";

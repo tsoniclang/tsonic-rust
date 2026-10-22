@@ -6,20 +6,19 @@ import type { RustSourceBindingFact } from "../../../target-model/records/value-
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
-import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
+import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literals/model.js";
 import type { RustFrameOwner } from "./frame-owners.js";
 import type { RustBlockPlanner } from "../statements/model.js";
 import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
 import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
-export { rustErrorType } from "./fallible-boundaries.js";
-import type { RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
+import type { RustErrorDomain } from "../../../target-model/operations/error-boundary.js";
+import type { RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import {
   isValidRustIdentifier,
   rustTargetIdentifier,
 } from "../../../target-model/names/identifiers.js";
-export { isValidRustIdentifier, rustReservedIdentifiers } from "../../../target-model/names/identifiers.js";
 
 export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;

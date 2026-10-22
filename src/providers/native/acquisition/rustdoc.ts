@@ -1,8 +1,11 @@
 import type { RustCompilerDependency, RustCompilerModuleModel, RustCompilerProjectSnapshot } from "../model/model.js";
 import { verifyRustCompilerDependencySource } from "./cargo-snapshot.js";
 import { validateDependencyBelongsToSnapshot, type RustdocDocumentLoader } from "./rustdoc-artifact.js";
-import { normalizeModule } from "../model/rustdoc-model.js";
-import { collectModuleStandardTypeLocations, loadStandardLibraryContext, loadStandardLibraryCrateDocument, resolveStandardLibraryItem } from "./standard-library.js";
+import { normalizeModule } from "../model/normalization/modules.js";
+import {
+  collectModuleStandardTypeLocations, loadStandardLibraryContext, loadStandardLibraryCrateDocument,
+  resolveStandardLibraryItem,
+} from "./standard-library.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export function loadRustCompilerModule(options: {

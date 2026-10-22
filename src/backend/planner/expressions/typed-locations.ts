@@ -1,5 +1,5 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
+import { rustPropagateLocalError, rustErrorType } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import type { RustBindingStorageFact } from "../../../target-model/records/operation-selections.js";
 import type { Node } from "@tsonic/tsts";
@@ -20,13 +20,13 @@ import {
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import {
-  rustSourceBindingPath,
-  rustCurrentErrorBoundary,
-  rustErrorType,
-} from "../program/plan-context.js";
+import { rustSourceBindingPath, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
+import {
+  rustProjectObjectRepresentation,
+  readRustStoredObjectField,
+  writeRustStoredObjectField,
+} from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
 import {
   readRustProjectDispatchedField,
@@ -34,10 +34,6 @@ import {
   readRustStructuralObjectField,
 } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
-import {
-  readRustStoredObjectField,
-  writeRustStoredObjectField,
-} from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 
 import { planNativeRustArrayAccess } from "./native-arrays.js";

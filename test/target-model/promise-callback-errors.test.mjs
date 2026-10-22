@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustCallableProtocol, rustCallableTargetType, rustUnitTargetType, rustSourcePrimitiveTargetType,
   rustJsValueTargetType } from "../../dist/target-model/types/index.js";
 import { rustStaticLifetime } from "../../dist/target-model/lifetimes/index.js";
-import { rustTypeFromCarrier } from "../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../dist/backend/planner/types/carrier-syntax.js";
 import { printRustType } from "../../dist/print/source/types.js";
 import { rebindRustCallableCarrier } from "../../dist/policy/types/callables/method-values.js";
 import { rustCallableInvocationSignaturesMatch } from "../../dist/policy/conversions/callable-input.js";

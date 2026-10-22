@@ -5,9 +5,7 @@ import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
-import {
-  rustCurrentErrorBoundary,
-} from "../../program/plan-context.js";
+import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
 import {
@@ -27,8 +25,7 @@ import {
   planRustCallableParameters,
 } from "./parameters.js";
 import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustJsPromiseReturnType } from "./return-types.js";
-import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
-import { rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
+import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";

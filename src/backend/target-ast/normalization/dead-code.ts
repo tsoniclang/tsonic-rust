@@ -1,9 +1,5 @@
 import { type RustAttribute } from "../syntax/attributes.js";
-import type {
-  RustItem,
-  RustSourceFileModel,
-  RustStructField,
-} from "../syntax/nodes.js";
+import type { RustItem, RustSourceFileModel, RustStructField } from "../syntax/nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import type { RustDeadCodeDisposition } from "../../../target-model/records/native-liveness.js";
 

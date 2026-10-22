@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/carrier-syntax.js";
+import { rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustProgramErrorTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustSourcePackageErrorBoundaries, rustSourcePackageErrorTypeIdentity } from "../../../../dist/analysis/errors/source-packages.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";

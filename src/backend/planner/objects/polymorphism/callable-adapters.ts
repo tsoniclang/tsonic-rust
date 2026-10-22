@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustPackageFallibleBoundary, rustErrorType } from "../../program/fallible-boundaries.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustImplFunction, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
@@ -8,7 +8,7 @@ import { planRustCallableArguments } from "../../declarations/callables/paramete
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { readRustProjectMethodOverride } from "../project-objects.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";

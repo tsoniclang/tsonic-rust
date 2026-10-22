@@ -2,7 +2,6 @@ import { sourcePrimitive } from "@tsonic/tsts";
 import type { SourceSemanticsModule } from "@tsonic/tsts";
 import { rustLangModule, rustTypesModule } from "../../target-model/identities/source.js";
 
-export { rustLangModule, rustTypesModule } from "../../target-model/identities/source.js";
 
 const rustPrimitiveAliases = [
   sourcePrimitive("bool", "bool", "boolean"),

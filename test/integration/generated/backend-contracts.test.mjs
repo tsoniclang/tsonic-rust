@@ -11,7 +11,7 @@ import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
-import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { requireProviderArgumentPassingFacts } from "../../../dist/backend/planner/expressions/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import {
@@ -404,7 +404,6 @@ test("singleton tuples render with the Rust-required trailing comma", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
 
 export function singleton(value: int32): [int32] {
   return [value];
@@ -501,7 +500,6 @@ test("private class members remain private in generated Rust", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
 
 export class Secret {
   private value: int32;

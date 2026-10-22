@@ -1,8 +1,4 @@
-import type {
-  RustGenerics,
-  RustItem,
-  RustType,
-} from "../../target-ast/syntax/nodes.js";
+import type { RustGenerics, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 
 export function rustDefaultImplementation(

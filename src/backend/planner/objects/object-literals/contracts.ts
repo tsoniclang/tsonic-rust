@@ -1,4 +1,4 @@
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustPackageFallibleBoundary, rustErrorType } from "../../program/fallible-boundaries.js";
 import {
   readRustProjectObjectField,
   readRustProjectMethodOverride,
@@ -11,19 +11,10 @@ import { applyRustCallableValueAdapter } from "../../declarations/callables/adap
 import { planRustCallableArguments } from "../../declarations/callables/parameter-adapters.js";
 import { projectOwnFields } from "../polymorphism/model.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
-import type {
-  RustExpr,
-  RustImplFunction,
-  RustItem,
-  RustStmt,
-  RustType,
-} from "../../../target-ast/syntax/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import {
-  rustErrorBoundaryForProjectMember,
-  rustErrorType,
-} from "../../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallTypeFromCarrierInContext, rustReturnTypeFromCarrier, rustTypeFromCarrierInContext,
-  rustUnionTypePathInContext } from "../../../../dist/backend/planner/types/render.js";
+import { rustCallTypeFromCarrierInContext, rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../../../../dist/backend/planner/types/render.js";
+import { rustReturnTypeFromCarrier } from "../../../../dist/backend/planner/types/carrier-syntax.js";
 import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, rustSourceOptionalTargetType,
   rustSourceUnionTargetType, rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "../../../../dist/target-model/types/source-union-definitions.js";

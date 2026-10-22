@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeModule } from "../../../../dist/providers/native/model/rustdoc-model.js";
+import { normalizeModule } from "../../../../dist/providers/native/model/normalization/modules.js";
 import {
   compilerAssociatedSourceExportName,
   resolveLocalRustdocItem,
 } from "../../../../dist/providers/native/model/rustdoc-items.js";
-import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/projection.js";
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
 import {
   compilerModuleSpecifier,
   compilerProviderModuleId,

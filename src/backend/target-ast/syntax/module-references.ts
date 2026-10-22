@@ -1,17 +1,6 @@
 import type {
-  RustBlock,
-  RustExpr,
-  RustFunctionParam,
-  RustGenericArgument,
-  RustImplFunction,
-  RustItem,
-  RustPattern,
-  RustStmt,
-  RustTraitFunction,
-  RustType,
-  RustGenerics,
-  RustTypeBound,
-  RustConstArgument,
+  RustBlock, RustExpr, RustFunctionParam, RustGenericArgument, RustImplFunction, RustItem, RustPattern, RustStmt,
+  RustTraitFunction, RustType, RustGenerics, RustTypeBound, RustConstArgument,
 } from "./nodes.js";
 import type { RustAttributeArgument } from "./attributes.js";
 

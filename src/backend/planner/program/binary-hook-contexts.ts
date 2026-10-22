@@ -3,7 +3,7 @@ import type { RustBinaryHookPlan } from "../../../target-model/records/binary-ex
 import type { RustPlanningContext } from "../context.js";
 import { applyRustDispatchContextBindings, projectRustDispatchContext } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextBinding } from "../project/dispatch-contexts.js";
-import { rustTypeFromCarrier } from "../types/render.js";
+import { rustTypeFromCarrier } from "../types/carrier-syntax.js";
 import { allocateRustSyntheticName, type RustSyntheticNameState } from "../names/synthetic.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

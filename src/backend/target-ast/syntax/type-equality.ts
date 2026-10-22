@@ -1,11 +1,4 @@
-import type {
-  RustGenericArgument,
-  RustLifetime,
-  RustLifetimeParameter,
-  RustTraitReference,
-  RustType,
-  RustTypeBound,
-} from "./nodes.js";
+import type { RustGenericArgument, RustLifetime, RustLifetimeParameter, RustTraitReference, RustType, RustTypeBound } from "./nodes.js";
 
 export function rustTypeEquals(
   left: RustType | undefined,

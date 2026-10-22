@@ -4,7 +4,8 @@ import type { RustStructuralShapeField } from "../../../target-model/records/str
 import type { RustImplFunction, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
+import { rustCurrentErrorBoundary } from "../program/plan-context.js";
+import { rustErrorType } from "../program/fallible-boundaries.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
 import { rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";

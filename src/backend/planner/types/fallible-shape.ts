@@ -1,9 +1,4 @@
-import type {
-  RustBlock,
-  RustExpr,
-  RustStmt,
-  RustType,
-} from "../../target-ast/syntax/nodes.js";
+import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { mapRustExpressionChildren } from "../../target-ast/syntax/expression-children.js";
 import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import type { RustFallibleBoundary } from "../program/fallible-boundaries.js";

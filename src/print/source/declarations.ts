@@ -11,16 +11,8 @@ import {
   printRustTypeBound,
 } from "./types.js";
 import type {
-  RustGenerics,
-  RustGenericParameter,
-  RustImplFunction,
-  RustItem,
-  RustSelfParam,
-  RustSourceFileModel,
-  RustStructField,
-  RustTraitFunction,
-  RustType,
-  RustVisibility,
+  RustGenerics, RustGenericParameter, RustImplFunction, RustItem, RustSelfParam, RustSourceFileModel, RustStructField,
+  RustTraitFunction, RustType, RustVisibility,
 } from "../../backend/target-ast/syntax/nodes.js";
 
 export function printRustSourceFile(model: RustSourceFileModel): string {

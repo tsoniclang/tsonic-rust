@@ -1,10 +1,14 @@
 import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter, RustItem, RustImplFunction, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
+import type {
+  RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter, RustItem, RustImplFunction, RustType,
+  RustWherePredicate,
+} from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
-import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustLifetimeBinderToAst } from "../../types/carrier-syntax.js";
+import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 

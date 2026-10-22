@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
-import type { RustFlowReadProjectionFact, RustProjectUpcastFact, RustProjectDowncastFact, RustContextualValueConversionFact, RustOptionProjectionFact } from "./value-projections.js";
+import type { RustFlowReadProjectionFact, RustProjectUpcastFact, RustContextualValueConversionFact, RustOptionProjectionFact } from "./value-projections.js";
+import type { RustProjectDowncastFact } from "../types/project-projections.js";
 import type { RustObjectReferenceView } from "./object-reference-views.js";
 
 export interface RustValueProjection {

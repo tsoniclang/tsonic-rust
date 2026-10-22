@@ -4,8 +4,9 @@ import { rustProgramErrorTargetType } from "../../../../target-model/types/index
 import type { RustStructuralLiteralEmission } from "../../../../target-model/records/object-literal-emission.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField,
-  type RustType } from "../../../target-ast/syntax/nodes.js";
+import {
+  emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField, type RustType,
+} from "../../../target-ast/syntax/nodes.js";
 import { rustCurrentErrorBoundary, type RustPlanContext } from "../../program/plan-context.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../../names/synthetic.js";

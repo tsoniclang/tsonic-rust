@@ -16,11 +16,15 @@ import { resolveArrayLiteralCarrier } from "../../../dist/analysis/operations/ar
 import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/collections/fixed-arrays.js";
 import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
 import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";
-import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustTargetConstSafeInteger, rustVecTargetType, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustOptionTargetType, rustAbsenceTargetType, rustCallableTargetType } from "../../../dist/target-model/types/index.js";
+import {
+  rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustTargetConstSafeInteger,
+  rustVecTargetType, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustOptionTargetType,
+  rustAbsenceTargetType, rustCallableTargetType,
+} from "../../../dist/target-model/types/index.js";
 import { rustTupleTargetType } from "../../../dist/policy/types/collections/tuple-carrier.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
-import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { planRustBindingPattern } from "../../../dist/backend/planner/bindings/binding-patterns.js";
 import { printRustType } from "../../../dist/print/source/types.js";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";

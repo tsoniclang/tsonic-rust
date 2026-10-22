@@ -1,23 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
+import { rustGenericsWithAssociatedBounds, rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import {
   type RustSourceGenericParameterContract,
   rustLifetimeKey,
 } from "../../../../target-model/lifetimes/index.js";
-import {
-  emptyRustGenerics,
-  type RustGenerics,
-  type RustGenericParameter,
-  type RustTypeBound,
-} from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics, type RustGenerics, type RustGenericParameter, type RustTypeBound } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { isValidRustIdentifier } from "../../program/plan-context.js";
+import { isValidRustIdentifier } from "../../../../target-model/names/identifiers.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
-import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";

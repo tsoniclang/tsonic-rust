@@ -3,13 +3,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustPlanningContext } from "../context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
-import type {
-  RustExpr,
-  RustItem,
-  RustStmt,
-  RustType,
-  RustVisibility,
-} from "../../target-ast/syntax/nodes.js";
+import type { RustExpr, RustItem, RustStmt, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import {
   allocateRustSyntheticName,

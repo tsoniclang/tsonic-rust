@@ -281,9 +281,6 @@ export type RustExpr =
     }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
-export type {
-  RustErrorDomain,
-} from "../../../target-model/operations/error-boundary.js";
 
 export type RustStmt =
   | { readonly kind: "let-pattern"; readonly pattern: RustPattern; readonly init: RustExpr }

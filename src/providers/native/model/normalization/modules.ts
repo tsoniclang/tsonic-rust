@@ -1,10 +1,23 @@
-import { authoredPublicCanonicalPath, authoredPublicIdentity, authoredPublicKind, authoredPublicName, canonicalItemId, canonicalItemPath, expandedPublicModuleItems, compilerAssociatedSourceExportName, isGlobUse, resolveLocalRustdocItem } from "../rustdoc-items.js";
-import { canonicalPathKey, normalizeGenericParameters, normalizeTraitBounds, normalizeType, normalizeTypeTraits, rootNormalizationContext, rustCompilerDerivedIdentity, rustCompilerItemIdentity, rustStaticValueCanBeCopied } from "../rustdoc-types.js";
+import {
+  authoredPublicCanonicalPath, authoredPublicIdentity, authoredPublicKind, authoredPublicName, canonicalItemId,
+  canonicalItemPath, expandedPublicModuleItems, compilerAssociatedSourceExportName, isGlobUse,
+  resolveLocalRustdocItem,
+} from "../rustdoc-items.js";
+import { canonicalPathKey, normalizeGenericParameters, normalizeTraitBounds } from "../types/normalization.js";
+import { normalizeType } from "../types/rustdoc-type-normalization.js";
+import { normalizeTypeTraits } from "../types/requirements.js";
+import { rootNormalizationContext, rustCompilerDerivedIdentity, rustCompilerItemIdentity } from "../types/normalization-context.js";
+import { rustStaticValueCanBeCopied } from "../types/substitution.js";
 import { compareText, hasInnerKind, itemById, requireArray, requireBoolean, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import { normalizeEnumVariants, normalizeFields, normalizePublicFields, normalizeTraitMembers, normalizeTypeMembers } from "./members.js";
 import { normalizeFunction } from "./functions.js";
 import { rustCompilerProviderProtocolVersion } from "../model.js";
-import type { RustCompilerAssociatedConstraint, RustCompilerDependency, RustCompilerExport, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerModuleModel, RustCompilerProjectSnapshot, RustCompilerStandardTypeLocation, RustCompilerTraitDispatch, RustCompilerType, RustCompilerUnsupportedExport, RustCompilerUnsupportedMember } from "../model.js";
+import type {
+  RustCompilerAssociatedConstraint, RustCompilerDependency, RustCompilerExport, RustCompilerFunction,
+  RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerModuleModel, RustCompilerProjectSnapshot,
+  RustCompilerStandardTypeLocation, RustCompilerTraitDispatch, RustCompilerType, RustCompilerUnsupportedExport,
+  RustCompilerUnsupportedMember,
+} from "../model.js";
 import type { ResolvedRustdocItem, RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 

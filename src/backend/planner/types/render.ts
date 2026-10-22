@@ -1,5 +1,6 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
-import { registerAliasFromPath, rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
+import { registerAliasFromPath, rustCurrentErrorBoundary } from "../program/plan-context.js";
+import { rustErrorType } from "../program/fallible-boundaries.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "../program/source-package-errors.js";
 import { collectAliasesFromRustType } from "./type-observations.js";
@@ -7,7 +8,9 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustTypeEmission } from "../../../target-model/records/type-emission.js";
 import type { RustCallGenericArgument, RustGenericArgument, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import { rustSourceUnionCarrierValue, rustBuiltInCarrierDefinitions, substituteRustTargetGenerics, isRustNeverCarrier } from "../../../target-model/types/index.js";
+import {
+  rustSourceUnionCarrierValue, rustBuiltInCarrierDefinitions, substituteRustTargetGenerics, isRustNeverCarrier,
+} from "../../../target-model/types/index.js";
 import { rustSourceTypePathInContext, rustStructuralTypePathInContext } from "./paths.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustFrameCallableTypes } from "./frame-callables.js";
@@ -18,9 +21,11 @@ import { rustClassEnvironmentHandleType } from "../objects/class-environment-typ
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { rustOptionalStorageTypeArguments } from "./type-projections.js";
 import { rustCallableInputAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
-import { rustTypeFromCarrier, rustGenericArgumentsFromCarrier, rustConstArgumentToAst, typeGenericArguments, type RustSourceTypeRendering } from "./carrier-syntax.js";
+import {
+  rustTypeFromCarrier, rustGenericArgumentsFromCarrier, rustConstArgumentToAst, typeGenericArguments,
+  type RustSourceTypeRendering,
+} from "./carrier-syntax.js";
 
-export { rustStrRefType, rustTypeFromCarrier, rustReturnTypeFromCarrier, isFloatCarrier, rustLifetimeBinderToAst } from "./carrier-syntax.js";
 
 export interface RustTypeRenderingContext {
     readonly sourcePackageErrors: RustSourcePackageErrorPlan;

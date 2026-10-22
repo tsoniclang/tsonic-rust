@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustPackageFallibleBoundary, rustErrorType } from "../../program/fallible-boundaries.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
@@ -9,7 +9,7 @@ import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustConstructionBody } from "../../declarations/classes/construction-body.js";
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
-import { rustErrorBoundaryForDeclaration, rustErrorType, type RustPlanContext } from "../../program/plan-context.js";
+import { rustErrorBoundaryForDeclaration, type RustPlanContext } from "../../program/plan-context.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";

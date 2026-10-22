@@ -14,11 +14,8 @@ import {
   readRustProjectDispatchedField,
 } from "../project-objects.js";
 import { planProjectClassConstructor } from "./construction.js";
-import {
-  planProjectDispatchTrait,
-  planProjectRootImplementations,
-  projectIdentityImplementations,
-} from "./dispatch.js";
+import { planProjectDispatchTrait, projectIdentityImplementations } from "./traits.js";
+import { planProjectRootImplementations } from "./roots.js";
 import {
   projectClassStateLayers,
   projectStateType,

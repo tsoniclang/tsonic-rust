@@ -1,9 +1,5 @@
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
-import {
-  createRustSourceFile,
-  type RustItem,
-  type RustSourceFileModel,
-} from "../syntax/nodes.js";
+import { createRustSourceFile, type RustItem, type RustSourceFileModel } from "../syntax/nodes.js";
 
 export function applyRustFoundationImports(
   model: RustSourceFileModel,

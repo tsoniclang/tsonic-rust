@@ -1,9 +1,9 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
-import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
+import { rustPackageFallibleBoundary, rustErrorType } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import { emptyRustGenerics, type RustImplFunction, type RustItem } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorType } from "../program/plan-context.js";
+import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustClassEnvironmentContext } from "./class-environments.js";
 import { rustClassEnvironmentType } from "./class-environment-types.js";

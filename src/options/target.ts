@@ -4,9 +4,6 @@ import type { RustEdition, RustOutputType } from "../target-model/project/model.
 import type { RustFoundation } from "../target-model/foundation/model.js";
 import { resolveRustProjectConfiguration } from "./user-project.js";
 
-export type { RustTargetConfiguration } from "../target-model/configuration/model.js";
-export type { RustEdition, RustOutputType } from "../target-model/project/model.js";
-export type { RustFoundation } from "../target-model/foundation/model.js";
 
 const supportedRustTargetOptionKeys = Object.freeze([
   "crateName",

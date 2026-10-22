@@ -1,9 +1,8 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import { rustProjectDowncastEquals } from "../../../target-model/records/equality.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import type { RustProjectDowncastFact } from "../../../target-model/records/value-projections.js";
+import type { RustProjectDowncastFact, RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
 import { createRustRecordFamily } from "./family.js";
 import { createRustProjectDowncastQuery } from "../../control-flow/project-downcasts.js";
 import type { RustProjectDowncastQuery } from "../../control-flow/project-downcasts.js";

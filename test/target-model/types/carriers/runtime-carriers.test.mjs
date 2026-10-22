@@ -5,7 +5,7 @@ import {
   rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType,
 } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
-import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/carrier-syntax.js";
 import { rustStructuralObjectTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustCallableTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { planRustStructuralShapeModule } from "../../../../dist/backend/planner/objects/structural-shapes.js";

@@ -1,8 +1,5 @@
 import { rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
-import {
-  projectCallableShape,
-  projectOwnFields,
-} from "./model.js";
+import { projectCallableShape, projectOwnFields, renderProjectMethodProperty } from "./model.js";
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
@@ -12,10 +9,8 @@ import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import {
-  rustErrorBoundaryForProjectMember,
-  rustErrorType,
-} from "../../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
+import { rustErrorType } from "../../program/fallible-boundaries.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -27,7 +22,6 @@ import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
 import { rustProjectErrorSuperTraits } from "./project-errors.js";
-import { renderProjectMethodProperty } from "./model.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function projectIdentityImplementations(

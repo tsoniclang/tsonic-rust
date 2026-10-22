@@ -2,7 +2,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustProgramRecords, RustRecordFamily } from "../../target-model/records/program.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectDowncastFact } from "../../target-model/records/value-projections.js";
+import type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";

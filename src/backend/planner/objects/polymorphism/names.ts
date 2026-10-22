@@ -2,17 +2,11 @@ import type { TargetTypeRef, RustTargetGenericArgument } from "../../../../targe
 import type { RustTypeRenderingContext } from "../../types/render.js";
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { RustObjectRepresentation } from "../../../../target-model/records/object-representation.js";
-import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
+import { rustGenericsWithAssociatedBounds, rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import {
   rustSourceTypeCarrierValue,
 } from "../../../../target-model/types/index.js";
-import type {
-  RustExpr,
-  RustGenericArgument,
-  RustGenericParameter,
-  RustGenerics,
-  RustType,
-} from "../../../target-ast/syntax/nodes.js";
+import type { RustExpr, RustGenericArgument, RustGenericParameter, RustGenerics, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
@@ -21,7 +15,6 @@ import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.j
 import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/types/carriers/generic-references.js";
 

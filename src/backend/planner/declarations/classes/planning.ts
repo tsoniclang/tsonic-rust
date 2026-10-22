@@ -1,12 +1,9 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustPackageFallibleBoundary, rustErrorType } from "../../program/fallible-boundaries.js";
 import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
-import {
-  rustErrorBoundaryForDeclaration,
-  rustErrorType,
-} from "../../program/plan-context.js";
+import { rustErrorBoundaryForDeclaration } from "../../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planExpression } from "../../expressions/index.js";
 import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
@@ -22,13 +19,7 @@ import { rustDefaultImplementation } from "../default-implementation.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { structAttributes } from "../struct-attributes.js";
-import type {
-  RustType,
-  RustImplFunction,
-  RustItem,
-  RustStmt,
-  RustStructField,
-} from "../../../target-ast/syntax/nodes.js";
+import type { RustType, RustImplFunction, RustItem, RustStmt, RustStructField } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../../program/plan-context.js";

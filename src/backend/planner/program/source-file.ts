@@ -18,24 +18,16 @@ import {
   KindVariableStatement,
 } from "@tsonic/target-api/source";
 
-import {
-  createRustSourceFile,
-  emptyRustGenerics,
-} from "../../target-ast/syntax/nodes.js";
+import { createRustSourceFile, emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/syntax/module-references.js";
-import type {
-  RustItem,
-  RustSourceFileModel,
-} from "../../target-ast/syntax/nodes.js";
+import type { RustItem, RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanningContext } from "../context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
 import {
   planFunctionDeclarations,
 } from "../declarations/callables/functions.js";
-import {
-  rustRuntimeAliasUseItems,
-} from "./plan-context.js";
+import { rustRuntimeAliasUseItems } from "./plan-context.js";
 import { planTopLevelVariableStatement } from "./module-bindings.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -68,7 +60,7 @@ import { planRustGenericCallableItems } from "../declarations/callables/generic-
 import { planRustFrameCallableItems } from "../declarations/callables/frame-implementations.js";
 import { planRustSuspendedCallableItems } from "../declarations/callables/suspended.js";
 import { completeRustAuthoredStructScopes } from "../../target-ast/normalization/authored-type-scopes.js";
-import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
+import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literals/model.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";

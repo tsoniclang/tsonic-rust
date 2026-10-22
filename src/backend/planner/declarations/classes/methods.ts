@@ -2,9 +2,7 @@ import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.j
 import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
-import {
-  rustCurrentErrorBoundary,
-} from "../../program/plan-context.js";
+import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";

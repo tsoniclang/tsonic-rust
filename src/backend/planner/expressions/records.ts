@@ -23,7 +23,7 @@ import {
 import { planExpression } from "./entry.js";
 import { planRustProviderRecordAbsentFields } from "./provider-record-absence.js";
 import { planRustRecordSpread } from "./record-spreads.js";
-import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
+import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literals/model.js";
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

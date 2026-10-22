@@ -11,7 +11,8 @@ import { planPromotedSourceMethodCall, shapeRustSourceCallParameters, type RustS
 import { rustPreparedValueLocation } from "../../objects/value-fields.js";
 import { planRustLexicalFunctionArguments } from "../../declarations/callables/lexical-functions.js";
 import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
-import { sourceModuleItemPath, rustActiveErrorType, rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
+import { sourceModuleItemPath, rustActiveErrorType, rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
+import { rustErrorType, rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { planRustExactProjectMethodCall, planRustVirtualProjectMethodCall } from "../../objects/project-method-dispatch.js";
 import { rustTargetCallGenericArgumentToAstInContext, rustTypeFromCarrierInContext, rustCallTypeFromCarrierInContext } from "../../types/render.js";
@@ -23,7 +24,6 @@ import { planRustUnionMethodCall } from "./union-methods.js";
 import { planRustNativeInputInvocation, planRustNativeInputPropagation } from "./native-input.js";
 import { planRustGenericCallableErrorPropagation } from "./generic-errors.js";
 import { planRustSourceErrorPropagation } from "./source-errors.js";
-import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 
 export function planSelectedSourceCall(node: Node, callee: Node | undefined, argumentPlan: RustSourceArgumentEvaluation,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>, context: RustPlanContext): RustExpr | undefined {

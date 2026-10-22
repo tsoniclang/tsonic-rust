@@ -5,11 +5,7 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import {
-  registerAliasFromPath,
-  rustActiveErrorType,
-  rustCurrentErrorBoundary,
-} from "../program/plan-context.js";
+import { registerAliasFromPath, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
 import {

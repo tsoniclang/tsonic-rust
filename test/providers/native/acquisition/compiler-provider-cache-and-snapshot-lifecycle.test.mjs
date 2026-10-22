@@ -14,11 +14,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/acquisition/worker-client.js";
-import { compilerTargetTypeId } from "../../../../dist/providers/native/projection/operations.js";
-import {
-  compilerProviderModuleId,
-  projectRustCompilerModule,
-} from "../../../../dist/providers/native/projection/projection.js";
+import { compilerTargetTypeId, compilerProviderModuleId } from "../../../../dist/providers/native/projection/operations.js";
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
 
 import {
   rustNamedTypeCarrierValue,

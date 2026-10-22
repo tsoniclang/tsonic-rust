@@ -1,13 +1,21 @@
 import { compareText, isRecord, itemById, requireArray, requireInnerRecord, requireRecord } from "../rustdoc-schema.js";
-import { canonicalCompilerTypePathKey, canonicalPathKey, mergeTypeParameterRequirements, normalizeGenericParameters, normalizeTraitDispatch, rustCompilerTraitRequirement, sourceVisibleTypeParameterCount, standardTypePathKind } from "./normalization.js";
+import {
+  canonicalCompilerTypePathKey, canonicalPathKey, mergeTypeParameterRequirements, normalizeGenericParameters,
+  normalizeTraitDispatch, rustCompilerTraitRequirement, sourceVisibleTypeParameterCount, standardTypePathKind,
+} from "./normalization.js";
 import { normalizeType } from "./rustdoc-type-normalization.js";
 import { rustCompilerTypeSemanticKey, substituteRustCompilerTrait, typeRequirementKey } from "./substitution.js";
 import { implementationSubstitutions } from "../normalization/implementation-bindings.js";
 import { derivedNormalizationContext } from "./normalization-context.js";
-import type { RustCompilerDependency, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerTraitImplementation, RustCompilerTraitRequirement, RustCompilerType, RustCompilerTypeParameter, RustCompilerTypeRequirement, RustCompilerTypeTraits } from "../model.js";
+import type {
+  RustCompilerDependency, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerItemIdentity,
+  RustCompilerTraitImplementation, RustCompilerTraitRequirement, RustCompilerType, RustCompilerTypeParameter,
+  RustCompilerTypeRequirement, RustCompilerTypeTraits,
+} from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerNormalizationContext, RustCompilerSubstitutions } from "../rustdoc-types.js";
+import type { RustCompilerNormalizationContext } from "./normalization-context.js";
+import type { RustCompilerSubstitutions } from "./substitution.js";
 
 export function compilerTypeRequirementCanonicalPath(
   requirement: RustCompilerTypeRequirement,

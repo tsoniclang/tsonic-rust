@@ -4,7 +4,6 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
-export type { RustGenericRequirement } from "../../../target-model/records/generic-requirements.js";
 
 export function rustCarrierHasCopyContract(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
   if (carrier === undefined) return false;

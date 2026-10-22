@@ -5,13 +5,10 @@ export interface RustSelectedBindingProjection {
   readonly checkedArrayElement?: TargetTypeRef;
 }
 import type { RustBindingNormalization } from "../types/binding-normalization.js";
-export type { RustBindingNormalization } from "../types/binding-normalization.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustContextualValueConversion } from "../conversions/contextual.js";
-import type { RustProjectProjectionSelection } from "../types/project-projections.js";
-import type { RustProjectDowncastFact } from "../types/project-projections.js";
+import type { RustProjectProjectionSelection, RustProjectDowncastFact } from "../types/project-projections.js";
 import type { RustUnionArmMapping } from "../types/union-relations.js";
-export type { RustProjectDowncastFact } from "../types/project-projections.js";
 
 export type RustOptionProjectionFact =
   | {

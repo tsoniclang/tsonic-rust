@@ -15,7 +15,7 @@ import { rustCarrierSupportsClone } from "../../dist/policy/constraints/native-t
 import { rustAwaitSelection } from "../../dist/policy/operations/flow/await.js";
 import { rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
 import { planRustSourceUnionPayloadTemplate } from "../../dist/backend/planner/types/source-union-payloads.js";
-import { rustTypeFromCarrier } from "../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../dist/backend/planner/types/carrier-syntax.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };

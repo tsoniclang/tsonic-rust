@@ -1,17 +1,11 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/types/carriers/runtime-carriers.js";
-import { rustTypeFromCarrier } from "../types/render.js";
+import { rustTypeFromCarrier } from "../types/carrier-syntax.js";
 import {
-  createRustSourceFile,
-  type RustExpr,
-  type RustItem,
-  type RustPattern,
-  type RustSourceFileModel,
-  type RustType,
-  type RustGenerics,
+  createRustSourceFile, type RustExpr, type RustItem, type RustPattern, type RustSourceFileModel, type RustType,
+  type RustGenerics, emptyRustGenerics,
 } from "../../target-ast/syntax/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
 import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErrorPattern,
   type RustErrorTransportVariant } from "./error-transport.js";

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustNativeFutureType } from "../../../../dist/backend/planner/types/native-futures.js";
 import { printRustType } from "../../../../dist/print/source/types.js";
-import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/carrier-syntax.js";
 import { rustNativeCompletionFutureType } from "../../../../dist/target-model/types/callable-completions.js";
 import { rustSourcePrimitiveTargetType, rustNamedTargetType } from "../../../../dist/target-model/types/carriers/native.js";
 

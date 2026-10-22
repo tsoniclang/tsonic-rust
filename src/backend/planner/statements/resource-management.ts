@@ -1,9 +1,7 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustErrorBoundary, applyRustLocalErrorBoundary } from "../types/error-boundary.js";
-import {
-  isValidRustIdentifier,
-  rustActiveErrorType,
-} from "../program/plan-context.js";
+import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
+import { rustActiveErrorType } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planVariableStatement } from "../bindings/locals.js";
 
@@ -13,7 +11,9 @@ import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from 
 import type { RustResourceManagementFact } from "../../../target-model/records/callables-and-resources.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
-import type { RustFinalizedTargetInput, RustFinalizedSourceInput, RustFinalizedDispatchContextInput } from "../../../target-model/records/finalized-operation.js";
+import type {
+  RustFinalizedTargetInput, RustFinalizedSourceInput, RustFinalizedDispatchContextInput,
+} from "../../../target-model/records/finalized-operation.js";
 import { finishProviderOperationExpression, planFinalizedTargetInput } from "../expressions/conversions.js";
 import { planRustFinalizedOperationForm } from "../expressions/finalized-operation-form.js";
 import { applyFinalizedValueConversion } from "../expressions/value-conversions.js";

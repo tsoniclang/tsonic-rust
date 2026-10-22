@@ -1,5 +1,5 @@
 import { finalizeRustNativeEmission } from "./emission.js";
-import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult, failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { snapshotTargetPlanningSourceNavigation, targetSourceSyntaxProgram } from "@tsonic/target-api/analysis";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
@@ -55,7 +55,6 @@ import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 
 /** Seals the analysis program into the data-only program the backend plans from. */
@@ -481,5 +480,3 @@ export function analyzeRustAnalysisProgram(
   }));
 }
 
-export type { AnalyzeRustTargetProgramResult, RustTargetAnalysisRequest } from "./model.js";
-export type { RustTargetProgram } from "../../target-model/records/target-program.js";

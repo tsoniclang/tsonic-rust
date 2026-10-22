@@ -5,11 +5,7 @@ import type { CargoManifestPlan } from "../../../target-model/project/cargo.js";
 import type { RustSourcePackageCargoPlan } from "../../../target-model/records/source-package-crates.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlannedArtifact } from "../../artifact-model/output.js";
-import {
-  createRustSourceFile,
-  type RustItem,
-  type RustSourceFileModel,
-} from "../../target-ast/syntax/nodes.js";
+import { createRustSourceFile, type RustItem, type RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
 import { applyRustSealedTypeVisibility } from "../../target-ast/normalization/sealed-type-visibility.js";
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
@@ -17,12 +13,10 @@ import { planRustProgramErrorModule } from "./errors.js";
 import { planRustDispatchContextRoots } from "./dispatch-contexts.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import { createRustSourcePackageTypeRenderingContext } from "./source-package-components.js";
-import type { RustSourcePackageComponentPlan } from "../../../target-model/records/source-packages.js";
 import type {
-  RustSourcePackageFacadeExport,
-  RustSourcePackageFacadePlan,
+  RustSourcePackageComponentPlan, RustSourcePackageFacadeExport, RustSourcePackageFacadePlan,
+  RustSourcePackageInitializerPlan,
 } from "../../../target-model/records/source-packages.js";
-import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/syntax/module-references.js";

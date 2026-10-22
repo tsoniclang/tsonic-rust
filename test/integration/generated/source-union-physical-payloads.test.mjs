@@ -10,7 +10,8 @@ import { rustUnitTargetType, rustNamedTargetType } from "../../../dist/target-mo
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 import { instantiateRustSourceUnionPayloads } from "../../../dist/target-model/types/source-union-definitions.js";
 import { planRustSourceUnionPayloadTemplate } from "../../../dist/backend/planner/types/source-union-payloads.js";
-import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
+import { rustTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
 import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustDeriveAttributes } from "../../../dist/backend/target-ast/syntax/attributes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
@@ -132,7 +133,6 @@ export function choose(first: boolean, value: int32): Choice<int32> { return fir
     "facade.ts": `export type { Choice as Selected } from "./definitions.js";
 export { choose } from "./definitions.js";`,
     "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
 import type { Selected as ImportedChoice } from "./facade.js";
 import { choose } from "./facade.js";
 function valid(value: ImportedChoice<int32>): boolean {

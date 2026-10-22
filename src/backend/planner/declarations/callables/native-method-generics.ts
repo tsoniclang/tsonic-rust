@@ -1,7 +1,8 @@
 import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import type { RustGenerics, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustLifetimeBinderToAst } from "../../types/carrier-syntax.js";
+import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 

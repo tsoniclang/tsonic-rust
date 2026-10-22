@@ -4,8 +4,8 @@ import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../ta
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
-import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
+import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
+import { rustErrorType, rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../../types/render.js";
 import { planExpression } from "../entry.js";

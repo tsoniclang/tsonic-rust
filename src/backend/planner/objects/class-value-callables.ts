@@ -1,10 +1,10 @@
 import type { RustClassValueCallable } from "../../../target-model/records/class-value-callables.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
+import { rustPackageFallibleBoundary, rustErrorType } from "../program/fallible-boundaries.js";
 
 import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
+import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, sourceModuleItemPath } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { applyRustCallableValueAdapter } from "../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../declarations/callables/parameter-adapters.js";

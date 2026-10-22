@@ -6,7 +6,7 @@ import { inferRustTargetTypeParameterBindings } from "../../../dist/target-model
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { generatedTypeParameterNames } from "@tsonic/target-api/source";
-import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 
 const outer = Object.freeze({ kind: "type-parameter", identity: "source:outer/0", name: "T" });
 const inner = Object.freeze({ kind: "type-parameter", identity: "source:inner/0", name: "T" });

@@ -5,7 +5,7 @@ import { planRustErrorRegion } from "../../../../dist/backend/planner/program/er
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 import { rustRuntimeErrorTargetType } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
-import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/carrier-syntax.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 
 test("the actual body planner consumes selected JS rejection conversions without a native error enum", () => {

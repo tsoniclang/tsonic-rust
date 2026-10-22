@@ -1,9 +1,12 @@
 import { compareText, digestText } from "./utilities.js";
-import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/types/requirements.js";
 import { sourceGenericParameterName } from "./type-arguments.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustNamedTypeTraitContract, rustNativeTraitRef } from "../../../target-model/types/carriers/native.js";
-import type { RustCompilerDependency, RustCompilerFunction, RustCompilerTypeParameter, RustCompilerTypeTraits, RustCompilerTraitDispatch } from "../model/model.js";
+import type {
+  RustCompilerDependency, RustCompilerFunction, RustCompilerTypeParameter, RustCompilerTypeTraits,
+  RustCompilerTraitDispatch,
+} from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
 import type { RustNamedTypeTraitContract, RustTargetTraitRef } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition } from "../../packages/model.js";

@@ -7,11 +7,7 @@ import {
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectRustCompletionDispatch, createRustCompletionBoundary, tailCompletionExits } from "./resource-management.js";
-import {
-  registerAliasFromPath,
-  rustCurrentErrorBoundary,
-  rustActiveErrorType,
-} from "../program/plan-context.js";
+import { registerAliasFromPath, rustCurrentErrorBoundary, rustActiveErrorType } from "../program/plan-context.js";
 import { rustPackageFallibleBoundary, rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./planning.js";

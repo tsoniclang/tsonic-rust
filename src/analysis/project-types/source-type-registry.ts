@@ -1,4 +1,8 @@
-import { closedStringUnionVariants, denseNodes, freezeSourceObjectShape, structuralCarrierKey, freezeSourceUnion, sourceObjectTargetContractEquals, appendStructuralProjection, selectStructuralProjection, sourceObjectShapeEquals, sourceUnionTargetContractEquals, nodeListsEqual } from "./source-shape-contracts.js";
+import {
+  closedStringUnionVariants, denseNodes, freezeSourceObjectShape, structuralCarrierKey, freezeSourceUnion,
+  sourceObjectTargetContractEquals, appendStructuralProjection, selectStructuralProjection, sourceObjectShapeEquals,
+  sourceUnionTargetContractEquals, nodeListsEqual,
+} from "./source-shape-contracts.js";
 import type { Node, Symbol, Type } from "@tsonic/tsts";
 import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "./source-declarations.js";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
@@ -6,25 +10,23 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "./type-definitions.js";
-import { ObjectLiteralProperty_SourceName, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import {
+  ObjectLiteralProperty_SourceName, sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations,
+  sourceParameterIsProperty,
+} from "@tsonic/target-api/source";
+import {
+  rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustOptionElementCarrier,
+  rustStructuralObjectCarrierValue,
+} from "../../target-model/types/index.js";
 import type { RustSourceTypeRegistry } from "./source-type-model.js";
-import type { RustSourceEnumVariant, RustSourceObjectShape, RustSourceUnion, RustStructuralFieldImplementation, RustStructuralFieldRegistration, RustStructuralInstantiation } from "../../target-model/records/source-types.js";
-export type {
-  RustSourceEnumVariant,
-  RustSourceObjectField,
-  RustSourceObjectShape,
-  RustSourceUnion,
-  RustSourceUnionVariant,
-  RustStructuralFieldImplementation,
-  RustStructuralFieldRegistration,
+import type {
+  RustSourceEnumVariant, RustSourceObjectShape, RustSourceUnion, RustStructuralFieldImplementation,
+  RustStructuralFieldRegistration, RustStructuralInstantiation,
 } from "../../target-model/records/source-types.js";
-export type { RustSourceTypeRegistry } from "./source-type-model.js";
 
 export function createRustSourceTypeRegistry(
   typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),

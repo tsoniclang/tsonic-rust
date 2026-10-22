@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectedRustDefaultMethods } from "../../../../../dist/providers/native/model/normalization/default-methods.js";
-import { emptyRustCompilerSubstitutions, rustCompilerItemIdentity } from "../../../../../dist/providers/native/model/rustdoc-types.js";
+import { emptyRustCompilerSubstitutions } from "../../../../../dist/providers/native/model/types/substitution.js";
+import { rustCompilerItemIdentity } from "../../../../../dist/providers/native/model/types/normalization-context.js";
 
 const dependency = { alias: "example", packageId: "example 1", packageName: "example", packageVersion: "1",
   crateName: "example", targetCrateName: "example", manifestPath: "/example/Cargo.toml",

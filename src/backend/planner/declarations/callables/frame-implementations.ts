@@ -1,9 +1,12 @@
-import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation } from "../../../../target-model/records/frame-callables.js";
+import type {
+  RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation,
+} from "../../../../target-model/records/frame-callables.js";
 
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
+import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
+import { rustErrorType } from "../../program/fallible-boundaries.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";

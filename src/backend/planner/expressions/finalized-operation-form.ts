@@ -8,8 +8,10 @@ import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,
-  rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext } from "../types/render.js";
+import {
+  rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,
+  rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext,
+} from "../types/render.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 
 export function planRustFinalizedOperationForm(

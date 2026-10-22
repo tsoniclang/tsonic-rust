@@ -1,12 +1,8 @@
 import type { RustProjectFieldDispatchPlan } from "../../../target-model/records/field-writes.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
-import { rustLocalErrorOwner, type RustFallibleBoundary } from "../program/fallible-boundaries.js";
+import { rustLocalErrorOwner, type RustFallibleBoundary, rustErrorType } from "../program/fallible-boundaries.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import {
-  rustErrorBoundaryForProjectMember,
-  rustErrorType,
-  type RustPlanContext,
-} from "../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember, type RustPlanContext } from "../program/plan-context.js";
 
 export type RustPlannedProjectFieldDispatchRole =
   | {

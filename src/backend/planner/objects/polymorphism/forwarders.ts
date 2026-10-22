@@ -7,10 +7,8 @@ import {
 } from "./model.js";
 import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
-import {
-  rustErrorBoundaryForProjectMember,
-  rustErrorType,
-} from "../../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember } from "../../program/plan-context.js";
+import { rustErrorType } from "../../program/fallible-boundaries.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
@@ -24,8 +22,7 @@ import { planRootCallableForwarder } from "./callable-adapters.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
-import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
-import type { RustProjectDowncastRoute } from "../../../../target-model/types/project-types.js";
+import type { RustProjectTypeDefinition, RustProjectDowncastRoute } from "../../../../target-model/types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../target-model/records/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
