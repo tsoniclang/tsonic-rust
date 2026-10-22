@@ -21,6 +21,7 @@ export function rustCallableConversionPhysical(
   source: RustCallablePhysicalSignature,
   fileName: string,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  carriedError = false,
 ): RustCallablePhysicalConversion | undefined {
   let remaining = 4096;
   const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number): RustCallablePhysicalConversion | undefined => {
@@ -34,9 +35,9 @@ export function rustCallableConversionPhysical(
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
     const errorContract = logical.error === undefined ? undefined : rustValueConversionContract(logical.error, definitions);
     if (logical.error !== undefined && errorContract === undefined) return undefined;
-    // A concrete invoked error is converted here; an abstract one (a native input's associated error) is carried
-    // through the native error join unchanged, like every other native input error.
-    const errorPlan = errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
+    // A concrete invoked error is converted here; an abstract one (a native input's associated error) and the error of
+    // a type-erased runtime callable are carried through the native error join unchanged.
+    const errorPlan = !carriedError && errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
       ? errorContract : undefined;
     // A provider callback (a fallible native closure) carries the runtime error; an invoked callable whose error is
     // uninhabited is adapted by eliminating that error.

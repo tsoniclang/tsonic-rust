@@ -9,7 +9,9 @@ export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef;
       readonly sources: readonly RustPhysicalCallableSourceSelection[] }
   | { readonly kind: "selected"; readonly carrier: TargetTypeRef; readonly inputs: readonly RustNativeCallableInput[];
-      readonly sources: readonly RustPhysicalCallableSourceSelection[] }
+      readonly sources: readonly RustPhysicalCallableSourceSelection[];
+      /** The physical is a closure's type-erased runtime callable parameter, whose error is carried, never converted. */
+      readonly erased?: true }
   | { readonly kind: "unresolved"; readonly reason: string };
 
 // A callable with an uninhabited error written into storage whose distinct producers share one boxed callable: the

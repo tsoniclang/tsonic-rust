@@ -42,11 +42,12 @@ export function rustNativeCallablePhysicalSource(
   source: TargetTypeRef,
   storage: Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }>
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "identity" }>, "kind" | "carrier">
-    | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs">,
+    | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs" | "erased">,
 ): RustNativeCallablePhysicalSource | undefined {
   if (storage.kind === "unresolved") return undefined;
   const signature = rustCallablePhysicalSignature(storage.carrier);
-  if (signature !== undefined) return Object.freeze({ carrier: storage.carrier, signature });
+  if (signature !== undefined) return Object.freeze({ carrier: storage.carrier, signature,
+    ...(storage.kind === "selected" && storage.erased === true ? { erased: true as const } : {}) });
   const inputs = storage.kind === "selected" ? storage.inputs.filter(input =>
     rustTargetTypeRefEquals(input.implementation, storage.carrier)) : [];
   if (inputs.length !== 1) return undefined;

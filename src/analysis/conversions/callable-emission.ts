@@ -48,7 +48,8 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const file = program.source.ast.getSourceFile(node);
     const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
     const physical = source === undefined || fileName === undefined ? undefined
-      : rustCallableConversionPhysical(conversion, providerCallbackSignature(conversion, source.signature), fileName, program.typeDefinitions);
+      : rustCallableConversionPhysical(conversion, providerCallbackSignature(conversion, source.signature), fileName, program.typeDefinitions,
+        source.erased === true);
     if (source === undefined || fileName === undefined || physical === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted callable adapter requires its exact physical source and closed native conversion.", node);
     const compile = (selected: RustCallablePhysicalConversion, actual: RustNativeCallablePhysicalSource): RustCallableConversionEmission => {

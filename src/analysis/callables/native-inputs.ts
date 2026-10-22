@@ -120,6 +120,11 @@ export function createRustNativeCallableInputPlan(input: {
     bindings.set(declaration, result ?? null);
     return result;
   };
+  // A closure cannot be generic: its callable parameters keep their type-erased runtime callable carrier.
+  const closureParameter = (subject: SourceStorageSubject): boolean => {
+    const owner = subject.kind === "input" ? input.ast.parent(subject.node) : undefined;
+    return owner !== undefined && (input.ast.is.IsArrowFunction(owner) || input.ast.is.IsFunctionExpression(owner));
+  };
   const selectInput = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeCallableInput | undefined => {
     if (subject.kind !== "input") return undefined;
     const owner = input.ast.parent(subject.node);
@@ -167,9 +172,9 @@ export function createRustNativeCallableInputPlan(input: {
       // A generic method read from an input is that input's stored generic callable family value, not a callable
       // input of this declaration.
       // A callable parameter of an owner emitted as a closure value keeps its concrete callable carrier; it is a concrete
-      // value of this declaration, not a generic native input.
+      // value of this declaration, not a generic native input. A closure cannot be generic either.
       const inputOwner = origin.kind === "input" ? input.ast.parent(origin.node) : undefined;
-      if (origin.kind !== "input" || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
+      if (origin.kind !== "input" || closureParameter(origin) || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
         rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined ||
         inputOwner !== undefined && input.ast.parameters(inputOwner).includes(origin.node) &&
           (!input.declaresGenericInputs(inputOwner) || nativeRetainedParameters.has(origin.node))) {
@@ -196,7 +201,7 @@ export function createRustNativeCallableInputPlan(input: {
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
     const subject = input.storage.subject(node, "input");
-    if (subject.kind === "resolved") selectInput(subject.subject, carrier);
+    if (subject.kind === "resolved" && !closureParameter(subject.subject)) selectInput(subject.subject, carrier);
   }
   for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;

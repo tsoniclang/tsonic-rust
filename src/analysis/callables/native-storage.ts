@@ -11,6 +11,8 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
+import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
 import { rustCallableConversionPhysical, rustCallableErrorJoin, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
@@ -205,6 +207,7 @@ export function createRustNativeStorageQueries(input: {
     let remaining = rustNativeStorageProjectionSteps;
     let reason: string | undefined;
     const selectedInputs = new Set<RustNativeCallableInput>();
+    const erasedPhysicals = new Set<TargetTypeRef>();
     const sources: RustPhysicalCallableSourceSelection[] = [];
     const fail = (message: string): undefined => { reason ??= message; return undefined; };
     const step = (depth: number): boolean => {
@@ -342,10 +345,11 @@ export function createRustNativeStorageQueries(input: {
         rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
         ? physicalInputs[0]!.carrier : undefined;
       const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
-        { kind: "selected", carrier: operand, inputs: [...selectedInputs] });
+        { kind: "selected", carrier: operand, inputs: [...selectedInputs], ...(erasedPhysicals.has(operand) ? { erased: true as const } : {}) });
       const file = input.ast.getSourceFile(origin.node);
       const physical = source === undefined || file === undefined ? undefined
-        : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions)?.carrier;
+        : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions,
+          source.erased === true)?.carrier;
       return physical ?? fail("Native callable conversion storage has no exact physical adaptation contract.");
     };
     const producerFuture = (origin: SourceStorageSubject, bindings: SourceStorageBindings,
@@ -429,6 +433,21 @@ export function createRustNativeStorageQueries(input: {
       const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
         : input.records.runtimeCarrier.get(component.declaration)?.carrier;
       return carrier !== undefined && rustFrameCallableValue(carrier) !== undefined ? carrier : undefined;
+    };
+    // A closure's callable parameter is not a native input (a closure cannot be generic); it holds its type-erased
+    // runtime callable carrier.
+    const erasedClosureParameter = (origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined => {
+      const owner = input.ast.parent(origin.node);
+      if (owner === undefined || !input.ast.is.IsArrowFunction(owner) && !input.ast.is.IsFunctionExpression(owner)) return undefined;
+      const carrier = input.records.sourceParameterAbi.get(origin.node)?.valueCarrier;
+      const selected = rustOptionElementCarrier(carrier) ?? carrier;
+      const protocol = rustCallableProtocol(selected);
+      if (selected?.kind !== "target-named" || selected.id !== rustCallableTargetId || protocol?.lifetime === undefined ||
+        protocol.error === undefined || !rustCallableInvocationSignaturesMatch(current, selected)) return undefined;
+      // Its physical storage is the runtime callable over its argument tuple and fallible result.
+      return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(protocol.lifetime),
+        ...rustTypeGenericArguments([{ kind: "tuple", elements: protocol.parameters },
+          rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([protocol.result, protocol.error]))])]);
     };
     const erasedFieldCallable = (origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined => {
       const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
@@ -566,8 +585,10 @@ export function createRustNativeStorageQueries(input: {
               // A callable narrowed out of a union-typed value is the union's stored payload for that member, which
               // is already a type-erased runtime callable; it has no separate producer implementation.
               // Likewise a class field declared as a type-erased runtime callable stores that erased callable.
-              const unionPayload = origin.projection.length === 0 ? erasedUnionCallablePayload(originCarrier, current)
-                : erasedFieldCallable(origin, current);
+              const erasedParameter = origin.projection.length === 0 && origin.kind === "input" ? erasedClosureParameter(origin, current) : undefined;
+              if (erasedParameter !== undefined) erasedPhysicals.add(erasedParameter);
+              const unionPayload = origin.projection.length === 0 ? origin.kind === "input" ? erasedParameter
+                : erasedUnionCallablePayload(originCarrier, current) : erasedFieldCallable(origin, current);
               if (unionPayload !== undefined) {
                 joinable = false;
                 candidatePhysical = unionPayload;
@@ -696,7 +717,8 @@ export function createRustNativeStorageQueries(input: {
     const selectedSources = Object.freeze(sources);
     return physical === undefined ? unresolved(reason ?? "Native callable storage has no exact physical selection.")
       : rustTargetTypeRefEquals(physical, carrier) ? Object.freeze({ kind: "identity", carrier, sources: selectedSources })
-        : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]), sources: selectedSources });
+        : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]), sources: selectedSources,
+          ...(erasedPhysicals.has(physical) ? { erased: true as const } : {}) });
   };
   const selectReturn = (declaration: Node): RustNativeStorageSelection => {
     const result = input.records.sourceCallableReturn.get(declaration);
