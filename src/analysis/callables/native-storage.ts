@@ -24,6 +24,8 @@ import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from ".
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
@@ -287,6 +289,19 @@ export function createRustNativeStorageQueries(input: {
         : input.records.runtimeCarrier.get(component.declaration)?.carrier;
       return carrier !== undefined && rustFrameCallableValue(carrier) !== undefined ? carrier : undefined;
     };
+    // Binds the free type parameters of a producer signature from the destination signature it is stored at.
+    const instanceTypeBindings = (producer: TargetTypeRef, destination: TargetTypeRef): ReadonlyMap<string, TargetTypeRef> | undefined => {
+      const source = rustCallableProtocol(producer);
+      const target = rustCallableProtocol(destination);
+      if (source === undefined || target === undefined || source.parameters.length !== target.parameters.length) return undefined;
+      const pattern: TargetTypeRef = { kind: "tuple", elements: [...source.parameters, source.result] };
+      const actual: TargetTypeRef = { kind: "tuple", elements: [...target.parameters, target.result] };
+      const typeIdentities = new Set(rustTargetGenericReferences(pattern).typeIdentities);
+      if (typeIdentities.size === 0) return undefined;
+      const inferred = inferRustTargetGenericBindings(pattern, actual,
+        { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
+      return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
+    };
     const visit = (current: TargetTypeRef, selectedSubject: SourceStorageSubject,
       bindings: SourceStorageBindings, depth: number, permitsAbsence: boolean,
       position: "value" | "input" = "value"): TargetTypeRef | undefined => {
@@ -368,12 +383,20 @@ export function createRustNativeStorageQueries(input: {
               const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
               if (generics.kind === "unresolved") return fail(generics.reason);
               const { types, lifetimes, consts } = generics.bindings;
-              const boundCarrier = originCarrier === undefined ? undefined
+              const ownerBound = originCarrier === undefined ? undefined
                 : callableValueCarrier(substituteRustTargetGenerics(originCarrier, types, lifetimes, consts));
+              // A class-level field initializer has no enclosing activation; the owning class's type parameters are
+              // instantiated by the instance the field is read from, which the destination signature carries.
+              const classBindings = ownerBound === undefined || rustCallableInvocationSignaturesMatch(current, ownerBound)
+                ? undefined : instanceTypeBindings(ownerBound, current);
+              const boundCarrier = classBindings === undefined ? ownerBound
+                : callableValueCarrier(substituteRustTargetGenerics(ownerBound!, classBindings, new Map(), new Map()));
               const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
                 ? undefined : rustFrameCallableValue(originCarrier) !== undefined
                   ? originCarrier : input.producers.physicalFor(origin.node, originCarrier);
-              candidatePhysical = produced === undefined ? undefined : substituteRustTargetGenerics(produced, types, lifetimes, consts);
+              const instantiated = produced === undefined || classBindings === undefined ? produced
+                : substituteRustTargetGenerics(produced, classBindings, new Map(), new Map());
+              candidatePhysical = instantiated === undefined ? undefined : substituteRustTargetGenerics(instantiated, types, lifetimes, consts);
             }
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");
