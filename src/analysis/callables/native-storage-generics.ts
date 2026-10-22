@@ -237,9 +237,12 @@ export function selectRustSourceCallableInvocationBindings(input: {
     rustOptionElementCarrier(destination) ?? destination, caller.types, caller.lifetimes, caller.consts);
   const actual = rustGenericCallableProtocol(actualCarrier, methodArguments);
   const actualValue = rustGenericCallableValue(actualCarrier);
+  // A stored value whose declared type names no outer generic carries no environment, while its implementation may be
+  // generic over the outer parameters it reads through its receiver; those bind from the receiver and signature.
+  const storedEnvironment = actualValue?.environment.length === 0 ? [] : source.environment;
   if (pattern === undefined || actual === undefined || actualValue === undefined ||
-    source.environment.length !== actualValue.environment.length) return unresolved();
-  const template: TargetTypeRef = { kind: "tuple", elements: [...source.environment, ...pattern.parameters, pattern.result] };
+    storedEnvironment.length !== actualValue.environment.length) return unresolved();
+  const template: TargetTypeRef = { kind: "tuple", elements: [...storedEnvironment, ...pattern.parameters, pattern.result] };
   const references = rustTargetGenericReferences(template);
   const inferred = inferRustTargetGenericBindings(template,
     { kind: "tuple", elements: [...actualValue.environment, ...actual.parameters, actual.result] }, {
@@ -247,6 +250,9 @@ export function selectRustSourceCallableInvocationBindings(input: {
         rustTargetGenericReferences(argument).typeIdentities.includes(identity)))),
       lifetimeIdentities: new Set(references.lifetimeIdentities), constIdentities: new Set(references.constIdentities),
     });
+  const environmentReferences = rustTargetGenericReferences({ kind: "tuple", elements: [...source.environment] });
+  if (inferred !== undefined && environmentReferences.typeIdentities.some(identity => !inferred.types.has(identity) &&
+    !methodArguments.some(argument => rustTargetGenericReferences(argument).typeIdentities.includes(identity)))) return unresolved();
   const merged = inferred === undefined ? undefined : mergeBindings(selected, inferred);
   return merged === undefined ? unresolved() : Object.freeze({ kind: "resolved", bindings: merged });
 }
