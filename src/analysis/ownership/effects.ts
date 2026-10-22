@@ -106,7 +106,9 @@ export function analyzeRustBorrowEffects(
         sourceTransparentExpressionOperand(input.ast, parent) === argument; parent = input.ast.parent(argument)) argument = parent;
       if (!["comparison", "condition", "return", "storage"].includes(use.role) &&
         !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref") &&
-        !(use.role === "receiver" && rustCallReceiverMode(argument, input.ast, input.records) === "ref")) {
+        !(use.role === "receiver" && (rustCallReceiverMode(argument, input.ast, input.records) === "ref" ||
+          isElementReadReceiver(argument, input))) &&
+        !(use.role === "argument" && isLocationBindingArgument(argument, input))) {
         stable = false;
         break;
       }
@@ -243,4 +245,18 @@ function selectBorrowedWrite(
   return Object.freeze({ target, value, receiver, owner, field,
     location: captured ? "captured-field" : "stored-field",
     fallible: input.frozenDataWrites.receiverFor(stored.storage, stored.receiverCarrier, stored.storageIndex) !== undefined });
+}
+
+// An element read (`values[0]`) borrows its receiver; it neither consumes nor replaces the binding (an element write
+// marks the binding member-written, which already excludes it).
+function isElementReadReceiver(receiver: Node, input: RustBorrowEffectsInput): boolean {
+  const access = input.ast.parent(receiver);
+  return access !== undefined && input.ast.is.IsElementAccessExpression(access) && Node_Expression(input.ast, access) === receiver;
+}
+
+// A typed location bound to the binding (`addressof(values)`) reads and replaces the binding's own storage cell; the
+// binding stays one stable place whose reads load the cell.
+function isLocationBindingArgument(argument: Node, input: RustBorrowEffectsInput): boolean {
+  const call = input.ast.parent(argument);
+  return call !== undefined && input.ast.is.IsCallExpression(call) && input.records.targetOperation.get(call)?.kind === "typed-location";
 }
