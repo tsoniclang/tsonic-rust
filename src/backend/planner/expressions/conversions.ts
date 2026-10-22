@@ -198,5 +198,5 @@ export function planFinalizedSourceInput(context: RustPlanContext, input: RustFi
   if (shared && input.conversion.kind === "identity") return direct;
   const value = applyFinalizedValueConversion(context, direct, input.conversion, source, shared);
   return value === undefined || position === "target-receiver" ? value
-    : applyFinalizedRustArgumentMode(context, source, value, input, override?.valueForm === "shared-reference");
+    : applyFinalizedRustArgumentMode(context, source, value, input, override?.valueForm === "shared-reference", sourceValue !== undefined);
 }

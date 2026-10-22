@@ -248,9 +248,14 @@ export function applySelectedRuntimeCallableCall(
         callableCarrier: carrier,
       };
   if (target.form === "callable" && optionalCall === undefined) {
-    const projection = calleeCarrier === undefined ? undefined : walk.context.records.flowReadProjections.resolve(
-      walk.context.requiredRecords, callee, calleeCarrier, rustCallableTargetForSourceLifetime(calleeCarrier, carrier),
-      walk.context.projectTypes, walk.context.typeDefinitions);
+    // A guarded read (for example a narrowed optional callable) already carries its flow projection; the callee then
+    // projects from that projection's stored carrier, so both readers select the same exact proof.
+    const narrowed = walk.context.records.flowReadProjections.records.get(callee);
+    const calleeSource = calleeCarrier !== undefined && narrowed !== undefined &&
+      rustTargetTypeRefEquals(narrowed.selectedCarrier, calleeCarrier) ? narrowed.sourceCarrier : calleeCarrier;
+    const projection = calleeCarrier === undefined || calleeSource === undefined ? undefined
+      : walk.context.records.flowReadProjections.resolve(walk.context.requiredRecords, callee, calleeSource,
+        rustCallableTargetForSourceLifetime(calleeCarrier, carrier), walk.context.projectTypes, walk.context.typeDefinitions);
     if (projection === undefined || projection.kind === "incompatible") {
       appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
         "The runtime callee cannot project to its exact checked callable carrier.", callee,
