@@ -165,3 +165,15 @@ export function rustCallableErrorJoin(
 export function rustUninhabitedError(error: TargetTypeRef): boolean {
   return isRustNeverCarrier(error) || error.kind === "target-named" && error.id === rustInfallibleTargetId;
 }
+
+// The same boxed callable carrying another error; an independent frame family member with an uninhabited error is
+// written into its family's callable this way.
+export function rustCallableWithError(physical: TargetTypeRef, error: TargetTypeRef): TargetTypeRef | undefined {
+  const named = rustNamedTypeCarrierValue(physical);
+  const lifetime = named?.genericArguments?.[0];
+  const signature = rustCallablePhysicalSignature(physical);
+  if (named?.id !== rustCallableTargetId || lifetime?.kind !== "lifetime" || signature === undefined) return undefined;
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, error]));
+  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
+    [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
+}

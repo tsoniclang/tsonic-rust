@@ -11,6 +11,8 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
+import { rustCallableWithError, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {
@@ -113,11 +115,22 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
       !rustTargetTypeRefEquals(closure.invocationResult.sourceCarrier, generator?.resultCarrier ?? asynchronous?.futureCarrier) ||
       !rustTargetTypeRefEquals(closure.invocationResult.targetCarrier, resultCarrier) || asynchronous?.kind === "native-future"))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted suspended closure requires its exact result conversion.", node);
+    const producedReference = rustProducerErrorReference(invocationError);
+    const producedError = producedReference === undefined ? invocationError : program.errorRegions.producerError(producedReference);
+    const familyError = frame?.independent === true ? protocol?.error : undefined;
+    const independentWrite = physicalCarrier === undefined || familyError === undefined || producedError === undefined ||
+      !rustUninhabitedError(producedError) || rustUninhabitedError(familyError) ? undefined
+      : rustCallableWithError(physicalCarrier, familyError);
+    if (frame?.independent === true && familyError !== undefined && producedError !== undefined && rustUninhabitedError(producedError) &&
+      !rustUninhabitedError(familyError) && independentWrite === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An independent frame member requires its family's exact callable error.", node);
     producer.lambda(node, { construction, constructionCarrier, protocol, nativeClosure, borrowedInput, parameters: Object.freeze(selected),
       resultCarrier, bodyCarrier, unitBody: isRustUnitCarrier(bodyCarrier), physicalCarrier, invocationError,
       resultFallible, bodyFallible: suspended ? fallible : resultFallible,
       staticStorage: protocol?.lifetime?.kind === "static", mutableCapture: closure.resultCarrier.kind === "closure" &&
-        (closure.resultCarrier.callTrait === "FnMut" || closure.resultCarrier.callTrait === "FnOnce") });
+        (closure.resultCarrier.callTrait === "FnMut" || closure.resultCarrier.callTrait === "FnOnce"),
+      independentWrite: independentWrite === undefined || physicalCarrier === undefined ? undefined
+        : Object.freeze({ source: physicalCarrier, carrier: independentWrite }) });
   }
   return Object.freeze(issues);
 }

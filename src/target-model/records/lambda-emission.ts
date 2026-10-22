@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustRecordFamily } from "./program.js";
 import type { rustCallableProtocol, rustClosureProtocol } from "../types/index.js";
+import type { RustCallableJoinWrite } from "./native-storage.js";
 
 export interface RustLambdaParameterEmission {
   readonly declaration: Node;
@@ -29,6 +30,8 @@ export interface RustNativeLambdaEmission {
   readonly bodyFallible: boolean;
   readonly staticStorage: boolean;
   readonly mutableCapture: boolean;
+  // An independent frame family member whose error is uninhabited is written into the family's callable error.
+  readonly independentWrite: RustCallableJoinWrite | undefined;
 }
 
 export type RustLambdaEmission = RustNativeLambdaEmission | {
