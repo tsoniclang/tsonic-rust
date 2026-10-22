@@ -629,7 +629,7 @@ main();
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /values\.delete_number\(1\.0_f64\)/u,
+    /values\.delete_number\(1\.0\)/u,
   );
   validateGeneratedProject("expression-delete-js-array", [...result.artifacts, {
     path: "tests/dense_delete.rs",
