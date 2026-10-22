@@ -5,6 +5,8 @@ import { lowerRustCompletionScope } from "./completion-regions.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustValueBlock } from "../syntax/value-block.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
+import { applyRustFreeFunctionLints, applyRustInherentMethodLints, applyRustTraitFunctionLints,
+  rustPublicDeclaredTypeNames } from "./function-lints.js";
 import { rustConditionPrintsAsBlock } from "../syntax/expressions.js";
 import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
@@ -20,8 +22,9 @@ type RustFunctionItemQuery = (name: string) => boolean;
 
 function finalizeRustItemScope(items: readonly RustItem[], isFunctionItem: RustFunctionItemQuery): RustNamedSignatureScope {
   const named = nameRustSignatureTypes(items, (callable, nameType) => styleCallable(callable, isFunctionItem, nameType));
-  return { aliases: named.aliases.map(item => finalizeRustItemStyle(item, isFunctionItem)),
-    items: named.items.map(item => finalizeRustItemStyle(item, isFunctionItem)) };
+  const publicTypes = rustPublicDeclaredTypeNames([...named.aliases, ...named.items]);
+  return { aliases: named.aliases.map(item => finalizeRustItemStyle(item, isFunctionItem, publicTypes)),
+    items: named.items.map(item => finalizeRustItemStyle(item, isFunctionItem, publicTypes)) };
 }
 
 // Names of the file's function items (module level or nested in bodies) that no binding of the file reuses.
@@ -69,15 +72,23 @@ function liftRustUnusedParameterExpectation<Callable extends Pick<RustImplFuncti
     }) };
 }
 
-function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionItemQuery): RustItem {
+function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionItemQuery, publicTypes: ReadonlySet<string>): RustItem {
   const item = finalizeRustItemNames(source);
   switch (item.kind) {
     case "mod-decl": return item.body === undefined ? item : { ...item, body: finalizeRustSourceStyle(item.body) };
-    case "impl": return { ...item, members: item.members.map(member => member.kind === "function"
-      ? finalizeRustFunctionNames(member, item.trait === undefined) : member) };
+    case "function": return applyRustFreeFunctionLints(item);
+    case "impl": {
+      const inherent = item.trait === undefined;
+      const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
+      return { ...item, members: item.members.map(member => {
+        if (member.kind !== "function") return member;
+        const named = finalizeRustFunctionNames(member, inherent);
+        return inherent ? applyRustInherentMethodLints(named, publicOwner) : named;
+      }) };
+    }
     case "trait": return { ...item, members: item.members.map(member => {
       if (member.kind !== "function") return member;
-      const fn = liftRustUnusedParameterExpectation(finalizeRustFunctionNames(member));
+      const fn = applyRustTraitFunctionLints(liftRustUnusedParameterExpectation(finalizeRustFunctionNames(member)));
       if (fn.body === undefined) return fn;
       const styler = createRustBodyStyler(isFunctionItem);
       const body = styler.block(fn.body);
