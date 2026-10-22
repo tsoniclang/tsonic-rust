@@ -1,3 +1,4 @@
+import { failRustSyntaxInvariant } from "./invariants.js";
 import type { RustBlock, RustExpr } from "./nodes.js";
 
 export function mapRustExpressionChildren(
@@ -54,7 +55,14 @@ export function mapRustExpressionChildren(
     case "vec-literal":
     case "slice-literal":
     case "tuple-literal": return { ...expression, elements: expression.elements.map(mapExpression) };
-    case "array-repeat": return { ...expression, element: mapExpression(expression.element) };
+    case "array-repeat": {
+      const element = mapExpression(expression.element);
+      if (expression.length.kind !== "path") return { ...expression, element };
+      // A named extent is a constant path; path rewrites (module aliases) apply to it as to any other path.
+      const length = mapExpression({ kind: "path", path: expression.length.path });
+      if (length.kind !== "path") failRustSyntaxInvariant("A named array extent remains a constant path.");
+      return { ...expression, element, length: { kind: "path", path: length.path } };
+    }
     case "closure": return { ...expression, body: mapExpression(expression.body) };
     case "break-expression":
     case "return-expression": return expression.expr === undefined

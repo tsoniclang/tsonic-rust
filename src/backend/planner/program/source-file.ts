@@ -59,7 +59,7 @@ import { planRustTypeFamilyImplementations } from "../declarations/type-families
 import { planRustGenericCallableItems } from "../declarations/callables/generic-implementations.js";
 import { planRustFrameCallableItems } from "../declarations/callables/frame-implementations.js";
 import { planRustSuspendedCallableItems } from "../declarations/callables/suspended.js";
-import { completeRustAuthoredStructScopes } from "../../target-ast/normalization/authored-type-scopes.js";
+import { completeRustAuthoredStructScopes } from "./authored-type-scopes.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literals/model.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";

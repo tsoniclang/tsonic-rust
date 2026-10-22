@@ -40,7 +40,7 @@ test("GAT declarations cannot omit their canonical binder container or occur in 
   assert.throws(() => printRustItem({ ...family, members: [oldDeclaration] }), TypeError);
   assert.throws(() => printRustItem({ ...implementation, members: [oldDefinition] }), TypeError);
   assert.throws(() => printRustItem({ ...implementation, trait: undefined }),
-    /Associated type definitions require an exact trait implementation/u);
+    /Unsupported Rust associated type without trait implementation syntax reached printer: impl/u);
 });
 
 test("associated generic bounds and predicates retain exact module dependencies", () => {

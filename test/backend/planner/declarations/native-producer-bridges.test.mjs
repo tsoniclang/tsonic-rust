@@ -10,6 +10,16 @@ import { rustGenericCallableTargetType } from "../../../../dist/target-model/typ
 import { nativeProducerFixture, nativeProducerItems, printNativeProducerItems }
   from "../../../helpers/native-producer-bridges.mjs";
 
+// A planning context whose sealed native protocol record also answers for `variant` with the analysed protocol's own
+// emission, so the planner sees an admitted protocol that differs from the analysed one only in the varied field.
+function withProtocolRecord(fixture, variant) {
+  const records = fixture.context.input.program.records;
+  const emission = records.nativeProtocol.get(fixture.protocol);
+  const program = { ...fixture.context.input.program, records: { ...records,
+    nativeProtocol: { get: protocol => protocol === variant ? emission : records.nativeProtocol.get(protocol) } } };
+  return { ...fixture.context, input: { ...fixture.context.input, program } };
+}
+
 const integer = rustSourcePrimitiveTargetType("uint64");
 const borrowed = { kind: "reference", referent: rustStrTargetType(), mutable: false };
 
@@ -61,7 +71,9 @@ test("borrowed inputs add only the reserved lifetime-bound producer helper", () 
   const printed = printNativeProducerItems(items);
   assert.match(printed, /for<'input> Implementation:/u);
   assert.doesNotMatch(printed, /'static|Box|dyn |\.clone\(|TsonicError/u);
-  assert.equal(planRustNativeProducerBridge({ ...fixture.protocol, boundProducerName: undefined }, fixture.context) === undefined, true);
+  const unnamed = { ...fixture.protocol, boundProducerName: undefined };
+  assert.throws(() => planRustNativeProducerBridge(unnamed, withProtocolRecord(fixture, unnamed)),
+    /An admitted higher-ranked producer requires its bound native trait name/u);
 });
 
 test("JS completion remains the concrete one-payload Promise without an unconstrained error parameter", () => {
@@ -132,7 +144,8 @@ test("bridge planning fails closed on an unrenderable input instead of guessing 
   const malformed = { ...fixture.protocol, method: { ...fixture.protocol.method,
     parameters: [{ kind: "target-named", id: "unavailable.native.carrier" }],
   } };
-  assert.equal(planRustNativeProducerBridge(malformed, fixture.context) === undefined, true);
+  assert.throws(() => planRustNativeProducerBridge(malformed, withProtocolRecord(fixture, malformed)),
+    /An admitted native type requires its exact sealed/u);
 });
 
 test("equal checked signatures share a bridge without consulting recipient errors", () => {

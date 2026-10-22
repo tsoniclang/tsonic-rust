@@ -8,6 +8,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { requirementUseHasValidStorage } from "./generic-requirement-contract.js";
 import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 
 export function analyzeRustGenericRequirementEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeGenericProducer): readonly TargetDiagnostic[] {
@@ -59,6 +60,8 @@ export function analyzeRustGenericRequirementEmission(program: Omit<RustAnalysis
   for (const node of nodes) {
     let declaration: Node | undefined = node;
     while (declaration !== undefined && !contracts.has(declaration)) declaration = program.source.ast.parent(declaration);
+    // Outside every generic requirement contract the enclosing callable owns the clone guarantees its reads query.
+    declaration ??= sourceEnclosingCallable(node, program.source.ast);
     if (declaration !== undefined) append(declaration, rustPhysicalEmissionRecordCarriers(program.records, node));
   }
   for (const [declaration, selected] of carriers) for (const carrier of selected.values()) for (const mode of [undefined, true] as const)

@@ -1,40 +1,45 @@
 import assert from "node:assert/strict";
 import { createRustNativeCallableProtocolRegistry } from "../../dist/analysis/callables/native-protocols.js";
+import { analyzeRustNativeProtocolEmission } from "../../dist/analysis/callables/native-protocol-emission.js";
+import { createRustNativeProtocolProducer } from "../../dist/analysis/program/records/native-protocol-emission.js";
+import { analyzeRustTypeEmission } from "../../dist/analysis/source-evidence/types/emission.js";
+import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
 import { planRustNativeCallableProtocol } from "../../dist/backend/planner/declarations/callables/native-protocols.js";
 import { planRustNativeProducerBridge } from "../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
-import { rustCallableTargetType, rustSourceUnionCarrierValue } from "../../dist/target-model/types/index.js";
+import { rustCallableTargetType } from "../../dist/target-model/types/index.js";
 import { createRustSourceFile } from "../../dist/backend/target-ast/syntax/nodes.js";
 import { finalizeRustSourceStyle } from "../../dist/backend/target-ast/normalization/source-style.js";
+import { analyzeRust } from "./rust-session.mjs";
+import { rustProgramSourceFiles, rustSourceFilePlanContext } from "./plan-context.mjs";
 import { printRustSourceFile } from "./printed-rust-source.mjs";
 
+// A protocol bound to a probe program's own source file, with the native protocol and type emission records that the
+// analysis owners (analyzeRustNativeProtocolEmission, analyzeRustTypeEmission) select for it. The planner context is
+// the probe source file's planning context, so the planner reads only sealed records, as in a real compilation.
 export function nativeProducerFixture({
   parameters = [], result, carrier = rustCallableTargetType(parameters, result),
   definitions = createRustTypeDefinitionRegistry(), identity = "producer-proof", usedNames = new Set(),
   protocols = createRustNativeCallableProtocolRegistry({ definitions, usedNames }),
 } = {}) {
-  const protocol = protocols.bind("/index.ts", carrier)?.protocol;
+  const { program: base } = analyzeRust({ files: { "index.ts": "export function probe(): void {}\n" } });
+  const [sourceFile] = rustProgramSourceFiles(base);
+  const protocol = protocols.bind(base.source.ast.getFileName(sourceFile), carrier)?.protocol;
   assert.equal(protocol !== undefined, true, `${identity}: protocol exists`);
-  const context = {
-    input: { program: {
-      typeDefinitions: definitions,
-      callableValues: { native: { protocolForSourceItem: (fileName, name) =>
-        fileName === protocol.ownerFileName && name === protocol.targetName ? protocol : undefined },
-        nativeDispatch: { requiredFor: candidate => candidate === protocol },
-        nativeGenericProducers: { unresolved: [], forProtocol: () => [] } },
-      names: { nameForSourceType: (_fileName, name) => name },
-      structuralShapes: { unionForCarrier: value => {
-        const union = rustSourceUnionCarrierValue(value);
-        return union === undefined || definitions.sourceUnionVariants(value) === undefined ? undefined : {
-          ownerFileName: union.fileName, targetName: union.typeName,
-        };
-      } },
-    } },
-    usedAliases: new Set(), moduleName: "proof", structuralShapesModuleName: "proof",
-    moduleNameByFileName: new Map([["/index.ts", "proof"]]), externalCrateNameByFileName: new Map(),
-    externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
-  };
-  return { protocol, context, definitions };
+  const native = createRustNativeProtocolProducer(() => {});
+  const callableValues = { ...base.callableValues,
+    native: { inputs: [], calls: [], protocols: protocols.definitions() },
+    nativeDispatch: { requiredFor: candidate => candidate === protocol },
+    nativeGenericProducers: { unresolved: [], forProtocol: () => [] } };
+  const issues = analyzeRustNativeProtocolEmission({ program: { ...base, typeDefinitions: definitions, callableValues },
+    sourceFiles: [sourceFile], producer: native });
+  assert.deepEqual(issues, [], `${identity}: native protocol emission`);
+  const withProtocols = { ...base, typeDefinitions: definitions, callableValues,
+    records: { ...base.records, nativeProtocol: native.protocol, nativeProtocols: native.inventories } };
+  const emission = createRustTypeEmissionProducer(() => {});
+  analyzeRustTypeEmission(withProtocols, [], emission, []);
+  const program = { ...withProtocols, records: { ...withProtocols.records, typeEmission: emission.records.typeEmission } };
+  return { protocol, context: rustSourceFilePlanContext(program, sourceFile), definitions, program };
 }
 
 export function nativeProducerItems(fixture) {
