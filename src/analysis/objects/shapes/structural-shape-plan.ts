@@ -218,12 +218,14 @@ function createRustStructuralShapeConstruction(
     const key = physicalKey(carrier);
     if (!carrierByKey.has(key)) carrierByKey.set(key, physicalSelection(carrier).carrier);
   }
-  // Two storage roots for one instance are one storage when one root is a generic instantiation of the other (a generic
-  // object literal shape and an authored type with the same layout): the more general root owns the storage.
+  // Two storage roots for one instance are one storage when one root is a generic instantiation of the other, closed
+  // root (a generic object literal shape and an authored concrete type with the same layout): the generic root owns the
+  // storage. Two open roots without an edge between them stay contradictory.
   const generalizes = (general: string, specific: string): boolean => {
     const generalCarrier = carrierByKey.get(general);
     const specificCarrier = carrierByKey.get(specific);
-    if (generalCarrier === undefined || specificCarrier === undefined) return false;
+    if (generalCarrier === undefined || specificCarrier === undefined ||
+      rustTargetGenericReferences(specificCarrier).typeIdentities.length !== 0) return false;
     const typeIdentities = new Set(rustTargetGenericReferences(generalCarrier).typeIdentities);
     return typeIdentities.size !== 0 && inferRustTargetGenericBindings(generalCarrier, specificCarrier,
       { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() }) !== undefined;
