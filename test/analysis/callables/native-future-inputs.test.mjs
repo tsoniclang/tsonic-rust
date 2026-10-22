@@ -61,7 +61,7 @@ test("unobserved native Future inputs preserve one exact opaque implementation t
   assert.equal(Object.isFrozen(inputs) && inputs.every(Object.isFrozen), true);
   assert.equal(inputs[0].implementation.identity === inputs[1].implementation.identity, false, "input identity is not signature identity");
   for (const [index, name] of ["first", "second"].entries()) {
-    const carrier = requireSelected(current.plan.valueFor(current.initializer(name)), name);
+    const carrier = requireSelected(current.plan.valueFor(current.declaration(name)), name);
     assert.equal(rustTargetTypeRefEquals(carrier, inputs[index].implementation), true, name);
     assert.equal(inputs[index].subject.node === current.ast.parameters(owner)[index], true, "exact original parameter");
   }
@@ -80,7 +80,7 @@ test("native Future input storage uses canonical optional union payloads without
   assert.equal(input !== undefined, true);
   const abi = current.program.records.sourceParameterAbi.get(parameter);
   for (const value of [current.plan.parameterFor(parameter), current.plan.returnFor(owner),
-    current.plan.valueFor(current.initializer("selected"))]) {
+    current.plan.valueFor(current.declaration("selected"))]) {
     const carrier = requireSelected(value, "one canonical Future union payload");
     assert.equal(contains(carrier, input.implementation, current.program.typeDefinitions), true, "same F in optional union");
   }
