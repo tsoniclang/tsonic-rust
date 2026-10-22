@@ -1,3 +1,4 @@
+import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
@@ -6,8 +7,8 @@ import type { RustBinaryErrorSelection } from "../../../target-model/records/err
 export interface RustBinaryErrorPlan {
   readonly errorType: RustType;
   readonly items: readonly RustItem[];
-  lifecycle(result: RustExpr): RustExpr;
-  lifecycleError(error: RustExpr): RustExpr;
+  lifecycle(result: RustExpr, operandErrorType?: RustType): RustExpr;
+  lifecycleError(error: RustExpr, operandErrorType?: RustType): RustExpr;
   propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr;
 }
 
@@ -34,15 +35,17 @@ export function planRustBinaryErrors(
     return selected;
   };
   return Object.freeze({ errorType: join.errorType, items: join.items, propagate,
-    lifecycle(result: RustExpr): RustExpr {
-      const converted: RustExpr = {
+    // A caller that knows the operand's error type passes it; an identical type propagates without conversion.
+    lifecycle(result: RustExpr, operandErrorType?: RustType): RustExpr {
+      const converted: RustExpr = operandErrorType !== undefined && rustTypeEquals(operandErrorType, lifecycleType) ? result : {
         kind: "method-call", receiver: result, method: "map_err",
         args: [{ kind: "associated-value", owner: lifecycleType, name: "from" }],
       };
       return propagate(lifecycle, converted);
     },
-    lifecycleError(error: RustExpr): RustExpr {
-      const converted: RustExpr = { kind: "associated-call", owner: lifecycleType, method: "from", args: [error] };
+    lifecycleError(error: RustExpr, operandErrorType?: RustType): RustExpr {
+      const converted: RustExpr = operandErrorType !== undefined && rustTypeEquals(operandErrorType, lifecycleType) ? error
+        : { kind: "associated-call", owner: lifecycleType, method: "from", args: [error] };
       const selected = join.inject(lifecycle, converted);
       if (selected === undefined) {
         failRustPlannerInvariant("Binary lifecycle errors require the exact selected native channel.");

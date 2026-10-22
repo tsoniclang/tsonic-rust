@@ -1,12 +1,14 @@
+import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/syntax/nodes.js";
 import type { RustErrorTransportPlan } from "./error-transport.js";
 import { rustCheckedNativeProjectionOutputParameter } from "../objects/checked-project-projections.js";
 
 export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): readonly RustItem[] {
+  // One impl per distinct type: identical spellings would be conflicting implementations.
   const types = [plan.fullTransportType,
     ...(plan.variants.some(item => item.source === "thrown" || item.source === "external" && item.transport === "package")
       ? [plan.sourceErrorType] : []),
-    plan.writableSourceErrorType];
+    plan.writableSourceErrorType].filter((type, index, all) => !all.slice(0, index).some(previous => rustTypeEquals(type, previous)));
   const projections = plan.variants.filter(item => item.source !== "thrown");
   const unit: RustExpr = { kind: "tuple-literal", elements: [] };
   return types.map(type => ({ kind: "impl", generics: emptyRustGenerics, target: type,
