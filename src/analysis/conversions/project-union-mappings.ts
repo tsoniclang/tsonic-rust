@@ -46,7 +46,7 @@ export function analyzeRustProjectUnionMappings(program: Omit<RustAnalysisProgra
       producer.publish(node, conversion, before, { mapping, upcasts: Object.freeze(conversion.arms.map(arm => arm.upcast)) });
     }
   };
-  // Callable adapters (parameter adapters, class-value callables) apply the same project union conversion as a
+  // Callable adapters (parameter adapters, class-value callables, object-literal contract methods) apply the same project union conversion as a
   // contextual conversion; their composition is sealed by the same decision.
   const adapter = (node: Node, selected: RustCallableValueAdapter | undefined, depth = 0): void => {
     if (selected === undefined || depth > 128) return;
@@ -75,6 +75,7 @@ export function analyzeRustProjectUnionMappings(program: Omit<RustAnalysisProgra
       : program.classValues.viewFor(classValue.declaration, classValue.sourceCarrier, classValue.carrier);
     for (const selected of [view?.construction, ...(view?.fields.map(field => field.callable) ?? [])])
       if (selected !== undefined) callable(node, selected);
+    for (const dispatch of program.records.objectLiteralMethodAdapter.get(node)?.dispatches ?? []) callable(node, dispatch);
   }
   for (const definition of program.projectTypes.definitions)
     for (const selected of program.records.projectCallableAdapters.get(definition.declaration) ?? []) callable(definition.declaration, selected);
