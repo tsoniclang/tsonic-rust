@@ -4,6 +4,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderInputProducer } from "../program/records/provider-inputs.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
@@ -38,7 +39,11 @@ export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "re
       const chain = program.records.optionalChainEmission.get(occurrence.node);
       const present = chain?.fact.guard === slot.node ? chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier : undefined;
       const carriers = present !== undefined ? [present] : contexts.length !== 0 ? contexts.map(operand => operand.carrier) : [raw];
-      for (const carrier of carriers) {
+      // The selected input carrier is logical, as the checkpoint planner compared it: an input whose own logical
+      // carrier reaches it needs no physical operand match. A placeholder callable lifetime takes the value's lifetime.
+      const logical = rustFinalizedCarrierTransitionMatches(raw, rustValueCarrierTransitionTarget(program.records, slot.node, raw),
+        rustCallableTargetForSourceLifetime(raw, input.sourceCarrier));
+      for (const carrier of logical ? [] : carriers) {
         const converted = rustValueCarrierTransitionTarget(program.records, slot.node, carrier);
         if (!rustFinalizedCarrierTransitionMatches(carrier, converted, input.sourceCarrier)) issues.push({
         code: converted === undefined ? "RUST_MISSING_TARGET_FACT" : "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: slot.node,
