@@ -104,6 +104,9 @@ export function analyzeRustConstructionEmission(input: {
       earlyReturnLayers: new Set(plan.layers.filter(layer => plan.layerHasEarlyReturn(layer.definition)).map(layer => layer.definition)),
       completingLayers: new Set(plan.layers.filter(layer => plan.layerCompletes(layer.definition)).map(layer => layer.definition)),
       unpublishedMutations: new Set(declarations.filter(declaration => plan.mutatesUnpublishedField(declaration))),
+      unpublishedAccesses: new Set(declarations.filter(declaration => plan.accessesUnpublishedField(declaration))),
+      unobservedInitializers: new Set(plan.fields.filter(field => field.initializer !== undefined && !field.externallyInitialized &&
+        !plan.observesInitialValue(field.declaration)).map(field => field.declaration)),
       physicalDeclarations: new Map(declarations.map(declaration => [declaration, program.objectRepresentations.receiverCaptures.storageDeclaration(declaration)])),
       retainedFieldIdentities: new Set(plan.fields.filter(field => program.frozenDataWrites.capturesFieldIdentity(field.declaration)).map(field => field.declaration)),
       retainedReferenceIdentities: retainedReferences,

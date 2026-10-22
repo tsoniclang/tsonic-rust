@@ -65,7 +65,9 @@ export function analyzeRustLocalBindings(input: {
       refuse(node, "rust.backend.lexical-function", lexical.reason, "RUST_MISSING_TARGET_FACT");
       continue;
     }
-    if (lexical !== undefined && initializer !== undefined) {
+    // A lexical function, or a module binding stored as a native callable (planned as a native function by
+    // module-bindings.ts), is a function declaration rather than a value binding.
+    if (initializer !== undefined && (lexical !== undefined || input.records.moduleBinding.get(node)?.storage === "native-callable")) {
       input.producer.declaration(node, { kind: "function", initializer, name });
       continue;
     }

@@ -386,7 +386,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
         records.nativeUnreachable.get(declaration) === true) continue;
       const initializer = Node_Initializer(ast, declaration);
       const name = ast.name(declaration);
-      if (name !== undefined && ast.is.IsIdentifier(name) &&
+      // A module callable declaration is planned as a native function (and, when stored, from its sealed hoisted
+      // carrier), never as a value binding.
+      if (name !== undefined && ast.is.IsIdentifier(name) && records.moduleBinding.get(declaration)?.storage !== "native-callable" &&
         (initializer === undefined || input.lexicalFunctions.forDeclaration(initializer) === undefined))
         request(owner, declaration, "binding", { kind: "value" }, declaration);
     }

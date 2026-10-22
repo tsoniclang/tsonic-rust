@@ -1,3 +1,4 @@
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -224,6 +225,7 @@ export function planRustConstructionBody(
       }
       return declarationAtInitialization.has(physical)
         ? [{ kind: "let", name: slot.expression.path, mutable: storage.mutable,
+          ...(plan.unobservedInitializers.has(physical) ? { attrs: [rustLintAttributes.unusedAssignments] } : {}),
           type: slot.storageType, init: storage.create(value) }]
         : storage.deferred ? [{ kind: "expr", expr: storage.initialize(slot.expression, value) }]
         : [{ kind: "assign", target: slot.expression, operator: "=", value: storage.create(value) }];
