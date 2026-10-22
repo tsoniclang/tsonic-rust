@@ -39,8 +39,8 @@ export function createRustSourcePackageEmissionProducer(assertOpen: () => void) 
     sourcePackageInitializers: Object.freeze({ get: () => initializers }),
     sourcePackageErrors: Object.freeze({ get: () => errors }),
     sourcePackageErrorBoundary: Object.freeze({ get: (consumer: string, owner: string) => boundaries.get(consumer)?.get(owner) }),
-    physicalProgramErrorBoundary: Object.freeze({ get: (consumer: string, owner: RustProgramErrorOwner) =>
-      owner.kind !== "physical" ? undefined : owner.domain === "runtime" ? runtime.get(consumer) : physical.get(consumer)?.get(owner.componentId) }),
+    physicalProgramErrorBoundary: Object.freeze({ get: (consumer: string, owner: RustProgramErrorOwner | undefined) =>
+      owner?.kind !== "physical" ? undefined : owner.domain === "runtime" ? runtime.get(consumer) : physical.get(consumer)?.get(owner.componentId) }),
     programErrorRoute: Object.freeze({ get: (consumer: string, definition: RustProjectTypeDefinition, variant: string) =>
       routes.get(consumer)?.get(definition)?.get(variant) }),
     sourcePackageComponents: Object.freeze({ get: () => components }),
