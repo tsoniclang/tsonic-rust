@@ -16,6 +16,7 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustIntegerCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
+import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
 
 export interface RustNativeValueDeclarationInput {
   readonly ast: AstReader;
@@ -130,8 +131,9 @@ function admitInterface(
       return reject(member, "RUST_INTERFACE_FIELD_NOT_CLOSED",
         "A record field requires its exact selected name, native carrier and project-object storage slot.");
     }
+    // A record owns its fields: callable storage with an open environment is 'static in the record struct.
     fields.push(Object.freeze({ declaration: member, sourceName: selected.sourceName, targetName,
-      storageIndex: selected.storageIndex, carrier }));
+      storageIndex: selected.storageIndex, carrier: closeRustRetainedCallableCarrier(carrier, { kind: "static" }) }));
   }
   if (fields.length !== layout.fields.length) {
     return reject(declaration, "RUST_INTERFACE_FIELD_COVERAGE_NOT_CLOSED",

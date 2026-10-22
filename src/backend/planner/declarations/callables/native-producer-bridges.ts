@@ -10,6 +10,7 @@ import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst } from "../../types/carrier-syntax.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
+import { planRustNativeProtocolObligations } from "./native-protocol-obligations.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustNativeProducerBridge(protocol: RustNativeCallableProtocol, context: RustPlanContext): readonly RustItem[] {
@@ -38,7 +39,8 @@ export function planRustNativeProducerBridge(protocol: RustNativeCallableProtoco
   const argumentsType = higherRanked === undefined ? inputTuple : named(bridge.arguments.name);
   const callable = named("rt::CallableImplementation", [typeArgument(argumentsType),
     { kind: "associated-equality", name: "Output", genericArguments: [], type: concreteResult }]);
-  const predicates: RustWherePredicate[] = [{ kind: "type", type: implementationType, bounds: [{ kind: "trait-type", reference: { trait: callable } }] }];
+  const predicates: RustWherePredicate[] = [{ kind: "type", type: implementationType, bounds: [{ kind: "trait-type", reference: { trait: callable } }] },
+    ...planRustNativeProtocolObligations(protocol, context)];
   for (const future of bridge.futureBounds) predicates.push({ kind: "type", type: named(future.parameter.name), bounds: [{ kind: "trait-type", reference: {
     trait: named("core::future::Future", [{ kind: "associated-equality", name: "Output", genericArguments: [],
       type: named("Result", [typeArgument(render(future.output)), typeArgument(named(future.error.name))]) }]),
@@ -70,7 +72,8 @@ export function planRustNativeProducerBridge(protocol: RustNativeCallableProtoco
         selfParam: { kind: "reference" as const, mutable: false }, params: directParameters, returnType: helperResult }] : [])],
   }, direct, { kind: "impl", trait: protocolType, target: implementationType,
     generics: { parameters: [{ kind: "type", name: bridge.implementation.name, bounds: [] }, ...environmentParameters],
-      wherePredicates: [{ kind: "type", type: implementationType, binder: lifetimes, bounds: [{ kind: "trait-type", reference: { trait: helperType } }] }] },
+      wherePredicates: [{ kind: "type", type: implementationType, binder: lifetimes, bounds: [{ kind: "trait-type", reference: { trait: helperType } }] },
+        ...planRustNativeProtocolObligations(protocol, context)] },
     members: [...channels.map(name => ({ kind: "type" as const, name, generics: methodGenerics,
       type: { kind: "qualified" as const, owner: implementationType, trait: helperType, member: name } })),
       ...(invoked ? [{ kind: "function" as const, name: "invoke", visibility: "private" as const, generics: methodGenerics,

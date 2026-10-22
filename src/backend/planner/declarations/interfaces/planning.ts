@@ -3,6 +3,7 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "../classes/planning.js";
 import type { RustItem, RustStructField } from "../../../target-ast/syntax/nodes.js";
@@ -54,7 +55,11 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     };
   }
   for (const field of admitted.fields) {
-    const fieldType = rustTypeFromCarrierInContext(field.carrier, context);
+    // A generic callable field stores the physical family its record literals write; the logical carrier has no storage type.
+    const generic = rustGenericCallableValue(field.carrier);
+    const carrier = generic !== undefined && generic.physical === undefined
+      ? context.input.program.records.recordFieldStorage.get(field.declaration) : field.carrier;
+    const fieldType = carrier === undefined ? undefined : rustTypeFromCarrierInContext(carrier, context);
     if (fieldType === undefined) {
       failRustPlannerInvariant("An admitted record field requires its renderable native carrier.", field.declaration);
     }

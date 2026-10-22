@@ -75,6 +75,13 @@ export function planRustNativeInputPropagation(
 ): RustExpr | undefined {
   const region = context.fallibleBoundary;
   const errorType = rustTypeFromCarrierInContext(call.invocationError, context);
+  const caught = context.input.program.records.nativeInputInvocation.get(node)?.caught;
+  if (caught !== undefined && region?.kind === "source-package" && errorType !== undefined) {
+    // In a catching try body the invocation error converts into the catch's program error (the owner's Into bound).
+    return { kind: "try", expr: { kind: "method-call", receiver: expression, method: "map_err",
+      genericArguments: [{ kind: "type", type: region.errorType }, { kind: "type", type: { kind: "infer" } }],
+      args: [{ kind: "path", path: "core::convert::Into::into" }] }, operandErrorType: region.errorType, resultErrorType: region.errorType };
+  }
   const result = region === undefined || errorType === undefined ? undefined :
     rustPropagateNativeError(region, { identity: call.invocationErrorSource, errorType }, expression);
   if (result === undefined) failRustPlannerInvariant("An admitted native callable invocation requires its exact active error channel.", node);

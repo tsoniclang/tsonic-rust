@@ -10,10 +10,12 @@ export function createRustCallableConversionProducer(assertOpen: () => void) {
   const operands = new WeakMap<Node, Map<string, RustCallableOperandEmission>>();
   const contracts = new WeakMap<Node, Map<string, RustCallableConversionEmission>>();
   const joinWrites = new WeakMap<Node, RustCallableJoinWrite>();
+  const recordFields = new WeakMap<Node, TargetTypeRef>();
   const records: RustCallableConversionRecords = Object.freeze({
     callableOperand: Object.freeze({ get: (node: Node, carrier: TargetTypeRef) => operands.get(node)?.get(closedMetadataKey(carrier)) }),
     callableContract: Object.freeze({ get: (node: Node, conversion: RustCallableConversion) => contracts.get(node)?.get(closedMetadataKey(conversion)) }),
     callableJoinWrite: Object.freeze({ get: (node: Node) => joinWrites.get(node) }),
+    recordFieldStorage: Object.freeze({ get: (member: Node) => recordFields.get(member) }),
   });
   const write = <Value>(values: WeakMap<Node, Map<string, Value>>, node: Node, key: string, value: Value): void => {
     assertOpen();
@@ -29,6 +31,11 @@ export function createRustCallableConversionProducer(assertOpen: () => void) {
       assertOpen();
       if (joinWrites.has(node)) failTargetAnalysisInvariant("tsonic-rust", "A joined callable storage write has one exact error join.", node);
       joinWrites.set(node, value);
+    },
+    recordField: (member: Node, carrier: TargetTypeRef): void => {
+      assertOpen();
+      if (recordFields.has(member)) failTargetAnalysisInvariant("tsonic-rust", "A record generic callable field has one exact physical family.", member);
+      recordFields.set(member, carrier);
     },
   });
 }

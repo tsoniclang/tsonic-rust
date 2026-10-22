@@ -52,7 +52,9 @@ export interface RustSourceErrorEffectSelection {
       readonly genericBindings: RustTargetGenericBindings }): RustSourceErrorBindings | undefined;
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
     bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
-  pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined): boolean;
+  pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined,
+    substitution?: "bound" | "completed"): boolean;
+  substitutesOnCompletion(identity: string): boolean;
   complete(error: RustNativeErrorEffect,
     physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">): RustNativeErrorEffect | undefined;
 }
@@ -63,6 +65,8 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
   const origins = new Map<string, { readonly origin: RustNativeErrorEffect; readonly selected: RustNativeErrorEffect }>();
   const pending = new Map<string, (physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">) => RustNativeErrorEffect | undefined>();
   const completed = new Map<string, RustNativeErrorEffect>();
+  // Pending errors whose carrier callers substitute only after completion (generic invocation channels).
+  const substitutedOnCompletion = new Set<string>();
   const active = new Set<string>();
   const bindingIdentities = new WeakMap<SourceStorageBindings, number>();
   let nextBindingIdentity = 0;
@@ -306,7 +310,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const recorded = origins.get(source.identity);
       if (recorded === undefined || !rustTargetTypeRefEquals(recorded.selected.errorType, source.errorType)) return undefined;
       const origin = recorded.origin;
-      const errorType = bindings.substitute(source.errorType);
+      const errorType = substitutedOnCompletion.has(source.identity) ? source.errorType : bindings.substitute(source.errorType);
       if (errorType === undefined) return undefined;
       const references = rustTargetGenericReferences(errorType, "metadata");
       const sourceComplete = !pending.has(source.identity) && !pending.has(origin.identity) &&
@@ -352,9 +356,11 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     } finally { active.delete(error.identity); }
   };
   return Object.freeze({ register, bindingsFor, edgeFor, complete,
-    pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined) {
+    substitutesOnCompletion: (identity: string) => substitutedOnCompletion.has(identity),
+    pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined, substitution: "bound" | "completed" = "bound") {
       if (!register([error])) return false;
       pending.set(error.identity, select);
+      if (substitution === "completed") substitutedOnCompletion.add(error.identity);
       return true;
     },
   });

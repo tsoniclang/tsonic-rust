@@ -34,6 +34,7 @@ import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/c
 import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints/error-protocols.js";
 import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
+import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -84,6 +85,13 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     [field.carrier, ...(field.methodStorageCarrier === undefined ? [] : [field.methodStorageCarrier])]));
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
     ...definition.signature.parameters, definition.signature.result, ...definition.members.flatMap(member => member.arguments.flatMap(argument => argument.kind === "type" ? [argument.type] : [])));
+  // A generic implementation renders its retained outlives bounds over the family environment it is emitted in.
+  for (const definition of program.callableValues.generic.physical.definitions()) for (const member of definition.members) {
+    const retained = program.records.nativeGenerics.get(member.implementation.declaration)?.retention;
+    const substitutions = new Map(member.implementation.substitutions);
+    if (retained !== undefined) pending.push(...[...retained.source, ...retained.body].map(carrier =>
+      substituteRustTargetTypeParameters(carrier, substitutions)));
+  }
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const parameter = program.records.callableParameter.get(node);
@@ -102,12 +110,17 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const retained = nativeGenerics?.retention;
     if (retained !== undefined) pending.push(...retained.source, ...retained.body);
     // A retained native input renders a where predicate from its invocation error into each error target.
-    for (const input of nativeGenerics?.inputs ?? []) if (input.retained !== undefined)
-      pending.push(input.retained.error, ...input.retained.targets);
+    for (const input of nativeGenerics?.inputs ?? []) {
+      if (input.retained !== undefined) pending.push(input.retained.error, ...input.retained.targets);
+      if (input.caught !== undefined) pending.push(input.caught.error, input.caught.target);
+    }
     // A generic invocation propagates through its native error join, which renders every source error carrier.
     const invocation = program.records.genericCallableInvocation.get(node);
     if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
       ...invocation.awaiting.map(source => source.errorType));
+    // A native input invocation propagates its invocation error, which renders as the input's associated error type.
+    const nativeInvocation = program.records.nativeInputInvocation.get(node)?.call;
+    if (nativeInvocation !== undefined) pending.push(nativeInvocation.invocationError);
     // A callable adapter constructs its physical callable (and each nested adapter's), which renders as a constructor type.
     const adapter = program.records.contextualValueConversion.get(node)?.conversion;
     const adapterContract = adapter?.kind === "callable-adapter" ? program.records.callableContract.get(node, adapter) : undefined;

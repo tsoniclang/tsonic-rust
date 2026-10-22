@@ -154,7 +154,7 @@ function collectFallibilityFacts(
     for (const error of [...selected.invocation, ...selected.awaiting]) selectSourceErrors.pending(error, () => {
       if (!completedInvocations.has(node)) completedInvocations.set(node, pending.complete(walk.context));
       return completedInvocations.get(node)?.replacements.get(error.identity);
-    });
+    }, pending.pendingErrors.has(error.identity) ? "completed" : "bound");
     budget.metadata(selected);
     genericInvocations.set(node, pending);
     return selected;
@@ -316,7 +316,8 @@ function collectFallibilityFacts(
           budget.expansion(carrierWork, replacementWork);
         }
         const bindings = source.nativeErrors.length === 0 ? undefined : selectSourceErrors.bindingsFor(
-          invocation, declaration, source.nativeErrors.map(error => error.errorType));
+          invocation, declaration, source.nativeErrors.filter(error => !selectSourceErrors.substitutesOnCompletion(error.identity))
+            .map(error => error.errorType));
         const edge = selectSourceErrors.edgeFor(declaration, kind, source, bindings);
         if (edge === undefined) {
           appendRustDiagnostic(walk, "RUST_NATIVE_ERROR_REBINDING_MISSING",
