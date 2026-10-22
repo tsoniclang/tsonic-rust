@@ -23,7 +23,9 @@ export function analyzeRustBindingLiveness(
     for (const point of graph.points) {
       if (!liveness.reachable.has(point.id)) continue;
       const operation = point.operation;
-      if (operation.kind === "read" || operation.kind === "capture") reads.add(operation.binding);
+      // A discarded callable is erased from the native program, so its capture never reads the binding.
+      if (operation.kind === "read" || operation.kind === "capture" &&
+        (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);
       if (operation.kind !== "write") continue;
       const observed = liveness.after.get(point.id)?.has(operation.binding) === true;
       if (operation.initialization) initialWrites.set(operation.binding,
