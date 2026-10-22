@@ -126,6 +126,7 @@ export function createRustSession({
     files: fileMap,
     compilerOptions: {
       module: "esnext",
+      moduleDetection: "force",
       moduleResolution: "bundler",
       noLib: true,
       strictNullChecks: true,
@@ -188,7 +189,7 @@ function collectCapabilityActivation(files, candidates, target) {
   const session = createCompilerSessionFromFiles({
     currentDirectory: "/src",
     files: new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text])),
-    compilerOptions: { module: "esnext", moduleResolution: "bundler", noLib: true, target: "es2022" },
+    compilerOptions: { module: "esnext", moduleDetection: "force", moduleResolution: "bundler", noLib: true, target: "es2022" },
   });
   const source = session.checkSource();
   const projectSourceFiles = sourceProjectFiles(source);

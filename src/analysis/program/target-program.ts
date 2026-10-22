@@ -8,7 +8,7 @@ import type { RustAnalysisRecords } from "../../target-model/records/analysis.js
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { analyzeRustBinaryDispatchDemand } from "../project/binary-dispatch-demand.js";
 import { createRustAnalysisContext } from "./context.js";
-import type { AnalyzeRustTargetProgramResult, RustTargetAnalysisRequest, RustAnalysisProgram } from "./model.js";
+import type { AnalyzeRustTargetProgramResult, RustTargetAnalysisRequest, RustAnalysisProgram, RustCompleteAnalysisProgram } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 
 import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
@@ -71,7 +71,7 @@ export function analyzeRustTargetProgram(
 /** The complete analysis program: every plan and record the analysis publishes, before sealing. */
 export function analyzeRustAnalysisProgram(
   request: RustTargetAnalysisRequest,
-): TargetStageResult<RustAnalysisProgram> {
+): TargetStageResult<RustCompleteAnalysisProgram> {
   const {
     input,
     configuration,
@@ -475,7 +475,8 @@ export function analyzeRustAnalysisProgram(
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
     ...program,
-    reachability: emission.value,
+    reachability: emission.value.reachability,
+    nativeDeclarations: emission.value.nativeDeclarations,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
   }));
 }

@@ -105,4 +105,9 @@ export interface RustAnalysisProgram {
   readonly genericCallableErrors: import("../../target-model/records/generic-callable-errors.js").RustGenericCallableErrorIndex;
 }
 
+/** The analysis program after native emission finalization, which also publishes the native declaration forms. */
+export interface RustCompleteAnalysisProgram extends RustAnalysisProgram {
+  readonly nativeDeclarations: import("../../target-model/records/native-declaration-forms.js").RustNativeDeclarationForms;
+}
+
 export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;
