@@ -513,7 +513,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(Object.isFrozen(member.bindings) && Object.isFrozen(member.bindings.types), true);
       assert.equal(typeof member.bindings.types.set, "undefined", "no mutable binding map escapes");
       const completion = program.callableValues.genericCompletions.forDefinition(definition);
-      const result = completion.kind === "direct" ? completion.result : completion.forMember(member).result;
+      const result = completion.kind === "direct" ? completion.result : completion.members.get(member).result;
       assert.equal(context.returnDestination.kind, "value");
       assert.equal(context.returnDestination.carrier === result, true, "already-bound completion is not applied a second time");
       assert.equal(prepared.carrierFor(context.use, result) === result, true, "selected physical payload remains the original object");

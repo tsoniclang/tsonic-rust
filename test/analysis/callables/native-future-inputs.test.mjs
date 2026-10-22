@@ -22,7 +22,7 @@ function storageFixture(program) {
   const ast = program.source.ast;
   const nodes = [];
   const walk = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) walk(child); }); };
-  for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) walk(file);
+  for (const file of program.sourceFiles) walk(file);
   const declaration = name => nodes.find(node => (ast.is.IsFunctionDeclaration(node) || ast.is.IsVariableDeclaration(node)) &&
     ast.name(node) !== undefined && ast.text(ast.name(node)) === name);
   const initializer = name => Node_Initializer(ast, declaration(name));

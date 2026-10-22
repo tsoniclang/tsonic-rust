@@ -14,6 +14,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceUnionPayloadArguments } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../target-model/types/carriers/generic-callable-storage.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
@@ -91,7 +92,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     if (selections.has(key)) continue;
     const generic = rustGenericCallableValue(carrier);
     const physical = generic === undefined ? undefined : program.callableValues.generic.physical.existingSelectionFor(carrier);
-    if (generic !== undefined && physical === undefined)
+    // A carrier that still names source type parameters is rendered only after its emission context substitutes them;
+    // the substituted closed carrier is the one prepared and selected.
+    if (generic !== undefined && physical === undefined && rustTargetTypeParameterIdentities(carrier).length === 0)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native generic carrier requires its exact selected physical definition and arguments.");
     const union = rustSourceUnionCarrierValue(carrier);
     const unionArguments = union === undefined ? undefined : rustSourceUnionPayloadArguments(carrier, program.typeDefinitions);

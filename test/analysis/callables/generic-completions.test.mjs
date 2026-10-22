@@ -36,7 +36,7 @@ test("equal producer-owned Promise completions preserve the existing promise car
   assert.equal(rustJsPromiseOutputTargetType(current.selection.result) !== undefined, true,
     "the exact generic payload remains selected");
   for (const member of current.definition.members) {
-    const selected = current.selection.forMember(member);
+    const selected = current.selection.members.get(member);
     assert.equal(selected !== undefined, true);
     assert.equal(selected.variant, undefined);
     assert.equal(rustTargetTypeRefEquals(selected.result, current.selection.result), true);
@@ -53,7 +53,7 @@ test("heterogeneous source errors retain one canonical shared JS Promise without
   assert.equal(current.input.definitions.generatedUnions().length, 0,
     "an error-only distinction does not allocate a physical Promise sum");
   for (const member of current.definition.members) {
-    const selected = current.selection.forMember(member);
+    const selected = current.selection.members.get(member);
     assert.equal(selected !== undefined, true, "every exact producer remains admitted");
     assert.equal(selected.variant, undefined, "no obsolete error-only variant is selected");
     assert.equal(rustTargetTypeRefEquals(current.selection.result, selected.result), true);
@@ -96,7 +96,7 @@ test("generic invocation correspondence binds actual authored parameters rather 
 
 test("completion member identity cannot be invented or replaced by the same logical signature", () => {
   const current = fixture('throw new Error("second");');
-  assert.equal(current.selection.forMember({ ...current.definition.members[0] }) === undefined, true);
+  assert.equal(current.selection.members.get({ ...current.definition.members[0] }) === undefined, true);
   assert.equal(current.plan.forDefinition({ ...current.definition }).kind, "unresolved");
 });
 
