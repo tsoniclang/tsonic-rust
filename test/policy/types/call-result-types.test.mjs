@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustSourceCallResult } from "../../../dist/analysis/types/resolution/call-results.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import { rustJsValueTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
@@ -45,7 +46,8 @@ test("source-call validation rejects stale or forged result correspondence", () 
     sourceResultProjection: projection };
   const fact = { kind: "source-call", operationId: "fixture.set", target: { form: "method", name: "set", mutatesSelf: false },
     parameters: [], resultCarrier: child, resultProjection: projection };
-  const matches = (candidate, signature = selected) => sourceCallSelectedMemberMatches(candidate, signature, base, carrier => carrier, projectTypes);
+  const matches = (candidate, signature = selected) => sourceCallSelectedMemberMatches(candidate, signature, base, carrier => carrier, projectTypes,
+    [], emptyRustTypeDefinitions, new Map());
   assert.equal(matches(fact), true);
   for (const field of ["sourceCarrier", "dispatchCarrier", "selectedCarrier"]) {
     assert.equal(matches({ ...fact, resultProjection: { ...projection, [field]: unrelated } }), false);
@@ -56,7 +58,8 @@ test("source-call validation rejects stale or forged result correspondence", () 
   assert.equal(matches({ ...fact, resultCarrier: base }), false);
   assert.equal(matches({ ...fact, resultProjection: { ...projection, extra: true } }), false);
   assert.equal(matches(fact, { ...selected, sourceResultProjection: { ...projection, projection: { ...route, slot: "unrelated" } } }), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, base, carrier => carrier, undefined), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, base, carrier => carrier, undefined,
+    [], emptyRustTypeDefinitions, new Map()), false);
 });
 
 test("broad implementation storage uses the canonical exact native payload projection", () => {
@@ -70,7 +73,8 @@ test("broad implementation storage uses the canonical exact native payload proje
       sourceResultProjection: result.projection };
     const fact = { kind: "source-call", operationId: "fixture.read", target: { form: "method", name: "read", mutatesSelf: false },
       parameters: [], resultCarrier: selectedType, resultProjection: result.projection };
-    const matches = candidate => sourceCallSelectedMemberMatches(candidate, signature, native, carrier => carrier, projectTypes);
+    const matches = candidate => sourceCallSelectedMemberMatches(candidate, signature, native, carrier => carrier, projectTypes,
+      [], emptyRustTypeDefinitions, new Map());
     assert.equal(matches(fact), true);
     assert.equal(matches({ ...fact, resultProjection: { ...result.projection, variant: "Other" } }), false);
     assert.equal(matches({ ...fact, resultProjection: { ...result.projection, selectedCarrier: unrelated } }), false);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../../dist/policy/ownership/suspended-storage.js";
 import { bindRustElidedCallableInput, instantiateRustElidedCallResult, rustSingleElidedInput } from "../../../dist/policy/types/callables/lifetime-elision.js";
 import { substituteElidedLifetime } from "../../../dist/target-model/types/carriers/lifetime-elision.js";
@@ -89,7 +90,8 @@ test("sealed source-call validation independently rechecks actual argument lifet
     parameters: [{ form: "required", valueCarrier: input, parameterCarrier: input, mode: "value", inputs: [binding] }],
     resultCarrier: promise(owned) };
   const matches = (candidate, carrier, signature = selected) =>
-    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [carrier]);
+    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [carrier],
+      emptyRustTypeDefinitions, new Map());
   assert.equal(matches(fact, promise(owned)), true);
   assert.equal(matches(fact, promise(borrowed)), false);
   assert.equal(matches(fact, undefined), false);
@@ -130,7 +132,8 @@ test("sealed callback input results reject deleted, foreign and payload-mutated 
     target: { form: "function", name: "invoke", selectedTargetName: "invoke", fileName: "/index.ts" },
     parameters: [physical], resultCarrier: promise(inferred, number) };
   const matches = (candidate, actual = callback, signature = selected) =>
-    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [actual]);
+    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [actual],
+      emptyRustTypeDefinitions, new Map());
   assert.equal(matches(fact), true);
   const { inputLifetime, ...deleted } = physical;
   assert.equal(matches({ ...fact, parameters: [deleted] }), false);

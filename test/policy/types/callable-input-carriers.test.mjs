@@ -128,7 +128,8 @@ test("finalized invocation input facts retain exact borrowed argument modes with
   const parameter = { form: "required", parameterCarrier: borrowed, valueCarrier: value, mode: "ref", inputs: [] };
   const fact = { kind: "source-call", operationId: "callback", resultCarrier: value,
     target: { form: "callable", carrier }, parameters: [parameter] };
-  const matches = candidate => sourceCallSelectedMemberMatches(candidate, selected, value, type => type, undefined);
+  const matches = candidate => sourceCallSelectedMemberMatches(candidate, selected, value, type => type, undefined,
+    [], emptyRustTypeDefinitions, new Map());
   assert.equal(matches(fact), true);
   for (const change of [
     { mode: "mut-ref" },
