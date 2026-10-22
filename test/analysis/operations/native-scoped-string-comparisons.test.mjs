@@ -13,10 +13,12 @@ const string = rustStringTargetType();
 function select({ operator = "==", literal = "abc", literalSide = "right", conversion = {}, fieldRecords = {},
   fieldValueReceiver = true } = {}) {
   const expression = {}, field = {}, other = {}, root = {};
-  const literalNode = literal === undefined ? undefined : {};
+  // `literal: null` means no literal operand (a default parameter would turn undefined back into "abc").
+  const literalNode = literal === null ? undefined : {};
   const left = literalSide === "left" && literalNode !== undefined ? literalNode : field;
   const right = literalSide === "left" || literalNode === undefined ? (literalNode === undefined ? other : field) : literalNode;
   const ast = {
+    parent: () => undefined,
     is: { IsBinaryExpression: node => node === expression, IsParenthesizedExpression: () => false, IsIdentifier: () => false,
       IsStringLiteral: node => node === literalNode, IsNoSubstitutionTemplateLiteral: () => false },
     as: { AsBinaryExpression: node => node === expression ? { Left: left, Right: right } : undefined },
@@ -36,7 +38,8 @@ function select({ operator = "==", literal = "abc", literalSide = "right", conve
       [family, { get: node => node === field ? value : undefined }])),
   }) };
   const producer = createRustNativeComparisonProducer(() => {});
-  analyzeRustNativeComparisons({ source: { ast }, records, ownership: { reads: { get: () => undefined } } }, [expression], producer);
+  analyzeRustNativeComparisons({ source: { ast }, records, ownership: { reads: { get: () => undefined } },
+    safetyApplications: { operationForExpression: () => undefined } }, [expression], producer);
   return { selected: producer.records.nativeComparison.get(expression), field };
 }
 
@@ -51,7 +54,7 @@ test("scoped native string comparisons preserve exact borrow and literal boundar
     const { selected, field } = select(options);
     assert.deepEqual(selected, { kind: "scoped-string", field, ...expected }, JSON.stringify(options));
   }
-  assert.notEqual(select({ literal: undefined }).selected.kind, "scoped-string", "a non-literal operand is not scoped");
+  assert.notEqual(select({ literal: null }).selected.kind, "scoped-string", "a non-literal operand is not scoped");
 });
 
 test("a converted, noncomparison, projected or owned operand does not claim a scoped borrow", () => {
