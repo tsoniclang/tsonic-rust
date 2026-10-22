@@ -115,8 +115,17 @@ export function retainRustStructuralInstantiation(
     }, context, options, resolving));
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
-    if (declared.some(carrier => carrier === undefined ||
-      !rustTargetTypeRefEquals(mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize), expected))) return undefined;
+    // An authored field type resolves to its template carrier. A field that itself holds structural storage is closed
+    // separately (its method environments name the new instantiation's lifetimes), so its authored type matches the
+    // template field and the recursive retention below proves and registers the closed nested instantiation.
+    const nestedTemplate = containsStructuralStorage(field.resultCarrier, options) === true
+      ? mapRustTargetTypes(field.resultCarrier, normalize) : undefined;
+    if (declared.some(carrier => {
+      if (carrier === undefined) return true;
+      const authored = mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize);
+      return !rustTargetTypeRefEquals(authored, expected) &&
+        (nestedTemplate === undefined || !rustTargetTypeRefEquals(authored, nestedTemplate));
+    })) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {
