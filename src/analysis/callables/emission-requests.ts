@@ -316,7 +316,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
           if (expression !== undefined && generic !== undefined && generic.physical === undefined)
             runtime(owner, expression, `member:${index}`, node);
         } else if (contribution.kind === "method" || contribution.kind === "structural-method") visitUse(contribution.expression, owner, `member:${index}`, node);
-        else if (contribution.kind === "accessor") visitConstruct(contribution.property, contribution.property);
+        // An accessor is a callable created where the literal is evaluated, so it is a used native producer like a method.
+        else if (contribution.kind === "accessor") visitUse(contribution.property, owner, `member:${index}`, node);
         else visitUse(contribution.expression, owner, `member:${index}`, node);
       }
     } else if (operation?.kind === "provider-record-literal" || operation?.kind === "closed-record-literal") {

@@ -10,6 +10,7 @@ import { visitRustTargetTypeParameters } from "../../../target-model/types/carri
 import { substituteRustTargetTypeParameters, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../../target-model/types/placeholder-lifetimes.js";
 
 export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
   const substitutions = new Map<string, TargetTypeRef>();
@@ -38,13 +39,16 @@ export function instantiateStructuralDefinition(
     parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
   const shape = rustStructuralObjectCarrierValue(carrier);
   const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction, shape.bases);
-  const bindings = inferRustTargetGenericBindings(definition.carrier, aligned, {
+  // A placeholder lifetime in a definition has no lifetime parameter of its own, so the struct stores it as 'static and
+  // a 'static instance lifetime instantiates it.
+  const template = rustCarrierWithTargetPlaceholderLifetimes(definition.carrier, aligned, lifetime => lifetime.kind === "static");
+  const bindings = inferRustTargetGenericBindings(template, aligned, {
     typeIdentities: parameters, lifetimeIdentities: lifetimes, constIdentities: new Set(),
   });
   const substitute = (type: TargetTypeRef) => bindings === undefined ? type :
     substituteRustTargetGenerics(type, bindings.types, bindings.lifetimes, bindings.consts);
   if (bindings === undefined || bindings.types.size !== parameters.size || bindings.lifetimes.size !== lifetimes.size ||
-    !rustTargetTypeRefEquals(substitute(definition.carrier), aligned)) {
+    !rustTargetTypeRefEquals(substitute(template), aligned)) {
     return undefined;
   }
   return Object.freeze({

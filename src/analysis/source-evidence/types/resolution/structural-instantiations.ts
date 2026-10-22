@@ -9,6 +9,7 @@ import { rustOptionElementCarrier } from "../../../../target-model/types/index.j
 import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../../target-model/types/carriers/js.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../../../target-model/types/placeholder-lifetimes.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../../../project-types/type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
@@ -105,10 +106,10 @@ export function retainRustStructuralInstantiation(
     correspondence.source.calls.length !== 0 || correspondence.source.constructs.length !== (template.construction === undefined ? 0 : 1) ||
     correspondence.source.indexes.length !== 0) return false;
   const construction = template.construction === undefined ? undefined : resolveRustConstructType(sourceType, context, options, resolving);
-  if (template.construction !== undefined && (construction === undefined ||
-    !rustTargetTypeRefEquals(construction.carrier, structural.construction))) return false;
+  if (template.construction !== undefined && (construction === undefined || structural.construction === undefined ||
+    !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(construction.carrier, structural.construction), structural.construction))) return false;
   if (template.construction !== undefined && construction !== undefined &&
-    !retainSignature(construction.signatureInfo, template.construction.carrier, construction.carrier, context, options, resolving)) return false;
+    !retainSignature(construction.signatureInfo, template.construction.carrier, structural.construction ?? construction.carrier, context, options, resolving)) return false;
   const fields = template.fields.map(field => {
     const matches = correspondence.members.filter(pair => field.symbols.includes(pair.destination.property.symbol));
     if (matches.length !== 1) return undefined;
@@ -149,6 +150,7 @@ export function retainRustStructuralInstantiation(
       if (carrier === undefined) return true;
       const authored = mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize);
       return !rustTargetTypeRefEquals(closed(authored), expected) &&
+        !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected) &&
         (nestedTemplate === undefined || !rustTargetTypeRefEquals(authored, nestedTemplate));
     })) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
@@ -163,7 +165,8 @@ export function retainRustStructuralInstantiation(
   });
   if (fields.some(field => field === undefined)) return false;
   return options.sourceTypes.registerStructuralObject({ ...template, sourceType, carrier,
-    ...(construction === undefined ? {} : { construction }),
+    // The construction registers with the closed carrier it was proven equal to (placeholder lifetimes taken from it).
+    ...(construction === undefined ? {} : { construction: { ...construction, carrier: structural.construction ?? construction.carrier } }),
     fields: fields as NonNullable<(typeof fields)[number]>[] }, templateCarrier);
 }
 

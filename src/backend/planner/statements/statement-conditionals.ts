@@ -54,6 +54,19 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   const planned = planCondition(node, context);
   const thenBlock = planEmbeddedBlock(thenStatement, context);
   const elseBlock = elseStatement === undefined ? undefined : planEmbeddedBlock(elseStatement, context);
+  // `if (value === undefined) return undefined;` in a callable returning a bare Option is `value.as_ref()?;`
+  // (the checkpoint form; `if value.is_none() { return None; }` is clippy::question_mark).
+  const ast = context.input.program.source.ast;
+  const terminal = thenBlock.statements.length === 1 ? thenBlock.statements[0] : undefined;
+  const sourceStatements = thenStatement !== undefined && ast.is.IsBlock(thenStatement) ? ast.statements(thenStatement) : [thenStatement];
+  const sourceReturn = sourceStatements.length === 1 ? sourceStatements[0] : undefined;
+  const returnedExpression = sourceReturn !== undefined && ast.is.IsReturnStatement(sourceReturn) ? Node_Expression(ast, sourceReturn) : undefined;
+  if (context.fallibleBoundary === undefined && context.generator === undefined && elseBlock === undefined &&
+    planned.kind === "option-presence" && !planned.present && terminal?.kind === "return" &&
+    returnedExpression !== undefined && ast.is.IsIdentifier(returnedExpression) && ast.text(returnedExpression) === "undefined" &&
+    context.input.program.records.sourceBinding.get(returnedExpression) === undefined &&
+    context.input.program.records.optionProjection.get(returnedExpression)?.kind === "none")
+    return [{ kind: "expr", expr: { kind: "option-try", expr: { kind: "method-call", receiver: planned.receiver, method: "as_ref", args: [] } } }];
   return [{
     kind: "if",
     condition: planned,

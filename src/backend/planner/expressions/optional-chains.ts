@@ -27,12 +27,18 @@ export function planOptionalChainExpression(node: Node, context: RustPlanContext
   })();
   if (guard === undefined) failRustPlannerInvariant("An admitted optional chain requires its native guard.", fact.guard);
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "optional_receiver");
+  // An indexed element guard (`callbacks[1]?.(..)`) is an owned Option temporary; it is matched by value, not borrowed
+  // through `.as_ref()`.
+  const ast = context.input.program.source.ast;
+  const indexed = context.input.program.records.targetOperation.get(fact.guard);
+  const ownedGuard = structuralGuard === undefined && fact.guardDepth === 1 && ast.is.IsElementAccessExpression(fact.guard) &&
+    indexed?.kind === "provider-operation" && indexed.abi.operationKind === "indexer";
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(fact.guard, { expression: { kind: "path", path: receiverName },
-    carrier: structuralGuard?.selectedStorageCarrier ?? fact.selectedGuardCarrier, valueForm: "shared-reference" });
+    carrier: structuralGuard?.selectedStorageCarrier ?? fact.selectedGuardCarrier, valueForm: ownedGuard ? "value" : "shared-reference" });
   const body = planInner({ ...context, expressionOverrides: overrides });
   if (body === undefined) failRustPlannerInvariant("An admitted optional chain requires its selected native body.", node);
-  let borrowedGuard: RustExpr = { kind: "method-call", receiver: guard, method: "as_ref", args: [] };
+  let borrowedGuard: RustExpr = ownedGuard ? guard : { kind: "method-call", receiver: guard, method: "as_ref", args: [] };
   for (let depth = 1; depth < fact.guardDepth; depth++) borrowedGuard = {
     kind: "method-call", receiver: borrowedGuard, method: "and_then",
     args: [{ kind: "path", path: "core::option::Option::as_ref" }],

@@ -101,7 +101,11 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   } else if (selected.option?.kind === "some") value = planRustPresentValue(selected.option.resultCarrier, value, context);
   if (access === "shared-receiver") return value;
   if (access === "shared-place") return borrowFlow ? { kind: "dereference", pointer: value } : value;
-  return access !== "shared-reference" || borrowFlow || selected.option === undefined && selected.referenceReborrow
+  // A contextual conversion to a shared reference (`AsRef::<str>::as_ref(&owned)`) already yields the shared reference;
+  // borrowing it again is clippy::needless_borrow.
+  const sharedResult = selected.option === undefined && selected.contextual?.targetCarrier.kind === "reference" &&
+    selected.contextual.targetCarrier.mutable !== true;
+  return access !== "shared-reference" || borrowFlow || selected.option === undefined && selected.referenceReborrow || sharedResult
     ? value : createRustSharedReferenceArgument(context, value, node);
 }
 

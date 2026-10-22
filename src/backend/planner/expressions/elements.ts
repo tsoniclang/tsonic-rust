@@ -9,7 +9,7 @@ import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { planOptionalChainExpression } from "./optional-chains.js";
 import { rustOperationFact, expressionCarrier } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { planExpression } from "./entry.js";
+import { planExpression, type RustExpressionAccess } from "./entry.js";
 import { planRustValueRead } from "./typed-locations.js";
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
@@ -17,13 +17,13 @@ import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRustIndexedFieldRead } from "./indexed-locations.js";
 
-export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
+export function planElementAccess(node: Node, context: RustPlanContext, access: RustExpressionAccess = "value"): RustExpr | undefined {
   if (context.input.program.records.selectedOperation.get(node)?.operationKind === "property") return planPropertyAccess(node, context);
   return planOptionalChainExpression(node, context, innerContext => planRustComputedMemberExpression(node, innerContext,
-    selectedContext => planElementAccessInner(node, selectedContext)));
+    selectedContext => planElementAccessInner(node, selectedContext, access)));
 }
 
-function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
+function planElementAccessInner(node: Node, context: RustPlanContext, access: RustExpressionAccess): RustExpr | undefined {
   if (context.input.program.records.nativeArrayStorage.get(node)?.kind === "element")
     return planNativeRustArrayAccess(node, context, planExpression, "load");
   const fact = rustOperationFact(node, context);
@@ -44,7 +44,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
         kind: "method-call", receiver: { kind: "method-call", receiver, method: "into_iter", args: [] },
         method: fact.index === 0n ? "next" : "nth", args: fact.index === 0n ? [] : [{ kind: "int-literal", text: String(fact.index) }],
       }, method: "unwrap", args: [] };
-    });
+    }, access);
   }
   if (fact?.kind !== "provider-operation" || fact.abi.operationKind !== "indexer")
     failRustPlannerInvariant("Element access requires a finalized provider indexer fact.", node);
@@ -59,12 +59,18 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
 }
 
 function planIndexedProjection(node: Node, receiverNode: Node, indexNode: Node, evaluateIndex: boolean,
-  context: RustPlanContext, project: (receiver: RustExpr, borrowed: boolean) => RustExpr): RustExpr {
-  const receiver = planExpression(receiverNode, context)
+  context: RustPlanContext, project: (receiver: RustExpr, borrowed: boolean) => RustExpr, access: RustExpressionAccess): RustExpr {
+  // A retained owner (its read would clone the whole tuple or array) is projected in place, and only the selected
+  // element is read with its own ownership (`pair.1.clone()`, `tuple.0`); a projection that is itself the receiver of a
+  // projection stays a place (`nested.1.0`).
+  const inPlace = context.expressionOverrides?.has(receiverNode) !== true &&
+    context.input.program.records.readOwnership.get(receiverNode)?.value.kind === "clone";
+  const receiver = (inPlace ? planExpression(receiverNode, context, "value", "shared-place") : planExpression(receiverNode, context))
     ?? failRustPlannerInvariant("An admitted fixed projection requires its rendered source receiver.", receiverNode);
-  const borrowed = expressionCarrier(receiverNode, context)?.kind === "reference" ||
+  const borrowed = inPlace || expressionCarrier(receiverNode, context)?.kind === "reference" ||
     context.expressionOverrides?.get(receiverNode)?.valueForm === "shared-reference";
-  const read = (owner: RustExpr): RustExpr => borrowed ? planRustValueRead(node, project(owner, true), context) : project(owner, false);
+  const read = (owner: RustExpr): RustExpr => !borrowed ? project(owner, false)
+    : access === "shared-place" ? project(owner, true) : planRustValueRead(node, project(owner, true), context);
   if (!evaluateIndex) return read(receiver);
   const effect = planExpression(indexNode, context)
     ?? failRustPlannerInvariant("An admitted fixed projection requires its source index effect.", indexNode);

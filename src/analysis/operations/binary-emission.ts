@@ -13,6 +13,7 @@ import { isRustAssignmentOperator, isRustBinaryOperator } from "../../target-mod
 import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
 import { rustProjectTypeTestMatches } from "./type-tests.js";
+import { rustBindingReadIsUnevaluated } from "./static-comparison-operands.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "reachability">,
@@ -167,7 +168,8 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
       leftLiteral: comparison && fact.leftConversion === undefined && isRustStringCarrier(leftCarrier) ? literal(left) : undefined,
       rightLiteral: comparison && fact.rightConversion === undefined && isRustStringCarrier(rightCarrier) ? literal(right) : undefined,
       selectionTest: fact.kind === "project-type-test" && fact.lowering.kind === "dispatch" && rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier),
-      constantLeftEffect: effect(left), constantRightEffect: effect(right), concatParts: concatParts === undefined ? undefined : Object.freeze(concatParts), optionCheck });
+      constantLeftEffect: effect(left) && !rustBindingReadIsUnevaluated(ast, program.records, left),
+      constantRightEffect: effect(right) && !rustBindingReadIsUnevaluated(ast, program.records, right), concatParts: concatParts === undefined ? undefined : Object.freeze(concatParts), optionCheck });
   }
   return Object.freeze(issues);
 }

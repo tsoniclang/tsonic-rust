@@ -4,31 +4,72 @@ import { nameRustSignatureTypes, type RustNamedSignatureScope } from "./signatur
 import { lowerRustCompletionScope } from "./completion-regions.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustValueBlock } from "../syntax/value-block.js";
+import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { rustConditionPrintsAsBlock } from "../syntax/expressions.js";
 import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
 export function finalizeRustSourceStyle(model: RustSourceFileModel): RustSourceFileModel {
-  const scope = finalizeRustItemScope(model.items);
+  const functions = rustUnshadowedFunctionItems(model.items);
+  const scope = finalizeRustItemScope(model.items, name => functions.has(name));
   return { ...model, items: [...scope.aliases, ...scope.items] };
 }
 
-function finalizeRustItemScope(items: readonly RustItem[]): RustNamedSignatureScope {
-  const named = nameRustSignatureTypes(items, (callable, nameType) => styleCallable(callable, nameType));
-  return { aliases: named.aliases.map(finalizeRustItemStyle), items: named.items.map(finalizeRustItemStyle) };
+type RustFunctionItemQuery = (name: string) => boolean;
+
+function finalizeRustItemScope(items: readonly RustItem[], isFunctionItem: RustFunctionItemQuery): RustNamedSignatureScope {
+  const named = nameRustSignatureTypes(items, (callable, nameType) => styleCallable(callable, isFunctionItem, nameType));
+  return { aliases: named.aliases.map(item => finalizeRustItemStyle(item, isFunctionItem)),
+    items: named.items.map(item => finalizeRustItemStyle(item, isFunctionItem)) };
+}
+
+// Names of the file's function items (module level or nested in bodies) that no binding of the file reuses.
+function rustUnshadowedFunctionItems(items: readonly RustItem[]): ReadonlySet<string> {
+  const functions = new Set<string>();
+  const bindings = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const entry of value) visit(entry); return; }
+    if (value === null || typeof value !== "object") return;
+    const node = value as { readonly kind?: unknown; readonly name?: unknown; readonly params?: unknown };
+    if (node.kind === "function" && typeof node.name === "string") functions.add(node.name);
+    if ((node.kind === "let" || node.kind === "binding") && typeof node.name === "string") bindings.add(node.name);
+    if ((node.kind === "closure" || node.kind === "closure-block" || node.kind === "function") && Array.isArray(node.params))
+      for (const parameter of node.params) {
+        const name = (parameter as { readonly name?: unknown }).name;
+        if (typeof name === "string") bindings.add(name);
+      }
+    for (const entry of Object.values(value)) visit(entry);
+  };
+  visit(items);
+  return new Set([...functions].filter(name => !bindings.has(name)));
 }
 
 function styleCallable<Callable extends RustImplFunction>(
-  callable: Callable, nameType?: (type: RustType, role: string) => RustType,
+  callable: Callable, isFunctionItem: RustFunctionItemQuery, nameType?: (type: RustType, role: string) => RustType,
 ): Callable {
-  const styler = createRustBodyStyler(nameType);
+  const styler = createRustBodyStyler(isFunctionItem, nameType);
   const body = styler.block(callable.body);
-  return { ...callable, body, ...(styler.requiresNamingAllowance()
-    ? { attrs: appendRustNamingAllowance(callable.attrs, "snake") } : {}) };
+  const lifted = liftRustUnusedParameterExpectation(callable);
+  return { ...lifted, body, ...(styler.requiresNamingAllowance()
+    ? { attrs: appendRustNamingAllowance(lifted.attrs, "snake") } : {}) };
 }
 
-function finalizeRustItemStyle(source: RustItem): RustItem {
+// An unused-parameter expectation is written on the function item, so the parameter list prints as authored
+// (`fn has_text(text: &str) -> bool`); the attribute covers the same lint for the whole signature (syntax only).
+function liftRustUnusedParameterExpectation<Callable extends Pick<RustImplFunction, "attrs" | "params">>(callable: Callable): Callable {
+  const expected = rustLintAttributes.unusedVariables;
+  if (!callable.params.some(parameter => parameter.attrs?.includes(expected) === true)) return callable;
+  return { ...callable, attrs: callable.attrs?.includes(expected) === true ? callable.attrs : [...callable.attrs ?? [], expected],
+    params: callable.params.map(parameter => {
+      if (parameter.attrs?.includes(expected) !== true) return parameter;
+      const attrs = parameter.attrs.filter(attribute => attribute !== expected);
+      const { attrs: _attrs, ...rest } = parameter;
+      return attrs.length === 0 ? rest : { ...rest, attrs };
+    }) };
+}
+
+function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionItemQuery): RustItem {
   const item = finalizeRustItemNames(source);
   switch (item.kind) {
     case "mod-decl": return item.body === undefined ? item : { ...item, body: finalizeRustSourceStyle(item.body) };
@@ -36,16 +77,16 @@ function finalizeRustItemStyle(source: RustItem): RustItem {
       ? finalizeRustFunctionNames(member, item.trait === undefined) : member) };
     case "trait": return { ...item, members: item.members.map(member => {
       if (member.kind !== "function") return member;
-      const fn = finalizeRustFunctionNames(member);
+      const fn = liftRustUnusedParameterExpectation(finalizeRustFunctionNames(member));
       if (fn.body === undefined) return fn;
-      const styler = createRustBodyStyler();
+      const styler = createRustBodyStyler(isFunctionItem);
       const body = styler.block(fn.body);
       return { ...fn, body, ...(styler.requiresNamingAllowance()
         ? { attrs: appendRustNamingAllowance(fn.attrs, "snake") } : {}) };
     }) };
     case "const":
     case "thread-local": {
-      const styler = createRustBodyStyler();
+      const styler = createRustBodyStyler(isFunctionItem);
       const value = styler.expression(item.value);
       return { ...item, value, ...(styler.requiresNamingAllowance()
         ? { attrs: appendRustNamingAllowance(item.attrs, "snake") } : {}) };
@@ -54,11 +95,11 @@ function finalizeRustItemStyle(source: RustItem): RustItem {
   }
 }
 
-function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType) {
+function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: (type: RustType, role: string) => RustType) {
   let namingAllowance = false;
   const block = (value: RustBlock): RustBlock => {
     const localItems = value.statements.flatMap(statement => statement.kind === "item" ? [statement.item] : []);
-    const scope = finalizeRustItemScope(localItems);
+    const scope = finalizeRustItemScope(localItems, isFunctionItem);
     let itemIndex = 0;
     return { ...value, statements: foldRustDirectLateInitializations([
       ...scope.aliases.map((item): RustStmt => ({ kind: "item", item })),
@@ -75,19 +116,17 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
-    // `|value| f(value)` (or `|value| { f(value) }`) with an unannotated parameter is the function or variant
-    // constructor path `f` itself (clippy::redundant_closure), e.g. `Ok` or `js_abi::JsValue::from_error`. A bare
-    // lowercase path may be a local callable, which the closure borrows and the path would move, so it stays.
-    const result = mapped.kind === "closure" ? mapped.body
-      : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
-        mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
-    if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 && result?.kind === "call" &&
-      result.genericArguments === undefined && result.args.length === 1 && rustItemCallPath(result.path)) {
-      const parameter = mapped.params[0];
-      const argument = result.args[0];
-      if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
-        (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
-        return { kind: "path", path: result.path };
+    // A literal left operand decides a short-circuit operator: `true && value` is `value`, `false && value` is `false`
+    // (syntax only; the right operand is evaluated exactly when the operator evaluates it).
+    if (mapped.kind === "binary" && mapped.left.kind === "bool-literal" && (mapped.operator === "&&" || mapped.operator === "||"))
+      return (mapped.operator === "&&" ? mapped.left.value : !mapped.left.value) ? mapped.right : mapped.left;
+    // A closure that only forwards its parameters is the callee itself (`|value| Ok(value)` is `Ok`,
+    // `|left, right| compare(left, right)` is `compare`). A bare lowercase callee collapses only when it names a
+    // function item of this file that no binding shadows: a local callable would be moved instead of borrowed.
+    if (mapped.kind === "closure" || mapped.kind === "closure-block") {
+      const collapsed = collapseRustForwardingClosure(mapped);
+      if (collapsed !== mapped && (collapsed.kind !== "path" || rustItemCallPath(collapsed.path) || isFunctionItem(collapsed.path)))
+        return collapsed;
     }
     // `|value| Type::Variant(value)` is the associated item `Type::Variant` itself; an associated item is never a local
     // callable, so the path form is always the same value (clippy::redundant_closure).
