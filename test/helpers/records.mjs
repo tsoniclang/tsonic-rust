@@ -18,7 +18,7 @@ export function rustNativeFixtureNodes(program) {
   }
   const participation = sourceNodesOutsideErasedSubtrees(ast, nodes, node =>
     program.records.nativeParticipation.get(node) === "erased" ||
-    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && sourceCallableDefinitionIsDiscarded(node, ast));
+    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && sourceCallableDefinitionIsDiscarded(node, ast, program.sourceNavigation));
   assert.equal(participation.kind, "resolved", "the same actual fixture participation has one complete native domain");
   return participation.nodes;
 }
