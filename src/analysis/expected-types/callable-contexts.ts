@@ -6,7 +6,7 @@ import { rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier } f
 import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { selectedRustCheckedCallInputCarrier } from "../operations/provider/calls/input-contract.js";
+import { selectedRustCheckedCallInputCarrier } from "../operations/members/calls/input-contract.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";

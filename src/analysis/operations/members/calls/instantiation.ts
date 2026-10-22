@@ -453,11 +453,11 @@ export function acceptSelectedCall(
       );
     }
     const mode = rustArgumentPassingMode(sourceArgument.mode);
-    requireRustRecord(context.requiredRecords, "argumentPassing", argument, mode, "analysis/operations/provider/calls/instantiation.ts");
+    requireRustRecord(context.requiredRecords, "argumentPassing", argument, mode, "analysis/operations/members/calls/instantiation.ts");
     context.records.argumentPassingPlans.pass(argument, mode);
   }
   if (optionalResult.fact !== undefined) {
-    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/calls/instantiation.ts");
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/members/calls/instantiation.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }

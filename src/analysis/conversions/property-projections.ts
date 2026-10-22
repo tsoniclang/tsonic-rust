@@ -2,7 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustCheckedCallSelectionInput } from "../../policy/operations/contracts.js";
-import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
+import type { RustOperationsProviderOptions } from "../operations/members/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -12,9 +12,9 @@ import { selectRustStructuralFieldProjection } from "../../policy/types/objects/
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustProjectedValueConversion } from "../../policy/conversions/property-projection.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
-import { resolveRustProjectField } from "../operations/provider/project-fields.js";
+import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
-import { resolveRustProjectAccessor } from "../operations/provider/project-accessors.js";
+import { resolveRustProjectAccessor } from "../operations/members/project-accessors.js";
 import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
 
 import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../target-model/records/property-projections.js";

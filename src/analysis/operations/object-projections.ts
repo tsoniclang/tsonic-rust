@@ -3,28 +3,28 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import { isRustJsArrayCarrier, rustStringTargetType } from "../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../policy/operations/contracts.js";
 
-import { selectRustOptionalCallResult } from "./provider/calls/optional-results.js";
+import { selectRustOptionalCallResult } from "./members/calls/optional-results.js";
 import { asNode } from "../../policy/identities/selected-source.js";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
 
-import { rejectSelectedOperation } from "./provider/result.js";
+import { rejectSelectedOperation } from "./members/result.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import { selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./provider/operators.js";
+import { selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./members/operators.js";
 import { selectedValueCarrier } from "./selected-values.js";
 import { selectedRustCallSignature } from "../program/records/selected-call.js";
-import { selectedAuthoredObjectFields } from "./provider/object-shape-fields.js";
+import { selectedAuthoredObjectFields } from "./members/object-shape-fields.js";
 import { selectObjectAssignmentFields, selectObjectShapeProjectionFields } from "../../policy/operations/source-profiles/js/object-fields.js";
 import type { SelectedObjectShapeProjection } from "../../policy/operations/source-profiles/js/object-fields.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../policy/operations/contracts.js";
 
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
-import { selectRustRecordObjectCall } from "./provider/records.js";
+import { selectRustRecordObjectCall } from "./members/records.js";
 
 import { selectedObjectShapeProjection } from "../../policy/operations/source-profiles/js/object-fields.js";
 export function mapSelectedJsSpecialCall(
@@ -284,7 +284,7 @@ function mapSelectedObjectShapeProjection(
       : "by-value" as const);
   for (const [index, argument] of sourceArguments.entries()) {
     const mode = parameterModes[index]!;
-    requireRustRecord(context.requiredRecords, "argumentPassing", argument.expression, mode, "analysis/operations/provider/object-shapes.ts");
+    requireRustRecord(context.requiredRecords, "argumentPassing", argument.expression, mode, "analysis/operations/members/object-shapes.ts");
     context.records.argumentPassingPlans.pass(argument.expression, mode);
   }
   const operation: RustTargetOperationSelection = {
@@ -318,7 +318,7 @@ function mapSelectedObjectShapeProjection(
   const selectedSignature = selectedRustCallSignature(request, member,
     selection.static ? undefined : { sourceSelectedReceiverCarrier: sourceValueCarrier });
   if (optionalResult.fact !== undefined) {
-    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/object-shapes.ts");
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/members/object-shapes.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }

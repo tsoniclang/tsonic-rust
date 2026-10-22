@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
-import { selectedImplicitSuperConstructorClass } from "../../../dist/analysis/operations/provider/calls/implicit-super.js";
+import { selectedImplicitSuperConstructorClass } from "../../../dist/analysis/operations/members/calls/implicit-super.js";
 
 test("implicit super selection requires the exact selected return owner and parameters", () => {
   const checked = checkRustSession(createRustSession({ files: { "index.ts": `

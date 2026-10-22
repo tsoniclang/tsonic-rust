@@ -49,7 +49,7 @@ export function selectRustArrayTypeTest(
       sourceCallee: request.source.sourceCallee.expression, sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration },
   };
-  requireRustRecord(context.requiredRecords, "argumentPassing", argument.expression, "borrow-shared", "analysis/operations/provider/type-tests.ts");
+  requireRustRecord(context.requiredRecords, "argumentPassing", argument.expression, "borrow-shared", "analysis/operations/members/type-tests.ts");
   context.records.argumentPassingPlans.pass(argument.expression, "borrow-shared");
   return acceptRustPolicy({ selectedSignature, targetFact, operation }, evidence);
 }

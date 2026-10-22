@@ -51,7 +51,7 @@ test("Rust source modules expose only the approved native aliases", () => {
 
 test("Rust converts typed-location facts into one target-owned selection", () => {
   const operationRouter = source(
-    "src/analysis/operations/provider/calls/deferred.ts",
+    "src/analysis/operations/members/calls/deferred.ts",
   );
   const operations = source(
     "src/source/extension/typed-locations.ts",

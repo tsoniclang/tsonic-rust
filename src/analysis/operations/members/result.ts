@@ -300,7 +300,7 @@ export function acceptRustMemberOperation(
     provenance,
     selection.fact.resultCarrier,
   );
-  requireRustRecord(context.requiredRecords, "optionalChain", request.expression, selection.fact.operationKind, "analysis/operations/provider/result.ts");
+  requireRustRecord(context.requiredRecords, "optionalChain", request.expression, selection.fact.operationKind, "analysis/operations/members/result.ts");
   context.records.optionalChains.guard(request.expression, selection.fact.guard, selection.fact.operationKind, selection.fact);
   return accepted;
 }

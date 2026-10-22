@@ -9,7 +9,7 @@ import { selectRustGuardedIntegerOperation } from "../../policy/operations/numer
 import { selectRustProgramErrorEquality } from "./error-equality.js";
 import { selectRustUnionEquality } from "../../policy/operations/operators/union-equality.js";
 
-import { recordRustCompoundWrite, selectRustCompoundWrite } from "./provider/compound-writes.js";
+import { recordRustCompoundWrite, selectRustCompoundWrite } from "./members/compound-writes.js";
 import { isRustAssignmentOperator, rustOperatorCarrierKey, selectRustBinaryOperator, selectRustCompoundAssignment, selectRustEquivalentAssignment } from "../../policy/operations/operators/rules.js";
 import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustOptionCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustOptionValueCarrier, rustBigIntTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";

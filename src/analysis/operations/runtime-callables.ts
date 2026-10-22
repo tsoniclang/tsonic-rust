@@ -8,12 +8,12 @@ import { rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue, 
 import { checkedPropertySelectionInput } from "./member-access.js";
 import { selectRustCheckedPropertyAccess } from "./selected-members.js";
 import { acceptRustPolicy } from "../../policy/operations/contracts.js";
-import { checkedCallIsConstruction, selectedCallReceiverValueCarrier } from "./provider/calls/instantiation.js";
-import { selectRustOptionalCallResult } from "./provider/calls/optional-results.js";
+import { checkedCallIsConstruction, selectedCallReceiverValueCarrier } from "./members/calls/instantiation.js";
+import { selectRustOptionalCallResult } from "./members/calls/optional-results.js";
 
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
-import { rejectSelectedOperation } from "./provider/result.js";
+import { rejectSelectedOperation } from "./members/result.js";
 
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
@@ -28,7 +28,7 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetSignature } from "../../target-model/records/member-selections.js";
 
@@ -238,7 +238,7 @@ export function acceptRuntimeCallableCarrierCall(
       : { sourceDeclaration: sourceDeclaration ?? request.sourceSelectedDeclaration }),
   });
   if (optionalResult.fact !== undefined) {
-    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/calls/selection.ts");
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/members/calls/selection.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }

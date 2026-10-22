@@ -2,13 +2,13 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { selectRustGuardedValueMembers } from "./native-flow-refinement.js";
 import { resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
 import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/selection.js";
-import { finalizeProviderOperationFromSubjects } from "./provider/conversions.js";
-import { acceptRustMemberOperation, rejectSelectedOperation } from "./provider/result.js";
+import { finalizeProviderOperationFromSubjects } from "./members/conversions.js";
+import { acceptRustMemberOperation, rejectSelectedOperation } from "./members/result.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 

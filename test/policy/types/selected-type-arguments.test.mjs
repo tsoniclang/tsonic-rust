@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveRustSelectedTypeArguments } from "../../../dist/analysis/source-evidence/types/resolution/generic-arguments.js";
-import { bindRustSelectedReceiverContext } from "../../../dist/analysis/operations/provider/member-carriers.js";
+import { bindRustSelectedReceiverContext } from "../../../dist/analysis/operations/members/member-carriers.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 
 function fixture() {

@@ -8,7 +8,7 @@ import { recordProjectSourceBinding } from "../../../../dist/analysis/storage/so
 import { resolveExpressionCarrier } from "../../../../dist/analysis/expressions/carriers.js";
 import { applyFlowReadLane } from "../../../../dist/analysis/expressions/flow-read.js";
 import { recordBindingWrite } from "../../../../dist/analysis/ownership/source-writes.js";
-import { recordRustCompoundWrite } from "../../../../dist/analysis/operations/provider/compound-writes.js";
+import { recordRustCompoundWrite } from "../../../../dist/analysis/operations/members/compound-writes.js";
 import { recordRustNativeBacking, resolveRustRawLocationCarrier } from "../../../../dist/analysis/operations/native-memory.js";
 import { resolveRustMemoryBindingCarrier } from "../../../../dist/analysis/operations/memory-bindings.js";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../../../../dist/analysis/operations/raw-addresses.js";

@@ -4,7 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "./records/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
-import { resolveRustProjectField } from "../operations/provider/project-fields.js";
+import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import { createRustModuleBindingAnalysis } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
@@ -29,7 +29,7 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
-import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
+import type { RustOperationsProviderOptions } from "../operations/members/index.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 

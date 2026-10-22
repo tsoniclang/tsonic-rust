@@ -15,7 +15,7 @@ import {
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../../policy/operations/native-contracts.js";
-import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
+import { finalizeRustPreparedCheckedCall } from "../operations/members/index.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";

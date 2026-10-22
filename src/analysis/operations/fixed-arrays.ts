@@ -1,8 +1,8 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
-import { acceptRustMemberOperation, normalizeSelectedOperationInputCarrier, rejectSelectedOperation } from "./provider/result.js";
+import { acceptRustMemberOperation, normalizeSelectedOperationInputCarrier, rejectSelectedOperation } from "./members/result.js";
 import { elementProvenance } from "../program/records/selected-operation-values.js";
 
-import { finalizeProviderOperationFromSubjects } from "./provider/conversions.js";
+import { finalizeProviderOperationFromSubjects } from "./members/conversions.js";
 
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType, rustTargetConstInteger } from "../../target-model/types/index.js";
@@ -13,7 +13,7 @@ import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "./selected-values.js";
 import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
 
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";

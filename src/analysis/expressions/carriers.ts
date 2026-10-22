@@ -17,7 +17,7 @@ import { resolveBinaryOperandCarriers } from "../operations/operator-inputs.js";
 import { resolveExpressionCarrierUncached } from "./value-resolution.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { recordRustCompoundWrite } from "../operations/provider/compound-writes.js";
+import { recordRustCompoundWrite } from "../operations/members/compound-writes.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -27,7 +27,7 @@ import { readRustRawLocation } from "../../source/extension/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "./flow-read.js";
-import { resolveNativeProviderCallableArguments } from "../operations/provider/calls/native-callables.js";
+import { resolveNativeProviderCallableArguments } from "../operations/members/calls/native-callables.js";
 import { selectRustUnionVariantByCheckedType } from "../expected-types/union-variants.js";
 import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

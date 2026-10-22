@@ -19,7 +19,7 @@ import { rustSourceLocationTargetType, rustOptionalLocationPointeeCarrier, rustC
 import { rustCarrierSupportsObjectIdentity } from "../../policy/operations/js-values/carrier-protocols.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import type { RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/index.js";
 import { selectRustTypedLocationSourceOperation } from "../../source/extension/typed-locations.js";

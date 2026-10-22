@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 
-import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
+import type { RustOperationsProviderOptions } from "../operations/members/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { asNode } from "../../policy/identities/selected-source.js";
 import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/conversions/literals.js";

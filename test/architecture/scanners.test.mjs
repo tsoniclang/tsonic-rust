@@ -487,7 +487,7 @@ test("runtime source classification uses compiler declaration-file facts", () =>
 
 test("project-source calls trust the exact TSTS-selected declaration rather than reconstructing alias identity", () => {
   const semantics = readFileSync(
-    join(sourceRoot, "analysis/operations/provider/calls/selection.ts"),
+    join(sourceRoot, "analysis/operations/members/calls/selection.ts"),
     "utf8",
   );
   assert.match(semantics, /if \(sourceDeclaration === undefined && calleeDeclaration !== undefined\)/u);
@@ -531,7 +531,7 @@ test("provider operation selection uses canonical provider identities, never imp
 
 test("provider parameter passing is metadata-derived and backend-gated", () => {
   const semantics = readFileSync(
-    join(sourceRoot, "analysis/operations/provider/calls/instantiation.ts"),
+    join(sourceRoot, "analysis/operations/members/calls/instantiation.ts"),
     "utf8",
   );
   const selectedCall = sourceSection(
@@ -577,7 +577,7 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.match(contracts, /readonly sourceReceiverType\?: Type/u);
 
   const semantics = readFileSync(
-    join(sourceRoot, "analysis/operations/provider/result.ts"),
+    join(sourceRoot, "analysis/operations/members/result.ts"),
     "utf8",
   );
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
@@ -799,7 +799,7 @@ test("backend conversion planning never reconstructs assertion kinds from source
 
 test("call-argument conversion consumes the checked expression carrier, not a semantic-type reconstruction", () => {
   const semantics = readFileSync(
-    join(sourceRoot, "analysis/operations/provider/conversions.ts"),
+    join(sourceRoot, "analysis/operations/members/conversions.ts"),
     "utf8",
   );
   const callArgument = sourceSection(

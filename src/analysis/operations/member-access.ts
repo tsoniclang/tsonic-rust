@@ -1,32 +1,32 @@
 import { selectExternalProjectFieldAccess, selectProjectSourceMethodProperty, selectProjectSourceAccessor } from "./project-member-access.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration, resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
-import { acceptRustMemberOperation, isDeclarationFileSubject, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./provider/result.js";
+import { acceptRustMemberOperation, isDeclarationFileSubject, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./members/result.js";
 import { acceptDeclarationOperation, acceptRustOperation } from "../program/records/selected-operation-values.js";
-import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./provider/conversions.js";
+import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 
-import { selectStructuralSourceProperty } from "./provider/structural-properties.js";
+import { selectStructuralSourceProperty } from "./members/structural-properties.js";
 import { selectRustFixedArrayLengthProperty } from "./fixed-arrays.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
-import { resolveRustProjectField } from "./provider/project-fields.js";
+import { resolveRustProjectField } from "./members/project-fields.js";
 import { rustSourceTypeCarrier } from "../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 
 import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/selection.js";
 import { selectRustGeneratorSourceProperty } from "../../policy/operations/source-profiles/generator-source-profile.js";
-import { selectRustBuiltinErrorProperty } from "./provider/builtin-errors.js";
-import { isIntrinsicSourceQualifier } from "./provider/source-qualifiers.js";
+import { selectRustBuiltinErrorProperty } from "./members/builtin-errors.js";
+import { isIntrinsicSourceQualifier } from "./members/source-qualifiers.js";
 import { selectedRustProviderGlobal } from "../../policy/identities/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
-import { selectRustRecordDelete } from "./provider/records.js";
+import { selectRustRecordDelete } from "./members/records.js";
 import type { RustCheckedDeleteSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
 import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 
-import { selectRustNumberArrayUnionMember } from "./provider/number-array-unions.js";
+import { selectRustNumberArrayUnionMember } from "./members/number-array-unions.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import { selectRustRecordProperty } from "./provider/records.js";
+import { selectRustRecordProperty } from "./members/records.js";
 import { selectRustUnionProperty } from "./union-properties.js";
 import { selectRustGuardedSourceValueTypes } from "./native-flow-refinement.js";
 import { selectJsSurfaceMemberRead } from "../../policy/operations/source-profiles/js/member-reads.js";

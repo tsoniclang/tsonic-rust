@@ -1,11 +1,11 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isProjectSourceDeclaration } from "../../policy/identities/selected-source.js";
-import { acceptRustMemberOperation, rejectSelectedOperation, sourceOperationId } from "./provider/result.js";
+import { acceptRustMemberOperation, rejectSelectedOperation, sourceOperationId } from "./members/result.js";
 
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { isProjectAccessorDeclaration } from "./provider/structural-properties.js";
+import { isProjectAccessorDeclaration } from "./members/structural-properties.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { resolveRustProjectAccessor } from "./provider/project-accessors.js";
+import { resolveRustProjectAccessor } from "./members/project-accessors.js";
 
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 
@@ -13,7 +13,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

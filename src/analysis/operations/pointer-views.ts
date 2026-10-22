@@ -5,10 +5,10 @@ import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, Rus
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustAbsenceCarrier, rustSourceLocationTargetType, rustOptionalLocationPointeeCarrier, rustOptionTargetType, rustUnitTargetType } from "../../target-model/types/index.js";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import { recordRustTypedLocationCall } from "./typed-locations.js";
 import { rustLocationCallbackCarrier } from "../../policy/operations/callables/location-callbacks.js";
-import { rejectSelectedOperation } from "./provider/result.js";
+import { rejectSelectedOperation } from "./members/result.js";
 
 export function selectRustPointerViewCall(
   request: RustCheckedCallSelectionInput,

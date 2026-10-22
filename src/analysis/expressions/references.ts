@@ -5,7 +5,7 @@ import { KindExportAssignment, KindFunctionDeclaration, KindBindingElement, Kind
 import { rustOperationContext } from "../program/walk.js";
 import { applySelectedProjectSourceCall, setCarrierFact } from "../operations/project-calls.js";
 
-import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
+import { prepareRustDeferredCheckedCall } from "../operations/members/index.js";
 
 import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";

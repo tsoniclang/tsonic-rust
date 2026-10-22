@@ -5,33 +5,33 @@ import { isProjectSourceDeclaration, resolveSelectedProviderDeclaration } from "
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
-import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./provider/result.js";
+import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./members/result.js";
 import { acceptDeclarationOperation, elementProvenance } from "../program/records/selected-operation-values.js";
 import { normalizeSelectedLiteralCarrier } from "../expressions/selected-literals.js";
-import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./provider/conversions.js";
+import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustNativeIndex } from "../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../project-types/object-layout.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedValueCarrier } from "./selected-values.js";
-import { canRequireSourceClone } from "./provider/clone-requirements.js";
+import { canRequireSourceClone } from "./members/clone-requirements.js";
 
 import { selectJsSurfaceMemberRead } from "../../policy/operations/source-profiles/js/member-reads.js";
-import { selectRustSourceProfileIndexMembers } from "./provider/selected-members.js";
+import { selectRustSourceProfileIndexMembers } from "./members/selected-members.js";
 import { selectRustFixedArrayElementAccess } from "./fixed-arrays.js";
-import { isIntrinsicSourceQualifier } from "./provider/source-qualifiers.js";
+import { isIntrinsicSourceQualifier } from "./members/source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 
-import { selectRustNumberArrayUnionMember } from "./provider/number-array-unions.js";
+import { selectRustNumberArrayUnionMember } from "./members/number-array-unions.js";
 
 import { resolveRustCheckedPropertyAccess } from "./member-access.js";
 import { resolveRustIndexedField } from "../source-evidence/types/resolution/indexed-fields.js";
-import { selectRustRecordElement } from "./provider/records.js";
+import { selectRustRecordElement } from "./members/records.js";
 
 export function resolveRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,

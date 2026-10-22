@@ -11,7 +11,7 @@ import { recordRustOptionProjection, recordRustValueCarrierReconciliation } from
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 
-import { selectProviderRecordArgument } from "../operations/provider/calls/record-arguments.js";
+import { selectProviderRecordArgument } from "../operations/members/calls/record-arguments.js";
 import { selectRustExactIntegerConversion } from "../../policy/conversions/exact-integer.js";
 import { selectRustGuardedIntegerConversion } from "../../policy/conversions/integer-refinement.js";
 

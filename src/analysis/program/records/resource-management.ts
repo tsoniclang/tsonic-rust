@@ -3,7 +3,7 @@ import type { RustOperationPolicyContext } from "../../../policy/model/operation
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { RustResourceManagementFact } from "../../../target-model/records/callables-and-resources.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import type { RustOperationsProviderOptions } from "../../operations/provider/index.js";
+import type { RustOperationsProviderOptions } from "../../operations/members/index.js";
 import { selectRustResourceManagement } from "../../control-flow/resource-management.js";
 import type { RustProjectDisposerEffects, RustResourceManagementSelection } from "../../control-flow/resource-management.js";
 import { createRustRecordFamily } from "./family.js";

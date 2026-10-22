@@ -14,7 +14,7 @@ import { recordRustComputedCallEvaluation } from "../operations/computed-members
 
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
-import { selectRustOptionalCallResult } from "../operations/provider/calls/optional-results.js";
+import { selectRustOptionalCallResult } from "../operations/members/calls/optional-results.js";
 
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

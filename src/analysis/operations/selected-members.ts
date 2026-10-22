@@ -4,7 +4,7 @@ import type { RustOperationAnalysisContext } from "../program/operation-context.
 import { rustCheckedElementRequestsEqual, rustCheckedPropertyRequestsEqual } from "./call-request-correspondence.js";
 import { admitRustOperationSelection } from "./operation-admission.js";
 import { resolveRustCheckedElementAccess } from "./element-access.js";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import { resolveRustCheckedPropertyAccess } from "./member-access.js";
 
 export function selectRustCheckedPropertyAccess(

@@ -9,7 +9,7 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric/union.js";
 
 import type { RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 
 export function rustOperandSupportsSourceNumeric(
   operand: Node,

@@ -8,7 +8,7 @@ import {
   resolveSelectedProviderDeclaration,
 } from "../../../dist/policy/identities/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
-import { selectRustCheckedOperator } from "../../../dist/analysis/operations/provider/operators.js";
+import { selectRustCheckedOperator } from "../../../dist/analysis/operations/members/operators.js";
 import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/target-model/types/index.js";
 
 const unit = { kind: "tuple", elements: [] };

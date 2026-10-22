@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canRequireSourceClone } from "../../../dist/analysis/operations/provider/clone-requirements.js";
+import { canRequireSourceClone } from "../../../dist/analysis/operations/members/clone-requirements.js";
 import { createRustSourceTypeFamilyRegistry } from "../../../dist/analysis/project-types/type-families.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 

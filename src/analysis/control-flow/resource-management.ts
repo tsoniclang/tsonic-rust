@@ -18,7 +18,7 @@ import {
   rustFutureOutputCarrier,
   rustOptionElementCarrier,
 } from "../../target-model/types/index.js";
-import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
+import type { RustOperationsProviderOptions } from "../operations/members/index.js";
 import {
   isProjectSourceDeclaration,
   resolveSelectedProviderDeclaration,

@@ -5,7 +5,7 @@ import { acmeTestingPackage, checkRustSession, compileRust, createRustSession } 
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { checkedPropertySelectionInput } from "../../../dist/analysis/operations/member-access.js";
-import { isIntrinsicSourceQualifier } from "../../../dist/analysis/operations/provider/source-qualifiers.js";
+import { isIntrinsicSourceQualifier } from "../../../dist/analysis/operations/members/source-qualifiers.js";
 
 test("qualified source builtins preserve static operations and local shadow implementations", { timeout: 300_000 }, () => {
   const { result } = compileRust({

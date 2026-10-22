@@ -2,12 +2,12 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isRustNumericCarrier } from "../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../policy/operations/contracts.js";
-import { checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier, mapSelectedProjectGenericArguments, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./provider/calls/instantiation.js";
-import { selectRustOptionalCallResult } from "./provider/calls/optional-results.js";
+import { checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier, mapSelectedProjectGenericArguments, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./members/calls/instantiation.js";
+import { selectRustOptionalCallResult } from "./members/calls/optional-results.js";
 import { asNode } from "../../policy/identities/selected-source.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
-import { rejectSelectedOperation } from "./provider/result.js";
+import { rejectSelectedOperation } from "./members/result.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
@@ -17,24 +17,24 @@ import { rustClassConstructorInstance } from "../../target-model/types/carriers/
 
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustProjectGenericContractCorrespondence } from "../../policy/types/project/project-generic-contract.js";
-import { selectedCallCalleeDeclaration } from "./provider/operators.js";
+import { selectedCallCalleeDeclaration } from "./members/operators.js";
 import { selectedValueCarrier } from "./selected-values.js";
 import { selectedRustCallSignature } from "../program/records/selected-call.js";
 
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOperationsProviderOptions } from "./provider/model.js";
+import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
 
 import { selectRustPointerReturnCarrier } from "../callables/pointer-return.js";
-import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./provider/calls/union-methods.js";
+import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./members/calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 
 import { selectRustSourceCallResult } from "../source-evidence/types/resolution/call-results.js";
 import { resolveRustTypeComponentEvidence } from "../source-evidence/types/resolution/source-evidence.js";
 import { bindRustSelectedCallTypeArguments } from "../source-evidence/types/resolution/generic-arguments.js";
-import { bindRustSelectedReceiverContext } from "./provider/member-carriers.js";
+import { bindRustSelectedReceiverContext } from "./members/member-carriers.js";
 
 export function acceptProjectSourceCall(
   request: RustCheckedCallSelectionInput,
@@ -370,7 +370,7 @@ export function acceptProjectSourceCall(
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
   });
   if (optionalResult.fact !== undefined) {
-    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/object-shapes.ts");
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/members/object-shapes.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }
