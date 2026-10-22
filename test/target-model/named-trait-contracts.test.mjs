@@ -8,7 +8,7 @@ import { rustCarrierSatisfiesTraitRef, rustNamedTypeSupportsTrait } from "../../
 import { rustRetainedErrorTargetType } from "../../dist/target-model/types/carriers/source-error.js";
 import { substituteRustTargetGenerics } from "../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences, rustTargetCaptureArguments } from "../../dist/target-model/types/carriers/generic-references.js";
-import { materializeProviderCarrier } from "../../dist/providers/packages/materialization.js";
+import { materializeProviderCarrier } from "../../dist/providers/packages/materialization/carriers.js";
 import { rustLifetimeKey } from "../../dist/target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { validateGenericReferences } from "../../dist/providers/packages/validation/generics.js";
