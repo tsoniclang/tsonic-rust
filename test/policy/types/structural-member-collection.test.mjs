@@ -23,7 +23,7 @@ function scenario(count) {
     source: { navigation: { isProjectDeclaration: () => true }, sourceFacts: { getFact: () => undefined } },
     records: createRustRecordFixture(),
     currentSemantics: {
-      declarations: { symbolDeclarations: selected => declarations.get(selected) ?? [] },
+      declarations: { typeSymbol: () => undefined, symbolDeclarations: selected => declarations.get(selected) ?? [] },
       types: {
         aliasApplication: () => undefined, indexInfos: () => [], isSymbolLike: () => false,
         constructSignatures: () => [], callSignatures: () => [], isIntersection: () => false,
