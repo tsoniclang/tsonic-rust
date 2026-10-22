@@ -275,10 +275,11 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }),
     ]);
     const mainErrorType = errors.errorType;
-    // A fallible hook whose error boundary is the root error domain returns the lifecycle error type itself.
+    // A fallible hook returns the lifecycle error type itself when its error boundary is the source program (the root
+    // error domain) or the target runtime under the runtime error domain.
     const hookOperandErrorType = (hook: (typeof activeHooks)[number]) =>
-      hook.isFallible && (hook.errorBoundary === "target-runtime" && rootErrorDomain.errorDomain === "runtime" ||
-        hook.errorBoundary === "source-program" && rootErrorDomain.errorDomain !== "runtime") ? lifecycleErrorType : undefined;
+      hook.isFallible && (hook.errorBoundary === "source-program" ||
+        hook.errorBoundary === "target-runtime" && rootErrorDomain.errorDomain === "runtime") ? lifecycleErrorType : undefined;
     const executor = binaryExecution.kind === "native" ? binaryExecution.executor : undefined;
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
     for (const hook of activeHooks) {
