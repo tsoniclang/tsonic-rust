@@ -13,6 +13,7 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
 import type { RustLocalBindingProducer } from "../program/records/local-bindings.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 
 export function analyzeRustLocalBindings(input: {
   readonly ast: AstReader; readonly nodes: readonly Node[]; readonly records: RustProgramRecords;
@@ -21,6 +22,7 @@ export function analyzeRustLocalBindings(input: {
   readonly projectTypes: RustProjectTypePolicy; readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
   readonly lexicalFunctions: RustLexicalFunctionQueries; readonly producer: RustLocalBindingProducer;
   readonly required: RustRequiredRecord[];
+  readonly runtimeValueUses: Pick<RustRuntimeValueUsePlan, "promiseCallAliasTarget">;
 }): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string, code = "RUST_UNSUPPORTED_AST"): void => {
@@ -39,9 +41,10 @@ export function analyzeRustLocalBindings(input: {
     if (statement !== undefined && (input.ast.is.IsForInStatement(statement) || input.ast.is.IsForOfStatement(statement))) continue;
     requireRustRecord(input.required, "localBinding", node, input.ast.kindName(node), "analyzeRustLocalBindings");
     const owner = input.aliases.owner(node);
-    // An ambient declaration is type-only: it has no native value and the planner skips its statement.
+    // An ambient declaration is type-only: it has no native value and the planner skips its statement. A Promise call
+    // alias holds no value either: each of its calls is a native Promise edge of the aliased function.
     if (input.records.compileTimeSource.get(node) !== undefined || owner !== undefined && owner !== node ||
-      input.records.typeOnlyDeclaration.get(node) !== undefined) {
+      input.records.typeOnlyDeclaration.get(node) !== undefined || input.runtimeValueUses.promiseCallAliasTarget(node) !== undefined) {
       input.producer.declaration(node, { kind: "erased" });
       continue;
     }
