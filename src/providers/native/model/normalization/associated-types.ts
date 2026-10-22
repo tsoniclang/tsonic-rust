@@ -1,16 +1,16 @@
-import { compilerTypeSupportsRequirement, directImplementationTypeParameterPositions, typeParameterGuaranteesRequirement } from "../types/requirements.js";
-import { normalizeType } from "../types/rustdoc-type-normalization.js";
-import { sourceVisibleTypeParameterCount } from "../types/normalization.js";
-import { substituteRustCompilerTrait, substituteRustCompilerType, typeRequirementKey } from "../types/substitution.js";
+import { compilerTypeSupportsRequirement, directImplementationTypeParameterPositions, typeParameterGuaranteesRequirement } from "./type-requirements.js";
+import { normalizeType } from "./types.js";
+import { sourceVisibleTypeParameterCount } from "./type-generics.js";
+import { substituteRustCompilerTrait, substituteRustCompilerType, typeRequirementKey } from "./type-substitution.js";
 import { compareText } from "../rustdoc-schema.js";
 import type {
   RustCompilerDependency, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerGenericArgument,
   RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeParameter, RustCompilerTypeRequirement,
 } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
-import type { RustCompilerSubstitutions } from "../types/substitution.js";
+import type { RustCompilerSubstitutions } from "./type-substitution.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerNormalizationContext } from "../types/normalization-context.js";
+import type { RustCompilerNormalizationContext } from "./context.js";
 
 export function normalizeMemberType(
   document: RustdocDocument,

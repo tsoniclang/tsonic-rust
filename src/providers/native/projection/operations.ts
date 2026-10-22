@@ -1,5 +1,5 @@
 import { compareText, digestText } from "./utilities.js";
-import { compilerTypeRequirementCanonicalPath } from "../model/types/requirements.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/normalization/type-requirements.js";
 import { sourceGenericParameterName } from "./type-arguments.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustNamedTypeTraitContract, rustNativeTraitRef } from "../../../target-model/types/carriers/native.js";

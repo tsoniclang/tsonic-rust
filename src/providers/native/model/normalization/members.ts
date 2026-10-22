@@ -1,11 +1,11 @@
 import { compareText, hasInnerKind, isRecord, itemById, requireArray, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import {
   childNormalizationContext, derivedNormalizationContext, rustCompilerDerivedIdentity, rustCompilerNestedItemIdentity,
-} from "../types/normalization-context.js";
-import { directImplementationGenericParameterPositions } from "../types/requirements.js";
-import { emptyRustCompilerSubstitutions, substituteRustCompilerTrait } from "../types/substitution.js";
-import { normalizeGenericParameters, normalizeTraitDispatch, normalizeTypeBounds } from "../types/normalization.js";
-import { normalizeType } from "../types/rustdoc-type-normalization.js";
+} from "./context.js";
+import { directImplementationGenericParameterPositions } from "./type-requirements.js";
+import { emptyRustCompilerSubstitutions, substituteRustCompilerTrait } from "./type-substitution.js";
+import { normalizeGenericParameters, normalizeTraitDispatch, normalizeTypeBounds } from "./type-generics.js";
+import { normalizeType } from "./types.js";
 import { associatedTypeKey, normalizeMemberType, sourceImplementationRequirements } from "./associated-types.js";
 import { canonicalItemId } from "../rustdoc-items.js";
 import { normalizeFunction } from "./functions.js";
@@ -18,8 +18,8 @@ import type {
 } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerNormalizationContext } from "../types/normalization-context.js";
-import type { RustCompilerSubstitutions } from "../types/substitution.js";
+import type { RustCompilerNormalizationContext } from "./context.js";
+import type { RustCompilerSubstitutions } from "./type-substitution.js";
 
 export function normalizeEnumVariants(
   document: RustdocDocument,

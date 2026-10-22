@@ -1,6 +1,6 @@
 import type { RustCompilerConstArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerType } from "../model.js";
-import { substituteRustCompilerType, type RustCompilerSubstitutions } from "../types/substitution.js";
-import { compilerTypeGenericIdentities } from "../types/generic-references.js";
+import { substituteRustCompilerType, type RustCompilerSubstitutions } from "./type-substitution.js";
+import { compilerTypeGenericIdentities } from "./type-generic-references.js";
 
 export function implementationSubstitutions(
   parameters: readonly RustCompilerGenericParameter[],

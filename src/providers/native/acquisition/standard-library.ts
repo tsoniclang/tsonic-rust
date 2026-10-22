@@ -14,9 +14,9 @@ import {
   compareText, hasInnerKind, isRecord, itemById, requireArray, requireInnerRecord, requireRecord, requireString,
   type RustdocDocument,
 } from "../model/rustdoc-schema.js";
-import { canonicalPathKey, normalizeGenericParameters, standardTypePathKind } from "../model/types/normalization.js";
-import { compilerTypeRequirementCanonicalPath } from "../model/types/requirements.js";
-import { rootNormalizationContext } from "../model/types/normalization-context.js";
+import { canonicalPathKey, normalizeGenericParameters, standardTypePathKind } from "../model/normalization/type-generics.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/normalization/type-requirements.js";
+import { rootNormalizationContext } from "../model/normalization/context.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export interface RustStandardLibraryContext {

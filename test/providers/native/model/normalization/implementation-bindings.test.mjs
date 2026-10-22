@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { implementationSubstitutions } from "../../../../../dist/providers/native/model/normalization/implementation-bindings.js";
-import { directImplementationGenericParameterPositions, normalizeTypeTraits } from "../../../../../dist/providers/native/model/types/requirements.js";
-import { normalizeGenericParameters } from "../../../../../dist/providers/native/model/types/normalization.js";
-import { rootNormalizationContext, rustCompilerItemIdentity } from "../../../../../dist/providers/native/model/types/normalization-context.js";
+import { directImplementationGenericParameterPositions, normalizeTypeTraits } from "../../../../../dist/providers/native/model/normalization/type-requirements.js";
+import { normalizeGenericParameters } from "../../../../../dist/providers/native/model/normalization/type-generics.js";
+import { rootNormalizationContext, rustCompilerItemIdentity } from "../../../../../dist/providers/native/model/normalization/context.js";
 
 const identity = itemId => ({ itemId, canonicalPath: ["example", itemId] });
 const parameter = (itemId, name) => ({ kind: "type", identity: identity(itemId), name,

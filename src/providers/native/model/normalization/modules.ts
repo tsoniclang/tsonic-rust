@@ -3,11 +3,11 @@ import {
   canonicalItemPath, expandedPublicModuleItems, compilerAssociatedSourceExportName, isGlobUse,
   resolveLocalRustdocItem,
 } from "../rustdoc-items.js";
-import { canonicalPathKey, normalizeGenericParameters, normalizeTraitBounds } from "../types/normalization.js";
-import { normalizeType } from "../types/rustdoc-type-normalization.js";
-import { normalizeTypeTraits } from "../types/requirements.js";
-import { rootNormalizationContext, rustCompilerDerivedIdentity, rustCompilerItemIdentity } from "../types/normalization-context.js";
-import { rustStaticValueCanBeCopied } from "../types/substitution.js";
+import { canonicalPathKey, normalizeGenericParameters, normalizeTraitBounds } from "./type-generics.js";
+import { normalizeType } from "./types.js";
+import { normalizeTypeTraits } from "./type-requirements.js";
+import { rootNormalizationContext, rustCompilerDerivedIdentity, rustCompilerItemIdentity } from "./context.js";
+import { rustStaticValueCanBeCopied } from "./type-substitution.js";
 import { compareText, hasInnerKind, itemById, requireArray, requireBoolean, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import { normalizeEnumVariants, normalizeFields, normalizePublicFields, normalizeTraitMembers, normalizeTypeMembers } from "./members.js";
 import { normalizeFunction } from "./functions.js";

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { sourceGenericArgumentFor, targetGenericArgumentFor } from "./type-arguments.js";
-import { createRustCompilerSubstitutions, substituteRustCompilerArgument, substituteRustCompilerType } from "../model/types/substitution.js";
-import { compilerTypeRequirementCanonicalPath } from "../model/types/requirements.js";
+import { createRustCompilerSubstitutions, substituteRustCompilerArgument, substituteRustCompilerType } from "../model/normalization/type-substitution.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/normalization/type-requirements.js";
 import type { ProjectionContext } from "./model.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
 import type {
@@ -264,7 +264,7 @@ function genericParameterName(parameter: RustCompilerGenericParameter): string {
 
 function compilerArgumentForParameter(
   parameter: RustCompilerGenericParameter,
-  substitutions: import("../model/types/substitution.js").RustCompilerSubstitutions,
+  substitutions: import("../model/normalization/type-substitution.js").RustCompilerSubstitutions,
 ): RustCompilerGenericArgument {
   if (parameter.kind === "lifetime") {
     if (parameter.lifetime.kind !== "parameter") {

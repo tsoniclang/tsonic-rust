@@ -1,10 +1,10 @@
 import { hasInnerKind, itemById, requireArray, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import { resolveLocalRustdocItem, type ResolvedRustdocItem, type RustdocItemResolver } from "../rustdoc-items.js";
-import { createRustCompilerSubstitutions } from "../types/substitution.js";
-import { normalizeGenericParameters } from "../types/normalization.js";
-import { rootNormalizationContext } from "../types/normalization-context.js";
+import { createRustCompilerSubstitutions } from "./type-substitution.js";
+import { normalizeGenericParameters } from "./type-generics.js";
+import { rootNormalizationContext } from "./context.js";
 import type { RustCompilerDependency, RustCompilerGenericParameter, RustCompilerTraitDispatch, RustCompilerUnsupportedMember } from "../model.js";
-import type { RustCompilerSubstitutions } from "../types/substitution.js";
+import type { RustCompilerSubstitutions } from "./type-substitution.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 
 export interface RustDefaultMethod extends ResolvedRustdocItem {

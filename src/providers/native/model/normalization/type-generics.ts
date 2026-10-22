@@ -1,10 +1,10 @@
 import { compareText, isRecord, requireArray, requireRecord, requireString } from "../rustdoc-schema.js";
-import { childNormalizationContext, contextWithParameters, resolveRustCompilerItem, rustCompilerDerivedIdentity } from "./normalization-context.js";
-import { normalizeConstArgument, normalizeLifetime, normalizePathArguments, normalizeType } from "./rustdoc-type-normalization.js";
-import { typeRequirementKey } from "./substitution.js";
+import { childNormalizationContext, contextWithParameters, resolveRustCompilerItem, rustCompilerDerivedIdentity } from "./context.js";
+import { normalizeConstArgument, normalizeLifetime, normalizePathArguments, normalizeType } from "./types.js";
+import { typeRequirementKey } from "./type-substitution.js";
 import type { RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerLifetimeBinder, RustCompilerLifetimeParameter, RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeParameter, RustCompilerTypeRequirement } from "../model.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerNormalizationContext } from "./normalization-context.js";
+import type { RustCompilerNormalizationContext } from "./context.js";
 
 export function standardTypePathKind(value: unknown): boolean {
   return value === "struct" || value === "enum" || value === "union" ||

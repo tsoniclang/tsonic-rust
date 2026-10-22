@@ -1,10 +1,10 @@
 import { hasInnerKind, isRecord, itemById, normalizeAbi, requireArray, requireBoolean, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
-import { childNormalizationContext, contextResolvingAlias, derivedNormalizationContext, resolveRustCompilerItem, rootNormalizationContext, rustCompilerDerivedIdentity } from "./normalization-context.js";
-import { normalizeDeclaredGenericParameters, normalizeGenericParameters, normalizeLifetimeBinder, normalizeTypeBounds, normalizeTraitDispatch } from "./normalization.js";
+import { childNormalizationContext, contextResolvingAlias, derivedNormalizationContext, resolveRustCompilerItem, rootNormalizationContext, rustCompilerDerivedIdentity } from "./context.js";
+import { normalizeDeclaredGenericParameters, normalizeGenericParameters, normalizeLifetimeBinder, normalizeTypeBounds, normalizeTraitDispatch } from "./type-generics.js";
 import type { RustCompilerAssociatedConstraint, RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerItemIdentity, RustCompilerLifetime, RustCompilerTraitDispatch, RustCompilerType } from "../model.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerNormalizationContext } from "./normalization-context.js";
-import { createRustCompilerSubstitutions, rustCompilerGenericArgumentSemanticKey, substituteRustCompilerType } from "./substitution.js";
+import type { RustCompilerNormalizationContext } from "./context.js";
+import { createRustCompilerSubstitutions, rustCompilerGenericArgumentSemanticKey, substituteRustCompilerType } from "./type-substitution.js";
 
 export interface NormalizedRustCompilerPathArguments {
   readonly genericArguments: readonly RustCompilerGenericArgument[];

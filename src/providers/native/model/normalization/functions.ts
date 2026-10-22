@@ -1,8 +1,8 @@
 import {
   contextWithParameters, rootNormalizationContext, rootNormalizationContextForIdentity, rustCompilerItemIdentity,
-} from "../types/normalization-context.js";
-import { emptyRustCompilerSubstitutions } from "../types/substitution.js";
-import { mergeTypeParameterRequirements, normalizeGenericParameters } from "../types/normalization.js";
+} from "./context.js";
+import { emptyRustCompilerSubstitutions } from "./type-substitution.js";
+import { mergeTypeParameterRequirements, normalizeGenericParameters } from "./type-generics.js";
 import { normalizeAbi, requireArray, requireBoolean, requireInnerRecord, requireRecord, requireString } from "../rustdoc-schema.js";
 import { normalizeMemberType, substituteMemberParameter } from "./associated-types.js";
 import type {
@@ -12,7 +12,7 @@ import type {
 } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerSubstitutions } from "../types/substitution.js";
+import type { RustCompilerSubstitutions } from "./type-substitution.js";
 
 export interface NormalizeRustCompilerFunctionOptions {
   readonly inheritedGenericParameters?: readonly RustCompilerGenericParameter[];

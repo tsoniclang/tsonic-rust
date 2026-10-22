@@ -2,11 +2,11 @@ import { compareText, isRecord, itemById, requireArray, requireInnerRecord, requ
 import {
   canonicalCompilerTypePathKey, canonicalPathKey, mergeTypeParameterRequirements, normalizeGenericParameters,
   normalizeTraitDispatch, rustCompilerTraitRequirement, sourceVisibleTypeParameterCount, standardTypePathKind,
-} from "./normalization.js";
-import { normalizeType } from "./rustdoc-type-normalization.js";
-import { rustCompilerTypeSemanticKey, substituteRustCompilerTrait, typeRequirementKey } from "./substitution.js";
-import { implementationSubstitutions } from "../normalization/implementation-bindings.js";
-import { derivedNormalizationContext } from "./normalization-context.js";
+} from "./type-generics.js";
+import { normalizeType } from "./types.js";
+import { rustCompilerTypeSemanticKey, substituteRustCompilerTrait, typeRequirementKey } from "./type-substitution.js";
+import { implementationSubstitutions } from "./implementation-bindings.js";
+import { derivedNormalizationContext } from "./context.js";
 import type {
   RustCompilerDependency, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerItemIdentity,
   RustCompilerTraitImplementation, RustCompilerTraitRequirement, RustCompilerType, RustCompilerTypeParameter,
@@ -14,8 +14,8 @@ import type {
 } from "../model.js";
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
-import type { RustCompilerNormalizationContext } from "./normalization-context.js";
-import type { RustCompilerSubstitutions } from "./substitution.js";
+import type { RustCompilerNormalizationContext } from "./context.js";
+import type { RustCompilerSubstitutions } from "./type-substitution.js";
 
 export function compilerTypeRequirementCanonicalPath(
   requirement: RustCompilerTypeRequirement,
