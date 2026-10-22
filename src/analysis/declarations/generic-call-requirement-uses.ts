@@ -26,6 +26,7 @@ import { rustGenericCallableMemberInvocationBindings } from "../callables/generi
 
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 
@@ -162,10 +163,14 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
             : operation.target.form === "structural-method" ? receiver : undefined;
           const interfaceMember = receiverDeclaration !== undefined && (ast.is.IsInterfaceDeclaration(receiverDeclaration) ||
             ast.is.IsTypeLiteralNode(receiverDeclaration));
-          if (callee.capturedTypeParameters.length !== 0 && structuralReceiver !== undefined && interfaceMember) {
+          // A captured parameter the receiver carrier itself names is in scope at the call (the call sits inside its owner)
+          // and denotes itself; only the interface's foreign parameters bind against the template.
+          const inScope = structuralReceiver === undefined ? new Set<string>() : new Set(rustTargetTypeParameterIdentities(structuralReceiver));
+          const foreign = callee.capturedTypeParameters.filter(parameter => !inScope.has(parameter.identity));
+          if (foreign.length !== 0 && structuralReceiver !== undefined && interfaceMember) {
             const template = input.structuralShapes.templateForCarrier(structuralReceiver)?.carrier;
             const bindings = template === undefined ? undefined : bindRustStructuralReceiverParameters(template, structuralReceiver,
-              new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
+              new Set(foreign.map(parameter => parameter.identity)));
             if (bindings === undefined) return "A structural member call lost its exact captured interface type bindings.";
             for (const [identity, carrier] of bindings) {
               const existing = substitutions.get(identity);
