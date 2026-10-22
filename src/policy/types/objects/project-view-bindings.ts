@@ -31,9 +31,13 @@ export function rustProjectViewBindings(
 // A view's structural target keeps the placeholder lifetime of its declared callable members; each use selects that
 // lifetime (for example a returned view's retained environment), so the placeholder matches the use's own lifetime.
 function rustProjectViewTargetMatches(viewTarget: TargetTypeRef, targetCarrier: TargetTypeRef): boolean {
-  return rustTargetTypeRefEquals(viewTarget, targetCarrier) || inferRustTargetGenericBindings(viewTarget, targetCarrier, {
+  if (rustTargetTypeRefEquals(viewTarget, targetCarrier)) return true;
+  // Inference only collects the placeholder's binding; the substituted target must still equal the use exactly.
+  const bindings = inferRustTargetGenericBindings(viewTarget, targetCarrier, {
     typeIdentities: new Set(), lifetimeIdentities: new Set([rustLifetimeKey(rustPlaceholderLifetime)]), constIdentities: new Set(),
-  }) !== undefined;
+  });
+  return bindings !== undefined &&
+    rustTargetTypeRefEquals(substituteRustTargetGenerics(viewTarget, bindings.types, bindings.lifetimes, bindings.consts), targetCarrier);
 }
 
 import type { RustProjectStructuralView } from "../../../target-model/records/project-structural-views.js";
