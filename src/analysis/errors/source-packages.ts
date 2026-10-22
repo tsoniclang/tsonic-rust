@@ -171,7 +171,7 @@ export function analyzeRustSourcePackageErrors(
   };
 }
 
-function selectRustSourcePackageErrorBoundary(
+export function selectRustSourcePackageErrorBoundary(
   plan: RustSourcePackageErrorPlan,
   consumerComponentId: string,
   ownerComponentId: string,
@@ -208,7 +208,7 @@ function selectRustSourcePackageErrorBoundary(
       });
 }
 
-function selectRustPhysicalProgramErrorBoundary(
+export function selectRustPhysicalProgramErrorBoundary(
   plan: RustSourcePackageErrorPlan,
   consumerComponentId: string,
   owner: RustProgramErrorOwner,
