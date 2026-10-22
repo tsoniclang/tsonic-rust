@@ -18,7 +18,10 @@ export function analyzeRustNativeParticipation(input: {
   const failure = input.storage.failureReason();
   if (failure !== undefined) return Object.freeze({ kind: "unresolved", reason: failure });
   return sourceNodesOutsideErasedSubtrees(input.ast, input.storage.nodes, node => {
-    const anonymous = input.ast.is.IsArrowFunction(node) || input.ast.is.IsFunctionExpression(node);
+    // An object literal method is a callable value created where the literal is evaluated, like a function expression.
+    const literalMethod = input.ast.is.IsMethodDeclaration(node) && input.ast.parent(node) !== undefined &&
+      input.ast.is.IsObjectLiteralExpression(input.ast.parent(node)!);
+    const anonymous = input.ast.is.IsArrowFunction(node) || input.ast.is.IsFunctionExpression(node) || literalMethod;
     let participation: RustNativeParticipation;
     if (anonymous) {
       participation = sourceCallableDefinitionIsDiscarded(node, input.ast, input.navigation) ? "erased" : "body";
