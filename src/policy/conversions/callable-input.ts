@@ -3,6 +3,7 @@ import { isRustCallableCarrier, rustCallableInputProtocol, rustCallableProtocol 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableSignaturesMatch } from "./generic-callable.js";
+import { rustFrameCallableError } from "./native-callables.js";
 
 export function rustCallableInvocationSignaturesMatch(source: TargetTypeRef, target: TargetTypeRef): boolean {
   if (rustGenericCallableValue(source) !== undefined || rustGenericCallableValue(target) !== undefined)
@@ -10,7 +11,7 @@ export function rustCallableInvocationSignaturesMatch(source: TargetTypeRef, tar
   const actual = rustCallableProtocol(source);
   const expected = rustCallableProtocol(target);
   return actual !== undefined && expected !== undefined &&
-    rustTargetTypeRefEquals(actual.error, expected.error) &&
+    rustTargetTypeRefEquals(rustFrameCallableError(source) ?? actual.error, rustFrameCallableError(target) ?? expected.error) &&
     actual.parameters.length === expected.parameters.length &&
     actual.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, expected.parameters[index])) &&
     rustTargetTypeRefEquals(actual.result, expected.result);

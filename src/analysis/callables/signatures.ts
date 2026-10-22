@@ -293,7 +293,10 @@ function recordCallableValueSignatureFacts(
     if (!recordRustParameterAbiSelection(walk, parameter, parameterAbi)) return;
     parameterAbis.push(parameterAbi);
   }
-  const inference = Node_Type(ast, declaration) === undefined && !ast.hasModifierKind(expression, "async")
+  // A callable with its own return annotation (or a typed binding) has its return; only an unannotated one is inferred
+  // from its body, which may read the binding being initialized.
+  const inference = Node_Type(ast, declaration) === undefined && Node_Type(ast, expression) === undefined &&
+    !ast.hasModifierKind(expression, "async")
     ? selectRustInferredReturn(walk, expression, selectedReturnCarrier)
     : { kind: "complete" as const, carrier: selectedReturnCarrier };
   if (inference.kind === "pending") return;

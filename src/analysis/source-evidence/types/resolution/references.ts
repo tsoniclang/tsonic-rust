@@ -54,8 +54,11 @@ export function resolveIdentifierCarrier(
       requireRustRecord(walk.context.requiredRecords, "sourceParameterAbi", identifier, "parameter-reference", "resolveIdentifierCarrier");
       walk.context.records.sourceParameterAbis.use(identifier, declaration);
     }
+    // A binding read inside its own initializer (a recursive callable) or captured before its initialization takes
+    // its callable value signature before the initializer's body is resolved.
     if (declarationKind === KindVariableDeclaration &&
-      sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
+      (sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation) ||
+        sourceNodeWithin(ast, identifier, Node_Initializer(ast, declaration)))) {
       recordCallableValueSignatureForDeclaration(walk, declaration);
     }
     if ((declarationKind === KindBindingElement || declarationKind === KindVariableDeclaration) &&
@@ -207,4 +210,10 @@ export function resolveCallLikeCarrier(
     );
   }
   return undefined;
+}
+
+function sourceNodeWithin(ast: RustFactWalk["context"]["ast"], node: Node, ancestor: Node | undefined): boolean {
+  for (let current: Node | undefined = node; ancestor !== undefined && current !== undefined; current = ast.parent(current))
+    if (current === ancestor) return true;
+  return false;
 }
