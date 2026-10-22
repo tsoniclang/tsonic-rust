@@ -6,7 +6,7 @@ import { planRustErrorObservations } from "../../../../dist/backend/planner/prog
 import { planRustProgramErrorConstruction } from "../../../../dist/backend/planner/expressions/program-errors.js";
 import { selectRustProgramErrorConversion } from "../../../../dist/policy/conversions/program-error.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
-import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
+import { rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 const variants = [
   { name: "ClosedNative", type: { kind: "named", path: "tsonic_rust_runtime::TsValue" }, source: "thrown" },
@@ -31,24 +31,26 @@ test("one consuming closed throw admission keeps Error capabilities and exact re
 });
 
 test("closed throw construction requires its exact owning native Error domain", () => {
-  for (const source of [rustTsValueTargetType(), rustJsValueTargetType()]) {
-    const conversion = selectRustProgramErrorConversion(source);
+  const conversions = [rustTsValueTargetType(), rustJsValueTargetType()].map(source => selectRustProgramErrorConversion(source));
+  // Type emission records for the conversion targets, selected by their analysis owner.
+  const program = rustProgramWithTypeEmissions(conversions.map(conversion => conversion.target), { surfaces: ["js"] });
+  for (const conversion of conversions) {
     const value = { kind: "path", path: "original" };
     for (const [componentId, errorDomain, accepted] of [["root", "project", true],
       ["root", "runtime", false], ["other", "project", false]]) {
-      const context = { diagnostics: [], sourcePackageComponentId: "root", input: { program: {
-        typeDefinitions: emptyRustTypeDefinitions,
-        source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1,
-          end: () => -1, kindName: () => "KindIdentifier" } },
-      } } };
-      const result = planRustProgramErrorConstruction(conversion, value, {}, context,
+      const context = { diagnostics: [], usedAliases: new Set(), sourcePackageComponentId: "root",
+        input: { program: { source: program.source, records: program.records } } };
+      const plan = () => planRustProgramErrorConstruction(conversion, value, {}, context,
         { componentId, errorDomain, errorTypePath: "rt::TsonicError" });
-      assert.equal(result !== undefined, accepted, `${componentId}:${errorDomain}`);
-      assert.equal(context.diagnostics.length, accepted ? 0 : 1);
-      if (accepted) {
-        assert.equal(result.path, "rt::TsonicError::from");
-        assert.equal(result.args[0] === value, true, "the identical closed payload is consumed");
+      if (!accepted) {
+        assert.throws(plan, error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+          /own source-package payload transport/u.test(error.diagnostic.message), `${componentId}:${errorDomain}`);
+        continue;
       }
+      const result = plan();
+      assert.equal(context.diagnostics.length, 0);
+      assert.equal(result.path, "rt::TsonicError::from");
+      assert.equal(result.args[0] === value, true, "the identical closed payload is consumed");
     }
   }
 });
