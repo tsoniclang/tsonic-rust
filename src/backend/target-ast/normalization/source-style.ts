@@ -128,6 +128,10 @@ function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: 
       if (collapsed !== mapped && (collapsed.kind !== "path" || rustItemCallPath(collapsed.path) || isFunctionItem(collapsed.path)))
         return collapsed;
     }
+    // The single expression a closure returns: its body, or the tail of a one-statement synchronous block body.
+    const result = mapped.kind === "closure" ? mapped.body
+      : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
+        mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
     // `|value| Type::Variant(value)` is the associated item `Type::Variant` itself; an associated item is never a local
     // callable, so the path form is always the same value (clippy::redundant_closure).
     if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 &&
