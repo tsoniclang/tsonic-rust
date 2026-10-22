@@ -321,12 +321,8 @@ export function finalizeRustNativeEmission(
     [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types]);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
-  // Every stored field the planner lays out has a visibility: the definition's own members and the fields it inherits
-  // from an external base (the profile Error fields of an Error subclass).
-  analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition => [
-    ...sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined),
-    ...(program.projectTypes.externalBaseForDefinition(definition)?.fields ?? []).map(field => field.declaration),
-  ]), context.records.classEmissionPlans);
+  analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>
+    sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.nativeLiveness, required: context.requiredRecords });
   analyzeRustStructuralLivenessEmission(program, reachability, context.records.nativeLiveness);
