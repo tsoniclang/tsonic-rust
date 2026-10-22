@@ -1,6 +1,5 @@
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
-import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
 
@@ -26,8 +25,10 @@ export function rustNativeFallibleBoundary(
   join: RustNativeErrorJoinPlan,
   local?: RustLocalErrorChannel,
 ): RustFallibleBoundary | undefined {
-  if (join.errorType === undefined || local !== undefined && !join.accepts(local.source))
-    failRustPlannerInvariant("An admitted native error boundary requires its exact selected channel inventory.");
+  // A boundary exists only for a complete join whose local channel, if any, is an accepted source carrying the
+  // owner's own error type; callers reject the region otherwise.
+  if (join.errorType === undefined || local !== undefined &&
+    (!join.accepts(local.source) || !rustTypeEquals(rustErrorType(local.owner), local.source.errorType))) return undefined;
   return Object.freeze({ kind: "native", errorType: join.errorType, join,
     local: local === undefined ? undefined : Object.freeze({ ...local, source: Object.freeze({ ...local.source }) }) });
 }
@@ -42,8 +43,7 @@ export function rustInjectNativeError(
   error: RustExpr,
 ): RustExpr | undefined {
   return region.kind === "native" ? region.join.inject(source, error)
-    : rustTypeEquals(region.errorType, source.errorType) ? error
-      : { kind: "associated-call", owner: region.errorType, method: "from", args: [error] };
+    : rustTypeEquals(region.errorType, source.errorType) ? error : undefined;
 }
 
 export function rustPropagateNativeError(
@@ -52,7 +52,8 @@ export function rustPropagateNativeError(
   result: RustExpr,
 ): RustExpr | undefined {
   return region.kind === "native" ? region.join.propagate(source, result)
-    : { kind: "try", expr: result, operandErrorType: source.errorType, resultErrorType: region.errorType };
+    : rustTypeEquals(region.errorType, source.errorType)
+      ? { kind: "try", expr: result, operandErrorType: source.errorType, resultErrorType: region.errorType } : undefined;
 }
 
 export function rustPropagateMappedErrorJoin(
