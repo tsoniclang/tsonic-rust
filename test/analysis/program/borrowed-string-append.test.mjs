@@ -64,7 +64,7 @@ test("indexed string append selects one immutable borrowed read for emission and
   assert.equal(operation?.kind, "provider-operation");
   assert.equal(operation.abi.effects.evaluation, "observable");
   assert.deepEqual(operation.borrowedIndexOperation, { method: "borrow_number_element", evaluation: "pure" });
-  assert.equal(program.countedLoops.representationFor(loop)?.kind, "native-counter");
+  assert.equal(program.records.countedLoop.get(loop)?.kind, "native-counter");
 
   const { result } = compileRust(options);
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
@@ -84,7 +84,7 @@ test("a merely available borrowed operation cannot establish counted-loop purity
     ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program), navigation: program.sourceNavigation, records: program.records,
     borrowedElementReads: { ...program.borrowedElementReads, forRead: () => undefined },
   });
-  assert.equal(counted.representationFor(loop) === undefined, true);
+  assert.equal(counted.get(loop) === undefined, true);
 });
 
 test("local String guards retain exact readonly uses and end before mutation", () => {
@@ -240,7 +240,7 @@ export function genericRead<T>(values: T[]): void {
   for (const name of ["aliased", "mutated", "written", "called", "indexedEffect", "throwing", "suspended",
     "captured", "ownedRead", "valuedAppend", "genericRead"]) {
     const { loop, append, element } = selectedNodes(source, program, name);
-    assert.equal(program.countedLoops.representationFor(loop) === undefined, true, name);
+    assert.equal(program.records.countedLoop.get(loop) === undefined, true, name);
     if (name === "ownedRead" || name === "valuedAppend" || name === "genericRead") {
       assert.equal(program.borrowedElementReads.forRead(element) === undefined, true, name);
     } else {

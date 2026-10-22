@@ -112,8 +112,8 @@ test("sealed generic error correspondence preserves owned member identities with
   assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.invocation) && Object.isFrozen(selected.awaiting), true);
   assert.equal(selected.invocation.length, 1);
   const member = definition.members[0];
-  assert.equal(Object.isFrozen(selected.forMember(member)), true);
-  assert.equal(selected.forMember({ ...member }) === undefined, true, "foreign member evidence is rejected");
+  assert.equal(Object.isFrozen(selected.members.get(member)), true);
+  assert.equal(selected.members.get({ ...member }) === undefined, true, "foreign member evidence is rejected");
   assert.equal(program.genericCallableErrors.forDefinition({ ...definition }) === undefined, true, "foreign family evidence is rejected");
   assert.equal(program.genericCallableErrors.forDefinition(definition) === selected, true, "queries reuse the immutable selection");
 });

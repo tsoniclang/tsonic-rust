@@ -5,6 +5,17 @@ import { analyzeRustStatementCompletions, rustRuntimeSetSourceInputs } from "../
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
+import { createRustStatementCompletionProducer } from "../../../dist/analysis/program/records/statement-completion.js";
+
+// Statement decisions are published as sealed record families; the queries below read those families.
+const statementQueries = Object.freeze({ conditionFor: "statementCondition", controlTargetsFor: "statementControlTargets",
+  exitFor: "controlExit", iterationFor: "iterationCompletion", setterFor: "runtimeSetter", assignmentFor: "assignmentCompletion",
+  projectTypeTestReadsFor: "projectTypeTestReads" });
+
+function statementIndex(records) {
+  return Object.freeze({ admitted: node => records.statementAdmission.get(node) === true,
+    ...Object.fromEntries(Object.entries(statementQueries).map(([name, family]) => [name, node => records[family].get(node)])) });
+}
 
 function checkedGuardNodes(program) {
   const nodes = [];
@@ -52,10 +63,10 @@ for (const surfaces of [[], ["js"]]) {
       const declaration = ast.statements(excludedBranch)[0];
       assert.equal(ast.is.IsInterfaceDeclaration(declaration), true,
         "the complete checked source preserves its excluded declaration");
-      assert.equal(program.statementCompletions.admitted(declaration), false,
+      assert.equal(statementIndex(program.records).admitted(declaration), false,
         "no native completion is fabricated for an excluded descendant");
       const returned = ast.statements(selectedBranch)[0];
-      assert.equal(program.statementCompletions.admitted(returned), true,
+      assert.equal(statementIndex(program.records).admitted(returned), true,
         "the selected return retains its existing admission");
       validateGeneratedProject(`finalized-${selectedThen ? "true" : "false"}-guard-${surface}`, result.artifacts);
     });
@@ -83,7 +94,7 @@ export function run(value: number): number {
       assert.equal(program.records.nativeUnreachable.get(statement.ThenStatement) === true, !selectedThen,
         "only the actual nonselected then root receives unreachable evidence");
       const assignment = ast.statements(statement.ThenStatement)[0];
-      assert.equal(program.statementCompletions.admitted(assignment), selectedThen,
+      assert.equal(statementIndex(program.records).admitted(assignment), selectedThen,
         "the selected body alone receives native statement completion");
       validateGeneratedProject(`finalized-no-else-${selectedThen}-${surface}`, result.artifacts);
     });
@@ -119,7 +130,7 @@ export function run(value: number): number {
     const resourceStatement = ast.parent(ast.parent(resource));
     assert.equal(ast.is.IsVariableStatement(resourceStatement), true,
       "the selected resource has its actual checked variable statement");
-    assert.equal(program.statementCompletions.admitted(resourceStatement), true,
+    assert.equal(statementIndex(program.records).admitted(resourceStatement), true,
       "resource lifecycle validation still admits the selected acquisition");
     assert.equal(program.records.sourceCallEffects.get(invocation)?.invocation, "fallible",
       "the real selected invocation retains its actual fallible ABI");
@@ -198,18 +209,28 @@ function checked(text = source, options = {}) {
 }
 
 function select(program, records = program.records) {
-  const nativeNodes = new Set(rustNativeFixtureNodes(program));
-  return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records,
-    isNativeNode: node => nativeNodes.has(node),
+  const nativeNodes = rustNativeFixtureNodes(program);
+  const native = new Set(nativeNodes);
+  const countedLoops = new Map(nativeNodes.flatMap(node => {
+    const loop = program.records.countedLoop.get(node);
+    return loop === undefined ? [] : [[node, loop]];
+  }));
+  const selected = analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.sourceFiles, records,
+    isNativeNode: node => native.has(node),
     names: program.names, typeDefinitions: program.typeDefinitions, errorRegions: program.errorRegions,
-    projectFlowReadSelections: program.projectFlowReadSelections });
+    projectFlowReadSelections: program.projectFlowReadSelections,
+    producer: createRustStatementCompletionProducer(() => undefined), required: [], countedLoops,
+    safetyApplications: program.safetyApplications, components: program.sourcePackageComponents,
+    ownership: program.ownership, projectTypes: program.projectTypes, projectFieldDispatch: program.projectFieldDispatch,
+    structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites });
+  return selected.kind === "resolved" ? { ...selected, plan: statementIndex(selected.plan) } : selected;
 }
 
 test("statement completion publishes exact source destinations for all labels and loop exits", () => {
   const { program, nodes, ast } = checked();
   const loop = nodes.find(ast.is.IsForStatement);
   const labels = nodes.filter(ast.is.IsLabeledStatement);
-  const index = program.statementCompletions;
+  const index = statementIndex(program.records);
   assert.equal(loop !== undefined, true, "checked for statement exists");
   const targets = index.controlTargetsFor(loop);
   assert.equal(targets?.includes(loop), true, "loop has its exact own target");
@@ -221,13 +242,14 @@ test("statement completion publishes exact source destinations for all labels an
     assert.equal(selected !== undefined && Object.isFrozen(selected), true, "every exit has one immutable admitted target");
     assert.equal(index.admitted(exit), true, "every retained exit is admitted");
   }
-  assert.equal(Object.isFrozen(index), true, "the statement decision index is immutable");
+  assert.equal(["statementAdmission", ...Object.values(statementQueries)].every(family => Object.isFrozen(program.records[family])), true,
+    "the statement decision records are immutable");
   assert.equal(Object.isFrozen(targets), true, "source target aliases are immutable");
 });
 
 test("admitted conditions and assignment identities are pure stable lookups", () => {
   const { program, nodes, ast } = checked();
-  const index = program.statementCompletions;
+  const index = statementIndex(program.records);
   for (const node of nodes.filter(node => ast.is.IsIfStatement(node) || ast.is.IsForStatement(node) ||
     ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node))) {
     const selected = index.conditionFor(node);
@@ -278,7 +300,7 @@ test("loop guards use native Boolean carriers rather than if-only static folding
   const { program, nodes, ast } = checked(text);
   const loops = nodes.filter(node => ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) || ast.is.IsForStatement(node));
   assert.equal(loops.length, 3, "while, do and for conditions are all checked");
-  for (const loop of loops) assert.equal(program.statementCompletions.conditionFor(loop) !== undefined, true,
+  for (const loop of loops) assert.equal(statementIndex(program.records).conditionFor(loop) !== undefined, true,
     "each loop has its native Boolean condition even when a guard is statically known");
 });
 
@@ -292,7 +314,7 @@ test("program-wide admission preserves chained and expression-position assignmen
       return first + second + value;
     }`;
   const { program, nodes } = checked(text);
-  const assignments = nodes.filter(node => program.statementCompletions.assignmentFor(node) !== undefined);
+  const assignments = nodes.filter(node => statementIndex(program.records).assignmentFor(node) !== undefined);
   assert.equal(assignments.length >= 5, true, "nested, conditional and argument assignments retain their exact operation evidence");
   const { result } = compileRust({ surfaces: [], files: { "index.ts": text } });
   assert.equal(result.diagnostics.length, 0,
@@ -343,7 +365,7 @@ main();
 
 test("conflicting finalized operator identity is rejected at the analysis owner", () => {
   const { program, nodes } = checked();
-  const assignment = nodes.find(node => program.statementCompletions.assignmentFor(node) !== undefined);
+  const assignment = nodes.find(node => statementIndex(program.records).assignmentFor(node) !== undefined);
   const records = { ...program.records, selectedOperation: { get: node => node === assignment
     ? { ...program.records.selectedOperation.get(node), operationId: "foreign.operation" }
     : program.records.selectedOperation.get(node) } };
@@ -373,7 +395,7 @@ export function run(values: number[]): number {
   const { program, nodes, ast } = checked(bindingSource);
   const loops = nodes.filter(ast.is.IsForOfStatement);
   assert.equal(loops.length, 3, "the three native-valid binding forms are checked");
-  const completions = loops.map(node => program.statementCompletions.iterationFor(node));
+  const completions = loops.map(node => statementIndex(program.records).iterationFor(node));
   assert.equal(completions[0]?.binding.kind, "assignment", "existing binding is assigned, never shadowed");
   assert.equal(completions[1]?.binding.kind, "declaration", "a mutable lexical binding is declared");
   assert.equal(completions[1]?.binding.mutable, true, "mutability comes from the existing mutation owner");
@@ -439,7 +461,7 @@ export function update(): void {
   for (const [ordinal, node] of setters.entries()) {
     const operation = program.records.targetOperation.get(node);
     const early = rustRuntimeSetSourceInputs(ast, node, operation);
-    const final = program.statementCompletions.setterFor(node);
+    const final = statementIndex(program.records).setterFor(node);
     const label = `native setter ${ordinal}`;
     assert.equal(early !== undefined && final !== undefined, true, `${label}: one exact early/final source projection`);
     assert.equal(early.receiver === final.receiver, true, `${label}: original receiver identity`);
@@ -512,7 +534,7 @@ main();
   assert.equal(program.records.targetOperation.get(iteration)?.lowering.kind, "fallible-owned",
     "the real native RegExp iteration retains its fallible protocol");
   assert.equal(program.errorRegions.get(callable)?.kind, "infallible", "the catch keeps the outward ABI infallible");
-  assert.equal(program.statementCompletions.iterationFor(iteration) !== undefined, true,
+  assert.equal(statementIndex(program.records).iterationFor(iteration) !== undefined, true,
     "the actual protected iteration is admitted before publication");
   const { result } = compileRust({ surfaces: ["js"], packages,
     target: { id: "rust", options: { outputType: "bin", crateName: "r05_caught_fallible_iteration" } },

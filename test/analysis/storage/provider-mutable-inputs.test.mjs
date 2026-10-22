@@ -18,16 +18,24 @@ export function main(): void {
   mutateBoth(fresh(), fresh());
 }` } });
   const ast = program.source.ast;
+  const input = { ast, records: program.records, navigation: program.sourceNavigation,
+    statementCompletions: { runtimeSetter: program.records.runtimeSetter } };
   const calls = [];
   const visit = node => {
-    const proof = program.providerMutableInputs.forOperation(node);
+    const proof = providerMutableInputsFor(node, input);
     if (proof?.kind === "proved" && proof.inputs.length === 2) calls.push({ node, proof });
     ast.forEachChild(node, visit);
   };
   for (const file of program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)) visit(file);
   assert.equal(calls.length, 3, "independent variables, disjoint fields and independently owned temporary values");
-  return { program, input: { ast, records: program.records, navigation: program.sourceNavigation,
-    statementCompletions: program.statementCompletions }, calls };
+  return { program, input, calls };
+}
+
+// The analysis admits mutable provider inputs per finalized provider or runtime-set operation.
+function providerMutableInputsFor(node, input) {
+  const operation = input.records.compoundWrite.get(node) ?? input.records.targetOperation.get(node);
+  return operation?.kind === "provider-operation" || operation?.kind === "runtime-set"
+    ? selectRustProviderMutableInputs(node, operation, input) : undefined;
 }
 
 test("native mutable admission is sealed and retains exact operation and source-input ownership", () => {
@@ -39,7 +47,7 @@ test("native mutable admission is sealed and retains exact operation and source-
     assert.equal(selectRustProviderMutableInputs(node, { ...proof.operation }, current.input).kind, "rejected",
       "foreign operation evidence cannot carry a valid admission");
   }
-  assert.equal(current.program.providerMutableInputs.forOperation({}) === undefined, true);
+  assert.equal(providerMutableInputsFor({}, current.input) === undefined, true);
 });
 
 test("missing direct roots and selected field paths cannot publish mutable admission", () => {

@@ -22,7 +22,7 @@ for (const surfaces of [[], ["js"]]) {
     program.sourceFiles.forEach(visit);
     assert.equal(initializers.length, 3);
     for (const initializer of initializers) {
-      const selection = program.borrowedInitializers.forExpression(initializer);
+      const selection = program.records.borrowedInitializer.get(initializer);
       assert.equal(selection !== undefined, true, "each actual native view has its checked receiver lifetime owner");
       assert.equal(selection.receiver === ast.as.AsElementAccessExpression(initializer).Expression, true,
         "the exact receiver survives nested fields without name matching");
@@ -33,7 +33,7 @@ for (const surfaces of [[], ["js"]]) {
         "the exact finalized native receiver carrier is retained without replacing its metadata representation");
       assert.equal(Object.isFrozen(selection), true);
     }
-    assert.equal(Object.isFrozen(program.borrowedInitializers), true);
+    assert.equal(Object.isFrozen(program.records.borrowedInitializer), true);
     const initializer = initializers[0];
     const fact = program.records.targetOperation.get(initializer);
     const input = fact.abi.targetReceiver.input;

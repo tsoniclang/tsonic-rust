@@ -461,6 +461,8 @@ export function analyzeRustAnalysisProgram(
     projectFlowReadSelections,
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
+    borrowedElementReads,
+    genericCallableErrors: genericCallableErrors.value,
   };
   const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value);
   if (emission.kind === "rejected") return emission;

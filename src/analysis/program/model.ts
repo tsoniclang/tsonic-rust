@@ -101,6 +101,8 @@ export interface RustAnalysisProgram {
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
   readonly sourceModuleConstructions: RustSourceModuleConstructionIndex;
   readonly generatedDeclarationUses: readonly RustGeneratedDeclarationUse[];
+  readonly borrowedElementReads: import("../storage/borrowed-element-reads.js").RustBorrowedElementReads;
+  readonly genericCallableErrors: import("../../target-model/records/generic-callable-errors.js").RustGenericCallableErrorIndex;
 }
 
 export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;

@@ -47,7 +47,7 @@ export function read(): Wide { return Wide.First; }
     const [width, representation, values] = expected.get(name);
     const carrier = program.records.runtimeCarrier.get(declaration)?.carrier;
     assert.equal(carrier !== undefined, true, `${name}: early nominal carrier is published`);
-    const form = program.nativeDeclarations.get(declaration);
+    const form = program.records.nativeDeclaration.get(declaration);
     assert.equal(program.typeDefinitions.sourceEnumDefinition(carrier) === form, true,
       `${name}: late native emission reads the identical early definition`);
     assert.equal(form.integerWidth, width, `${name}: cached shared width`);
@@ -138,7 +138,7 @@ test("the existing type registry publishes one frozen enum definition and reject
 test("late enum admission cannot re-evaluate names, constants, width or physical form", () => {
   const { source, program } = analyzeRust({ files: { "index.ts": "export enum State { First = 1, Again = 1 }" } });
   const declaration = enumDeclarations(source)[0];
-  const form = program.nativeDeclarations.get(declaration);
+  const form = program.records.nativeDeclaration.get(declaration);
   const admitted = admitRustNativeValueDeclaration(declaration, { ast: source.ast, records: program.records,
     typeDefinitions: program.typeDefinitions, names: { nameForDeclaration() { throw new Error("late name decision"); } } });
   assert.equal(admitted.kind, "accepted", "late admission consumes only completed enum evidence");

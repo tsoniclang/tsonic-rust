@@ -517,7 +517,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(context.returnDestination.kind, "value");
       assert.equal(context.returnDestination.carrier === result, true, "already-bound completion is not applied a second time");
       assert.equal(prepared.carrierFor(context.use, result) === result, true, "selected physical payload remains the original object");
-      const selected = program.genericCallableErrors.forDefinition(definition).forMember(member);
+      const selected = program.genericCallableErrors.forDefinition(definition).members.get(member);
       for (const source of [selected.invocation, selected.awaiting]) if (source !== undefined) {
         assert.equal(context.operands.includes(source.errorType), true, "completed native error endpoint is retained");
         assert.equal(prepared.carrierFor(context.use, source.errorType) === source.errorType, true, "no second error substitution");

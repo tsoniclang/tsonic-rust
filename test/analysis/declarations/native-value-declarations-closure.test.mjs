@@ -21,7 +21,7 @@ test("a native record admits its exact closed field correspondence", () => {
   assert.equal(result.kind, "accepted", "closed record remains admitted");
   assert.equal(result.form.kind, "interface", "record form stays distinct");
   const field = result.form.fields[0];
-  const selected = fixture.program.nativeDeclarations.get(fixture.declaration).fields[0];
+  const selected = fixture.program.records.nativeDeclaration.get(fixture.declaration).fields[0];
   assert.equal(field.declaration === selected.declaration, true, "identical source field is retained");
   assert.equal(field.carrier === selected.carrier, true, "identical selected native carrier is retained");
   assert.equal(Object.isFrozen(result.form.fields) && Object.isFrozen(field), true, "field evidence is immutable");
