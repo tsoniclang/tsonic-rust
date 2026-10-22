@@ -238,11 +238,11 @@ export function finalizeRustLexicalFunctionQueries(
       ? Object.freeze({ kind: "unresolved", reason: failure ?? "A lexical function lost its exact enclosing generic or lifetime declarations." })
       : Object.freeze({ ...environment, genericParameters: parameters }));
   }
-  return sealRustLexicalFunctionQueries(selections, environments.valueDeclarationsAt);
+  return sealRustLexicalFunctionQueries(selections, environments.valueDeclarationsAt, environments.calleesFor);
 
   function exhausted(): RustLexicalFunctionQueries {
     const selection = Object.freeze({ kind: "unresolved" as const, reason: "Lexical physical generic selection exceeds its finite work budget." });
     return sealRustLexicalFunctionQueries(new Map(environments.subjects.map(declaration => [declaration, selection])),
-      environments.valueDeclarationsAt);
+      environments.valueDeclarationsAt, environments.calleesFor);
   }
 }

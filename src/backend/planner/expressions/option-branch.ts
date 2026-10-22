@@ -12,13 +12,16 @@ export function planRustOptionBranch(option: RustExpr, carrier: TargetTypeRef, p
   present: RustExpr, absent: RustExpr, context: RustPlanContext): RustExpr {
   const storage = context.input.program.records.typeEmission.get(carrier)?.optionalStorage;
   if (storage?.kind === "option") {
+    // An absent arm that evaluates only a unit literal first is the absence itself (the style normalization drops it).
+    const absence = absent.kind === "evaluate-then" && absent.effect.kind === "tuple-literal" && absent.effect.elements.length === 0
+      ? absent.value : absent;
     // The pre-rewrite Option forms: a branch that rebuilds the same Option is the Option itself, and a present
     // value with a constant fallback is unwrap_or_default / unwrap_or (clippy::manual_unwrap_or and friends). The
     // checks read only the two arms this function receives.
     if (present.kind === "call" && present.path === "Some" && (present.genericArguments?.length ?? 0) === 0 &&
       present.args.length === 1 && present.args[0]?.kind === "path" && present.args[0].path === presentName &&
-      (absent.kind === "none" || absent.kind === "associated-value" && absent.name === "None" && absent.trait === undefined &&
-        rustTypeEquals(absent.owner, rustTypeFromCarrierInContext(carrier, context)))) return option;
+      (absence.kind === "none" || absence.kind === "associated-value" && absence.name === "None" && absence.trait === undefined &&
+        rustTypeEquals(absence.owner, rustTypeFromCarrierInContext(carrier, context)))) return option;
     if (present.kind === "path" && present.path === presentName) {
       if (isNativeDefaultLiteral(absent)) return { kind: "method-call", receiver: option, method: "unwrap_or_default", args: [] };
       if (isConstantLiteral(absent)) return { kind: "method-call", receiver: option, method: "unwrap_or", args: [absent] };

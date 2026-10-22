@@ -1,6 +1,7 @@
 import { requirementContractsEqual, requirementUseHasValidStorage, stringListsEqual, type RequirementContractState } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { Node } from "@tsonic/tsts";
+import { normalizeRustErrorType } from "../errors/error-types.js";
 
 import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
 
@@ -293,7 +294,8 @@ export function analyzeRustDeclarationGenericRequirements(
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
   const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
-    frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records };
+    frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records,
+    errorType: (carrier, node) => normalizeRustErrorType(carrier, errorTypes, node) };
   const sourceScopes = new Map<string, Node | undefined>();
   for (const sourceFile of source.sourceFiles) {
     const fileName = ast.getFileName(sourceFile);

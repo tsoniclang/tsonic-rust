@@ -45,6 +45,7 @@ import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structur
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput, type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle, type RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
 import { type RustPhysicalCallableStorage } from "../../target-model/records/native-storage.js";
+import { prepareRustProjectCallableFieldStorage, type RustProjectCallableFieldStorage } from "./project-field-storage.js";
 import type { RustGenericCallableFlowProducer } from "../program/records/generic-callable-flow.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
@@ -84,6 +85,7 @@ export interface RustCallableValuePlan {
   readonly genericIdentities: RustGenericCallableIdentityPlan;
   readonly nativeDispatch: RustNativeCallableDispatchPlan;
   readonly genericCompletions: RustGenericCallableCompletionPlan;
+  readonly projectFieldStorage: RustProjectCallableFieldStorage;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
 
@@ -322,6 +324,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;
+  let projectFieldStorage: RustProjectCallableFieldStorage | undefined;
   const nativeStorage: RustNativeStorageConstruction = Object.freeze({ ...nativeStorageQueries,
     parameterFor(parameter: Node) {
       if (parameterStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
@@ -359,10 +362,14 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
         nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);
+      projectFieldStorage = prepareRustProjectCallableFieldStorage({ ast: input.ast, records: input.records,
+        storage: input.sourceStorage, projectTypes: input.projectTypes },
+      (subject, carrier) => nativeStorageQueries.subjectFor(subject, carrier));
       return Object.freeze([]);
     },
     finalizeSelected() {
-      if (structuralMethodStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Physical callable families require their completed constructor and field storage selection.");
+      if (structuralMethodStorage === undefined || projectFieldStorage === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "Physical callable families require their completed constructor and field storage selection.");
       const suspended = createRustSuspendedCallablePlan(input.ast, input.nativeNodes, input.records, input.names, input.lifetimes,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
@@ -402,6 +409,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const selectedIssues = Object.freeze([...suspended.issues, ...frames.issues, ...genericIdentities.issues]);
       const plan: RustCallableValueSelection = Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers,
         nativeGenericProducers, genericDispatch, genericIdentities, nativeDispatch, get genericCompletions() { return completions(); },
+        projectFieldStorage,
         issues: Object.freeze([...issues, ...selectedIssues]) });
       selectedPlan = plan;
       return resolvedTargetStage(Object.freeze({ plan, issues: selectedIssues }));

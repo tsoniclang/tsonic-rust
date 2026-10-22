@@ -26,7 +26,6 @@ export function analyzeRustProjectEmission(input: {
     producer.structuralDeclarations(component, program.structuralShapes.definitions.filter(shape => shape.componentId === component));
     producer.unionDeclarations(component, program.structuralShapes.unionDefinitions.filter(union => union.componentId === component));
   }
-  for (const shape of program.structuralShapes.instances) producer.shape(shape.carrier, shape);
   const unionCarriers = [...program.structuralShapes.unionDefinitions.flatMap(union => union.sourceCarriers),
     ...program.structuralShapes.instances.map(shape => shape.carrier),
     ...program.projectTypes.definitions.map(definition => program.projectTypes.openCarrier(definition)),
@@ -65,6 +64,8 @@ export function analyzeRustProjectEmission(input: {
     if (projection !== undefined) producer.checkedProjection(carrier, projection);
     unionCarriers.push(...rustTargetTypeChildren(carrier));
   }
+  // After the carrier scan: it may instantiate a planned shape over a generic callable family's environment parameters.
+  for (const shape of program.structuralShapes.instances) producer.shape(shape.carrier, shape);
   for (const definition of program.projectTypes.definitions) {
     const representation = program.objectRepresentations.representationFor(definition);
     producer.definition(definition, representation);

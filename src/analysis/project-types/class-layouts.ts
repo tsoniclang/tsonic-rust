@@ -102,7 +102,8 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     }
     const offset = fields.length;
     for (const field of layout.fields) {
-      const declared = program.records.runtimeCarrier.get(field.declaration)?.carrier ?? program.records.runtimeCarrier.get(Node_Type(ast, field.declaration))?.carrier;
+      const declared = program.callableValues.projectFieldStorage.get(field.declaration) ??
+        program.records.runtimeCarrier.get(field.declaration)?.carrier ?? program.records.runtimeCarrier.get(Node_Type(ast, field.declaration))?.carrier;
       const selected = declared === undefined ? undefined : program.projectTypes.instantiateMemberCarrier(field.declaration, carrier, declared);
       const targetName = program.projectTypes.fieldStorageName(definition, field.declaration);
       if (selected === undefined || isRustNeverCarrier(selected) || targetName === undefined)
