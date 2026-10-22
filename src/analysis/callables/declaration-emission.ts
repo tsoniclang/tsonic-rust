@@ -23,12 +23,22 @@ export function analyzeRustCallableDeclarationEmission(input: {
     issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
+  // A callable written inside compile-time source (a safety builder such as `safety<T>().property(value => value.field)`,
+  // or erased memory metadata and its field selectors) selects a declaration; it is never a native function and has no
+  // runtime return or control flow.
+  const insideCompileTimeSource = (node: Node): boolean => {
+    for (let current = ast.parent(node); current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
+      if (program.records.compileTimeSource.get(current) !== undefined ||
+        program.safetyApplications.operationForExpression(current)?.kind === "safety-builder") return true;
+    return false;
+  };
   for (const declaration of input.nodes) {
     if (!ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsFunctionExpression(declaration) && !ast.is.IsArrowFunction(declaration) &&
       !ast.is.IsMethodDeclaration(declaration) && !ast.is.IsGetAccessorDeclaration(declaration) && !ast.is.IsSetAccessorDeclaration(declaration)) continue;
     const body = ast.body(declaration);
     if (body === undefined || program.records.nativeParticipation.get(declaration) === "erased" ||
-      program.records.nativeUnreachable.get(declaration) === true || program.records.compileTimeSource.get(declaration) !== undefined) continue;
+      program.records.nativeUnreachable.get(declaration) === true || program.records.compileTimeSource.get(declaration) !== undefined ||
+      insideCompileTimeSource(declaration)) continue;
     const sourceReturn = program.records.sourceCallableReturn.get(declaration);
     const asyncFact = program.records.asyncFunction.get(declaration);
     const generator = program.records.generator.get(declaration);
