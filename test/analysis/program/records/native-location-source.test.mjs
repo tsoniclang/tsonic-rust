@@ -51,7 +51,7 @@ test("source native arrays publish exact checked aliases, literals and element o
     const record = program.records.nativeArrayStorage.get(node);
     if (record === undefined) continue;
     counts[record.kind] += 1;
-    assert.equal(record.stride, 8);
+    assert.equal(record.stride, 8n);
     assert.equal(record.layout.pointeeCarrier.name, "uint32");
     assert.equal(Object.isFrozen(record), true);
     if (record.kind === "element") {

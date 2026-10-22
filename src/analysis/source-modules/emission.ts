@@ -84,7 +84,7 @@ export function analyzeRustSourceFileEmission(program: Omit<RustAnalysisProgram,
   return Object.freeze(issues);
 
   function admitBinding(declaration: Node, statement: Node): void {
-    // An ambient (declare) binding is type-only: it has no native value and the planner skips its statement.
+    // An ambient (declare) binding is type-only: it has no native module binding.
     if (program.records.compileTimeSource.get(declaration) || program.records.typeOnlyDeclaration.get(declaration) !== undefined) return;
     const binding = program.records.moduleBinding.get(declaration);
     const initializer = Node_Initializer(ast, declaration);

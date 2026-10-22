@@ -18,6 +18,12 @@ export function planExpressionStatement(node: Node, context: RustPlanContext): r
 export function planExpressionAsStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] {
   const { records } = context.input.program;
   if (records.compileTimeSource.get(expression) !== undefined) return [];
+  // A parenthesized statement expression is the same discarded expression: `(result = value);` is an assignment
+  // statement, as analysis selects it (its result disposition sees through the parentheses).
+  if (context.input.program.source.ast.is.IsParenthesizedExpression(expression)) {
+    const inner = Node_Expression(context.input.program.source.ast, expression);
+    if (inner !== undefined) return planExpressionAsStatement(inner, context);
+  }
   const sequence = sourceExpressionSequence(context.input.program.source.ast, expression);
   if (sequence.length > 1) return sequence.flatMap(item => planExpressionAsStatement(item, context));
   const operation = records.targetOperation.get(expression);
