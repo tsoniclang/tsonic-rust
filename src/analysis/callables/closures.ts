@@ -20,6 +20,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
 import { selectedSourceCallableReturn } from "./signatures.js";
@@ -201,7 +202,7 @@ export function resolveFunctionExpressionCarrier(
           ? rustOptionElementCarrier(sourceParameterCarrier) : sourceParameterCarrier)) ||
       rustCallableInputProtocol(selectedExpected) === undefined && !rustTargetTypeRefEquals(
         parameterAbi.parameterCarrier,
-        targetParameterCarrier,
+        retainedParameterContract(parameterAbi.parameterCarrier, targetParameterCarrier),
       )) {
       return undefined;
     }
@@ -462,4 +463,12 @@ function callableExpressionValueDeclaration(
       Node_Initializer(ast, parent) === current
     ? parent
     : undefined;
+}
+
+// A callable parameter this closure retains (a returned closure captures it) is closed with the closure's retained
+// environment lifetime; the contract it implements leaves that environment open.
+function retainedParameterContract(selected: TargetTypeRef, contract: TargetTypeRef): TargetTypeRef {
+  const lifetime = rustCallableProtocol(rustOptionElementCarrier(selected) ?? selected)?.lifetime;
+  return lifetime?.kind === "parameter" && lifetime.identity.startsWith("retained-environment\0")
+    ? closeRustRetainedCallableCarrier(contract, lifetime) : contract;
 }

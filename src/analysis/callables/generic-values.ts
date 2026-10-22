@@ -5,7 +5,8 @@ import type { RustCallableOrigin, RustCallableSignature } from "../../target-mod
 import { rustGenericCallableValue, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
-import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -117,7 +118,7 @@ export function createRustGenericCallablePlan(
     const value = rustGenericCallableValue(carrier);
     if (carrier !== undefined && value !== undefined) {
       const capture = records.closureCapture.get(node);
-      const signatureKey = closedMetadataKey(value.signature);
+      const signatureKey = rustGenericFamilySignatureKey(value.signature);
       const identity = flow.familyFor(carrier)!;
       const sourceFileName = ast.getFileName(ast.getSourceFile(node));
       const implementationIdentity = createHash("sha256").update(`${sourceFileName}:${ast.pos(node)}:${ast.end(node)}`).digest("hex");
@@ -159,7 +160,7 @@ export function createRustGenericCallablePlan(
           captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), receivers: Object.freeze(receivers), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);
-        if (group !== undefined && closedMetadataKey(group.signature) !== signatureKey) {
+        if (group !== undefined && rustGenericFamilySignatureKey(group.signature) !== signatureKey) {
           issues.push({ subject: node, message: "One selected generic callable contract has conflicting native signatures; no implementation can be selected." });
         } else {
           const selected = group ?? { origin: value.origin, signature: snapshotClosedMetadata(value.signature), implementations: [] };
@@ -188,7 +189,7 @@ export function createRustGenericCallablePlan(
       const value = rustGenericCallableValue(carrier);
       if (value === undefined) return undefined;
       const selected = byFamily.get(flow.familyFor(carrier)!);
-      return selected === undefined || closedMetadataKey(selected.signature) !== closedMetadataKey(value.signature) ? undefined : selected;
+      return selected === undefined || rustGenericFamilySignatureKey(selected.signature) !== rustGenericFamilySignatureKey(value.signature) ? undefined : selected;
   };
   let physical: RustGenericCallablePhysicalPlan | undefined;
   const plan: RustGenericCallablePlan = Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues), definitionFor,
@@ -215,3 +216,13 @@ export function createRustGenericCallablePlan(
 }
 
 import { selectRustGenericCallableStorage } from "../../policy/ownership/generic-callables.js";
+
+// A family's contract is its declared signature: an implementation closes a returned callable's open environment with its
+// own retained environment lifetime, which is not part of the contract the family's carriers name.
+function rustGenericFamilySignatureKey(signature: RustCallableSignature): string {
+  return closedMetadataKey(mapRustTargetTypes({ kind: "tuple", elements: [...signature.parameters, signature.result] }, current => {
+    const protocol = rustCallableProtocol(current);
+    return protocol?.lifetime?.kind === "parameter" && protocol.lifetime.identity.startsWith("retained-environment\0")
+      ? rustCallableTargetType(protocol.parameters, protocol.result, undefined, protocol.error) : current;
+  })) + closedMetadataKey({ typeParameters: signature.typeParameters, environmentParameters: signature.environmentParameters });
+}

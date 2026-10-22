@@ -34,6 +34,7 @@ import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/c
 import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints/error-protocols.js";
 import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
+import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -84,6 +85,13 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     [field.carrier, ...(field.methodStorageCarrier === undefined ? [] : [field.methodStorageCarrier])]));
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
     ...definition.signature.parameters, definition.signature.result, ...definition.members.flatMap(member => member.arguments.flatMap(argument => argument.kind === "type" ? [argument.type] : [])));
+  // A generic implementation renders its retained outlives bounds over the family environment it is emitted in.
+  for (const definition of program.callableValues.generic.physical.definitions()) for (const member of definition.members) {
+    const retained = program.records.nativeGenerics.get(member.implementation.declaration)?.retention;
+    const substitutions = new Map(member.implementation.substitutions);
+    if (retained !== undefined) pending.push(...[...retained.source, ...retained.body].map(carrier =>
+      substituteRustTargetTypeParameters(carrier, substitutions)));
+  }
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const parameter = program.records.callableParameter.get(node);
