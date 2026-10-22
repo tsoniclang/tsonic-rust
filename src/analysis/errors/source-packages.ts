@@ -5,7 +5,7 @@ import type { RustSourcePackageComponentPlan } from "../../target-model/records/
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary, RustSourcePackageErrorDomainPlan, RustExternalSourcePackageError } from "../../target-model/records/source-package-errors.js";
 import type { RustSourcePackageErrorRoute } from "../../target-model/records/source-package-errors.js";
 import type { RustErrorDomain } from "../../target-model/operations/error-boundary.js";
-import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../target-model/types/carriers/runtime-carriers.js";
 import type { RustProgramErrorOwner } from "../../target-model/types/model.js";
 import { isRustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustPascalCaseIdentifier } from "../../target-model/names/identifiers.js";

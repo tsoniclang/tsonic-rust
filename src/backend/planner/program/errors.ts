@@ -1,6 +1,6 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustPlanningContext } from "../context.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import {
   createRustSourceFile,

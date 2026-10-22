@@ -13,7 +13,8 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
-import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames } from "../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {

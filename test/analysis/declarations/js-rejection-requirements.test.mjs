@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyCarrierRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
-import { rustRuntimeErrorTargetType } from "../../../dist/target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustCarrierSatisfiesTraitRef } from "../../../dist/policy/constraints/native-traits.js";
 import { rustMutableJsErrorTargetType, rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableRetainedErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";

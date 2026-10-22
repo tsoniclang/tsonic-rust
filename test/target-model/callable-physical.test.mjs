@@ -9,7 +9,7 @@ import { rustNamedTargetType } from "../../dist/target-model/types/carriers/nati
 import { rustCallableTargetId, rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../dist/target-model/types/carriers/primitives.js";
 import { rustNativeErrorJoinReference } from "../../dist/target-model/types/native-error-joins.js";
-import { rustRuntimeErrorTargetType } from "../../dist/target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { rustNativeCompletionFutureType } from "../../dist/target-model/types/callable-completions.js";
 

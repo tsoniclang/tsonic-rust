@@ -1,6 +1,12 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustNamedTargetType, rustNativeTraitRef } from "./native.js";
 
+export const rustRuntimeErrorTypeIdentity = "tsonic-rust-runtime:TsonicError";
+
+export function rustRuntimeErrorTargetType(): TargetTypeRef {
+  return rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError");
+}
+
 export function rustRuntimeRecordFieldTargetType(value: TargetTypeRef, error: TargetTypeRef): TargetTypeRef {
   return rustNamedTargetType("rust.runtime.RecordField", "rt::RecordField", [
     { kind: "type", type: value }, { kind: "type", type: error },

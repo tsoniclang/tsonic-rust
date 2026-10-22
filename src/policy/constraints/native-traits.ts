@@ -21,7 +21,7 @@ import type { RustTargetTraitRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierSupportsAsRef } from "./as-ref.js";
 
-import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustOnlyTypeGenericArguments, rustTargetGenericTypeArguments } from "../../target-model/types/generic-arguments.js";
 

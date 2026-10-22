@@ -9,7 +9,7 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustAwaitExpression } from "../../../../dist/backend/planner/expressions/await.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
 
 function awaitProgram(source) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });

@@ -7,7 +7,7 @@ import { rustCallableTargetType, rustCallableProtocol, rustCallableInputProtocol
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { resolveRustCallableEnvironment, bindRustCallableEnvironment } from "../source-evidence/types/resolution/callable-environments.js";
-import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustCallableStorageCarrier } from "../source-evidence/types/resolution/source-evidence.js";

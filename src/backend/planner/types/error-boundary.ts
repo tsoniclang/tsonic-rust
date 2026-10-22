@@ -1,7 +1,7 @@
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustAwaitedErrorBoundary, RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustErrorType, rustLocalErrorOwner, rustPropagateLocalError,
   type RustFallibleBoundary } from "../program/fallible-boundaries.js";
 

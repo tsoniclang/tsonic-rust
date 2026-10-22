@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectRustJsRejectionRegion } from "../../../../dist/policy/operations/flow/js-rejection.js";
 import { planRustErrorRegion } from "../../../../dist/backend/planner/program/error-regions.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
-import { rustRuntimeErrorTargetType } from "../../../../dist/target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";

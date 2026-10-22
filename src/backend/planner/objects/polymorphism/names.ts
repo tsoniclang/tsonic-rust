@@ -23,7 +23,7 @@ import { rustProjectProjectionPredicates } from "../../types/project-projection-
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
-import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../../../target-model/types/carriers/generic-references.js";
 
 export interface RustProjectGenericPlan {
   readonly bindings: readonly { readonly parameter: RustGenericParameter; readonly argument: RustTargetGenericArgument }[];

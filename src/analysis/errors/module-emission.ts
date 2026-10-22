@@ -7,7 +7,7 @@ import type { RustErrorTransportEmissionProducer } from "../program/records/erro
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustTsValueTargetType, rustJsValueTargetType,
   rustNamedTargetType, rustJsErrorTargetId } from "../../target-model/types/index.js";
-import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 

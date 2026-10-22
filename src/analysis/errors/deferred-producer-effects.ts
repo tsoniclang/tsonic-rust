@@ -10,7 +10,7 @@ import { rustNativeCallableCompletion } from "../../policy/types/callables/nativ
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
-import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";

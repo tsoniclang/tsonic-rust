@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "../program/records/required-records.js";
-import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 
 import { appendRustDiagnostic } from "../program/walk.js";
 import { KindBlock, KindFunctionExpression, KindBindingElement, KindNonNullExpression, KindParameter, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, Node_Expression, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment } from "@tsonic/target-api/source";

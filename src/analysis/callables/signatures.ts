@@ -1,5 +1,5 @@
 import { requireRustRecord } from "../program/records/required-records.js";
-import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { rustUnionPayloadAdmission } from "../../policy/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";

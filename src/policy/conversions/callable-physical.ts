@@ -1,5 +1,5 @@
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";

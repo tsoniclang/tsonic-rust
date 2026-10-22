@@ -20,7 +20,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "../objects/record-member-contracts.js";
 
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
-import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 
 import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
 

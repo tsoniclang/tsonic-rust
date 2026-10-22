@@ -1,6 +1,6 @@
 import { rustJsArrayEntriesTargetType, rustJsArrayEntryTargetType } from "../../../../target-model/types/carriers/array-entries.js";
 import { rustIteratorResultTargetType } from "../../../../target-model/types/index.js";
-import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsNumericTargetType, isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustJsStringTargetType, rustVecTargetType, isRustNumericCarrier, rustJsDateTargetId, rustJsArrayBufferTargetType, rustJsSymbolTargetType, rustJsTypedArrayTargetType, rustFutureOutputCarrier, rustJsPromiseOutputTargetType, rustJsPromiseSettledResultTargetType, rustJsPromiseTargetType, rustJsRegExpExecArrayTargetType, rustJsRegExpIndicesTargetType, rustJsRegExpMatchArrayTargetType, rustJsRegExpNamedGroupsTargetType, rustJsRegExpNamedIndicesTargetType, rustJsRegExpStringIteratorTargetType, rustJsRegExpTargetType, rustRegExpExecArrayTargetType, rustRegExpIndicesTargetType, rustRegExpMatchArrayTargetType, rustRegExpNamedGroupsTargetType, rustRegExpNamedIndicesTargetType, rustRegExpStringIteratorTargetType, rustJsArrayTargetType, rustCallableTargetType, rustClosureTargetType, rustAbsenceTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustBorrowedStrTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
+import { rustBigIntTargetType, rustEmptyObjectTargetType, rustJsNumericTargetType, isRustJsArrayCarrier, rustJsArrayLikeElementTargetType, rustJsValueTargetType, rustJsStringTargetType, rustVecTargetType, isRustNumericCarrier, rustJsDateTargetType, rustJsArrayBufferTargetType, rustJsSymbolTargetType, rustJsTypedArrayTargetType, rustFutureOutputCarrier, rustJsPromiseOutputTargetType, rustJsPromiseSettledResultTargetType, rustJsPromiseTargetType, rustJsRegExpExecArrayTargetType, rustJsRegExpIndicesTargetType, rustJsRegExpMatchArrayTargetType, rustJsRegExpNamedGroupsTargetType, rustJsRegExpNamedIndicesTargetType, rustJsRegExpStringIteratorTargetType, rustJsRegExpTargetType, rustRegExpExecArrayTargetType, rustRegExpIndicesTargetType, rustRegExpMatchArrayTargetType, rustRegExpNamedGroupsTargetType, rustRegExpNamedIndicesTargetType, rustRegExpStringIteratorTargetType, rustJsArrayTargetType, rustCallableTargetType, rustClosureTargetType, rustAbsenceTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustBorrowedStrTargetType, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import { rustInferCarrier } from "./rows.js";
 import { rustJsIntlGroupingTargetId } from "../../../../target-model/types/carriers/source-types.js";
 import type { JsCarrierRef } from "./model.js";
@@ -275,7 +275,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "int32-array":
       return rustJsTypedArrayTargetType("Int32Array");
     case "date":
-      return { kind: "target-named", id: rustJsDateTargetId };
+      return rustJsDateTargetType();
     case "future-output":
       return rustFutureOutputCarrier(bindings.sourceResult);
     case "promise-output":

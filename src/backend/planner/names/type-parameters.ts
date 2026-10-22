@@ -1,8 +1,7 @@
 import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import {
-  rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames, rustTypeParameterFromSourceContract,
-} from "../../../target-model/names/type-parameters.js";
+import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames } from "../../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../../target-model/types/carriers/generic-references.js";
 
 export function rustGeneratedTypeParameterContext<Context extends { readonly typeParameterNames?: ReadonlyMap<string, string> }>(
   parameters: readonly { readonly identity: string; readonly name: string }[],

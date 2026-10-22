@@ -14,7 +14,7 @@ import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../../ta
 import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../../../project-types/type-family-normalization.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
-import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../../../target-model/types/carriers/generic-references.js";
 import { rustCallableOrigin } from "../../../../policy/types/callables/callable-origins.js";
 import { closeRustSuspendedStorage } from "../../../../policy/types/storage/suspended-storage.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";

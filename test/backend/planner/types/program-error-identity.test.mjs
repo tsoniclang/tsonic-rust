@@ -4,7 +4,7 @@ import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../d
 import { rustProgramErrorTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
 import { analyzeRustSourcePackageErrorBoundaries, rustSourcePackageErrorTypeIdentity } from "../../../../dist/analysis/errors/source-packages.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustTypeEquals } from "../../../../dist/backend/target-ast/syntax/type-equality.js";
 import { rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 

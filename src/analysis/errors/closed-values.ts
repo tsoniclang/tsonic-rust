@@ -10,7 +10,7 @@ import type { RustConversionEmissionProducer } from "../program/records/conversi
 import { admitRustConversionEmission } from "../conversions/emission.js";
 import { rustTsValueTargetType, rustJsValueTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTypeIdentity } from "../../target-model/types/carriers/runtime-carriers.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 import { isSourceCallableBodyBoundary, TryStatement_CatchClause, TryStatement_TryBlock } from "@tsonic/target-api/source";
 

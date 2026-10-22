@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRustErrorRegions } from "../../../dist/analysis/errors/regions.js";
 import { rustJsPromiseTargetType, rustJsValueTargetType, rustProgramErrorTargetType,
   rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { rustRuntimeErrorTargetType } from "../../../dist/target-model/operations/error-boundary.js";
+import { rustRuntimeErrorTargetType } from "../../../dist/target-model/types/carriers/runtime-carriers.js";
 import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";

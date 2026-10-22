@@ -2,7 +2,7 @@ import { stringListsEqual, type RequirementUse, type RequirementContractState } 
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
-import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
+import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 import type { Node } from "@tsonic/tsts";
 
 import { classifyCarrierRequirements, type RustCarrierRequirementSelection } from "./generic-carrier-requirements.js";
