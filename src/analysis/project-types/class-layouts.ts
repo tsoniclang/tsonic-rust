@@ -190,6 +190,14 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
           const source = producer.records.projectCallableSignature.get(selectedImplementation);
           const target = producer.records.projectCallableSignature.get(member);
           if (source === undefined || target === undefined) continue;
+          // A dispatch slot keeps its contract safety; an implementation with a different unsafe contract cannot fill it.
+          if (source.safety.declaration !== target.safety.declaration || source.safety.getter !== target.safety.getter ||
+            source.safety.setter !== target.safety.setter) {
+            issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: selectedImplementation,
+              message: `Selected project member implementation does not preserve its finalized contract-to-implementation Rust ABI adapter. Node kind: ${ast.kindName(selectedImplementation)}.`,
+              evidence: ["target.capability=rust.backend.project-dispatch-signature"] });
+            continue;
+          }
           const accessor = ast.kindName(member) === "KindGetAccessor" || ast.kindName(member) === "KindSetAccessor";
           producer.forwarder(member, selectedImplementation, selectRustProjectForwarder(source.errorCarrier, target.errorCarrier, accessor));
         }
