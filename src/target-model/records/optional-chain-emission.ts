@@ -6,6 +6,8 @@ import type { RustRecordFamily } from "./program.js";
 export interface RustOptionalChainEmission {
   readonly fact: RustOptionalChainFact;
   readonly unit: boolean;
+  /** A mapped chain whose present branch is evaluated by Option::map: infallible and free of await and yield. */
+  readonly mapClosure: boolean;
   readonly structuralGuard: {
     readonly receiverNode: Node;
     readonly receiverCarrier: TargetTypeRef;
