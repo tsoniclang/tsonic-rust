@@ -211,7 +211,9 @@ function planFrameEntry(
       { kind: "type", name: "Result", generics: emptyRustGenerics, type: resultType },
       { kind: "function", name: "invoke", visibility: "private", selfParam: rustSelfParameter("ref"), generics: emptyRustGenerics,
         params: [{ name: "frame", type: { kind: "reference", referent: shared(types.frameType), mutable: false } },
-          { name: "arguments", type: { kind: "named", path: "Self::Arguments" } }],
+          // An entry with no arguments and no independent variant never reads its argument tuple.
+          { name: argumentTypes.length === 0 && !entry.hasIndependent ? "_arguments" : "arguments",
+            type: { kind: "named", path: "Self::Arguments" } }],
         returnType: { kind: "named", path: "Self::Result" },
         body: { statements: [{ kind: "tail", expr: { kind: "match", expression: { kind: "path", path: "self" }, arms } }] } },
     ] });

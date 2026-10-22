@@ -16,6 +16,8 @@ import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/ca
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
 import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustInfallibleTargetId, rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 
 export function rustNativeCallableAbsenceWitness(
   input: RustNativeCallableInput, definitions: RustTypeDefinitions,
@@ -45,7 +47,11 @@ export function rustNativeCallablePhysicalSource(
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs" | "erased">,
 ): RustNativeCallablePhysicalSource | undefined {
   if (storage.kind === "unresolved") return undefined;
-  const signature = rustCallablePhysicalSignature(storage.carrier);
+  // A frame callable is an rt::FrameCallable: its call takes the argument tuple and returns its entry's Result, whose
+  // error is the owning component's program error (frame entries use the source package error boundary).
+  const frame = rustFrameCallableValue(storage.carrier);
+  const signature = frame === undefined ? rustCallablePhysicalSignature(storage.carrier) : Object.freeze({
+    parameters: frame.signature.parameters, result: frame.signature.result, error: rustProgramErrorTargetType() });
   if (signature !== undefined) return Object.freeze({ carrier: storage.carrier, signature,
     ...(storage.kind === "selected" && storage.erased === true ? { erased: true as const } : {}) });
   const inputs = storage.kind === "selected" ? storage.inputs.filter(input =>

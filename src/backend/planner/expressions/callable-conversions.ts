@@ -55,9 +55,10 @@ function planSelectedRustCallableConversion(
   const native = emission.target === "closure";
   const input = emission.target === "input";
   const targetType = native || input ? undefined : rustCallableConstructionType(conversion.carrier, context);
-  const argumentsType = rustTypeFromCarrierInContext({ kind: "tuple", elements: conversion.parameters }, context);
+  // A native closure target takes its arguments as separate parameters; only a runtime callable takes the tuple.
+  const argumentsType = native ? undefined : rustTypeFromCarrierInContext({ kind: "tuple", elements: conversion.parameters }, context);
   const errorType = rustTypeFromCarrierInContext(conversion.error, context);
-  if (argumentsType === undefined || errorType === undefined || !native && !input && targetType === undefined)
+  if (!native && argumentsType === undefined || errorType === undefined || !native && !input && targetType === undefined)
     failRustPlannerInvariant("An admitted callable conversion requires its rendered native argument, result and error types.", node);
   const arity = conversion.errors.length;
   const joinName = context.input.program.records.nativeErrorJoinName.get(fileName, arity);
@@ -137,7 +138,7 @@ function planSelectedRustCallableConversion(
     ] } };
   }
   const closure: RustExpr = {
-    kind: "closure", move: true, params: native ? nativeParameters : [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
+    kind: "closure", move: true, params: native || argumentsType === undefined ? nativeParameters : [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
   };
   const value = borrowed
     ? createRustSharedReferenceArgument(context,
