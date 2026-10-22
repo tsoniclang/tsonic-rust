@@ -10,6 +10,8 @@ import { applyRustFallibleResultExpression } from "../../../../dist/backend/plan
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { checkRustDataWrite } from "../../../../dist/backend/planner/objects/data-writes.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
+import { analyzeRustSourcePackageErrorBoundaries } from "../../../../dist/analysis/errors/source-packages.js";
+import { createRustSourcePackageEmissionProducer } from "../../../../dist/analysis/program/records/source-packages.js";
 
 const owner = Object.freeze({ componentId: "root", errorDomain: "project",
   errorTypePath: "rt::TsonicError", errorTypeIdentity: "root:error" });
@@ -35,8 +37,13 @@ test("active concrete regions preserve the genuine package owner and exact error
   assert.equal(rustInjectLocalError(region, error) === error, true);
   assert.equal(rustInjectNativeError(region, callback, error) === undefined, true);
   assert.equal(rustPropagateNativeError(region, callback, path("result")) === undefined, true);
+  const sourcePackageErrors = { componentIdByFileName: new Map(), componentIdByDefinition: new Map(),
+    domainsByComponentId: new Map([["root", { componentId: "root", errorDomain: "project", errorTypeIdentity: "root:error",
+      errorOwnerComponentId: "root", definitions: [] }]]), dependencyErrorsByComponentId: new Map() };
+  const producer = createRustSourcePackageEmissionProducer(() => {});
+  analyzeRustSourcePackageErrorBoundaries({ projectTypes: { programErrorDefinitions: [] } }, sourcePackageErrors, producer);
   const context = { fallibleBoundary: rustNativeFallibleBoundary(join([callback])), sourcePackageComponentId: "root",
-    sourcePackageErrors: { domainsByComponentId: new Map([["root", { errorDomain: "project", errorTypeIdentity: "root:error" }]]) } };
+    sourcePackageErrors, input: { program: { records: producer.records } } };
   assert.equal(rustCurrentErrorBoundary(context).componentId, "root");
   assert.equal(rustActiveErrorType(context) === associated, true);
 });
