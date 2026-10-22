@@ -161,6 +161,8 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     const rootVisited = new Set<Node>();
     while (rootNode !== undefined && !rootVisited.has(rootNode)) {
       rootVisited.add(rootNode);
+      // A static field is its own class storage; its receiver (the class or a runtime alias of it) is no location root.
+      if (program.records.targetOperation.get(rootNode)?.kind === "source-static-field") break;
       const native = program.records.nativeArrayStorage.get(rootNode);
       if (native !== undefined) {
         if (native.kind === "element") root = { expression: rootNode, declaration: native.declaration };
