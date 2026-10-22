@@ -98,7 +98,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         const value = applyRustCallableValueAdapter(invocation, callable.resultAdapter, callable.declaration, local);
         if (value === undefined) failRustPlannerInvariant("A structural member requires its admitted result adaptation.", member.declaration);
         functions.push({ kind: "function", name: field.targetName, visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("rc"),
-          params, returnType: result, errorType: rustErrorType(boundary), body: applyFallibleShape({ statements: [...arguments_.statements,
+          params: arguments_.parameters, returnType: result, errorType: rustErrorType(boundary), body: applyFallibleShape({ statements: [...arguments_.statements,
             { kind: "tail", expr: value }] }, { fallible: true, hasReturnValue: result.kind !== "unit",
             errorType: rustErrorType(boundary), inferErrorTypeFromReturnType: true, canFallThrough: false }) });
         continue;

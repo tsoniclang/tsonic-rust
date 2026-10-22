@@ -47,6 +47,10 @@ export function finalizeProjectSourceGenericArguments(
   const parameters = selected.member.genericParameters ?? [];
   const selectedTargets = selected.targetGenericArguments ?? [];
   const identitySubject = callArguments[0] ?? asSourceNode(selected.sourceDeclaration, walk.context.ast);
+  // A function value's binder (analysis/callables/higher-ranked-function.ts) substitutes fresh bound lifetimes for the
+  // declaration's lifetime parameters in order, so its member lifetime parameters are those binder lifetimes.
+  const functionBinder = selected.sourceCallableCarrier?.kind === "function-pointer"
+    ? selected.sourceCallableCarrier.lifetimeBinder : undefined;
   if (sourceArguments.length !== parameters.length || parameters.length !== selectedTargets.length ||
     parameters.some((parameter, index) => {
       const argument = sourceArguments[index];
@@ -55,8 +59,10 @@ export function finalizeProjectSourceGenericArguments(
       const symbol = declarations.typeSymbol(argument.typeParameter);
       const declaration = symbol === undefined ? undefined : declarations.primarySymbolDeclaration(symbol);
       const contract = declaration === undefined ? undefined : walk.context.sourceLifetimes.parameterFor(declaration);
-      return contract === undefined || contract.kind !== parameter.kind || parameter.targetIdentity !==
-        (contract.kind === "type" ? contract.identity : rustLifetimeKey(contract.lifetime));
+      if (contract === undefined || contract.kind !== parameter.kind) return true;
+      const bound = functionBinder?.parameters[index]?.lifetime;
+      return parameter.targetIdentity !== (contract.kind === "type" ? contract.identity
+        : functionBinder !== undefined ? (bound === undefined ? undefined : rustLifetimeKey(bound)) : rustLifetimeKey(contract.lifetime));
     })) return undefined;
   const finalized = [...selectedTargets];
   if (!selectRustIndexedCallKeys(walk, selected, callArguments, finalized)) return undefined;

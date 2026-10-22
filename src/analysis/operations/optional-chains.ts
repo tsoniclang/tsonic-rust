@@ -61,7 +61,25 @@ export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgr
       refuse(fact.guard, "rust.backend.optional-chain-flow-read", "Optional-chain lowering conflicts with the separately finalized receiver projection.");
       continue;
     }
-    producer.publish(node, { fact, structuralGuard, unit: isRustUnitCarrier(fact.innerResultCarrier) });
+    const unit = isRustUnitCarrier(fact.innerResultCarrier);
+    const closure = unit || !presentBranchIsPure(node, fact.guard) ? undefined
+      : fact.lowering === "map" ? "map" as const : "and_then" as const;
+    producer.publish(node, { fact, structuralGuard, unit, closure });
   }
   return Object.freeze(issues);
+
+  // The present branch (everything the chain evaluates after its guard) can run inside a closure when no node in it
+  // suspends, yields or carries error effects. Error effects are recorded on the calls and awaits that carry them.
+  function presentBranchIsPure(root: Node, guard: Node): boolean {
+    const pending = [root];
+    for (let index = 0; index < pending.length; index++) {
+      if (index > 4096) return false;
+      const current = pending[index]!;
+      if (ast.is.IsAwaitExpression(current) || ast.is.IsYieldExpression(current)) return false;
+      const effects = program.records.errorEffects.get(current);
+      if (effects !== undefined && (effects.localErrors || effects.nativeErrors.length !== 0)) return false;
+      ast.forEachChild(current, child => { if (child !== undefined && child !== guard) pending.push(child); });
+    }
+    return true;
+  }
 }

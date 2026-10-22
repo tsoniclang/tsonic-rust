@@ -556,7 +556,7 @@ export function drive(): int32 {
   assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(
     text,
-    /rt::conversions::f64_to_i32\(pass_through::<f64>\(41\.0_f64\) \+ 1\.0_f64\)/u,
+    /rt::conversions::f64_to_i32\(pass_through::<f64>\(41\.0_f64\) \+ 1\.0\)/u, // ruling: the closed float side of the addition is unsuffixed
   );
 });
 

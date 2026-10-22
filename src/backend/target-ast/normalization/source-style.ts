@@ -126,22 +126,53 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
 }
 
 
-// `let x: T;` immediately followed by `x = value;` is `let x: T = value;` (clippy::needless_late_init). Syntax only:
-// the assignment cannot read the still-uninitialized binding, so moving it into the declaration changes nothing.
+// `let x: T;` followed by `x = value;` is `let x: T = value;` (clippy::needless_late_init). A run of such declarations
+// followed by their assignments folds the same way (`let a; let b; a = e1; b = e2;`). Syntax only: an assignment in
+// the run cannot read a still-uninitialized binding, so moving each declaration to its first write changes nothing.
 function foldRustDirectLateInitializations(statements: readonly RustStmt[]): readonly RustStmt[] {
+  const deferred = (statement: RustStmt | undefined): statement is Extract<RustStmt, { readonly kind: "let" }> =>
+    statement?.kind === "let" && statement.init === undefined && (statement.attrs?.length ?? 0) === 0;
   const folded: RustStmt[] = [];
-  for (let index = 0; index < statements.length; index++) {
+  let index = 0;
+  while (index < statements.length) {
     const statement = statements[index]!;
-    const next = statements[index + 1];
-    if (statement.kind === "let" && statement.init === undefined && next?.kind === "assign" && next.operator === "=" &&
-      next.target.kind === "path" && next.target.path === statement.name) {
-      folded.push({ ...statement, init: next.value });
+    if (!deferred(statement)) {
+      folded.push(statement);
       index++;
       continue;
     }
-    folded.push(statement);
+    const run: Extract<RustStmt, { readonly kind: "let" }>[] = [];
+    for (let candidate = statements[index]; deferred(candidate); candidate = statements[index]) {
+      run.push(candidate);
+      index++;
+    }
+    const pending = new Map(run.map(declaration => [declaration.name, declaration]));
+    if (pending.size !== run.length) {
+      folded.push(...run);
+      continue;
+    }
+    const initialized: RustStmt[] = [];
+    for (let next = statements[index]; next?.kind === "assign" && next.operator === "=" && next.target.kind === "path";
+      next = statements[index]) {
+      const declaration = pending.get(next.target.path);
+      if (declaration === undefined) break;
+      initialized.push({ ...declaration, init: next.value });
+      pending.delete(next.target.path);
+      index++;
+    }
+    folded.push(...run.filter(declaration => pending.has(declaration.name)), ...initialized);
   }
-  return folded;
+  return foldRustLetAndReturn(folded);
+}
+
+// A block ending in `let x = value; x` is the value itself (clippy::let_and_return). Only an unannotated, unattributed,
+// immutable binding is folded, so no coercion site or lint expectation is lost.
+function foldRustLetAndReturn(statements: readonly RustStmt[]): readonly RustStmt[] {
+  const last = statements[statements.length - 1];
+  const binding = statements[statements.length - 2];
+  if (last?.kind !== "tail" || last.expr.kind !== "path" || binding?.kind !== "let" || binding.name !== last.expr.path ||
+    binding.init === undefined || binding.type !== undefined || binding.mutable || (binding.attrs?.length ?? 0) !== 0) return statements;
+  return [...statements.slice(0, -2), { kind: "tail", expr: binding.init }];
 }
 
 // A unit literal used as a statement (`();` or `let _ = ();`) has no effect by construction; it is dropped as

@@ -6,6 +6,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectDowncastFact } from "../../target-model/types/project-projections.js";
 import type { RustProjectProjectionEmission } from "../../target-model/records/object-projections.js";
 import type { RustClosedTypeTestPlan, RustProjectTypeTestPlan } from "../../target-model/operations/type-tests.js";
+import type { RustFlowReadProjectionFact } from "../../target-model/records/value-projections.js";
 import { closedMetadataKey, closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -65,6 +66,11 @@ export function analyzeRustObjectProjections(program: Omit<RustAnalysisProgram, 
         projection: Object.freeze({ kind: route.kind, slot: route.slot }) });
     }
   };
+  const flowProjection = (node: Node, flow: RustFlowReadProjectionFact | undefined): void => {
+    if (flow?.kind === "closed-native") native(node, flow.sourceCarrier, flow.selectedCarrier);
+    else if (flow?.kind === "project-downcast") project(node, { ...flow, targetCarrier: flow.selectedCarrier });
+    else if ((flow?.kind === "source-union" || flow?.kind === "runtime-union") && flow.project !== undefined) project(node, flow.project);
+  };
   const closedTest = (node: Node, plan: RustClosedTypeTestPlan): void => {
     if (plan.kind === "project") test(node, plan.plan);
     else if (plan.kind === "option") closedTest(node, plan.test);
@@ -77,13 +83,13 @@ export function analyzeRustObjectProjections(program: Omit<RustAnalysisProgram, 
     if (conversion !== undefined) carriers.push(conversion.sourceCarrier, conversion.targetCarrier);
     const downcast = program.records.projectDowncast.get(node);
     if (downcast !== undefined) project(node, downcast);
-    const flow = program.records.flowReadProjection.get(node);
-    if (flow?.kind === "closed-native") native(node, flow.sourceCarrier, flow.selectedCarrier);
-    else if (flow?.kind === "project-downcast") project(node, { ...flow, targetCarrier: flow.selectedCarrier });
-    else if ((flow?.kind === "source-union" || flow?.kind === "runtime-union") && flow.project !== undefined) project(node, flow.project);
+    flowProjection(node, program.records.flowReadProjection.get(node));
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "project-type-test") test(node, operation);
     else if (operation?.kind === "closed-type-test") closedTest(node, operation.test);
+    // A source call whose result is projected (`value.retain()` returning a narrowed class) plans the same value
+    // projection as a flow read (flow-read-emission prepares it), so its native route is sealed here as well.
+    else if (operation?.kind === "source-call") flowProjection(node, operation.resultProjection);
   }
   const seen = new Set<string>();
   for (let index = 0; index < carriers.length; index++) {

@@ -7,6 +7,8 @@ import { rustTargetGenericBindingsForArguments } from "../../target-model/types/
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
@@ -44,7 +46,11 @@ export function prepareRustNativeGenericProducerRequests(input: {
     const declaration = signature?.sourceDeclaration;
     if (operation?.kind !== "source-call" || signature === undefined || declaration === undefined) continue;
     const owner = sourceEnclosingCallable(invocation, input.ast);
+    // A call dispatched through a native callable input has no static implementation; a type-erased runtime
+    // callable parameter of its signature is passed through unchanged, so it has no producer to forward.
+    const dispatched = input.native.callFor(invocation) !== undefined;
     for (const selected of input.native.inputsFor(declaration)) {
+      if (dispatched && isErasedRuntimeCallable(selected.carrier)) continue;
       const symbolic = input.nativeStorage.invocationOriginsFor(selected, invocation, owner);
       if (symbolic.kind === "unresolved") {
         reject(invocation, selected, symbolic.reason);
@@ -184,3 +190,8 @@ export function createRustNativeGenericProducerPlan(input: {
 
 import type { RustNativeGenericProducerForwarding, RustNativeGenericProducerPlan, RustNativeGenericProducerRequests } from "../../target-model/records/native-generic-producers.js";
 import { sealRustNativeGenericProducers } from "../program/records/native-generic-producers.js";
+
+function isErasedRuntimeCallable(carrier: TargetTypeRef): boolean {
+  const selected = rustOptionElementCarrier(carrier) ?? carrier;
+  return selected.kind === "target-named" && selected.id === rustCallableTargetId;
+}

@@ -69,7 +69,7 @@ export function planRootCallableForwarder(
   statements.push({ kind: "tail", expr: result });
   return { kind: "function",
     name: slot, visibility: "private", generics: helper.generics, selfParam: rustSelfParameter("rc"),
-    params: parameters,
+    params: arguments_.parameters,
     ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
     ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
     ...(shape.isUnsafe ? { isUnsafe: true } : {}),

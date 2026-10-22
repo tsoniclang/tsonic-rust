@@ -388,7 +388,18 @@ function createRustStructuralShapeConstruction(
   const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
     const key = closedMetadataKey(carrier);
-    return byKey.get(key);
+    const registered = byKey.get(key);
+    if (registered !== undefined) return registered;
+    // A generic callable family instantiates a shape over its own environment parameters (the receiver of a generic
+    // structural method implementation) after the shapes are planned. Storage keys identify type parameters only by
+    // position, so such a carrier is an exact instance of the definition stored under its storage key.
+    const template = byStorageKey.get(structuralStorageKey(carrier, componentForFile));
+    const instance = template === undefined ? undefined : instantiateStructuralDefinition(template, carrier);
+    if (instance !== undefined) {
+      byKey.set(key, instance);
+      publishedInstances = Object.freeze([...publishedInstances, instance]);
+    }
+    return instance;
   };
   const plan: RustStructuralShapePlan = Object.freeze({
     get unionDefinitions() { return unions.unionDefinitions; },

@@ -39,13 +39,33 @@ export function rustRetainedCallLifetimes(
   const retainedCaller = knownCaller ?? (callerEnvironment.kind === "selected" ? callerEnvironment.environment : undefined);
   const carriers: TargetTypeRef[] = [];
   const projected = new Map<SourceStorageSubject, TargetTypeRef | undefined>();
-  const carrierFor = (subject: SourceStorageSubject): TargetTypeRef | undefined => {
+  const lexicalVisits = new Set<Node>();
+  const carrierFor =(subject: SourceStorageSubject): TargetTypeRef | undefined => {
     if (subject.kind === "value" && subject.projection.length === 0 &&
       records.targetOperation.get(subject.node)?.kind === "closure") {
       const captures = records.closureCapture.get(subject.node);
       if (captures === undefined) return undefined;
       const carriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier);
       const lifetime = rustRetainedValueLifetime(subject.node, carriers, walk);
+      return lifetime === undefined ? undefined : reference(lifetime);
+    }
+    if (subject.kind === "value" && subject.projection.length === 0 && ast.body(subject.node) !== undefined) {
+      // A lexical function bound as a value retains what it captures, as the environment selection reads it
+      // (retained-environment-shapes.ts): its lifetime comes from the carriers of its captured sources.
+      if (lexicalVisits.has(subject.node)) return reference(rustCallScopedElisionLifetime(
+        sourceNodeIdentity(ast, subject.node) ?? "lexical-function", "owned-environment"));
+      const lexical = walk.context.retainedEnvironments.lexicalFor(subject.node);
+      if (lexical.kind === "unresolved") return undefined;
+      lexicalVisits.add(subject.node);
+      const captured: TargetTypeRef[] = [];
+      for (const capture of lexical.captures) {
+        const source = storage.subjectFor(capture.references[0]!);
+        const carrier = source.kind === "resolved" ? carrierFor(source.subject) : undefined;
+        if (carrier === undefined) return undefined;
+        captured.push(carrier);
+      }
+      lexicalVisits.delete(subject.node);
+      const lifetime = rustRetainedValueLifetime(subject.node, captured, walk);
       return lifetime === undefined ? undefined : reference(lifetime);
     }
     const root = subject.kind === "input"

@@ -16,6 +16,7 @@ import { planRustObjectReferenceView } from "./object-reference-views.js";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import { planRustProjectUnionMapping } from "./project-union-mappings.js";
 import { planRustCallableConversion } from "./callable-conversions.js";
+import { planRustCallableJoinWrite } from "./shared-callable-writes.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
 import { planProviderRecordCopy } from "./provider-record-copy.js";
 import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
@@ -83,6 +84,8 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   if (selected.contextual !== undefined && !selected.contextualIdentity)
     value = applyRustContextualValueConversion(node, value, selected.contextual, context, borrowConversion, fused);
   if (value === undefined) failRustPlannerInvariant("An admitted expression requires its native contextual projection.", node);
+  const joinWrite = context.input.program.records.callableJoinWrite.get(node);
+  if (joinWrite !== undefined) value = planRustCallableJoinWrite(joinWrite, value, node, context);
   if (finalStage === "contextual") return value;
   if (selected.option?.kind === "none") {
     const absent = planRustAbsentValue(context.valueDestinations?.get(node) ?? selected.option.resultCarrier, context);

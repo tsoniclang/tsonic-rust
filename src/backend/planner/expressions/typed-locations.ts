@@ -170,6 +170,10 @@ export function planRustSharedReceiver(
       : { kind: "reference", expr: { kind: "dereference", pointer: value } };
   }
   if (context.input.program.records.readOwnership.get(node)?.sharedReference === true) return value;
+  // A selected shared borrow is planned as the place behind its borrowed flow reference (*reference); its shared
+  // receiver is that reference itself, not &*reference (clippy::borrow_deref_ref).
+  const ownership = requireRustReadOwnership(node, context);
+  if (value.kind === "dereference" && (ownership.value.kind === "borrow" || ownership.source.kind === "borrow")) return value.pointer;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")
