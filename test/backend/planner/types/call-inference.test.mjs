@@ -73,13 +73,18 @@ test("native call positions infer anonymous types without erasing their known co
   assert.equal(rustTypeFromCarrierInContext(callable, context, "parameter").bounds[0].trait, "FnMut");
 });
 
+// A carrier without a sealed type emission record is an internal planner invariant, not an absent rendering
+// (no-fallback rule; PORT-MAP row 262: rendering reads only sealed physical type metadata; RULINGS.md).
+const missingRenderingMetadata = error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+  /exact sealed rendering metadata/u.test(error.diagnostic.message);
+
 test("native anonymous call inference does not conceal an unresolved component", () => {
   const unresolved = { kind: "opaque", name: "unresolved" };
-  assert.equal(rustCallTypeFromCarrierInContext(unresolved, context), undefined);
-  assert.equal(rustCallTypeFromCarrierInContext({ ...callable, result: unresolved }, context), undefined);
-  assert.equal(rustCallTypeFromCarrierInContext({ ...owner, value: { ...owner.value,
+  assert.throws(() => rustCallTypeFromCarrierInContext(unresolved, context), missingRenderingMetadata);
+  assert.throws(() => rustCallTypeFromCarrierInContext({ ...callable, result: unresolved }, context), missingRenderingMetadata);
+  assert.throws(() => rustCallTypeFromCarrierInContext({ ...owner, value: { ...owner.value,
     genericArguments: [...owner.value.genericArguments, { kind: "type", type: unresolved }],
-  } }, context), undefined);
+  } }, context), missingRenderingMetadata);
 });
 
 test("bottom storage is uninhabited while diverging return types remain native never", () => {

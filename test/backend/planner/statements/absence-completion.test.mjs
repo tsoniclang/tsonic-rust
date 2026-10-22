@@ -13,8 +13,13 @@ test("absence completion uses the exact native storage without an adapter", () =
   assert.deepEqual(planRustAbsentValue(rustOptionTargetType(rustSourcePrimitiveTargetType("uint64")), context), { kind: "none" });
 });
 
+// The refusal wording follows PORT-MAP row 373 (backend optional storage selection is sealed; RULINGS.md).
 test("absence completion rejects missing or unproved native storage", () => {
-  for (const carrier of [undefined, rustSourcePrimitiveTargetType("uint64"), { kind: "target-named", id: "External.Value" }]) {
-    assert.throws(() => planRustAbsentValue(carrier, context), /finalized native optional storage/u);
+  for (const carrier of [rustSourcePrimitiveTargetType("uint64"), { kind: "target-named", id: "External.Value" }]) {
+    assert.throws(() => planRustAbsentValue(carrier, context), error =>
+      error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+      error.diagnostic.message.startsWith("An admitted absence requires its native optional storage."));
   }
+  // A missing carrier has no closed identity to look up; it still produces no value.
+  assert.throws(() => planRustAbsentValue(undefined, context));
 });
