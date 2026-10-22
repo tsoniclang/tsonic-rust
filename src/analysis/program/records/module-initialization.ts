@@ -1,11 +1,10 @@
 import type { SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { SourceBinaryEntryIssue } from "@tsonic/target-api/analysis";
-import type { RustModuleInitializationPlan, RustModuleInitializationRequirement } from "../../../target-model/records/module-initialization.js";
+import type { RustModuleInitializationIssue, RustModuleInitializationPlan, RustModuleInitializationRequirement } from "../../../target-model/records/module-initialization.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export function createRustModuleInitializationRecords(input: {
-  readonly issues: readonly SourceBinaryEntryIssue[];
+  readonly issues: readonly RustModuleInitializationIssue[];
   readonly requirements: ReadonlyMap<SourceFile, RustModuleInitializationRequirement>;
   readonly minimumFoundation: RustFoundation;
   readonly stateIndependentCycles: ReadonlySet<SourceFile>;
