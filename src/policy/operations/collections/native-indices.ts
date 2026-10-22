@@ -1,8 +1,8 @@
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { isRustIntegerCarrier, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustExactIntegerConversion } from "../conversions/exact-integer.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustValueConversion } from "../../../target-model/operations/model.js";
+import { isRustIntegerCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { selectRustExactIntegerConversion } from "../../conversions/exact-integer.js";
 
 export interface RustNativeIndexSelection {
   readonly carrier: TargetTypeRef;

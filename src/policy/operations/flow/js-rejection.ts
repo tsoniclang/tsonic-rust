@@ -1,10 +1,10 @@
-import type { RustJsRejectionConversion, RustJsRejectionRegion, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
-import { rustJsValueTargetType, rustProgramErrorTargetType, isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
-import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
-import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustNativeErrorJoinReference, type RustNativeErrorSource } from "../../target-model/types/native-error-joins.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustJsRejectionConversion, RustJsRejectionRegion, RustPhysicalErrorOwner } from "../../../target-model/records/error-regions.js";
+import { rustJsValueTargetType, rustProgramErrorTargetType, isRustNeverCarrier } from "../../../target-model/types/carriers/js.js";
+import { rustProgramErrorOwner } from "../../../target-model/types/carriers/program-errors.js";
+import { rustInfallibleTargetId } from "../../../target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustNativeErrorJoinReference, type RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustJsRejectionRegion(
   owner: RustPhysicalErrorOwner | undefined,

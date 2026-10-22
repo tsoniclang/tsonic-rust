@@ -12,7 +12,7 @@ import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, ru
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { rustNativeInputEffectsMatch } from "./native-protocol-emission.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";

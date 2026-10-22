@@ -41,7 +41,7 @@ import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../erro
 import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
-import { rustTargetOperationIsFallible } from "../../policy/operations/native-contracts.js";
+import { rustTargetOperationIsFallible } from "../../policy/operations/members/native-contracts.js";
 import { analyzeRustErrorTransport } from "../errors/transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 
@@ -482,4 +482,4 @@ export function analyzeRustAnalysisProgram(
 }
 
 export type { AnalyzeRustTargetProgramResult, RustTargetAnalysisRequest } from "./model.js";
-export type { RustTargetProgram } from "../../target-model/program.js";
+export type { RustTargetProgram } from "../../target-model/records/target-program.js";

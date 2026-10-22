@@ -1,9 +1,9 @@
-import type { TargetTypeRef, RustTargetGenericArgument } from "../../target-model/types/model.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import type { TargetTypeRef, RustTargetGenericArgument } from "../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustBuiltInCarrierDefinitions,
   rustPrimitiveTypeName, isRustNeverCarrier, isRustAbsenceCarrier, rustStringTargetId, rustStrTargetId,
-  rustProgramErrorTargetId, rustCallableInputTargetId, rustCallableTargetId } from "../../target-model/types/index.js";
-import { rustTargetGenericArgumentEquals } from "../../target-model/types/equality.js";
+  rustProgramErrorTargetId, rustCallableInputTargetId, rustCallableTargetId } from "../../../target-model/types/index.js";
+import { rustTargetGenericArgumentEquals } from "../../../target-model/types/equality.js";
 
 export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef,
   context: { readonly programError: boolean }): string | undefined {

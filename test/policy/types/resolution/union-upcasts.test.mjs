@@ -2,7 +2,7 @@ import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/reco
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
-import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/control-flow/flow-read-projections.js";
 
 import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";

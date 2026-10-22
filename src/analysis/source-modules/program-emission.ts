@@ -3,8 +3,8 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageEmissionProducer } from "../program/records/source-packages.js";
-import { allocateRustComponentSupportModuleName } from "../../policy/names/support-modules.js";
-import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
+import { allocateRustComponentSupportModuleName } from "../../policy/identities/support-modules.js";
+import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 
 export function analyzeRustProgramEmission(program: Omit<RustAnalysisProgram, "reachability">,
   producer: RustSourcePackageEmissionProducer): readonly TargetDiagnostic[] {

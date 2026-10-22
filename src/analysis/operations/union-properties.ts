@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { selectRustGuardedValueMembers } from "./native-flow-refinement.js";

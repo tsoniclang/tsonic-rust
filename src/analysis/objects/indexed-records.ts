@@ -8,7 +8,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { selectRustIndexedRecordStorage } from "../../policy/objects/indexed-records.js";
+import { selectRustIndexedRecordStorage } from "../../policy/types/objects/indexed-records.js";
 import type { SourceFile } from "@tsonic/tsts";
 import { Node_Type, ObjectLiteralProperty_Value, SpreadAssignment_Expression } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";

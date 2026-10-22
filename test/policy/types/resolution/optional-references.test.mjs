@@ -3,7 +3,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustFlowReadProjection } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { planRustFlowReadProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustFutureTargetType, rustUnitTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";

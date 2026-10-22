@@ -7,7 +7,7 @@ import { selectRustProgramErrorRoute } from "../../dist/analysis/errors/source-p
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../helpers/plan-context.mjs";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier } from "../../dist/target-model/types/index.js";
-import { selectRustValueCarrierReconciliation } from "../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { planRustProgramErrorConstruction } from "../../dist/backend/planner/expressions/program-errors.js";
 import { collectRustDeclaredProviderErrorCarriers, analyzeRustProviderErrorCarriers } from "../../dist/analysis/program/provider-errors.js";
 

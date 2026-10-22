@@ -24,14 +24,14 @@ import { selectRustExactIntegerConversion } from "../../../policy/conversions/ex
 
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 
-import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { ExtensionFactSubject, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 
 import type { RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetOperationSupportsAssignment } from "../../../policy/operations/native-contracts.js";
+import { rustTargetOperationSupportsAssignment } from "../../../policy/operations/members/native-contracts.js";
 
 import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";

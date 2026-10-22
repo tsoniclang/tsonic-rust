@@ -5,7 +5,7 @@ import { isRustUnitCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustS
 import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
 import { selectRustKnownNumericValueConversion } from "../../policy/conversions/selection.js";
 
-import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { recordRustConversionSelection } from "../program/records/value-carrier-admission.js";
 import { recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 

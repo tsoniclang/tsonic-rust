@@ -10,7 +10,7 @@ import { acceptDeclarationOperation, elementProvenance } from "../program/record
 import { normalizeSelectedLiteralCarrier } from "../source-evidence/types/resolution/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { selectRustNativeIndex } from "../../policy/operations/native-indices.js";
+import { selectRustNativeIndex } from "../../policy/operations/collections/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../project-types/object-layout.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -22,7 +22,7 @@ import { selectRustSourceProfileIndexMembers } from "./members/selected-members.
 import { selectRustFixedArrayElementAccess } from "./collections/fixed-arrays.js";
 import { isIntrinsicSourceQualifier } from "./members/source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
-import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";

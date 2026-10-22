@@ -1,5 +1,5 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { selectRustProjectFieldDispatch } from "../../policy/operations/declarations/field-dispatch.js";
+import { selectRustProjectFieldDispatch } from "../../policy/types/project/field-dispatch.js";
 import type {
   AstReader,
   Node,

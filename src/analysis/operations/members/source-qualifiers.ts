@@ -1,6 +1,6 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import type { RustCheckedPropertySelectionInput } from "../../../policy/operations/contracts.js";
+import type { RustCheckedPropertySelectionInput } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import { sourceCallableValueExpression } from "@tsonic/target-api/source";

@@ -5,7 +5,7 @@ import { rustPolicyNode } from "../model/context.js";
 import type { RustSourceProfileRegistry } from "../types/model/source-profile.js";
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import { selectedSourcePropertyDeclarations } from "@tsonic/target-api/source";
-import type { RustCheckedCallSelectionInput } from "../operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../model/contracts.js";
 
 export interface RustSelectedSourceMemberIdentity {
   readonly profile: "native" | "js";

@@ -6,8 +6,8 @@ import type { AstReader, Node, ProviderDeclarationIdentity, SourceCallMarkerKind
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "./selected-values.js";
 import { rustSelectedCallTypeParameters } from "../source-evidence/types/resolution/generic-arguments.js";
-import { acceptRustPolicy, rejectRustPolicy } from "../../policy/operations/contracts.js";
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import { acceptRustPolicy, rejectRustPolicy } from "../../policy/model/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSelectedTargetOperation } from "../../target-model/records/member-selections.js";

@@ -1,4 +1,4 @@
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import { resolveRustCheckedCall } from "./members/calls/selection.js";

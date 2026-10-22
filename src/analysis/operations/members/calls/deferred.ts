@@ -1,5 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
-import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
+import { acceptRustPolicy } from "../../../../policy/model/contracts.js";
 import { acceptSelectedCall, mapSelectedTargetTypeArguments } from "./instantiation.js";
 import { selectRustOptionalCallResult } from "./optional-results.js";
 import { defaultValueFactKey, fieldFactKey, flowStateFactKey } from "@tsonic/tsts";
@@ -14,7 +14,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
 import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/model/contracts.js";
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 
@@ -22,7 +22,7 @@ import type { RustTargetOperationFact } from "../../../../target-model/records/o
 import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
-import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../../policy/conversions/value-carrier-reconciliation.js";
 
 import type { RustPreparedDeferredCheckedCall } from "../../../../target-model/records/deferred-callbacks.js";
 import { callbackFallibleTemplate } from "../../../../policy/operations/members/deferred-callbacks.js";

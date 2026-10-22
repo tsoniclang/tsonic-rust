@@ -1,5 +1,5 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { rustCheckedElementRequestsEqual, rustCheckedPropertyRequestsEqual } from "./call-request-correspondence.js";
 import { admitRustOperationSelection } from "./operation-admission.js";

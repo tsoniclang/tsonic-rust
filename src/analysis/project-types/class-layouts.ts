@@ -10,7 +10,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
-import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/objects/project-dispatch-callables.js";
+import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/types/objects/project-dispatch-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
 import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";

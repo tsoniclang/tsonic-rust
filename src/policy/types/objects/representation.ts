@@ -1,7 +1,7 @@
-import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
-import type { RustObjectRepresentationKind } from "../../target-model/records/object-representation.js";
-import { rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { rustLifetimeOutlives } from "../constraints/lifetime-outlives.js";
+import type { RustProjectTypeDefinition } from "../../../target-model/types/project-types.js";
+import type { RustObjectRepresentationKind } from "../../../target-model/records/object-representation.js";
+import { rustStaticLifetime, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeOutlives } from "../../constraints/lifetime-outlives.js";
 
 export function selectRustObjectRepresentationKind(input: {
   readonly polymorphic: boolean;

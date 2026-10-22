@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustNativeIndex } from "../../../dist/policy/operations/native-indices.js";
-import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { selectRustNativeIndex } from "../../../../dist/policy/operations/collections/native-indices.js";
+import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 
 test("native indexing keeps usize and checked native integer widths without float intermediates", () => {
   for (const name of ["int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "native-int", "native-uint"]) {

@@ -4,7 +4,7 @@ import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/value-carrier-admission.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
-import { selectRustCallScopedLifetimeReconciliation } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustCallScopedLifetimeReconciliation } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { rustOptionTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "int32" };

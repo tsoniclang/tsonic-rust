@@ -12,7 +12,7 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -120,7 +120,7 @@ export function resolveRecordLiteralCarrier(
   }
   const closed = resolveRustClosedRecordLiteral(walk, expression, sourceFile, selectedExpected, properties);
   if (closed.kind === "selected") return closed.carrier;
-  let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
+  let contextualReconciliation: import("../../policy/conversions/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
   if ((expected !== undefined || contextualSelection.kind === "selected") && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
     rustSourceUnionCarrierValue(selectedExpected) === undefined &&
     rustStructuralObjectCarrierValue(selectedExpected) === undefined) {

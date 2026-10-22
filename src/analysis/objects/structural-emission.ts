@@ -3,7 +3,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustStructuralEmissionProducer } from "../program/records/structural-emission.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustCarrierSupportsTrait } from "../../policy/constraints/native-traits.js";
-import { selectRustStructuralEmission } from "../../policy/objects/structural-emission.js";
+import { selectRustStructuralEmission } from "../../policy/types/objects/structural-emission.js";
 
 export function analyzeRustStructuralEmission(program: Omit<RustAnalysisProgram, "reachability">, producer: RustStructuralEmissionProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];

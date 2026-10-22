@@ -12,7 +12,7 @@ import { isRustProgramErrorCarrier, rustNamedTargetType } from "../../target-mod
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustBinaryHookInputCount } from "../../target-model/operations/binary-hooks.js";
 import { rustTargetIdentifier } from "../../target-model/names/identifiers.js";
-import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
+import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 
 export function analyzeRustBinaryDispatchEmission(program: Omit<RustAnalysisProgram, "reachability">,
   errors: RustSourcePackageErrorPlan, producer: RustDispatchContextEmissionProducer): readonly TargetDiagnostic[] {

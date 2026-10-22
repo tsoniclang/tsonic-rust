@@ -9,7 +9,7 @@ import { rustTargetGenericReferences, rustSourceTypeCarrierValue, rustSourceUnio
 import type { RustProjectGenericEmission } from "../../target-model/records/project-emission.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { selectRustCheckedProjectProjection } from "../../policy/objects/checked-project-projections.js";
+import { selectRustCheckedProjectProjection } from "../../policy/types/objects/checked-project-projections.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
 import type { RustProjectMemberSlotRole } from "../../target-model/types/project-types.js";
 

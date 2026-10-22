@@ -4,7 +4,7 @@ import { selectRustOptionalCallResult } from "./optional-results.js";
 import { requireRustRecord } from "../../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { rustLifetimeGenericArgument, rustStrTargetType, rustStringTargetId, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, rustTypeGenericArgument } from "../../../../target-model/types/index.js";
-import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
+import { acceptRustPolicy } from "../../../../policy/model/contracts.js";
 import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
 import { asNode } from "../../../../policy/identities/selected-source.js";
 
@@ -30,7 +30,7 @@ import { selectReceiverReferenceReborrow } from "./reference-reborrows.js";
 
 import { selectRustProviderSourceReceiver } from "../source-qualifiers.js";
 import type { InstantiatedProviderOperationTemplate } from "../../../../policy/types/callables/provider-templates.js";
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/model/contracts.js";
 import type { RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 

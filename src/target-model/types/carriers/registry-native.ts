@@ -396,7 +396,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     id: "src/analysis/operations/selected-values.ts#selectedValueCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/operations/selected-values.ts", symbol: "selectedValueCarrier" },
-    counterpart: { module: "src/policy/types/selected-type-evidence.ts", symbol: "reconcileCsharpSelectedTargetType" },
+    counterpart: { module: "src/policy/types/resolution/selected-type-evidence.ts", symbol: "reconcileCsharpSelectedTargetType" },
     frozen: false,
   },
   {
@@ -543,21 +543,21 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     id: "src/policy/operations/operators/absence.ts#selectRustCoalesceOperation",
     kinds: ["closure"],
     declaration: { module: "src/policy/operations/operators/absence.ts", symbol: "selectRustCoalesceOperation" },
-    counterpart: { module: "src/policy/types/short-circuit-values.ts", symbol: "resolveCsharpShortCircuitResult" },
+    counterpart: { module: "src/policy/types/resolution/short-circuit-values.ts", symbol: "resolveCsharpShortCircuitResult" },
     frozen: false,
   },
   {
     id: "src/analysis/operations/operators.ts#resolvePostCheckBinaryCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/operations/operators.ts", symbol: "resolvePostCheckBinaryCarrier" },
-    counterpart: { module: "src/policy/types/representation.ts", symbol: "resolveBinaryTargetRepresentation" },
+    counterpart: { module: "src/policy/types/resolution/representation.ts", symbol: "resolveBinaryTargetRepresentation" },
     frozen: false,
   },
   {
     id: "src/policy/operations/flow/absence-use.ts#rustSourceAbsenceReadCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/policy/operations/flow/absence-use.ts", symbol: "rustSourceAbsenceReadCarrier" },
-    counterpart: { module: "src/policy/types/representation.ts", symbol: "getNonNullableTargetRepresentation" },
+    counterpart: { module: "src/policy/types/resolution/representation.ts", symbol: "getNonNullableTargetRepresentation" },
     frozen: false,
   },
   {
@@ -669,7 +669,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     id: "src/analysis/source-evidence/types/resolution/source.ts#resolveRustTargetTypeRef",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/source.ts", symbol: "resolveRustTargetTypeRef" },
-    counterpart: { module: "src/policy/types/semantic-types.ts", symbol: "selectCsharpSemanticCarrier" },
+    counterpart: { module: "src/policy/types/resolution/semantic-types.ts", symbol: "selectCsharpSemanticCarrier" },
     frozen: false,
   },
   {

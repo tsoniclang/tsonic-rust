@@ -20,7 +20,7 @@ import { isIntrinsicSourceQualifier } from "./members/source-qualifiers.js";
 import { selectedRustProviderGlobal } from "../../policy/identities/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import { selectRustRecordDelete } from "./members/records.js";
-import type { RustCheckedDeleteSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedDeleteSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 

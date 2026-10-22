@@ -35,7 +35,7 @@ import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
-import { rustNativeCallableInvocationArguments } from "../../policy/operations/callables/native-invocations.js";
+import { rustNativeCallableInvocationArguments } from "../../policy/types/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
 import { type RustNativeFutureEnvironmentSelection } from "../../target-model/records/native-future-inputs.js";
@@ -46,7 +46,7 @@ import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";

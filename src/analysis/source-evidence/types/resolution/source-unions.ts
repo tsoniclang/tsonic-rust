@@ -1,4 +1,4 @@
-import { selectRustImmediateUnionCarrier } from "../../../../policy/types/source-unions.js";
+import { selectRustImmediateUnionCarrier } from "../../../../policy/types/resolution/source-unions.js";
 import type { Node, Type } from "@tsonic/tsts";
 import { sourceBoundTypeRelationship, type SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustSourceUnion } from "../../../../target-model/records/source-types.js";

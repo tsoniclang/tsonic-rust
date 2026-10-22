@@ -6,7 +6,7 @@ import type { RustDispatchContextEmissionProducer } from "../program/records/dis
 import type { RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
 import { isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
+import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";

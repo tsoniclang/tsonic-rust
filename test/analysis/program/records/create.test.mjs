@@ -17,7 +17,7 @@ import { closedMetadataEquals } from "../../../../dist/target-model/metadata/clo
 import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
 
 
-import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment } from "../../../../dist/policy/operations/native-contracts.js";
+import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment } from "../../../../dist/policy/operations/members/native-contracts.js";
 import { rustTargetOperationText } from "../../../../dist/target-model/operations/text.js";
 
 function createModel() {

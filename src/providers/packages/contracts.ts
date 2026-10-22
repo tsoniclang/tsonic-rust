@@ -1,7 +1,7 @@
 import type { RustProviderContractValidation } from "../model/contract-validation.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustNumericPromotionKind } from "../../policy/conversions/numeric-promotion.js";
-import { rustProviderOperationFormContractViolation } from "../../policy/operations/forms.js";
+import { rustProviderOperationFormContractViolation } from "../../policy/operations/members/forms.js";
 
 export const rustProviderContractValidation: RustProviderContractValidation = Object.freeze({
   conversion: rustValueConversionContract,

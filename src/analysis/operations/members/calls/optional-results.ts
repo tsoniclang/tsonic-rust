@@ -4,9 +4,9 @@ import { rustCallableProtocol } from "../../../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 
 import { selectedCallCalleeDeclaration } from "../operators.js";
-import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
+import { selectRustOptionalChain } from "../../../../policy/operations/flow/optional-chains.js";
 
-import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustOptionalCallGuard } from "../../../../target-model/records/optional-calls.js";

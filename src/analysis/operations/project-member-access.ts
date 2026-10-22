@@ -11,7 +11,7 @@ import { rustCallableProtocol } from "../../target-model/types/index.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

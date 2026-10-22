@@ -13,7 +13,7 @@ import {
   rustTargetTypeRefEquals,
   rustTargetTypeRefEqualsWithinLifetimeBinders,
 } from "../../dist/target-model/types/equality.js";
-import { selectRustNativeTraitObjectUpcast, selectRustCallScopedLifetimeReconciliation } from "../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustNativeTraitObjectUpcast, selectRustCallScopedLifetimeReconciliation } from "../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../dist/policy/conversions/contextual.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/index.js";
 

@@ -7,7 +7,7 @@ import { isProjectSourceDeclaration } from "../../../policy/identities/selected-
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 

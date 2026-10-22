@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import { rustClosureTargetType, rustJsArrayTargetType, rustJsStringTargetType, rustJsValueTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
-import type { RustCheckedCallSelectionInput } from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

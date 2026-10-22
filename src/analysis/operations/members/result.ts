@@ -4,7 +4,7 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import { isRustAbsenceCarrier, isRustProgramErrorCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustOptionValueCarrier, isRustJsArrayCarrier, isRustVecCarrier } from "../../../target-model/types/index.js";
 import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations.js";
 
-import { rejectRustPolicy } from "../../../policy/operations/contracts.js";
+import { rejectRustPolicy } from "../../../policy/model/contracts.js";
 import { asNode, resolveSelectedSourceProfilePropertyMembers } from "../../../policy/identities/selected-source.js";
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
@@ -17,10 +17,10 @@ import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../..
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitive } from "../../source-evidence/types/resolution/selected-literals.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/selection.js";
-import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
-import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustOptionalChain } from "../../../policy/operations/flow/optional-chains.js";
+import { selectRustValueCarrierReconciliation } from "../../../policy/conversions/value-carrier-reconciliation.js";
 import { contextualConditionalArgumentMatches } from "../../expected-types/conditional-arguments.js";
-import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/model/contracts.js";
 
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";

@@ -1,4 +1,4 @@
-import type { RustTargetProgram } from "../../target-model/program.js";
+import type { RustTargetProgram } from "../../target-model/records/target-program.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import type { RustNumericRepresentations } from "../../target-model/records/numeric.js";

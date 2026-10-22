@@ -9,7 +9,7 @@ import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
-import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import type { RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
 
 interface RustGenericCallableInvocationInput {

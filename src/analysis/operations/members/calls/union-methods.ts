@@ -1,6 +1,6 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 import { selectRustPointerReturnCarrier } from "../../../callables/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";

@@ -1,6 +1,6 @@
 import { rustStringTargetType } from "../../../target-model/types/index.js";
 
-import { isRustCVariadicArgumentCarrier } from "../callables/c-variadic.js";
+import { isRustCVariadicArgumentCarrier } from "../../types/callables/c-variadic.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 

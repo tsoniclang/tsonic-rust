@@ -5,7 +5,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderEvaluationProducer } from "../program/records/provider-evaluation.js";
 import type { RustMutableProviderStorage } from "../../target-model/records/provider-evaluation.js";
-import { rustTargetOperationIsDirectLocation } from "../../policy/operations/native-contracts.js";
+import { rustTargetOperationIsDirectLocation } from "../../policy/operations/members/native-contracts.js";
 import { rustNativeStorageRoot } from "./native-paths.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { selectRustProviderMutableInputs } from "./provider-mutable-inputs.js";

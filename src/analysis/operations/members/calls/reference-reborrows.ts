@@ -1,7 +1,7 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
-import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
-import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/conversions/value-carrier-reconciliation.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";

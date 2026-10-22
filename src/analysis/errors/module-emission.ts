@@ -9,7 +9,7 @@ import { rustJsErrorTargetType, rustProgramErrorTargetType, rustTsValueTargetTyp
   rustNamedTargetType, rustJsErrorTargetId } from "../../target-model/types/index.js";
 import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectRustStandaloneTypeIdentity } from "../../policy/types/standalone-emission.js";
+import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 
 export function analyzeRustProgramErrorModuleEmission(program: Omit<RustAnalysisProgram, "reachability">,
   errors: RustSourcePackageErrorPlan, producer: RustErrorTransportEmissionProducer): readonly TargetDiagnostic[] {

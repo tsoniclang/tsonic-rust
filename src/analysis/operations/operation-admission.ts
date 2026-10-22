@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustPolicySelection } from "../../policy/model/contracts.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustSelectedTargetOperationEquals } from "../../target-model/records/operation-equality.js";
 import type { RustSelectedTargetOperation } from "../../target-model/records/member-selections.js";

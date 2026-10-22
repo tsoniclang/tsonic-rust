@@ -10,7 +10,7 @@ import { rustJsErrorTargetType, rustProgramErrorTargetType, rustStringTargetType
 import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { planThrowStatement } from "../../../dist/backend/planner/statements/statement-try.js";
 import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-errors.mjs";
-import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { planRustValueProjection } from "../../../dist/backend/planner/expressions/flow-read-projections.js";
 
 for (const surfaces of [[], ["js"]]) {

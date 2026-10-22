@@ -12,7 +12,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import { type RustStructuralStorageLookup } from "../../policy/model/operation-record-inputs.js";
-import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import type { RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";

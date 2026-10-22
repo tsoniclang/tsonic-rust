@@ -6,12 +6,12 @@ import { finalizeProviderOperationFromSubjects } from "../members/conversions.js
 
 import { isRustCopyCarrier } from "../../../policy/constraints/native-traits.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType, rustTargetConstInteger } from "../../../target-model/types/index.js";
-import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
+import { selectRustNativeIndex } from "../../../policy/operations/collections/native-indices.js";
 
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "../selected-values.js";
-import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 
 import type { RustOperationsProviderOptions } from "../members/model.js";
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";

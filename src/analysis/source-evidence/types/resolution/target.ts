@@ -20,7 +20,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustRawPointerTargetType } from "../../../../target-model/types/carriers/callables.js";
 import { isRustSourceRawPointer } from "../../../../source/extension/raw-pointers.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
-import { rustBroadSourceValueTargetType } from "../../../../policy/types/broad-values.js";
+import { rustBroadSourceValueTargetType } from "../../../../policy/types/resolution/broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
 import { resolveRustSemanticConditionalAlias } from "./type-families.js";

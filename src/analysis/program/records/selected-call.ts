@@ -1,4 +1,4 @@
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { rustSelectedTargetSignatureEquals } from "../../../target-model/types/selected-call-equality.js";

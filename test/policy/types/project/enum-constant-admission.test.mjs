@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustEnumConstantRepresentation } from "../../../../dist/policy/types/enums/constant-admission.js";
+import { selectRustEnumConstantRepresentation } from "../../../../dist/policy/types/project/enum-constant-admission.js";
 
 for (const [name, values, expected] of [
   ["empty", [], "constants"],

@@ -8,7 +8,7 @@ import { providerOperationFact } from "../../../../policy/operations/members/pro
 import { checkedCallIsConstruction, instantiateSelectedCallTemplate } from "./instantiation.js";
 import { selectedCallSourceParameterCarriers } from "./source-sequences.js";
 import { createRustJsCallRequest } from "./source-profile-request.js";
-import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 

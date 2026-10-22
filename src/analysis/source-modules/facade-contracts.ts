@@ -1,4 +1,4 @@
-import { sourcePackageFacadeModuleSegments } from "../../policy/names/package-facades.js";
+import { sourcePackageFacadeModuleSegments } from "../../policy/identities/package-facades.js";
 import type { RustSourcePackageFacadeClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustSourcePackageFacadeExportContract } from "../../target-model/records/source-packages.js";

@@ -1,10 +1,10 @@
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { RustArgumentMode, RustFinalizedOperationKind, RustProviderConstantArgument, RustProviderOperationForm } from "../../target-model/operations/model.js";
-import { rustValueConversionContract } from "../conversions/contracts.js";
-import { rustNumericPromotionKind } from "../conversions/numeric-promotion.js";
-import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { RustArgumentMode, RustFinalizedOperationKind, RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
+import { rustValueConversionContract } from "../../conversions/contracts.js";
+import { rustNumericPromotionKind } from "../../conversions/numeric-promotion.js";
+import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;

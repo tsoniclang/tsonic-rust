@@ -7,7 +7,7 @@ import { rustStructuralMethodCallableCarrier, rustStructuralObjectCarrierValue, 
 
 import { checkedPropertySelectionInput } from "./member-access.js";
 import { selectRustCheckedPropertyAccess } from "./selected-members.js";
-import { acceptRustPolicy } from "../../policy/operations/contracts.js";
+import { acceptRustPolicy } from "../../policy/model/contracts.js";
 import { checkedCallIsConstruction, selectedCallReceiverValueCarrier } from "./members/calls/instantiation.js";
 import { selectRustOptionalCallResult } from "./members/calls/optional-results.js";
 
@@ -26,7 +26,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";

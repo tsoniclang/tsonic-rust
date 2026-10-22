@@ -11,7 +11,7 @@ import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../targe
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustClosedValueRetainsError } from "../../target-model/types/carriers/closed-values.js";
-import { selectRustClosedNativeProjection } from "../../policy/objects/closed-native-values.js";
+import { selectRustClosedNativeProjection } from "../../policy/types/objects/closed-native-values.js";
 
 export function analyzeRustObjectProjections(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustObjectProjectionProducer): void {
   const closed = new WeakMap<Node, Set<string>>();

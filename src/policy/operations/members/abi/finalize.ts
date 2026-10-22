@@ -9,7 +9,7 @@ import { rustRestSequenceForm } from "../../../../target-model/operations/rest-a
 import { isRustTargetGenericArgument, isRustTargetTypeRef } from "../../../../target-model/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
 import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../../target-model/types/index.js";
-import { rustProviderOperationFormContractViolation } from "../../forms.js";
+import { rustProviderOperationFormContractViolation } from "../forms.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments } from "../../../../target-model/operations/form-inputs.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "../../../../target-model/records/finalized-operation.js";
 import type { RustFinalizedOperationKind } from "../../../../target-model/operations/model.js";

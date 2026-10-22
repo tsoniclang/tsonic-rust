@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-import type { RustPolicyDiagnostic } from "../../policy/operations/contracts.js";
+import type { RustPolicyDiagnostic } from "../../policy/model/contracts.js";
 export function rustPolicyTargetDiagnostic(
   diagnostic: RustPolicyDiagnostic,
 ): TargetDiagnostic {

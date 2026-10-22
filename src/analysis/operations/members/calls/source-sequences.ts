@@ -1,5 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
-import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustOperationsProviderOptions } from "../model.js";

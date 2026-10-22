@@ -1,8 +1,8 @@
-import type { RustProjectCallablePolicyInput } from "../model/project-dispatch-callables.js";
-import type { RustProjectCallableSignature } from "../../target-model/records/project-classes.js";
-import { isRustUnitCarrier, isRustNeverCarrier } from "../../target-model/types/index.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustProjectCallablePolicyInput } from "../../model/project-dispatch-callables.js";
+import type { RustProjectCallableSignature } from "../../../target-model/records/project-classes.js";
+import { isRustUnitCarrier, isRustNeverCarrier } from "../../../target-model/types/index.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function selectRustProjectForwarder(source: TargetTypeRef | undefined, target: TargetTypeRef | undefined, accessor: boolean): "adapter" | "direct" {
   return !accessor && source === undefined || rustTargetTypeRefEquals(source, target) ? "adapter" : "direct";

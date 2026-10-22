@@ -1,5 +1,5 @@
 import type { ResolvedSourceCallInfo } from "@tsonic/tsts";
-import type { RustCheckedCallSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput } from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput } from "../../policy/model/contracts.js";
 import { sourceArgumentBindingsEqual, sourceSelectedMethodTypeArgumentsEqual, sourceSelectedSignatureParametersEqual } from "../../target-model/types/selected-call-equality.js";
 
 export function rustCheckedCallRequestsEqual(left: RustCheckedCallSelectionInput, right: RustCheckedCallSelectionInput): boolean {

@@ -25,7 +25,7 @@ import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { selectRustClosedTypeTest } from "./type-tests.js";
 import { selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
-import type { RustCheckedCallSelectionInput, RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 

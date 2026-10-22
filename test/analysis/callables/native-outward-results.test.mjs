@@ -10,7 +10,7 @@ import { rustProducerErrorReference } from "../../../dist/target-model/types/car
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustNativeCallableInputPhysicalSignature } from "../../../dist/policy/conversions/native-callables.js";
-import { rustNativeCallableInvocationArguments } from "../../../dist/policy/operations/callables/native-invocations.js";
+import { rustNativeCallableInvocationArguments } from "../../../dist/policy/types/callables/native-invocations.js";
 import { rustPhysicalPayloadFor } from "../../../dist/policy/conversions/physical-payloads.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustNativeCallableCompletion } from "../../../dist/policy/types/callables/native-completion.js";

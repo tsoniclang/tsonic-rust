@@ -23,7 +23,7 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 
 import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
 
-import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/native-contracts.js";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";

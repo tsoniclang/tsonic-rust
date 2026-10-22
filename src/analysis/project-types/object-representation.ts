@@ -1,5 +1,5 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { selectRustObjectRepresentationKind, selectRustDispatchObjectLifetime, selectRustMethodSelfMode } from "../../policy/objects/representation.js";
+import { selectRustObjectRepresentationKind, selectRustDispatchObjectLifetime, selectRustMethodSelfMode } from "../../policy/types/objects/representation.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceNodesEqual, Node_Expression, sourceObjectMemberDeclarations, type SourceDeclarationUse, type SourceExpressionValueFlowSummary, type SourceProgramNavigation, type SourceProgramSemantics } from "@tsonic/target-api/source";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "./index.js";

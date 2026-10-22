@@ -3,9 +3,9 @@ import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "
 import { type TargetTypeRef } from "../../../target-model/types/model.js";
 import { type RustSelectedTargetOperation } from "../../../target-model/records/member-selections.js";
 import { rustTargetOperationText } from "../../../target-model/operations/text.js";
-import type { RustCheckedElementSelectionInput, RustCheckedOperatorSelectionInput } from "../../../policy/operations/contracts.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperatorSelectionInput } from "../../../policy/model/contracts.js";
 import { rustPostCheckBinaryOperationId, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../target-model/operations/model.js";
-import { acceptRustPolicy, type RustCheckedOperationSelectionResult, type RustPolicySelection, type RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
+import { acceptRustPolicy, type RustCheckedOperationSelectionResult, type RustPolicySelection, type RustTargetOperationSelection } from "../../../policy/model/contracts.js";
 
 export function rustSelectedOperatorOperation(
   subject: Node, fact: RustTargetOperationFact, resultType: TargetTypeRef,

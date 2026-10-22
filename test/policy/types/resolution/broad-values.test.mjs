@@ -1,5 +1,5 @@
-import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
-import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
+import { assertNoTargetDiagnostics } from "../../../scripts/diagnostic-assertions.mjs";
+import { rustProviderContractValidation } from "../../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -9,18 +9,18 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustTsValueTargetType,
-} from "../../../dist/target-model/types/index.js";
-import { rustValueConversionContract } from "../../../dist/policy/conversions/contracts.js";
+} from "../../../../dist/target-model/types/index.js";
+import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
 import {
   selectRustSourceValueConversion,
-} from "../../../dist/policy/conversions/selection.js";
+} from "../../../../dist/policy/conversions/selection.js";
 import {
   acmeTestingPackage,
   artifactText,
   compileRust,
-} from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
+} from "../../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { validateValueConversion } from "../../../../dist/providers/packages/validation/carriers.js";
 
 test("native broad values select one closed passive carrier contract", () => {
   const source = rustStringTargetType();

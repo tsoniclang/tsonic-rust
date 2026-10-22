@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
-import { rustBroadSourceValueTargetType } from "../../../dist/policy/types/broad-values.js";
+import { rustBroadSourceValueTargetType } from "../../../dist/policy/types/resolution/broad-values.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 for (const surfaces of [[], ["js"]]) {

@@ -1,7 +1,7 @@
-import type { RustIndexedRecordPolicyInput } from "../model/indexed-records.js";
-import type { RustIndexedRecordStorageEmission } from "../../target-model/records/indexed-records.js";
-import { rustRecordCarrierValue, rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustIndexedRecordPolicyInput } from "../../model/indexed-records.js";
+import type { RustIndexedRecordStorageEmission } from "../../../target-model/records/indexed-records.js";
+import { rustRecordCarrierValue, rustRecordReadAdmitsAbsence } from "../../../target-model/types/carriers/records.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function selectRustIndexedRecordStorage(input: RustIndexedRecordPolicyInput):
   | { readonly kind: "selected"; readonly value: RustIndexedRecordStorageEmission }

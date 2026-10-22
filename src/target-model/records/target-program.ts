@@ -1,6 +1,6 @@
 import type { TargetCompileInput } from "@tsonic/target-api";
 import type { TargetSourceSyntaxProgram } from "@tsonic/target-api/analysis";
-import type { RustProgramRecords } from "./records/program.js";
+import type { RustProgramRecords } from "./program.js";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 
 export interface RustTargetProgram {

@@ -8,7 +8,7 @@ import { acceptSelectedCall, selectedCallReceiverValueCarrier } from "./calls/in
 import { selectRustOptionalCallResult } from "./calls/optional-results.js";
 import { selectedCallArgumentCarriers, selectedSourceValueCarrier } from "./operators.js";
 import { rejectSelectedOperation } from "./result.js";
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustSourceObjectField } from "../../../target-model/records/source-types.js";
 import type { RustProviderConstantArgument } from "../../../target-model/operations/model.js";

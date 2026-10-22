@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
-import { rustBroadSourceValueTargetType } from "../../../../policy/types/broad-values.js";
+import { rustBroadSourceValueTargetType } from "../../../../policy/types/resolution/broad-values.js";
 export function resolveRustAuthoredBroadSourceValueTargetType(
   authoredTypeNode: Node,
   context: RustTargetTypeResolutionContext,

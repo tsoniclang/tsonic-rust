@@ -7,7 +7,7 @@ import { planRustOutput } from "./planner/program/index.js";
 import { createRustPlanningContext } from "./planner/context.js";
 import { analyzeRustTargetProgram } from "../analysis/program/index.js";
 import type { RustTargetAnalysisRequest } from "../analysis/program/index.js";
-import type { RustTargetProgram } from "../target-model/program.js";
+import type { RustTargetProgram } from "../target-model/records/target-program.js";
 import { materializeRustOutputPlan } from "./emission/materialize.js";
 
 export function compileRustTarget(

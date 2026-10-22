@@ -1,11 +1,11 @@
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
+import { acceptRustPolicy } from "../../../policy/model/contracts.js";
 import { resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
 import { mapProviderCheckedOperation } from "./conversions.js";
 import { rejectSelectedOperation } from "./result.js";
 import { selectRustProviderExport } from "../../../policy/operations/provider-selection.js";
 import { selectedRustProviderGlobal } from "../../../policy/identities/provider-globals.js";
-import type { RustCheckedValueSelectionInput, RustCheckedValueSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedValueSelectionInput, RustCheckedValueSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 
 export function selectRustCheckedValue(

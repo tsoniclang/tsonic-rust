@@ -7,7 +7,7 @@ import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustS
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType, rustEmptyObjectTargetId, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
-import { selectRustObjectLiteralDispatch } from "../../policy/objects/object-literal-emission.js";
+import { selectRustObjectLiteralDispatch } from "../../policy/types/objects/object-literal-emission.js";
 import { analyzeRustProjectLiteralEmission } from "./project-literal-emission.js";
 import { rustJsValueTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

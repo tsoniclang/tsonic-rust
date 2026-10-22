@@ -21,7 +21,7 @@ import { parseSourceBigIntLiteral } from "../../source/extension/literals.js";
 
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
-import { rustTargetOperationSupportsAssignment } from "../../policy/operations/native-contracts.js";
+import { rustTargetOperationSupportsAssignment } from "../../policy/operations/members/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";

@@ -12,7 +12,7 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
-import type { RustCheckedIterationSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedIterationSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 

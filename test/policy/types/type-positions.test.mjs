@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectRustTypePositions } from "../../../dist/policy/types/type-emission.js";
+import { selectRustTypePositions } from "../../../dist/policy/types/resolution/type-emission.js";
 
 const concrete = Object.freeze({ opaque: false, general: true, parameter: true, return: true });
 const anonymous = Object.freeze({ opaque: true, general: false, parameter: true, return: true });

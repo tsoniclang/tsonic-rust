@@ -9,7 +9,7 @@ import { validateRustFinalizedOperationAbi } from "../../policy/operations/membe
 import { sourceInput } from "../../policy/operations/members/abi/conversions.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
-import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/native-contracts.js";
+import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";
 
 import type { RustExternalInitialization } from "../../target-model/records/construction.js";
 

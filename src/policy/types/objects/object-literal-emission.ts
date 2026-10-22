@@ -1,4 +1,4 @@
-import type { RustObjectLiteralEmissionPolicyInput } from "../model/object-literal-emission.js";
+import type { RustObjectLiteralEmissionPolicyInput } from "../../model/object-literal-emission.js";
 
 export function selectRustObjectLiteralDispatch(input: RustObjectLiteralEmissionPolicyInput): "project" | "structural" | undefined {
   if (input.fact.storage !== "project-object") return input.structuralDispatch ? "structural" : undefined;

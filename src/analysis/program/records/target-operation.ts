@@ -1,5 +1,5 @@
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
-import type { RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "./target-operation-literals.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";

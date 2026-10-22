@@ -12,7 +12,7 @@ import { acceptProjectSourceCall } from "../../project-call-signatures.js";
 import { selectRustArrayTypeTest } from "../type-tests.js";
 import { isRustArrayTypeTestMember } from "../../source-profiles/js/type-tests.js";
 
-import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
+import { acceptRustPolicy } from "../../../../policy/model/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./instantiation.js";
 
 import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
@@ -42,7 +42,7 @@ import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
 
 import { rustClassConstructorInstance } from "../../../../target-model/types/carriers/class-constructors.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../../target-model/types/carriers/source-error.js";
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../../policy/model/contracts.js";
 
 import type { RustOperationsProviderOptions } from "../model.js";
 

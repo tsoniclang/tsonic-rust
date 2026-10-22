@@ -570,7 +570,7 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
 });
 
 test("optional chains consume exact TSTS evidence through one finalized Option fact", () => {
-  const contracts = readFileSync(join(sourceRoot, "policy/operations/contracts.ts"), "utf8");
+  const contracts = readFileSync(join(sourceRoot, "policy/model/contracts.ts"), "utf8");
   assert.match(contracts, /readonly source: ResolvedSourceCallInfo/u);
   assert.doesNotMatch(contracts, /readonly optionalChain: ResolvedSourceCallInfo/u);
   assert.doesNotMatch(contracts, /readonly sourceReceiver\?: ResolvedSourceCallInfo/u);
@@ -594,7 +594,7 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.match(producer, /id: "tsonic\.rust\.optionalChain"/u);
   assert.match(producer, /family\.writer\.set\(expression, Object\.freeze\(\{ expression, guard, operationKind,/u);
 
-  const selector = readFileSync(join(sourceRoot, "policy/operations/optional-chains.ts"), "utf8");
+  const selector = readFileSync(join(sourceRoot, "policy/operations/flow/optional-chains.ts"), "utf8");
   assert.match(selector, /rustOptionNestingDepth\(sourceGuardCarrier, selectedGuardCarrier\)/u);
   assert.match(selector, /guardDepth === undefined \|\| guardDepth === 0/u);
   assert.doesNotMatch(selector, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
@@ -650,7 +650,7 @@ test("native module-function eligibility is finalized before backend planning", 
     "utf8",
   );
   assert.match(semantics, /selectRustModuleValueStorage\(/u);
-  const storage = readFileSync(join(sourceRoot, "policy/operations/declarations/module-bindings.ts"), "utf8");
+  const storage = readFileSync(join(sourceRoot, "policy/types/storage/module-bindings.ts"), "utf8");
   assert.match(semantics, /hasFirstClassUse\(declaration\)/u);
   assert.match(storage, /storage: "module-cell"/u);
   const runtimeUses = readFileSync(

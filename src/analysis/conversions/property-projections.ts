@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustCheckedCallSelectionInput } from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "../operations/members/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";

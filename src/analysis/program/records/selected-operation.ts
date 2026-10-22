@@ -1,6 +1,6 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
-import type { RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustPolicySelection } from "../../../policy/model/contracts.js";
 import { rustPostCheckOperationKind } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";

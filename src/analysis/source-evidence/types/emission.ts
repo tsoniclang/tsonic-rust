@@ -24,7 +24,7 @@ import { rustClassConstructorInstance } from "../../../target-model/types/carrie
 import { rustPhysicalEmissionRecordCarriers } from "../../callables/emission-contexts.js";
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustSourceTypeCarrierValue,
   rustNamedTypeCarrierValue, rustFixedArrayCarrierValue, rustCallableInputTargetId, rustCallableTargetId, rustFutureTargetId, rustProgramErrorTargetType, rustUnitTargetType, rustEmptyObjectTargetId } from "../../../target-model/types/index.js";
-import { selectRustTypePositions } from "../../../policy/types/type-emission.js";
+import { selectRustTypePositions } from "../../../policy/types/resolution/type-emission.js";
 import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetainedErrorCarrier,
   isRustWritableRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js";

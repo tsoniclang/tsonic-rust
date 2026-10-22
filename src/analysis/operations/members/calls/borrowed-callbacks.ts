@@ -3,7 +3,7 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
 import { selectedCallArgumentNodes } from "../operators.js";
-import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
 import type { JsOperationSelection } from "../../../../policy/operations/source-profiles/js/index.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 

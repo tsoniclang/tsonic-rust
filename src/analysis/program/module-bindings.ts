@@ -1,4 +1,4 @@
-import { selectRustModuleValueStorage } from "../../policy/operations/declarations/module-bindings.js";
+import { selectRustModuleValueStorage } from "../../policy/types/storage/module-bindings.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 import { flowStateFactKey } from "@tsonic/tsts";
 

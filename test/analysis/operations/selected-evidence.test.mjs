@@ -7,7 +7,7 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { selectRustOptionalChain } from "../../../dist/policy/operations/optional-chains.js";
+import { selectRustOptionalChain } from "../../../dist/policy/operations/flow/optional-chains.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
 import {
   rustOptionTargetType,

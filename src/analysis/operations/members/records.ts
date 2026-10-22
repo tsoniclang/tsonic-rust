@@ -1,6 +1,6 @@
 import { selectRustRecordObjectOperation, selectRustRecordDeleteOperation } from "../../../policy/operations/source-profiles/js/records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";

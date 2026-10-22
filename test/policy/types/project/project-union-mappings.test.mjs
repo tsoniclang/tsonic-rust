@@ -13,7 +13,7 @@ import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConv
 import { selectRustProjectUnionMapping } from "../../../../dist/policy/types/project/project-union-mappings.js";
 import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";
 import { rustProjectUnionUpcastRelation } from "../../../../dist/policy/model/project-union-relations.js";
-import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } from "../../../../dist/policy/conversions/value-carrier-reconciliation.js";
 import { planRustProjectUnionMapping } from "../../../../dist/backend/planner/expressions/project-union-mappings.js";
 import { planExpression, planRustProjectUpcast } from "../../../../dist/backend/planner/expressions/entry.js";
 import { applyRustCallableValueAdapterRaw } from "../../../../dist/backend/planner/declarations/callables/adapters.js";

@@ -7,7 +7,7 @@ import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
-import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/native-contracts.js";
+import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";

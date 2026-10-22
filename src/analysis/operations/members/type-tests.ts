@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
-import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult, RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
-import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
+import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult, RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/model/contracts.js";
+import { acceptRustPolicy } from "../../../policy/model/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSelectedTargetOperation } from "../../../target-model/records/member-selections.js";

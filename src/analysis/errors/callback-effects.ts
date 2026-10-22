@@ -24,7 +24,7 @@ export function createRustCallbackEffectAnalysis(input: {
   const { walk, budget, isFallible, declarationEffects, expressionRegionEffects } = input;
   const { ast } = walk.context;
   const callbackExpression = (
-    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
+    pending: { readonly request: import("../../policy/model/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
   ): Node | undefined => pending.request.source.sourceArguments[
     pending.prepared.callback.sourceArgumentIndex
   ]?.expression;
@@ -37,7 +37,7 @@ export function createRustCallbackEffectAnalysis(input: {
     return current;
   };
   const callbackExpressionIsFallible = (
-    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
+    pending: { readonly request: import("../../policy/model/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
   ): boolean => callbackValueAnalysis(callbackExpression(pending), new Set())?.fallible === true;
   const callbackValueAnalysis = (
     expression: Node | undefined,

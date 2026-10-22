@@ -1,7 +1,7 @@
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isRustNumericCarrier } from "../../target-model/types/index.js";
-import { acceptRustPolicy } from "../../policy/operations/contracts.js";
+import { acceptRustPolicy } from "../../policy/model/contracts.js";
 import { checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier, mapSelectedProjectGenericArguments, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./members/calls/instantiation.js";
 import { selectRustOptionalCallResult } from "./members/calls/optional-results.js";
 import { asNode } from "../../policy/identities/selected-source.js";
@@ -21,7 +21,7 @@ import { selectedCallCalleeDeclaration } from "./members/operators.js";
 import { selectedValueCarrier } from "./selected-values.js";
 import { selectedRustCallSignature } from "../program/records/selected-call.js";
 
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./members/model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";

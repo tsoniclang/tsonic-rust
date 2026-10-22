@@ -54,14 +54,14 @@ export interface RustFactWalk {
   readonly callableSignatureCarrierFor: (walk: RustFactWalk, declaration: Node) => TargetTypeRef | undefined;
   readonly postCheckOperations: WeakMap<object, "binary" | "unary-minus" | "unary-plus">;
   readonly deferredCallbackCalls: WeakMap<Node, {
-    readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
+    readonly request: import("../../policy/model/contracts.js").RustCheckedCallSelectionInput;
     readonly selection: Extract<
-      import("../../policy/operations/contracts.js").RustCheckedCallSelectionResult,
+      import("../../policy/model/contracts.js").RustCheckedCallSelectionResult,
       { readonly kind: "deferred-callback" }
     >;
   }>;
   readonly preparedCallbackCalls: Map<Node, {
-    readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
+    readonly request: import("../../policy/model/contracts.js").RustCheckedCallSelectionInput;
     readonly prepared: RustPreparedDeferredCheckedCall;
   }>;
   readonly capturedBindingStorage: Map<Node, { readonly carrier: TargetTypeRef; readonly selection: RustCaptureStorage }>;
@@ -134,7 +134,7 @@ export function recordPolicySelection<T extends { readonly operation?: RustSelec
   readonly targetFact?: RustTargetOperationFact }>(
   walk: RustFactWalk,
   subject: Node,
-  selection: import("../../policy/operations/contracts.js").RustPolicySelection<T>,
+  selection: import("../../policy/model/contracts.js").RustPolicySelection<T>,
 ): void {
   walk.context.records.assertOpen();
   if (selection.kind === "reject") {
@@ -173,7 +173,7 @@ export function recordPolicySelection<T extends { readonly operation?: RustSelec
 }
 
 function recordPolicyRejection(walk: RustFactWalk,
-  selection: import("../../policy/operations/contracts.js").RustPolicySelection<unknown>): void {
+  selection: import("../../policy/model/contracts.js").RustPolicySelection<unknown>): void {
   if (selection.kind !== "reject") return;
   const diagnostic = rustPolicyTargetDiagnostic(selection.diagnostic);
   if (diagnostic.category === "error") recordTerminalExpressionFailure(walk, diagnostic.sourceNode);
@@ -226,7 +226,7 @@ export function selectExpressionOperation(
       return;
     }
     const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(source.selectedSignature);
-    const request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput = {
+    const request: import("../../policy/model/contracts.js").RustCheckedCallSelectionInput = {
       target: "rust",
       source,
       ...(sourceSelectedDeclaration === undefined ? {} : { sourceSelectedDeclaration }),
