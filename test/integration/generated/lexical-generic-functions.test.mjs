@@ -12,7 +12,15 @@ for (const surfaces of [[], ["js"]]) {
 export function main(): void { if (run() !== 23 || readKeeper(19 as int32) !== 19) throw new Error("lexical generic result"); }
 ` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
-    const executed = validateGeneratedProject(`lexical-generic-${surfaces[0] ?? "native"}`, [...result.artifacts, {
+    const executed = validateGeneratedProject(`lexical-generic-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+    assert.equal(executed.status, 0, executed.stderr);
+    // Bin crates do not re-export their entry module (RULINGS 2026-10-22, cd9644e5e), so the capture-cost
+    // integration test links the same source built as a library.
+    const { result: library } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "lib", crateName: `lexical_generic_${surfaces[0] ?? "native"}` } },
+      files: { "index.ts": lexicalGenericFunctionsSource } });
+    assert.equal(library.diagnostics.length, 0, library.diagnostics.map(value => value.message).join("\n"));
+    validateGeneratedProject(`lexical-generic-lib-${surfaces[0] ?? "native"}`, [...library.artifacts, {
       path: "tests/capture_cost.rs",
       text: `use lexical_generic_${surfaces[0] ?? "native"}::{captureOuter, forwardOuter, shadowOuter};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -50,8 +58,7 @@ fn once_only_captures_move_without_clone_bounds_or_copies() {
     assert_eq!(CLONES.load(Ordering::SeqCst), 0);
 }
 `,
-    }], { run: true });
-    assert.equal(executed.status, 0, executed.stderr);
+    }]);
   });
   test(`native lexical captures retain named outer lifetimes in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
