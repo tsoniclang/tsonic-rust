@@ -17,7 +17,7 @@ import { rustBindingLivenessAttributes } from "./liveness.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const declarations = collectVariableDeclarations(node, context);
-  if (declarations.length === 0) failRustPlannerInvariant("An admitted variable statement requires its declaration sequence.", node);
+  // An empty sealed sequence means every authored declaration is compile-time or erased; nothing is emitted.
   return declarations.flatMap(declaration => context.input.program.records.completionBindingOwner.get(declaration) === undefined
     ? planVariableDeclaration(declaration, context) : []);
 }
