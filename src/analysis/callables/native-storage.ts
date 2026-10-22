@@ -390,6 +390,10 @@ export function createRustNativeStorageQueries(input: {
         const materialized = (origin: SourceStorageSubject): boolean => origin.kind !== "return" || origin.projection.length !== 0 ||
           !isRustNeverCarrier(input.records.sourceCallableReturn.get(origin.node)?.returnCarrier);
         const values = origins.subjects.filter(materialized);
+        const storedMethodValue = (origin: SourceStorageSubject): boolean =>
+          origin.kind === "input" && origin.projection[origin.projection.length - 1]?.kind === "method-value";
+        // Generic methods read from inputs are those inputs' stored generic callable family values.
+        if (values.length !== 0 && values.every(storedMethodValue)) return current;
         if (values.every(origin => !inputs.has(origin))) {
           const producers = input.storage.storageProducersFor(selectedSubject, bindings);
           if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
@@ -409,7 +413,11 @@ export function createRustNativeStorageQueries(input: {
           if (!step(depth)) return undefined;
           const candidate = inputs.get(origin);
           let candidatePhysical: TargetTypeRef | undefined;
-          if (candidate === undefined) {
+          if (storedMethodValue(origin)) {
+            // A generic method read from an input is the input's stored generic callable family value (structural
+            // methods are stored with the receiver first), not a callable input type parameter.
+            candidatePhysical = current;
+          } else if (candidate === undefined) {
             const originCarrier = origin.projection.length === 0
               ? input.records.runtimeCarrier.get(origin.node)?.carrier : undefined;
             if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
