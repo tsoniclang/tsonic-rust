@@ -36,6 +36,9 @@ export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "r
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "closed-type-test") continue;
     const ast = program.source.ast;
+    // The selected operation is validated before any of its parts is read, so a malformed record stops at the invariant.
+    if (!rustClosedTypeTestMatches(fact, program.projectTypes, program.typeDefinitions))
+      failTargetAnalysisInvariant("tsonic-rust", "Type predicate requires its exact selected operation, carrier and retained test plan.", node);
     const arguments_ = ast.is.IsCallExpression(node) ? ast.arguments(node) : [];
     const nominal = fact.predicate.kind !== "array";
     const operand = nominal ? BinaryExpression_Left(ast, node) : arguments_[0];

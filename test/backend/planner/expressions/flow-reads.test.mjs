@@ -1,28 +1,58 @@
-import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
-import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustFlowReadProjection, planRustValueProjection } from "../../../../dist/backend/planner/expressions/flow-read-projections.js";
+import { analyzeRustFlowReadEmission } from "../../../../dist/analysis/control-flow/flow-read-emission.js";
+import { createRustFlowReadEmissionProducer } from "../../../../dist/analysis/program/records/flow-read-emission.js";
+import { analyzeRustCarrierReads } from "../../../../dist/analysis/ownership/carrier-reads.js";
+import { createRustCarrierReadProducer } from "../../../../dist/analysis/program/records/carrier-reads.js";
 import { rustJsValueTargetType, rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
-import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustSourceCallResult } from "../../../../dist/analysis/source-evidence/types/resolution/call-results.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 
+// The planner renders only flow-read emissions sealed by the analysis owner. Each case runs that owner on a program
+// whose flow-read record for one real node carries the projection under test, then plans from the sealed emission.
+function analyzedNode() {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": "export function value(): unknown { return 1; }" } });
+  const sourceFile = program.sourceFiles[0];
+  return { program, sourceFile, node: program.source.ast.statements(sourceFile)[0] };
+}
+
+function sealFlowRead(program, node, fact, records = {}) {
+  const forged = { ...program, records: { ...program.records,
+    flowReadProjection: { get: candidate => candidate === node ? fact : program.records.flowReadProjection.get(candidate) },
+    runtimeCarrier: { get: candidate => candidate === node ? { carrier: fact.sourceCarrier } : program.records.runtimeCarrier.get(candidate) },
+    targetOperation: { get: candidate => candidate === node ? undefined : program.records.targetOperation.get(candidate) },
+    ...records } };
+  const producer = createRustFlowReadEmissionProducer(() => undefined);
+  const issues = analyzeRustFlowReadEmission(forged, [node], producer);
+  // Copy and Clone guarantees for the carriers the read uses are sealed by their own analysis owner.
+  const reads = createRustCarrierReadProducer(() => undefined);
+  analyzeRustCarrierReads(forged, [node], reads);
+  return { issues, producer, program: { ...forged, records: { ...forged.records,
+    flowReadEmission: producer.records.flowReadEmission, carrierRead: reads.records.carrierRead } } };
+}
+
+function planContext(program, sourceFile, node) {
+  return { input: { program }, sourceFile, diagnostics: [], usedAliases: new Set(),
+    syntheticNames: createRustSyntheticNameState(program.source.ast, node, []),
+    moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
+    externalStructuralShapeModuleByFileName: new Map() };
+}
+
 test("optional readonly native references preserve one exact borrow without redundant dereferencing or cloning", () => {
+  const { program, sourceFile, node } = analyzedNode();
   const selectedCarrier = { kind: "reference", mutable: false,
     referent: { kind: "slice", element: rustStringTargetType() } };
-  const sourceCarrier = rustOptionTargetType(selectedCarrier);
-  const fact = { kind: "option-value", sourceCarrier, selectedCarrier };
-  const diagnostics = [];
-  const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions,
-    source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1, end: () => -1, kindName: () => "KindIdentifier" } },
-  } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } };
+  const fact = { kind: "option-value", sourceCarrier: rustOptionTargetType(selectedCarrier), selectedCarrier };
+  const sealed = sealFlowRead(program, node, fact);
+  assertNoTargetDiagnostics(sealed.issues);
   for (const ownership of ["move", "clone", "borrow"]) {
-    const result = planRustValueProjection({}, { kind: "path", path: "values" }, fact, context, ownership);
-    assertNoTargetDiagnostics(diagnostics);
+    const context = planContext(sealed.program, sourceFile, node);
+    const result = planRustValueProjection(node, { kind: "path", path: "values" }, fact, context, ownership);
+    assertNoTargetDiagnostics(context.diagnostics);
     assert.equal(result.arms[0].expression.kind, "path");
     if (ownership === "borrow") assert.equal(result.expression.method, "as_ref");
     else assert.equal(result.expression.kind, "path");
@@ -31,68 +61,71 @@ test("optional readonly native references preserve one exact borrow without redu
 });
 
 test("optional native associated values move or borrow without inventing Clone, and reject an unproved owned copy", () => {
+  const { program, sourceFile, node } = analyzedNode();
   const selectedCarrier = { kind: "associated-type", owner: { kind: "type-parameter", identity: "Owner", name: "Owner" },
     trait: { kind: "trait-ref", id: "native::Family", path: "native::Family", genericArguments: [], associatedConstraints: [] },
     name: "Output",
   };
   const sourceCarrier = rustOptionTargetType(selectedCarrier);
   const fact = { kind: "option-value", sourceCarrier, selectedCarrier };
-  const node = {};
   for (const [canMove, borrowedResult, succeeds] of [[true, false, true], [false, true, true], [false, false, false]]) {
-    const diagnostics = [];
-    const result = planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, {
-      input: { program: {
-        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-        ownership: createRustOwnershipFixture(node, sourceCarrier, canMove ? "move" : "clone"), typeDefinitions: emptyRustTypeDefinitions,
-        source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1, end: () => -1, kindName: () => "KindIdentifier" } },
-      } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() },
-    }, borrowedResult);
+    const read = { carrier: sourceCarrier, source: { kind: canMove ? "move" : "clone" }, value: { kind: canMove ? "move" : "clone" },
+      snapshot: undefined, stablePlace: true, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() };
+    const sealed = sealFlowRead(program, node, fact, {
+      readOwnership: { get: candidate => candidate === node ? read : program.records.readOwnership.get(candidate) },
+    });
+    // The associated type has no Clone bound, so its sealed read guarantee has no Clone.
+    assert.equal(sealed.program.records.carrierRead.get(selectedCarrier).clone, false);
+    assertNoTargetDiagnostics(sealed.issues);
+    const context = planContext(sealed.program, sourceFile, node);
     if (succeeds) {
+      const result = planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, context, borrowedResult);
       assert.equal(result.kind, "match");
       assert.equal(result.arms[0].expression.kind, "path");
-      assertNoTargetDiagnostics(diagnostics);
+      assertNoTargetDiagnostics(context.diagnostics);
     } else {
-      assert.equal(result, undefined);
-      assert.equal(diagnostics.length, 1);
-      assert.match(diagnostics[0].message, /proven non-consuming clone contract/u);
+      // A copy of a value whose carrier has no proven Clone guarantee is a corrupt record set at the planner boundary.
+      assert.throws(() => planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, context, borrowedResult),
+        /native non-consuming payload contract/u);
     }
   }
 });
 
 test("source-call and flow-read projections share one native payload planner with exact ownership", () => {
-  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": "export function value(): unknown { return 1; }" } });
-  const sourceFile = program.sourceFiles[0];
-  const node = program.source.ast.statements(sourceFile)[0];
-  const context = () => ({ input: { program }, sourceFile, diagnostics: [], usedAliases: new Set(),
-    syntheticNames: createRustSyntheticNameState(program.source.ast, node, []),
-    moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
-    externalStructuralShapeModuleByFileName: new Map() });
+  const { program, sourceFile, node } = analyzedNode();
   for (const selectedCarrier of [rustStringTargetType(), rustSourcePrimitiveTargetType("uint64")]) {
     const fact = selectRustSourceCallResult(program.projectTypes, rustJsValueTargetType(), () => selectedCarrier).projection;
+    const sealed = sealFlowRead(program, node, fact);
+    assertNoTargetDiagnostics(sealed.issues);
     const expression = { kind: "call", path: "produce", args: [] };
-    const owned = context();
+    const owned = planContext(sealed.program, sourceFile, node);
     const result = planRustValueProjection(node, expression, fact, owned, "move");
     assertNoTargetDiagnostics(owned.diagnostics);
     assert.equal(result.kind, "match");
     assert.equal(result.expression, expression);
     assert.equal(result.arms[0].expression.kind, "path");
     assert.doesNotMatch(JSON.stringify(result), /clone|Box::|Rc::|from_closed/u);
-    const borrowed = context();
+    const borrowed = planContext(sealed.program, sourceFile, node);
     const borrow = planRustValueProjection(node, expression, fact, borrowed, "borrow");
     assertNoTargetDiagnostics(borrowed.diagnostics);
     assert.equal(borrow.expression.kind, "reference");
     assert.equal(borrow.expression.expr, expression);
     assert.equal(borrow.arms[0].expression.kind, "path");
-    const copied = context();
+    const copied = planContext(sealed.program, sourceFile, node);
     const copy = planRustValueProjection(node, expression, fact, copied, "clone");
     assertNoTargetDiagnostics(copied.diagnostics);
     assert.equal(copy.arms[0].expression.kind, selectedCarrier.kind === "source-primitive"
       ? "dereference" : "method-call");
     if (selectedCarrier.kind !== "source-primitive") assert.equal(copy.arms[0].expression.method, "clone");
+    // A projection that no longer matches its exact native carrier relation is refused by the analysis owner and
+    // never sealed, so the planner has no emission to render.
     for (const mutation of [{ variant: "Other" }, { sourceCarrier: selectedCarrier }, { extra: true }]) {
-      const rejected = context();
-      assert.equal(planRustValueProjection(node, expression, { ...fact, ...mutation }, rejected, "move"), undefined);
-      assert.equal(rejected.diagnostics.length, 1);
+      const forged = { ...fact, ...mutation };
+      const rejected = sealFlowRead(program, node, forged);
+      assert.equal(rejected.issues.length >= 1, true);
+      assert.equal(rejected.producer.records.flowReadEmission.get(forged), undefined);
+      assert.throws(() => planRustValueProjection(node, expression, forged, planContext(rejected.program, sourceFile, node), "move"),
+        /requires its sealed native emission/u);
     }
   }
 });

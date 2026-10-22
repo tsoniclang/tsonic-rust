@@ -8,6 +8,8 @@ import { rustOptionEqualityContract } from "../../policy/operations/operators/op
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustOptionCarrier } from "../../target-model/types/index.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 
 export function analyzeRustOptionEquality(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustOptionEqualityProducer): void {
   for (const node of nodes) {
@@ -19,7 +21,13 @@ export function analyzeRustOptionEquality(program: Omit<RustAnalysisProgram, "re
     const leftCarrier = rustStrictEqualityOperandCarrier(program.records, left);
     const rightCarrier = rustStrictEqualityOperandCarrier(program.records, right);
     const contract = rustOptionEqualityContract(leftCarrier, rightCarrier);
-    if (left === undefined || right === undefined || contract === undefined ||
+    const selected = program.records.selectedOperation.get(node);
+    // The exact record shape and its selected operator are checked as the checkpoint planner checked them.
+    if (!isClosedMetadata(fact) || !hasExactObjectKeys(fact, ["kind", "operationId", "negated", "leftCarrier", "rightCarrier",
+      "comparisonCarrier", "leftLiftDepth", "rightLiftDepth", "view"]) || typeof fact.negated !== "boolean" ||
+      selected?.operationId !== fact.operationId || selected.operationKind !== "operator" ||
+      !rustTargetTypeRefEquals(selected.resultType, rustSourcePrimitiveTargetType("bool")) ||
+      left === undefined || right === undefined || contract === undefined ||
       program.source.ast.operatorKindName(node) !== (fact.negated ? "KindExclamationEqualsEqualsToken" : "KindEqualsEqualsEqualsToken") ||
       !rustTargetTypeRefEquals(leftCarrier, fact.leftCarrier) || !rustTargetTypeRefEquals(rightCarrier, fact.rightCarrier) ||
       !rustTargetTypeRefEquals(contract.comparisonCarrier, fact.comparisonCarrier) || contract.view !== fact.view ||
