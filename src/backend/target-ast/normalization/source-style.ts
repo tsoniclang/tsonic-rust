@@ -109,6 +109,17 @@ function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: 
       if (collapsed !== mapped && (collapsed.kind !== "path" || rustItemCallPath(collapsed.path) || isFunctionItem(collapsed.path)))
         return collapsed;
     }
+    // `|value| Type::Variant(value)` is the associated item `Type::Variant` itself; an associated item is never a local
+    // callable, so the path form is always the same value (clippy::redundant_closure).
+    if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 &&
+      result?.kind === "associated-call" && result.genericArguments === undefined && result.args.length === 1) {
+      const parameter = mapped.params[0];
+      const argument = result.args[0];
+      if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
+        (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
+        return { kind: "associated-value", owner: result.owner, ...(result.trait === undefined ? {} : { trait: result.trait }),
+          name: result.method };
+    }
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
       : { ...parameter, type: nameType(parameter.type, parameter.name) }) };

@@ -305,6 +305,7 @@ export function analyzeRustAnalysisProgram(
     storage: context.sourceStorage,
     nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
     nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+    promiseBodies: context.promiseBodies.plan,
     nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
     sourceTypes: sourceStage.sourceTypes,
     sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies, jsEnabled: context.jsEnabled,

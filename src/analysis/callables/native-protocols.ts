@@ -32,7 +32,7 @@ export function createRustNativeCallableProtocolRegistry(input: {
       const key = closedMetadataKey({ ...contract, method: binding.identityMethod });
       let protocol = protocols.get(key);
       if (protocol === undefined) {
-        const identity = `native-protocol:${createHash("sha256").update(key).digest("hex")}`;
+        const identity = `${rustNativeCallableProtocolIdPrefix}${createHash("sha256").update(key).digest("hex")}`;
         const result = selectRustNativeCallableProtocolResult({ ...contract, identity }, input.definitions);
         if (result === undefined) return undefined;
         const targetName = allocateRustGeneratedName(input.usedNames, `NativeCallable_${identity.slice(-16)}`);
@@ -60,3 +60,4 @@ export function createRustNativeCallableProtocolRegistry(input: {
 }
 
 import { selectRustNativeCallableProtocolSignature, selectRustNativeCallableProtocolResult } from "../../policy/types/callables/native-protocols.js";
+import { rustNativeCallableProtocolIdPrefix } from "../../target-model/records/native-protocols.js";
