@@ -6,6 +6,7 @@ import { resolveExpressionCarrier } from "../source-evidence/types/resolution/ex
 import { appendRustDiagnostic } from "../program/walk.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { setCarrierFact } from "./project-calls.js";
+import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
 
 interface FlowMarkerResolution {
   readonly carrier: TargetTypeRef | undefined;
@@ -29,12 +30,14 @@ export function tryFlowMarkerCall(
   if (flow.state !== "moved" && flow.state !== "borrowed-shared" && flow.state !== "borrowed-mut") {
     return { carrier: undefined };
   }
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "flow-marker", "analysis/declarations/types-and-bindings.ts");
-  walk.context.records.targetOperations.source(expression, {
-    kind: "flow-marker",
-    operationId: `tsonic.rust.flow.${flow.state}`,
-    state: flow.state,
-  });
+  const fact = { kind: "flow-marker", operationId: `tsonic.rust.flow.${flow.state}`, state: flow.state } as const;
+  // The marker fact is a function of the checked flow state alone; an operation-purpose resolution of the call and a
+  // later value-purpose resolution select the same fact, which is published once. A different fact still conflicts.
+  const published = walk.context.records.targetOperation.get(expression);
+  if (published === undefined || !rustTargetOperationFactEquals(published, fact)) {
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "flow-marker", "analysis/declarations/types-and-bindings.ts");
+    walk.context.records.targetOperations.source(expression, fact);
+  }
   if (argumentCarrier !== undefined) {
     setCarrierFact(walk, expression, argumentCarrier);
   }
