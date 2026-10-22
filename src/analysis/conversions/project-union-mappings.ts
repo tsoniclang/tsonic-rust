@@ -81,5 +81,8 @@ export function analyzeRustProjectUnionMappings(program: Omit<RustAnalysisProgra
   }
   for (const definition of program.projectTypes.definitions)
     for (const selected of program.records.projectCallableAdapters.get(definition.declaration) ?? []) callable(definition.declaration, selected);
+  for (const view of program.classValues.constructorViewImplementations)
+    for (const selected of [view.construction, ...view.fields.map(field => field.callable)])
+      if (selected !== undefined) callable(view.declaration, selected);
   return Object.freeze(issues);
 }
