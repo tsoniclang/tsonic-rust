@@ -23,6 +23,7 @@ import { resolveExpressionCarrier } from "../source-evidence/types/resolution/ex
 
 import { rustTargetOperationSupportsAssignment } from "../../policy/operations/members/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
 
@@ -102,7 +103,9 @@ export function resolvePostCheckBinaryCarrier(
   } else if (operatorKind === KindEqualsToken &&
     (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact, walk.context.typeDefinitions)) &&
     left !== undefined && right !== undefined &&
-    rustTargetTypeRefEquals(left, right)) {
+    // A callable target whose lifetime is still a placeholder takes the lifetime of the callable assigned to it, as
+    // source-call arguments and runtime callees do.
+    rustTargetTypeRefEquals(rustCallableTargetForSourceLifetime(right, left), right)) {
     const parent = walk.context.ast.parent(expression);
     const equivalentOperator = parent !== undefined &&
         walk.context.ast.kindName(parent) === KindExpressionStatement

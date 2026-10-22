@@ -88,22 +88,25 @@ export function rustCapturedReceiverFieldType(
 }
 
 export function planRustCapturedReceiverFields(
-  _node: Node, fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
+  node: Node, fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
-  return planRustReceiverFieldOwners(fields, creation, invocation, options);
+  return planRustReceiverFieldOwners(fields, creation, invocation, options, node);
 }
 
 export function planRustReceiverFieldOwners(
   fields: RustClosureCaptureFact["receiverFields"], creation: RustPlanContext,
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
+  closure?: Node,
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
+  // A closure's capture requirements are sealed with the closure's own contract, as for its receiver captures.
+  const requirementContext = closure === undefined ? creation : { ...creation, callableDeclaration: closure };
   for (const [index, capture] of fields.entries()) {
-    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["static"] : [], capture.reference, creation)) return undefined;
+    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["static"] : [], capture.reference, requirementContext)) return undefined;
     if (options.sharedStateName !== undefined) {
       retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
         name: String(options.offset + index) });

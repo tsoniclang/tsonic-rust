@@ -83,7 +83,8 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
   const staticEvidence = { lifetimeContract: input.sourceLifetimes.contractFor(declaration),
     genericCallables: input.genericCallables, structuralShapes: input.structuralShapes,
     frameCallables: input.frameCallables, classValues: input.classValues,
-    objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records };
+    objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records,
+    errorType: (carrier: TargetTypeRef, node: Node) => normalizeRustErrorType(carrier, input.errorTypes, node) };
   const classifyUse = (node: Node, carrier: TargetTypeRef,
     requirements: readonly RustGenericRequirement[]): RustCarrierRequirementSelection => {
     const normalized = mapRustTargetTypes(carrier, normalizeFamily);

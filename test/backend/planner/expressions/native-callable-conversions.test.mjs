@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../../helpers/native-closure-producers.mjs";
+import { nativeClosureProducerFixture } from "../../../helpers/native-closure-producers.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-session.mjs";
+import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
   from "../../../../dist/backend/planner/expressions/callable-conversions.js";
 
-import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/carriers/native.js";
-import { rustCallableTargetType, rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
+import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/carriers/native.js";
+import { rustCallableTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../../dist/policy/conversions/callable.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable-adapters.mjs";
-import { Node_Initializer } from "@tsonic/target-api/source";
 import { planRustNativeInputInvocation, planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
 
-const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 const integer = rustSourcePrimitiveTargetType("int32");
 
 for (const retained of [false, true]) {
@@ -33,74 +34,90 @@ for (const retained of [false, true]) {
   });
 }
 
-function fixture(throwing = false) {
-  const current = nativeClosureProducerFixture(throwing ? {
-    packages: [nativeClosureProducerFailurePackage(failure)], source: `
-import { fail } from "test:producer";
-import type { int32 } from "@tsonic/core/types.js";
-export function create(): () => int32 { return (): int32 => { fail(); return 3; }; }
-`,
-  } : {});
+// A closure passed to a callable parameter is converted at that call: borrowed (a callable input), adapted to the
+// parameter's arity, or retained (stored as an rt::Callable). A throwing closure here invokes a captured native
+// callable input, so its error is that input's native associated error, never the program error.
+const nativeError = "<Implementation0 as crate::index::NativeCallable_[0-9a-f]+>::InvocationError";
+const programs = {
+  borrowed: "export function invoke(callback: () => int32): int32 { return callback(); }",
+  arity: "export function invoke(callback: (value: int32) => int32): int32 { return callback(1); }",
+  retained: "export function keep(callback: (value: int32) => int32): (value: int32) => int32 { return callback; }",
+};
+function compiledRun(form, throwing) {
+  const call = form === "retained" ? "keep" : "invoke";
+  const result = form === "retained" ? "(value: int32) => int32" : "int32";
+  const { result: compiled } = compileRust({ files: { "index.ts": `import type { int32 } from "@tsonic/core/types.js";
+${programs[form]}
+export function run(${throwing ? "source: () => int32" : ""}): ${result} { return ${call}((): int32 => ${throwing ? "source() + 3" : "3"}); }
+` } });
+  assert.deepEqual(compiled.diagnostics, []);
+  const run = rustSourceText(compiled).match(/pub fn run[\s\S]*?\n\}\n/u)?.[0];
+  assert.equal(run !== undefined, true, "the converting caller is emitted");
+  return run;
+}
+const okType = throwing => throwing ? `Ok::<\\s*_,\\s*${nativeError},?\\s*>` : "Ok::<_, core::convert::Infallible>";
+
+for (const throwing of [false, true]) {
+  test(`borrowed input elides the fresh physical ${throwing ? "fallible" : "pure"} producer allocation`, () => {
+    const text = compiledRun("borrowed", throwing);
+    assert.doesNotMatch(text, /Callable::|::new|ConsumerFailure|TsonicError|TsonicResult/u);
+    assert.match(text, new RegExp(okType(throwing), "u"));
+  });
+
+  for (const retained of [false, true]) {
+    test(`${retained ? "retained" : "borrowed"} arity adapter keeps ${throwing ? "native E" : "Infallible"} without an intermediate allocation`, () => {
+      const text = compiledRun(retained ? "retained" : "arity", throwing);
+      assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|\.clone\(/u);
+      assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, retained ? 1 : 0);
+      assert.match(text, new RegExp(okType(throwing), "u"));
+      // A returned retained callable owns its environment, so its construction lifetime is 'static here.
+      if (retained) assert.match(text, new RegExp(
+        `rt::Callable::<'(?:_|static), \\(i32,\\), Result<i32, ${throwing ? nativeError : "core::convert::Infallible"}>>::new`, "u"));
+    });
+  }
+}
+
+// Planner-level cases plan against the sealed records of a real program that demands the callable input.
+function fixture() {
+  const current = nativeClosureProducerFixture({ source: `import type { int32 } from "@tsonic/core/types.js";
+${programs.borrowed}
+export function run(): int32 { return invoke((): int32 => 3); }
+` });
   const source = current.program.records.targetOperation.get(current.node).resultCarrier;
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "exact source producer plans");
   return { ...current, source, expression };
 }
 
-for (const throwing of [false, true]) {
-  test(`borrowed input elides the fresh physical ${throwing ? "fallible" : "pure"} producer allocation`, () => {
-    const current = fixture(throwing);
-    const converted = planRustCallableInputProducer(current.expression, current.source, current.context, current.node);
-    assert.equal(converted !== undefined, true);
-    const text = printRustExpr(converted);
-    assert.doesNotMatch(text, /Callable|::new|ConsumerFailure|TsonicError|TsonicResult/u);
-    assert.match(text, new RegExp(`Ok::<_, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>`, "u"));
-  });
-
-  for (const retained of [false, true]) {
-    test(`${retained ? "retained" : "borrowed"} arity adapter keeps ${throwing ? "native E" : "Infallible"} without an intermediate allocation`, () => {
-      const current = fixture(throwing);
-      const target = retained ? rustCallableTargetType([integer], integer) : rustCallableInputTargetType([integer], integer);
-      const conversion = selectRustCallableConversion(current.source, target, () => undefined, current.program.typeDefinitions);
-      assert.equal(conversion !== undefined, true);
-      const converted = planRustCallableConversion(conversion, current.expression, current.node, current.context);
-      assert.equal(converted !== undefined, true, "physical adapter plans");
-      const text = printRustExpr(converted);
-      assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|\.clone\(/u);
-      assert.equal((text.match(/rt::Callable::<[^\n]+>::new/gu) ?? []).length, retained ? 1 : 0);
-      assert.match(text, new RegExp(`Ok::<_, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>`, "u"));
-      if (retained) assert.match(text, new RegExp(
-        `rt::Callable::<'_, \\(i32,\\), Result<i32, ${throwing ? "ProducerFailure" : "core::convert::Infallible"}>>::new`, "u"));
-    });
-  }
-}
-
-test("inline elimination preserves preparation effects and refuses decorated or different constructors", () => {
+// F6: the inline producer decision is sealed by analysis (callableOperand.inline); the planner never inspects the
+// shape of a generated expression to eliminate an allocation, so every given expression yields the same producer.
+test("inline producers are planned from the sealed operand record, never from the shape of a generated expression", () => {
   const current = fixture();
+  // Hygienic argument names advance with each planning; the producer shape is compared without the suffix.
+  const producer = expression => printRustExpr(planRustCallableInputProducer(expression, current.source, current.context, current.node))
+    .replace(/_callable_arguments_\d+/gu, "_callable_arguments");
+  const planned = producer(current.expression);
+  assert.doesNotMatch(planned, /::new/u);
   const prepare = { kind: "expr", expr: { kind: "call", path: "prepare", args: [] } };
   const block = { kind: "block", body: { statements: [prepare, { kind: "tail", expr: current.expression }] } };
-  const converted = planRustCallableInputProducer(block, current.source, current.context, current.node);
-  assert.equal(converted !== undefined, true);
-  assert.equal(converted.body.statements[0] === prepare, true, "preparation remains exactly once in order");
-  assert.doesNotMatch(printRustExpr(converted), /::new/u);
   for (const expression of [
+    block,
     { ...current.expression, method: "recursive" },
-    { ...current.expression, owner: { ...current.expression.owner, path: "OtherCallable" } },
     { ...block, body: { ...block.body, innerAttrs: [{ kind: "list", path: "allow", arguments: [{ kind: "word", path: "dead_code" }] }] } },
   ]) {
-    assert.equal(planRustCallableInputProducer(expression, current.source, current.context, current.node) === expression,
-      true, "nonmatching producer is never structurally guessed");
+    assert.equal(producer(expression), planned,
+      "the producer comes from its sealed record, not from structural guessing");
   }
 });
 
 test("unresolved physical storage cannot silently select a logical ambient-error constructor", () => {
   const current = fixture();
-  current.context.input.program = { ...current.program, callableValues: { ...current.program.callableValues,
-    nativeStorage: { ...current.program.callableValues.nativeStorage,
-      operandFor: () => ({ kind: "unresolved", reason: "test missing exact source storage" }),
-    },
-  } };
-  assert.equal(planRustCallableInputProducer(current.expression, current.source, current.context, current.node) === undefined, true);
+  // Unresolved physical storage leaves the operand unsealed; the planner refuses instead of choosing a constructor.
+  const records = createRustRecordFixture({ callableOperand: { get: () => undefined } }, current.program.records);
+  const context = { ...current.context, input: { ...current.context.input, program: { ...current.context.input.program, records } } };
+  assert.throws(() => planRustCallableInputProducer(current.expression, current.source, context, current.node),
+    failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+      failure.message === "An admitted callable input requires its exact physical source operand.");
 });
 
 test("adapter emission requires the exact source-node callable identity", () => {
@@ -109,7 +126,9 @@ test("adapter emission requires the exact source-node callable identity", () => 
   const conversion = selectRustCallableConversion(foreign, rustCallableTargetType([integer, integer], integer),
     () => undefined, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true);
-  assert.equal(planRustCallableConversion(conversion, current.expression, current.node, current.context) === undefined, true);
+  assert.throws(() => planRustCallableConversion(conversion, current.expression, current.node, current.context),
+    failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+      failure.message === "An admitted callable adapter requires its exact physical conversion contract.");
 });
 
 test("fallible adapters use the same canonical native error channels as their physical signature", () => {
@@ -128,32 +147,21 @@ test("fallible adapters use the same canonical native error channels as their ph
 });
 
 test("formal callable adaptation invokes the exact selected protocol rather than a runtime dictionary", () => {
-  const current = nativeClosureProducerFixture({ source: `import type { int32 } from "@tsonic/core/types.js";
-export function adapt(callback: () => int32): () => int32 { const local = callback; return local; }
-export function create(): () => int32 { return (): int32 => { return 3; }; }
-` });
-  const { ast } = current.program.source;
-  let local;
-  const visit = node => {
-    const name = ast.name(node);
-    if (name !== undefined && ast.text(name) === "local" && ast.is.IsVariableDeclaration(node)) local = node;
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
-  };
-  current.program.sourceFiles.forEach(visit);
-  assert.equal(local !== undefined, true);
-  const node = Node_Initializer(ast, local);
-  const input = current.program.callableValues.native.inputs[0];
+  // The callable input is adapted to a callable of another arity where the program demands it.
+  const source = `import type { int32 } from "@tsonic/core/types.js";
+export function adapt(callback: () => int32): int32 { const local: (value: int32) => int32 = callback; return local(1); }
+`;
+  const { result } = compileRust({ files: { "index.ts": source } });
+  assert.deepEqual(result.diagnostics, []);
+  const text = rustSourceText(result).match(/pub fn adapt[\s\S]*?\n\}\n/u)?.[0] ?? "";
+  assert.match(text, /as crate::index::NativeCallable_[0-9a-f]+>::invoke/u);
+  assert.doesNotMatch(text, /Callable::|\.call\(|\.clone\(|TsonicError|ConsumerFailure/u);
+  const { program } = analyzeRust({ files: { "index.ts": source } });
+  const input = program.callableValues.native.inputs[0];
   assert.equal(input !== undefined, true);
-  const conversion = selectRustCallableConversion(input.carrier, rustCallableInputTargetType([integer], integer),
-    () => undefined, current.program.typeDefinitions);
-  assert.equal(conversion !== undefined, true);
-  const converted = planRustCallableConversion(conversion, { kind: "path", path: "callback" }, node, current.context);
-  assert.equal(converted !== undefined, true, "formal protocol adaptation plans");
-  const text = printRustExpr(converted);
-  assert.match(text, new RegExp(`as crate::index::${input.protocol.targetName}>::invoke`, "u"));
-  assert.doesNotMatch(text, /Callable::|\.call\(|\.invoke\(|\.clone\(|TsonicError|ConsumerFailure/u);
-  assert.equal(planRustNativeProtocolInvocation({ ...input }, { kind: "path", path: "callback" }, [], undefined, current.context) === undefined,
+  const context = rustSourceFilePlanContext(program, input.subject.node);
+  assert.equal(planRustNativeProtocolInvocation({ ...input }, { kind: "path", path: "callback" }, [], undefined, context) === undefined,
     true, "an equal-looking input cannot replace the selected source identity");
   assert.equal(planRustNativeProtocolInvocation(input, { kind: "path", path: "callback" }, [{ kind: "int-literal", text: "0" }], undefined,
-    current.context) === undefined, true, "protocol argument arity remains exact");
+    context) === undefined, true, "protocol argument arity remains exact");
 });

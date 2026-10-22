@@ -4,7 +4,7 @@ import { collectRustSourceCallRequirements } from "./generic-call-requirement-us
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 
-import { rustCallableInputProtocol, rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableInputProtocol, rustCallableProtocol, rustLocationTargetType } from "../../target-model/types/carriers/callables.js";
 
 import type { Node } from "@tsonic/tsts";
 
@@ -55,6 +55,10 @@ interface CallableRequirementVisitState {
 export function createRustCallableRequirementVisitor(input: RustCallableRequirementInput, state: CallableRequirementVisitState): (node: Node) => string | undefined {
   const { ast, declaration, records } = input;
   const { declared, dependencies, definition, normalizeFamily, optionalStorage, associated, projections, addUse } = state;
+  // A capture whose physical carrier is Copy is read by copy (analysis/ownership/reads.ts), so it needs no Clone bound.
+  const copiedCapture = (capture: { readonly storage: string; readonly carrier: TargetTypeRef }): boolean =>
+    isRustCopyCarrier(capture.storage === "location" ? rustLocationTargetType(capture.carrier) : capture.carrier,
+      selected => input.genericCallables.definitionFor(selected)?.copy === true);
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
       const nestedId = input.idByDeclaration.get(node);
@@ -423,7 +427,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
         if (error !== undefined) return error;
       }
       for (const capture of captures?.captures ?? []) {
-        const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
+        const move = capture.storage === "cell" || capture.storage === "borrow-cell" || copiedCapture(capture) ||
           input.ownershipFlow.captureTransfers.get(sourceValue.sourceDeclaration)?.has(capture.declaration) === true;
         const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), ...storage], true);
         if (error !== undefined) return error;
@@ -451,7 +455,7 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
       }
       for (const capture of captures.captures) {
         const error = addUse(capture.reference, capture.carrier,
-          capture.storage === "cell" || capture.storage === "borrow-cell" ||
+          capture.storage === "cell" || capture.storage === "borrow-cell" || copiedCapture(capture) ||
             input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true
             ? required.filter(requirement => requirement !== "clone") : required, true);
         if (error !== undefined) return error;

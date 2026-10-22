@@ -5,7 +5,7 @@ import type { RustStringComparisonView } from "../../../target-model/records/str
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustContextualRuntimeConversionContract } from "../../../policy/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
-import { rustBorrowValueIsUnprojected } from "../../storage/borrowed-element-purity.js";
+import { rustBorrowValueIsUnconverted, rustBorrowValueIsUnprojected } from "../../storage/borrowed-element-purity.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 
@@ -20,7 +20,14 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
       value = inner;
     }
     const literal = program.records.literalValue.get(value);
-    if ((literal?.form === "string" || literal?.form === "template") && isRustStringCarrier(program.records.valueRead.get(node)?.value) && rustBorrowValueIsUnprojected(node, program.records))
+    const parent = program.source.ast.parent(node);
+    const operation = parent === undefined ? undefined : program.records.targetOperation.get(parent);
+    // An optional equality operand is planned before its option projection and lifted into Some by the planner, so a
+    // string literal there is borrowed as the literal itself.
+    const optionOperand = operation?.kind === "option-equality" && isRustStringCarrier(program.records.runtimeCarrier.get(node)?.carrier) &&
+      rustBorrowValueIsUnconverted(node, program.records);
+    if ((literal?.form === "string" || literal?.form === "template") && (optionOperand ||
+      isRustStringCarrier(program.records.valueRead.get(node)?.value) && rustBorrowValueIsUnprojected(node, program.records)))
       selected = { kind: "literal", value: literal.text };
     const field = program.records.errorFieldEmission.get(node);
     if (field?.kind === "property" && field.directRead && field.property !== "stack") selected = { kind: "error" };
@@ -30,8 +37,6 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     const contextual = program.records.contextualValueConversion.get(node);
     if (contextual !== undefined && rustContextualRuntimeConversionContract(contextual.conversion, program.typeDefinitions)?.lowering === "owned-string-from-borrowed-str")
       selected = { kind: "contextual" };
-    const parent = program.source.ast.parent(node);
-    const operation = parent === undefined ? undefined : program.records.targetOperation.get(parent);
     if (parent !== undefined && operation?.kind === "operator-token" &&
       (BinaryExpression_Left(program.source.ast, parent) === node && operation.leftConversion !== undefined ||
         BinaryExpression_Right(program.source.ast, parent) === node && operation.rightConversion !== undefined)) selected = { kind: "value" };

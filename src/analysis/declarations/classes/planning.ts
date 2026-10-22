@@ -96,7 +96,7 @@ export function analyzeRustClassEmission(input: {
         if (ast.hasModifierKind(member, "static") || program.objectRepresentations.aliasFor(member) !== undefined) continue;
         const field = layout.fields.find(field => field.declaration === member);
         const targetName = program.projectTypes.fieldStorageName(definition, member);
-        const carrier = program.records.runtimeCarrier.get(member)?.carrier;
+        const carrier = program.callableValues.projectFieldStorage.get(member) ?? program.records.runtimeCarrier.get(member)?.carrier;
         if (field === undefined || targetName === undefined || !isValidRustIdentifier(targetName) || carrier === undefined)
           failTargetAnalysisInvariant("tsonic-rust", "An admitted class field requires its exact native slot, identifier and carrier.", member);
         const visibility = rustProjectMemberIsPrivate(ast, member) ? "private" as const : publiclyReachable ? "public" as const : "crate" as const;

@@ -50,7 +50,7 @@ export function planRustClassValueForwarder(
   if (result === undefined) failRustPlannerInvariant("An admitted class forwarder requires its native result adaptation.", callable.declaration);
   return { kind: "function", name, visibility: "private", generics: { parameters: [], wherePredicates: [] },
     selfParam: rustSelfParameter(construction ? "rc" : "ref"),
-    params, returnType, errorType: rustErrorType(boundary),
+    params: arguments_.parameters, returnType, errorType: rustErrorType(boundary),
     body: { statements: [...arguments_.statements, { kind: "tail", expr:
       applyRustFallibleResultExpression(result, { errorType: rustErrorType(boundary) }) }] },
   };

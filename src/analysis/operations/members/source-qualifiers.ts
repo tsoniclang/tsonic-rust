@@ -32,7 +32,8 @@ export function selectRustProviderSourceReceiver(
   if (selectedReceiver?.intrinsic === "global-object" || declaration !== undefined && (
     ast.is.IsClassDeclaration(declaration) || ast.is.IsClassExpression(declaration) ||
     ast.is.IsModuleDeclaration(declaration) || ast.is.IsSourceFile(declaration) || ast.is.IsEnumDeclaration(declaration) ||
-    ast.is.IsVariableDeclaration(declaration) && options.sourceProfiles.profileForNode(declaration, ast) === "js" &&
+    // A source-profile global (JS or native profile) qualifying a provider member is a compile-time qualifier.
+    ast.is.IsVariableDeclaration(declaration) && options.sourceProfiles.profileForNode(declaration, ast) !== undefined &&
       (carrier === undefined || isRustCallableCarrier(carrier))
   )) return Object.freeze({ kind: "compile-time" });
   return carrier === undefined ? undefined : Object.freeze({ kind: "runtime", carrier });
