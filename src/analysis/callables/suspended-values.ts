@@ -52,7 +52,8 @@ export function createRustSuspendedCallablePlan(
     const captures = captureFact?.captures;
     const receiverFields = captureFact?.receiverFields;
     const receivers = captureFact?.receivers;
-    const carrier = operation?.kind === "closure" ? operation.resultCarrier : undefined;
+    // A receiver-independent method is invoked without its receiver, as its native producer is.
+    const carrier = operation?.kind === "closure" ? records.receiverIndependentMethod.get(declaration)?.carrier ?? operation.resultCarrier : undefined;
     const protocol = rustCallableProtocol(carrier);
     const physical = nativeCaptures.forDeclaration(declaration);
     if (carrier === undefined || protocol === undefined || captures === undefined || receiverFields === undefined || receivers === undefined) {

@@ -376,6 +376,8 @@ export function createRustNativeStorageQueries(input: {
         const result = substituteRustTargetGenerics(signature.result, types, caller.bindings.lifetimes, caller.bindings.consts);
         return rustPhysicalPayloadFor(logical, result, current, input.definitions);
       }
+      // A call of a native Promise body produces that body's own anonymous native Future, not the Promise facade's result.
+      if (operation.asyncBody !== undefined) return isRustNativeFutureCarrier(logical) && rustTargetTypeRefEquals(logical, current) ? logical : undefined;
       const implementations = input.storage.invocationImplementationsFor(origin.node, bindings);
       if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length !== 1) return undefined;
       const declaration = implementations.nodes[0]!;
@@ -445,6 +447,17 @@ export function createRustNativeStorageQueries(input: {
       const typeIdentities = new Set(rustTargetGenericReferences(pattern).typeIdentities);
       if (typeIdentities.size === 0) return undefined;
       const inferred = inferRustTargetGenericBindings(pattern, actual,
+        { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
+      return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
+    };
+    const frameInstanceBindings = (producer: TargetTypeRef, destination: TargetTypeRef): ReadonlyMap<string, TargetTypeRef> | undefined => {
+      const source = rustFrameCallableValue(producer);
+      const target = rustFrameCallableValue(destination);
+      if (source?.owner.kind !== "class" || target?.owner.kind !== "class" ||
+        closedMetadataKey(source.owner.origin) !== closedMetadataKey(target.owner.origin)) return undefined;
+      const typeIdentities = new Set(rustTargetGenericReferences(producer).typeIdentities);
+      if (typeIdentities.size === 0) return undefined;
+      const inferred = inferRustTargetGenericBindings(producer, destination,
         { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
       return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
     };
@@ -530,6 +543,22 @@ export function createRustNativeStorageQueries(input: {
               const originCarrier = origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
                 : frameFieldCarrier(origin);
+              // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
+              // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
+              const concreteParameter = origin.kind === "input" && origin.projection.length === 0 &&
+                input.native.isConcreteCallableParameter(origin.node)
+                ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
+              if (concreteParameter !== undefined) {
+                const declared = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
+                if (!rustCallableInvocationSignaturesMatch(current, callableValueCarrier(declared) ?? declared))
+                  return fail("Native callable storage conflicts with its exact concrete callable parameter.");
+                joinable = false;
+                if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
+                  return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                physical = declared;
+                alternatives.set(origin, declared);
+                continue;
+              }
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) {
                 absent.add(origin);
                 continue;
@@ -561,8 +590,13 @@ export function createRustNativeStorageQueries(input: {
               const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
                 ? undefined : rustFrameCallableValue(originCarrier) !== undefined
                   ? originCarrier : input.producers.physicalFor(origin.node, originCarrier);
-              const instantiated = produced === undefined || classBindings === undefined ? produced
+              const classBound = produced === undefined || classBindings === undefined ? produced
                 : substituteRustTargetGenerics(produced, classBindings, new Map(), new Map());
+              // A field write made in a method body of a generic class is reached with that method's declaration
+              // bindings; the instance whose field is read supplies the class type arguments.
+              const readInstance = classBound === undefined ? undefined : frameInstanceBindings(classBound, current);
+              const instantiated = classBound === undefined || readInstance === undefined ? classBound
+                : substituteRustTargetGenerics(classBound, readInstance, new Map(), new Map());
               candidatePhysical = instantiated === undefined ? undefined : substituteRustTargetGenerics(instantiated, types, lifetimes, consts);
             }
             if (candidatePhysical === undefined)

@@ -10,6 +10,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/types/objects/project-dispatch-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
@@ -44,13 +45,35 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
         ast.kindName(member) === "KindGetAccessor" || ast.kindName(member) === "KindSetAccessor") callableDeclarations.add(member);
     }
   }
+  // A dispatch slot returning a callable value returns the physical callable every implementation of the slot produces,
+  // as callers' native storage selects it; the logical callable carrier would not match the implementations.
+  const classDefinitions = program.projectTypes.definitions.filter(definition => definition.kind === "class");
+  const slotResult = (member: Node): TargetTypeRef | undefined => {
+    const logical = rustCallableInvocationResult(program.records, member);
+    if (logical === undefined || rustCallableProtocol(logical) === undefined ||
+      program.records.asyncFunction.get(member) !== undefined || program.records.generator.get(member) !== undefined) return logical;
+    const implementations = new Set<Node>(ast.body(member) === undefined ? [] : [member]);
+    for (const definition of classDefinitions) {
+      const selected = program.projectTypes.memberImplementation(definition, member);
+      if (selected.kind === "resolved" && ast.body(selected.implementation.declaration) !== undefined)
+        implementations.add(selected.implementation.declaration);
+    }
+    let physical: TargetTypeRef | undefined;
+    for (const implementation of implementations) {
+      const selected = program.callableValues.nativeStorage.returnFor(implementation);
+      if (selected.kind === "unresolved" || selected.kind === "selected" && selected.inputs.length !== 0) return logical;
+      if (physical !== undefined && !rustTargetTypeRefEquals(physical, selected.carrier)) return logical;
+      physical = selected.carrier;
+    }
+    return physical ?? logical;
+  };
   for (const member of callableDeclarations) {
     const asynchronous = program.records.asyncFunction.get(member);
     const typeParameters = ast.typeParameters(member).map(parameter => {
       const selected = program.sourceLifetimes.parameterFor(parameter);
       return selected?.kind === "type" ? selected.identity : undefined;
     });
-    const result = rustCallableInvocationResult(program.records, member);
+    const result = slotResult(member);
     const effects = program.records.sourceCallEffects.get(member);
     if (result === undefined || effects === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact native result and invocation effects.", member);
     const safety = (placement: "declaration" | "getter" | "setter"): boolean => {

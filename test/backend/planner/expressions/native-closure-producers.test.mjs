@@ -8,8 +8,12 @@ import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist
 import { printRustType } from "../../../../dist/print/source/types.js";
 
 
-import { rustSourcePrimitiveTargetType, rustClosureTargetType, rustCallableInputProtocol, rustCallableInputTargetType }
+import { rustSourcePrimitiveTargetType, rustClosureTargetType }
   from "../../../../dist/target-model/types/index.js";
+import { compileRust, rustSourceText, analyzeRust } from "../../../helpers/rust-session.mjs";
+import { createRustProviderPackage } from "../../../../dist/public/provider.js";
+import { analyzeRustLambdaEmission } from "../../../../dist/analysis/callables/lambda-emission.js";
+import { createRustLambdaEmissionProducer } from "../../../../dist/analysis/program/records/lambda-emission.js";
 import { rustGenericCallableValue } from "../../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustCallableConstructionType } from "../../../../dist/backend/planner/types/constructions.js";
 import { rustNativeCompletionFutureType } from "../../../../dist/target-model/types/callable-completions.js";
@@ -17,13 +21,46 @@ import { rustTypeGenericArguments } from "../../../../dist/target-model/types/ge
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
+const integer = rustSourcePrimitiveTargetType("int32");
 
-function producerCarrierRecords(carrier) {
-  return (records, producer) => ({ ...records,
-    targetOperation: { get: node => node === producer
-      ? { ...records.targetOperation.get(node), resultCarrier: carrier } : records.targetOperation.get(node) },
-    runtimeCarrier: { get: node => node === producer ? { carrier } : records.runtimeCarrier.get(node) },
+// A provider operation whose callback parameter has the given native carrier; an inline arrow passed to it is the
+// checked closure producer whose carrier analysis selects from that parameter.
+function nativeCallbackConsumer(carrier) {
+  return createRustProviderPackage({
+    id: "native-closure-consumer-proof", version: "1.0.0", displayName: "Native closure consumer proof", crates: [],
+    modules: [{ moduleSpecifier: "test:consumer", providerModuleId: "test.consumer", exports: [{
+      id: "test:consumer::apply", name: "apply", kind: "function", signatures: [{
+        id: "test:consumer::apply()", name: "apply", parameters: [{ name: "callback", type: { kind: "function",
+          id: "test:consumer::Callback", parameters: [], returnType: { kind: "source-primitive", name: "int32" }, typeParameters: [] } }],
+        returnType: { kind: "source-primitive", name: "int32" },
+      }],
+    }] }],
+    operations: [{ exportId: "test:consumer::apply", operationKind: "method", target: { form: "call", path: "apply" },
+      parameterCarriers: [carrier], resultCarrier: integer }],
   });
+}
+
+function compiledItem(files, item, packages = []) {
+  const { result } = compileRust({ packages, files });
+  assert.deepEqual(result.diagnostics, []);
+  const text = rustSourceText(result).match(new RegExp(`pub fn ${item}[\\s\\S]*?\\n\\}\\n`, "u"))?.[0];
+  assert.equal(text !== undefined, true, `${item} is emitted`);
+  return text;
+}
+
+// The analysis owner of closure emission, run on a real analyzed program with one producer input withheld.
+function lambdaEmissionWithout(source, withhold) {
+  const { program } = analyzeRust({ files: { "index.ts": source } });
+  const { ast } = program.source;
+  const closures = [];
+  const visit = node => {
+    if (program.records.targetOperation.get(node)?.kind === "closure") closures.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(closures.length > 0, true, "checked closure producers");
+  const producer = createRustLambdaEmissionProducer(() => undefined);
+  return () => analyzeRustLambdaEmission(withhold(program, closures[0]), closures, producer);
 }
 
 test("pure closure construction owns Infallible instead of inheriting the consumer's error", () => {
@@ -144,12 +181,11 @@ test("native future closures remain delegated to their sealed generic implementa
 });
 
 test("nonretaining closure inputs keep their borrowed native representation and exact pure result", () => {
-  const carrier = rustCallableInputTargetType([], rustSourcePrimitiveTargetType("int32"));
-  const fixture = nativeClosureProducerFixture({ selectRecords: producerCarrierRecords(carrier) });
-  const operation = fixture.program.records.targetOperation.get(fixture.node);
-  assert.equal(rustCallableInputProtocol(operation.resultCarrier) !== undefined, true, "borrowed callable input selected");
-  const text = printNativeClosureProducer(fixture);
-  assert.match(text, /move \|_callable_arguments: \(\)\| Ok::<_, core::convert::Infallible>\(3\)/u);
+  const text = compiledItem({ "index.ts": `import type { int32 } from "@tsonic/core/types.js";
+export function invoke(callback: () => int32): int32 { return callback(); }
+export function run(): int32 { return invoke((): int32 => 3); }
+` }, "run");
+  assert.match(text, /move \|_callable_arguments(?:_\d+)?: \(\)\| Ok::<_, core::convert::Infallible>\(3\)/u);
   assert.doesNotMatch(text, /Callable::|::new|Rc::|Box|clone/u);
 });
 
@@ -192,39 +228,59 @@ export function create(): () => int32 {
   assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
 });
 
-for (const [label, carrier, expected] of [
-  ["function pointer", { kind: "function-pointer", args: [], result: rustSourcePrimitiveTargetType("int32") }, "|| 3"],
-  ["native closure", rustClosureTargetType([], rustSourcePrimitiveTargetType("int32")), "|| 3"],
-  ["explicit native fallible closure", rustClosureTargetType([], rustSourcePrimitiveTargetType("int32"), true), "|| Ok(3)"],
+for (const [label, carrier] of [
+  ["function pointer", { kind: "function-pointer", args: [], result: integer }],
+  ["native closure", { ...rustClosureTargetType([], integer), callTrait: "Fn" }],
 ]) {
   test(`${label} keeps its native call ABI without a runtime storage wrapper`, () => {
-    const fixture = nativeClosureProducerFixture({ selectRecords: producerCarrierRecords(carrier) });
-    const text = printNativeClosureProducer(fixture);
-    assert.equal(text, expected);
+    const text = compiledItem({ "index.ts": `import { apply } from "test:consumer";
+import type { int32 } from "@tsonic/core/types.js";
+export function run(): int32 { return apply((): int32 => 3); }
+` }, "run", [nativeCallbackConsumer(carrier)]);
+    assert.match(text, /apply\(\|\| 3\)/u);
     assert.doesNotMatch(text, /rt::|ConsumerFailure|Box|clone/u);
   });
 }
 
-test("closure construction rejects missing error evidence rather than selecting the ambient error", () => {
-  const fixture = nativeClosureProducerFixture({
-    selectErrorRegions: (regions, producer) => ({ ...regions,
-      get: node => node === producer ? undefined : regions.get(node) }),
-  });
-  assert.equal(fixture.plan() === undefined, true, "missing error fact rejects");
-  assert.equal(fixture.bodyContexts.length, 0, "invalid producer never plans its body");
-  assert.equal(fixture.context.diagnostics.length, 1);
-  assert.match(fixture.context.diagnostics[0].message, /finalized native error region/u);
+// An inline location callback is an explicit fallible native closure (location-callbacks.ts).
+test("explicit native fallible closure keeps its native call ABI without a runtime storage wrapper", () => {
+  const text = compiledItem({ "index.ts": `import { bindptr } from "@tsonic/core/lang.js";
+import type { int32, Pointer } from "@tsonic/core/types.js";
+export class Owner { value: int32 = 0; }
+export function bound(owner: Owner): Pointer<int32> {
+  return bindptr(owner, (): int32 => 3, (_value: int32): void => {});
+}
+` }, "bound");
+  const callback = text.match(/try_bind\(owner, (\|\| [^,]+),/u)?.[1];
+  assert.equal(callback, "|| Ok(3)");
+  assert.doesNotMatch(callback, /rt::|ConsumerFailure|Box|clone/u);
 });
 
-for (const method of ["errorFor", "physicalFor"]) {
+// Closure emission is decided in analysis (lambda-emission.ts); missing producer evidence stops that owner instead of
+// selecting an ambient error.
+const retainedProducer = `import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 { return (): int32 => 3; }
+`;
+// An inline location callback is a fallible native closure, whose invocation error comes from the producer itself.
+const nativeClosureProducer = `import { bindptr } from "@tsonic/core/lang.js";
+import type { int32, Pointer } from "@tsonic/core/types.js";
+export class Owner { value: int32 = 0; }
+export function bound(owner: Owner): Pointer<int32> {
+  return bindptr(owner, (): int32 => 3, (_value: int32): void => { throw new Error("rejected"); });
+}
+`;
+
+test("closure construction rejects missing error evidence rather than selecting the ambient error", () => {
+  const analyze = lambdaEmissionWithout(retainedProducer, (program, producer) => ({ ...program, records: { ...program.records,
+    nativeErrorRegion: { get: node => node === producer ? undefined : program.records.nativeErrorRegion.get(node) } } }));
+  assert.throws(analyze, /finalized native error region/u);
+});
+
+for (const [method, source] of [["errorFor", nativeClosureProducer], ["physicalFor", retainedProducer]]) {
   test(`closure construction rejects missing producer ${method} evidence`, () => {
-    const fixture = nativeClosureProducerFixture({
-      ...(method === "errorFor" ? { selectRecords: producerCarrierRecords(rustCallableInputTargetType([], rustSourcePrimitiveTargetType("int32"))) } : {}),
-      selectProducers: plan => ({ ...plan, [method]: () => undefined }),
-    });
-    assert.equal(fixture.plan() === undefined, true, method);
-    assert.equal(fixture.bodyContexts.length, 0);
-    assert.equal(fixture.context.diagnostics.length, 1);
+    const analyze = lambdaEmissionWithout(source, program => ({ ...program, callableValues: { ...program.callableValues,
+      nativeProducers: { ...program.callableValues.nativeProducers, [method]: () => undefined } } }));
+    assert.throws(analyze, /producer-owned physical invocation ABI/u);
   });
 }
 
