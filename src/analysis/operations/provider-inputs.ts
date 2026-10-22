@@ -33,7 +33,11 @@ export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "re
         operand.origin.operationNode === occurrence.node && operand.origin.input === input);
       const raw = program.records.runtimeCarrier.get(slot.node)?.carrier;
       if (raw === undefined) failTargetAnalysisInvariant("tsonic-rust", "A finalized provider source input requires its independent checked carrier.", slot.node);
-      const carriers = contexts.length === 0 ? [raw] : contexts.map(operand => operand.carrier);
+      // The guard of an optional chain reaches the chained operation as its present value (the planner binds it as
+      // `Some(optional_receiver)`), so its input carrier is the chain's selected guard carrier, not the Option its operand context carries.
+      const chain = program.records.optionalChainEmission.get(occurrence.node);
+      const present = chain?.fact.guard === slot.node ? chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier : undefined;
+      const carriers = present !== undefined ? [present] : contexts.length !== 0 ? contexts.map(operand => operand.carrier) : [raw];
       for (const carrier of carriers) {
         const converted = rustValueCarrierTransitionTarget(program.records, slot.node, carrier);
         if (!rustFinalizedCarrierTransitionMatches(carrier, converted, input.sourceCarrier)) issues.push({
