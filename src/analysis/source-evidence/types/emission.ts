@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustCallableConversionEmission } from "../../../target-model/records/callable-conversions.js";
+import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustTypeEmissionProducer } from "../../program/records/type-emission.js";
@@ -106,6 +108,12 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const invocation = program.records.genericCallableInvocation.get(node);
     if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
       ...invocation.awaiting.map(source => source.errorType));
+    // A callable adapter constructs its physical callable (and each nested adapter's), which renders as a constructor type.
+    const adapter = program.records.contextualValueConversion.get(node)?.conversion;
+    const adapterContract = adapter?.kind === "callable-adapter" ? program.records.callableContract.get(node, adapter) : undefined;
+    const adapterCarriers = (contract: RustCallableConversionEmission): readonly TargetTypeRef[] =>
+      [contract.physical.carrier, ...[...contract.nested.values()].flatMap(adapterCarriers)];
+    if (adapterContract !== undefined) pending.push(...adapterCarriers(adapterContract));
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     // A callable written through the eliminating adapter renders the callable carrying the destination's error.
@@ -140,7 +148,8 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const optionalStorage: RustOptionalStorageEmission | undefined = isRustAbsenceCarrier(carrier) ? { kind: "unit" }
       : optionalValue !== undefined ? { kind: "custom", element: optionalValue }
       : optionalElement !== undefined ? { kind: "option", element: optionalElement }
-      : union === undefined ? undefined : { kind: "union", absence: rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, program.typeDefinitions)?.path };
+      : union === undefined && rustRuntimeUnionContract(carrier) === undefined ? undefined
+        : { kind: "union", absence: rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, program.typeDefinitions)?.path };
     const sourceStorage = rustSourceOptionalTargetType(carrier);
     const sourceOptional: RustSourceOptionalEmission = rustTargetTypeRefEquals(sourceStorage, rustOptionTargetType(carrier)) ? { kind: "identity" }
       : optionalElement !== undefined && rustTargetTypeRefEquals(sourceStorage, carrier)

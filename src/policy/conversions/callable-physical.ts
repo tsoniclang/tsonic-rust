@@ -189,3 +189,17 @@ export function rustCallableWithError(physical: TargetTypeRef, error: TargetType
   return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
     [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
 }
+
+// The physical boxed callable a declared callable protocol carrier denotes: `Callable<'l, (P..), Result<R, E>>`.
+// A concrete callable parameter is passed in this form, so its storage and invocation read its physical error.
+export function rustCallablePhysicalCarrier(declared: TargetTypeRef): TargetTypeRef | undefined {
+  if (rustCallablePhysicalSignature(declared) !== undefined) return declared;
+  if (declared.kind !== "target-named" || declared.id !== rustCallableTargetId) return undefined;
+  const lifetime = declared.genericArguments?.[0];
+  const types = declared.genericArguments?.slice(1).map(argument => argument.kind === "type" ? argument.type : undefined);
+  const [parameters, result, error] = types ?? [];
+  if ( lifetime?.kind !== "lifetime" || types?.length !== 3 || parameters?.kind !== "tuple" ||
+    result === undefined || error === undefined) return undefined;
+  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable", [lifetime,
+    ...rustTypeGenericArguments([parameters, rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, error]))])]));
+}
