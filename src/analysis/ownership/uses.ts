@@ -9,6 +9,8 @@ import { selectRustOperationReadUses } from "../../policy/ownership/read-use.js"
 import { type RustReadUse } from "../../target-model/records/ownership.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustCallArgumentMode } from "../callables/parameter-passing.js";
+import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   ast: AstReader, records: RustProgramRecords): boolean {
@@ -29,8 +31,16 @@ export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   return true;
 }
 
-export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords): ReadonlyMap<Node, RustReadUse> {
+export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords,
+  definitions: RustTypeDefinitions): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
+  // A borrowed provider input whose argument is first converted by value (`&JsValue::from(handle)`) consumes the
+  // argument's own read, so a later read of the same storage needs its clone.
+  const argumentConsumed = (source: { readonly kind: string; readonly sourceIndex?: number }, argumentsList: readonly (Node | undefined)[] | undefined): boolean => {
+    const argument = source.kind === "argument" && source.sourceIndex !== undefined ? argumentsList?.[source.sourceIndex] : undefined;
+    const conversion = argument === undefined ? undefined : records.contextualValueConversion.get(argument)?.conversion;
+    return conversion !== undefined && rustContextualRuntimeConversionContract(conversion, definitions)?.sourceMode === "value";
+  };
   for (const node of nodes) {
     const operation = records.targetOperation.get(node);
     const computedMember = records.computedMember.get(node);
@@ -50,7 +60,7 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
       : rustBorrowedOperationArguments(node, ast);
     const selected = selectRustOperationReadUses(ast, node, { operation, computedMember, address, location, guard, callableMode, arguments: argumentsList,
       nativeInputs: operation?.kind === "provider-operation" || operation?.kind === "runtime-set" ? rustFinalizedSourceInputs(operation.abi).map(input =>
-        ({ source: input.source, mode: rustProviderInputBorrowMode(input) })) : [],
+        ({ source: input.source, mode: argumentConsumed(input.source, argumentsList) ? undefined : rustProviderInputBorrowMode(input) })) : [],
       argumentModes: (argumentsList ?? []).map(argument => records.argumentPassing.get(argument)?.mode) });
     for (const [subject, use] of selected) uses.set(subject, use);
     // A getter read whose method borrows `self` shares its receiver, like a stored field read.

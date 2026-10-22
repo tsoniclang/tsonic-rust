@@ -308,7 +308,7 @@ export function analyzeRustAnalysisProgram(
     promiseBodies: context.promiseBodies.plan,
     nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
     sourceTypes: sourceStage.sourceTypes,
-    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies,
+    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies, jsEnabled: context.jsEnabled,
     evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
       classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });
   if (declarationGenericRequirements.kind === "rejected" || retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {

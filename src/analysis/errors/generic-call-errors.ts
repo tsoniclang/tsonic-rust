@@ -31,6 +31,9 @@ type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "rec
 
 export interface RustSourceGenericCallableInvocation {
   readonly selection: RustGenericCallableInvocationFact;
+  // Pending channels carry a producer's own error carrier, which names the producer's generic and captured environment;
+  // callers of the invoking declaration bind them only once the invocation completes.
+  readonly pendingErrors: ReadonlySet<string>;
   complete(context: RustAnalysisContext): {
     readonly selection: RustGenericCallableInvocationFact;
     readonly replacements: ReadonlyMap<string, RustNativeErrorEffect>;
@@ -118,7 +121,7 @@ export function prepareRustGenericCallableInvocation(
     effects: Object.freeze({ invocation: invocation.length === 0 ? "infallible" : "fallible",
       awaiting: awaiting.length !== 0 ? "fallible" : effects.some(effect => effect.awaiting !== "not-applicable")
         ? "infallible" : "not-applicable" }) });
-  return Object.freeze({ selection,
+  return Object.freeze({ selection, pendingErrors: new Set([...requests, ...implementationRequests].map(request => request.identity)),
     complete(finalContext: RustAnalysisContext) {
       const completed = resolveRustGenericCallableInvocation(node, finalContext, effectsFor);
       if (completed === undefined) return undefined;

@@ -1,3 +1,4 @@
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
@@ -98,7 +99,11 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
       const name = bodyName ?? (fact.target.dispatch === undefined ? specialization?.targetName ?? fact.target.name : fact.target.name);
       const receiverNode = rustMemberAccessReceiver(context.input.program.source.ast, callee);
       if (fact.target.dispatch !== undefined) {
-        const variant = selection.dispatch ?? failRustPlannerInvariant("An admitted method requires its native dispatch specialization.", node);
+        // Inside a specialized callable the variant is the one sealed for the active specialization's substitutions.
+        const substitutions = context.typeParameterSubstitutions;
+        const variant = selection.dispatch ?? selection.specializedDispatch.find(entry => substitutions !== undefined &&
+          [...entry.substitutions].every(([identity, carrier]) => rustTargetTypeRefEquals(substitutions.get(identity), carrier)))?.variant
+          ?? failRustPlannerInvariant("An admitted method requires its native dispatch specialization.", node);
         // An exact call (super.method()) dispatches through the active project root; only a virtual call evaluates its
         // receiver expression (`super` has no value of its own).
         if (fact.target.dispatch.selected === "exact") {

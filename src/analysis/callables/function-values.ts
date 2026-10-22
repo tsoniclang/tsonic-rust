@@ -1,6 +1,7 @@
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
+import { KindNonNullExpression, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableTargetType, rustCallableProtocol, rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
@@ -23,7 +24,10 @@ export function rustSourceClosureValueCarrier(
   const storage = resolveRustCallableStorageCarrier(construction, context, walk.operationOptions, new Set());
   const stored = rustCallableProtocol(storage);
   if (storage === undefined || stored?.lifetime === undefined) return storage;
-  const environment = captures ?? resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set());
+  // A recursive closure reads its own unwritten binding through its recursion slot, not its environment (as captures do).
+  const self = rustCallableExpressionValueDeclaration(declaration, walk.context.ast);
+  const excluded = self !== undefined && !walk.context.source.navigation.declarationUseSummary(self).bindingWritten ? new Set([self]) : new Set<Node>();
+  const environment = captures ?? resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set(), excluded);
   const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, walk);
   return lifetime === undefined ? undefined : rustCallableTargetType(stored.parameters, stored.result, lifetime, stored.error);
 }
@@ -43,4 +47,30 @@ export function rustSourceFunctionValueCarrier(
   }
   return rustHigherRankedNativeFunctionCarrier(walk, declaration, parameters, result) ?? rustCallableTargetType(
     parameters.map(parameter => parameter.parameterCarrier), result, { kind: "static" });
+}
+
+// The variable a callable expression initializes (through parentheses and type assertions): its self binding.
+export function rustCallableExpressionValueDeclaration(
+  expression: Node,
+  ast: RustFactWalk["context"]["ast"],
+): Node | undefined {
+  let current = expression;
+  let parent = ast.parent(current);
+  while (parent !== undefined) {
+    const kind = ast.kindName(parent);
+    if (kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
+      kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
+      kind !== "KindTypeAssertionExpression") {
+      break;
+    }
+    if (Node_Expression(ast, parent) !== current) {
+      return undefined;
+    }
+    current = parent;
+    parent = ast.parent(current);
+  }
+  return parent !== undefined && ast.kindName(parent) === KindVariableDeclaration &&
+      Node_Initializer(ast, parent) === current
+    ? parent
+    : undefined;
 }

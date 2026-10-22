@@ -29,7 +29,7 @@ import { rustUnionAlternatives } from "../../target-model/types/union-relations.
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
@@ -37,15 +37,15 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "../../policy/conversions/native-callables.js";
-import { rustAbsentFutureWitness, rustNativeCallableAbsenceWitness } from "../../policy/conversions/native-callables.js";
+import { rustAbsentFutureWitness } from "../../policy/conversions/native-callables.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
-import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustNativeCallableInvocationArguments } from "../../policy/types/callables/native-invocations.js";
 import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
+import { collectRustNativeAbsenceWitnesses, selectRustNativeConversionBoundaries } from "./native-storage-witnesses.js";
 import { type RustNativeFutureEnvironmentSelection } from "../../target-model/records/native-future-inputs.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
@@ -105,36 +105,14 @@ export function createRustNativeStorageQueries(input: {
   readonly carrierHost: RustValueDomainCarrierHost;
   // Resolved after the error regions; storage shared by distinct producers is selected only once it is available.
   readonly producerErrorFor: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;
+  // Source type families (indexed field outputs) resolved to their selected native carriers.
+  readonly normalizeTypeFamily: (carrier: TargetTypeRef) => TargetTypeRef;
 }): RustNativeStorageQueries {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
   const ownedInputs = new Set(input.native.inputs);
-  const absenceWitnesses = new Map<Node, Map<RustNativeCallableInput, TargetTypeRef>>();
-  const argumentWitnesses = new Map<Node, Map<Node, TargetTypeRef>>();
   const joinWrites = new Map<Node, RustCallableJoinWrite>();
-  const conversionBoundaries: SourceStorageSubject[] = [];
-  // Source storage transports an identifier operand as its declaration, so a callable adapter recorded on an identifier
-  // reference is never reached as a frontier boundary. Index those adapted references by the declaration they name.
-  const adaptedReferences = new Map<Node, { readonly node: Node; readonly subject: SourceStorageSubject }[]>();
-  let boundaryFailure: string | undefined;
-  for (const node of input.nativeNodes) {
-    if (input.records.contextualValueConversion.get(node)?.conversion.kind !== "callable-adapter") continue;
-    const selected = input.storage.subject(node, "value");
-    if (selected.kind === "unresolved") { boundaryFailure ??= selected.reason; continue; }
-    const declaration = input.ast.is.IsIdentifier(node)
-      ? input.storage.source.navigation.sourceReferenceFor(node)?.declaration : undefined;
-    // A reference to a native callable input is transported as the input itself and is never on a frontier; any other
-    // adapted reference (a local binding read) is a frontier stop of the storage it is written into.
-    if (declaration === undefined || !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
-      conversionBoundaries.push(selected.subject);
-      continue;
-    }
-    // A query of the reference itself reads the declaration's unconverted value, so it is not a frontier stop.
-    const references = adaptedReferences.get(declaration) ?? [];
-    references.push({ node, subject: selected.subject });
-    adaptedReferences.set(declaration, references);
-  }
-  const boundaries = Object.freeze(conversionBoundaries);
+  const { boundaries, adaptedReferences, failure: boundaryFailure } = selectRustNativeConversionBoundaries(input);
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
   const returns = new Map<Node, RustNativeStorageSelection>();
@@ -611,7 +589,8 @@ export function createRustNativeStorageQueries(input: {
                 ? undefined : instanceTypeBindings(ownerBound, current);
               const boundCarrier = classBindings === undefined ? ownerBound
                 : callableValueCarrier(substituteRustTargetGenerics(ownerBound!, classBindings, new Map(), new Map()));
-              const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
+              const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(mapRustTargetTypes(current, input.normalizeTypeFamily),
+                  mapRustTargetTypes(boundCarrier, input.normalizeTypeFamily))
                 ? undefined : rustFrameCallableValue(originCarrier) !== undefined
                   ? originCarrier : input.producers.physicalFor(origin.node, originCarrier);
               const classBound = produced === undefined || classBindings === undefined ? produced
@@ -751,50 +730,11 @@ export function createRustNativeStorageQueries(input: {
     const subject = input.storage.subjectFor(callee);
     return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindings);
   };
-  const witnessBudget = createRustEffectsWorkBudget();
-  let witnessSubject: Node | undefined;
-  const witnessFailure = witnessBudget.run(() => { for (const invocation of input.storage.invocations) {
-    witnessSubject = invocation;
-    witnessBudget.step();
-    const operation = input.records.targetOperation.get(invocation);
-    const signature = input.records.selectedCall.get(invocation);
-    const declaration = asSourceNode(signature?.sourceDeclaration, input.ast);
-    if (operation?.kind !== "source-call" || signature === undefined || declaration === undefined) continue;
-    for (const selected of input.native.inputsFor(declaration)) {
-      witnessBudget.step();
-      if (rustOptionElementCarrier(selected.carrier) === undefined) continue;
-      const bindings = invocationBindingsFor(selected.owner, invocation);
-      const origins = bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
-      if (origins.kind !== "resolved" || origins.subjects.length === 0 || origins.subjects.some(subject => subject.projection.length !== 0 ||
-        !isRustAbsenceCarrier(input.records.runtimeCarrier.get(subject.node)?.carrier) &&
-        !(subject.kind === "return" && isRustNeverCarrier(input.records.sourceCallableReturn.get(subject.node)?.returnCarrier)))) continue;
-      const prototype = rustNativeCallableAbsenceWitness(selected, input.definitions);
-      const generics = rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], operation.targetGenericArguments ?? []);
-      if (prototype === undefined || generics === undefined) continue;
-      const witness = snapshotClosedMetadata(substituteRustTargetGenerics(prototype, generics.types, generics.lifetimes, generics.consts));
-      witnessBudget.metadata(witness);
-      const witnesses = absenceWitnesses.get(invocation) ?? new Map<RustNativeCallableInput, TargetTypeRef>();
-      witnesses.set(selected, witness);
-      absenceWitnesses.set(invocation, witnesses);
-      if (selected.subject.projection.length === 0) {
-        const index = input.ast.parameters(selected.owner).indexOf(selected.subject.node);
-        for (const supplied of operation.parameters[index]?.inputs ?? []) {
-          witnessBudget.step();
-          if (supplied.sourceForm !== "value") continue;
-          const argument = input.ast.arguments(invocation)[supplied.sourceArgumentIndex];
-          if (argument === undefined) continue;
-          const arguments_ = argumentWitnesses.get(invocation) ?? new Map<Node, TargetTypeRef>();
-          arguments_.set(argument, snapshotClosedMetadata(rustSourceOptionalTargetType(witness)));
-          argumentWitnesses.set(invocation, arguments_);
-        }
-      }
-    }
-  } });
+  const witnesses = collectRustNativeAbsenceWitnesses(input, invocationBindingsFor);
+  const { absenceWitnesses, argumentWitnesses } = witnesses;
   return Object.freeze({
     logicalCarrierFor,
-    issues: Object.freeze(witnessFailure === undefined || witnessSubject === undefined ? [] : [{
-      subject: witnessSubject, message: witnessFailure.message,
-    }]),
+    issues: witnesses.issues,
     invocationCallableFor: (node: Node) => invocationCallableFor(node, bindingsFor(ownerFor(node))),
     genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection {
       return nodes.has(declaration) ? selectRustNativeStorageGenericBindings({ ...input, genericInvocationBindingsFor }, declaration, bindings)

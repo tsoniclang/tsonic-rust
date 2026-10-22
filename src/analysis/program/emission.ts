@@ -94,6 +94,7 @@ import { analyzeRustLambdaEmission } from "../callables/lambda-emission.js";
 import { analyzeRustIntegerTruncation } from "../operations/integer-truncation.js";
 import { analyzeRustProviderForms } from "../operations/provider-forms.js";
 import { analyzeRustCallableEmission } from "../conversions/callable-emission.js";
+import { analyzeRustRecordFieldStorage } from "../objects/record-field-storage.js";
 import { analyzeRustArgumentViews } from "../operations/argument-views.js";
 import { admitRustRecordContributions } from "../reachability/record-contributions.js";
 import { admitRustErrorObservations } from "../errors/observations.js";
@@ -264,6 +265,8 @@ export function finalizeRustNativeEmission(
   const lambdaEmissionIssues = analyzeRustLambdaEmission(program, context.nativeNodes, context.records.lambdaEmissionPlans);
   if (lambdaEmissionIssues.length !== 0) return rejectedTargetStage(lambdaEmissionIssues);
   analyzeRustCallableEmission(program, context.nativeNodes, context.records.callableConversionPlans);
+  const recordFieldIssues = analyzeRustRecordFieldStorage(program, context.nativeNodes, context.records.callableConversionPlans);
+  if (recordFieldIssues.length !== 0) return rejectedTargetStage(recordFieldIssues);
   const sourceCallIssues = analyzeRustSourceCalls(program, context.nativeNodes, context.records.sourceCallPlans);
   if (sourceCallIssues.length !== 0) return rejectedTargetStage(sourceCallIssues);
   const callAdmissionIssues = admitRustCalls(program, context.nativeNodes);

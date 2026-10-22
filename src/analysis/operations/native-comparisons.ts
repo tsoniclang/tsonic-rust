@@ -80,8 +80,9 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
     const right = BinaryExpression_Right(ast, node);
     if (left === undefined || right === undefined) continue;
     let selected: RustNativeComparison = { kind: "ordinary" };
-    if (operation.operator === "&" && isRustIntegerCarrier(operation.resultCarrier) && isRustSignedNumericCarrier(operation.resultCarrier) &&
-      operation.leftConversion === undefined && operation.rightConversion === undefined) {
+    // `x & -1` in a signed integer result is `x` (clippy::identity_op); operand conversions to the result carrier keep
+    // that identity, as the checkpoint applied it to the converted operands.
+    if (operation.operator === "&" && isRustIntegerCarrier(operation.resultCarrier) && isRustSignedNumericCarrier(operation.resultCarrier)) {
       if (program.records.literalValue.get(right)?.integer === -1n) selected = { kind: "integer-identity", operand: "left" };
       else if (program.records.literalValue.get(left)?.integer === -1n) selected = { kind: "integer-identity", operand: "right" };
     }

@@ -9,6 +9,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { mapRustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
+import { selectRustDiscardedFutureSpawn } from "./discarded-futures.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
@@ -82,6 +83,8 @@ export function analyzeRustPromiseResults(input: {
   readonly retentionIssues: readonly RustSourceCallableSpecializationIssue[];
   readonly families: Pick<RustSourceTypeFamilyRegistry, "implementation">;
   readonly evidence: Omit<RustStaticRequirementEvidence, "lifetimeContract">;
+  /** The js surface spawns discarded native futures on its event loop (selectRustDiscardedFutureSpawn). */
+  readonly jsEnabled: boolean;
 }): { readonly results: RustPromiseResults; readonly diagnostics: readonly TargetDiagnostic[] } {
   const results = new Map<Node, RustPromiseResult>();
   const diagnostics: TargetDiagnostic[] = [...input.genericAdoption];
@@ -475,7 +478,11 @@ export function analyzeRustPromiseResults(input: {
       failTargetAnalysisInvariant("tsonic-rust", "An indexed async producer requires its original source result-use selection.", node);
     const native = leaves.some(leaf => leaf.future !== undefined &&
       rustJsPromiseOutputTargetType(leaf.future.futureCarrier) === undefined);
-    if (input.ast.is.IsCallExpression(node) && (!native || disposition.kind === "discarded")) {
+    // A spawned discarded future owns a clone of its receiver and Copy arguments, so it holds no source lease and
+    // needs no ownership decision; any other discarded native future goes through the must-observe rule.
+    const spawn = disposition.kind === "discarded" && native && input.jsEnabled && selection.kind === "leaf"
+      ? selectRustDiscardedFutureSpawn(input, node) : undefined;
+    if (input.ast.is.IsCallExpression(node) && (!native || disposition.kind === "discarded" && spawn === undefined)) {
       const selected = ownership.forCall(node);
       if (selected.kind === "unresolved") {
         if (input.requirements.kind === "resolved" && input.retentionIssues.length === 0)
@@ -489,7 +496,8 @@ export function analyzeRustPromiseResults(input: {
         continue;
       }
     }
-    const discard = disposition.kind === "discarded" && !native
+    const discard = spawn !== undefined ? Object.freeze({ kind: "leaf" as const, value: Object.freeze({ observe: true, spawn }) })
+      : disposition.kind === "discarded" && !native
       ? mapRustAwaitSelection(selection, leaf => Object.freeze({ observe: leaf.future !== undefined })) : undefined;
     results.set(node, Object.freeze({ disposition, ...(discard === undefined ? {} : { discard }) }));
   }

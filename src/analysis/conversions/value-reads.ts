@@ -51,11 +51,19 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
       if (value.conversion.kind === "project-union-map") for (const arm of value.conversion.arms) if (arm.upcast !== null) upcast(node, arm.upcast);
     } else if (value.kind === "option-map" || value.kind === "option-some") adapter(node, value.element);
   };
+  // A constructor value's forwarders (its construction and static methods) adapt their results the same way.
+  for (const view of program.classValues.constructorViewImplementations)
+    for (const callable of [view.construction, ...view.fields.map(field => field.callable)])
+      if (callable !== undefined) for (const value of rustCallableAdapterValues(callable)) adapter(callable.declaration, value);
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     for (const callable of program.records.projectCallableAdapters.get(node) ?? []) for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
     for (const callable of program.records.objectLiteralMethodAdapter.get(node)?.dispatches ?? [])
       for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
+    // Class values forward construction and static callable fields through the same callable adapters.
+    for (const view of program.classValues.forDeclaration(node)?.views ?? [])
+      for (const callable of [view.construction, ...view.fields.map(field => field.callable)])
+        if (callable !== undefined) for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
   }
   // Each emitted constructor view forwards its construction and static callables through callable adapters.
   for (const view of program.classValues.constructorViewImplementations)
@@ -141,7 +149,8 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         fused: applied.has("flow") && applied.has("contextual") ? fused : undefined, borrowable: borrowable && applied.has("flow"),
         borrowConversion: borrowable && contextual !== undefined && rustTargetTypeRefEquals(flow?.selectedCarrier, contextual.sourceCarrier) &&
           (runtime?.sourceMode === "ref" || contextual.conversion.kind === "project-union-map" && ownership?.value.kind !== "move"),
-        referenceReborrow: referenceReborrow !== undefined, contextualIdentity: contextual?.conversion.kind === "native-trait-object-upcast" || referenceReborrow !== undefined,
+        referenceReborrow: referenceReborrow !== undefined,
+        contextualConsumesSource: applied.has("contextual") && runtime?.sourceMode === "value", contextualIdentity: contextual?.conversion.kind === "native-trait-object-upcast" || referenceReborrow !== undefined,
         preserveAbsenceEffect: ownership?.pure !== true, absenceDiscard: isRustUnitCarrier(optional?.sourceCarrier) ? "unit" : "value" }) });
     }
     projections.publish(node, Object.freeze(plans), transitions.length === 0);

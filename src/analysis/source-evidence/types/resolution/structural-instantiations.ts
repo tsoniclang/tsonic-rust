@@ -1,6 +1,8 @@
 import type { Node, TypeSignatureInfo, Type } from "@tsonic/tsts";
+import { closeRustRetainedCallableCarrier } from "../../../../policy/ownership/retained-storage.js";
 import { ArrayTypeNode_ElementType } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue } from "../../../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
@@ -116,15 +118,24 @@ export function retainRustStructuralInstantiation(
     }, context, options, resolving));
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
-    // An authored field type resolves to its template carrier. A field that itself holds structural storage is closed
+    // The authored field type keeps an open callable environment: the selected storage either closes it with its own
+    // lifetime or keeps the target placeholder lifetimes. A field that itself holds structural storage is closed
     // separately (its method environments name the new instantiation's lifetimes), so its authored type matches the
     // template field and the recursive retention below proves and registers the closed nested instantiation.
+    let closing: RustLifetimeRef | undefined;
+    mapRustTargetTypes(expected, (current, original) => {
+      closing ??= rustCallableProtocol(original)?.lifetime;
+      return current;
+    });
+    const closed = (carrier: TargetTypeRef): TargetTypeRef => closing === undefined ? carrier
+      : closeRustRetainedCallableCarrier(carrier, closing);
     const nestedTemplate = containsStructuralStorage(field.resultCarrier, options) === true
       ? mapRustTargetTypes(field.resultCarrier, normalize) : undefined;
     if (declared.some(carrier => {
       if (carrier === undefined) return true;
       const authored = mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize);
-      return !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected) &&
+      return !rustTargetTypeRefEquals(closed(authored), expected) &&
+        !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected) &&
         (nestedTemplate === undefined || !rustTargetTypeRefEquals(authored, nestedTemplate));
     })) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
