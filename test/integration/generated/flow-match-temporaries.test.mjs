@@ -26,10 +26,10 @@ for (const edition of ["2021", "2024"]) {
         records: createRustRecordFixture({
           runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) },
           readOwnership: { get: candidate => ownership.reads.get(candidate) },
+          programEmission: { get: () => ({ configuration: { edition } }) },
           flowReadEmission: { get: candidate => candidate === fact
             ? { kind: "option", custom: false, reborrow: false, readonlyReference: false } : undefined },
         }),
-        configuration: { edition },
       } },
       diagnostics: [], sourceFile,
     };
