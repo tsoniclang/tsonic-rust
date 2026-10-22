@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
 import { isRustProgramErrorCarrier, rustJsErrorTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
 import { rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../constraints/native-traits.js";
-import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustOptionTargetId } from "../../target-model/types/carriers/source-types.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { selectRustSourceValueConversion } from "./selection.js";
@@ -145,8 +145,20 @@ export function selectRustFlowReadProjection(
   };
 }
 
-/** A callable target whose lifetime is still a placeholder takes the concrete lifetime of the callable value flowing into it. */
+/**
+ * A callable target whose lifetime is still a placeholder takes the concrete lifetime of the callable value flowing into
+ * it; an optional callable target takes it from the present (or optional) callable value.
+ */
 export function rustCallableTargetForSourceLifetime(sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef): TargetTypeRef {
+  if (targetCarrier.kind === "target-named" && targetCarrier.id === rustOptionTargetId) {
+    const element = rustOptionElementCarrier(targetCarrier);
+    const sourceElement = sourceCarrier.kind === "target-named" && sourceCarrier.id === rustOptionTargetId
+      ? rustOptionElementCarrier(sourceCarrier) : sourceCarrier;
+    const selected = element === undefined || sourceElement === undefined ? undefined
+      : rustCallableTargetForSourceLifetime(sourceElement, element);
+    return selected === undefined || selected === element ? targetCarrier
+      : { ...targetCarrier, genericArguments: [{ kind: "type", type: selected }] };
+  }
   const sourceCallable = rustCallableProtocol(sourceCarrier);
   const targetCallable = rustCallableProtocol(targetCarrier);
   return targetCarrier.kind === "target-named" && targetCarrier.id === rustCallableTargetId &&

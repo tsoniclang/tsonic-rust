@@ -136,8 +136,14 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     producer.instance(definition, carrier, result.fields, result.properties);
     return result;
   };
-  const pending = [...program.projectTypes.definitions.filter(definition => members.has(definition)).map(definition => program.projectTypes.openCarrier(definition))];
+  // An interface without an object layout (members keyed only by an ambient unique symbol, a type-level storage family
+  // marker) has a native instance only where a value of that type exists, which the value carriers below reach.
+  const layoutless = (definition: RustProjectTypeDefinition | undefined): boolean => definition?.kind === "interface" &&
+    program.projectTypes.objectLayoutForDefinition(definition) === undefined;
+  const pending = [...program.projectTypes.definitions.filter(definition => members.has(definition) && !layoutless(definition))
+    .map(definition => program.projectTypes.openCarrier(definition))];
   for (const node of nodes) {
+    if (ast.is.IsInterfaceDeclaration(node) && layoutless(program.projectTypes.definitionForDeclaration(node))) continue;
     const carrier = program.records.runtimeCarrier.get(node)?.carrier;
     if (carrier !== undefined) pending.push(carrier);
   }

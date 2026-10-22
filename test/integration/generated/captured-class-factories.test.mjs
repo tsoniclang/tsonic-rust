@@ -90,8 +90,12 @@ test("captured class factories retain per-evaluation identity, static state and 
   ` });
 });
 
-test("local static storage keeps evaluations independent and releases borrows before callbacks", { timeout: 300_000 }, () => {
-  compileAndRun("local_class_static_storage", { "index.ts": `
+// PORT-MAP row 624 (analysis/names/plan.ts): authored values keep their spelling and native E0592 collisions reject
+// before sealing. A static and an instance method both named 'reset' share one Rust inherent item name, so this source
+// is refused rather than renamed.
+test("local static and instance members sharing a native name are refused before sealing", { timeout: 300_000 }, () => {
+  const { result, source } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "local_class_static_storage" } }, files: { "index.ts": `
     interface Counter { increment(): number; reset(): number; }
     function factory(initial: number): Counter {
       class Selected implements Counter {
@@ -109,7 +113,13 @@ test("local static storage keeps evaluations independent and releases borrows be
       if (first.increment() !== 4 || second.increment() !== 10) throw new Error("independent");
     }
   main();
-  ` });
+  ` } });
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(row => [row.code, row.message]), [["RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE",
+    "Authored static and instance methods 'reset' require the same Rust inherent item name (E0592); their spelling cannot be changed."]]);
+  const [diagnostic] = result.diagnostics;
+  assert.equal(source.ast.kindName(diagnostic.sourceNode), "KindMethodDeclaration");
+  assert.equal(source.ast.hasModifierKind(diagnostic.sourceNode, "static"), true);
 });
 
 test("generic captured constructors share native instance views across exact instantiations", { timeout: 300_000 }, () => {

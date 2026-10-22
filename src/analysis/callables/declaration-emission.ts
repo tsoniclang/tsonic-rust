@@ -26,6 +26,12 @@ export function analyzeRustCallableDeclarationEmission(input: {
   };
   const insideCompileTimeSource = (node: Node): boolean => rustNodeIsOutsideNativeCode(ast, program.records,
     expression => program.safetyApplications.operationForExpression(expression), node);
+  // A module const callable is liveness-tracked through its variable declaration.
+  const moduleBindingSuppressed = (declaration: Node): boolean => {
+    const binding = ast.parent(declaration);
+    return binding !== undefined && program.records.moduleBinding.get(binding)?.storage === "native-callable" &&
+      input.reachability.suppressedDeclarations.has(binding);
+  };
   for (const declaration of input.nodes) {
     if (!ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsFunctionExpression(declaration) && !ast.is.IsArrowFunction(declaration) &&
       !ast.is.IsMethodDeclaration(declaration) && !ast.is.IsGetAccessorDeclaration(declaration) && !ast.is.IsSetAccessorDeclaration(declaration)) continue;
@@ -89,7 +95,8 @@ export function analyzeRustCallableDeclarationEmission(input: {
     if (error === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable requires its selected native error region.", declaration);
     input.producer.declaration(declaration, { name, exported,
       visibility: lexical !== undefined ? "private" : exported || publicAbi ? "public" : "crate",
-      deadCode: input.reachability.suppressedDeclarations.has(declaration) ? "authored-declaration" : undefined,
+      deadCode: input.reachability.suppressedDeclarations.has(declaration) || moduleBindingSuppressed(declaration)
+        ? "authored-declaration" : undefined,
       nativeBody, promiseObject: program.promiseBodies.objects.has(declaration),
       requiresSpecialization: program.sourceCallableSpecializations.requiresSpecialization(declaration),
       specializations: program.sourceCallableSpecializations.variantsForCallable(declaration),

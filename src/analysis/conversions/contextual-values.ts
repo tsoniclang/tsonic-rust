@@ -5,7 +5,7 @@ import { isRustUnitCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustS
 import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
 import { selectRustKnownNumericValueConversion } from "../../policy/conversions/selection.js";
 
-import { selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
+import { rustCallableTargetForSourceLifetime, selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { recordRustConversionSelection } from "../program/records/value-carrier-admission.js";
 import { recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 
@@ -121,10 +121,13 @@ export function applyRustOptionalValueCarrier(
     }
     return expected;
   }
-  if (projected !== undefined && rustTargetTypeRefEquals(projected, inner)) {
+  // An optional callable destination whose lifetime is still a placeholder takes the present callable's lifetime.
+  const present = projected === undefined ? undefined : rustCallableTargetForSourceLifetime(projected, expected);
+  const presentInner = present === undefined ? undefined : rustOptionElementCarrier(present);
+  if (projected !== undefined && present !== undefined && rustTargetTypeRefEquals(projected, presentInner)) {
     recordRustOptionProjection(walk.context.records, walk.context.requiredRecords, expression, { kind: "some", sourceCarrier: projected,
-      elementCarrier: inner, resultCarrier: expected });
-    return expected;
+      elementCarrier: presentInner!, resultCarrier: present });
+    return present;
   }
   return resolved;
 }

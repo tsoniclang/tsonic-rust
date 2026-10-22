@@ -24,7 +24,15 @@ export function analyzeRustNativeParticipation(input: {
     const anonymous = input.ast.is.IsArrowFunction(node) || input.ast.is.IsFunctionExpression(node) || literalMethod;
     let participation: RustNativeParticipation;
     if (anonymous) {
-      participation = sourceCallableDefinitionIsDiscarded(node, input.ast, input.navigation) ? "erased" : "body";
+      // A module-level const callable is an authored module declaration, kept like a module function declaration
+      // (unused ones carry a dead-code expectation); other unobserved callable values are erased.
+      const declaration = input.ast.parent(node);
+      const list = declaration === undefined ? undefined : input.ast.parent(declaration);
+      const statement = list === undefined ? undefined : input.ast.parent(list);
+      const owner = statement === undefined ? undefined : input.ast.parent(statement);
+      const moduleDeclaration = declaration !== undefined && input.ast.is.IsVariableDeclaration(declaration) &&
+        statement !== undefined && input.ast.is.IsVariableStatement(statement) && owner !== undefined && input.ast.is.IsSourceFile(owner);
+      participation = !moduleDeclaration && sourceCallableDefinitionIsDiscarded(node, input.ast, input.navigation) ? "erased" : "body";
     } else {
       if (!input.ast.is.IsFunctionDeclaration(node)) return false;
       const parent = input.ast.parent(node);

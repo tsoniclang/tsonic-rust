@@ -39,13 +39,15 @@ export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "re
       const chain = program.records.optionalChainEmission.get(occurrence.node);
       const present = chain?.fact.guard === slot.node ? chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier : undefined;
       const carriers = present !== undefined ? [present] : contexts.length !== 0 ? contexts.map(operand => operand.carrier) : [raw];
-      // The selected input carrier is logical, as the checkpoint planner compared it: an input whose own logical
-      // carrier reaches it needs no physical operand match. A placeholder callable lifetime takes the value's lifetime.
-      const logical = rustFinalizedCarrierTransitionMatches(raw, rustValueCarrierTransitionTarget(program.records, slot.node, raw),
-        rustCallableTargetForSourceLifetime(raw, input.sourceCarrier));
-      for (const carrier of logical ? [] : carriers) {
+      // A physical operand context carrier (a closure's physical callable, for example) need not equal the logical
+      // input carrier; the input is then checked through the operand's own logical carrier, as the planner reads it. A
+      // placeholder callable lifetime takes the value's lifetime.
+      const logicalMatches = present === undefined &&
+        rustFinalizedCarrierTransitionMatches(raw, rustValueCarrierTransitionTarget(program.records, slot.node, raw),
+          rustCallableTargetForSourceLifetime(raw, input.sourceCarrier));
+      for (const carrier of carriers) {
         const converted = rustValueCarrierTransitionTarget(program.records, slot.node, carrier);
-        if (!rustFinalizedCarrierTransitionMatches(carrier, converted, input.sourceCarrier)) issues.push({
+        if (!rustFinalizedCarrierTransitionMatches(carrier, converted, input.sourceCarrier) && !logicalMatches) issues.push({
         code: converted === undefined ? "RUST_MISSING_TARGET_FACT" : "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: slot.node,
         message: `${converted === undefined ? "Finalized Rust operation input requires a missing exact source-value transition."
           : "Finalized Rust operation input conflicts with its independent source or selected call-argument carrier fact."} Node kind: ${program.source.ast.kindName(slot.node)}.`,

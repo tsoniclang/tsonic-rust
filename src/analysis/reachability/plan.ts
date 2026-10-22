@@ -1,7 +1,7 @@
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import type { RustReachabilityInput } from "./model.js";
 import type { RustReachability } from "../../target-model/records/reachability.js";
 
@@ -257,12 +257,26 @@ function declarationEmitsStandaloneRustItem(
   }
 }
 
+// The nodes evaluated by module initialization: callable bodies (functions, methods, accessors, constructors and
+// callable values that are not invoked in place) run only when called, so their uses belong to their declaration.
 function collectSubtreeNodes(ast: AstReader, roots: readonly Node[], nativeNodes: ReadonlySet<Node>): WeakSet<Node> {
   const nodes = new WeakSet<Node>();
   const pending = [...roots];
+  const invokedInPlace = (node: Node): boolean => {
+    let callee = node;
+    let parent = ast.parent(node);
+    while (parent !== undefined && ast.is.IsParenthesizedExpression(parent)) {
+      callee = parent;
+      parent = ast.parent(parent);
+    }
+    return parent !== undefined && ast.is.IsCallExpression(parent) && Node_Expression(ast, parent) === callee;
+  };
+  const deferredBody = (node: Node): boolean => ast.is.IsFunctionDeclaration(node) || ast.is.IsMethodDeclaration(node) ||
+    ast.is.IsConstructorDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node) ||
+    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && !invokedInPlace(node);
   while (pending.length > 0) {
     const node = pending.pop()!;
-    if (nodes.has(node) || !nativeNodes.has(node)) continue;
+    if (nodes.has(node) || !nativeNodes.has(node) || deferredBody(node)) continue;
     nodes.add(node);
     ast.forEachChild(node, (child) => {
       if (child !== undefined) pending.push(child);

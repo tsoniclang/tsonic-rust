@@ -92,6 +92,9 @@ export function createRustSharedReferenceArgument(
   if (override?.valueForm === "shared-reference") {
     return argument;
   }
+  // A ref or mut-ref source parameter is already a reference; its string and argument views would borrow it again.
+  const sourceParameterAbi = node === undefined ? undefined : context.input.program.records.sourceParameterAbi.get(node);
+  if (sourceParameterAbi?.mode === "ref" || sourceParameterAbi?.mode === "mut-ref") return argument;
   if (node !== undefined && override === undefined) {
     const stringView = context.input.program.records.stringComparisonView.get(node);
     if (stringView !== undefined && stringView.kind !== "value") return rustErrorFieldComparisonView(node, argument, undefined, context);
