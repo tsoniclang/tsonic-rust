@@ -4,12 +4,14 @@ import { type RustAnalysisProgram } from "../program/model.js";
 import { type ResolvedSourceCallInfo } from "@tsonic/target-api/source";
 import { type RustProgramRecordWriter } from "../program/records/model.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function admitRustComputedMembers(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[]): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.computedMember.get(node);
     const element = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node) : undefined;
     const parent = ast.parent(node);

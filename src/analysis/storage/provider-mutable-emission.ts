@@ -9,6 +9,7 @@ import { rustTargetOperationIsDirectLocation } from "../../policy/operations/mem
 import { rustNativeStorageRoot } from "./native-paths.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { selectRustProviderMutableInputs } from "./provider-mutable-inputs.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustProviderMutableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustProviderEvaluationProducer): readonly TargetDiagnostic[] {
@@ -39,7 +40,7 @@ export function analyzeRustProviderMutableEmission(program: Omit<RustAnalysisPro
     producer.effects(node, selected);
     return selected;
   };
-  for (const node of nodes) effects(node);
+  for (const node of nodes) if (!rustProgramNodeIsOutsideNativeCode(program, node)) effects(node);
   for (const occurrence of program.physicalEmissionContexts.sourceOccurrences) {
     const mutable = occurrence.inputs.filter(selected => selected.input.mode === "mut-ref");
     if (mutable.length === 0) { producer.mutable(occurrence.node, occurrence.operation, Object.freeze([])); continue; }

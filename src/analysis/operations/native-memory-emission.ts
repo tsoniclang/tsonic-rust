@@ -7,6 +7,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRuntimeNativeLayoutTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustNativeMemoryEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeLayoutProducer): readonly TargetTypeRef[] {
@@ -15,6 +16,7 @@ export function analyzeRustNativeMemoryEmission(program: Omit<RustAnalysisProgra
   for (const shape of program.structuralShapes.instances) for (const field of shape.fields)
     if (field.nativeLayout !== undefined) pending.push(field.nativeLayout);
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const backing = program.records.nativeBacking.get(node);
     const array = program.records.nativeArrayStorage.get(node);
     const handler = program.records.nativeHandler.get(node);

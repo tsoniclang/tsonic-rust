@@ -11,6 +11,7 @@ import { rustGenericCallableSignaturesMatch } from "../../policy/conversions/gen
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustGenericEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -42,6 +43,7 @@ export function analyzeRustGenericEmission(input: {
     requests.set(node, rows);
   };
   for (const node of input.nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const comparison = program.callableValues.genericIdentities.forComparison(node);
     if (comparison !== undefined) {
       const leftRead = program.ownership.reads.get(comparison.leftNode);

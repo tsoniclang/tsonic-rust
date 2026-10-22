@@ -9,6 +9,7 @@ import { requirementUseHasValidStorage } from "./generic-requirement-contract.js
 import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustGenericRequirementEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeGenericProducer): readonly TargetDiagnostic[] {
@@ -58,6 +59,7 @@ export function analyzeRustGenericRequirementEmission(program: Omit<RustAnalysis
   for (const context of program.physicalEmissionContexts.contexts) append(context.declaration,
     [...context.operands, ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : [])]);
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     let declaration: Node | undefined = node;
     while (declaration !== undefined && !contracts.has(declaration)) declaration = program.source.ast.parent(declaration);
     // Outside every generic requirement contract the enclosing callable owns the clone guarantees its reads query.

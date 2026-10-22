@@ -9,6 +9,7 @@ import { type RustCallablePhysicalConversion } from "../../target-model/conversi
 import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustCallableConversionProducer): void {
@@ -52,6 +53,7 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     producer.contract(node, conversion, compile(physical, source));
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const read = program.records.valueRead.get(node);
     for (const source of [program.records.runtimeCarrier.get(node)?.carrier, read?.source, read?.contextualInput]) operand(node, source);
     const selected = program.records.contextualValueConversion.get(node);

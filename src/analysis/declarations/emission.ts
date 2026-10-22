@@ -4,6 +4,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDeclarationEmissionProducer } from "../program/records/declaration-emission.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustDeclarationEmission(input: {
   readonly program: Pick<RustAnalysisProgram, "source" | "sourceFiles" | "records" | "projectTypes" | "classValues" | "callableValues" | "names" | "projectConstructions" | "safetyApplications">;
@@ -71,7 +72,7 @@ export function analyzeRustDeclarationEmission(input: {
     requireRustRecord(input.required, "classDeclaration", node, "native class declaration", "analyzeRustDeclarationEmission");
   }
   const declarations = new Set(program.callableValues.nativeProducers.producers.map(producer => producer.declaration));
-  for (const node of input.nodes) if (ast.body(node) !== undefined &&
+  for (const node of input.nodes) if (ast.body(node) !== undefined && !rustProgramNodeIsOutsideNativeCode(program, node) &&
     program.records.sourceCallableReturn.get(node) !== undefined) declarations.add(node);
   for (const declaration of declarations) {
     const destination = program.callableValues.nativeStorage.returnFor(declaration);

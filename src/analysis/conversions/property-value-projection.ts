@@ -5,6 +5,7 @@ import type { RustPropertyValueProjectionProducer } from "../program/records/pro
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustPropertyValueProjection(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustPropertyValueProjectionProducer): readonly TargetDiagnostic[] {
@@ -13,7 +14,7 @@ export function analyzeRustPropertyValueProjection(program: Omit<RustAnalysisPro
     issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
-  for (const node of nodes) for (const projection of program.records.propertyProjection.get(node)?.cases ?? []) {
+  for (const node of nodes) if (!rustProgramNodeIsOutsideNativeCode(program, node)) for (const projection of program.records.propertyProjection.get(node)?.cases ?? []) {
     if (producer.records.propertyValueProjection.get(node, projection.source) !== undefined) {
       refuse(node, "rust.backend.property-projection", "Native property projection requires its exact sealed selected-parameter member reads.");
       continue;
