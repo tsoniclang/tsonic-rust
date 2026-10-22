@@ -19,7 +19,6 @@ import {
   type RustFoundation,
 } from "../../target-model/foundation/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNativeRootFoundations, rustRuntimeExportFoundations } from "../../target-model/foundation/native-paths.js";
 
@@ -83,10 +82,12 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         current.genericArguments?.forEach(visitArgument);
         return;
       case "opaque":
+        require("std");
         return;
       case "target-specific": {
         const callable = rustGenericCallableValue(current);
         if (callable !== undefined) {
+          require("alloc");
           callable.environment.forEach(visit);
           callable.signature.parameters.forEach(visit);
           visit(callable.signature.result);
@@ -116,11 +117,11 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         }
         const structural = rustStructuralObjectCarrierValue(current);
         if (structural !== undefined) {
-          if (structural.representation === "reference") require("alloc");
+          require("alloc");
           structural.fields.forEach((field) => visit(field.type));
           return;
         }
-        rustTargetTypeChildren(current).forEach(visit);
+        if (current.name !== "never") require("std");
         return;
       }
     }
