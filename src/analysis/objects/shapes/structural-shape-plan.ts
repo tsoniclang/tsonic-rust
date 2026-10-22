@@ -85,9 +85,11 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       return current;
     },
     initializeUnions(definitions: readonly RustSourceUnionDefinition[]) {
+      // A second finalization is refused as such, also after sealing (sealing requires the first one).
+      if (unions !== undefined) throw new Error("Rust generated unions can be finalized only once after structural objects.");
       if (sealed) throw new Error("Rust structural unions cannot change after sealing.");
       const shapes = requireCurrent();
-      if (unions !== undefined || componentForFile === undefined)
+      if (componentForFile === undefined)
         throw new Error("Rust generated unions can be finalized only once after structural objects.");
       const names = new Map<string, Set<string>>();
       for (const shape of shapes.definitions) {
@@ -100,8 +102,12 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     },
     finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition,
       ReadonlyMap<number, RustStructuralMethodStorageSelection>>) {
-      if (sealed || construction === undefined) throw new Error("Structural method storage requires its open initialized shape builder.");
-      construction.finalizeMethodStorage(selections);
+      // A second finalization is refused as such, also after sealing.
+      if (construction?.methodStorageFinalized() === true || !sealed && construction !== undefined) {
+        construction.finalizeMethodStorage(selections);
+        return;
+      }
+      throw new Error("Structural method storage requires its open initialized shape builder.");
     },
     isInitialized() {
       return current !== undefined;
@@ -165,6 +171,7 @@ function createRustStructuralShapeConstruction(
   receiverIndependentMethods: ReadonlySet<string>,
 ): {
   readonly plan: RustStructuralShapePlan;
+  methodStorageFinalized(): boolean;
   finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>): void;
 } {
@@ -416,6 +423,7 @@ function createRustStructuralShapeConstruction(
   });
   let methodStorageFinalized = false;
   return Object.freeze({ plan,
+    methodStorageFinalized: () => methodStorageFinalized,
     finalizeMethodStorage(selections) {
       if (methodStorageFinalized) throw new Error("Structural method physical storage finalizes exactly once.");
       const replacements = new Map<RustStructuralShapeDefinition, RustStructuralShapeDefinition>();
