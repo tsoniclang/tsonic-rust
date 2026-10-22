@@ -279,6 +279,14 @@ export function createRustNativeStorageQueries(input: {
       const physical = substituteRustTargetGenerics(produced, types, generic.bindings.lifetimes, generic.bindings.consts);
       return rustPhysicalPayloadFor(logical, physical, current, input.definitions);
     };
+    // A class field reached through an unbound receiver holds the field's own storage; a frame-callable field stores
+    // its physical frame callable directly, so that storage is the producer's physical implementation.
+    const frameFieldCarrier = (origin: SourceStorageSubject): TargetTypeRef | undefined => {
+      const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
+      const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
+        : input.records.runtimeCarrier.get(component.declaration)?.carrier;
+      return carrier !== undefined && rustFrameCallableValue(carrier) !== undefined ? carrier : undefined;
+    };
     const visit = (current: TargetTypeRef, selectedSubject: SourceStorageSubject,
       bindings: SourceStorageBindings, depth: number, permitsAbsence: boolean,
       position: "value" | "input" = "value"): TargetTypeRef | undefined => {
@@ -355,7 +363,7 @@ export function createRustNativeStorageQueries(input: {
             else {
               const originCarrier = origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
-                : undefined;
+                : frameFieldCarrier(origin);
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
               const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
               if (generics.kind === "unresolved") return fail(generics.reason);
