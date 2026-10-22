@@ -3,11 +3,15 @@ import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/di
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
+import { analyzeRustLiteralEmission } from "../../../../dist/analysis/operations/literals.js";
+import { createRustLiteralEmissionProducer } from "../../../../dist/analysis/program/records/literal-emission.js";
 import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/literal-conversions.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
-function contextFor(text, kindName, carrier, provenance = "authored") {
+// Literal recipes are sealed by analyzeRustLiteralEmission for the literal's contextual carrier; the planner reads
+// the sealed recipe. Analysis refusals are the context's diagnostics.
+function contextFor(text, kindName, carrier, provenance = "authored", sealedLiteralValues = true) {
   const node = { ...fakeStatement({ kindName: `Kind${kindName}`, pos: 0, end: text.length }), text };
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text, statements: [node] });
   const ast = fakeAstReader([sourceFile]);
@@ -18,9 +22,15 @@ function contextFor(text, kindName, carrier, provenance = "authored") {
     forEachChild: (candidate, visit) => { if (candidate === sourceFile) visit(node); },
     authoredRange: () => provenance === "synthetic" ? { kind: "synthetic" } : { kind: "authored", start: 0, end: text.length } };
   const literalValues = analyzeSourceLiteralValues(literals, [sourceFile]);
+  const records = { ...createRustRecordFixture({ conversion: { get: () => undefined },
+    runtimeCarrier: { get: () => ({ carrier }) },
+    valueRead: { get: candidate => candidate === node ? { contextualInput: carrier } : undefined } }),
+  literalValue: sealedLiteralValues ? literalValues.literalValue : { get: () => undefined } };
+  const producer = createRustLiteralEmissionProducer(() => {});
+  const issues = analyzeRustLiteralEmission({ source: { ast: literals }, records,
+    safetyApplications: { operationForExpression: () => undefined } }, [node], producer);
   return { node, context: { input: { program: { source: { ast: literals },
-    records: { ...createRustRecordFixture({conversion: { get: () => undefined },
-runtimeCarrier: { get: () => ({ carrier }) }}), literalValue: literalValues.literalValue } } }, sourceFile, diagnostics: [] } };
+    records: { ...records, literalEmission: producer.records.literalEmission } } }, sourceFile, diagnostics: [...issues] } };
 }
 
 test("numeric literal producers preserve each exact native width independently of contextual inference", () => {
@@ -82,13 +92,16 @@ test("Rust owns floating grammar while shared source facts retain neutral decima
   }
 });
 
-test("missing sealed numeric evidence uses the canonical Rust planner invariant without changing its diagnostic", () => {
+test("missing sealed numeric evidence is refused by literal emission analysis and never reaches the planner", () => {
   const carrier = rustSourcePrimitiveTargetType("float32");
-  const { node, context } = contextFor("1", "NumericLiteral", carrier);
-  context.input.program.records.literalValue = { get: () => undefined };
+  const { node, context } = contextFor("1", "NumericLiteral", carrier, "authored", false);
+  assert.equal(context.diagnostics.length, 1);
+  const [diagnostic] = context.diagnostics;
+  assert.equal(diagnostic.message, "A floating literal requires its sealed source numeric evidence. Node kind: KindNumericLiteral.");
+  assert.equal(diagnostic.code, "RUST_MISSING_TARGET_FACT");
+  assert.equal(diagnostic.source, "tsonic-rust");
+  assert.equal(diagnostic.sourceNode === node, true);
   assert.throws(() => planNumericLiteralWithCarrier(node, carrier, context), failure =>
-    failure.message === "A floating literal requires its sealed source numeric evidence." &&
-    failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
-    failure.diagnostic?.source === "tsonic-rust" && failure.diagnostic?.sourceNode === node);
-  assertNoTargetDiagnostics(context.diagnostics);
+    failure.message === "An admitted literal requires its exact source/native emission recipe." &&
+    failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" && failure.diagnostic?.sourceNode === node);
 });

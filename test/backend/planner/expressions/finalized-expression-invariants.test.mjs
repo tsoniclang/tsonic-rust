@@ -151,7 +151,7 @@ export function create(): Counter { return new SteppedCounter(1); }
   assert.equal(accepted.diagnostics.length, 0);
   const missingNames = planContext(program, node, false);
   assertInvariant(() => planPropertyAccess(node, missingNames), missingNames,
-    "Project property dispatch requires a finalized hygienic-name scope.", node);
+    "An admitted field dispatch requires its native hygienic scope.", node);
 });
 
 test("a finalized promoted compound write requires only its backend name state", () => {
