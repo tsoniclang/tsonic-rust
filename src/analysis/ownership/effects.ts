@@ -15,7 +15,7 @@ import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativ
 import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
-import { rustCallArgumentMode } from "../callables/parameter-passing.js";
+import { rustCallArgumentMode, rustCallReceiverMode } from "../callables/parameter-passing.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -105,7 +105,8 @@ export function analyzeRustBorrowEffects(
       for (let parent = input.ast.parent(argument); parent !== undefined &&
         sourceTransparentExpressionOperand(input.ast, parent) === argument; parent = input.ast.parent(argument)) argument = parent;
       if (!["comparison", "condition", "return", "storage"].includes(use.role) &&
-        !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref")) {
+        !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref") &&
+        !(use.role === "receiver" && rustCallReceiverMode(argument, input.ast, input.records) === "ref")) {
         stable = false;
         break;
       }
