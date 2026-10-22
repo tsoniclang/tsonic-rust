@@ -1,4 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -21,6 +22,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const { ast } = program.source;
     if (!ast.is.IsObjectLiteralExpression(node)) continue;
     const fact = program.records.targetOperation.get(node);
@@ -64,6 +66,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
     }
   }
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "closed-record-literal") continue;
     const { ast } = program.source;

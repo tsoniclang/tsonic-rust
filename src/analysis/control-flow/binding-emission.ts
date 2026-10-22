@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "./compile-time-statements.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -18,6 +19,7 @@ export function analyzeRustBindingProjectionEmission(input: {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   for (const node of input.nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.bindingProjection.get(node);
     if (fact === undefined || !("bindingCarrier" in fact)) continue;
     const name = ast.name(node);

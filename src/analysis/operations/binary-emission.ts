@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -38,8 +39,9 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     result.push(node);
   };
   for (const node of nodes) {
-    if (!ast.is.IsBinaryExpression(node) || ast.operatorKindName(node) === "KindEqualsToken" || program.records.nativeUnreachable.get(node) === true ||
-      program.records.compileTimeSource.get(node) !== undefined || program.records.nativeParticipation.get(node) === "erased") continue;
+    if (!ast.is.IsBinaryExpression(node) || ast.operatorKindName(node) === "KindEqualsToken" ||
+      program.records.nativeParticipation.get(node) === "erased" || rustNodeIsOutsideNativeCode(ast, program.records,
+        expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     const fact = program.records.targetOperation.get(node);
     const left = BinaryExpression_Left(ast, node);
     const right = BinaryExpression_Right(ast, node);

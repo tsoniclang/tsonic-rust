@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustValueReadProducer } from "../program/records/value-read.js";
@@ -51,11 +52,13 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     } else if (value.kind === "option-map" || value.kind === "option-some") adapter(node, value.element);
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     for (const callable of program.records.projectCallableAdapters.get(node) ?? []) for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
     for (const callable of program.records.objectLiteralMethodAdapter.get(node)?.dispatches ?? [])
       for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
   }
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const source = program.records.runtimeCarrier.get(node)?.carrier;
     const flow = program.records.flowReadProjection.get(node);
     const conversion = program.records.conversion.get(node);

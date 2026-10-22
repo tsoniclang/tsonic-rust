@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustIntegerTruncationProducer } from "../program/records/integer-truncation.js";
@@ -8,6 +9,7 @@ export function analyzeRustIntegerTruncation(program: Omit<RustAnalysisProgram, 
   nodes: readonly Node[], producer: RustIntegerTruncationProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const selected = program.records.contextualValueConversion.get(node);
     if (selected?.conversion.kind !== "integer-truncation") continue;
     const operation = program.records.targetOperation.get(node);

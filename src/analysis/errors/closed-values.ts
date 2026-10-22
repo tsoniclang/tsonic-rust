@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageErrorPlan, RustSourcePackageErrorBoundary } from "../../target-model/records/source-package-errors.js";
@@ -114,6 +115,7 @@ export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, 
       evidence: ["target.capability=rust.backend.closed-throw-domain"] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const file = program.source.ast.getSourceFile(node);
     const component = file === undefined ? undefined : program.sourcePackageComponents.componentForFile(program.source.ast.getFileName(file));
     if (component === undefined) continue;

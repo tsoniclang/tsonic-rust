@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceTransparentExpressionOperand, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { isRustStringCarrier, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -11,7 +12,7 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustAssignmentWrites(input: {
-  readonly program: Pick<RustAnalysisProgram, "source" | "sourceNavigation" | "records" | "projectTypes" | "objectRepresentations" | "callableValues" | "names">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "sourceNavigation" | "records" | "projectTypes" | "objectRepresentations" | "callableValues" | "names" | "safetyApplications">;
   readonly nodes: readonly Node[];
   readonly producer: RustAssignmentWriteProducer;
   readonly required: RustRequiredRecord[];
@@ -80,6 +81,7 @@ export function analyzeRustAssignmentWrites(input: {
     } else parts.push(Object.freeze({ kind: "expression", expression: node }));
   };
   for (const node of input.nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     if (!ast.is.IsBinaryExpression(node) || records.nativeUnreachable.get(node) === true ||
       records.compileTimeSource.get(node) !== undefined || records.nativeParticipation.get(node) === "erased") continue;
     const selected = records.targetOperation.get(node);

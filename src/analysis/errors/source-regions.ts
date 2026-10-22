@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustErrorEmissionProducer } from "../program/records/error-emission.js";
@@ -28,6 +29,7 @@ export function analyzeRustSourceErrorRegions(program: Omit<RustAnalysisProgram,
     published.add(edge);
   }
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const branches = program.records.awaitSourceErrorEffects.get(node)?.branches ?? [];
     const selections = new Map<string, typeof branches[number]>();
     const duplicates = new Set<string>();

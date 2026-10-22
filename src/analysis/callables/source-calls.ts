@@ -17,7 +17,8 @@ import { rustNativeInputEffectsMatch } from "./native-protocol-emission.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
-import { rustNodeIsInsideCompileTimeSource } from "../control-flow/compile-time-statements.js";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { rustNativeCallableOperand } from "./native-conversions.js";
 
 export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall): boolean {
@@ -50,7 +51,7 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "source-call") continue;
     // A call inside compile-time source (a safety builder chain or erased metadata) is never planned as native code.
-    if (rustNodeIsInsideCompileTimeSource(program.source.ast, program.records,
+    if (rustNodeIsOutsideNativeCode(program.source.ast, program.records,
       expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     const selected = program.records.selectedCall.get(node);
     const declaration = selected?.sourceDeclaration;
@@ -98,7 +99,12 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
       refuse(node, "rust.backend.source-call-target", "Selected project-source call target does not resolve to a finalized Rust path or receiver operation.", true); continue;
     }
     const inputCarrier = callee === undefined ? undefined : rustValueCarrierBeforeContextualConversion(program.records, callee);
-    const physical = callee === undefined || inputCarrier === undefined ? undefined : program.records.callableOperand.get(callee, inputCarrier)?.physical;
+    // The callee's physical operand: its conversion record when the callee was converted, otherwise its selected
+    // native storage or producer, as the checkpoint planner selected it for every callable callee.
+    const physical = callee === undefined || inputCarrier === undefined ? undefined
+      : program.records.callableOperand.get(callee, inputCarrier)?.physical ?? (fact.target.form === "callable" && native === undefined
+        ? rustNativeCallableOperand(inputCarrier, callee, { records: program.records, storage: program.callableValues.nativeStorage,
+          producers: program.callableValues.nativeProducers }) : undefined);
     const error = physical?.signature.error;
     const eliminateInfallible = error?.kind === "target-named" && error.id === rustInfallibleTargetId;
     const edges = program.records.sourceErrorEffects.get(node)?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === declaration);

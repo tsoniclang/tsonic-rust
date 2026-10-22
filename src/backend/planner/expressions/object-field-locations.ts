@@ -13,6 +13,7 @@ import { planRustProjectFieldDispatchRoles } from "../objects/project-field-disp
 import { rustClassFrameFieldLocation } from "../objects/frame-storage.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 export function rustExpressionHasReferenceObjectField(expression: Node, context: RustPlanContext): boolean {
   return context.input.program.records.referenceObjectField.get(expression) === true;
@@ -75,7 +76,7 @@ export function planRustProjectedObjectLocation(
     failRustPlannerInvariant("An admitted projected native field address requires its physical read and write operations.", context.callableDeclaration ?? context.sourceFile);
   }
   const clone = (value: RustExpr): RustExpr => ({ kind: "method-call",
-    receiver: value, method: "clone", args: [] });
+    receiver: rustAutoBorrowedReceiver(value), method: "clone", args: [] });
   context.usedAliases?.add("rt");
   return rustValueBlock([
     { name: ownerName, value: clone(receiver) },
