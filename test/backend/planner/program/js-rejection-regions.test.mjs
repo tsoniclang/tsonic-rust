@@ -4,7 +4,7 @@ import { selectRustJsRejectionRegion } from "../../../../dist/policy/errors/js-r
 import { planRustErrorRegion } from "../../../../dist/backend/planner/program/error-regions.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 import { rustRuntimeErrorTargetType } from "../../../../dist/target-model/operations/error-boundary.js";
-import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 
@@ -14,8 +14,8 @@ test("the actual body planner consumes selected JS rejection conversions without
   const sources = [source("js-rejection", rustJsValueTargetType()), source("native", rustRuntimeErrorTargetType())];
   const selected = { kind: "native", fileName: "/src/index.ts", localOwner: undefined, sources,
     jsRejection: selectRustJsRejectionRegion(undefined, sources) };
-  const context = { input: { program: { errorRegions: { get: selectedNode => selectedNode === node ? selected : undefined },
-    typeDefinitions: emptyRustTypeDefinitions } }, usedAliases: new Set(),
+  const context = { input: { program: { records: createRustRecordFixture({
+    nativeErrorRegion: { get: selectedNode => selectedNode === node ? selected : undefined } }) } }, usedAliases: new Set(),
     syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } };
   const planned = planRustErrorRegion(node, context);
   assert.equal(planned?.boundary?.kind, "native");
@@ -41,7 +41,8 @@ test("the actual body planner consumes selected JS rejection conversions without
 test("an infallible settled JS body needs neither an error channel nor generated names", () => {
   const selected = { kind: "infallible", fileName: "/src/index.ts", localOwner: undefined, sources: [],
     jsRejection: selectRustJsRejectionRegion(undefined, []) };
-  const planned = planRustErrorRegion({}, { input: { program: { errorRegions: { get: () => selected } } } });
+  const planned = planRustErrorRegion({}, { input: { program: { records: createRustRecordFixture({
+    nativeErrorRegion: { get: () => selected } }) } } });
   assert.equal(planned !== undefined, true);
   assert.equal(planned.boundary === undefined, true);
 });
