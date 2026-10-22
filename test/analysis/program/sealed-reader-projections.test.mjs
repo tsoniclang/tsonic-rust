@@ -58,10 +58,7 @@ export function value(limit: number): number {
     const captures = program.objectRepresentations.receiverCaptures;
     const reader = (symbol, inputs, read, unknown, absent = "undefined") => ({ symbol, inputs, read, unknown, absent });
     const readers = [
-      reader("RustCountedLoopRepresentationPlan.representationFor", nodes, node => program.countedLoops.representationFor(node), () => program.countedLoops.representationFor(foreign)),
       reader("RustNativeDeclarationForms.get", nodes, node => program.nativeDeclarations.get(node), () => program.nativeDeclarations.get(foreign)),
-      reader("RustNumericRepresentations.usesInt32Remainder", nodes, node => program.numericRepresentations.usesInt32Remainder(node), () => program.numericRepresentations.usesInt32Remainder(foreign), "false"),
-      reader("RustClassValuePlan.forCarrier", carriers, carrier => program.classValues.forCarrier(carrier), () => program.classValues.forCarrier(int32Carrier)),
       reader("RustClassValuePlan.forDeclaration", nodes, node => program.classValues.forDeclaration(node), () => program.classValues.forDeclaration(foreign)),
       reader("RustClassValuePlan.viewFor", nodes, node => program.classValues.viewFor(node, itemCarrier, itemCarrier), () => program.classValues.viewFor(foreign, itemCarrier, itemCarrier)),
       reader("RustFrozenDataWritePlan.capturesFieldIdentity", nodes, node => program.frozenDataWrites.capturesFieldIdentity(node), () => program.frozenDataWrites.capturesFieldIdentity(foreign), "false"),
@@ -93,18 +90,19 @@ export function value(limit: number): number {
       reader("RustSourceModuleConstructionIndex.entries", [undefined], () => program.sourceModuleConstructions.entries(), () => program.sourceModuleConstructions.entries(), "collection"),
       reader("RustSourceModuleConstructionIndex.from", program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), file => program.sourceModuleConstructions.from(file), () => program.sourceModuleConstructions.from(foreign), "empty"),
       reader("RustSourceModuleConstructionIndex.targets", [undefined], () => program.sourceModuleConstructions.targets(), () => program.sourceModuleConstructions.targets(), "collection"),
-      reader("RustBorrowedInitializerQueries.forExpression", nodes, node => program.borrowedInitializers.forExpression(node), () => program.borrowedInitializers.forExpression(foreign)),
-      reader("RustCaptureStoragePlan.deferredForScope", nodes, node => program.captureStorage.deferredForScope(node), () => program.captureStorage.deferredForScope(foreign), "empty"),
-      reader("RustCaptureStoragePlan.iterationsForScope", nodes, node => program.captureStorage.iterationsForScope(node), () => program.captureStorage.iterationsForScope(foreign), "empty"),
       reader("RustLocalStorageAliasPlan.owner", nodes, node => program.localStorageAliases.owner(node), () => program.localStorageAliases.owner(foreign)),
       reader("RustLocalStorageAliasPlan.requiresMutableOwner", nodes, node => program.localStorageAliases.requiresMutableOwner(node), () => program.localStorageAliases.requiresMutableOwner(foreign), "false"),
-      reader("RustProviderMutableInputPlan.forOperation", nodes, node => program.providerMutableInputs.forOperation(node), () => program.providerMutableInputs.forOperation(foreign)),
+      reader("RustDeclarationGenericRequirementIndex.contractForCarrier", carriers, carrier => program.declarationGenericRequirements.contractForCarrier(carrier), () => program.declarationGenericRequirements.contractForCarrier(int32Carrier)),
+      reader("RustLifetimeIndex.contractFor", nodes, node => program.sourceLifetimes.contractFor(node), () => program.sourceLifetimes.contractFor(foreign)),
+      reader("RustLifetimeIndex.parameterFor", nodes, node => program.sourceLifetimes.parameterFor(node), () => program.sourceLifetimes.parameterFor(foreign)),
+      reader("RustLifetimeIndex.resolve", nodes, node => program.sourceLifetimes.resolve(node), () => program.sourceLifetimes.resolve(foreign)),
+      reader("RustLifetimeIndex.allContracts", [undefined], () => program.sourceLifetimes.allContracts(), () => program.sourceLifetimes.allContracts(), "collection"),
     ];
     const declared = new Set(keelOwnedTargets["tsonic-rust"].recordReaders.map(entry => entry.symbol));
-    assert.equal(readers.length, 41);
+    assert.equal(readers.length, 39);
     assert.equal(readers.every(current => declared.has(current.symbol)), true,
       "all and only the exact audited contracts must be registered");
-    assert.equal(new Set(readers.map(current => current.symbol)).size, 41);
+    assert.equal(new Set(readers.map(current => current.symbol)).size, 39);
     assert.equal(nodes.length > 40, true, "the fixture contains actual checked source subjects");
     gate.closed = true;
     let positiveObjects = 0;
