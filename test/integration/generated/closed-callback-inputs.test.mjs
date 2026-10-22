@@ -38,8 +38,11 @@ test("closed Promise callback inputs preserve authored Error payload and identit
       '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("closed callback input"); }\nawait main();\n' },
   });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
-  assert.equal(/JsValue|dyn Any/u.test(artifactText(result, "src/index.rs")), false,
-    "closed callback inputs must not erase the authored Error payload");
+  // RULINGS 2026-10-22: on the js surface an `unknown` rejection reason stays JsValue (JS rejection reasons are
+  // arbitrary values); the authored Error itself keeps its native type and is never erased to `dyn Any`.
+  const output = artifactText(result, "src/index.rs");
+  assert.equal(/dyn Any/u.test(output), false, "closed callback inputs must not erase the authored Error payload");
+  assert.match(output, /let original: DetailedError = DetailedError::new\(/u, "the authored Error keeps its native type");
   validateGeneratedProject("closed-promise-callback-inputs", result.artifacts, { run: true });
 });
 
