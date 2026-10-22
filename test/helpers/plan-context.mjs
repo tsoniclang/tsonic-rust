@@ -1,3 +1,6 @@
+import { analyzeRust } from "./rust-session.mjs";
+import { analyzeRustTypeEmission } from "../../dist/analysis/types/emission.js";
+import { createRustTypeEmissionProducer } from "../../dist/analysis/program/records/type-emission.js";
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { planRustSourcePackageComponents } from "../../dist/backend/planner/program/source-package-components.js";
 import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/source-package-errors.js";
@@ -45,4 +48,19 @@ export function rustSourceFilePlanContext(program, node, overrides = {}) {
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     ...overrides,
   };
+}
+
+// A sealed analysis program compiled from `source`, whose type emission records also cover `carriers`: the
+// analysis owner (analyzeRustTypeEmission) selects every carrier the program uses plus these, as it does for the
+// carriers a real program renders. Planner and render tests use it instead of hand-made type emission records.
+export function rustProgramWithTypeEmissions(carriers, { source = "export function probe(): void {}\n", surfaces = [] } = {}) {
+  const { program } = analyzeRust({ surfaces, files: { "index.ts": source } });
+  const producer = createRustTypeEmissionProducer(() => {});
+  analyzeRustTypeEmission(program, [], producer, carriers);
+  return { ...program, records: { ...program.records, typeEmission: producer.records.typeEmission } };
+}
+
+// The planner context of the program's first authored source file.
+export function rustProgramPlanContext(program, overrides = {}) {
+  return rustSourceFilePlanContext(program, rustProgramSourceFiles(program)[0], overrides);
 }

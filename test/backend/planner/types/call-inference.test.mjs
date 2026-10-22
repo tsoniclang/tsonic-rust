@@ -7,8 +7,8 @@ import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, ru
 import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { createRustGeneratedUnionPlan } from "../../../../dist/analysis/objects/generated-union-plan.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
-const context = { input: { program: { typeDefinitions: emptyRustTypeDefinitions } } };
 
 test("borrowed invocation protocols render only in native parameter or return positions", () => {
   const input = rustCallableInputTargetType([scalar], scalar);
@@ -54,6 +54,16 @@ test("optional invocation parameters keep static dispatch and absence uses a con
 
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };
 const owner = rustNamedTargetType("test.adapter", "example::Adapter", [{ kind: "type", type: callable }]);
+
+// Rendering reads each carrier's sealed type emission; a real program selects the carriers these tests render.
+const input = rustCallableInputTargetType([scalar], scalar);
+const borrowedString = { kind: "reference", referent: { kind: "target-named", id: "rust.std.String" }, mutable: false };
+const bottom = { kind: "target-specific", target: "rust", name: "never" };
+const context = rustProgramPlanContext(rustProgramWithTypeEmissions([
+  scalar, input, { kind: "function-pointer", args: [input], result: scalar }, rustSourceOptionalTargetType(input),
+  rustSourceOptionalTargetType(rustCallableInputTargetType([borrowedString], scalar)), callable, owner,
+  bottom, rustVecTargetType(bottom),
+]));
 
 test("native call positions infer anonymous types without erasing their known contract", () => {
   assert.deepEqual(rustCallTypeFromCarrierInContext(callable, context), { kind: "infer" });

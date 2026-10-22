@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustAbsentValue } from "../../../../dist/backend/planner/expressions/optional-storage.js";
 import { rustAbsenceTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
-import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
-const context = { input: { program: { typeDefinitions: createRustTypeDefinitionRegistry().seal() } } };
+// The planner reads each carrier's sealed optional storage; a real program selects the two admitted carriers.
+const context = rustProgramPlanContext(rustProgramWithTypeEmissions([
+  rustAbsenceTargetType(), rustOptionTargetType(rustSourcePrimitiveTargetType("uint64"))]));
 
 test("absence completion uses the exact native storage without an adapter", () => {
   assert.deepEqual(planRustAbsentValue(rustAbsenceTargetType(), context), { kind: "tuple-literal", elements: [] });
