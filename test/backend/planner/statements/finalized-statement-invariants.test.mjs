@@ -4,6 +4,7 @@ import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-ap
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.mjs";
 import { createRustRecordFixture, rustNativeFixtureNodes } from "../../../helpers/records.mjs";
+import { rustProgramSourceFiles, rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustPlanningContext } from "../../../../dist/backend/planner/context.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
@@ -52,30 +53,17 @@ function nodeIn(program, owner, predicate) {
     if (currentOwner === owner && predicate(ast, node)) found ??= node;
     for (const child of ast.children(node)) visit(child, currentOwner);
   };
-  for (const file of program.sourceFiles) visit(file);
+  for (const file of rustProgramSourceFiles(program)) visit(file);
   assert.equal(found !== undefined, true, owner + ": checked construct exists");
   return found;
 }
 
 function planContext(program, node, names = true) {
-  const { ast } = program.source;
-  const input = createRustPlanningContext(program);
-  const components = program.sourcePackageComponents.components.map(component => ({
-    ...component, sourceFileNames: new Set(component.sourceFileNames), programModuleName: "program",
-  }));
-  const errors = planRustSourcePackageErrors(input, components);
-  assert.equal(errors.diagnostics.length, 0, "the checked package has its actual error plan");
-  const context = {
-    input, sourceFile: ast.getSourceFile(node), diagnostics: [], usedAliases: new Set(),
-    sourcePackageErrors: errors.plan,
-    sourcePackageComponentId: program.sourcePackageComponents.rootComponentId,
-    ...(names ? { syntheticNames: createRustSyntheticNameState(ast, node, []) } : {}),
+  // The sealed program's own source-file context, as the planner builds it.
+  const context = rustSourceFilePlanContext(program, node, {
     controlFlow: { nextLoopId: 0 }, functionReturnType: { kind: "unit" },
-    moduleName: "index", programModuleName: "program", structuralShapesModuleName: "shapes",
-    moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
-    externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
-    externalStructuralShapeModuleByFileName: new Map(),
-  };
+    ...(names ? {} : { syntheticNames: undefined }),
+  });
   context.fallibleBoundary = rustPackageFallibleBoundary(rustCurrentErrorBoundary(context));
   return context;
 }

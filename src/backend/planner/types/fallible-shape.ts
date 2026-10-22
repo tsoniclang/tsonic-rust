@@ -2,8 +2,10 @@ import type {
   RustBlock,
   RustExpr,
   RustStmt,
+  RustType,
 } from "../../target-ast/syntax/nodes.js";
 import { mapRustExpressionChildren } from "../../target-ast/syntax/expression-children.js";
+import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import type { RustFallibleBoundary } from "../program/fallible-boundaries.js";
 
 export type RustFallibleShapeOptions =
@@ -46,6 +48,8 @@ function applyRustResultExpression(
   if (expression.kind === "bottom") {
     return expression;
   }
+  const propagated = rustPropagatedResult(expression, boundary.errorType);
+  if (propagated !== undefined) return propagated;
   return {
     kind: "call",
     path: "Ok",
@@ -58,6 +62,17 @@ function applyRustResultExpression(
           ],
         }),
     args: [expression],
+  };
+}
+
+// `Ok(result?)` whose propagated error already has the boundary's error type is `result` itself (or
+// `result.map_err(From::from)` when only the operand's error differs); emitting the wrapper fails
+// clippy::needless_question_mark.
+export function rustPropagatedResult(expression: RustExpr, errorType: RustType): RustExpr | undefined {
+  if (expression.kind !== "try" || expression.nativeReturn === true || !rustTypeEquals(expression.resultErrorType, errorType)) return undefined;
+  return rustTypeEquals(expression.operandErrorType, errorType) ? expression.expr : {
+    kind: "method-call", receiver: expression.expr, method: "map_err",
+    args: [{ kind: "associated-value", owner: errorType, name: "from" }],
   };
 }
 

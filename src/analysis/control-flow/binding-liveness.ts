@@ -28,7 +28,10 @@ export function analyzeRustBindingLiveness(
       const observed = liveness.after.get(point.id)?.has(operation.binding) === true;
       if (operation.initialization) initialWrites.set(operation.binding,
         (initialWrites.get(operation.binding) ?? true) && !observed);
-      else if (records.bindingStorage.get(operation.binding) === undefined) {
+      // Only a binding owned by this callable can have a write that no later read observes. A write to a module
+      // binding or to a binding of an enclosing callable stays observable outside this region.
+      else if (records.bindingStorage.get(operation.binding) === undefined &&
+        sourceEnclosingCallable(operation.binding, source.ast) === graph.declaration) {
         writesBySource.set(operation.reference, (writesBySource.get(operation.reference) ?? true) && !observed);
       }
     }

@@ -1,5 +1,6 @@
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustPropagatedResult } from "../types/fallible-shape.js";
 
 export function planRustReturnExit(
   expression: RustExpr | undefined,
@@ -11,7 +12,8 @@ export function planRustReturnExit(
   const boundary = context.completionBoundary;
   if (boundary === undefined) {
     return { kind: "return", ...(context.returnResult === undefined ? expression === undefined ? {} : { expr: expression }
-      : { expr: { kind: "call", path: "Ok", args: [expression ?? { kind: "tuple-literal", elements: [] }] } }) };
+      : { expr: (expression === undefined ? undefined : rustPropagatedResult(expression, context.returnResult.errorType)) ??
+        { kind: "call", path: "Ok", args: [expression ?? { kind: "tuple-literal", elements: [] }] } }) };
   }
   markOutermostReturnDispatch(boundary);
   context.usedAliases?.add("rt");

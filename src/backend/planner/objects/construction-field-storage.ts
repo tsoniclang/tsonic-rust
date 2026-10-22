@@ -33,8 +33,13 @@ export function rustConstructionFieldStorage(
     location: owner => rustFrameBindingLocalLocation(binding, owner, context),
   };
   const storage = rustCapturedFieldStorage(declaration, context);
+  // A plain construction local needs `mut` only when the source writes the field again while the object is
+  // unpublished, or mutates the field's content in place. A single (possibly deferred) initialization does not.
+  const dispatch = context.input.program.records.projectFieldDispatch.get(declaration);
+  const mutable = storage === undefined &&
+    (plan.unpublishedMutations.has(declaration) || dispatch === undefined || dispatch.mutableContent);
   return {
-    deferred: storage?.initialization === "deferred", mutable: storage === undefined, retainedFieldOwner: storage !== undefined,
+    deferred: storage?.initialization === "deferred", mutable, retainedFieldOwner: storage !== undefined,
     create: value => createRustCapturedField(storage, value),
     createDeferred: () => storage?.initialization === "deferred" ? createRustDeferredFieldOwner() : undefined,
     initialize: (owner, value) => initializeRustCapturedField(storage, owner, value),

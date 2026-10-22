@@ -8,7 +8,9 @@ function prepared(abi, receiver, argumentsList) {
   const node = Object.freeze({ name: "operation" });
   const operation = Object.freeze({ kind: "provider-operation", abi });
   const occurrence = selectRustProviderSourceOccurrence(node, operation, receiver, argumentsList);
-  const plan = Object.freeze({ sourceFor: (subject, fact) => subject === node && fact === operation ? occurrence : undefined });
+  // The planner reads the sealed provider evaluation records; this fixture publishes the one selected occurrence.
+  const plan = Object.freeze({ providerSourceOccurrence: Object.freeze({
+    get: (subject, fact) => subject === node && fact === operation ? occurrence : undefined }) });
   return {
     keys: providerTargetRuntimeSlotKeys(plan, node, operation),
     slots: sourceRuntimeSlots(plan, node, operation)?.map(slot => ({ key: slot.key, node: slot.node,

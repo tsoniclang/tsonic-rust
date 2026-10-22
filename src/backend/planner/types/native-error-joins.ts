@@ -1,3 +1,4 @@
+import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr, RustItem, RustPattern, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
@@ -45,8 +46,9 @@ export function planRustNativeErrorJoin(input: {
       fields: [{ kind: "named" as const, path: parameters[index]!.name }] }))),
   }]);
   const select = (source: RustNativeErrorJoinSelection): RustNativeErrorJoinSource | undefined => {
+    // A selection must name a sealed source with the identical error type; a foreign or inconsistent carrier rejects.
     const selected = sources.get(source.identity);
-    return selected;
+    return selected !== undefined && rustTypeEquals(selected.errorType, source.errorType) ? selected : undefined;
   };
   const propagatedValue = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined => {
     const selected = select(source);

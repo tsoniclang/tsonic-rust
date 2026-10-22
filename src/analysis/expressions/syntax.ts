@@ -4,7 +4,9 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustExpressionSyntaxProducer } from "../program/records/expression-syntax.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustAbsenceCarrier, rustOptionElementCarrier, getRustGeneratorProtocol } from "../../target-model/types/index.js";
+import { isRustAbsenceCarrier, rustOptionElementCarrier, getRustGeneratorProtocol, rustAbsenceTargetType, rustSourceUnionCarrierValue }
+  from "../../target-model/types/index.js";
+import { rustUnionPayloadAdmission } from "../../policy/conversions/union-injection.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { sourceCharCodeUnit } from "../../source/extension/literals.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
@@ -31,13 +33,26 @@ export function analyzeRustExpressionSyntax(program: Omit<RustAnalysisProgram, "
       } else producer.publish(node, { kind: "string", value: ast.text(node) });
     }
     if (kind === "KindNullKeyword" || kind === "KindIdentifier" && (fact?.kind === "option-none" || binding === undefined && isRustAbsenceCarrier(carrier))) {
-      if (carrier === undefined || fact?.kind !== "option-none" && !isRustAbsenceCarrier(carrier))
+      // A null literal reads as the absent value of its own carrier: the unit absence, an Option, a custom optional
+      // storage or a source union with an absence lane (the same optional storage that type emission selects).
+      const absentStorage = carrier !== undefined && (isRustAbsenceCarrier(carrier) ||
+        rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined ||
+        rustSourceUnionCarrierValue(carrier) !== undefined &&
+          rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, program.typeDefinitions) !== undefined);
+      if (carrier === undefined || fact?.kind !== "option-none" && !absentStorage)
         refuse(node, "rust.backend.nullish", "null literals require an exact native absence carrier or finalized Option lane fact.");
       else producer.publish(node, { kind: "absence", carrier });
     }
     if (kind === "KindIdentifier" && binding !== undefined && program.records.sourceCallableValue.get(node) === undefined && program.records.classValue.get(node) === undefined) {
-      if (ast.kindName(binding.sourceDeclaration) === "KindClassDeclaration")
-        refuse(node, "rust.backend.class-value", "Class constructor used as a value has no exact finalized constructor-object view.", true);
+      // A class name that is the receiver of a member access names a static member path (`Counter.count`), not a
+      // constructor-object value; its static member owner plans it.
+      const parent = ast.parent(node);
+      const staticMemberReceiver = parent !== undefined &&
+        (ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent)) && Node_Expression(ast, parent) === node;
+      if (ast.kindName(binding.sourceDeclaration) === "KindClassDeclaration") {
+        if (!staticMemberReceiver)
+          refuse(node, "rust.backend.class-value", "Class constructor used as a value has no exact finalized constructor-object view.", true);
+      }
       else {
         const name = program.names.nameForDeclaration(binding.sourceDeclaration);
         if (name === undefined || !isValidRustIdentifier(name))

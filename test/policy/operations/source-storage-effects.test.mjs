@@ -47,7 +47,7 @@ function fixture(body = `
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(file);
-  const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
+  const profiles = createRustSourceProfileRegistry(source, jsEnabled);
   const effects = createRustSourceProfileStorageEffects(source, profiles);
   const selected = name => {
     const invocation = variables.get(name);
@@ -224,7 +224,7 @@ test("local Object and ObjectConstructor lookalikes cannot contribute JavaScript
 test("disabled or ambiguous source-profile provenance cannot invent an effect", () => {
   const current = fixture();
   const { invocation, call } = current.selected("frozen");
-  const disabled = createRustSourceProfileRegistry(current.source.sourceFiles, current.source.ast, false);
+  const disabled = createRustSourceProfileRegistry(current.source, false);
   assert.equal(createRustSourceProfileStorageEffects(current.source, disabled).call(invocation, call) === undefined, true);
   assert.equal(createRustSourceProfileStorageEffects(current.source, {
     profileForNode: () => undefined,
@@ -375,7 +375,8 @@ test("the real Rust target session wires the same freeze alias query into its co
   const { result } = compileRust({ surfaces: ["js"], files: {
     "index.ts": "export function run(): number { const original = { count: 3 }; const frozen = Object.freeze(original); return frozen.count; }",
   }, compileTarget(request) {
-    const runtime = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation);
+    const runtime = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation,
+      request.runtimeCrates);
     assert.equal(runtime.kind, "resolved");
     const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, runtime.plan.activeCrates);
     assert.equal(dispatch.kind, "resolved");

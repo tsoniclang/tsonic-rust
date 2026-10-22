@@ -80,6 +80,8 @@ function compile(input) {
     providerSemantics,
     jsEnabled: false,
     rootPublishesLibrary: configuration.outputType === "lib",
+    // The compilation session acquires runtime crates before analysis; this direct target call does the same.
+    runtimeCrates: materializeRustRuntimeReferences(input.runtimeReferences),
   }));
   return {
     artifacts: result.kind === "resolved" ? result.value.artifacts : [],

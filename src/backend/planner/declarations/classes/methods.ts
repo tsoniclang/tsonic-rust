@@ -16,6 +16,7 @@ import { readRustProjectMethodOverride } from "../../objects/project-objects.js"
 import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustJsPromiseReturnType } from "../callables/return-types.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
+import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
@@ -227,6 +228,10 @@ export function planProjectMethod(
   if (overridePrelude === undefined) {
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   }
+  const shapedBody = applyRustTailShape(
+    { statements: [...overridePrelude, ...finalizedBody.statements] },
+    returnType !== undefined,
+  );
   return { kind: "function",
     name: methodName,
     ...(deadCode === undefined ? {} : { deadCode }),
@@ -243,10 +248,8 @@ export function planProjectMethod(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise
-      ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody({
-          statements: [...overridePrelude, ...finalizedBody.statements],
-        }, fallible, asyncFact.lowering).statements] }
-      : { statements: [...overridePrelude, ...finalizedBody.statements] },
+      ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody(shapedBody, fallible, asyncFact.lowering).statements] }
+      : shapedBody,
   };
 }
 

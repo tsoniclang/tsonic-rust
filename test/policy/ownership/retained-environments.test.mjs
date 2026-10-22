@@ -38,7 +38,8 @@ function fixture(text, configure = input => input, maximumSteps) {
   const source = createTargetSourceProgram(checked);
   const sourceStorage = createSourceStorageQuery(source, sourceProjectFiles(checked));
   assert.equal(sourceStorage.failureReason(), undefined);
-  const input = configure({ source, sourceStorage, sourceLifetimes: emptyRustLifetimeIndex });
+  // The analysis host passes every native participating node; the source storage inventory is that set here.
+  const input = configure({ source, sourceStorage, declarations: sourceStorage.nodes, sourceLifetimes: emptyRustLifetimeIndex });
   const queries = createRustRetainedEnvironmentQueries(input, maximumSteps);
   const declarations = new Map(sourceStorage.nodes.filter(node => source.ast.is.IsFunctionDeclaration(node))
     .map(node => [source.ast.text(source.ast.name(node)), node]));

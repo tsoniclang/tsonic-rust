@@ -58,8 +58,11 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     let itemIndex = 0;
     return { ...value, statements: [
       ...scope.aliases.map((item): RustStmt => ({ kind: "item", item })),
-      ...value.statements.map(statement => statement.kind === "item"
-        ? { ...statement, item: scope.items[itemIndex++]! } : styleStatement(statement)),
+      ...value.statements.flatMap((statement): RustStmt[] => {
+        if (statement.kind === "item") return [{ ...statement, item: scope.items[itemIndex++]! }];
+        const styled = styleStatement(statement);
+        return isRustUnitLiteralStatement(styled) ? [] : [styled];
+      }),
     ] };
   };
   const expression = (value: RustExpr): RustExpr => {
@@ -102,3 +105,13 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
   return { block, expression, requiresNamingAllowance: () => namingAllowance };
 }
 
+
+// A unit literal used as a statement (`();` or `let _ = ();`) has no effect by construction; it is dropped as
+// syntax only. Attributed statements are kept.
+function isRustUnitLiteralStatement(statement: RustStmt): boolean {
+  const value = statement.kind === "expr" ? statement.expr
+    : statement.kind === "let" && statement.name === "_" && !statement.mutable && statement.type === undefined
+      ? statement.init : undefined;
+  const attributed = "attrs" in statement && (statement.attrs?.length ?? 0) !== 0;
+  return !attributed && value?.kind === "tuple-literal" && value.elements.length === 0;
+}

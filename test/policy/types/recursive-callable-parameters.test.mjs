@@ -42,7 +42,7 @@ selectedCall: { get: () => undefined }});
     pointerReturns: { resolve: () => undefined } };
   let selections = 0;
   const options = { jsEnabled: false, providerRows: [], providerTypes: [], sourceTypes,
-    sourceProfiles: createRustSourceProfileRegistry(source.sourceFiles, ast, false),
+    sourceProfiles: createRustSourceProfileRegistry(source, false),
     resolveProjectUnionCarrier: () => undefined,
     callableSignatureCarrier: () => assert.fail("a declaration cannot be specialized from recursive actual arguments"),
     callableStorageCarrier() { selections += 1; return undefined; } };
@@ -116,7 +116,8 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(protocol !== undefined, true);
       assert.equal(protocol.parameters.length, 0);
       assert.equal(protocol.result.name, "float64");
-      assert.equal(program.callableValues.native.inputsFor(declaration).length, 1);
+      // The sealed declaration contract lists one implementation type parameter per native callable input.
+      assert.equal(program.records.declarationRequirements.get(declaration)?.nativeInputs.length, 1);
     }
   });
 }
