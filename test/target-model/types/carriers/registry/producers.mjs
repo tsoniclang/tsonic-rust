@@ -218,13 +218,6 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/analysis/program/module-declarations.ts#resolveRustModuleBindingValue",
-    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/analysis/program/module-declarations.ts", symbol: "resolveRustModuleBindingValue" },
-    responsibility: "producers/resolve-identifier-carrier",
-    frozen: false,
-  },
-  {
     id: "src/analysis/objects/object-literals.ts#resolveRecordLiteralCarrier",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/objects/object-literals.ts", symbol: "resolveRecordLiteralCarrier" },
@@ -250,13 +243,6 @@ export const producersCarrierRegistry = Object.freeze([
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/callables.ts", symbol: "resolveUnion" },
     responsibility: "producers/resolve-union",
-    frozen: false,
-  },
-  {
-    id: "src/analysis/control-flow/array-entry-values.ts#rustGuardedArrayEntryCarrier",
-    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/analysis/control-flow/array-entry-values.ts", symbol: "rustGuardedArrayEntryCarrier" },
-    responsibility: "kinds/tuple",
     frozen: false,
   },
   {

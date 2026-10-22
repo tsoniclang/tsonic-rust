@@ -225,13 +225,6 @@ export const callablesCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/analysis/callables/signature-query.ts#resolveRustCallableSignatureCarrier",
-    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/analysis/callables/signature-query.ts", symbol: "resolveRustCallableSignatureCarrier" },
-    responsibility: "callables/select-closed-callable-context",
-    frozen: false,
-  },
-  {
     id: "src/analysis/source-evidence/types/resolution/callables.ts#resolveCallableType",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/analysis/source-evidence/types/resolution/callables.ts", symbol: "resolveCallableType" },
