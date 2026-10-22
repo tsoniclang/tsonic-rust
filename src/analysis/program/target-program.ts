@@ -157,6 +157,8 @@ export function analyzeRustAnalysisProgram(
     // binding of a provider module object has no Rust binding.
     if (!context.ast.is.IsVariableDeclaration(declaration) && !context.ast.is.IsParameterDeclaration(declaration) &&
       !context.ast.is.IsBindingElement(declaration)) return false;
+    // A variable declared by a provider or profile declaration file (`declare var process`) is not a Rust binding either.
+    if (context.ast.getSourceFile(declaration)?.IsDeclarationFile === true) return false;
     const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "A mutated referent requires its finalized declaration carrier.", declaration);
     return rustCarrierReferentMutationRequiresMutableBinding(carrier, selected => {
