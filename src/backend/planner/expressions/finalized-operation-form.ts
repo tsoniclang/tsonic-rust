@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProviderChainStep } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
-import type { RustCallGenericArgument, RustExpr, RustGenericArgument } from "../../target-ast/syntax/nodes.js";
+import type { RustCallGenericArgument, RustExpr, RustGenericArgument, RustGenericParameter, RustItem, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustPrimitiveTypeName } from "../../../target-model/types/carriers/primitives.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
@@ -13,6 +13,7 @@ import {
   rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext,
 } from "../types/render.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
+import { allocateRustSyntheticName } from "../names/synthetic.js";
 
 export function planRustFinalizedOperationForm(
   context: RustPlanContext,
@@ -41,6 +42,10 @@ export function planRustFinalizedOperationForm(
     ? undefined
     : targetGenericArguments as readonly RustCallGenericArgument[];
   switch (form.form) {
+    case "native-promise-continuation":
+      return receiver === undefined
+        ? failRustPlannerInvariant("An admitted native Promise continuation requires its finalized receiver future.", operationNode)
+        : planRustNativePromiseContinuation(form.member, receiver, args, operationNode, context);
     case "numeric-cast":
       return args[0] ?? failRustPlannerInvariant("An admitted numeric cast requires its exact source operand.", operationNode);
     case "marker":
@@ -318,4 +323,55 @@ function typeUnsuffixedIntegerReceiver(expression: RustExpr, carrier: TargetType
   if (expression.kind !== "int-literal" || expression.text.includes("_") || carrier.kind !== "source-primitive") return expression;
   const suffix = rustPrimitiveTypeName(carrier.name);
   return suffix === undefined ? expression : { ...expression, text: `${expression.text}_${suffix}` };
+}
+
+// `promise.catch(rejected)` / `promise.then(fulfilled, rejected?)` on a native Promise body: a local async function
+// awaits the receiver future and routes its settlement to the callbacks (an unhandled rejection settles the continuation
+// with it). The callbacks are fallible native closures; the function's bounds give them their exact parameter types.
+function planRustNativePromiseContinuation(member: "catch" | "then", receiver: RustExpr, args: readonly RustExpr[],
+  operationNode: Node, context: RustPlanContext): RustExpr {
+  const names = context.syntheticNames
+    ?? failRustPlannerInvariant("An admitted native Promise continuation requires its hygienic name scope.", operationNode);
+  if (args.length < 1 || args.length > (member === "catch" ? 1 : 2))
+    failRustPlannerInvariant("An admitted native Promise continuation requires its exact callbacks.", operationNode);
+  context.usedAliases?.add("rt");
+  const name = allocateRustSyntheticName(names, `native_promise_${member}`);
+  const named = (path: string, ...types: RustType[]): RustType => ({ kind: "named", path,
+    ...(types.length === 0 ? {} : { genericArguments: types.map(type => ({ kind: "type" as const, type })) }) });
+  const value = named("Value");
+  const output = member === "catch" ? value : named("Output");
+  const rejection = named("Rejection");
+  const settled = (type: RustType): RustType => named("rt::TsonicResult", type);
+  const callback = (parameter: RustType): RustTypeBound =>
+    ({ kind: "callable", trait: "FnOnce", binder: [], parameters: [parameter], result: settled(output) });
+  const fulfilled = member === "then";
+  const rejected = member === "catch" || args.length === 2;
+  const parameters: RustGenericParameter[] = [
+    { kind: "type", name: "Value", bounds: [] },
+    ...(member === "then" ? [{ kind: "type" as const, name: "Output", bounds: [] }] : []),
+    { kind: "type", name: "Rejection", bounds: rejected ? [] : [{ kind: "trait-type", reference: {
+      trait: named("core::convert::Into", named("rt::TsonicError")) } }] },
+    ...(fulfilled ? [{ kind: "type" as const, name: "Fulfilled", bounds: [callback(value)] }] : []),
+    ...(rejected ? [{ kind: "type" as const, name: "Rejected", bounds: [callback(rejection)] }] : []),
+  ];
+  const promise: RustType = { kind: "impl-trait", outlives: [], bounds: [{ kind: "trait-type", reference: {
+    trait: { kind: "named", path: "core::future::Future", genericArguments: [{ kind: "associated-equality", name: "Output",
+      genericArguments: [], type: named("Result", value, rejection) }] } } }] };
+  const invoke = (callee: string, argument: string): RustExpr =>
+    ({ kind: "invoke", callee: { kind: "path", path: callee }, args: [{ kind: "path", path: argument }] });
+  const body: RustExpr = { kind: "match", expression: { kind: "await", expr: { kind: "path", path: "promise" } }, arms: [
+    { pattern: { kind: "tuple-variant", path: "Ok", elements: [{ kind: "binding", name: "value" }] },
+      expression: fulfilled ? invoke("fulfilled", "value") : { kind: "call", path: "Ok", args: [{ kind: "path", path: "value" }] } },
+    { pattern: { kind: "tuple-variant", path: "Err", elements: [{ kind: "binding", name: "rejection" }] },
+      expression: rejected ? invoke("rejected", "rejection") : { kind: "call", path: "Err", args: [{ kind: "method-call",
+        receiver: { kind: "path", path: "rejection" }, method: "into", args: [] }] } },
+  ] };
+  const item: RustItem = { kind: "function", name, visibility: "private", isAsync: true,
+    generics: { parameters, wherePredicates: [] },
+    params: [{ name: "promise", type: promise },
+      ...(fulfilled ? [{ name: "fulfilled", type: named("Fulfilled") }] : []),
+      ...(rejected ? [{ name: "rejected", type: named("Rejected") }] : [])],
+    returnType: settled(output), body: { statements: [{ kind: "tail", expr: body }] } };
+  return { kind: "block", body: { statements: [{ kind: "item", item },
+    { kind: "tail", expr: { kind: "call", path: name, args: [receiver, ...args] } }] } };
 }

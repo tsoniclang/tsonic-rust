@@ -1,5 +1,5 @@
 import { requireRustRecord } from "../program/records/required-records.js";
-import { KindSpreadAssignment, ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
+import { KindSpreadAssignment, ObjectLiteralProperty_Value, SpreadAssignment_Expression } from "@tsonic/target-api/source";
 import { rustEmptyObjectTargetId, rustEmptyObjectTargetType, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -12,7 +12,10 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
+import { rustCallableTargetForSourceLifetime, selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
+import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
+import { rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -202,6 +205,21 @@ export function resolveRecordLiteralCarrier(
     }
     explicitPropertiesByName.set(fieldName, property);
   }
+  // Method slots copied by spreads whose destination lifetime is still a placeholder keep the copied slots' callable
+  // lifetimes; the literal's structural carrier is that registered instantiation of its source type.
+  if (rustStructuralObjectCarrierValue(selectedExpected) !== undefined) {
+    const adapted = rustSpreadSlotLifetimes(walk, sourceFile, selectedExpected, properties, explicitPropertiesByName);
+    if (adapted !== selectedExpected) {
+      if (!retainRustStructuralInstantiation(selectedSourceType, selectedExpected, adapted,
+        rustResolutionContext(walk, expression), walk.operationOptions)) {
+        appendRustDiagnostic(walk, "RUST_STRUCTURAL_PROPERTY_IMPLEMENTATION_CONFLICT",
+          "A spread record literal has no exact structural instantiation for its copied method slot lifetimes.", expression,
+          ["target.capability=rust.structural-property.closed-storage"]);
+        return undefined;
+      }
+      selectedExpected = adapted;
+    }
+  }
   const layout = selectRustRecordLiteralLayout(walk, expression, selectedExpected, accessorSelection);
   if (layout === undefined) return undefined;
   const { resultCarrier, storage, selectedFields, selectedMethodDeclarations } = layout;
@@ -300,4 +318,28 @@ export function resolveRecordLiteralCarrier(
     return rustEffectiveValueCarrier(walk.context.records, expression);
   }
   return finalizedCarrier;
+}
+
+function rustSpreadSlotLifetimes(walk: RustFactWalk, sourceFile: SourceFile, carrier: TargetTypeRef,
+  properties: readonly Node[], explicit: ReadonlyMap<string, Node>): TargetTypeRef {
+  const target = rustStructuralObjectCarrierValue(carrier);
+  if (target === undefined) return carrier;
+  const copied = new Map<string, TargetTypeRef>();
+  for (const property of properties) {
+    if (walk.context.ast.kindName(property) !== KindSpreadAssignment) continue;
+    const operand = SpreadAssignment_Expression(walk.context.ast, property);
+    const source = operand === undefined ? undefined : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+    const value = source === undefined ? undefined : rustStructuralObjectCarrierValue(rustOptionElementCarrier(source) ?? source);
+    for (const field of value?.fields ?? []) if (field.method === true) copied.set(field.sourceName, field.type);
+  }
+  let changed = false;
+  const fields = target.fields.map(field => {
+    const source = field.method === true && !explicit.has(field.sourceName) ? copied.get(field.sourceName) : undefined;
+    const type = source === undefined ? field.type : rustCallableTargetForSourceLifetime(source, field.type);
+    if (type === field.type) return field;
+    changed = true;
+    return { ...field, type };
+  });
+  return changed ? rustStructuralObjectTargetType(target.ownerFileName, fields, target.representation, target.construction, target.bases)
+    : carrier;
 }

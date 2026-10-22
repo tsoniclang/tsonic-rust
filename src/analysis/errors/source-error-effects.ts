@@ -7,7 +7,7 @@ import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { mergeRustErrorEffects, rustErrorEffectsEqual } from "./error-effects.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 
-import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics, substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
@@ -19,7 +19,7 @@ import type { RustNativeCallableProducer } from "../../target-model/records/nati
 import { rustNativeCallableErrorChannel } from "../../policy/types/callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
-import type { SourceStorageBindings } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -52,7 +52,9 @@ export interface RustSourceErrorEffectSelection {
       readonly genericBindings: RustTargetGenericBindings }): RustSourceErrorBindings | undefined;
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
     bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
-  pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined): boolean;
+  pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined,
+    substitution?: "bound" | "completed"): boolean;
+  substitutesOnCompletion(identity: string): boolean;
   complete(error: RustNativeErrorEffect,
     physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">): RustNativeErrorEffect | undefined;
 }
@@ -63,6 +65,8 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
   const origins = new Map<string, { readonly origin: RustNativeErrorEffect; readonly selected: RustNativeErrorEffect }>();
   const pending = new Map<string, (physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">) => RustNativeErrorEffect | undefined>();
   const completed = new Map<string, RustNativeErrorEffect>();
+  // Pending errors whose carrier callers substitute only after completion (generic invocation channels).
+  const substitutedOnCompletion = new Set<string>();
   const active = new Set<string>();
   const bindingIdentities = new WeakMap<SourceStorageBindings, number>();
   let nextBindingIdentity = 0;
@@ -86,6 +90,15 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
   }
   if (!register([{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }]))
     throw new Error("JS object rejection requires its one canonical identity and carrier.");
+  // A closure cannot be generic: a callable parameter of a closure is not a native input and supplies its
+  // type-erased runtime callable carrier.
+  const erasedClosureParameter = (subject: SourceStorageSubject): TargetTypeRef | undefined => {
+    const owner = subject.kind === "input" && subject.projection.length === 0 ? walk.context.ast.parent(subject.node) : undefined;
+    if (owner === undefined || !walk.context.ast.is.IsArrowFunction(owner) && !walk.context.ast.is.IsFunctionExpression(owner)) return undefined;
+    const carrier = walk.context.records.sourceParameterAbi.get(subject.node)?.valueCarrier;
+    const selected = rustOptionElementCarrier(carrier) ?? carrier;
+    return selected?.kind === "target-named" && selected.id === rustCallableTargetId ? selected : undefined;
+  };
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, activation) => {
     const signature = walk.context.records.selectedCall.get(node);
     const operation = walk.context.records.targetOperation.get(node);
@@ -149,6 +162,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     const physicalInputs = new Map<string, TargetTypeRef>();
     const completedInputs = new Map<string, TargetTypeRef>();
     const absentInputs = new Set<string>();
+    const erasedInputs = new Map<string, TargetTypeRef>();
     const bindings = new Set<string>();
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
     const needed = new Set(references.typeIdentities);
@@ -177,10 +191,17 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         : walk.context.sourceStorage.boundOriginsFor(input.subject, storageBindings);
       if (selected.kind !== "resolved") return undefined;
       let actual: TargetTypeRef | undefined;
+      let erasedActual = false;
       let producer: RustNativeCallableProducer | undefined;
       for (const subject of selected.subjects) {
         const parameter = native.inputs.find(candidate => candidate.subject === subject);
-        if (parameter !== undefined) {
+        const erased = parameter === undefined ? erasedClosureParameter(subject) : undefined;
+        if (erased !== undefined) {
+          if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, erased)) return undefined;
+          actual = erased;
+          erasedActual = true;
+          if (storageBindings !== undefined && !bindSignature(input.carrier, erased)) return undefined;
+        } else if (parameter !== undefined) {
           if (producer !== undefined || actual !== undefined && !rustTargetTypeRefEquals(actual, parameter.implementation)) return undefined;
           actual = parameter.implementation;
           if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return undefined;
@@ -199,7 +220,10 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
           }
         }
       }
-      if (actual !== undefined) types.set(identity, actual);
+      if (actual !== undefined) {
+        types.set(identity, actual);
+        if (erasedActual) erasedInputs.set(identity, actual);
+      }
       else if (producer !== undefined) {
         const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
         producers.set(identity, producer);
@@ -232,10 +256,14 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         if (original.kind !== "associated-type" || original.owner.kind !== "type-parameter") return type;
         const producer = producers.get(original.owner.identity);
         const input = inputs.get(original.owner.identity);
-        if (input === undefined || producer === undefined && !absentInputs.has(original.owner.identity)) return type;
+        const erased = erasedInputs.get(original.owner.identity);
+        if (input === undefined || producer === undefined && erased === undefined && !absentInputs.has(original.owner.identity)) return type;
         const channel = rustNativeCallableErrorChannel(input, input.implementation, original);
         if (channel === undefined) return type;
-        const replacement: TargetTypeRef | undefined = absentInputs.has(original.owner.identity)
+        // A type-erased runtime callable's invocation error is its own declared error.
+        const replacement: TargetTypeRef | undefined = erased !== undefined
+          ? channel === "invocation" ? rustCallableProtocol(erased)?.error : undefined
+          : absentInputs.has(original.owner.identity)
           ? { kind: "target-named", id: rustInfallibleTargetId } : producer === undefined ? undefined
           : walk.context.callableValues.nativeProducers.errorFor(producer.declaration, channel === "invocation" ? "invoke" : channel);
         if (replacement === undefined) { valid = false; return type; }
@@ -282,7 +310,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const recorded = origins.get(source.identity);
       if (recorded === undefined || !rustTargetTypeRefEquals(recorded.selected.errorType, source.errorType)) return undefined;
       const origin = recorded.origin;
-      const errorType = bindings.substitute(source.errorType);
+      const errorType = substitutedOnCompletion.has(source.identity) ? source.errorType : bindings.substitute(source.errorType);
       if (errorType === undefined) return undefined;
       const references = rustTargetGenericReferences(errorType, "metadata");
       const sourceComplete = !pending.has(source.identity) && !pending.has(origin.identity) &&
@@ -328,9 +356,11 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     } finally { active.delete(error.identity); }
   };
   return Object.freeze({ register, bindingsFor, edgeFor, complete,
-    pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined) {
+    substitutesOnCompletion: (identity: string) => substitutedOnCompletion.has(identity),
+    pending(error: RustNativeErrorEffect, select: () => RustNativeErrorEffect | undefined, substitution: "bound" | "completed" = "bound") {
       if (!register([error])) return false;
       pending.set(error.identity, select);
+      if (substitution === "completed") substitutedOnCompletion.add(error.identity);
       return true;
     },
   });

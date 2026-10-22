@@ -1,6 +1,8 @@
 import type { Node, TypeSignatureInfo, Type } from "@tsonic/tsts";
+import { closeRustRetainedCallableCarrier } from "../../../../policy/ownership/retained-storage.js";
 import { ArrayTypeNode_ElementType } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustStructuralObjectCarrierValue, rustSourceUnionCarrierValue } from "../../../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
@@ -115,8 +117,16 @@ export function retainRustStructuralInstantiation(
     }, context, options, resolving));
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
-    if (declared.some(carrier => carrier === undefined ||
-      !rustTargetTypeRefEquals(mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize), expected))) return undefined;
+    // The authored field type keeps an open callable environment; the selected storage closes it with its own lifetime.
+    let closing: RustLifetimeRef | undefined;
+    mapRustTargetTypes(expected, (current, original) => {
+      closing ??= rustCallableProtocol(original)?.lifetime;
+      return current;
+    });
+    const closed = (carrier: TargetTypeRef): TargetTypeRef => closing === undefined ? carrier
+      : closeRustRetainedCallableCarrier(carrier, closing);
+    if (declared.some(carrier => carrier === undefined || !rustTargetTypeRefEquals(
+      closed(mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize)), expected))) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {

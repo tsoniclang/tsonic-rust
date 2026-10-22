@@ -406,8 +406,12 @@ export function analyzeRustPromiseResults(input: {
       const selection = rustAwaitSelection(carrier, input.definitions);
       if (selection === undefined) return unresolved(call, "Async result-use requires its completed native completion carrier.");
       const futures = rustAwaitSelectionLeaves(selection).flatMap(leaf => leaf.future === undefined ? [] : [leaf.future]);
+      // The async contract comes from this call's sealed native completion carrier. A provider declaration file is not
+      // part of the checked source program, so the contract is attached to the exact call, as suspensionFor does.
+      const declarationFile = input.ast.getSourceFile(declaration);
+      const contractDeclaration = declarationFile !== undefined && input.source.semantics.includes(declarationFile) ? declaration : call;
       return futures.length === 0 ? { kind: "not-async" }
-        : { kind: "async", contractDeclaration: declaration, checkedType: selected.sourceResultType,
+        : { kind: "async", contractDeclaration, checkedType: selected.sourceResultType,
           resultPolicy: futures.every(future => rustJsPromiseOutputTargetType(future.futureCarrier) !== undefined)
             ? "observe-rejection" : "must-observe" };
     },

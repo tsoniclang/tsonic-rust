@@ -58,6 +58,11 @@ export function closeRustRetainedParameter(
   if (declaration === undefined || !context.ast.parameters(declaration).includes(parameter)) return undefined;
   const selected = context.retainedEnvironments.environmentFor(declaration);
   if (selected.kind === "unresolved") return undefined;
-  if (selected.kind === "none" || !selected.environment.parameters.includes(parameter)) return carrier;
+  if (selected.kind === "none") {
+    const retained = context.retainedEnvironments.ownsRetainedInputs(declaration)
+      ? context.retainedEnvironments.suspendedParametersFor(declaration) : undefined;
+    return retained?.includes(parameter) === true ? closeRustRetainedCallableCarrier(carrier, { kind: "static" }) : carrier;
+  }
+  if (!selected.environment.parameters.includes(parameter)) return carrier;
   return closeRustRetainedCallableCarrier(carrier, selected.environment.lifetime);
 }

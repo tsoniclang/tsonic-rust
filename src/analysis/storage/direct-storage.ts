@@ -207,7 +207,9 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const computed = program.records.computedMember.get(node);
     const accessor = program.records.accessorReceiver.get(node);
-    if (computed?.evaluateKey && computed.evaluateReceiver && accessor?.value) {
+    // A receiver with no direct storage place (`new Box()[key()]`) is evaluated into its own temporary before the key, so
+    // no later expression can rebind it; only a direct place must keep its storage identity across the key.
+    if (computed?.evaluateKey && computed.evaluateReceiver && accessor?.value && select(accessor.receiver).kind !== "unavailable") {
       admit(accessor.receiver, [computed.key]);
       admitPlace(accessor.receiver);
     }
@@ -234,7 +236,7 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     if (left !== undefined && right !== undefined && (assignment !== undefined || operator?.kind === "nullish-assignment")) {
       admitPlace(left);
       const selected = program.records.accessorReceiver.get(left);
-      if (selected?.value) admit(selected.receiver, [right]);
+      if (selected?.value && select(selected.receiver).kind !== "unavailable") admit(selected.receiver, [right]);
       const target = program.records.targetOperation.get(left);
       const receiver = Node_Expression(ast, left);
       if (receiver !== undefined && rustTargetOperationIsDirectLocation(target) && select(receiver).kind === "identifier") {

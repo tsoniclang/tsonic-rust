@@ -8,7 +8,8 @@ import { rustSourceValueWrapperContains } from "../../policy/ownership/source-va
 import type { RustSourceCallableQueries, RustSourceLexicalCallableQueries } from "../../target-model/records/source-callables.js";
 
 export function createRustSourceCallableQueries(sourceStorage: SourceStorageQueries,
-  explicitUnsafe: RustExplicitUnsafeContexts): RustSourceCallableQueries {
+  explicitUnsafe: RustExplicitUnsafeContexts,
+  promiseCallAliasTarget: (binding: Node) => Node | undefined): RustSourceCallableQueries {
   const source = sourceStorage.source;
   const lexical = createRustSourceLexicalCallableQueries(source, sourceStorage.nodes, explicitUnsafe);
   const returns = new WeakMap<Node, Node | null>();
@@ -21,6 +22,7 @@ export function createRustSourceCallableQueries(sourceStorage: SourceStorageQuer
   return Object.freeze({
     directLexicalBinding: lexical.bindingFor,
     borrowedReturnParameter: (declaration: Node) => returns.get(declaration) ?? undefined,
+    promiseCallAliasTarget,
   });
 }
 

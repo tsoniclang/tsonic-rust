@@ -13,6 +13,9 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
 import { rustCallableWithError, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLambdaEmissionProducer): readonly TargetDiagnostic[] {
@@ -119,13 +122,13 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
       failTargetAnalysisInvariant("tsonic-rust", "An admitted suspended closure requires its exact result conversion.", node);
     const producedReference = rustProducerErrorReference(invocationError);
     const producedError = producedReference === undefined ? invocationError : program.errorRegions.producerError(producedReference);
-    const familyError = frame?.independent === true ? protocol?.error : undefined;
+    const familyError = frame?.independent === true ? protocol?.error : fixedErasedSlotError(program, node);
     const independentWrite = physicalCarrier === undefined || familyError === undefined || producedError === undefined ||
       !rustUninhabitedError(producedError) || rustUninhabitedError(familyError) ? undefined
       : rustCallableWithError(physicalCarrier, familyError);
-    if (frame?.independent === true && familyError !== undefined && producedError !== undefined && rustUninhabitedError(producedError) &&
+    if (familyError !== undefined && producedError !== undefined && rustUninhabitedError(producedError) &&
       !rustUninhabitedError(familyError) && independentWrite === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An independent frame member requires its family's exact callable error.", node);
+      failTargetAnalysisInvariant("tsonic-rust", "A closure written into a fixed callable slot requires the slot's exact callable error.", node);
     producer.lambda(node, { construction, constructionCarrier, protocol, nativeClosure, borrowedInput, parameters: Object.freeze(selected),
       resultCarrier, bodyCarrier, unitBody: isRustUnitCarrier(bodyCarrier), physicalCarrier, invocationError,
       resultFallible, bodyFallible: suspended ? fallible : resultFallible,
@@ -135,4 +138,25 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
         : Object.freeze({ source: physicalCarrier, carrier: independentWrite }) });
   }
   return Object.freeze(issues);
+}
+
+// A closure passed directly to a provider operation or placed directly in an array literal is stored in that slot's
+// fixed type-erased callable (the provider ABI and the literal's element type are not producer-selected), so the
+// slot's error is the error the closure is written with.
+function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">, node: Node): TargetTypeRef | undefined {
+  const { ast } = program.source;
+  let value = node;
+  for (let parent = ast.parent(value); parent !== undefined && ast.is.IsParenthesizedExpression(parent); parent = ast.parent(parent))
+    value = parent;
+  const owner = ast.parent(value);
+  if (owner === undefined) return undefined;
+  const operation = program.records.targetOperation.get(owner);
+  let slot: TargetTypeRef | undefined;
+  if (operation?.kind === "provider-operation" && ast.is.IsCallExpression(owner)) {
+    const index = ast.arguments(owner).indexOf(value);
+    slot = index < 0 ? undefined
+      : operation.abi.sourceArguments.find(argument => argument.sourceIndex === index && argument.form === "value")?.carrier;
+  } else if (operation?.kind === "array-literal" && ast.is.IsArrayLiteralExpression(owner)) slot = operation.elementCarrier;
+  const erased = slot === undefined ? undefined : rustOptionElementCarrier(slot) ?? slot;
+  return erased?.kind === "target-named" && erased.id === rustCallableTargetId ? rustCallableProtocol(erased)?.error : undefined;
 }

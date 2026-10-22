@@ -1,5 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionSelection,
@@ -165,10 +166,16 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       if (effects !== undefined) {
         const selected = regionFor(node, effects, true);
         if (selected !== undefined) regions.set(node, selected);
-        if (effects.nativeErrors.length > 0) {
+        // Only callable boundaries and source files plan their error region as a join; a nested block's errors are
+        // unified by its try/catch completion. A settled js-promise body converts each native error into its rejection
+        // value where it occurs, so it forms no join either.
+        const plannedRegion = input.ast.is.IsSourceFile(node) || sourceEnclosingCallable(node, input.ast) === node;
+        const asynchronous = input.records.asyncFunction.get(node);
+        const settledPromise = asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "settled";
+        if (effects.nativeErrors.length > 0 && plannedRegion && !settledPromise) {
           const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
           if (arity > 1) arities.add(arity);
-          if (input.records.asyncFunction.get(node)?.kind === "js-promise") clonedArities.add(arity);
+          if (asynchronous?.kind === "js-promise") clonedArities.add(arity);
         }
       }
       for (const edge of input.records.sourceErrorEffects.get(node)?.edges ?? []) sourceRegionFor(node, edge);

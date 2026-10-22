@@ -5,7 +5,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
 import { isRustProgramErrorCarrier, rustJsErrorTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
 import { rustCarrierSupportsClone, rustCarrierSupportsTrait } from "../constraints/native-traits.js";
-import { rustCallableTargetId, rustOptionTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustOptionTargetId, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { selectRustSourceValueConversion } from "./selection.js";
@@ -158,6 +158,23 @@ export function rustCallableTargetForSourceLifetime(sourceCarrier: TargetTypeRef
       : rustCallableTargetForSourceLifetime(sourceElement, element);
     return selected === undefined || selected === element ? targetCarrier
       : { ...targetCarrier, genericArguments: [{ kind: "type", type: selected }] };
+  }
+  // A structural parameter takes the concrete method lifetimes of the structural value passed, field by field.
+  const sourceObject = rustStructuralObjectCarrierValue(sourceCarrier);
+  const targetObject = rustStructuralObjectCarrierValue(targetCarrier);
+  if (sourceObject !== undefined && targetObject !== undefined) {
+    if (sourceObject.fields.length !== targetObject.fields.length) return targetCarrier;
+    let changed = false;
+    const fields = targetObject.fields.map((field, index) => {
+      const source = sourceObject.fields[index]!;
+      if (source.sourceName !== field.sourceName) return field;
+      const type = rustCallableTargetForSourceLifetime(source.type, field.type);
+      if (type === field.type) return field;
+      changed = true;
+      return { ...field, type };
+    });
+    return changed ? rustStructuralObjectTargetType(targetObject.ownerFileName, fields, targetObject.representation,
+      targetObject.construction, targetObject.bases) : targetCarrier;
   }
   const sourceCallable = rustCallableProtocol(sourceCarrier);
   const targetCallable = rustCallableProtocol(targetCarrier);

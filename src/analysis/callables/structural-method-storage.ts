@@ -19,6 +19,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
@@ -164,7 +165,8 @@ export function createRustStructuralMethodStorage(input: {
             const destination = destinations.get(field.targetStorageIndex)!;
             const original = shape?.fields[field.sourceStorageIndex];
             if (original?.method !== true || original.declarations.length === 0 ||
-              original.storageIndex !== field.sourceStorageIndex || !rustTargetTypeRefEquals(original.resultCarrier, field.carrier)) {
+              original.storageIndex !== field.sourceStorageIndex ||
+              !rustTargetTypeRefEquals(original.resultCarrier, rustCallableTargetForSourceLifetime(original.resultCarrier, field.carrier))) {
               sourceIssues.push({ subject: contribution.expression, message: "Structural method spread storage requires its exact checked source field layout." });
               continue;
             }
@@ -191,6 +193,75 @@ export function createRustStructuralMethodStorage(input: {
       if (subject.kind === "resolved") register(node, destination, subject.subject);
     }
   }
+  // A method slot read through a parameter is produced by the arguments of every checked activation of the
+  // parameter's declaration; the domain follows each activation to its caller-side origins.
+  const producersFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings):
+    { readonly kind: "complete"; readonly producers: readonly SourceStorageProducer[];
+      readonly transported: ReadonlySet<SourceStorageProducer> } |
+    { readonly kind: "open" } | { readonly kind: "unresolved"; readonly reason: string } => {
+    const producers: SourceStorageProducer[] = [];
+    const transported = new Set<SourceStorageProducer>();
+    const visited = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
+    const pending: { readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
+      readonly transported?: true }[] = [{ subject, bindings }];
+    while (pending.length !== 0) {
+      const current = pending.pop()!;
+      const visits = visited.get(current.subject) ?? new Set<SourceStorageBindings>();
+      if (visits.has(current.bindings)) continue;
+      visits.add(current.bindings);
+      visited.set(current.subject, visits);
+      const selected = sourceStorage.storageProducersFor(current.subject, current.bindings);
+      if (selected.kind !== "complete") return selected.kind === "unresolved" ? selected : { kind: "open" };
+      for (const producer of selected.producers) {
+        if (producer.subject.kind !== "input") {
+          producers.push(producer);
+          if (current.transported === true) transported.add(producer);
+          continue;
+        }
+        const declaration = ast.parent(producer.subject.node);
+        if (declaration === undefined) return { kind: "unresolved",
+          reason: "Structural method storage requires the checked declaration of its parameter producer." };
+        // Declaration-local bindings stand for every activation of the declaration; specialized bindings name theirs.
+        const activations = producer.bindings === input.native.bindingsFor(declaration)
+          ? { kind: "resolved" as const, activations: [{ kind: "declaration" as const }] }
+          : sourceStorage.boundActivationsFor(declaration, producer.bindings);
+        if (activations.kind === "unresolved") return activations;
+        const invocations: { readonly bindings: SourceStorageBindings; readonly callerBindings: SourceStorageBindings }[] = [];
+        for (const activation of activations.activations) {
+          if (activation.kind === "invocation") {
+            invocations.push(activation);
+            continue;
+          }
+          if ("nativeEntry" in activation && activation.nativeEntry !== undefined) return { kind: "open" };
+          // An unspecialized declaration activation stands for every direct call of a declaration whose value never
+          // escapes; each call binds the parameter to that call's argument.
+          const summary = sourceStorage.source.navigation.declarationUseSummary(declaration);
+          if (summary.exported || summary.bindingWritten) return { kind: "open" };
+          for (const use of sourceStorage.source.navigation.declarationUses(declaration)) {
+            if (use.kind === "type-only") continue;
+            const call = ast.parent(use.reference);
+            if (use.kind !== "direct-call" || call === undefined || !ast.is.IsCallExpression(call) ||
+              Node_Expression(ast, call) !== use.reference) return { kind: "open" };
+            const owner = sourceEnclosingCallable(call, ast);
+            const callerBindings = owner === undefined ? sourceStorage.emptyBindings : input.native.bindingsFor(owner);
+            if (callerBindings === undefined) return { kind: "unresolved",
+              reason: "Structural method storage requires the checked lexical activation of each parameter call site." };
+            const bound = sourceStorage.bindingsForInvocation(declaration, call, callerBindings);
+            if (bound.kind === "unresolved") return bound;
+            invocations.push({ bindings: bound.bindings, callerBindings });
+          }
+        }
+        if (invocations.length === 0) return { kind: "open" };
+        for (const activation of invocations) {
+          const origins = sourceStorage.boundOriginsFor(producer.subject, activation.bindings);
+          if (origins.kind === "unresolved") return origins;
+          if (origins.subjects.length === 0) return { kind: "open" };
+          for (const origin of origins.subjects) pending.push({ subject: origin, bindings: activation.callerBindings, transported: true });
+        }
+      }
+    }
+    return { kind: "complete", producers: Object.freeze(producers), transported };
+  };
   let complete = false;
   const producerErrors = new Map<import("../../target-model/types/carriers/producer-errors.js").RustProducerErrorReference, TargetTypeRef>();
   const retainedRequirements: { readonly declaration: Node; readonly bindings: RustTargetGenericBindings | undefined;
@@ -218,17 +289,32 @@ export function createRustStructuralMethodStorage(input: {
         return node === undefined ? undefined : effectsFor(node);
       } } },
         producers: input.nativeProducers, definitions: input.typeDefinitions };
+      // A method read through a parameter reaches the closures of the arguments' own constructions; a closure that
+      // a construction of the same storage definition already admits needs no second admission at the read.
+      const constructed = new Map<Node, Set<RustStructuralShapeDefinition>>();
+      for (const root of roots) if (root.construction !== undefined) {
+        const definitions = constructed.get(root.construction.expression) ?? new Set<RustStructuralShapeDefinition>();
+        definitions.add(root.definition);
+        constructed.set(root.construction.expression, definitions);
+      }
+      const covered = new Set<RustStructuralMethodRoot>();
       for (const root of roots) {
-        const selected = sourceStorage.storageProducersFor(root.subject, root.bindings);
+        const selected = producersFor(root.subject, root.bindings);
         if (selected.kind !== "complete") return reject(root.subject.node, selected.kind === "unresolved" ? selected.reason
           : "Retained constructor selection requires its exact admitted source producer domain.");
-        admittedProducers.set(root, selected.producers);
+        const admitted = selected.producers.filter(producer => !selected.transported.has(producer) ||
+          constructed.get(producer.subject.node)?.has(root.definition) !== true);
+        if (admitted.length === 0 && selected.producers.length !== 0) {
+          covered.add(root);
+          continue;
+        }
+        admittedProducers.set(root, admitted);
         const fields = slots.get(root.definition) ?? new Map<number, Node>();
         slots.set(root.definition, fields);
         const field = structuralShapes.field(root.carrier, root.index)!;
         const protocol = rustCallableProtocol(field.presence === "optional"
           ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
-        for (const producer of selected.producers) {
+        for (const producer of admitted) {
           const subject = producer.subject;
           if (subject.kind !== "value" || subject.projection.length !== 0 ||
             records.targetOperation.get(subject.node)?.kind !== "closure")
@@ -251,6 +337,7 @@ export function createRustStructuralMethodStorage(input: {
           else parent.set(rootFor(declaration), rootFor(existing));
         }
       }
+      for (let index = roots.length - 1; index >= 0; index -= 1) if (covered.has(roots[index]!)) roots.splice(index, 1);
       const groups = new Map<Node, Node[]>();
       for (const declaration of parent.keys()) {
         const root = rootFor(declaration);
@@ -389,7 +476,7 @@ export function createRustStructuralMethodStorage(input: {
           const transported = root.spread.fields.filter(field => field.method === true && field.targetStorageIndex === root.index);
           if (sourceField === undefined || transported.length !== 1 ||
             transported[0]!.sourceStorageIndex !== sourceField.storageIndex ||
-            !rustTargetTypeRefEquals(transported[0]!.carrier, sourceField.resultCarrier) ||
+            !rustTargetTypeRefEquals(sourceField.resultCarrier, rustCallableTargetForSourceLifetime(sourceField.resultCarrier, transported[0]!.carrier)) ||
             projected?.kind !== "method-value" || !sourceField.declarations.includes(projected.declaration) ||
             structuralShapes.field(root.spread.sourceValueCarrier, sourceField.storageIndex)?.method !== true)
             failTargetAnalysisInvariant("tsonic-rust", "Structural method spread lost its exact source field and destination contribution.");

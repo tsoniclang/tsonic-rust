@@ -1,4 +1,5 @@
 import { selectRustNativeStringOperation } from "../../../../policy/operations/source-profiles/native-string.js";
+import { selectRustNativePromiseContinuation } from "../../../../policy/operations/source-profiles/native-promises.js";
 import { acceptRuntimeCallableCall, acceptStructuralRuntimeMethodCall, acceptRuntimeCallableCarrierCall } from "../../runtime-callables.js";
 
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
@@ -210,6 +211,13 @@ export function resolveRustCheckedCall(
       context,
       options,
     );
+    if (selectedSourceMember.profile === "native" && selectedSourceMember.ownerName === "Promise") {
+      const template = selectRustNativePromiseContinuation(selectedSourceMember.memberName, receiverCarrier,
+        selectedCallArgumentCarriers(request, context, options));
+      if (template === undefined) return rejectSelectedOperation(request.source.call, context, "RUST_NATIVE_PROMISE_CONTINUATION_CONTRACT",
+        "A native Promise continuation requires a native Promise body receiver and catch(rejected) or then(fulfilled, rejected?) callbacks.");
+      return acceptSelectedCall(request, template, template.parameterCarriers, context, options, { sourceName: selectedSourceMember.memberName });
+    }
     if (selectedSourceMember.profile === "native" && selectedSourceMember.ownerName === "String") {
       const template = selectRustNativeStringOperation(selectedSourceMember.memberName, receiverCarrier, selectedCallArgumentNodes(request).length);
       if (template === undefined) return rejectSelectedOperation(request.source.call, context, "RUST_NATIVE_STRING_CONTRACT",
@@ -375,7 +383,8 @@ export function resolveRustCheckedCall(
       (binding.callableDeclaration === sourceDeclaration ||
         declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
     const lexicalBinding = context.sourceCallables.directLexicalBinding(sourceDeclaration);
-    const directLexical = lexicalBinding !== undefined && lexicalBinding === reference?.declaration;
+    const directLexical = lexicalBinding !== undefined && lexicalBinding === reference?.declaration ||
+      reference !== undefined && context.sourceCallables.promiseCallAliasTarget(reference.declaration) === sourceDeclaration;
     const calleeKind = calleeDeclaration === undefined ? undefined : context.ast.kindName(calleeDeclaration);
     const storedCallable = calleeKind !== undefined && ["KindVariableDeclaration", "KindParameter",
       "KindPropertyDeclaration", "KindPropertySignature", "KindPropertyAssignment", "KindShorthandPropertyAssignment"].includes(calleeKind);

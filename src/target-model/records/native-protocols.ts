@@ -42,6 +42,8 @@ export interface RustNativeCallableProtocol {
   readonly completion?: RustNativeCallableCompletion;
   readonly result: TargetTypeRef;
   readonly trait: RustTargetTraitRef;
+  /** Associated type projections in the signature (an indexed field output): each owner must implement the trait. */
+  readonly associatedObligations: readonly { readonly owner: TargetTypeRef; readonly trait: RustTargetTraitRef }[];
 }
 
 export interface RustNativeCallableProtocolBinding {

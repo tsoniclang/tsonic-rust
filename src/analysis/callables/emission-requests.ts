@@ -309,6 +309,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
           const property = contribution.property;
           const expression = ast.is.IsPropertyAssignment(property) ? ast.as.AsPropertyAssignment(property)?.Initializer : ast.name(property);
           if (expression !== undefined) visitUse(expression, owner, `member:${index}`, node);
+          // A record member typed as a logical generic callable stores the physical family selected for its written value.
+          const field = operation.storage === "project-object"
+            ? operation.fields.find(candidate => candidate.storageIndex === contribution.targetStorageIndex) : undefined;
+          const generic = rustGenericCallableValue(field?.carrier);
+          if (expression !== undefined && generic !== undefined && generic.physical === undefined)
+            runtime(owner, expression, `member:${index}`, node);
         } else if (contribution.kind === "method" || contribution.kind === "structural-method") visitUse(contribution.expression, owner, `member:${index}`, node);
         else if (contribution.kind === "accessor") visitConstruct(contribution.property, contribution.property);
         else visitUse(contribution.expression, owner, `member:${index}`, node);

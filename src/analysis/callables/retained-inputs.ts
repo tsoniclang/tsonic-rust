@@ -7,6 +7,8 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustOnlyTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
@@ -66,6 +68,24 @@ export function analyzeRustRetainedCallableInputs(input: {
         members.set(index, boundary);
         boundaries.set(node, members);
         for (const selectedInput of origins.inputs) add(selectedInput, errorCarrier);
+      }
+    }
+    // A native input passed to a native input invocation whose parameter is a type-erased runtime callable is erased
+    // into that callable: the input is retained by it and its invocation error converts into the parameter's error.
+    for (const call of input.native.calls) {
+      budget.step();
+      const parameters = rustCallableProtocol(rustOptionElementCarrier(call.input.carrier) ?? call.input.carrier)?.parameters ?? [];
+      for (const [index, argument] of input.ast.arguments(call.node).entries()) {
+        budget.step();
+        const parameter = parameters[index];
+        const errorCarrier = parameter?.kind === "target-named" && parameter.id === rustCallableTargetId
+          ? rustCallableProtocol(parameter)?.error : undefined;
+        const origins = argument === undefined || errorCarrier === undefined ? undefined : input.native.originsForValue(argument);
+        if (origins?.kind !== "resolved" || origins.inputs.length !== 1 || origins.implementations.length !== 0) continue;
+        const members = boundaries.get(call.node) ?? new Map<number, RustRetainedCallableBoundary>();
+        members.set(index, Object.freeze({ inputs: Object.freeze([...origins.inputs]), errorCarrier: errorCarrier! }));
+        boundaries.set(call.node, members);
+        add(origins.inputs[0]!, errorCarrier!);
       }
     }
     for (const node of input.storage.invocations) {

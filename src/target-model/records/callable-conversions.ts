@@ -10,6 +10,8 @@ export interface RustNativeCallablePhysicalSource {
   readonly carrier: TargetTypeRef;
   readonly signature: RustCallablePhysicalSignature;
   readonly input?: RustNativeCallableInput;
+  /** A type-erased runtime callable: its invocation error is carried through the native error join. */
+  readonly erased?: true;
 }
 
 export interface RustCallableOperandEmission {
@@ -30,4 +32,6 @@ export interface RustCallableConversionRecords {
   readonly callableOperand: { readonly get: (node: Node, source: TargetTypeRef) => RustCallableOperandEmission | undefined };
   readonly callableContract: { readonly get: (node: Node, conversion: RustCallableConversion) => RustCallableConversionEmission | undefined };
   readonly callableJoinWrite: { readonly get: (node: Node) => RustCallableJoinWrite | undefined };
+  /** The physical generic callable family a record interface member stores, keyed by the member declaration. */
+  readonly recordFieldStorage: { readonly get: (member: Node) => TargetTypeRef | undefined };
 }

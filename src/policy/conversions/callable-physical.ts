@@ -21,6 +21,7 @@ export function rustCallableConversionPhysical(
   source: RustCallablePhysicalSignature,
   fileName: string,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  carriedError = false,
 ): RustCallablePhysicalConversion | undefined {
   let remaining = 4096;
   const select = (logical: RustCallableConversion, actual: RustCallablePhysicalSignature, depth: number): RustCallablePhysicalConversion | undefined => {
@@ -34,12 +35,15 @@ export function rustCallableConversionPhysical(
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
     const errorContract = logical.error === undefined ? undefined : rustValueConversionContract(logical.error, definitions);
     if (logical.error !== undefined && errorContract === undefined) return undefined;
-    // A concrete invoked error is converted here; an abstract one (a native input's associated error) is carried
-    // through the native error join unchanged, like every other native input error.
-    const errorPlan = errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
+    // A concrete invoked error is converted here; an abstract one (a native input's associated error) and the error of
+    // a type-erased runtime callable are carried through the native error join unchanged.
+    const errorPlan = !carriedError && errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
       ? errorContract : undefined;
+    // A provider callback (a fallible native closure) carries the runtime error; an invoked callable whose error is
+    // uninhabited is adapted by eliminating that error.
+    const eliminated = errorPlan === undefined && logical.target.kind === "closure" && rustUninhabitedError(actual.error);
     const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0",
-      errorType: errorPlan?.target ?? actual.error }];
+      errorType: eliminated ? rustRuntimeErrorTargetType() : errorPlan?.target ?? actual.error }];
     const parameters: TargetTypeRef[] = [...target.parameters];
     const arguments_: RustCallablePhysicalValueConversion[] = [];
     for (const [index, parameter] of logical.parameters.entries()) {
@@ -84,7 +88,8 @@ export function rustCallableConversionPhysical(
     const signature = { parameters, result, error };
     const carrier = physicalTarget(logical.target, signature);
     return carrier === undefined ? undefined : snapshotClosedMetadata({ logical, source: actual, carrier,
-      ...signature, arguments: arguments_, resultPlan, errors, ...(errorPlan === undefined ? {} : { errorPlan }) });
+      ...signature, arguments: arguments_, resultPlan, errors, ...(errorPlan === undefined ? {} : { errorPlan }),
+      ...(eliminated ? { eliminatedInvokeError: true as const } : {}) });
 
     function valuePlan(contract: RustValueConversionContract, identity: string): RustCallablePhysicalValueConversion {
       const errorType = conversionError(contract);
@@ -183,4 +188,18 @@ export function rustCallableWithError(physical: TargetTypeRef, error: TargetType
   const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, error]));
   return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
     [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
+}
+
+// The physical boxed callable a declared callable protocol carrier denotes: `Callable<'l, (P..), Result<R, E>>`.
+// A concrete callable parameter is passed in this form, so its storage and invocation read its physical error.
+export function rustCallablePhysicalCarrier(declared: TargetTypeRef): TargetTypeRef | undefined {
+  if (rustCallablePhysicalSignature(declared) !== undefined) return declared;
+  if (declared.kind !== "target-named" || declared.id !== rustCallableTargetId) return undefined;
+  const lifetime = declared.genericArguments?.[0];
+  const types = declared.genericArguments?.slice(1).map(argument => argument.kind === "type" ? argument.type : undefined);
+  const [parameters, result, error] = types ?? [];
+  if ( lifetime?.kind !== "lifetime" || types?.length !== 3 || parameters?.kind !== "tuple" ||
+    result === undefined || error === undefined) return undefined;
+  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable", [lifetime,
+    ...rustTypeGenericArguments([parameters, rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([result, error]))])]));
 }

@@ -146,6 +146,7 @@ export type RustProgramRecordWriter = RustAnalysisRecords & {
   readonly optionEqualityPlans: import("./option-equality.js").RustOptionEqualityProducer;
   readonly indexedLocationPlans: import("./indexed-locations.js").RustIndexedLocationProducer;
   readonly locationCallbackPlans: import("./location-callbacks.js").RustLocationCallbackProducer;
+  readonly erasedInputArgumentPlans: import("./erased-input-arguments.js").RustErasedInputArgumentProducer;
   readonly directStoragePlans: import("./direct-storage.js").RustDirectStorageProducer;
   readonly unaryEmissionPlans: import("./expression-unary.js").RustUnaryEmissionProducer;
   readonly flowReadEmissionPlans: import("./flow-read-emission.js").RustFlowReadEmissionProducer;

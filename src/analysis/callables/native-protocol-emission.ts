@@ -13,6 +13,8 @@ import type { RustNativeCallableCall } from "../../target-model/records/native-p
 import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 
 export function rustNativeInputEffectsMatch(call: RustNativeCallableCall, effects: RustSourceCallEffectsFact): boolean {
   return effects.invocation === "fallible" && effects.awaiting === (call.completion === undefined ? "not-applicable" : "fallible") &&
@@ -35,13 +37,17 @@ export function analyzeRustNativeProtocolEmission(input: {
     const owner = sourceEnclosingCallable(call.node, program.source.ast);
     const file = program.source.ast.getSourceFile(call.node);
     const region = owner === undefined ? file === undefined ? undefined : program.errorRegions.initialization.moduleFor(file)?.region : program.errorRegions.get(owner);
-    if (callee === undefined || carrier === undefined || effects === undefined || !rustNativeInputEffectsMatch(call, effects) || region === undefined || region.kind === "infallible") {
+    // In a catching try body the invocation error converts into the catch's program error, whatever the owner's region.
+    const caught = rustNodeInCatchingTryBody(program.source.ast, call.node);
+    if (callee === undefined || carrier === undefined || effects === undefined || !rustNativeInputEffectsMatch(call, effects) ||
+      !caught && (region === undefined || region.kind === "infallible")) {
       issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: call.node,
         message: `Native callable invocation requires its exact selected error channel in the active region. Node kind: ${program.source.ast.kindName(call.node)}.`,
         evidence: ["target.capability=rust.backend.native-callable-error-channel"] });
       continue;
     }
-    input.producer.call(call.node, { call, callee, reference: carrier.kind === "reference" });
+    input.producer.call(call.node, { call, callee, reference: carrier.kind === "reference",
+      caught: caught ? rustProgramErrorTargetType() : undefined });
   }
   const protocols = Object.freeze([...input.program.callableValues.native.protocols]);
   const selections = input.program.callableValues.nativeGenericProducers;

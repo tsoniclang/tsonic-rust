@@ -25,6 +25,7 @@ import { rustSourceInputLifetime } from "./source-input-lifetimes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { closeRustRetainedParameter } from "./retained-values.js";
+import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -103,7 +104,7 @@ export function createRustSourceCallableAbiResolver(input: {
         cache.set(parameter, null);
         return undefined;
       }
-      const named = finalizeRustSourceParameterStorage(parameter, abi, context);
+      const named = finalizeRustSourceParameterStorage(parameter, abi, context, options);
       cache.set(parameter, named ?? null);
       return named;
     },
@@ -193,13 +194,14 @@ export function resolveRustContextualParameterAbi(
     valueCarrier: selectedValueCarrier,
     parameterCarrier: selectedParameterCarrier,
     mode,
-  }, context);
+  }, context, options);
 }
 
 function finalizeRustSourceParameterStorage(
   parameter: Node,
   abi: RustSourceParameterAbiFact,
   context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
 ): RustSourceParameterAbiFact | undefined {
   const owner = context.ast.parent(parameter);
   if (abi.form === "required" && abi.entryConversion === undefined && owner !== undefined &&
@@ -218,7 +220,14 @@ function finalizeRustSourceParameterStorage(
   const parameterCarrier = valueCarrier === undefined ? undefined
     : rustTargetTypeRefEquals(abi.valueCarrier, abi.parameterCarrier) ? valueCarrier
       : closeRustRetainedParameter(parameter, abi.parameterCarrier, context);
-  return valueCarrier === undefined || parameterCarrier === undefined ? undefined : { ...abi, valueCarrier, parameterCarrier };
+  if (valueCarrier === undefined || parameterCarrier === undefined) return undefined;
+  // Closing a retained parameter creates a new structural instantiation (its method environments now name the
+  // retained environment lifetime); the closing owner registers it so structural storage stays exact.
+  const typeNode = Node_Type(context.ast, parameter);
+  const sourceType = typeNode === undefined ? undefined : context.currentSemantics.types.authoredType(typeNode);
+  if (!rustTargetTypeRefEquals(abi.valueCarrier, valueCarrier) && (sourceType === undefined ||
+    !retainRustStructuralInstantiation(sourceType, abi.valueCarrier, valueCarrier, context, options, new Set(), typeNode))) return undefined;
+  return { ...abi, valueCarrier, parameterCarrier };
 }
 
 function parameterUsesFlowState(

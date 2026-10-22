@@ -562,6 +562,7 @@ export function substituteProviderOperationForm(
               substitutions.consts,
             ),
           };
+    case "native-promise-continuation":
     case "marker":
     case "numeric-cast":
     case "struct-variant":

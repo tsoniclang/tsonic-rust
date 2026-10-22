@@ -79,6 +79,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly callableOperand: import("./callable-conversions.js").RustCallableConversionRecords["callableOperand"];
   readonly callableContract: import("./callable-conversions.js").RustCallableConversionRecords["callableContract"];
   readonly callableJoinWrite: import("./callable-conversions.js").RustCallableConversionRecords["callableJoinWrite"];
+  readonly recordFieldStorage: import("./callable-conversions.js").RustCallableConversionRecords["recordFieldStorage"];
   readonly conversionContract: import("./conversion-emission.js").RustConversionEmissionRecords["conversionContract"];
   readonly programErrorClosedValue: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorClosedValue"];
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];
@@ -102,6 +103,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly optionEquality: RustRecordFamily<import("./option-equality.js").RustOptionEqualityEmission>;
   readonly indexedLocation: RustRecordFamily<import("./indexed-locations.js").RustIndexedLocationEmission>;
   readonly locationCallback: { readonly get: (node: import("@tsonic/tsts").Node, argument: number) => import("./location-callbacks.js").RustLocationCallbackEmission | undefined };
+  readonly erasedInputArgument: { readonly get: (node: import("@tsonic/tsts").Node, argument: number) => import("./erased-input-arguments.js").RustErasedInputArgument | undefined };
   readonly directStorage: RustRecordFamily<import("./direct-storage.js").RustDirectStorageEmission>;
   readonly directStorageIdentity: RustRecordFamily<import("./direct-storage.js").RustDirectStorageIdentity>;
   readonly storageEffectful: RustRecordFamily<boolean>;

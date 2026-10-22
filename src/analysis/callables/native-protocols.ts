@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 
@@ -35,7 +36,13 @@ export function createRustNativeCallableProtocolRegistry(input: {
         const result = selectRustNativeCallableProtocolResult({ ...contract, identity }, input.definitions);
         if (result === undefined) return undefined;
         const targetName = allocateRustGeneratedName(input.usedNames, `NativeCallable_${identity.slice(-16)}`);
-        protocol = snapshotClosedMetadata({ ...contract, identity, targetName, result,
+        const obligations = new Map<string, { readonly owner: TargetTypeRef; readonly trait: RustTargetTraitRef }>();
+        for (const carrier of [...method.parameters, method.result, result]) mapRustTargetTypes(carrier, (current, original) => {
+          if (original.kind === "associated-type" && original.trait !== undefined)
+            obligations.set(closedMetadataKey({ owner: original.owner, trait: original.trait }), { owner: original.owner, trait: original.trait });
+          return current;
+        });
+        protocol = snapshotClosedMetadata({ ...contract, identity, targetName, result, associatedObligations: [...obligations.values()],
           ...(method.binder.parameters.length === 0 ? {} : {
             boundProducerName: allocateRustGeneratedName(input.usedNames, `${targetName}Bound`),
           }),
