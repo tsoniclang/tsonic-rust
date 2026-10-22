@@ -69,8 +69,11 @@ export function main(): void { const entry = new Entry(); if (entry.value !== 3)
   assert.doesNotMatch(generated, /class_environment\.initialize/u);
 });
 
-test("inferred constructor aliases retain the selected evaluation across calls and argument effects", { timeout: 300_000 }, () => {
-  const { result } = compileRust({ surfaces: ["js"],
+// PORT-MAP row 624 (analysis/names/plan.ts): authored values keep their spelling and native E0592 collisions reject
+// before sealing. Entry's static read() and instance read() share one Rust inherent item name, so the source is refused
+// rather than renamed.
+test("inferred constructor aliases with a static and an instance read() are refused before sealing", { timeout: 300_000 }, () => {
+  const { result, source: checked } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "inferred_constructor_values" } },
     files: { "index.ts": `
 function factory(seed: number) {
@@ -103,11 +106,12 @@ export function main(): void {
 }
 main();
 ` } });
-  assert.deepEqual(result.diagnostics, []);
-  validateGeneratedProject("inferred-constructor-values", result.artifacts, { run: true });
-  const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
-  assert.doesNotMatch(generated, /Rc::new\([^\n]*EmptyClass\s*\{/u);
-  assert.doesNotMatch(generated, /struct [^\n]*EmptyClass[^}]*OnceCell/u);
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(row => [row.code, row.message]), [["RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE",
+    "Authored static and instance methods 'read' require the same Rust inherent item name (E0592); their spelling cannot be changed."]]);
+  const [diagnostic] = result.diagnostics;
+  assert.equal(checked.ast.kindName(diagnostic.sourceNode), "KindMethodDeclaration");
+  assert.equal(checked.ast.hasModifierKind(diagnostic.sourceNode, "static"), true);
 });
 
 test("generic constructor binders are independent of captured outer class arguments", { timeout: 300_000 }, () => {
