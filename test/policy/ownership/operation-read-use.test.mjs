@@ -273,7 +273,9 @@ export function read(value: Value, key: "value"): number { return value[key]; }
   assert.equal(computed !== undefined, true, "the actual checked computed read exists");
   const fact = program.records.computedMember.get(computed);
   assert.equal(fact !== undefined && fact.evaluateKey, true, "the original evaluated-key obligation is retained");
+  // The published records omit the memory location families; this source has no raw addresses or typed locations.
   const computedOnly = analyzeRustReadUses(ast, [computed, fact.key], { ...program.records,
+    rawAddressPlan: { get: () => undefined }, typedLocationPlan: { get: () => undefined },
     targetOperation: { get: () => undefined } });
   assert.equal(computedOnly.get(fact.key)?.mode, "shared", "computed-only evidence reaches the same policy with no operation fallback");
   const read = program.ownership.reads.get(fact.key);
