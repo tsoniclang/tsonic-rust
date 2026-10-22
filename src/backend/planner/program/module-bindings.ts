@@ -56,6 +56,9 @@ export function planTopLevelVariableStatement(
     if (binding === undefined || emission === undefined)
       failRustPlannerInvariant("An admitted module binding requires its exact native storage and emission plan.", declaration);
     const { name, initializer, visibility } = emission;
+    // As for function declarations (source-file.ts), an erased module callable has no native item.
+    if (binding.storage === "native-callable" &&
+      context.input.program.records.nativeParticipation.get(binding.callableDeclaration) === "erased") continue;
     if (binding.storage === "native-callable") {
       const item = planNativeModuleFunction(
         declaration,
