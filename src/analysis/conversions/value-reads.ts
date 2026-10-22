@@ -141,7 +141,8 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         fused: applied.has("flow") && applied.has("contextual") ? fused : undefined, borrowable: borrowable && applied.has("flow"),
         borrowConversion: borrowable && contextual !== undefined && rustTargetTypeRefEquals(flow?.selectedCarrier, contextual.sourceCarrier) &&
           (runtime?.sourceMode === "ref" || contextual.conversion.kind === "project-union-map" && ownership?.value.kind !== "move"),
-        referenceReborrow: referenceReborrow !== undefined, contextualIdentity: contextual?.conversion.kind === "native-trait-object-upcast" || referenceReborrow !== undefined,
+        referenceReborrow: referenceReborrow !== undefined,
+        contextualConsumesSource: applied.has("contextual") && runtime?.sourceMode === "value", contextualIdentity: contextual?.conversion.kind === "native-trait-object-upcast" || referenceReborrow !== undefined,
         preserveAbsenceEffect: ownership?.pure !== true, absenceDiscard: isRustUnitCarrier(optional?.sourceCarrier) ? "unit" : "value" }) });
     }
     projections.publish(node, Object.freeze(plans), transitions.length === 0);

@@ -61,7 +61,7 @@ export function analyzeRustReadOwnership(input: {
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
-  const uses = analyzeRustReadUses(ast, input.nativeNodes, records);
+  const uses = analyzeRustReadUses(ast, input.nativeNodes, records, input.definitions);
   const reads = new Map<Node, RustReadOwnershipFact>();
   const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
