@@ -41,7 +41,8 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
       if (integer === undefined) { refuse(node, "Numeric literal cannot lower to integer carrier without exact sealed integer evidence.", true); return; }
       const type = carrier.kind === "source-primitive" ? rustPrimitiveTypeName(carrier.name) : undefined;
       if (type === undefined) { refuse(node, "Numeric literal carrier is not a supported Rust numeric carrier."); return; }
-      producer.publish(node, carrier, { kind: "integer", text: `${integer.toString(10)}_${type}` });
+      // i32 is Rust's integer literal default, so its literal stays unsuffixed as before the rewrite.
+      producer.publish(node, carrier, { kind: "integer", text: type === "i32" ? integer.toString(10) : `${integer.toString(10)}_${type}` });
       return;
     }
     if (ast.is.IsBigIntLiteral(node) && isRustBigIntCarrier(carrier) && integer !== undefined) {
