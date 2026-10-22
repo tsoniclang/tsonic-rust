@@ -279,7 +279,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
       if (checked === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted source call requires its original checked argument occurrences."));
       else for (const [index, argument] of checked.sourceArguments.entries()) visitUse(argument.expression, owner, `argument:${index}`, node);
       const callable = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
-      if (input.native.callFor(node) === undefined && rustGenericCallableValue(callable) !== undefined)
+      // A generic callable value, or a stored (non-native) structural method slot, is invoked through its physical
+      // invocation storage, which is prepared together with the other physical callable storage.
+      const storedStructuralMethod = target.form === "structural-method" && callable !== undefined &&
+        rustCallableProtocol(callable) !== undefined &&
+        input.structuralShapes.field(target.receiverCarrier, target.storageIndex)?.nativeMethod !== true;
+      if (input.native.callFor(node) === undefined && (rustGenericCallableValue(callable) !== undefined || storedStructuralMethod))
         request(owner, node, "invocation", { kind: "invocation" }, node);
     } else if (operation?.kind === "closure") {
       const implementation = input.frames.implementationFor(node);

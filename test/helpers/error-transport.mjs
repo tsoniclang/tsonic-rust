@@ -23,6 +23,8 @@ export function rustErrorDomainFixture(errorDomain, thrownCarriers = [], retaine
       projectTypes: { programErrorDefinitions: [], sourceErrorDefinitions: [], programErrorVariant: () => undefined },
       typeDefinitions: emptyRustTypeDefinitions,
       errorStorageDemands: { retainedBoundaries: [] },
+      // No safety builders in these fixtures: every node is native code.
+      safetyApplications: { operationForExpression: () => undefined },
       sourcePackageComponents: { forComponent: () => ({ closedErrorDemand: { thrownCarriers, retained, sourceView: false } }) },
       source: { ast: { kindName: node => node.kind, pos: () => 0, end: () => 0, parent: () => undefined,
         getSourceFile: () => sourceFile, getFileName: () => "/src/index.ts", getSourceText: () => "" } },

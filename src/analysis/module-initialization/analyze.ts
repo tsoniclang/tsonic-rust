@@ -18,7 +18,8 @@ import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { rustModuleInitializationIsStateIndependent } from "./independence.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
 
-import type { RustModuleInitializationPlan, RustModuleInitializationRequirement } from "../../target-model/records/module-initialization.js";
+import type { RustModuleInitializationIssue, RustModuleInitializationPlan, RustModuleInitializationRequirement,
+  RustUnsupportedTopLevelStatementIssue } from "../../target-model/records/module-initialization.js";
 import { createRustModuleInitializationRecords } from "../program/records/module-initialization.js";
 
 type RustModuleInitializationPlanInput = Pick<
@@ -34,7 +35,9 @@ export function createRustModuleInitializationPlan(
   const entryPath = resolve(entry.projectRoot, entry.entryPoint).split("\\").join("/");
   const entrySourceFile = entry.outputType === "lib" ? undefined : input.sourceFiles.find(sourceFile =>
     resolve(input.ast.getFileName(sourceFile)).split("\\").join("/") === entryPath);
-  const issues = entry.outputType === "lib" || entrySourceFile === undefined ? Object.freeze([])
+  const unsupported = input.sourceFiles.flatMap(sourceFile => unsupportedTopLevelStatements(input, sourceFile));
+  const issues: readonly RustModuleInitializationIssue[] = unsupported.length !== 0 ? Object.freeze(unsupported)
+    : entry.outputType === "lib" || entrySourceFile === undefined ? Object.freeze([])
     : validateSourceBinaryEntry(input.source, entrySourceFile);
   const requirements = new Map<SourceFile, RustModuleInitializationRequirement>();
   let minimumFoundation: RustFoundation = "core";
@@ -58,6 +61,29 @@ export function createRustModuleInitializationPlan(
     }
   }
   return createRustModuleInitializationRecords({ issues, requirements, minimumFoundation, stateIndependentCycles });
+}
+
+// The top-level statement kinds the Rust target lowers: declarations that emit items or nothing at runtime, and the
+// runtime statements the module initializer executes.
+const topLevelStatementKinds: ReadonlySet<string> = new Set([
+  KindImportDeclaration, KindExportDeclaration, KindExportAssignment, KindFunctionDeclaration, KindVariableStatement,
+  "KindInterfaceDeclaration", "KindTypeAliasDeclaration", "KindEnumDeclaration", "KindClassDeclaration", "KindEndOfFile",
+  "KindEmptyStatement", "KindDebuggerStatement", "KindBlock", "KindExpressionStatement", "KindIfStatement",
+  "KindWhileStatement", "KindDoStatement", "KindForStatement", "KindForInStatement", "KindForOfStatement",
+  "KindLabeledStatement", "KindSwitchStatement", "KindThrowStatement", "KindTryStatement",
+]);
+
+function unsupportedTopLevelStatements(input: RustModuleInitializationPlanInput, sourceFile: SourceFile): readonly RustUnsupportedTopLevelStatementIssue[] {
+  return input.ast.statements(sourceFile).flatMap(statement => {
+    if (statement === undefined || input.records.typeOnlyDeclaration.get(statement) !== undefined ||
+      input.records.compileTimeSource.get(statement) !== undefined) return [];
+    const kind = input.ast.kindName(statement);
+    if (topLevelStatementKinds.has(kind)) return [];
+    return [Object.freeze({ code: "RUST_UNSUPPORTED_AST" as const, node: statement,
+      message: `The Rust target does not support the top-level statement ${kind}.`,
+      evidence: Object.freeze(["target.capability=rust.backend.statement",
+        `source.byteSpan=${input.ast.pos(statement)}-${input.ast.end(statement)}`]) })];
+  });
 }
 
 function classifyModuleInitialization(

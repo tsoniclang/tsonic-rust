@@ -91,7 +91,7 @@ test("actual layout carrier queries reuse one zero-valued observation per checke
     const fact = context.records.memoryLayoutObservation.get(expression);
     const carrier = context.records.runtimeCarrier.get(expression)?.carrier;
     assert.equal(count, 1);
-    assert.equal(fact.value, 0, "zero is present selected metadata");
+    assert.equal(fact.value, 0n, "zero is present selected metadata");
     for (let attempt = 0; attempt < 3; attempt++) {
       assert.equal(resolveExpressionCarrier(walk, expression, context.ast.getSourceFile(expression), undefined) === carrier, true);
       assert.equal(context.records.memoryLayoutObservation.get(expression) === fact, true);
@@ -121,7 +121,11 @@ for (const surfaces of [[], ["js"]]) {
     assertRustRecordRequirement(requiredRecords, "compileTimeSource", declaration);
     assertRustRecordRequirement(requiredRecords, "compileTimeSource", initializer);
     const selected = checkedNodes(program).filter(node => program.records.compileTimeSource.get(node) === true);
-    assert.equal(selected.length, 2, "only the exact struct declaration and its initializer are erased");
+    // The variable statement whose only declaration is compile-time source is erased with it (cbc9f57ad).
+    const statement = ast.parent(ast.parent(declaration));
+    assert.equal(ast.is.IsVariableStatement(statement), true);
+    assert.equal(selected.length, 3, "only the exact struct declaration, its initializer and its statement are erased");
+    for (const node of [declaration, initializer, statement]) assert.equal(selected.includes(node), true, "exact erased struct source");
     const call = checkedNodes(program).find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "struct");
     assert.equal(call !== undefined, true, "ordinary same-named function call is present");
     assert.equal(program.records.compileTimeSource.get(call) === undefined, true, "spelling never selects erasure");
@@ -210,7 +214,7 @@ for (const surfaces of [[], ["js"]]) {
     }
     const observations = checkedNodes(program).filter(node => selectedLayoutObservation(program, node) !== undefined);
     assert.equal(observations.length, 8);
-    assert.deepEqual(observations.map(node => selectedLayoutObservation(program, node).value), [8, 4, 8, 4, 0, 0, 0, 1]);
+    assert.deepEqual(observations.map(node => selectedLayoutObservation(program, node).value), [8n, 4n, 8n, 4n, 0n, 0n, 0n, 1n]);
     for (const node of observations) {
       assert.equal(ast.is.IsCallExpression(node), true, "the observation is attached to the exact checked call");
       const record = selectedLayoutObservation(program, node);
@@ -245,8 +249,11 @@ test("checked JS source-profile callable aliases erase exactly their immutable a
   const declarations = [named(program, "absolute"), named(program, "parse")];
   for (const declaration of declarations) assertRustRecordRequirement(requiredRecords, "compileTimeSource", declaration);
   const selected = checkedNodes(program).filter(node => program.records.compileTimeSource.get(node) === true);
-  assert.equal(selected.length, 2);
-  for (const declaration of declarations) assert.equal(selected.includes(declaration), true, "exact checked alias");
+  // Each alias is the only declaration of its statement, so the statement is erased with it (cbc9f57ad).
+  const statements = declarations.map(declaration => program.source.ast.parent(program.source.ast.parent(declaration)));
+  assert.equal(statements.every(statement => program.source.ast.is.IsVariableStatement(statement)), true);
+  assert.equal(selected.length, 4);
+  for (const node of [...declarations, ...statements]) assert.equal(selected.includes(node), true, "exact checked alias");
 });
 
 test("inline module alias transport erases only selected checked declarations when storage is elided", () => {

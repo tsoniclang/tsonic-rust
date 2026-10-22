@@ -19,8 +19,8 @@ export function fakeAstReader(sourceFiles = []) {
       parentByNode.set(statement, sourceFile);
     }
   }
-  return {
-    is: {
+  // A fake node is only of the kinds listed below; every other kind predicate is false.
+  const kinds = {
       IsArrowFunction: (node) => node.kindName === "KindArrowFunction",
       IsFunctionExpression: (node) => node.kindName === "KindFunctionExpression",
       IsFunctionDeclaration: () => false,
@@ -108,9 +108,12 @@ export function fakeAstReader(sourceFiles = []) {
       IsNoSubstitutionTemplateLiteral: () => false,
       IsNumericLiteral: () => false,
       IsBigIntLiteral: () => false,
-    },
+  };
+  return {
+    is: new Proxy(kinds, { get: (target, name) => target[name] ?? (() => false) }),
     statements: (sourceFile) => sourceFile.statements ?? [],
     members: () => [],
+    kind: (node) => node.kindName,
     kindName: (node) => node.kindName,
     pos: (node) => node.pos,
     end: (node) => node.end,
@@ -122,6 +125,7 @@ export function fakeAstReader(sourceFiles = []) {
     isDeclarationFile: () => false,
     forEachChild: () => {},
     hasModifierKind: () => false,
+    modifiers: () => [],
     name: () => undefined,
     parameters: () => [],
     arguments: () => [],

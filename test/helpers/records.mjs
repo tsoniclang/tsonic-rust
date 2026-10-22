@@ -1,6 +1,6 @@
 import { createRustProgramRecordBuilder } from "../../dist/analysis/program/records/create.js";
 import assert from "node:assert/strict";
-import { sourceNodesOutsideErasedSubtrees, sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
+import { sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 
 export function rustNativeFixtureNodes(program) {
   const ast = program.source.ast;
@@ -16,9 +16,9 @@ export function rustNativeFixtureNodes(program) {
     ast.forEachChild(node, child => { if (child !== undefined) children.push(child); });
     pending.push(...children.reverse());
   }
+  // Native participation already records every discarded callable definition as erased.
   const participation = sourceNodesOutsideErasedSubtrees(ast, nodes, node =>
-    program.records.nativeParticipation.get(node) === "erased" ||
-    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && sourceCallableDefinitionIsDiscarded(node, ast, program.sourceNavigation));
+    program.records.nativeParticipation.get(node) === "erased");
   assert.equal(participation.kind, "resolved", "the same actual fixture participation has one complete native domain");
   return participation.nodes;
 }

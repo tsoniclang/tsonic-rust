@@ -100,11 +100,24 @@ export function createRustSharedReferenceArgument(
     if (stringView !== undefined && stringView.kind !== "value") return rustErrorFieldComparisonView(node, argument, undefined, context);
     const selected = context.input.program.records.argumentView.get(node);
     if (selected?.slice === true) return { kind: "reference", expr: planArrayLiteral(node, context, "slice") };
-    if (selected?.borrowedStorage === true) {
+    // A by-reference parameter read is already a shared reference; borrowing its storage again is a needless borrow.
+    if (selected?.borrowedStorage === true && !rustReadsReferenceParameter(node, context)) {
       const place = planExpression(node, context, "value", "shared-receiver")
         ?? failRustPlannerInvariant("An admitted borrowed operand requires its native storage view.", node);
       return planRustSharedReceiver(node, place, context);
     }
   }
+  if (node !== undefined && rustReadsReferenceParameter(node, context)) return argument;
   return node === undefined ? { kind: "reference", expr: argument } : planRustSharedReceiver(node, argument, context);
+}
+
+// The read carries its parameter's ABI; when its carrier was selected before the parameter reference was resolved, the
+// identifier's binding declaration (the parameter) carries it.
+function rustReadsReferenceParameter(node: Node, context: RustPlanContext): boolean {
+  const { records, source } = context.input.program;
+  const declaration = context.expressionOverrides?.has(node) === true || !source.ast.is.IsIdentifier(node) ? undefined
+    : records.sourceBinding.get(node)?.sourceDeclaration;
+  const abi = records.sourceParameterAbi.get(node) ??
+    (declaration !== undefined && source.ast.is.IsParameterDeclaration(declaration) ? records.sourceParameterAbi.get(declaration) : undefined);
+  return abi?.mode === "ref" || abi?.mode === "mut-ref";
 }

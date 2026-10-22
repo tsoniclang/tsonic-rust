@@ -10,6 +10,7 @@ import type { RustReceiverCaptureEmissionProducer } from "../program/records/rec
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustClosureCaptureEquals } from "../../target-model/records/equality.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 
 export function validatedRustCapturedFieldStorageFact(
   declaration: Node,
@@ -79,7 +80,8 @@ export function analyzeRustReceiverCaptureEmission(program: Omit<RustAnalysisPro
     if (!rustClosureCaptureEquals(capture, capture) || (fixed === undefined ? field !== undefined : field === undefined ||
       fixed.declaration !== field.declaration || capture.recursiveDeclaration !== field.declaration || capture.invocationOwner !== undefined ||
       capture.captures.length !== 0 || capture.receivers.length !== 0 || capture.receiverFields.length !== 0 ||
-      fixed.reference !== field.reference || fixed.receiver !== field.receiver || !rustTargetTypeRefEquals(field.carrier, carrier) ||
+      fixed.reference !== field.reference || fixed.receiver !== field.receiver || carrier === undefined ||
+      !rustTargetTypeRefEquals(rustCallableTargetForSourceLifetime(carrier, field.carrier), carrier) ||
       fixed.references.length !== field.references.length || !fixed.references.every((reference, index) => reference === field.references[index] &&
         rustTargetTypeRefEquals(program.records.runtimeCarrier.get(reference)?.carrier, field.carrier))))
       refuse(node, "rust.backend.fixed-field-self", "A fixed field self differs from its sealed origin, source references or exact callable carrier.");

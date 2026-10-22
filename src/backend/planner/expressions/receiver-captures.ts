@@ -12,6 +12,7 @@ import { planExpression } from "./entry.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
+import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 
 export function rustRecursiveReceiverFieldContext(
   field: NonNullable<RustClosureCaptureFact["recursiveField"]>, owner: RustExpr, context: RustPlanContext,
@@ -55,7 +56,9 @@ export function planRustReceiverOwners(
       failRustPlannerInvariant("An admitted lexical receiver capture requires its exact native ownership handle.", capture.reference);
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_receiver");
-    bindings.push({ name, value });
+    // The retained environment owns a clone of the receiver handle (a captured receiver is never a value struct); the
+    // creation site reads the receiver as `self`, a borrow that cannot outlive the method.
+    bindings.push({ name, value: value.kind === "method-call" && value.method === "clone" ? value : cloneRustExpression(value) });
     retained.push({ kind: "path", path: name });
   }
   return { bindings, context: rustCapturedReceiverContext(receivers, invocation, index => retained[index]!) };

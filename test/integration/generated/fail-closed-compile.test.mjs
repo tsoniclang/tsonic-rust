@@ -6,6 +6,7 @@ import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
 import { createRustTargetConfiguration } from "../../../dist/options/target.js";
 import { materializeRustRuntimeReferences } from "../../../dist/providers/runtime/materialization.js";
+import { finalizeTargetDiagnostics } from "../../../../tsonic/packages/host/dist/diagnostics.js";
 import {
   fakeCompileInput,
   fakeSourceFile,
@@ -28,9 +29,10 @@ function compile(input) {
     jsEnabled: false,
     rootPublishesLibrary: configuration.outputType === "lib",
   }));
+  // The target reports each diagnostic's source node; the host maps it to the user-visible source span.
   return {
     artifacts: result.kind === "resolved" ? result.value.artifacts : [],
-    diagnostics: result.diagnostics,
+    diagnostics: finalizeTargetDiagnostics(input.source, result.diagnostics, process.cwd()),
   };
 }
 

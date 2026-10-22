@@ -105,8 +105,10 @@ export function generalizeRustProjectStructuralView(
     if (selected === undefined) return undefined;
     fields.push({ ...field, resultCarrier: selected.type });
   }
-  const selectedFields = selectRustProjectStructuralViewFields(sources,
-    { ...target, carrier: targetCarrier, fields }, walk);
+  // The generalized destination is an instance of the view's structural template, so it gets its own shape storage.
+  const generalized = { ...target, carrier: targetCarrier, fields };
+  if (!rustTargetTypeRefEquals(targetCarrier, template) && !walk.sourceTypes.registerStructuralObject(generalized, template)) return undefined;
+  const selectedFields = selectRustProjectStructuralViewFields(sources, generalized, walk);
   return selectedFields === undefined ? undefined
     : { declaration: view.declaration, sourceCarrier, targetCarrier, fields: selectedFields };
 }
