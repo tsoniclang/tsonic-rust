@@ -101,6 +101,21 @@ function native(name, source) {
   return rustSourceText(result);
 }
 
+// PORT-MAP row 624 (analysis/names/plan.ts; RULINGS 2026-10-22): authored values keep their spelling and native E0592
+// collisions reject before sealing. A static and an instance method with one name share one Rust inherent item name, so
+// such a source is refused on the static member rather than renamed.
+function refusedCollision(source, member) {
+  const { result, source: checked } = compileRust({ surfaces: ["js"], files: { "index.ts": `${header}\n${source}` },
+    target: { id: "rust", options: { outputType: "bin", crateName: "promise_native_recursion" } },
+  });
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(row => [row.code, row.message]), [["RUST_AUTHORED_IDENTIFIER_UNREPRESENTABLE",
+    `Authored static and instance methods '${member}' require the same Rust inherent item name (E0592); their spelling cannot be changed.`]]);
+  const [diagnostic] = result.diagnostics;
+  assert.equal(checked.ast.kindName(diagnostic.sourceNode), "KindMethodDeclaration");
+  assert.equal(checked.ast.hasModifierKind(diagnostic.sourceNode, "static"), true);
+}
+
 test("ordinary generic object-method returns stay native payloads, without proving a generic await", { timeout: 300_000 }, () => {
   const rust = native("promise-generic-object-method-payload", `
 function make<Value>(value: Value): { read(): Promise<Value> } {
@@ -189,8 +204,8 @@ async function main(): Promise<void> {
 await main();`);
 });
 
-test("recursive suspending instance and static methods retain their own native body names", { timeout: 300_000 }, () => {
-  const rust = native("promise-recursive-method-static", `
+test("recursive suspending instance and static methods with one name are refused before sealing", { timeout: 300_000 }, () => {
+  refusedCollision(`
 class Work {
   async count(value: int32, pending: Promise<void>): Promise<int32> {
     if (value > 0) return await this.count(value - 1, pending);
@@ -208,14 +223,11 @@ async function main(): Promise<void> {
   if (await work.count(3, Promise.resolve(undefined)) !== 3 ||
       await Work.count(4, Promise.resolve(undefined)) !== 5) throw new Error("recursive method/static");
 }
-await main();`);
-  assert.equal((rust.match(/Box::pin\(/gu) ?? []).length, 2,
-    "exactly one recursive layout edge is boxed per physical method, never the root call");
-  assert.equal(rust.includes(".count_native("), true, "the instance call uses its selected native method name");
+await main();`, "count");
 });
 
-test("finite specialized instance and static methods call the same physical variant that defines their body", { timeout: 300_000 }, () => {
-  const rust = native("promise-specialized-method-static", `
+test("finite specialized instance and static methods with one name are refused before sealing", { timeout: 300_000 }, () => {
+  refusedCollision(`
 abstract class Contract { abstract accept<Value>(value: Value): boolean; }
 class Identity extends Contract { override accept<Value>(_value: Value): boolean { return true; } }
 class Work {
@@ -236,10 +248,5 @@ async function main(): Promise<void> {
       !await Work.accept(owner, 9, Promise.resolve(undefined)) ||
       !await Work.accept(owner, "static", Promise.resolve(undefined))) throw new Error("specialized method/static");
 }
-await main();`);
-  const names = [...rust.matchAll(/fn ([A-Za-z0-9_]*accept[A-Za-z0-9_]*_native)(?:<|\()/gu)].map(match => match[1]);
-  assert.equal(names.length, 4, "two native variants exist for each of the instance and static method");
-  assert.equal(new Set(names).size, 4, "instance/static and each finite specialization have distinct physical names");
-  for (const name of names) assert.equal([...rust.matchAll(new RegExp(`\\b${name}\\b`, "gu"))].length, 2,
-    `${name}: exactly one native definition and its selected concrete invocation`);
+await main();`, "accept");
 });
