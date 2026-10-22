@@ -1,4 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import type { RustAttribute } from "../../target-ast/syntax/attributes.js";
+import { rustBindingLivenessAttributes } from "../bindings/liveness.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import {
   applyFallibleShape,
@@ -259,7 +261,12 @@ export function planRustCallableExpressionBody(
   };
   const bindingStatements: RustStmt[] = [];
   let invocationArgumentsName: string | undefined;
-  let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean; type?: RustType }[];
+  let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean; type?: RustType; attrs?: readonly RustAttribute[] }[];
+  // An unread source parameter keeps its source name and carries the same liveness allowance as a named function's.
+  const parameterAttributes = (parameter: { readonly parameter: Node; readonly mutable: boolean }): readonly RustAttribute[] =>
+    context.input.program.records.sourceParameterAbi.get(parameter.parameter)?.entryConversion !== undefined ||
+    context.input.program.records.callableParameter.get(parameter.parameter)?.default !== undefined ? []
+      : rustBindingLivenessAttributes(parameter.parameter, parameter.mutable, context);
   let closureMove = nativeClosureProtocol !== undefined &&
     (captureFact.captures.length > 0 || captureFact.receiverFields.length > 0 || captureFact.receivers.length > 0);
   if (callableProtocol === undefined) {
@@ -272,6 +279,7 @@ export function planRustCallableExpressionBody(
         name: parameter.name,
         mutable: parameter.mutable && context.input.program.records.sourceParameterAbi.get(parameter.parameter)?.entryConversion === undefined,
         byRefCopy: parameter.byRefCopy,
+        attrs: parameterAttributes(parameter),
       })),
       ...closureFact.ignoredParameterCarriers.map(() => ({ name: "_", mutable: false })),
     ];
@@ -280,7 +288,7 @@ export function planRustCallableExpressionBody(
       for (const [index, parameter] of closureParams.entries()) {
         const value: RustExpr = { kind: "field", receiver: { kind: "path", path: tuple.name }, name: String(index) };
         bindingStatements.push({ kind: "let", name: parameter.name, mutable: parameter.mutable,
-          init: parameter.byRefCopy ? { kind: "dereference", pointer: value } : value });
+          init: parameter.byRefCopy ? { kind: "dereference", pointer: value } : value, ...(parameter.attrs === undefined ? {} : { attrs: parameter.attrs }) });
       }
       closureParams = [{ name: tuple.name, mutable: false }];
     }
@@ -337,6 +345,7 @@ export function planRustCallableExpressionBody(
         name: parameter.name,
         mutable: parameter.mutable && context.input.program.records.sourceParameterAbi.get(parameter.parameter)?.entryConversion === undefined,
         init: initializer,
+        attrs: parameterAttributes(parameter),
       });
     }
   }

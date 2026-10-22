@@ -45,4 +45,6 @@ export interface RustNativeInputInvocationEmission {
   readonly call: RustNativeCallableCall;
   readonly callee: Node;
   readonly reference: boolean;
+  /** Set when the call is in a catching try body: its invocation error converts into this program error. */
+  readonly caught: TargetTypeRef | undefined;
 }

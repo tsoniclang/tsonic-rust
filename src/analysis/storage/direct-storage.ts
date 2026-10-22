@@ -1,6 +1,6 @@
 import type { Node, Symbol } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
@@ -204,7 +204,9 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const computed = program.records.computedMember.get(node);
     const accessor = program.records.accessorReceiver.get(node);
-    if (computed?.evaluateKey && computed.evaluateReceiver && accessor?.value) {
+    // A receiver with no direct storage place (`new Box()[key()]`) is evaluated into its own temporary before the key, so
+    // no later expression can rebind it; only a direct place must keep its storage identity across the key.
+    if (computed?.evaluateKey && computed.evaluateReceiver && accessor?.value && select(accessor.receiver).kind !== "unavailable") {
       admit(accessor.receiver, [computed.key]);
       admitPlace(accessor.receiver);
     }
@@ -231,7 +233,7 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     if (left !== undefined && right !== undefined && (assignment !== undefined || operator?.kind === "nullish-assignment")) {
       admitPlace(left);
       const selected = program.records.accessorReceiver.get(left);
-      if (selected?.value) admit(selected.receiver, [right]);
+      if (selected?.value && select(selected.receiver).kind !== "unavailable") admit(selected.receiver, [right]);
       const target = program.records.targetOperation.get(left);
       const receiver = Node_Expression(ast, left);
       if (receiver !== undefined && rustTargetOperationIsDirectLocation(target) && select(receiver).kind === "identifier") {
@@ -239,6 +241,10 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
         admit(receiver, [...(index === undefined ? [] : [index]), right]);
       }
     }
+    // An increment or decrement writes through its operand place like an assignment does.
+    const updateOperator = ast.is.IsPrefixUnaryExpression(node) || ast.is.IsPostfixUnaryExpression(node) ? ast.operatorKindName(node) : undefined;
+    const updated = updateOperator === "KindPlusPlusToken" || updateOperator === "KindMinusMinusToken" ? Node_Operand(ast, node) : undefined;
+    if (updated !== undefined) admitPlace(updated);
   }
   return Object.freeze(issues);
 }

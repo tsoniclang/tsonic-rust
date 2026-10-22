@@ -48,6 +48,15 @@ export function planRustNativeCallableGenerics(
         } }] });
       }
     }
+    if (input.caught !== undefined) {
+      // An input invoked in a catching try body converts its invocation error into the catch's program error.
+      const error = rustTypeFromCarrierInContext(input.caught.error, context);
+      const target = rustTypeFromCarrierInContext(input.caught.target, context);
+      if (error === undefined || target === undefined) failRustPlannerInvariant("An admitted caught native input requires its renderable error conversion.", declaration);
+      predicates.push({ kind: "type", type: error, bounds: [{ kind: "trait-type", reference: {
+        trait: { kind: "named", path: "core::convert::Into", genericArguments: [{ kind: "type", type: target }] },
+      } }] });
+    }
     if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
       // A substituted implementation is named only where it carries a bound (a transport-only capture needs none).
       if (selectedBounds.length === 0) continue;

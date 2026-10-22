@@ -15,7 +15,7 @@ import { rustNamedTargetType } from "../../target-model/types/carriers/native.js
 import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
-import { rustCallableConversionPhysical, rustCallableErrorJoin, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import { rustCallableConversionPhysical, rustCallableErrorJoin, rustCallablePhysicalCarrier, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustProducerErrorReference, type RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -568,8 +568,9 @@ export function createRustNativeStorageQueries(input: {
                 input.native.isConcreteCallableParameter(origin.node)
                 ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
               if (concreteParameter !== undefined) {
-                const declared = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
-                if (!rustCallableInvocationSignaturesMatch(current, callableValueCarrier(declared) ?? declared))
+                const element = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
+                const declared = rustCallablePhysicalCarrier(element);
+                if (declared === undefined || !rustCallableInvocationSignaturesMatch(current, callableValueCarrier(element) ?? element))
                   return fail("Native callable storage conflicts with its exact concrete callable parameter.");
                 joinable = false;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))

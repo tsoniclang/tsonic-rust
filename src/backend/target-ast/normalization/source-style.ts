@@ -4,6 +4,7 @@ import { nameRustSignatureTypes, type RustNamedSignatureScope } from "./signatur
 import { lowerRustCompletionScope } from "./completion-regions.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustValueBlock } from "../syntax/value-block.js";
+import { rustConditionPrintsAsBlock } from "../syntax/expressions.js";
 import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
@@ -74,18 +75,19 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
-    // `|value| Ok(value)` (or `|value| { Ok(value) }`) with an unannotated parameter is the variant constructor `Ok`
-    // itself (clippy::redundant_closure).
+    // `|value| f(value)` (or `|value| { f(value) }`) with an unannotated parameter is the function or variant
+    // constructor path `f` itself (clippy::redundant_closure), e.g. `Ok` or `js_abi::JsValue::from_error`. A bare
+    // lowercase path may be a local callable, which the closure borrows and the path would move, so it stays.
     const result = mapped.kind === "closure" ? mapped.body
       : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
         mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
     if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 && result?.kind === "call" &&
-      result.path === "Ok" && result.genericArguments === undefined && result.args.length === 1) {
+      result.genericArguments === undefined && result.args.length === 1 && rustItemCallPath(result.path)) {
       const parameter = mapped.params[0];
       const argument = result.args[0];
       if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
         (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
-        return { kind: "path", path: "Ok" };
+        return { kind: "path", path: result.path };
     }
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
@@ -141,9 +143,10 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
 
 
 // `let x: T;` followed by `x = value;` is `let x: T = value;` (clippy::needless_late_init). A run of such declarations
-// followed by their assignments folds the same way (`let a; let b; a = e1; b = e2;`), also across initialized `let`s
-// of other names between them (`let a; let b = e1; a = e2;`). Syntax only: no statement in the run can read or capture
-// a still-uninitialized binding, so moving each declaration to its first write changes nothing.
+// followed by their assignments folds the same way (`let a; let b; a = e1; b = e2;`), also across statements that do
+// not mention the pending name (`let a; let b = e1; { … } a = e2;`). Syntax only: those statements cannot read,
+// write or shadow the binding, so moving each declaration to its first write changes nothing. A declaration whose
+// binding a crossed statement mentions stays in place.
 function foldRustDirectLateInitializations(statements: readonly RustStmt[]): readonly RustStmt[] {
   const deferred = (statement: RustStmt | undefined): statement is Extract<RustStmt, { readonly kind: "let" }> =>
     statement?.kind === "let" && statement.init === undefined && (statement.attrs?.length ?? 0) === 0;
@@ -167,30 +170,34 @@ function foldRustDirectLateInitializations(statements: readonly RustStmt[]): rea
       continue;
     }
     const initialized: RustStmt[] = [];
+    const foldedNames = new Set<string>();
     let accepted = index;
     let crossed = 0;
     for (let next = statements[index]; next !== undefined && pending.size !== 0; next = statements[index]) {
-      if (next.kind === "let" && next.init !== undefined && !pending.has(next.name)) {
-        initialized.push(next);
-        crossed++;
+      const declaration = next.kind === "assign" && next.operator === "=" && next.target.kind === "path"
+        ? pending.get(next.target.path) : undefined;
+      if (next.kind === "assign" && declaration !== undefined) {
+        initialized.push({ ...declaration, init: next.value });
+        pending.delete(declaration.name);
+        foldedNames.add(declaration.name);
         index++;
+        accepted = index;
+        crossed = 0;
         continue;
       }
-      if (next.kind !== "assign" || next.operator !== "=" || next.target.kind !== "path") break;
-      const declaration = pending.get(next.target.path);
-      if (declaration === undefined) break;
-      initialized.push({ ...declaration, init: next.value });
-      pending.delete(next.target.path);
+      // A statement that mentions a pending binding (e.g. assigns it in a nested block) keeps that declaration where
+      // it is; the other pending declarations may still move past it.
+      for (const name of [...pending.keys()]) if (rustSyntaxReferencesPath(next, name)) pending.delete(name);
+      initialized.push(next);
+      crossed++;
       index++;
-      accepted = index;
-      crossed = 0;
     }
-    // Initialized `let`s after the last folded assignment stay where they were.
+    // Statements after the last folded assignment stay where they were.
     if (crossed !== 0) {
       initialized.splice(initialized.length - crossed);
       index = accepted;
     }
-    folded.push(...run.filter(declaration => pending.has(declaration.name)), ...initialized);
+    folded.push(...run.filter(declaration => !foldedNames.has(declaration.name)), ...initialized);
   }
   return foldRustLetAndReturn(foldRustConditionalLateInitializations(folded));
 }
@@ -301,22 +308,11 @@ function withLintAttributes(existing: readonly RustAttribute[] | undefined,
   return added.length === 0 ? existing : [...existing ?? [], ...added];
 }
 
-function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
-  switch (expression.kind) {
-    case "block":
-    case "evaluate-then": return true;
-    case "bottom":
-    case "numeric-cast":
-    case "unsafe":
-    case "owned-string-from-borrowed-str": return rustConditionPrintsAsBlock(expression.expression);
-    case "option-try":
-    case "try":
-    case "await": return rustConditionPrintsAsBlock(expression.expr);
-    default: return false;
-  }
-}
-
 function isReflexivePathComparison(condition: RustExpr): boolean {
   return condition.kind === "binary" && (condition.operator === "==" || condition.operator === "!=") &&
     condition.left.kind === "path" && condition.right.kind === "path" && condition.left.path === condition.right.path;
+}
+
+function rustItemCallPath(path: string): boolean {
+  return path.includes("::") || /^[A-Z]/u.test(path);
 }

@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import type { RustCallableConversionEmission } from "../../../target-model/records/callable-conversions.js";
+import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../../program/model.js";
 import type { RustTypeEmissionProducer } from "../../program/records/type-emission.js";
@@ -100,12 +102,23 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const retained = nativeGenerics?.retention;
     if (retained !== undefined) pending.push(...retained.source, ...retained.body);
     // A retained native input renders a where predicate from its invocation error into each error target.
-    for (const input of nativeGenerics?.inputs ?? []) if (input.retained !== undefined)
-      pending.push(input.retained.error, ...input.retained.targets);
+    for (const input of nativeGenerics?.inputs ?? []) {
+      if (input.retained !== undefined) pending.push(input.retained.error, ...input.retained.targets);
+      if (input.caught !== undefined) pending.push(input.caught.error, input.caught.target);
+    }
     // A generic invocation propagates through its native error join, which renders every source error carrier.
     const invocation = program.records.genericCallableInvocation.get(node);
     if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
       ...invocation.awaiting.map(source => source.errorType));
+    // A native input invocation propagates its invocation error, which renders as the input's associated error type.
+    const nativeInvocation = program.records.nativeInputInvocation.get(node)?.call;
+    if (nativeInvocation !== undefined) pending.push(nativeInvocation.invocationError);
+    // A callable adapter constructs its physical callable (and each nested adapter's), which renders as a constructor type.
+    const adapter = program.records.contextualValueConversion.get(node)?.conversion;
+    const adapterContract = adapter?.kind === "callable-adapter" ? program.records.callableContract.get(node, adapter) : undefined;
+    const adapterCarriers = (contract: RustCallableConversionEmission): readonly TargetTypeRef[] =>
+      [contract.physical.carrier, ...[...contract.nested.values()].flatMap(adapterCarriers)];
+    if (adapterContract !== undefined) pending.push(...adapterCarriers(adapterContract));
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     // A callable written through the eliminating adapter renders the callable carrying the destination's error.
@@ -140,7 +153,8 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const optionalStorage: RustOptionalStorageEmission | undefined = isRustAbsenceCarrier(carrier) ? { kind: "unit" }
       : optionalValue !== undefined ? { kind: "custom", element: optionalValue }
       : optionalElement !== undefined ? { kind: "option", element: optionalElement }
-      : union === undefined ? undefined : { kind: "union", absence: rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, program.typeDefinitions)?.path };
+      : union === undefined && rustRuntimeUnionContract(carrier) === undefined ? undefined
+        : { kind: "union", absence: rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, program.typeDefinitions)?.path };
     const sourceStorage = rustSourceOptionalTargetType(carrier);
     const sourceOptional: RustSourceOptionalEmission = rustTargetTypeRefEquals(sourceStorage, rustOptionTargetType(carrier)) ? { kind: "identity" }
       : optionalElement !== undefined && rustTargetTypeRefEquals(sourceStorage, carrier)

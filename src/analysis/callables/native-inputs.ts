@@ -40,6 +40,8 @@ import type { RustNativeCallableInput, RustNativeCallableCall } from "../../targ
 
 import type { RustNativeCallableGenericContext, RustNativeCallableGenericInput } from "../../target-model/records/native-generics.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
+import { rustNodeInCatchingTryBody } from "../errors/catching-try.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 
 export type RustNativeCallableOrigins =
   | { readonly kind: "resolved"; readonly inputs: readonly RustNativeCallableInput[];
@@ -362,6 +364,7 @@ export function analyzeRustNativeCallableGenerics(input: {
       collect(selected.carrier);
     }
     let failure: { readonly node: Node; readonly reason: string } | undefined;
+    const caught = new Map<string, { readonly error: TargetTypeRef; readonly target: TargetTypeRef }>();
     const visit = (node: Node): void => {
       if (failure !== undefined || IsTypeSyntaxNode(input.ast, node)) return;
       for (const error of input.records.errorEffects.get(node)?.nativeErrors ?? []) collect(error.errorType);
@@ -372,6 +375,8 @@ export function analyzeRustNativeCallableGenerics(input: {
       }
       const call = input.native.callFor(node);
       if (call !== undefined) bounds.get(call.input.implementation.identity)?.set(closedMetadataKey(call.input.trait), call.input.trait);
+      if (call !== undefined && rustNodeInCatchingTryBody(input.ast, node))
+        caught.set(call.input.implementation.identity, Object.freeze({ error: call.invocationError, target: rustProgramErrorTargetType() }));
       input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     visit(declaration);
@@ -400,7 +405,8 @@ export function analyzeRustNativeCallableGenerics(input: {
       }
       selectedInputs.push(Object.freeze({ implementation: selected.implementation,
         traits: Object.freeze([...bounds.get(selected.implementation.identity)!.values()]),
-        retained: signature === undefined ? undefined : Object.freeze({ error: signature.error, targets }) }));
+        retained: signature === undefined ? undefined : Object.freeze({ error: signature.error, targets }),
+        caught: caught.get(selected.implementation.identity) }));
     }
     if (failure !== undefined) diagnostics.push(emissionDiagnostic(failure.node, failure.reason));
     else contexts.set(declaration, Object.freeze({ sourceContract, retention, implicitLifetimes, inputs: Object.freeze(selectedInputs),

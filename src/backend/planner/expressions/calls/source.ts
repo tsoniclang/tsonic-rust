@@ -16,6 +16,7 @@ import { rustErrorType, rustPropagateLocalError } from "../../program/fallible-b
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { planRustExactProjectMethodCall, planRustVirtualProjectMethodCall } from "../../objects/project-method-dispatch.js";
 import { rustTargetCallGenericArgumentToAstInContext, rustTypeFromCarrierInContext, rustCallTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
 import { rustOptionalStorageCallArguments } from "../../types/type-projections.js";
 import { planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression, rustEliminateInfallibleResult } from "../../types/fallible-shape.js";
@@ -176,7 +177,12 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
   let result: RustExpr | undefined;
   if (generic !== undefined) result = planRustGenericCallableErrorPropagation(node, generic, "invocation", planned, context);
   else if (selection.errorEdge !== undefined) result = planRustSourceErrorPropagation(node, selection.errorEdge, planned, context);
-  else {
+  else if (selection.physicalCallableError !== undefined && rustActiveErrorType(context) !== undefined &&
+    rustTypeEquals(rustTypeFromCarrierInContext(selection.physicalCallableError, context) ?? { kind: "infer" }, rustActiveErrorType(context)!)) {
+    // A concrete callable whose physical error is already the active boundary's error propagates it unchanged.
+    const errorType = rustActiveErrorType(context)!;
+    result = { kind: "try", expr: planned, operandErrorType: errorType, resultErrorType: errorType };
+  } else {
     const operand = selection.callable !== undefined ? rustCurrentErrorBoundary(context)
       : declaration === undefined ? undefined : rustErrorBoundaryForProjectMember(declaration, context);
     if (rustActiveErrorType(context) === undefined || context.fallibleBoundary === undefined || operand === undefined)

@@ -53,6 +53,15 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
         ({ source: input.source, mode: rustProviderInputBorrowMode(input) })) : [],
       argumentModes: (argumentsList ?? []).map(argument => records.argumentPassing.get(argument)?.mode) });
     for (const [subject, use] of selected) uses.set(subject, use);
+    // A getter read whose method borrows `self` shares its receiver, like a stored field read.
+    if (operation?.kind === "source-accessor" && operation.accessMode === "read" && operation.receiver.kind === "instance" &&
+      operation.read !== undefined && records.selfMode.get(operation.read.declaration)?.mode === "ref") {
+      const receiver = Node_Expression(ast, node);
+      const key = ast.is.IsElementAccessExpression(node) ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
+      if (receiver !== undefined && !uses.has(receiver))
+        uses.set(receiver, Object.freeze({ mode: "shared", later: Object.freeze(key === undefined ? [] : [key]), laterStart: 0,
+          stableAcrossEffects: true }));
+    }
   }
   for (const node of nodes) {
     const use = uses.get(node);

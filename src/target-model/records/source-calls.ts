@@ -18,6 +18,8 @@ export interface RustSourceCallEmission {
   readonly callable: "direct" | "generic" | "input" | "tuple" | undefined;
   readonly callableCarrier: TargetTypeRef | undefined;
   readonly eliminateInfallible: boolean;
+  /** The error a callable callee physically returns, when it is a concrete callable value (not the logical carrier). */
+  readonly physicalCallableError?: TargetTypeRef;
   readonly never: boolean;
   readonly errorEdge: RustSourceErrorEffectEdge | undefined;
   readonly pinnedBodies: ReadonlySet<string>;

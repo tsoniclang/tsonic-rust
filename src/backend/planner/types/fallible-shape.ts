@@ -1,4 +1,5 @@
 import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { mapRustExpressionChildren } from "../../target-ast/syntax/expression-children.js";
 import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import type { RustFallibleBoundary } from "../program/fallible-boundaries.js";
@@ -27,12 +28,15 @@ export function rustEliminateInfallibleResult(
   valueName: string,
   errorName: string,
 ): RustExpr {
-  return { kind: "match", expression, arms: [
+  // A block scrutinee is bound first: a match never scrutinizes a block expression.
+  const scrutinee: RustExpr = expression.kind === "block" ? { kind: "path", path: valueName } : expression;
+  const eliminated: RustExpr = { kind: "match", expression: scrutinee, arms: [
     { pattern: { kind: "tuple-variant", path: "Ok", elements: [{ kind: "binding", name: valueName }] },
       expression: { kind: "path", path: valueName } },
     { pattern: { kind: "tuple-variant", path: "Err", elements: [{ kind: "binding", name: errorName }] },
       expression: { kind: "match", expression: { kind: "path", path: errorName }, arms: [] } },
   ] };
+  return expression.kind === "block" ? rustValueBlock([{ name: valueName, value: expression }], eliminated) : eliminated;
 }
 
 function applyRustResultExpression(
