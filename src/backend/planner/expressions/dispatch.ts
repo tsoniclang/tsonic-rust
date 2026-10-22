@@ -192,7 +192,7 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
     case "KindCallExpression": return planCallExpression(node, context, resultUse);
     case "KindNewExpression": return planNewExpression(node, context);
     case "KindPropertyAccessExpression": return planPropertyAccess(node, context);
-    case "KindElementAccessExpression": return planElementAccess(node, context);
+    case "KindElementAccessExpression": return planElementAccess(node, context, access);
     default: return failRustPlannerInvariant("An admitted expression requires its exact native syntax form.", node);
   }
 }
