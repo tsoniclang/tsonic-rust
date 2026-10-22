@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
 import { createRustTargetConfiguration } from "../../../dist/options/target.js";
+import { materializeRustRuntimeReferences } from "../../../dist/providers/runtime/materialization.js";
 import {
   fakeCompileInput,
   fakeSourceFile,
@@ -21,6 +22,7 @@ function compile(input) {
   );
   const result = compileRustTarget(Object.freeze({
     input,
+    runtimeCrates: materializeRustRuntimeReferences(input.runtimeReferences),
     configuration,
     providerSemantics,
     jsEnabled: false,

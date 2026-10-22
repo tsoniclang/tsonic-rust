@@ -13,6 +13,21 @@ export function analyzeRustBindingLiveness(
 ): readonly TargetDiagnostic[] {
   const writesBySource = new Map<Node, boolean>();
   const bindings = new Map<Node, { unused: boolean; unusedInitializer: boolean; multipleWrites: boolean }>();
+  // A write inside a try region nested in a loop of the binding's own callable is dispatched through a native
+  // completion scope whose loop-continue arm the Rust compiler cannot rule out, so it may observe a second write.
+  const loopKinds = new Set(["KindForStatement", "KindForInStatement", "KindForOfStatement", "KindWhileStatement", "KindDoStatement"]);
+  const repeatedByCompletionScope = new Set<Node>();
+  const writeRepeatsThroughCompletion = (reference: Node, binding: Node): boolean => {
+    const owner = sourceEnclosingCallable(binding, source.ast);
+    let insideTry = false;
+    for (let node = source.ast.parent(reference); node !== undefined && node !== owner; node = source.ast.parent(node)) {
+      if (node === binding) return false;
+      const kind = source.ast.kindName(node);
+      if (kind === "KindTryStatement") insideTry = true;
+      else if (insideTry && loopKinds.has(kind)) return true;
+    }
+    return false;
+  };
   for (const { graph, liveness } of flow.regions) {
     const writes = analyzeSourceWrites(graph);
     if (writes.kind === "unresolved") return [{ code: "RUST_LIVENESS_FLOW_UNRESOLVED", source: "tsonic-rust",
@@ -27,6 +42,7 @@ export function analyzeRustBindingLiveness(
       if (operation.kind === "read" || operation.kind === "capture" &&
         (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);
       if (operation.kind !== "write") continue;
+      if (writeRepeatsThroughCompletion(operation.reference, operation.binding)) repeatedByCompletionScope.add(operation.binding);
       const observed = liveness.after.get(point.id)?.has(operation.binding) === true;
       if (operation.initialization) initialWrites.set(operation.binding,
         (initialWrites.get(operation.binding) ?? true) && !observed);
@@ -46,7 +62,8 @@ export function analyzeRustBindingLiveness(
           names.nameForDeclaration(binding)?.startsWith("_") !== true,
         unusedInitializer: (previous?.unusedInitializer ?? true) && initialWrites.get(binding) === true &&
           names.nameForDeclaration(binding)?.startsWith("_") !== true,
-        multipleWrites: previous?.multipleWrites === true || (writes.maximum.get(binding) ?? 0) > 1 });
+        multipleWrites: previous?.multipleWrites === true || (writes.maximum.get(binding) ?? 0) > 1 ||
+          repeatedByCompletionScope.has(binding) });
     }
   }
   for (const [binding, value] of bindings) producer.binding(binding, value);

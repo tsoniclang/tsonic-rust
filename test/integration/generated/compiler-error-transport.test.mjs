@@ -11,7 +11,8 @@ import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carr
 import { planThrowStatement } from "../../../dist/backend/planner/statements/statement-try.js";
 import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-errors.mjs";
 import { selectRustFlowReadProjection } from "../../../dist/policy/conversions/value-carrier-reconciliation.js";
-import { planRustValueProjection } from "../../../dist/backend/planner/expressions/flow-read-projections.js";
+import { rustFlowReadProjectionMatches } from "../../../dist/analysis/control-flow/flow-read-projections.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`caught builtin Errors retain identity and stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
@@ -126,18 +127,12 @@ test("builtin catch projections require the exact sealed selected carrier", () =
   for (const unavailableCarrier of [rustStringTargetType(), undefined]) {
     assert.equal(selectRustFlowReadProjection(sourceCarrier, selectedCarrier,
       { ...policy, sourceErrorCarrier: () => unavailableCarrier }).kind, "incompatible");
-    const diagnostics = [];
-    const node = {};
-    assert.equal(planRustValueProjection(node, { kind: "path", path: "caught" }, selected.fact, {
-      input: { program: { records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-        projectTypes: { ...policy, sourceErrorCarrier: () => unavailableCarrier },
-        source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1,
-          end: () => -1, kindName: () => "KindIdentifier" } } } },
-      diagnostics,
-    }, "clone"), undefined);
-    assert.equal(diagnostics.length, 1);
-    assert.equal(diagnostics[0].message, "Value projection conflicts with its exact sealed native carrier relation. Node kind: KindIdentifier.");
+    // The sealed projection is re-validated by the flow-read emission analysis (its refusal is "Value projection
+    // conflicts with its exact sealed native carrier relation."); the planner only renders admitted projections.
+    assert.equal(rustFlowReadProjectionMatches(selected.fact, { ...policy, sourceErrorCarrier: () => unavailableCarrier },
+      emptyRustTypeDefinitions), false);
   }
+  assert.equal(rustFlowReadProjectionMatches(selected.fact, policy, emptyRustTypeDefinitions), true);
 });
 
 test("runtime throw facts bind the exact operand and native Error carrier", () => {

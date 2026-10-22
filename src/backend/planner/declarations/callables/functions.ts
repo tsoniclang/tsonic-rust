@@ -231,10 +231,14 @@ function planRustFunctionItem(
   if (bodyReturnType === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
   }
+  // A function body is its own completion and control-flow region: a local function item planned inside an enclosing
+  // try/finally or loop must not inherit that region (closures reset it the same way).
   const bodyContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
+    controlTargets: undefined,
+    completionBoundary: undefined,
     functionReturnType: bodyReturnType,
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? returnCarrier : undefined,
     ...(isAsync ? { asyncContext: true } : {}),
