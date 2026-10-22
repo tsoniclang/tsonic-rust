@@ -244,7 +244,7 @@ export function finalizeRustNativeEmission(
   const genericRequirementEmissionIssues = analyzeRustGenericRequirementEmission(program, context.nativeNodes, context.records.nativeGenericPlans);
   if (genericRequirementEmissionIssues.length !== 0) return rejectedTargetStage(genericRequirementEmissionIssues);
   // Provider reads select Copy/Clone from the declaration-owned clone guarantees published just above.
-  const providerFormIssues = analyzeRustProviderForms(program, context.records.providerFormPlans);
+  const providerFormIssues = analyzeRustProviderForms(program, context.nativeNodes, context.records.providerFormPlans);
   if (providerFormIssues.length !== 0) return rejectedTargetStage(providerFormIssues);
   const arrayLiteralIssues = analyzeRustArrayLiterals(program, context.nativeNodes, context.records.arrayLiteralPlans);
   if (arrayLiteralIssues.length !== 0) return rejectedTargetStage(arrayLiteralIssues);

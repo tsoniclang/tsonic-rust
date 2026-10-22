@@ -1,3 +1,4 @@
+import type { Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -6,13 +7,18 @@ import type { RustProviderFormProducer } from "../program/records/provider-forms
 import type { RustProviderFormEmission } from "../../target-model/records/provider-forms.js";
 import { isRustFinalizedSourceInput } from "../../target-model/operations/finalized-inputs.js";
 
-export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">,
+export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustProviderFormProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
-  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences) {
-    const { node, operation } = occurrence;
-    const { abi } = operation;
+  // A provider disposer is planned at its resource declaration, outside the source operation occurrences.
+  const disposals = nodes.flatMap(node => {
+    const target = program.records.resourceManagement.get(node)?.disposal.target;
+    return target?.form === "provider" ? [{ node, abi: target.abi, runtimeSet: false }] : [];
+  });
+  const occurrences = program.physicalEmissionContexts.sourceOccurrences.map(occurrence =>
+    ({ node: occurrence.node, abi: occurrence.operation.abi, runtimeSet: occurrence.operation.kind === "runtime-set" }));
+  for (const { node, abi, runtimeSet } of [...occurrences, ...disposals]) {
     const form = abi.target;
     const owner = sourceEnclosingCallable(node, ast);
     const native = owner === undefined ? undefined : program.records.callableDeclaration.get(owner)?.nativeBody;
@@ -36,7 +42,7 @@ export function analyzeRustProviderForms(program: Omit<RustAnalysisProgram, "rea
     for (const body of bodies) {
       if (producer.records.providerForm.get(node, abi, body) !== undefined) continue;
       let read: RustProviderFormEmission["read"] = "storage";
-      if (operation.kind !== "runtime-set" && (form.form === "field" || form.form === "index")) {
+      if (!runtimeSet && (form.form === "field" || form.form === "index")) {
         const carrier = abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier;
         const physical = program.records.carrierRead.get(carrier);
         if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted provider read requires its exact native carrier guarantees.", node);
