@@ -1,4 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../target-model/types/placeholder-lifetimes.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustUnionArmMapping, rustUnionProjectionContract } from "./union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -192,7 +193,8 @@ export function selectRustValueCarrierReconciliation(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueCarrierReconciliation {
   targetCarrier = rustCallableTargetForSourceLifetime(sourceCarrier, targetCarrier);
-  if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
+  if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier) ||
+    rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(sourceCarrier, targetCarrier), targetCarrier)) {
     return { kind: "identity" };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {

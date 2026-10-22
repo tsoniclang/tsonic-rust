@@ -65,6 +65,10 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
       for (const callable of [view.construction, ...view.fields.map(field => field.callable)])
         if (callable !== undefined) for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
   }
+  // Each emitted constructor view forwards its construction and static callables through callable adapters.
+  for (const view of program.classValues.constructorViewImplementations)
+    for (const callable of [view.construction, ...view.fields.map(field => field.callable)])
+      if (callable !== undefined) for (const value of rustCallableAdapterValues(callable)) adapter(view.declaration, value);
   // The planner binds an optional chain guard as `Some(optional_receiver)` and reads it with the chain's present carrier.
   const presentGuards = new Map<Node, TargetTypeRef>();
   for (const node of nodes) {

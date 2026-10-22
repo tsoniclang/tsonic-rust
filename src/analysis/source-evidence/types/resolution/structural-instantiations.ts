@@ -9,6 +9,7 @@ import { rustOptionElementCarrier } from "../../../../target-model/types/index.j
 import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../../target-model/types/carriers/js.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../../../target-model/types/placeholder-lifetimes.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../../../project-types/type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
@@ -117,7 +118,8 @@ export function retainRustStructuralInstantiation(
     }, context, options, resolving));
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
-    // The authored field type keeps an open callable environment; the selected storage closes it with its own lifetime.
+    // The authored field type keeps an open callable environment: the selected storage either closes it with its own
+    // lifetime or keeps the target placeholder lifetimes. Either correspondence admits the field (both lanes' rules).
     let closing: RustLifetimeRef | undefined;
     mapRustTargetTypes(expected, (current, original) => {
       closing ??= rustCallableProtocol(original)?.lifetime;
@@ -125,8 +127,12 @@ export function retainRustStructuralInstantiation(
     });
     const closed = (carrier: TargetTypeRef): TargetTypeRef => closing === undefined ? carrier
       : closeRustRetainedCallableCarrier(carrier, closing);
-    if (declared.some(carrier => carrier === undefined || !rustTargetTypeRefEquals(
-      closed(mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize)), expected))) return undefined;
+    if (declared.some(carrier => {
+      if (carrier === undefined) return true;
+      const authored = mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize);
+      return !rustTargetTypeRefEquals(closed(authored), expected) &&
+        !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(authored, expected), expected);
+    })) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {
