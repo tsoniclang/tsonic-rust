@@ -3,7 +3,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 
 import { appendRustDiagnostic } from "../program/walk.js";
-import { KindBlock, KindFunctionExpression, KindBindingElement, KindNonNullExpression, KindParameter, KindParenthesizedExpression, KindSatisfiesExpression, KindVariableDeclaration, Node_Expression, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment } from "@tsonic/target-api/source";
+import { KindBlock, KindFunctionExpression, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Initializer, Node_Name, Node_Type, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 
 import { rustSourceOptionalTargetType, rustOptionElementCarrier, rustCallableProtocol, rustCallableInputProtocol, rustCallableTargetType, rustClosureProtocol, rustUnitTargetType } from "../../target-model/types/index.js";
 import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
@@ -32,7 +32,7 @@ import { selectRustSourceValueConversion } from "../../policy/conversions/select
 import { finalizeValueConversion } from "../../policy/operations/members/abi/conversions.js";
 
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
-import { rustSourceClosureValueCarrier } from "./function-values.js";
+import { rustCallableExpressionValueDeclaration, rustSourceClosureValueCarrier } from "./function-values.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../policy/conversions/callable.js";
 import { selectRustClosedCallableContext } from "../expected-types/callable-contexts.js";
@@ -375,7 +375,7 @@ export function collectRustLexicalCaptures(
   }>();
   let recursiveDeclaration: Node | undefined;
   let recursiveField: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["recursiveField"];
-  const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
+  const valueDeclaration = rustCallableExpressionValueDeclaration(expression, ast);
   const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation, "source",
     (use, declaration) => walk.context.records.compileTimeSource.get(use.reference) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(declaration, use.reference));
@@ -437,29 +437,4 @@ export function collectRustLexicalCaptures(
   return { receivers, receiverFields, captures: [...captures.values()],
     ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }),
     ...(recursiveField === undefined ? {} : { recursiveField }) };
-}
-
-function callableExpressionValueDeclaration(
-  expression: Node,
-  ast: RustFactWalk["context"]["ast"],
-): Node | undefined {
-  let current = expression;
-  let parent = ast.parent(current);
-  while (parent !== undefined) {
-    const kind = ast.kindName(parent);
-    if (kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
-      kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
-      kind !== "KindTypeAssertionExpression") {
-      break;
-    }
-    if (Node_Expression(ast, parent) !== current) {
-      return undefined;
-    }
-    current = parent;
-    parent = ast.parent(current);
-  }
-  return parent !== undefined && ast.kindName(parent) === KindVariableDeclaration &&
-      Node_Initializer(ast, parent) === current
-    ? parent
-    : undefined;
 }
