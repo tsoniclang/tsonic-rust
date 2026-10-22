@@ -38,9 +38,12 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
       : ast.kindName(member) === "KindGetAccessor" ? [{ declaration: member, role: "read" as const }]
         : ast.kindName(member) === "KindSetAccessor" ? [{ declaration: member, role: "write" as const }] : []);
     producer.members(definition, Object.freeze([...selected]), Object.freeze(accessors));
-    if (!program.projectTypes.isPolymorphic(definition)) continue;
+    // A polymorphic type dispatches every instance callable through its slot; a writable method property (the
+    // instance layout below stores it) needs the same object-safe slot signature on any class.
+    const polymorphic = program.projectTypes.isPolymorphic(definition);
     for (const member of selected) {
       if (ast.hasModifierKind(member, "static")) continue;
+      if (!polymorphic && program.projectMethodProperties.usageFor(member)?.writable !== true) continue;
       if (ast.is.IsMethodDeclaration(member) || ast.kindName(member) === "KindMethodSignature" ||
         ast.kindName(member) === "KindGetAccessor" || ast.kindName(member) === "KindSetAccessor") callableDeclarations.add(member);
     }
