@@ -140,7 +140,7 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         referenceReborrow: referenceReborrow !== undefined, contextualIdentity: contextual?.conversion.kind === "native-trait-object-upcast" || referenceReborrow !== undefined,
         preserveAbsenceEffect: ownership?.pure !== true, absenceDiscard: isRustUnitCarrier(optional?.sourceCarrier) ? "unit" : "value" }) });
     }
-    projections.publish(node, Object.freeze(plans));
+    projections.publish(node, Object.freeze(plans), transitions.length === 0);
   }
   return Object.freeze(issues);
 }
