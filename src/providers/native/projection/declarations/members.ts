@@ -1,16 +1,16 @@
-import { compareText, requireCurrentType, rustCompilerTypeConstructsCurrentType, withDefaultGenericBindings, withProjectionGenericParameters } from "./utilities.js";
-import { operationRow, typeRequirements } from "./operations.js";
-import { projectFunction, sourceMethodIsInstance } from "./functions.js";
+import { compareText, requireCurrentType, rustCompilerTypeConstructsCurrentType, withDefaultGenericBindings, withProjectionGenericParameters } from "../utilities.js";
+import { operationRow, typeRequirements } from "../operations.js";
+import { projectFunction, sourceMethodIsInstance } from "./signatures.js";
 import { sourceTypeFor, targetTraitFor, targetTypeFor } from "./types.js";
 import { providerGenericBindingsFor, providerGenericParametersFor, sourceGenericParameterNames, targetGenericArgumentFor, targetGenericParameterArguments } from "./type-arguments.js";
-import { compilerAssociatedSourceExportName } from "../model/rustdoc-items.js";
-import { rustUnitTargetType } from "../../../target-model/types/carriers/native.js";
+import { compilerAssociatedSourceExportName } from "../../model/rustdoc-items.js";
+import { rustUnitTargetType } from "../../../../target-model/types/carriers/native.js";
 import { compilerFunctionResult, rustCompilerFunctionHasCarrierContracts } from "./representability.js";
 import type { ProviderExportDeclaration, ProviderMemberDeclaration, ProviderParameterDeclaration, ProviderSignatureDeclaration, ProviderTypeExpression } from "@tsonic/tsts";
-import type { RustCompilerAssociatedConstant, RustCompilerAssociatedType, RustCompilerExport, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerTraitDispatch, RustCompilerTypeParameter } from "../model/model.js";
-import type { ProjectionContext } from "./model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../target-model/identities/provider-relations.js";
+import type { RustCompilerAssociatedConstant, RustCompilerAssociatedType, RustCompilerExport, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerTraitDispatch, RustCompilerTypeParameter } from "../../model/model.js";
+import type { ProjectionContext } from "./context.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../../../target-model/identities/provider-relations.js";
 
 export function projectFields(
   exported: Extract<RustCompilerExport, { readonly kind: "struct" | "union" }>,

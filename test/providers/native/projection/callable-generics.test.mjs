@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compilerCallableSignature, withCallableGenericProjections } from "../../../../dist/providers/native/projection/callable-generics.js";
-import { sourceTypeFor, targetTypeFor } from "../../../../dist/providers/native/projection/types.js";
+import { compilerCallableSignature, withCallableGenericProjections } from "../../../../dist/providers/native/projection/declarations/callable-generics.js";
+import { sourceTypeFor, targetTypeFor } from "../../../../dist/providers/native/projection/declarations/types.js";
 
 const identity = itemId => ({ itemId, canonicalPath: ["example", itemId] });
 const scalar = { kind: "primitive", name: "u64" };

@@ -1,10 +1,10 @@
-import { projectAssociatedConstants, projectTypeMethods } from "./declaration-members.js";
-import { selectUnambiguousMembers } from "./functions.js";
+import { projectAssociatedConstants, projectTypeMethods } from "./members.js";
+import { selectUnambiguousMembers } from "./signatures.js";
 import { sourceTypeFor, targetTypeFor } from "./types.js";
 import type { ProviderExportDeclaration } from "@tsonic/tsts";
-import type { RustCompilerExport, RustCompilerFunction, RustCompilerType } from "../model/model.js";
-import type { ProjectionContext } from "./model.js";
-import type { RustProviderOperationDefinition } from "../../../target-model/identities/provider-relations.js";
+import type { RustCompilerExport, RustCompilerFunction, RustCompilerType } from "../../model/model.js";
+import type { ProjectionContext } from "./context.js";
+import type { RustProviderOperationDefinition } from "../../../../target-model/identities/provider-relations.js";
 
 export function projectPrimitiveExport(
   exported: Extract<RustCompilerExport, { readonly kind: "primitive" }>,

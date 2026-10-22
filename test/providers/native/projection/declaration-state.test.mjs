@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { refineNativeExportDeclaration } from "../../../../dist/providers/native/projection/declaration-state.js";
+import { refineNativeExportDeclaration } from "../../../../dist/providers/native/projection/declarations/state.js";
 
 test("native declaration completion preserves exact headers and never regresses completed members", () => {
   const header = { id: "example::Value", name: "Value", kind: "class", members: [] };

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withProjectionGenericParameters, requireSourceGenericName } from "../../../../dist/providers/native/projection/utilities.js";
-import * as typeArguments from "../../../../dist/providers/native/projection/type-arguments.js";
-import * as typeProjection from "../../../../dist/providers/native/projection/types.js";
+import * as typeArguments from "../../../../dist/providers/native/projection/declarations/type-arguments.js";
+import * as typeProjection from "../../../../dist/providers/native/projection/declarations/types.js";
 
 const parameter = (identity, name) => ({ kind: "type", name,
   identity: { itemId: identity, canonicalPath: ["example", identity] }, requirements: [], outlives: [], maybeSized: false });

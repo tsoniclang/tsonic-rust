@@ -1,16 +1,16 @@
-import { functionSignatureDigest, operationRow, typeRequirements } from "./operations.js";
+import { functionSignatureDigest, operationRow, typeRequirements } from "../operations.js";
 import { parameterPassing, sourceTypeFor, targetTraitFor, targetTypeFor } from "./types.js";
 import { providerGenericBindingsFor, providerGenericParametersFor, targetGenericArgumentFor, targetGenericParameterArguments } from "./type-arguments.js";
-import { requireCurrentType, withProjectionGenericParameters } from "./utilities.js";
+import { requireCurrentType, withProjectionGenericParameters } from "../utilities.js";
 import { referencedCallableOwnerGenericParameters, sourceCallableGenericParameters } from "./source-generics.js";
 import { compilerFunctionResult } from "./representability.js";
 import { withCallableGenericProjections } from "./callable-generics.js";
 
-import type { ProjectionContext } from "./model.js";
+import type { ProjectionContext } from "./context.js";
 import type { ProviderMemberDeclaration, ProviderParameterDeclaration, ProviderSignatureDeclaration } from "@tsonic/tsts";
-import type { RustCompilerFunction, RustCompilerGenericParameter, RustCompilerType } from "../model/model.js";
-import type { RustProviderOperationDefinition } from "../../../target-model/identities/provider-relations.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustCompilerFunction, RustCompilerGenericParameter, RustCompilerType } from "../../model/model.js";
+import type { RustProviderOperationDefinition } from "../../../../target-model/identities/provider-relations.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function projectFunction(
   fn: RustCompilerFunction,
@@ -212,7 +212,7 @@ function ordinaryFunctionTarget(
   ownerTargetPath: readonly string[],
   instanceMethod: boolean,
   argumentModes: readonly ("value" | "ref" | "mut-ref")[],
-): import("../../../target-model/operations/model.js").RustProviderOperationForm {
+): import("../../../../target-model/operations/model.js").RustProviderOperationForm {
   if (fn.variadic) {
     return {
       form: "call-c-variadic",

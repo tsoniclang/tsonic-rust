@@ -1,16 +1,16 @@
-import { rustNativeScalarTargetId, rustOptionTargetId } from "../../../target-model/types/index.js";
-import { rustFixedArrayTargetType, rustNamedTargetType, rustNeverTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustStrTargetType, rustUnitTargetType } from "../../../target-model/types/carriers/native.js";
-import { canonicalCompilerTypePathKey, importedSourceType, isRustOptionPath, isRustStringPath, requireCurrentType, requireSourceGenericName, rustCompilerTypeText, standardSourceGenericArguments, targetGenericArgumentsForApplication, targetGenericDefaultsForApplication } from "./utilities.js";
-import { compilerAssociatedSourceExportName } from "../model/rustdoc-items.js";
-import { compilerModuleSpecifier, compilerTargetTypeId, providerFunctionPointerAbi, recordCarrierPath, rustPath } from "./operations.js";
-import { rustConstPointerExport, rustMutPointerExport } from "../../../target-model/identities/source.js";
-import { rustTypesModule } from "../../../target-model/identities/source.js";
-import { rustSourceTypeExportIds } from "../../../target-model/identities/source.js";
-import { sourcePrimitiveByRustName } from "./model.js";
-import type { ProjectionContext } from "./model.js";
+import { rustNativeScalarTargetId, rustOptionTargetId } from "../../../../target-model/types/index.js";
+import { rustFixedArrayTargetType, rustNamedTargetType, rustNeverTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustStrTargetType, rustUnitTargetType } from "../../../../target-model/types/carriers/native.js";
+import { canonicalCompilerTypePathKey, importedSourceType, isRustOptionPath, isRustStringPath, requireCurrentType, requireSourceGenericName, rustCompilerTypeText, standardSourceGenericArguments, targetGenericArgumentsForApplication, targetGenericDefaultsForApplication } from "../utilities.js";
+import { compilerAssociatedSourceExportName } from "../../model/rustdoc-items.js";
+import { compilerModuleSpecifier, compilerTargetTypeId, providerFunctionPointerAbi, recordCarrierPath, rustPath } from "../operations.js";
+import { rustConstPointerExport, rustMutPointerExport } from "../../../../target-model/identities/source.js";
+import { rustTypesModule } from "../../../../target-model/identities/source.js";
+import { rustSourceTypeExportIds } from "../../../../target-model/identities/source.js";
+import { sourcePrimitiveByRustName } from "./context.js";
+import type { ProjectionContext } from "./context.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
-import type { RustCompilerAssociatedConstraint, RustCompilerTraitDispatch, RustCompilerType } from "../model/model.js";
-import type { RustTargetAssociatedConstraint, RustTargetTraitRef, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerTraitDispatch, RustCompilerType } from "../../model/model.js";
+import type { RustTargetAssociatedConstraint, RustTargetTraitRef, TargetTypeRef } from "../../../../target-model/types/model.js";
 import { isCompilerCallableTrait } from "./callable-generics.js";
 import { compilerModuleSpecifierForIdentity, providerGenericParametersFor, requireTargetLifetimes, sourceGenericArgumentFor, sourceLifetimeFor, targetConstFor, targetGenericArgumentFor, targetLifetimeBinderFor, targetLifetimeFor, targetPathForIdentity, withCompilerLifetimeBinder } from "./type-arguments.js";
 

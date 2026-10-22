@@ -22,9 +22,9 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/providers/native/projection/types.ts#targetTypeFor",
+    id: "src/providers/native/projection/declarations/types.ts#targetTypeFor",
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
-    declaration: { module: "src/providers/native/projection/types.ts", symbol: "targetTypeFor" },
+    declaration: { module: "src/providers/native/projection/declarations/types.ts", symbol: "targetTypeFor" },
     responsibility: "providers/projected-type",
     frozen: false,
   },
@@ -470,9 +470,9 @@ export const producersCarrierRegistry = Object.freeze([
     frozen: false,
   },
   {
-    id: "src/providers/native/projection/types.ts#targetTraitFor",
+    id: "src/providers/native/projection/declarations/types.ts#targetTraitFor",
     kinds: ["trait-ref"],
-    declaration: { module: "src/providers/native/projection/types.ts", symbol: "targetTraitFor" },
+    declaration: { module: "src/providers/native/projection/declarations/types.ts", symbol: "targetTraitFor" },
     responsibility: "providers/projected-trait-reference",
     frozen: false,
   },

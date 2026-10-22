@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations/modules.js";
 import { rustCompilerProviderProtocolVersion } from "../../../../dist/providers/native/model/model.js";
 
 const dependency = { alias: "example", packageId: "example 1", packageName: "example", packageVersion: "1",

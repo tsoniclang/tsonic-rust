@@ -1,4 +1,4 @@
-import type { RustCompilerAssociatedConstraint, RustCompilerConstArgument, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerTraitDispatch, RustCompilerType } from "../model/model.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerConstArgument, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerTraitDispatch, RustCompilerType } from "../../model/model.js";
 
 export function referencedCallableOwnerGenericParameters(
   ownerParameters: readonly RustCompilerGenericParameter[],

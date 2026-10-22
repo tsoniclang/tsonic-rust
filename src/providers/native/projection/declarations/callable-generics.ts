@@ -1,5 +1,5 @@
-import type { RustCompilerFunction, RustCompilerTraitDispatch, RustCompilerType } from "../model/model.js";
-import type { ProjectionContext } from "./model.js";
+import type { RustCompilerFunction, RustCompilerTraitDispatch, RustCompilerType } from "../../model/model.js";
+import type { ProjectionContext } from "./context.js";
 
 export interface RustCompilerCallableSignature {
   readonly callTrait: "Fn" | "FnMut" | "FnOnce";

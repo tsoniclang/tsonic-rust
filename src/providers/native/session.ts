@@ -1,7 +1,7 @@
 import type { RustProviderContractValidation } from "../model/contract-validation.js";
 import { TstsSourceProviderContractVersion } from "@tsonic/tsts";
 import { resolve } from "node:path";
-import { refineNativeExportDeclaration } from "./projection/declaration-state.js";
+import { refineNativeExportDeclaration } from "./projection/declarations/state.js";
 import type {
   ExtensionDiagnostic, ProviderDeclarationModel, ProviderDeclarationRequest, ProviderModuleResolution,
   SourceDeclarationProvider,
@@ -15,9 +15,9 @@ import { mergeRustProviderSemantics, collectRustProviderSemanticsFromDefinitions
 import { rustProviderBindingProviderId } from "../packages/source-provider.js";
 import type { RustCompilerDependency, RustCompilerProjectSnapshot } from "./model/model.js";
 import { compilerModulePathFromSpecifier, compilerModuleSpecifier, compilerProviderModuleId, compilerProviderVersion } from "./projection/operations.js";
-import { projectRustCompilerModule } from "./projection/declarations.js";
+import { projectRustCompilerModule } from "./projection/declarations/modules.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
-import type { RustCompilerProviderProjection } from "./projection/model.js";
+import type { RustCompilerProviderProjection } from "./projection/declarations/context.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./acquisition/worker-client.js";
 import type { RustCompilerWorkerClient } from "./acquisition/worker-client.js";

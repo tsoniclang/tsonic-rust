@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { sourceGenericArgumentFor, targetGenericArgumentFor } from "./type-arguments.js";
+import { sourceGenericArgumentFor, targetGenericArgumentFor } from "./declarations/type-arguments.js";
 import { createRustCompilerSubstitutions, substituteRustCompilerArgument, substituteRustCompilerType } from "../model/normalization/type-substitution.js";
 import { compilerTypeRequirementCanonicalPath } from "../model/normalization/type-requirements.js";
-import type { ProjectionContext } from "./model.js";
+import type { ProjectionContext } from "./declarations/context.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
 import type {
   RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter,

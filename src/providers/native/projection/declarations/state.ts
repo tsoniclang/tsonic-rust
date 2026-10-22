@@ -1,5 +1,5 @@
 import type { ProviderExportDeclaration } from "@tsonic/tsts";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 
 export function refineNativeExportDeclaration(
   existing: ProviderExportDeclaration | undefined,

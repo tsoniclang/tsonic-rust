@@ -5,7 +5,7 @@ import {
   compilerAssociatedSourceExportName,
   resolveLocalRustdocItem,
 } from "../../../../dist/providers/native/model/rustdoc-items.js";
-import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations/modules.js";
 import {
   compilerModuleSpecifier,
   compilerProviderModuleId,

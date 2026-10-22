@@ -1,15 +1,15 @@
-import { importedSourceType, requireSourceGenericName, withProjectionGenericParameters } from "./utilities.js";
-import { compilerModuleSpecifier } from "./operations.js";
+import { importedSourceType, requireSourceGenericName, withProjectionGenericParameters } from "../utilities.js";
+import { compilerModuleSpecifier } from "../operations.js";
 import { sourceTypeFor, targetTypeFor } from "./types.js";
-import { rustTypesModule } from "../../../target-model/identities/source.js";
-import { rustSourceTypeExportIds } from "../../../target-model/identities/source.js";
+import { rustTypesModule } from "../../../../target-model/identities/source.js";
+import { rustSourceTypeExportIds } from "../../../../target-model/identities/source.js";
 import type { ProviderTypeExpression, ProviderTypeParameterDeclaration } from "@tsonic/tsts";
-import type { RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerLifetimeBinder } from "../model/model.js";
-import type { ProjectionContext } from "./model.js";
-import type { RustTargetConstArgument, RustTargetGenericArgument } from "../../../target-model/types/model.js";
-import type { RustProviderGenericParameter } from "../../../target-model/operations/model.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import type { RustLifetimeBinder, RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import type { RustCompilerConstArgument, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerLifetimeBinder } from "../../model/model.js";
+import type { ProjectionContext } from "./context.js";
+import type { RustTargetConstArgument, RustTargetGenericArgument } from "../../../../target-model/types/model.js";
+import type { RustProviderGenericParameter } from "../../../../target-model/operations/model.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+import type { RustLifetimeBinder, RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export function sourceGenericArgumentFor(
   argument: RustCompilerGenericArgument,

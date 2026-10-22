@@ -1,7 +1,7 @@
-import { sourcePrimitiveByRustName } from "./model.js";
-import type { RustCompilerAssociatedConstraint, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerTraitDispatch, RustCompilerType } from "../model/model.js";
-import type { ProjectionContext } from "./model.js";
-import { withProjectionGenericParameters } from "./utilities.js";
+import { sourcePrimitiveByRustName } from "./context.js";
+import type { RustCompilerAssociatedConstraint, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter, RustCompilerTraitDispatch, RustCompilerType } from "../../model/model.js";
+import type { ProjectionContext } from "./context.js";
+import { withProjectionGenericParameters } from "../utilities.js";
 
 export function rustCompilerFunctionHasCarrierContracts(
   fn: RustCompilerFunction,

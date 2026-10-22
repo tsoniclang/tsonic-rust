@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/acquisition/worker-client.js";
 import { compilerTargetTypeId, compilerProviderModuleId } from "../../../../dist/providers/native/projection/operations.js";
-import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations/modules.js";
 
 import {
   rustNamedTypeCarrierValue,
