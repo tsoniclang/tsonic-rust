@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { analyzeSourceWrites } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
@@ -61,6 +61,18 @@ export function analyzeRustBindingLiveness(
   };
   const observesInitializerThroughCompletion = (reference: Node, binding: Node, write: boolean): boolean =>
     insideCompletionScope(reference, binding, { catchClause: write });
+  // A read the native program never evaluates (in a decided guard condition, whose if statement emits only its
+  // selected branch, or in a removed branch) does not keep the binding used.
+  const notEmitted = (reference: Node): boolean => {
+    let child = reference;
+    for (let current = source.ast.parent(reference); current !== undefined; child = current, current = source.ast.parent(current)) {
+      if (records.nativeUnreachable.get(current) === true) return true;
+      if (source.ast.is.IsIfStatement(current) && Node_Expression(source.ast, current) === child &&
+        records.nativeGuardResult.get(child) !== undefined) return true;
+      if (source.ast.is.IsBlock(current) || source.ast.is.IsSourceFile(current)) return false;
+    }
+    return false;
+  };
   for (const { graph, liveness } of flow.regions) {
     const writes = analyzeSourceWrites(graph);
     if (writes.kind === "unresolved") return [{ code: "RUST_LIVENESS_FLOW_UNRESOLVED", source: "tsonic-rust",
@@ -72,7 +84,7 @@ export function analyzeRustBindingLiveness(
       if (!liveness.reachable.has(point.id)) continue;
       const operation = point.operation;
       // A discarded callable is erased from the native program, so its capture never reads the binding.
-      if (operation.kind === "read" || operation.kind === "capture" &&
+      if (operation.kind === "read" && (point.source === undefined || !notEmitted(point.source)) || operation.kind === "capture" &&
         (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);
       if (operation.kind === "read" && point.source !== undefined &&
         observesInitializerThroughCompletion(point.source, operation.binding, false) ||

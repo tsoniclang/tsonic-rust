@@ -92,9 +92,17 @@ export function analyzeRustLocalBindings(input: {
     const representation = input.representations.representationFor(input.projectTypes.definitionForCarrier(carrier));
     const liveness = input.records.bindingLiveness.get(node);
     const resource = input.records.resourceManagement.get(node);
-    const mutable = nativeArray !== undefined ? summary.bindingWritten : storage?.iterationScope !== undefined || storage === undefined &&
+    // Only a write the native program executes needs a mutable binding: a write in a branch a decided guard removes
+    // (nativeUnreachable) is never emitted.
+    const nativelyWritten = summary.bindingWritten && input.navigation.declarationUses(node).some(use => {
+      if (use.role !== "write") return false;
+      for (let current: Node | undefined = use.reference; current !== undefined && current !== node; current = input.ast.parent(current))
+        if (input.records.nativeUnreachable.get(current) === true) return false;
+      return true;
+    });
+    const mutable = nativeArray !== undefined ? nativelyWritten : storage?.iterationScope !== undefined || storage === undefined &&
       (input.aliases.requiresMutableOwner(node) || (initializer !== undefined || absenceInitializer ||
-        liveness?.multipleWrites !== false) && (summary.bindingWritten || input.records.mutatedBinding.get(node) !== undefined) ||
+        liveness?.multipleWrites !== false) && (nativelyWritten || input.records.mutatedBinding.get(node) !== undefined) ||
         representation?.kind === "value" && representation.mutable && summary.memberWritten ||
         carrier.kind !== "pointer" && carrier.kind !== "reference" && input.records.mutatedReferentBinding.get(node) !== undefined ||
         resource?.disposal.target.receiverMode === "mut-ref");

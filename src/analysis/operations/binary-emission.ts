@@ -48,8 +48,18 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     const spread = current !== undefined && ast.is.IsSpreadElement(current) ? Node_Expression(ast, current) : undefined;
     return spread !== undefined && sourceSequenceInputChoice(ast, spread)?.controlNodes.includes(node) === true;
   };
+  // The condition of an if statement whose guard result is already decided is never evaluated natively: the
+  // statement emits only its selected branch (planner statements/planning.ts).
+  const insideDecidedGuard = (node: Node): boolean => {
+    let current = node;
+    for (let parent = ast.parent(current); parent !== undefined; current = parent, parent = ast.parent(parent)) {
+      if (ast.is.IsIfStatement(parent)) return Node_Expression(ast, parent) === current && program.records.nativeGuardResult.get(current) !== undefined;
+      if (!ast.is.IsBinaryExpression(parent) && !ast.is.IsParenthesizedExpression(parent) && !ast.is.IsPrefixUnaryExpression(parent)) return false;
+    }
+    return false;
+  };
   for (const node of nodes) {
-    if (!ast.is.IsBinaryExpression(node) || ast.operatorKindName(node) === "KindEqualsToken" || spreadChoiceControl(node) ||
+    if (!ast.is.IsBinaryExpression(node) || ast.operatorKindName(node) === "KindEqualsToken" || spreadChoiceControl(node) || insideDecidedGuard(node) ||
       program.records.nativeParticipation.get(node) === "erased" || rustNodeIsOutsideNativeCode(ast, program.records,
         expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     const fact = program.records.targetOperation.get(node);
