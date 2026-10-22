@@ -29,6 +29,7 @@ import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
+import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
 import { planRustGeneratorBody } from "./generator-body.js";
@@ -306,7 +307,10 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   }
   const generics = genericPlan.finalizeGenerics();
-  const finalizedBody: RustBlock = { statements: [...parameterStatements, ...body.statements] };
+  const finalizedBody: RustBlock = applyRustTailShape(
+    { statements: [...parameterStatements, ...body.statements] },
+    returnType !== undefined,
+  );
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name: nativeBody === undefined ? name : nativeBodyName!,
