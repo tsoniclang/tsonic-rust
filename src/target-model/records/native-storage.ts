@@ -12,6 +12,13 @@ export type RustNativeStorageSelection =
       readonly sources: readonly RustPhysicalCallableSourceSelection[] }
   | { readonly kind: "unresolved"; readonly reason: string };
 
+// A callable with an uninhabited error written into storage whose distinct producers share one boxed callable: the
+// written value's own physical callable and the shared storage callable, into which the write eliminates the error.
+export interface RustCallableJoinWrite {
+  readonly source: TargetTypeRef;
+  readonly carrier: TargetTypeRef;
+}
+
 export interface RustPhysicalCallableStorage {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   parameterFor(parameter: Node): RustNativeStorageSelection;
@@ -22,4 +29,5 @@ export interface RustPhysicalCallableStorage {
   invocationCallableFor(node: Node): RustNativeStorageSelection;
   invocationWitnessFor(input: RustNativeCallableInput, invocation: Node): TargetTypeRef | undefined;
   invocationArgumentWitnessFor(invocation: Node, argument: Node): TargetTypeRef | undefined;
+  joinWriteFor(node: Node): RustCallableJoinWrite | undefined;
 }

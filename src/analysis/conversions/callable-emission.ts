@@ -58,6 +58,8 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     for (const source of [program.records.runtimeCarrier.get(node)?.carrier, read?.source, read?.contextualInput]) operand(node, source);
     const selected = program.records.contextualValueConversion.get(node);
     if (selected?.conversion.kind === "callable-adapter") contract(node, selected.conversion);
+    const joinWrite = program.callableValues.nativeStorage.joinWriteFor(node);
+    if (joinWrite !== undefined) producer.joinWrite(node, joinWrite);
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-conversion" && operation.conversion?.kind === "callable-input") operand(node, operation.conversion.source);
   }

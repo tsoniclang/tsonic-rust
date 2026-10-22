@@ -102,6 +102,10 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     // A retained native input renders a where predicate from its invocation error into each error target.
     for (const input of nativeGenerics?.inputs ?? []) if (input.retained !== undefined)
       pending.push(input.retained.error, ...input.retained.targets);
+    // A generic invocation propagates through its native error join, which renders every source error carrier.
+    const invocation = program.records.genericCallableInvocation.get(node);
+    if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
+      ...invocation.awaiting.map(source => source.errorType));
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     const contract = program.records.declarationRequirements.get(node);
