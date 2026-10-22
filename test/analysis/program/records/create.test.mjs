@@ -165,7 +165,7 @@ test("sealed records publish only frozen typed family readers without a native k
   };
   assert.equal(Object.keys(producerAdmissions).length, 68, "every producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
-  assert.equal(Object.keys(records).length, 68, "every native key has one family");
+  assert.equal(Object.keys(records).length, 343, "every native key has one family");
   for (const [name, family] of Object.entries(records)) {
     assert.deepEqual(Object.keys(family), ["get"], name + ": getter-only publication");
     assert.equal(Object.isFrozen(family), true, name + ": immutable family port");
@@ -176,9 +176,10 @@ test("sealed records publish only frozen typed family readers without a native k
     if (admission !== undefined) {
       assert.equal(model[name].set === undefined, true, name + ": no general writer");
       assert.throws(admission, /after analysis is sealed/u, name + ": producer is closed");
-    } else {
-      assert.equal(typeof model[name].set, "function", name + ": unconverted family has its one current writer");
+    } else if (typeof model[name].set === "function") {
       assert.throws(() => model[name].set({}, undefined), /after analysis is sealed/u, name + ": writer is closed");
+    } else {
+      assert.equal(model[name].set, undefined, name + ": producer-owned family has no general writer");
     }
   }
   for (const removed of ["get", "getFact", "resolve", "set", "seal", "minimumFoundation"]) {
@@ -198,8 +199,8 @@ test("the backend projection removes exactly five applicability families and pre
   const analysis = builder.seal([]);
   const records = createRustProgramRecords(analysis);
   const removed = new Set(["memoryBindingPlan", "rawLocationPlan", "rawAddressPlan", "memoryLayoutObservation", "typedLocationPlan"]);
-  assert.equal(Object.keys(analysis).length, 68);
-  assert.equal(Object.keys(records).length, 63);
+  assert.equal(Object.keys(analysis).length, 343);
+  assert.equal(Object.keys(records).length, 338);
   assert.equal(Object.isFrozen(records), true);
   for (const [family, reader] of Object.entries(analysis)) {
     if (removed.has(family)) {
