@@ -77,6 +77,8 @@ export function createRustNativeCallableInputPlan(input: {
    * declare type parameters, so their callable parameters keep their concrete callable carrier.
    */
   readonly declaresGenericInputs: (owner: Node) => boolean;
+  /** Generic callable family implementations: their captures live in the family's named environment. */
+  readonly genericImplementations: ReadonlySet<Node>;
 }): RustNativeCallableInputPlan {
   const registry = createRustNativeCallableProtocolRegistry(input);
   const componentByFile = new Map(input.sourcePackages.packages.flatMap(entry =>
@@ -105,6 +107,14 @@ export function createRustNativeCallableInputPlan(input: {
       for (const origin of origins.origins) {
         if (origin.subject.kind === "input" && origin.subject.projection.length === 0) nativeRetainedParameters.add(origin.subject.node);
       }
+    }
+  }
+  // A callable parameter captured by a generic callable implementation is stored in the family's named environment, which
+  // is the storage type of every place the family value reaches (a record field, a returned object); that type cannot
+  // carry the capturing declaration's native input type parameter, so the parameter keeps its concrete callable carrier.
+  for (const implementation of input.genericImplementations) {
+    for (const capture of input.records.closureCapture.get(implementation)?.captures ?? []) {
+      if (input.ast.is.IsParameterDeclaration(capture.declaration)) nativeRetainedParameters.add(capture.declaration);
     }
   }
   const bindings = new Map<Node, SourceStorageBindings | null>();
