@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
@@ -143,7 +144,7 @@ test("unit variants preserve their native constant and reject broader payloads o
   }
   const conversion = { kind: "union-map", source, target: source, coverage: "source",
     arms: selectRustUnionArmMapping(source, source, "source", definitions) };
-  const fail = message => { throw new Error(message); };
+  const fail = Object.assign(message => { throw new Error(message); }, { contracts: rustProviderContractValidation });
   assert.doesNotThrow(() => validateValueConversion(conversion, {}, "conversion", source, source, fail));
   for (const invalidArms of [[], new Array(1), [null], [{ ...arms[0], extra: true }],
     [{ ...arms[0], carrier: { kind: "source-primitive", name: "missing" } }],

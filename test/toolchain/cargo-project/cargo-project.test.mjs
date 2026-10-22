@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -39,7 +40,7 @@ function materializedCrate(name, identity = name) {
   return root;
 }
 
-const providerSemantics = composeRustProviderSemantics([]);
+const providerSemantics = composeRustProviderSemantics([], rustProviderContractValidation);
 const generatedConfiguration = Object.freeze({
   crateName: "tsonic_generated",
   edition: "2021",

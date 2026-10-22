@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import test from "node:test";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { collectRustProviderSemanticsFromDefinitions, mergeRustProviderSemantics } from "../../../dist/providers/packages/index.js";
@@ -24,7 +25,7 @@ function definition(group = dispatchGroup(), phase = "after-entry") {
 }
 
 test("dispatch groups materialize aliases and exact native empty constructor carriers", () => {
-  const semantics = collectRustProviderSemanticsFromDefinitions([definition()]);
+  const semantics = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation);
   const group = semantics.binaryHooks[0].dispatchGroups[0];
   assert.equal(group.prepend.path, "acme_dispatch::prepend");
   assert.equal(rustNamedTypeCarrierValue(group.empty.owner)?.path, "acme_dispatch::Dispatch");
@@ -40,7 +41,7 @@ test("dispatch groups snapshot every caller-owned constructor and selection", ()
   input.binaryHooks[0].dispatchGroups[0].contextIds[0] = "wrong";
   input.binaryHooks[0].dispatchGroups[0].prepend.path = "runtime::wrong";
   input.binaryHooks[0].dispatchGroups[0].empty.owner.genericArguments[0].type.id = "wrong";
-  const row = collectRustProviderSemanticsFromDefinitions([captured]).binaryHooks[0];
+  const row = collectRustProviderSemanticsFromDefinitions([captured], rustProviderContractValidation).binaryHooks[0];
   assert.deepEqual(row.dispatchGroups[0].contextIds, ["acme.dispatch"]);
   assert.equal(row.dispatchGroups[0].prepend.path, "acme_dispatch::prepend");
   assert.equal(rustNamedTypeCarrierValue(row.dispatchGroups[0].empty.owner)?.genericArguments[0].type.id, "rust.program.TsonicError");
@@ -112,9 +113,9 @@ test("one native argument selects multiple immutable independent dispatch roots"
 });
 
 test("conflicting native group constructors cannot share one binary hook identity", () => {
-  const first = collectRustProviderSemanticsFromDefinitions([definition()]);
+  const first = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation);
   const second = collectRustProviderSemanticsFromDefinitions([definition(dispatchGroup({
     prepend: { form: "call", path: "runtime::different" },
-  }))]);
+  }))], rustProviderContractValidation);
   assert.throws(() => mergeRustProviderSemantics(first, second), /conflicting definitions/u);
 });

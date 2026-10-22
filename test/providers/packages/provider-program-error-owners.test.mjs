@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import test from "node:test";
 import { createRustProviderPackage, rustProgramErrorTargetType } from "../../../dist/public/provider.js";
 import { collectRustProviderSemanticsFromDefinitions } from "../../../dist/providers/packages/index.js";
@@ -24,7 +25,7 @@ test("providers preserve immutable logical program error templates without autho
   const provider = createRustProviderPackage(definition(carrier));
   errorOwner.kind = "changed";
   const published = provider.createTargetContributions()[0].definition;
-  const result = collectRustProviderSemanticsFromDefinitions([published]).operations[0].resultCarrier;
+  const result = collectRustProviderSemanticsFromDefinitions([published], rustProviderContractValidation).operations[0].resultCarrier;
   assert.deepEqual(result, rustProgramErrorTargetType());
   assert.equal(Object.isFrozen(published.operations[0].resultCarrier.errorOwner), true);
   for (const owner of [{ kind: "physical", domain: "runtime" },

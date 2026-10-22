@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { collectRustProviderOperationRows } from "../../../dist/providers/packages/composition.js";
@@ -459,7 +460,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
   });
   assert.deepEqual(model.exports, [valueExport]);
   assert.equal(Object.hasOwn(model.exports[0], "targetIdentity"), false);
-  assert.deepEqual(collectRustProviderSemantics(providerContext([providerPackage])).types, [{
+  assert.deepEqual(collectRustProviderSemantics(providerContext([providerPackage]), rustProviderContractValidation).types, [{
     exportId: "@acme/validation::Value",
     targetCarrier: {
       kind: "target-specific",

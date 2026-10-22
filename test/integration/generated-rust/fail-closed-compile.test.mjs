@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { dirname } from "node:path";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
@@ -10,7 +11,7 @@ import {
   fakeStatement,
 } from "../../helpers/fake-compile-input.mjs";
 
-const providerSemantics = composeRustProviderSemantics([]);
+const providerSemantics = composeRustProviderSemantics([], rustProviderContractValidation);
 
 function compile(input) {
   const configuration = createRustTargetConfiguration(

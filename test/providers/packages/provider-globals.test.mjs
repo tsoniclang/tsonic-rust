@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import test from "node:test";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { collectRustProviderSemanticsFromDefinitions, mergeRustProviderSemantics } from "../../../dist/providers/packages/index.js";
@@ -38,8 +39,8 @@ test("provider globals have one immutable declaration and export owner", () => {
     declarations: [{ fileName: "provider-globals.d.ts", text: 'declare var selectedValue: typeof import("@acme/acme-global")["value"];' }],
   });
   assert.throws(() => mergeRustProviderSemantics(
-    collectRustProviderSemanticsFromDefinitions([definition()]),
-    collectRustProviderSemanticsFromDefinitions([definition("second")]),
+    collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation),
+    collectRustProviderSemanticsFromDefinitions([definition("second")], rustProviderContractValidation),
   ), /conflicting export owners/u);
 });
 

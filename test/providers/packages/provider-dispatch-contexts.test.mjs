@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import {
@@ -12,7 +13,7 @@ import {
 } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
 
 test("dispatch contexts materialize exact native carriers, generic errors and factory aliases", () => {
-  const semantics = collectRustProviderSemanticsFromDefinitions([definition()]);
+  const semantics = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation);
   const row = semantics.dispatchContexts[0];
   assert.equal(row.providerPackageId, "acme-dispatch");
   assert.equal(row.providerVersion, "1.0.0");
@@ -32,7 +33,7 @@ test("dispatch context publication snapshots every mutable provider input", () =
     form: "receiver-method", name: "wrong",
   } });
   const captured = provider.createTargetContributions()[0].definition;
-  const row = collectRustProviderSemanticsFromDefinitions([captured]).dispatchContexts[0];
+  const row = collectRustProviderSemanticsFromDefinitions([captured], rustProviderContractValidation).dispatchContexts[0];
   assert.equal(row.construct.path, "acme_dispatch::Dispatch::new");
   assert.equal(row.handle.name, "handle");
   assert.equal(row.composedContexts.length, 0);
@@ -67,7 +68,7 @@ test("component-owned contexts accept closed native generics and reject unbound 
 });
 
 test("dispatch context identity has one exact owner and idempotent publication", () => {
-  const original = collectRustProviderSemanticsFromDefinitions([definition()]);
+  const original = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation);
   assert.equal(mergeRustProviderSemantics(original, original).dispatchContexts.length, 1);
   for (const alternate of [
     definition({ id: "other-owner" }),
@@ -75,7 +76,7 @@ test("dispatch context identity has one exact owner and idempotent publication",
     definition({ dispatchContexts: [context({ handle: { form: "receiver-method", name: "other" } })] }),
   ]) {
     assert.throws(() => mergeRustProviderSemantics(original,
-      collectRustProviderSemanticsFromDefinitions([alternate])),
+      collectRustProviderSemanticsFromDefinitions([alternate], rustProviderContractValidation)),
     /dispatch context .* has conflicting definitions/u);
   }
 });
@@ -84,7 +85,7 @@ test("dispatch contexts preserve exact composed-root projections without guessin
   const composed = { contextId: "other.dispatch", project: { form: "receiver-method", name: "other" } };
   const semantics = collectRustProviderSemanticsFromDefinitions([definition({
     dispatchContexts: [context({ composedContexts: [composed] })],
-  })]);
+  })], rustProviderContractValidation);
   const row = semantics.dispatchContexts[0];
   assert.equal(row.composedContexts[0].contextId, "other.dispatch");
   assert.equal(row.composedContexts[0].project.name, "other");
@@ -95,7 +96,7 @@ test("root-only contexts have no manufactured scheduling handle", () => {
   const input = context();
   delete input.handleCarrier;
   delete input.handle;
-  const selected = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts: [input] })]).dispatchContexts[0];
+  const selected = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts: [input] })], rustProviderContractValidation).dispatchContexts[0];
   assert.equal(Object.hasOwn(selected, "handleCarrier"), false);
   assert.equal(Object.hasOwn(selected, "handle"), false);
   assert.equal(Object.isFrozen(selected), true);
@@ -147,7 +148,7 @@ test("dispatch construction retains immutable compiler-checked native const evid
     const input = definition({ dispatchContexts: [context({ construct: {
       form: "call", path: "runtime::Dispatch::new", const: constant,
     } })] });
-    const selected = collectRustProviderSemanticsFromDefinitions([input]).dispatchContexts[0];
+    const selected = collectRustProviderSemanticsFromDefinitions([input], rustProviderContractValidation).dispatchContexts[0];
     assert.equal(selected.construct.const, constant);
     assert.equal(Object.isFrozen(selected.construct), true);
     input.dispatchContexts[0].construct.const = !constant;

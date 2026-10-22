@@ -1,4 +1,5 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -69,7 +70,7 @@ test("passive broad values reject carriers whose lifetime cannot be closed", () 
 test("native and JS optional admission retain exact payload and destination evidence", () => {
   const element = rustStringTargetType();
   const source = rustOptionTargetType(element);
-  const fail = message => { throw new Error(message); };
+  const fail = Object.assign(message => { throw new Error(message); }, { contracts: rustProviderContractValidation });
   for (const target of [rustTsValueTargetType(), rustJsValueTargetType()]) {
     const conversion = selectRustSourceValueConversion(source, target);
     assert.equal(conversion.kind, "closed-value-from-option");

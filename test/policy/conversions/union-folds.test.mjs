@@ -1,4 +1,5 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -14,7 +15,7 @@ import { selectRustProjectedValueConversion } from "../../../dist/policy/convers
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/policy/operations/members/abi/validation.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
-import { materializeProviderOperationRow } from "../../../dist/providers/packages/materialization.js";
+import { materializeProviderOperationRow } from "../../../dist/providers/packages/materialization/operations.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 
@@ -63,7 +64,7 @@ test("union fold facts reject incomplete, stale, reordered, malformed and supers
     sourceArgumentCarriers: [source], resultCarrier: target, isAsync: false, isFallible: false });
   assert.ok(abi);
   assert.equal(validateRustFinalizedOperationAbi(abi), true);
-  const fail = message => { throw new Error(message); };
+  const fail = Object.assign(message => { throw new Error(message); }, { contracts: rustProviderContractValidation });
   assert.doesNotThrow(() => validateValueConversion(conversion, {}, "fold", source, target, fail));
   const changes = [
     { target: rustStringTargetType() }, { arms: [] }, { arms: new Array(2) }, { arms: conversion.arms.slice(1) },

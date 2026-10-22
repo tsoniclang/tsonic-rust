@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
@@ -32,7 +33,7 @@ function definition(overrides = {}) {
 }
 
 test("binary hooks materialize aliases into one deterministic provider-owned row", () => {
-  const semantics = collectRustProviderSemanticsFromDefinitions([definition()]);
+  const semantics = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation);
   assert.deepEqual(semantics.binaryHooks, [{
     id: "drain",
     path: "acme_lifecycle::event_loop::drain",
@@ -44,21 +45,21 @@ test("binary hooks materialize aliases into one deterministic provider-owned row
 
 test("identical binary hooks merge idempotently and contradictory rows fail closed", () => {
   const duplicate = mergeRustProviderSemantics(
-    collectRustProviderSemanticsFromDefinitions([definition()]),
-    collectRustProviderSemanticsFromDefinitions([definition()]),
+    collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation),
+    collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation),
   );
   assert.equal(duplicate.binaryHooks.length, 1);
 
   assert.throws(
     () => mergeRustProviderSemantics(
-      collectRustProviderSemanticsFromDefinitions([definition()]),
+      collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation),
       collectRustProviderSemanticsFromDefinitions([definition({
         binaryHooks: [{
           id: "drain",
           path: "runtime::different",
           phase: "after-entry", requiredCrate: "acme_lifecycle",
         }],
-      })]),
+      })], rustProviderContractValidation),
     ),
     /binary hook .* has conflicting definitions/u,
   );
@@ -137,11 +138,11 @@ test("binary hook phases are explicit, immutable and conflict checked", () => {
   const startup = definition({ binaryHooks: [{
     ...definition().binaryHooks[0], phase: "before-initialization",
   }] });
-  const selected = collectRustProviderSemanticsFromDefinitions([startup]);
+  const selected = collectRustProviderSemanticsFromDefinitions([startup], rustProviderContractValidation);
   assert.equal(selected.binaryHooks[0].phase, "before-initialization");
   assert.equal(Object.isFrozen(selected.binaryHooks[0]), true);
   assert.throws(() => mergeRustProviderSemantics(selected,
-    collectRustProviderSemanticsFromDefinitions([definition()])), /conflicting definitions/u);
+    collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation)), /conflicting definitions/u);
   assert.throws(() => createRustProviderPackage(definition({ binaryEpilogues: [] })), /binaryEpilogues/u);
 });
 
@@ -150,7 +151,7 @@ test("async execution hooks retain their exact provider error and path contracts
     id: "executor", phase: "async-execution", path: "runtime::block_on",
     requiredCrate: "acme_lifecycle", isFallible: true, errorBoundary: "target-runtime",
   }] });
-  const semantics = collectRustProviderSemanticsFromDefinitions([hooks]);
+  const semantics = collectRustProviderSemanticsFromDefinitions([hooks], rustProviderContractValidation);
   assert.deepEqual(semantics.binaryHooks, [{
     id: "executor", phase: "async-execution", path: "acme_lifecycle::event_loop::block_on",
     requiredCrate: "acme_lifecycle", isFallible: true, errorBoundary: "target-runtime",

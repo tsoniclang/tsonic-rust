@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
@@ -313,7 +314,7 @@ test("provider paths and named carriers materialize before facts reach the backe
     crates: [],
   });
 
-  const semantics = collectRustProviderSemantics(providerContext([providerPackage]));
+  const semantics = collectRustProviderSemantics(providerContext([providerPackage]), rustProviderContractValidation);
   assert.deepEqual(semantics.exports, [{
     exportId: "acme.materialized::create",
     declarationKind: "function",
@@ -403,7 +404,7 @@ test("every path-bearing provider operation materializes its declared crate alia
   });
 
   const operations = new Map(
-    collectRustProviderSemantics(providerContext([providerPackage])).operations
+    collectRustProviderSemantics(providerContext([providerPackage]), rustProviderContractValidation).operations
       .map((operation) => [operation.exportId, operation]),
   );
   assert.equal(
@@ -437,7 +438,7 @@ test("conflicting provider carrier paths fail before operation facts are recorde
     () => collectRustProviderSemantics(providerContext([
       packageWithPath("acme-first", "@acme/first", "acme_first::Shared"),
       packageWithPath("acme-second", "@acme/second", "acme_second::Shared"),
-    ])),
+    ]), rustProviderContractValidation),
     /conflicting target paths 'acme_first::Shared' and 'acme_second::Shared'/u,
   );
 });
@@ -460,7 +461,7 @@ test("conflicting provider carrier trait contracts fail before operation facts a
         implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
       }),
       packageWithTraits("acme-second", "@acme/second", { implementations: [] }),
-    ])),
+    ]), rustProviderContractValidation),
     /conflicting native trait contracts/u,
   );
 });

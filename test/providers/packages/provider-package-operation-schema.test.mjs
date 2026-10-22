@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import {
   createRustProviderPackage,
@@ -23,7 +24,7 @@ test("free-call receiver conversions survive immutable provider publication and 
     const provider = createRustProviderPackage(definition({ operations: [operation] }));
     target.receiverConversion.id = "guessed";
     const published = provider.createTargetContributions()[0].definition;
-    const row = collectRustProviderSemanticsFromDefinitions([published]).operations[0];
+    const row = collectRustProviderSemanticsFromDefinitions([published], rustProviderContractValidation).operations[0];
     assert.deepEqual(row.target.receiverConversion, rustStringToBorrowedStrValueConversion, form);
     assert.equal(Object.isFrozen(row.target.receiverConversion), true, form);
     let accessorReads = 0;
@@ -50,7 +51,7 @@ test("native failures incorporated into source results have exact closed immutab
   native.id = "acme.Wrong";
   input.operations[0].nativeErrorCarriers.push({ kind: "target-named", id: "acme.Other" });
   const published = provider.createTargetContributions()[0].definition;
-  const row = collectRustProviderSemanticsFromDefinitions([published]).operations[0];
+  const row = collectRustProviderSemanticsFromDefinitions([published], rustProviderContractValidation).operations[0];
   assert.equal(row.nativeErrorCarriers.length, 1);
   assert.equal(rustNamedTypeCarrierValue(row.nativeErrorCarriers[0]).path, "acme_validation::NativeError");
   assert.equal(Object.isFrozen(row.nativeErrorCarriers), true);
@@ -79,7 +80,7 @@ test("native source-result evidence rejects malformed or unrelated error boundar
     { errorBoundary: "provider-native", errorCarrier: native }]) {
     assert.throws(() => createRustProviderPackage(withOperation(change)));
   }
-  const ordinary = collectRustProviderSemanticsFromDefinitions([definition()]).operations[0];
+  const ordinary = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation).operations[0];
   assert.equal(Object.hasOwn(ordinary, "nativeErrorCarriers"), false);
 });
 
@@ -704,10 +705,10 @@ test("provider carrier metadata canonicalizes after cross-provider composition",
     }],
   });
 
-  const together = collectRustProviderSemanticsFromDefinitions([consumer, owner]);
+  const together = collectRustProviderSemanticsFromDefinitions([consumer, owner], rustProviderContractValidation);
   const separately = mergeRustProviderSemantics(
-    collectRustProviderSemanticsFromDefinitions([consumer]),
-    collectRustProviderSemanticsFromDefinitions([owner]),
+    collectRustProviderSemanticsFromDefinitions([consumer], rustProviderContractValidation),
+    collectRustProviderSemanticsFromDefinitions([owner], rustProviderContractValidation),
   );
   const togetherCarrier = rustNamedTypeCarrierValue(together.operations[0].resultCarrier);
   const separateCarrier = rustNamedTypeCarrierValue(separately.operations[0].resultCarrier);
