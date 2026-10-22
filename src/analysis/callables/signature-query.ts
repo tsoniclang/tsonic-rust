@@ -20,6 +20,7 @@ import { selectRustCallableSuspension } from "./suspension.js";
 import type { RustCallableSuspensionSelection } from "./suspension.js";
 import { selectRustCallableLogicalReturn } from "./signatures.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
 
 export interface RustCallableSignatureRequest {
   readonly parameterAbis?: readonly RustSourceParameterAbiFact[];
@@ -69,6 +70,15 @@ export function finalizeRustCallableSignature(
     walk.callableSignatures.set(declaration, state);
   }
   state.active = true;
+  // A class member body reads `this` and `super` as its own class, whichever walk requests its signature.
+  const classOwner = rustClassCallableMemberOwner(walk, declaration);
+  const previousThis = walk.currentThisCarrier;
+  const previousSuper = walk.currentSuperCarrier;
+  if (classOwner !== undefined) {
+    const receivers = rustClassReceiverCarriers(walk, classOwner);
+    walk.currentThisCarrier = receivers?.thisCarrier;
+    walk.currentSuperCarrier = receivers?.superCarrier;
+  }
   try {
     const { ast } = walk.context;
     const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
@@ -136,6 +146,8 @@ export function finalizeRustCallableSignature(
     return completed;
   } finally {
     state.active = false;
+    walk.currentThisCarrier = previousThis;
+    walk.currentSuperCarrier = previousSuper;
   }
 }
 

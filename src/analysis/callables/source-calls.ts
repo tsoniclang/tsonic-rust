@@ -17,8 +17,8 @@ import { rustNativeInputEffectsMatch } from "./native-protocol-emission.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
-import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { rustNativeCallableOperand } from "./native-conversions.js";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall): boolean {
