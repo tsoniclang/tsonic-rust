@@ -4,7 +4,8 @@ import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity } from "@t
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
-import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
+import { rustTargetGenericBindingsForArguments, rustTargetGenericTypeArguments } from "../../target-model/types/generic-arguments.js";
+import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 
@@ -60,9 +61,45 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
   const cache = new Map<Node, Map<SourceStorageBindings, RustNativeStorageGenericSelection | "resolving">>();
   const unresolved = (reason: string): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved", reason });
   const lexicalOwners = new Map<Node, Node | null>();
+  // An instance member or constructor of a generic class is bound by its class's type parameters, which the
+  // receiver (or constructed) instance selects at each activation.
+  const classTypeParameters = (declaration: Node): readonly Node[] => {
+    const owner = input.ast.parent(declaration);
+    if (owner === undefined || !input.ast.is.IsClassDeclaration(owner) && !input.ast.is.IsClassExpression(owner)) return [];
+    if (!input.ast.is.IsConstructorDeclaration(declaration) && !input.ast.is.IsMethodDeclaration(declaration) &&
+      !input.ast.is.IsGetAccessorDeclaration(declaration) && !input.ast.is.IsSetAccessorDeclaration(declaration) ||
+      input.ast.hasModifierKind(declaration, "static")) return [];
+    return input.ast.typeParameters(owner).filter((parameter): parameter is Node => parameter !== undefined);
+  };
   const ownBindings = (declaration: Node): boolean => input.ast.typeParameters(declaration).length !== 0 ||
+    classTypeParameters(declaration).length !== 0 ||
     input.records.retainedEnvironment.get(declaration) !== undefined ||
     rustCallableInputLifetimeParameters(declaration, input.ast, input.records).length !== 0;
+  // The class type parameter bindings an invocation's instance selects: the receiver of a member call, or the
+  // constructed instance of a `new` expression.
+  const classBindingsFor = (declaration: Node, invocation: Node, caller: RustTargetGenericBindings): RustTargetGenericBindings | undefined => {
+    const parameters = classTypeParameters(declaration);
+    if (parameters.length === 0) return Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() });
+    const callee = input.ast.is.IsNewExpression(invocation) ? undefined : Node_Expression(input.ast, invocation);
+    const instance = input.ast.is.IsNewExpression(invocation) ? invocation
+      : callee !== undefined && (input.ast.is.IsPropertyAccessExpression(callee) || input.ast.is.IsElementAccessExpression(callee))
+        ? Node_Expression(input.ast, callee) : undefined;
+    const carrier = instance === undefined ? undefined : input.records.runtimeCarrier.get(instance)?.carrier;
+    const sourceType = carrier === undefined ? undefined
+      : rustSourceTypeCarrierValue(substituteRustTargetGenerics(carrier, caller.types, caller.lifetimes, caller.consts));
+    // An instance that is not a nominal source-type carrier (an interface or structural view of the class) carries
+    // no class arguments here; the member keeps the bindings its own activation selects, as before.
+    if (sourceType === undefined) return Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() });
+    const arguments_ = rustTargetGenericTypeArguments(sourceType.genericArguments);
+    if (arguments_.length !== parameters.length) return undefined;
+    const types = new Map<string, TargetTypeRef>();
+    for (const [index, parameter] of parameters.entries()) {
+      const identity = sourceNodeIdentity(input.ast, parameter);
+      if (identity === undefined) return undefined;
+      types.set(identity, arguments_[index]!);
+    }
+    return Object.freeze({ types, lifetimes: new Map(), consts: new Map() });
+  };
   const lexicalOwnerFor = (declaration: Node, depth: number): Node | null | undefined => {
     const previous = lexicalOwners.get(declaration);
     if (previous !== undefined) return previous;
@@ -136,6 +173,13 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
         const generic = input.genericInvocationBindingsFor(declaration, activation.invocation, activation.callerBindings, arguments_, caller.bindings);
         if (generic?.kind === "unresolved") return finish(generic);
         const own = generic?.bindings ?? rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], arguments_);
+        const instance = classBindingsFor(declaration, activation.invocation, caller.bindings);
+        if (instance === undefined)
+          return finish(unresolved("Native class member activation requires its exact instance type arguments."));
+        const classBound = mergeBindings(actual, instance);
+        if (classBound === undefined)
+          return finish(unresolved("Native callable activation has inconsistent selected generic arguments."));
+        actual = classBound;
         const merged = own === undefined ? undefined : mergeBindings(actual, { ...own,
           lifetimes: new Map([...own.lifetimes, ...[...rustRetainedCallSubstitutions(input.records, activation.invocation)]
             .map(([identity, lifetime]) => [identity, caller.bindings.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime] as const)]) });
