@@ -25,7 +25,7 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
 
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
-import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
+import { bindRustStructuralInterfaceParameters, bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
@@ -168,9 +168,9 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
           const inScope = structuralReceiver === undefined ? new Set<string>() : new Set(rustTargetTypeParameterIdentities(structuralReceiver));
           const foreign = callee.capturedTypeParameters.filter(parameter => !inScope.has(parameter.identity));
           if (foreign.length !== 0 && structuralReceiver !== undefined && interfaceMember) {
-            const template = input.structuralShapes.templateForCarrier(structuralReceiver)?.carrier;
-            const bindings = template === undefined ? undefined : bindRustStructuralReceiverParameters(template, structuralReceiver,
-              new Set(foreign.map(parameter => parameter.identity)));
+            const definition = input.structuralShapes.templateForCarrier(structuralReceiver);
+            const bindings = definition === undefined ? undefined : bindRustStructuralInterfaceParameters(
+              [definition.carrier, ...definition.sourceCarriers], structuralReceiver, new Set(foreign.map(parameter => parameter.identity)));
             if (bindings === undefined) return "A structural member call lost its exact captured interface type bindings.";
             for (const [identity, carrier] of bindings) {
               const existing = substitutions.get(identity);
