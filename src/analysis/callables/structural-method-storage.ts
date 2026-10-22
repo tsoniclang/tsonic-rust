@@ -5,7 +5,7 @@ import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
-import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustLifetimesEqual, type RustLifetimeIndex, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeOutlives } from "../../policy/constraints/lifetime-outlives.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -449,15 +449,20 @@ export function createRustStructuralMethodStorage(input: {
               !rustTargetTypeRefEquals(originalSignature.result, originalDestination.result) ||
               !rustTargetTypeRefEquals(originalSignature.error, originalDestination.error))
               return reject(root.subject.node, "Structural method transport requires its complete actual bound source construction witness.");
-            const references = rustTargetGenericReferences(original.destinationCarrier);
-            const witnessBindings = inferRustTargetGenericBindings(original.destinationCarrier, carrier, {
+            // The witness is written with the instance's retained callable lifetimes, which the template abstracts as its
+            // storage lifetimes; lift them to the template's before binding the witness's own generics.
+            const lifted = rustLiftStructuralInstanceLifetimes(original, carrier);
+            if (lifted === undefined)
+              return reject(root.subject.node, "Structural method construction lost its exact source-to-destination template binding.");
+            const references = rustTargetGenericReferences(lifted.destinationCarrier);
+            const witnessBindings = inferRustTargetGenericBindings(lifted.destinationCarrier, carrier, {
               typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
               constIdentities: new Set(references.constIdentities),
             });
-            if (witnessBindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(original.destinationCarrier,
+            if (witnessBindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(lifted.destinationCarrier,
               witnessBindings.types, witnessBindings.lifetimes, witnessBindings.consts), carrier))
               return reject(root.subject.node, "Structural method construction lost its exact source-to-destination template binding.");
-            const physicalCarrier = normalize(substituteRustTargetGenerics(original.physicalCarrier,
+            const physicalCarrier = normalize(substituteRustTargetGenerics(lifted.physicalCarrier,
               witnessBindings.types, witnessBindings.lifetimes, witnessBindings.consts));
             const physicalSignature = rustCallablePhysicalSignature(physicalCarrier);
             const destination = rustCallableProtocol(carrier)!;
@@ -541,5 +546,30 @@ export function createRustStructuralMethodStorage(input: {
       retentionValidated = issues.length === 0;
       return Object.freeze(issues);
     },
+  });
+}
+
+function rustLiftStructuralInstanceLifetimes(
+  original: Pick<RustStructuralMethodConstruction, "destinationCarrier" | "physicalCarrier">, template: TargetTypeRef,
+): Pick<RustStructuralMethodConstruction, "destinationCarrier" | "physicalCarrier"> | undefined {
+  const templateReferences = rustTargetGenericReferences(template);
+  const selected = inferRustTargetGenericBindings(template, original.destinationCarrier, {
+    typeIdentities: new Set(templateReferences.typeIdentities), lifetimeIdentities: new Set(templateReferences.lifetimeIdentities),
+    constIdentities: new Set(templateReferences.constIdentities),
+  });
+  if (selected === undefined) return original;
+  const lifted = new Map<string, RustLifetimeRef>();
+  for (const parameter of templateReferences.lifetimes) {
+    const instance = selected.lifetimes.get(rustLifetimeKey(parameter));
+    if (instance === undefined || rustLifetimesEqual(instance, parameter)) continue;
+    const key = rustLifetimeKey(instance);
+    const previous = lifted.get(key);
+    if (previous !== undefined && !rustLifetimesEqual(previous, parameter)) return undefined;
+    lifted.set(key, parameter);
+  }
+  if (lifted.size === 0) return original;
+  return Object.freeze({
+    destinationCarrier: substituteRustTargetGenerics(original.destinationCarrier, new Map(), lifted, new Map()),
+    physicalCarrier: substituteRustTargetGenerics(original.physicalCarrier, new Map(), lifted, new Map()),
   });
 }

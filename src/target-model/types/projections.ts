@@ -27,8 +27,15 @@ export function rustSourceOptionalTargetType(value: TargetTypeRef): TargetTypeRe
   return { ...rustOptionTargetType(value) as Extract<TargetTypeRef, { readonly kind: "target-named" }>, sourceAbsence: true };
 }
 
+/**
+ * The storage of a structural property: an optional property is an Option field of its value, a generic value included
+ * (the same storage as a non-generic optional property, with no optional-storage projection).
+ */
 export function rustSourcePropertyTargetType(value: TargetTypeRef, optional: boolean): TargetTypeRef {
-  return optional && rustOptionElementCarrier(value) === undefined ? rustSourceOptionalTargetType(value) : value;
+  if (!optional || rustOptionElementCarrier(value) !== undefined) return value;
+  if (value.kind === "type-parameter" || value.kind === "associated-type")
+    return { ...rustOptionTargetType(value) as Extract<TargetTypeRef, { readonly kind: "target-named" }>, sourceAbsence: true };
+  return rustSourceOptionalTargetType(value);
 }
 
 export function rustOptionalStorageValue(type: TargetTypeRef | undefined): TargetTypeRef | undefined {

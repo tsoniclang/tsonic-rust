@@ -4,6 +4,7 @@ import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../conversions/selection.js";
+import { rustCallableTargetForSourceLifetime } from "../../../conversions/value-carrier-reconciliation.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../../../../target-model/operations/model.js";
 import type { RustFinalizedSourceInput, RustFinalizedValueConversion } from "../../../../target-model/records/finalized-operation.js";
@@ -132,11 +133,15 @@ export function declaredCarriersMatch(
       runtimeSourceIndexes.every((sourceIndex, index) => sourceIndex === index) &&
       declared.length === form.fixedArgumentModes.length &&
       source.length >= declared.length &&
-      declared.every((carrier, index) => carrier === undefined ||
-        rustTargetTypeRefEquals(source[index]!, carrier));
+      declared.every((carrier, index) => carrier === undefined || declaredCarrierMatches(source[index]!, carrier));
   }
   return declared === undefined || (isDenseDataArray(source) && isDenseDataArray(runtimeSourceIndexes) &&
     isDenseDataArray(declared) && runtimeSourceIndexes.length === declared.length &&
     declared.every((carrier, index) => carrier === undefined ||
-      rustTargetTypeRefEquals(source[runtimeSourceIndexes[index]!], carrier)));
+      declaredCarrierMatches(source[runtimeSourceIndexes[index]!]!, carrier)));
+}
+
+// A declared callable parameter whose lifetime is still a placeholder takes the concrete lifetime of the value passed.
+function declaredCarrierMatches(source: TargetTypeRef, declared: TargetTypeRef): boolean {
+  return rustTargetTypeRefEquals(source, rustCallableTargetForSourceLifetime(source, declared));
 }

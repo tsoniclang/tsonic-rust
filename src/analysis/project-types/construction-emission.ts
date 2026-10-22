@@ -28,6 +28,9 @@ export function analyzeRustConstructionEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
     if (program.records.classDeclaration.get(definition.declaration) === undefined) continue;
+    // An abstract class is never constructed itself; its layers are prepared within each concrete subclass, and the
+    // emission contexts request no constructor layer for it.
+    if (program.source.ast.hasModifierKind(definition.declaration, "abstract")) continue;
     const plan = program.projectConstructions.forDefinition(definition);
     if (plan === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its complete construction readiness plan.", definition.declaration);
     const rejected = [...plan.issues, ...plan.emission.issues];
@@ -79,7 +82,10 @@ export function analyzeRustConstructionEmission(input: {
     }
     const preparations = new Map<Node, RustConstructionPreparationSelection>();
     const retainedReferences = new Set<Node>();
-    for (const point of plan.points) {
+    // An abstract class is never constructed on its own: its constructor runs only as a layer of a concrete
+    // subclass's construction, which prepares those points with its own physical layer contexts.
+    const constructible = !program.source.ast.hasModifierKind(definition.declaration, "abstract");
+    for (const point of constructible ? plan.points : []) {
       const selected = plan.emission.preparationFor(point.node);
       if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted construction point requires its selected preparation.", point.node);
       const physical = contexts.get(selected.layer);
@@ -104,6 +110,9 @@ export function analyzeRustConstructionEmission(input: {
       earlyReturnLayers: new Set(plan.layers.filter(layer => plan.layerHasEarlyReturn(layer.definition)).map(layer => layer.definition)),
       completingLayers: new Set(plan.layers.filter(layer => plan.layerCompletes(layer.definition)).map(layer => layer.definition)),
       unpublishedMutations: new Set(declarations.filter(declaration => plan.mutatesUnpublishedField(declaration))),
+      unpublishedAccesses: new Set(declarations.filter(declaration => plan.accessesUnpublishedField(declaration))),
+      unobservedInitializers: new Set(plan.fields.filter(field => field.initializer !== undefined && !field.externallyInitialized &&
+        !plan.observesInitialValue(field.declaration)).map(field => field.declaration)),
       physicalDeclarations: new Map(declarations.map(declaration => [declaration, program.objectRepresentations.receiverCaptures.storageDeclaration(declaration)])),
       retainedFieldIdentities: new Set(plan.fields.filter(field => program.frozenDataWrites.capturesFieldIdentity(field.declaration)).map(field => field.declaration)),
       retainedReferenceIdentities: retainedReferences,

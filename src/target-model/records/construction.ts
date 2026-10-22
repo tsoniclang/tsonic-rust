@@ -80,6 +80,9 @@ export interface RustAdmittedConstruction {
   readonly earlyReturnLayers: ReadonlySet<RustProjectTypeDefinition>;
   readonly completingLayers: ReadonlySet<RustProjectTypeDefinition>;
   readonly unpublishedMutations: ReadonlySet<Node>;
+  readonly unpublishedAccesses: ReadonlySet<Node>;
+  /** Fields whose initializer value is always overwritten before it can be observed (evaluated for its effects). */
+  readonly unobservedInitializers: ReadonlySet<Node>;
   readonly physicalDeclarations: ReadonlyMap<Node, Node>;
   readonly retainedFieldIdentities: ReadonlySet<Node>;
   readonly retainedReferenceIdentities: ReadonlySet<Node>;

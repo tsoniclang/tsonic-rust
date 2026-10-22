@@ -11,7 +11,6 @@ const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
 import type { Node } from "@tsonic/tsts";
 import type { RustGeneratorProtocol } from "${join(root, "dist/target-model/types/index.js")}";
-import type { RustSourceParameterAbi } from "${join(root, "dist/policy/ownership/source-callable-abi.js")}";
 import type { RustSourceParameterAbiFact, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "${join(root, "dist/target-model/records/callables-and-resources.js")}";
 const builder = createRustProgramRecordBuilder();
 declare const subject: Node;
@@ -19,7 +18,7 @@ declare const parameter: Node;
 declare const protocol: RustGeneratorProtocol;
 declare const storage: RustSuspendedCallableStorage;
 declare const receiver: RustSuspendedOwnedReceiver;
-declare const selectedAbi: RustSourceParameterAbi;
+declare const selectedAbi: RustSourceParameterAbiFact;
 declare const arbitraryFact: RustSourceParameterAbiFact;
 const retention = { capturedParameters: [parameter], storage };
 `;

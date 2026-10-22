@@ -22,6 +22,10 @@ export interface RustConstructionPointQueries {
   layerCompletes(definition: RustProjectTypeDefinition): boolean;
   layerHasEarlyReturn(definition: RustProjectTypeDefinition): boolean;
   mutatesUnpublishedField(declaration: Node): boolean;
+  /** The constructor reads or writes the field through `this` before the receiver is published. */
+  accessesUnpublishedField(declaration: Node): boolean;
+  /** A field's initial value (initializer or absence default) can be read, captured, published or completed. */
+  observesInitialValue(declaration: Node): boolean;
   pointFor(node: Node): RustConstructionPoint | undefined;
   expressionsWithin(node: Node): readonly RustConstructionExpression[];
   returnLayerFor(node: Node): RustProjectTypeDefinition | undefined;
@@ -51,16 +55,45 @@ export interface RustConstructionReadinessInput {
   mayThrow(node: Node): boolean;
 }
 
-export function analyzeRustConstructionReadiness(input: RustConstructionReadinessInput): RustConstructionPointQueries & {
+type RustConstructionReadiness = RustConstructionPointQueries & {
   readonly issues: readonly RustConstructionIssue[];
   readonly publishesReceiver: boolean;
   readonly mutatesPublishedFields: boolean;
   readonly deferredCaptureFields: readonly Node[];
   readonly publishedFieldWrites: readonly Node[];
-} {
+};
+
+/**
+ * Two passes. The first leaves every field initial value (absence default or initializer; an initializer is still
+ * evaluated in order) unapplied and records where it could be observed: a read, a capture, receiver publication or a
+ * completing path before any write. The second is the readiness analysis with only the observed absence defaults
+ * applied, so a field the constructor always writes first is an ordinary deferred initialization (its first write is
+ * not a mutation), and an initializer that is always overwritten is known to be unobserved.
+ */
+export function analyzeRustConstructionReadiness(input: RustConstructionReadinessInput): RustConstructionReadiness {
+  const observed = new Set<Node>();
+  analyzeRustConstructionReadinessPass(input, new Set(), observed);
+  return analyzeRustConstructionReadinessPass(input, observed, undefined);
+}
+
+function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessInput, observedInitialValues: ReadonlySet<Node>,
+  observing: Set<Node> | undefined): RustConstructionReadiness {
+  const absenceDeclarations = new Set(input.fields.filter(field => field.absenceDefault).map(field => field.declaration));
+  const initialValueDeclarations = new Set(input.fields.filter(field => field.absenceDefault ||
+    field.initializer !== undefined && !field.externallyInitialized).map(field => field.declaration));
+  // While observing, a field whose initial value is needed before any write takes that value at this point.
+  const observe = (state: ConstructionState, selected: Iterable<Node>): ConstructionState => {
+    if (observing === undefined) return state;
+    const missing = [...selected].filter(declaration => initialValueDeclarations.has(declaration) && !state.initialized.has(declaration));
+    if (missing.length === 0) return state;
+    for (const declaration of missing) observing.add(declaration);
+    return Object.freeze({ ...state, initialized: new Set([...state.initialized, ...missing]),
+      possiblyInitialized: new Set([...state.possiblyInitialized, ...missing]) });
+  };
   const deferredCaptureFields = new Set<Node>();
   const publishedFieldWrites = new Set<Node>();
   const unpublishedFieldWrites = new Set<Node>();
+  const unpublishedFieldAccesses = new Set<Node>();
   const points = new Map<Node, RustConstructionPoint>();
   const expressions = new Map<Node, readonly RustConstructionExpression[]>();
   const issues: RustConstructionIssue[] = [];
@@ -135,12 +168,15 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
       possiblyInitializedFields: Object.freeze([...state.possiblyInitialized]),
       published: state.published, publishBefore, publishAfter, publishMissingElse: false }));
   };
-  const enter = (node: Node, state: ConstructionState, roots: readonly Node[]): ConstructionState => {
+  const enter = (node: Node, incoming: ConstructionState, roots: readonly Node[]): ConstructionState => {
+    let state = observe(incoming, roots.flatMap(root => selectedExpressions(root).flatMap(capture =>
+      capture.kind === "capture" && capture.declaration !== undefined ? [capture.declaration] : [])));
+    const requiresReceiver = roots.some(root => selectedExpressions(root).some(expression => expression.kind === "receiver"));
+    if (!state.published && requiresReceiver) state = observe(state, initialValueDeclarations);
     for (const root of roots) for (const capture of selectedExpressions(root)) {
       if (capture.kind === "capture" && capture.declaration !== undefined && !state.initialized.has(capture.declaration))
         deferredCaptureFields.add(capture.declaration);
     }
-    const requiresReceiver = roots.some(root => selectedExpressions(root).some(expression => expression.kind === "receiver"));
     let selected = state;
     if (!state.published && requiresReceiver) {
       if (ready(state)) {
@@ -198,8 +234,9 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     if ((input.ast.is.IsPropertyAccessExpression(node) || input.ast.is.IsElementAccessExpression(node)) && receiverIsThis(node)) {
       const declaration = selectedField(node);
       if (declaration !== undefined) {
-        record(node, state);
         const field = input.selectedField(node);
+        if (field !== undefined && field.accessMode !== "write") state = observe(state, [declaration]);
+        record(node, state);
         if (field !== undefined && field.accessMode !== "write" && !state.initialized.has(declaration))
           issue(node, "A native constructor field read has no dominating exact initialization.");
         if (field !== undefined && field.accessMode !== "read" && state.published) {
@@ -207,6 +244,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         }
         if (field !== undefined && field.accessMode !== "read" && !state.published &&
           state.possiblyInitialized.has(declaration)) unpublishedFieldWrites.add(declaration);
+        if (field !== undefined && !state.published) unpublishedFieldAccesses.add(declaration);
         return state;
       }
     }
@@ -237,7 +275,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     const published = normal.some(branch => branch.flow.normal!.published);
     if (published && normal.some(branch => !branch.flow.normal!.published)) {
       for (const branch of normal) {
-        const state = branch.flow.normal!;
+        const state = observe(branch.flow.normal!, initialValueDeclarations);
         if (state.published) continue;
         if (!ready(state)) {
           issue(node, "Native receiver publication must have one definitely initialized storage owner on every continuing branch.");
@@ -405,8 +443,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     }
     return fallthrough(after);
   };
-  const absenceFields = new Set(input.fields.filter(field => field.absenceDefault).map(field => field.declaration));
-  let state: ConstructionState = Object.freeze({ initialized: absenceFields, possiblyInitialized: absenceFields, published: false });
+  const appliedAbsence = new Set([...absenceDeclarations].filter(declaration => observedInitialValues.has(declaration)));
+  let state: ConstructionState = Object.freeze({ initialized: appliedAbsence, possiblyInitialized: appliedAbsence, published: false });
   let completesNormally = true;
   for (const layer of input.layers) {
     currentLayer = layer.definition;
@@ -416,19 +454,21 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         state = enter(field.initializer, state, [field.initializer]);
         state = expression(field.initializer, state, 0);
       } else record(field.declaration, state);
-      if (field.initializer !== undefined || field.absenceDefault || field.externallyInitialized)
+      if (field.initializer !== undefined && observing === undefined || field.absenceDefault && appliedAbsence.has(field.declaration) ||
+        field.externallyInitialized)
         state = Object.freeze({ ...state, initialized: new Set([...state.initialized, field.declaration]),
           possiblyInitialized: new Set([...state.possiblyInitialized, field.declaration]) });
     }
     const flow = sequence(layer.statements, state, 0);
     if (earlyReturns !== previousReturns) layerEarlyReturn.add(layer.definition);
-    const continuing = [flow.normal, ...flow.returned].filter((result): result is ConstructionState => result !== undefined);
+    const last = layer === input.layers[input.layers.length - 1];
+    const required = last ? input.fields : layer.fields;
+    const continuing = [flow.normal, ...flow.returned].filter((result): result is ConstructionState => result !== undefined)
+      .map(result => observe(result, required.map(field => field.declaration)));
     layerCompletion.set(layer.definition, continuing.length !== 0);
     completesNormally = continuing.length !== 0;
     if (continuing.length === 0) break;
     if (continuing.length !== 0) state = intersection(continuing);
-    const last = layer === input.layers[input.layers.length - 1];
-    const required = last ? input.fields : layer.fields;
     if (continuing.some(result => required.some(field => !result.initialized.has(field.declaration))))
       issue(layer.constructor ?? layer.definition.declaration, "A successful native constructor path leaves required physical storage uninitialized.");
   }
@@ -443,6 +483,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     layerCompletes: (definition: RustProjectTypeDefinition) => layerCompletion.get(definition) === true,
     layerHasEarlyReturn: (definition: RustProjectTypeDefinition) => layerEarlyReturn.has(definition),
     mutatesUnpublishedField: (declaration: Node) => unpublishedFieldWrites.has(declaration),
+    accessesUnpublishedField: (declaration: Node) => unpublishedFieldAccesses.has(declaration),
+    observesInitialValue: (declaration: Node) => observedInitialValues.has(declaration),
     expressions: Object.freeze([...indexedExpressions.values()]),
     pointFor: (node: Node) => points.get(node),
     expressionsWithin: (node: Node) => expressions.get(node) ?? emptyExpressions,

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { Node_Operand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLiteralEmissionProducer } from "../program/records/literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -15,6 +15,34 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: ["target.capability=rust.backend.literal-carrier"] });
   };
+  // A float literal prints without suffix where its generated position already fixes the float type: a provider
+  // operation argument, the other side of a binary operation with a non-literal operand, an annotated initializer,
+  // a return value or a source-call argument. Any other position keeps the suffix.
+  const providerArguments = new Set<Node>();
+  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences)
+    for (const { input, slot } of occurrence.inputs) if (input.source.kind === "argument") providerArguments.add(slot.node);
+  const numericLiteral = (node: Node | undefined): boolean => node !== undefined && (ast.is.IsNumericLiteral(node) ||
+    ast.is.IsBigIntLiteral(node) || ast.is.IsPrefixUnaryExpression(node) && numericLiteral(Node_Operand(ast, node)));
+  const typedPosition = (node: Node): boolean => {
+    let current = node;
+    let parent = ast.parent(node);
+    while (parent !== undefined && (ast.is.IsParenthesizedExpression(parent) || ast.is.IsPrefixUnaryExpression(parent))) {
+      current = parent;
+      parent = ast.parent(parent);
+    }
+    if (providerArguments.has(current)) return true;
+    if (parent === undefined) return false;
+    if (ast.is.IsBinaryExpression(parent)) {
+      const left = BinaryExpression_Left(ast, parent);
+      const right = BinaryExpression_Right(ast, parent);
+      const other = current === left ? right : current === right ? left : undefined;
+      return other !== undefined && !numericLiteral(other);
+    }
+    if (ast.is.IsVariableDeclaration(parent)) return Node_Initializer(ast, parent) === current && Node_Type(ast, parent) !== undefined;
+    if (ast.is.IsReturnStatement(parent)) return true;
+    return ast.is.IsCallExpression(parent) && ast.arguments(parent).includes(current) &&
+      program.records.targetOperation.get(parent)?.kind === "source-call";
+  };
   const request = (node: Node | undefined, carrier: TargetTypeRef | undefined): void => {
     if (node === undefined || !ast.is.IsNumericLiteral(node) && !ast.is.IsBigIntLiteral(node)) return;
     if (carrier === undefined) return;
@@ -26,7 +54,8 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
       if (numeric.kind === "authored") {
         const text = numeric.token.coefficient === 0n ? "0.0" : numeric.token.decimalText;
         const digits = text.includes(".") || text.includes("e") ? text : `${text}.0`;
-        producer.publish(node, carrier, { kind: "float", text: `${digits}_${carrier.name === "float32" ? "f32" : "f64"}`,
+        producer.publish(node, carrier, { kind: "float",
+          text: typedPosition(node) ? digits : `${digits}_${carrier.name === "float32" ? "f32" : "f64"}`,
           negative: numeric.token.negative, cast: undefined });
       } else {
         if (!Number.isFinite(numeric.value)) { refuse(node, "Numeric literal emission requires finite checked floating-point evidence.", true); return; }

@@ -594,7 +594,14 @@ function collectFallibilityFacts(
           const generic = nativeInput === undefined &&
             rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes)) !== undefined;
           const invocation = generic ? genericInvocation(node) : undefined;
-          if (nativeInput === undefined && (nativeCallable || runtimeCallable || invocation !== undefined || declaration !== undefined)) {
+          // A body-less project contract member with no implementation in the program has no implementation that can
+          // throw; its dispatch still needs its (infallible) invocation effects.
+          const selectedContract = asSourceNode(walk.context.records.selectedCall.get(node)?.sourceDeclaration, walk.context.ast);
+          const unimplementedContract = declaration === undefined && operation.target.form === "method" && selectedContract !== undefined &&
+            selectedDeclarationIsProjectSource(walk, selectedContract) && ast.body(selectedContract) === undefined &&
+            !projectImplementations.has(selectedContract);
+          if (nativeInput === undefined && (nativeCallable || runtimeCallable || invocation !== undefined || declaration !== undefined ||
+            unimplementedContract)) {
             const isAsync = hasCompletion(operation.resultCarrier);
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => ({

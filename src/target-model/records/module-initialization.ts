@@ -7,8 +7,18 @@ export type RustModuleInitializationRequirement =
   | { readonly kind: "not-required" }
   | { readonly kind: "unresolved"; readonly node: Node; readonly reason: string };
 
+/** A top-level statement whose kind the Rust target cannot lower fails closed before module initialization is selected. */
+export interface RustUnsupportedTopLevelStatementIssue {
+  readonly code: "RUST_UNSUPPORTED_AST";
+  readonly node: Node;
+  readonly message: string;
+  readonly evidence: readonly string[];
+}
+
+export type RustModuleInitializationIssue = SourceBinaryEntryIssue | RustUnsupportedTopLevelStatementIssue;
+
 export interface RustModuleInitializationPlan {
-  readonly issues: readonly SourceBinaryEntryIssue[];
+  readonly issues: readonly RustModuleInitializationIssue[];
   requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement;
   minimumFoundation(): RustFoundation;
   hasStateIndependentCycle(sourceFile: SourceFile): boolean;

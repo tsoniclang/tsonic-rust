@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { prepareRustComputedMemberEvaluation } from "../../../../dist/backend/planner/expressions/computed-members.js";
+import { admitRustComputedMembers } from "../../../../dist/analysis/operations/computed-members.js";
 
 
 for (const [form, source] of [
@@ -33,17 +34,14 @@ ${source}
     assert.equal(original !== undefined, true, "analysis owns the evaluation evidence");
     const changed = mutation === "missing" ? undefined
       : { ...original, [mutation]: selected };
-    const context = {
-      input: { program: { ...program, records: createRustRecordFixture({
-computedMember: { get: (node) => node === selected
-    ? changed : program.records.computedMember.get(node) }}, program.records) } },
-      sourceFile: ast.getSourceFile(selected), diagnostics: [],
-    };
-    assert.equal(prepareRustComputedMemberEvaluation(selected, context) === undefined, true,
-      "no source effect can be silently discarded");
-    assert.equal(context.diagnostics.length, 1);
-    assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-    assert.equal(context.diagnostics[0].evidence.includes(
+    // The evaluation evidence is admitted where it is sealed (admitRustComputedMembers); the planner only reads it.
+    const issues = admitRustComputedMembers({ ...program, records: createRustRecordFixture({
+      computedMember: { get: (node) => node === selected ? changed : program.records.computedMember.get(node) } },
+    program.records) }, [selected]);
+    assert.equal(issues.length, 1, "no source effect can be silently discarded");
+    assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT");
+    assert.equal(issues[0].sourceNode === selected, true);
+    assert.equal(issues[0].evidence.includes(
       "target.capability=rust.backend.computed-member-evaluation"), true);
   });
 }

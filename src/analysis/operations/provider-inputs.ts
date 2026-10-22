@@ -4,6 +4,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProviderInputProducer } from "../program/records/provider-inputs.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-queries.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
@@ -39,9 +40,11 @@ export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "re
       const present = chain?.fact.guard === slot.node ? chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier : undefined;
       const carriers = present !== undefined ? [present] : contexts.length !== 0 ? contexts.map(operand => operand.carrier) : [raw];
       // A physical operand context carrier (a closure's physical callable, for example) need not equal the logical
-      // input carrier; the input is then checked through the operand's own logical carrier, as the planner reads it.
+      // input carrier; the input is then checked through the operand's own logical carrier, as the planner reads it. A
+      // placeholder callable lifetime takes the value's lifetime.
       const logicalMatches = present === undefined &&
-        rustFinalizedCarrierTransitionMatches(raw, rustValueCarrierTransitionTarget(program.records, slot.node, raw), input.sourceCarrier);
+        rustFinalizedCarrierTransitionMatches(raw, rustValueCarrierTransitionTarget(program.records, slot.node, raw),
+          rustCallableTargetForSourceLifetime(raw, input.sourceCarrier));
       for (const carrier of carriers) {
         const converted = rustValueCarrierTransitionTarget(program.records, slot.node, carrier);
         if (!rustFinalizedCarrierTransitionMatches(carrier, converted, input.sourceCarrier) && !logicalMatches) issues.push({

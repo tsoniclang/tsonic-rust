@@ -34,7 +34,8 @@ export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, 
         if (inventory === undefined) return reject("Program-error value admission has no exact sealed transport variant inventory.");
         active.add(boundary.componentId);
         const arms: { readonly name: string; readonly payload: RustClosedErrorPayloadEmission }[] = [
-          { name: "Runtime", payload: { kind: "error" } }, { name: "SourceCreated", payload: { kind: "error" } },
+          Object.freeze({ name: "Runtime", payload: Object.freeze({ kind: "error" }) }),
+          Object.freeze({ name: "SourceCreated", payload: Object.freeze({ kind: "error" }) }),
         ];
         for (const variant of inventory.variants) {
           if (++reservations > 65_536) { active.delete(boundary.componentId); return reject("Program-error value admission exceeds its bounded acyclic component graph."); }
@@ -57,7 +58,7 @@ export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, 
           }
           arms.push(Object.freeze({ name: variant.name, payload: Object.freeze(payload) }));
         }
-        arms.push({ name: "Suppressed", payload: { kind: "suppressed" } });
+        arms.push(Object.freeze({ name: "Suppressed", payload: Object.freeze({ kind: "suppressed" }) }));
         active.delete(boundary.componentId);
         return Object.freeze({ kind: "domain", path: boundary.errorTypePath, arms: Object.freeze(arms) });
       };
@@ -67,7 +68,7 @@ export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, 
         : Object.freeze({ kind: "selected", ownerPath, value });
       producer.closedValue(component, boundary.errorTypeIdentity, target, selection);
       if (boundary.errorTypeIdentity !== rustRuntimeErrorTypeIdentity) producer.closedValue(component, rustRuntimeErrorTypeIdentity, target,
-        { kind: "selected", ownerPath, value: { kind: "runtime" } });
+        Object.freeze({ kind: "selected", ownerPath, value: Object.freeze({ kind: "runtime" }) }));
     }
   }
   const required = (node: Node, target: TargetTypeRef, boundary: RustSourcePackageErrorBoundary | undefined): void => {

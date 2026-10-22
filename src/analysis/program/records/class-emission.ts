@@ -13,6 +13,7 @@ import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js
 import type { RustClassValueCallable, RustClassValueForwarderEmission, RustClassValueForwarderRecords } from "../../../target-model/records/class-value-callables.js";
 import type { RustClassImplementationContext, RustClassImplementationGenerics, RustClassConstructorViewEmission, RustClassImplementationRecords } from "../../../target-model/records/class-implementations.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { rustProjectViewMatches } from "../../../policy/types/objects/project-view-bindings.js";
 import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "../../../target-model/records/project-structural-views.js";
 import type { RustStructuralViewCallableEmission } from "../../../target-model/records/class-implementations.js";
 import type { RustShapeGenericRequirementContract } from "../../../target-model/records/generic-requirements.js";
@@ -62,7 +63,13 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
   const family = createRustRecordFamily<RustNativeClassEmission>({ id: "tsonic.rust.nativeClass", equals: (left, right) => left === right }, assertOpen);
   return Object.freeze({ records: family.reader,
     implementationRecords: Object.freeze({
-      structuralView: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => instanceConversions.get(closedMetadataKey([source, target])) }),
+      // A use converts one instance of an emitted view; the emitted (generalized) view that binds to it is its conversion.
+      structuralView: Object.freeze({ get: (source: TargetTypeRef, target: TargetTypeRef) => {
+        const exact = instanceConversions.get(closedMetadataKey([source, target]));
+        if (exact !== undefined) return exact;
+        const covering = [...instanceConversions.values()].filter(view => rustProjectViewMatches(view, source, target));
+        return covering.length === 1 ? covering[0] : undefined;
+      } }),
       structuralViewImplementations: Object.freeze({ get: (declaration: Node, fileName: string) => instanceViews.get(declaration)?.get(fileName) }),
       structuralViewPolymorphic: Object.freeze({ get: (declaration: Node) => instancePolymorphic.get(declaration) }),
       structuralViewCallable: Object.freeze({ get: (callable: RustClassValueCallable) => instanceCallables.get(callable) }),
@@ -168,10 +175,14 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
       if (environments.has(subject.declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native class environment is written exactly once.", subject.declaration);
       let declarations = environmentsByFile.get(subject.fileName);
       if (declarations === undefined) { declarations = new Map(); environmentsByFile.set(subject.fileName, declarations); }
-      if (declarations.has(subject.targetPath)) failTargetAnalysisInvariant("tsonic-rust", "A native class environment requires one exact source carrier identity.", subject.declaration);
+      // Readers look the environment up by its carrier (classEnvironmentType), so it is keyed by the carrier identity,
+      // which differs from the target path for a class nested in a callable.
+      const identity = rustSourceTypeCarrierValue(value.environment.carrier)?.typeName;
+      if (identity === undefined || declarations.has(identity))
+        failTargetAnalysisInvariant("tsonic-rust", "A native class environment requires one exact source carrier identity.", subject.declaration);
       const selected = Object.freeze(value);
       environments.set(subject.declaration, selected);
-      declarations.set(subject.targetPath, selected);
+      declarations.set(identity, selected);
     },
     visibilityRecords: Object.freeze({ nativeMemberVisibility: Object.freeze({ get: (subject: Node, publiclyReachable: boolean) => {
       const selected = visibility.get(subject);

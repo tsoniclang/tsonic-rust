@@ -1,4 +1,5 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -65,7 +66,8 @@ export function read(value: int32): int32 { return (effect(), value); }
 targetOperation: { get: (node) => node === subject
     ? operation : program.records.targetOperation.get(node) },
 selectedOperation: { get: (node) => node === subject ? selection : program.records.selectedOperation.get(node) }}, program.records);
-    const context = { input: { program: { ...program, records } }, diagnostics: [], sourceFile: ast.getSourceFile(subject) };
+    // The planner context of the subject's source file, built as the planner builds it, over the altered records.
+    const context = rustSourceFilePlanContext({ ...program, records }, subject);
     assert.equal(planBinaryExpression(subject, context) === undefined, true, label);
     assert.ok(context.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"), label);
   }

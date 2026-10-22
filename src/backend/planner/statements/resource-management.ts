@@ -24,6 +24,9 @@ export function directResourceDeclarations(
   statement: Node,
   context: RustPlanContext,
 ): readonly Node[] {
+  // A for statement also owns a resource scope for its initializer; its own planner opens it around the loop, so only
+  // a using variable statement scopes the rest of its statement sequence.
+  if (!context.input.program.source.ast.is.IsVariableStatement(statement)) return [];
   return context.input.program.records.resourceScope.get(statement)?.declarations ?? [];
 }
 

@@ -88,7 +88,9 @@ for (const surface of ["native", "js"]) {
         assert.equal(/clone\(|Callable|RefCell|Rc<|Box</u.test(generated), false, "identity observation stays allocation/copy free");
       } else if (name === "owned") {
         assert.match(generated, /fn read\(input: String\) -> String/u);
-        assert.match(generated, /fn mutate\(mut input: String\) -> String/u);
+        // The parameter's passed value is overwritten before any read (rustc unused_assignments), so it carries the
+        // checked-evaluation-order expectation.
+        assert.match(generated, /fn mutate\(\s*#\[expect\(unused_assignments, reason = "checked source evaluation order"\)\] mut input: String,?\s*\) -> String/u);
         assert.doesNotMatch(generated, /fn (?:read|mutate)<'input>/u);
       } else {
         assert.match(generated, /fn capturedRead\(input: String,/u);

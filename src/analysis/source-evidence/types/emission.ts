@@ -64,6 +64,18 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
     ...(operand.destination === undefined ? [] : [operand.destination]));
   for (const definition of program.projectTypes.definitions) pending.push(program.projectTypes.openCarrier(definition));
+  // An inherited constructor layer renders the instantiated parameters of its implicit constructor.
+  for (const definition of program.projectTypes.definitions) {
+    if (definition.kind !== "class") continue;
+    const root = program.projectTypes.openCarrier(definition);
+    for (const layer of program.projectConstructions.forDefinition(definition)?.layers ?? []) {
+      if (layer.constructor !== undefined) continue;
+      const relation = program.projectTypes.relationship(root, layer.definition);
+      if (relation.kind !== "related") continue;
+      for (const parameter of program.records.implicitConstructorParameters.get(layer.signature, relation.targetType) ?? [])
+        pending.push(parameter.carrier);
+    }
+  }
   for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
     [field.carrier, ...(field.methodStorageCarrier === undefined ? [] : [field.methodStorageCarrier])]));
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
@@ -81,6 +93,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const callable = program.records.projectCallableSignature.get(node);
     if (callable !== undefined) pending.push(callable.returnCarrier,
       ...(callable.errorCarrier === undefined ? [] : [callable.errorCarrier]));
+    // A retained callable renders an outlives bound for each retained carrier in its source and Promise-body items.
+    const retained = program.records.nativeGenerics.get(node)?.retention;
+    if (retained !== undefined) pending.push(...retained.source, ...retained.body);
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     const contract = program.records.declarationRequirements.get(node);

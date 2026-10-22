@@ -41,10 +41,16 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     const region = { ...ownedBody, statements: [
       ...lowered.body.statements,
       ...(terminates ? [] : [{ kind: "tail" as const, expr: errorType === undefined ? normal : call("Ok", normal) }])] };
+    // A region that is exactly its exit value (a lone tail, or one break to its own label with a value) is that
+    // value: `'l: { break 'l v; }` is clippy::diverging_sub_expression (syntax only).
+    const [only] = region.statements;
+    const direct = scope.asynchronous || region.statements.length !== 1 ? undefined
+      : only?.kind === "tail" && !lowered.breaksToLabel ? only.expr
+      : only?.kind === "expr" && only.expr.kind === "break-expression" && only.expr.label === name ? only.expr.expr : undefined;
     return { kind: "let", name, mutable: false, type: resultType(type, errorType),
-      init: scope.asynchronous
+      init: direct ?? (scope.asynchronous
         ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true) } }
-        : { kind: "block", ...(lowered.breaksToLabel ? { label: name } : {}), body: region } };
+        : { kind: "block", ...(lowered.breaksToLabel ? { label: name } : {}), body: region }) };
   };
   const statements: RustStmt[] = [];
   if (scope.kind === "try-scope") {
@@ -56,8 +62,9 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     }
     let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
-      // An unused authored catch binding is expected to warn; the wildcard `_` of a binding-less catch never does.
-      ...(caught?.bindingUsed === false && caught.binding !== "_" ? { attrs: [rustLintAttributes.unusedVariables] } : {}),
+      // A catch without a variable matches `Err(_)`, and an authored `_name` binding is exempt: neither triggers
+      // unused_variables.
+      ...(caught?.bindingUsed === false && !caught.binding.startsWith("_") ? { attrs: [rustLintAttributes.unusedVariables] } : {}),
       type: resultType(completionType, errorType),
       init: caught === undefined ? path(scope.bodyName) : { kind: "match", expression: path(scope.bodyName), arms: [
         { pattern: variant("Ok", binding("completion")), expression: caught.errorType === undefined

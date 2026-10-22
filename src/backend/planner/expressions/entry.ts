@@ -162,7 +162,9 @@ export function planRustProjectUpcast(node: Node, expression: RustExpr, fact: Ru
   if (target?.kind !== "named") failRustPlannerInvariant("An admitted upcast requires its exact native target type.", node);
   const name = allocateRustSyntheticName(names, "upcast_value");
   const value: RustExpr = { kind: "path", path: name };
-  return rustValueBlock([{ name, value: expression }], { kind: "struct-literal", path: target.path,
+  // A borrowed source stays usable after the upcast: it is bound by reference and its fields are cloned.
+  return rustValueBlock([{ name, value: ownership === "owned" ? expression : { kind: "reference", expr: expression } }], {
+    kind: "struct-literal", path: target.path,
     fields: [rustProjectObjectIdentityField, rustProjectObjectDispatchField].map(field => {
       if (field === rustProjectObjectIdentityField && selected.structural) return { name: field, value: cloneRustExpression({ kind: "method-call",
         receiver: { kind: "field", receiver: value, name: rustProjectObjectDispatchField }, method: "object_identity", args: [] }) };
