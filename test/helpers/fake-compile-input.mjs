@@ -104,6 +104,10 @@ export function fakeAstReader(sourceFiles = []) {
       IsConstructorTypeNode: () => false,
       IsTemplateLiteralTypeNode: () => false,
       IsImportTypeNode: () => false,
+      IsStringLiteral: () => false,
+      IsNoSubstitutionTemplateLiteral: () => false,
+      IsNumericLiteral: () => false,
+      IsBigIntLiteral: () => false,
     },
     statements: (sourceFile) => sourceFile.statements ?? [],
     members: () => [],
@@ -224,6 +228,9 @@ export function fakeCompileInput({
       forFile: semanticsForFile,
       forNode: (node) => semanticsForFile(ast.getSourceFile(node)),
       selectValueTypeRefinement: () => ({ kind: "not-project-reference" }),
+      // A program without enum declarations has no enum constants and no enum admission issues.
+      enumConstants: Object.freeze({ entries: Object.freeze([]), issues: Object.freeze([]),
+        get: () => undefined, integerWidth: () => undefined }),
     },
     documents: {
       all: [],

@@ -167,7 +167,8 @@ test("bin output without an exported entry main fails closed", () => {
   }));
 
   assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
+  // The entry module is resolved where initialization is analyzed (analysis/errors/initialization.ts).
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_PROJECT_ENTRY_SOURCE_MISSING"));
 });
 
 test("core, alloc, and std foundations emit exact crate roots and Cargo features", () => {
