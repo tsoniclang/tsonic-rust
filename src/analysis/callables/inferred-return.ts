@@ -17,7 +17,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { checkedPropertySelectionInput } from "../operations/member-access.js";
 import { selectRustCheckedPropertyAccess } from "../operations/selected-members.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../source-evidence/types/resolution/branch-unions.js";
 import { finalizeRustCallableSignature } from "./signature-query.js";

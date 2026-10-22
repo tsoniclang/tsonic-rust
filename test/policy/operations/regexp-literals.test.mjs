@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustRegularExpressionLiteral } from "../../../dist/policy/operations/syntax/regexp-literal.js";
-import { resolveRegExpCreation } from "../../../dist/analysis/expressions/regexp.js";
+import { resolveRegExpCreation } from "../../../dist/analysis/operations/regexp.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 

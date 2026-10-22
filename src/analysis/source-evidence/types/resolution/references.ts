@@ -1,33 +1,33 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/required-records.js";
 
 import { KindExportAssignment, KindFunctionDeclaration, KindBindingElement, KindParameter, KindVariableDeclaration, Node_Expression, Node_Initializer, asSourceNode, sourceDeclarationIsModuleScoped, sourceBindingCapturedBeforeInitialization } from "@tsonic/target-api/source";
 
-import { rustOperationContext } from "../program/walk.js";
-import { applySelectedProjectSourceCall, setCarrierFact } from "../operations/project-calls.js";
+import { rustOperationContext } from "../../../program/walk.js";
+import { applySelectedProjectSourceCall, setCarrierFact } from "../../../operations/project-calls.js";
 
-import { prepareRustDeferredCheckedCall } from "../operations/members/index.js";
+import { prepareRustDeferredCheckedCall } from "../../../operations/members/index.js";
 
-import { recordExportAssignmentFacts } from "../control-flow/statements.js";
-import { resolveExpressionCarrier } from "./carriers.js";
+import { recordExportAssignmentFacts } from "../../../control-flow/statements.js";
+import { resolveExpressionCarrier } from "./expression-carriers.js";
 
-import { resolveRustExactNullishValueCarrier } from "../source-evidence/types/resolution/index.js";
-import { rustPolicyTargetDiagnostic } from "../program/policy-diagnostics.js";
+import { resolveRustExactNullishValueCarrier } from "./index.js";
+import { rustPolicyTargetDiagnostic } from "../../../program/policy-diagnostics.js";
 
-import { resolveRustDeclaredBindingStorage } from "../declarations/binding-storage.js";
-import { tryFlowMarkerCall } from "../operations/flow-markers.js";
+import { resolveRustDeclaredBindingStorage } from "../../../declarations/binding-storage.js";
+import { tryFlowMarkerCall } from "../../../operations/flow-markers.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustFactWalk } from "../../../program/walk.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
-import { rustSourceFunctionValueCarrier } from "../callables/function-values.js";
-import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
+import { rustSourceFunctionValueCarrier } from "../../../callables/function-values.js";
+import { recordCallableValueSignatureForDeclaration } from "../../../callables/signatures.js";
 
-import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
-import { resolveRustModuleBindingValue } from "../program/module-declarations.js";
+import { rustCallableInvocationResult } from "../../../../policy/types/callables/return-contexts.js";
+import { resolveRustModuleBindingValue } from "../../../program/module-declarations.js";
 
-import { recordProjectSourceBinding, selectedDeclarationIsProjectSource } from "../storage/source-bindings.js";
-import { resolveSharedSourceMarkerCarrier } from "../operations/source-markers.js";
-import { applySelectedRuntimeCallableCall } from "../callables/runtime-callables.js";
+import { recordProjectSourceBinding, selectedDeclarationIsProjectSource } from "../../../storage/source-bindings.js";
+import { resolveSharedSourceMarkerCarrier } from "../../../operations/source-markers.js";
+import { applySelectedRuntimeCallableCall } from "../../../callables/runtime-callables.js";
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
   identifier: Node,
@@ -100,7 +100,7 @@ export function resolveIdentifierCarrier(
       const targetName = walk.context.names.functionNameForDeclaration(declaration);
       if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&
         returnCarrier !== undefined && targetName !== undefined) {
-        const closedParameterAbis = parameterAbis as import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
+        const closedParameterAbis = parameterAbis as import("../../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
         const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
         if (callableCarrier === undefined) return undefined;
         requireRustRecord(walk.context.requiredRecords, "sourceCallableValue", identifier, "runtime-function", "resolveIdentifierCarrier");
@@ -168,7 +168,7 @@ export function resolveCallLikeCarrier(
       request: deferred.request,
       prepared: prepared.value,
     });
-    requireRustRecord(walk.context.requiredRecords, "preparedOperationResult", expression, "deferred-call", "analysis/expressions/references.ts");
+    requireRustRecord(walk.context.requiredRecords, "preparedOperationResult", expression, "deferred-call", "analysis/source-evidence/types/resolution/references.ts");
     walk.context.records.preparedOperations.prepare(expression, prepared.value.template, prepared.value.resultCarrier);
     return setCarrierFact(walk, expression, prepared.value.resultCarrier);
   }

@@ -13,7 +13,7 @@ import type { RustNativeObjectField } from "../../target-model/operations/native
 
 import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { setCarrierFact } from "./project-calls.js";
 import { rustRuntimeNativeArrayTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 

@@ -11,7 +11,7 @@ import { rustTargetOperationText } from "../../target-model/operations/text.js";
 import { isRustAssignmentOperator, isRustBinaryOperator } from "../../target-model/syntax/tokens.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { finalizedConversionIsValid } from "../../policy/operations/members/abi/conversions.js";
-import { rustProjectTypeTestMatches } from "../operations/contracts/type-tests.js";
+import { rustProjectTypeTestMatches } from "./contracts/type-tests.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "reachability">,

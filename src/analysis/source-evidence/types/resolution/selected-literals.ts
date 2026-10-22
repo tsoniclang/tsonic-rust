@@ -1,20 +1,20 @@
-import type { RustOperationAnalysisContext } from "../program/operation-context.js";
-import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
+import { requireRustRecord } from "../../../program/records/required-records.js";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 
-import type { RustOperationsProviderOptions } from "../operations/members/model.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { asNode } from "../../policy/identities/selected-source.js";
-import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/conversions/literals.js";
+import type { RustOperationsProviderOptions } from "../../../operations/members/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { asNode } from "../../../../policy/identities/selected-source.js";
+import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../../../policy/conversions/literals.js";
 
-import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
+import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../../target-model/operations/model.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../program/records/target-operation-literals.js";
-import { rustSelectedOperatorOperation } from "../program/records/selected-operation-values.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
-import { rustSelectedTargetOperationEquals } from "../../target-model/records/operation-equality.js";
-import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../../../program/records/target-operation-literals.js";
+import { rustSelectedOperatorOperation } from "../../../program/records/selected-operation-values.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import { rustTargetOperationFactEquals } from "../../../../target-model/records/operation-equality.js";
+import { rustSelectedTargetOperationEquals } from "../../../../target-model/records/operation-equality.js";
+import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 
 export function sourceLiteralIsRepresentableAsPrimitive(
   node: Node,

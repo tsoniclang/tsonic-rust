@@ -3,7 +3,7 @@ import test from "node:test";
 import { planRustScopedStringComparison } from "../../../../dist/backend/planner/expressions/scoped-comparisons.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 
-// Selection is analysis-owned (test/analysis/expressions/native-scoped-string-comparisons.test.mjs); the planner
+// Selection is analysis-owned (test/analysis/operations/native-scoped-string-comparisons.test.mjs); the planner
 // borrows the selected field once and compares its str view without cloning or allocating.
 const node = {};
 const field = {};

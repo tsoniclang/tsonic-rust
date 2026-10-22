@@ -6,7 +6,7 @@ import { recordBindingWrite } from "../ownership/source-writes.js";
 
 import { validateFlowMarkerAgainstMode } from "./flow-markers.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing.js";
 

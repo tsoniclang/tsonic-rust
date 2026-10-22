@@ -19,7 +19,7 @@ import { rustTargetOperationResultCarrier } from "../../target-model/records/ope
 import { appendRustDiagnostic } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../source/extension/literals.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { rustTargetOperationSupportsAssignment } from "../../policy/operations/native-contracts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

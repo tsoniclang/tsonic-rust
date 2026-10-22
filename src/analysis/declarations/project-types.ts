@@ -18,7 +18,7 @@ import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "..
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";

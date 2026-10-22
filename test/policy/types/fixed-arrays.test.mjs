@@ -12,7 +12,7 @@ import {
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
-import { resolveArrayLiteralCarrier } from "../../../dist/analysis/expressions/array-literals.js";
+import { resolveArrayLiteralCarrier } from "../../../dist/analysis/operations/array-literals.js";
 import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/fixed-arrays.js";
 import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
 import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";

@@ -4,7 +4,7 @@ import { rustStructuralMethodStorageCarrier } from "../../policy/types/objects/m
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape } from "../objects/record-shapes.js";
 

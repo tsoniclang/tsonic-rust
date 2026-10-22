@@ -1,38 +1,38 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/required-records.js";
 import { ElementAccessExpression_ArgumentExpression, BinaryExpression_Left, BinaryExpression_Right, BinaryExpression_OperatorToken, Node_Operand, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindDeleteExpression, KindElementAccessExpression, KindEqualsToken, KindIdentifier, KindNewExpression, KindNonNullExpression, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindQuestionQuestionToken, KindSatisfiesExpression, KindSpreadElement, sourceSequenceInputChoice, sourceSequenceInputIsEmpty, KindVoidExpression, KindAwaitExpression, Node_Expression, Node_Type } from "@tsonic/target-api/source";
-import { isRustBigIntCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
+import { isRustBigIntCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustSourcePrimitiveTargetType, rustStructuralObjectCarrierValue } from "../../../../target-model/types/index.js";
+import { rustUnionAlternatives } from "../../../../target-model/types/union-relations.js";
+import { rustSourceValueWrapperContains } from "../../../../policy/ownership/source-value-wrappers.js";
 
-import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
-import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
-import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/conversions/literals.js";
+import { rustPostCheckOperationKind } from "../../../../target-model/operations/model.js";
+import { rustTargetOperationResultCarrier } from "../../../../target-model/records/operations.js";
+import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../../../program/walk.js";
+import { resolveRustTargetTypeRef } from "./source.js";
+import { selectedSourceLiteralIsRepresentable } from "../../../../policy/conversions/literals.js";
 
-import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operators/rules.js";
-import { recordAssignmentWrite } from "../ownership/source-writes.js";
-import { recordSelectedOperationInputs } from "../operations/inputs.js";
-import { resolveBinaryOperandCarriers } from "../operations/operator-inputs.js";
-import { resolveExpressionCarrierUncached } from "./value-resolution.js";
+import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../../../policy/operations/operators/rules.js";
+import { recordAssignmentWrite } from "../../../ownership/source-writes.js";
+import { recordSelectedOperationInputs } from "../../../operations/inputs.js";
+import { resolveBinaryOperandCarriers } from "../../../operations/operator-inputs.js";
+import { resolveExpressionCarrierUncached } from "./expression-values.js";
 
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { recordRustCompoundWrite } from "../operations/members/compound-writes.js";
-import { setCarrierFact } from "../operations/project-calls.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { recordRustCompoundWrite } from "../../../operations/members/compound-writes.js";
+import { setCarrierFact } from "../../../operations/project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { readRustSourceRawAddress } from "../../source/extension/raw-addresses.js";
-import { readRustRawLocation } from "../../source/extension/native-memory.js";
-import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
+import type { RustFactWalk } from "../../../program/walk.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { readRustSourceRawAddress } from "../../../../source/extension/raw-addresses.js";
+import { readRustRawLocation } from "../../../../source/extension/native-memory.js";
+import { selectRustMemoryLayoutObservation } from "../../../../policy/operations/pointers/layout-observations.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
-import { applyFlowReadLane } from "./flow-read.js";
-import { resolveNativeProviderCallableArguments } from "../operations/members/calls/native-callables.js";
-import { selectRustUnionVariantByCheckedType } from "../expected-types/union-variants.js";
-import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
+import { applyFlowReadLane } from "../../../conversions/flow-read.js";
+import { resolveNativeProviderCallableArguments } from "../../../operations/members/calls/native-callables.js";
+import { selectRustUnionVariantByCheckedType } from "../../../expected-types/union-variants.js";
+import { rustNativePropertyNameIssue } from "../../../objects/computed-field-names.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
-import { applyRustOptionalValueCarrier } from "../conversions/contextual-values.js";
+import { applyRustOptionalValueCarrier } from "../../../conversions/contextual-values.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,

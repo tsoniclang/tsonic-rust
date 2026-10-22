@@ -10,8 +10,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { setCarrierFact } from "../operations/project-calls.js";
-import { resolveExpressionCarrier } from "./carriers.js";
+import { setCarrierFact } from "./project-calls.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustTemplateStrings(program: Omit<RustAnalysisProgram, "reachability">,
@@ -123,7 +123,7 @@ export function resolveTemplateExpressionCarrier(
     substitutions.push({ expression: substitution, carrier });
   }
   const resultCarrier = rustStringTargetType();
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "template-string", "analysis/expressions/value-resolution.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "template-string", "analysis/source-evidence/types/resolution/expression-values.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "template-string",
     operationId: "tsonic.rust.syntax.template-string",

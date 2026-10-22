@@ -1,5 +1,5 @@
 import type { RustFactWalk } from "../program/walk.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { rustProgramErrorRuntimeRouteMatches, selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

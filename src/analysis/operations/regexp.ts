@@ -1,5 +1,5 @@
 import { requireRustRecord } from "../program/records/required-records.js";
-import { setCarrierFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "./project-calls.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -15,7 +15,7 @@ export function resolveRegExpCreation(
     return undefined;
   }
   const selected = selectRustRegularExpressionLiteral(pattern, flags);
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, selected.operation.kind, "analysis/expressions/regexp.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, selected.operation.kind, "analysis/operations/regexp.ts");
   walk.context.records.targetOperations.source(expression, selected.operation);
   return setCarrierFact(walk, expression, selected.targetType);
 }

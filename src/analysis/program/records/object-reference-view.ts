@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustObjectReferenceView } from "../../../target-model/records/object-reference-views.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { selectRustObjectReferenceView } from "../../expressions/object-reference-views.js";
+import { selectRustObjectReferenceView } from "../../operations/object-reference-views.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustProjectMemberSelectionEquals } from "../../../target-model/records/operation-equality.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";

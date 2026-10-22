@@ -15,7 +15,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { resolveExpressionCarrier } from "./carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -55,7 +55,7 @@ export function resolveProviderRecordLiteral(
       return rejectProviderRecordLiteral(walk, expression,
         "Opaque provider default construction accepts only an empty object literal.");
     }
-    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "provider-record-literal", "analysis/expressions/provider-records.ts");
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "provider-record-literal", "analysis/objects/provider-records.ts");
     walk.context.records.targetOperations.source(expression, {
       kind: "provider-record-literal", operationId: "tsonic.rust.provider.default",
       resultCarrier, completion: "default", absentFields: [], fields: [],
@@ -205,7 +205,7 @@ export function resolveProviderRecordLiteral(
       absentFields.push(Object.freeze({ targetName: field.targetName, carrier: field.carrier }));
     }
   }
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "provider-record-literal", "analysis/expressions/provider-records.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "provider-record-literal", "analysis/objects/provider-records.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "provider-record-literal",
     operationId: `tsonic.rust.provider-record.${typeRow.providerPackageId}.${typeRow.providerModuleId}.${typeRow.exportId}`,

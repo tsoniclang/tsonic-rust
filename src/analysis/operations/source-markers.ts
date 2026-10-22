@@ -6,9 +6,9 @@ import { setCarrierFact } from "../operations/project-calls.js";
 
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../source/extension/explicit-safety.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
-import { readRustReferenceOperation, resolvedRustReferenceOperationCarrier } from "../expressions/reference-operations.js";
+import { readRustReferenceOperation, resolvedRustReferenceOperationCarrier } from "./reference-operations.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -28,7 +28,7 @@ import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } fr
 import { readRustSourceRawPointerIdentity } from "../../source/extension/raw-pointers.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 
-import { readRustNativeControl, resolveRustNativeControl } from "../expressions/native-controls.js";
+import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 
 export function isSharedSourceMarkerOperation(
   walk: RustFactWalk,
@@ -73,7 +73,7 @@ export function resolveSharedSourceMarkerCarrier(
       appendRustDiagnostic(walk, "RUST_MEMORY_LAYOUT_OBSERVATION_NOT_PROVEN", layout.reason, expression, []);
       return { handled: true };
     }
-    requireRustRecord(walk.context.requiredRecords, "memoryLayoutObservation", expression, "native-layout", "analysis/expressions/references.ts");
+    requireRustRecord(walk.context.requiredRecords, "memoryLayoutObservation", expression, "native-layout", "analysis/source-evidence/types/resolution/references.ts");
     walk.context.records.memoryLayoutObservations.observe(expression, layout.value);
     return { handled: true, carrier: setCarrierFact(walk, expression, rustSourcePrimitiveTargetType("native-uint")) };
   }
@@ -261,7 +261,7 @@ function resolvedNativePointerCarrier(
       break;
     }
   }
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/references.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/source-evidence/types/resolution/references.ts");
   walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }

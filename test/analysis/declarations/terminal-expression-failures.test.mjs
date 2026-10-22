@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveExpressionCarrier } from "../../../dist/analysis/expressions/carriers.js";
+import { resolveExpressionCarrier } from "../../../dist/analysis/source-evidence/types/resolution/expression-carriers.js";
 import { appendRustDiagnostic } from "../../../dist/analysis/program/walk.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 

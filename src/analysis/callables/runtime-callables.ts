@@ -12,7 +12,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { selectRustOptionalCallResult } from "../operations/members/calls/optional-results.js";
 
@@ -261,7 +261,7 @@ export function applySelectedRuntimeCallableCall(
   if (completed === undefined) return undefined;
   recordSelectedSourceCallArguments(walk, arguments_);
   if (selectedOptional !== undefined) {
-    requireRustRecord(walk.context.requiredRecords, "optionalChain", expression, selectedOptional.operationKind, "analysis/expressions/references.ts");
+    requireRustRecord(walk.context.requiredRecords, "optionalChain", expression, selectedOptional.operationKind, "analysis/source-evidence/types/resolution/references.ts");
     walk.context.records.optionalChains.guard(expression, selectedOptional.guard,
       selectedOptional.operationKind, selectedOptional);
   }
@@ -273,7 +273,7 @@ export function applySelectedRuntimeCallableCall(
     target.form,
     finalResultCarrier,
   );
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/expressions/references.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/source-evidence/types/resolution/references.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "source-call",
     operationId: selectedSignature.member.id,

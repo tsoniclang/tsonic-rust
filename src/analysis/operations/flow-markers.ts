@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { flowStateFactKey } from "@tsonic/tsts";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { setCarrierFact } from "./project-calls.js";

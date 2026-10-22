@@ -17,7 +17,7 @@ import { rustRecordCarrierValue } from "../../target-model/types/carriers/record
 import { isRustIntegerCarrier } from "../../target-model/types/index.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { parseSourceIntegerLiteral } from "../../source/extension/literals.js";
 

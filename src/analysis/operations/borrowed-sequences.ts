@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceSequenceInputChoice, sourceSequenceInputIsEmpty } from "@tsonic/target-api/source";
 import type { RustBorrowedSequenceInput } from "../../target-model/records/borrowed-sequences.js";
 import type { RustFactWalk } from "../program/walk.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

@@ -4,7 +4,7 @@ import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-
 import { normalizeSelectedOperationInputCarrier, providerIdentityText, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
 import { providerOperationTemplate } from "../../../policy/operations/members/provider-templates.js";
 import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
-import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
+import { normalizeSelectedLiteralCarrier } from "../../source-evidence/types/resolution/selected-literals.js";
 
 import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
 import { selectRustSourceProfileIndexMembers } from "./selected-members.js";

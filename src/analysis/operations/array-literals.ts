@@ -11,17 +11,17 @@ import { rustArrayLiteralCarrier } from "../../policy/types/collections/array-li
 import { requireRustRecord } from "../program/records/required-records.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { resolveRustTupleElementTargetType } from "../source-evidence/types/resolution/index.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { resolveRustInferredUnion } from "../source-evidence/types/resolution/inferred-unions.js";
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../source-evidence/types/resolution/source-unions.js";
-import { setCarrierFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "./project-calls.js";
 import { type RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { type TargetTypeRef } from "../../target-model/types/model.js";
-import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "../operations/borrowed-sequences.js";
-import { collectRustArrayElementStorageDemands } from "../expressions/array-storage.js";
+import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
+import { collectRustArrayElementStorageDemands } from "../storage/array-storage.js";
 import { selectRustInferredNumericArrayElement } from "../../policy/types/collections/array-elements.js";
 import { selectRustArrayElementStorage } from "../../policy/types/collections/array-storage.js";
 

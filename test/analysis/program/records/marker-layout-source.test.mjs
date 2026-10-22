@@ -11,7 +11,7 @@ import { memoryAbiCapability } from "../../../helpers/memory-abi.mjs";
 import { recordRustInlineModuleCallableUses } from "../../../../dist/analysis/callables/module-values.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mjs";
-import { resolveExpressionCarrier } from "../../../../dist/analysis/expressions/carriers.js";
+import { resolveExpressionCarrier } from "../../../../dist/analysis/source-evidence/types/resolution/expression-carriers.js";
 
 function checkedNodes(program) {
   const nodes = [];

@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import { acceptRustMemberOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, rejectSelectedOperation } from "./result.js";
 import { providerOperationFact } from "../../../policy/operations/members/provider-templates.js";
 import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
-import { sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
+import { sourceLiteralIsRepresentableAsPrimitive } from "../../source-evidence/types/resolution/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/identities/selected-source.js";
 import { providerFormRequiresSourceReceiver } from "../../../policy/operations/members/call-inputs.js";

@@ -9,7 +9,7 @@ import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/so
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { setCarrierFact } from "./project-calls.js";
 
 export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: Node, file: SourceFile) {

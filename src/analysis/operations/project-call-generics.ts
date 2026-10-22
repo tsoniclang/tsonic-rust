@@ -15,7 +15,7 @@ import { resolveParameterAbi } from "../callables/parameter-facts.js";
 import { resolveFunctionExpressionSignature } from "../callables/closures.js";
 import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { recordCallableParameterSignatureFacts } from "../callables/parameter-signature.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

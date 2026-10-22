@@ -4,7 +4,7 @@ import { rustEmptyObjectTargetId, rustEmptyObjectTargetType, rustSourceTypeCarri
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 
@@ -20,9 +20,9 @@ import type { RustFactWalk } from "../program/walk.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { resolveProviderRecordLiteral } from "../expressions/provider-records.js";
+import { resolveProviderRecordLiteral } from "./provider-records.js";
 
-import { resolveRustClosedRecordLiteral } from "../expressions/closed-records.js";
+import { resolveRustClosedRecordLiteral } from "./closed-records.js";
 
 import { rustRecordPropertySourceName } from "./computed-field-names.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
@@ -145,7 +145,7 @@ export function resolveRecordLiteralCarrier(
   }
   if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
     if (properties.length !== 0) return undefined;
-    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "empty-object-literal", "analysis/expressions/records.ts");
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "empty-object-literal", "analysis/objects/object-literals.ts");
     walk.context.records.targetOperations.source(expression, {
       kind: "empty-object-literal",
       operationId: "tsonic.rust.object.empty-literal",
@@ -258,7 +258,7 @@ export function resolveRecordLiteralCarrier(
     );
     return undefined;
   }
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "record-literal", "analysis/expressions/records.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "record-literal", "analysis/objects/object-literals.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "record-literal",
     operationId: "tsonic.rust.record.literal",

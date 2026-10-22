@@ -5,8 +5,8 @@ import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.
 import { createRustCarrierProbe } from "../../../../dist/analysis/program/carrier-probe.js";
 import { rustOperationContext } from "../../../../dist/analysis/program/walk.js";
 import { recordProjectSourceBinding } from "../../../../dist/analysis/storage/source-bindings.js";
-import { resolveExpressionCarrier } from "../../../../dist/analysis/expressions/carriers.js";
-import { applyFlowReadLane } from "../../../../dist/analysis/expressions/flow-read.js";
+import { resolveExpressionCarrier } from "../../../../dist/analysis/source-evidence/types/resolution/expression-carriers.js";
+import { applyFlowReadLane } from "../../../../dist/analysis/conversions/flow-read.js";
 import { recordBindingWrite } from "../../../../dist/analysis/ownership/source-writes.js";
 import { recordRustCompoundWrite } from "../../../../dist/analysis/operations/members/compound-writes.js";
 import { recordRustNativeBacking, resolveRustRawLocationCarrier } from "../../../../dist/analysis/operations/native-memory.js";

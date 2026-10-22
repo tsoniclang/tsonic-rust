@@ -9,8 +9,8 @@ import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-car
 import { requireRustRecord } from "../program/records/required-records.js";
 import { BinaryExpression_Left, BinaryExpression_Right, KindBinaryExpression, KindIdentifier } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
-import { setCarrierFact } from "../operations/project-calls.js";
-import { resolveExpressionCarrier } from "./carriers.js";
+import { setCarrierFact } from "./project-calls.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { recordBindingWrite } from "../ownership/source-writes.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustEquivalentAssignment } from "../../policy/operations/operators/rules.js";
@@ -262,7 +262,7 @@ export function resolvedRustReferenceOperationCarrier(
       referenceCarrier: operandCarrier,
       resultCarrier: operandCarrier.referent,
     };
-    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/reference-operations.ts");
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/operations/reference-operations.ts");
     walk.context.records.targetOperations.source(expression, fact);
     return { carrier: setCarrierFact(walk, expression, fact.resultCarrier) };
   }
@@ -310,7 +310,7 @@ export function resolvedRustReferenceOperationCarrier(
     ),
     resultCarrier,
   };
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/reference-operations.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/operations/reference-operations.ts");
   walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
@@ -436,7 +436,7 @@ function resolvedRustReferenceConstruction(
     referenceCarrier,
     resultCarrier: referenceCarrier,
   };
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/reference-operations.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/operations/reference-operations.ts");
   walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, referenceCarrier) };
 }

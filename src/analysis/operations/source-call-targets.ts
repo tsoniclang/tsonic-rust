@@ -5,7 +5,7 @@ import { appendRustDiagnostic } from "../program/walk.js";
 
 import { recordBindingWrite } from "../ownership/source-writes.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { analyzeSourceLiteralValues, createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { normalizeSelectedLiteralCarrier } from "../../../dist/analysis/expressions/selected-literals.js";
+import { normalizeSelectedLiteralCarrier } from "../../../dist/analysis/source-evidence/types/resolution/selected-literals.js";
 import { rustPostCheckUnaryMinusOperationId } from "../../../dist/target-model/operations/model.js";
 import { isRustNumericCarrier, rustPrimitiveTypeName } from "../../../dist/target-model/types/carriers/primitives.js";
 

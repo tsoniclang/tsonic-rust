@@ -7,7 +7,7 @@ import { isRustProgramErrorCarrier, isRustAbsenceCarrier, rustOptionElementCarri
 import { isDeclarationFileSubject, rejectSelectedOperation } from "./result.js";
 
 import { acceptDeclarationOperation, acceptRustOperation } from "../../program/records/selected-operation-values.js";
-import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
+import { normalizeSelectedLiteralCarrier } from "../../source-evidence/types/resolution/selected-literals.js";
 
 import { asNode } from "../../../policy/identities/selected-source.js";
 

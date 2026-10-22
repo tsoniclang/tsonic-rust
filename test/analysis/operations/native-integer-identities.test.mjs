@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRustNativeComparisons } from "../../../dist/analysis/expressions/native-comparisons.js";
+import { analyzeRustNativeComparisons } from "../../../dist/analysis/operations/native-comparisons.js";
 import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native-comparisons.js";
 
 // The all-bits identity decision (`value & -1` on a signed integer keeps `value`) moved from the planner, which read

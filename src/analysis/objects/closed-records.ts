@@ -7,7 +7,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { resolveExpressionCarrier } from "./carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 export function resolveRustClosedRecordLiteral(
   walk: RustFactWalk,
@@ -43,7 +43,7 @@ export function resolveRustClosedRecordLiteral(
     names.add(sourceName);
     fields.push({ property, expression: value, sourceName });
   }
-  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "closed-record-literal", "analysis/expressions/closed-records.ts");
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "closed-record-literal", "analysis/objects/closed-records.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "closed-record-literal", operationId: "tsonic.rust.record.closed-literal",
     resultCarrier: carrier, fields,

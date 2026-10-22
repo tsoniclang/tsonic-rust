@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNativeIntegerIdentity } from "../../../../dist/backend/planner/expressions/native-integer-identities.js";
 
-// The identity decision is analysis-owned (test/analysis/expressions/native-integer-identities.test.mjs); the planner
+// The identity decision is analysis-owned (test/analysis/operations/native-integer-identities.test.mjs); the planner
 // returns the operand the sealed record selects and nothing otherwise.
 function context(selected) {
   return { input: { program: { records: { nativeComparison: { get: node => node === expression ? selected : undefined } } } } };

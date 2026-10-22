@@ -13,7 +13,7 @@ import type { RustSuspendedOwnedReceiver } from "../../target-model/records/call
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "./retained-values.js";
 
 export type RustSuspendedCallableStorageResolution =

@@ -4,12 +4,12 @@ import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { readRustLanguageCall, type RustLanguageCall } from "./native-language-call.js";
 import { rustSourceOperationExportIds, rustSourceOperationSignatureIds } from "../../target-model/identities/source.js";
-import { resolveExpressionCarrier } from "./carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import { setCarrierFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "./project-calls.js";
 
 interface RustNativeControl extends RustLanguageCall {
   readonly operation: "range" | "propagate";
@@ -51,7 +51,7 @@ export function resolveRustNativeControl(
       operands.length === 2 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, element))) {
       const resultCarrier = rustNamedTargetType(native.id, native.path,
         [{ kind: "type", type: element }], native.genericDefaults, native.traits, native.upcasts);
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-range", "analysis/expressions/native-controls.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-range", "analysis/operations/native-controls.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "native-range", operationId: "tsonic.rust.range",
         operands: operands.map(operand => operand.expression), elementCarrier: element,
@@ -77,7 +77,7 @@ export function resolveRustNativeControl(
       (explicitArguments.length === 0 || explicitArguments.length === 2 &&
         explicitArguments.every((argument, index) => argument !== undefined &&
           rustTargetTypeRefEquals(argument, argumentsList[index])))) {
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-propagation", "analysis/expressions/native-controls.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-propagation", "analysis/operations/native-controls.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "native-propagation", operationId: "tsonic.rust.propagate",
         callableDeclaration: declaration, callableReturnCarrier: returnCarrier,

@@ -1,34 +1,34 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../../../program/records/required-records.js";
 import { ConditionalExpression_Condition, ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue, KindBinaryExpression, KindCallExpression, KindConditionalExpression, KindElementAccessExpression, KindFalseKeyword, KindFunctionExpression, KindIdentifier, KindArrayLiteralExpression, KindBigIntLiteral, KindNewExpression, KindNoSubstitutionTemplateLiteral, KindNonNullExpression, KindNumericLiteral, KindParenthesizedExpression, KindPostfixUnaryExpression, KindPrefixUnaryExpression, KindPropertyAccessExpression, KindStringLiteral, KindSatisfiesExpression, KindSpreadElement, KindTemplateExpression, KindTrueKeyword, KindTypeOfExpression, KindVoidExpression, Node_Expression, sourceIntegerLiteralValue, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { rustNumericLiteralIsFinite } from "../numeric/literal-admission.js";
-import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { getRustTypeofRuntimeKind } from "../../policy/operations/syntax/runtime-kind.js";
-import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustBigIntTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../target-model/types/index.js";
-import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation, type RustFactWalk, rustOperationContext } from "../program/walk.js";
-import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../source/extension/literals.js";
-import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
-import { setCarrierFact } from "../operations/project-calls.js";
-import { resolveArrayLiteralCarrier } from "./array-literals.js";
+import { rustNumericLiteralIsFinite } from "../../../numeric/literal-admission.js";
+import { rustRuntimeUnionProjection } from "../../../../target-model/types/carriers/runtime-unions.js";
+import { getRustTypeofRuntimeKind } from "../../../../policy/operations/syntax/runtime-kind.js";
+import { rustUnparenthesizedExpression } from "../../../../target-model/syntax/expressions.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustNumericCarrier, isRustOptionCarrier, rustOptionElementCarrier, rustBigIntTargetType, rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
+import { rustTargetOperationResultCarrier, type RustTargetOperationFact } from "../../../../target-model/records/operations.js";
+import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation, type RustFactWalk, rustOperationContext } from "../../../program/walk.js";
+import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../../../source/extension/literals.js";
+import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../../../operations/operators.js";
+import { setCarrierFact } from "../../../operations/project-calls.js";
+import { resolveArrayLiteralCarrier } from "../../../operations/array-literals.js";
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
-import { resolveExpressionCarrier } from "./carriers.js";
-import { createRustCarrierProbe } from "../program/carrier-probe.js";
-import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
-import { resolveRecordLiteralCarrier } from "../objects/object-literals.js";
-import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/conversions/literals.js";
-import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
-import { resolveRustBranchUnion } from "../source-evidence/types/resolution/branch-unions.js";
+import { resolveExpressionCarrier } from "./expression-carriers.js";
+import { createRustCarrierProbe } from "../../../program/carrier-probe.js";
+import { resolveFunctionExpressionCarrier } from "../../../callables/closures.js";
+import { resolveRecordLiteralCarrier } from "../../../objects/object-literals.js";
+import { resolveRustTargetTypeRef } from "./source.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../../../policy/conversions/literals.js";
+import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
+import { selectRustConditionalNumericCarrier } from "../../../../policy/types/conditional-numeric-carrier.js";
+import { resolveRustBranchUnion } from "./branch-unions.js";
 import { type Node, type SourceFile } from "@tsonic/tsts";
-import { type TargetTypeRef } from "../../target-model/types/model.js";
-import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../policy/operations/flow/await.js";
-import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { type TargetTypeRef } from "../../../../target-model/types/model.js";
+import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../../../policy/operations/flow/await.js";
+import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 import { normalizeSelectedLiteralCarrier } from "./selected-literals.js";
-import { resolveTemplateExpressionCarrier } from "./template-strings.js";
+import { resolveTemplateExpressionCarrier } from "../../../operations/template-strings.js";
 
 export function resolveExpressionCarrierUncached(
   walk: RustFactWalk,
@@ -206,7 +206,7 @@ export function resolveExpressionCarrierUncached(
       if (output === undefined) {
         return undefined;
       }
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "await-op", "analysis/expressions/value-resolution.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "await-op", "analysis/source-evidence/types/resolution/expression-values.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "await-op",
         operationId: "tsonic.rust.async.await",
@@ -305,7 +305,7 @@ export function resolveExpressionCarrierUncached(
           operationId: "tsonic.rust.assertion.const",
           resultCarrier: carrier,
         };
-        requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/value-resolution.ts");
+        requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/source-evidence/types/resolution/expression-values.ts");
         walk.context.records.targetOperations.source(expression, fact);
         requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, fact.kind, "resolveExpressionCarrierUncached");
         walk.context.records.selectedOperations.operator(expression, fact, carrier);
@@ -324,7 +324,7 @@ export function resolveExpressionCarrierUncached(
       if (!rustTargetTypeRefEquals(carrier, resultCarrier)) {
         return undefined;
       }
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "identity-expression", "analysis/expressions/value-resolution.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "identity-expression", "analysis/source-evidence/types/resolution/expression-values.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "identity-expression",
         operationId: "tsonic.rust.syntax.satisfies",
@@ -341,7 +341,7 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const resultCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "non-null-expression", "analysis/expressions/value-resolution.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "non-null-expression", "analysis/source-evidence/types/resolution/expression-values.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "non-null-expression",
         operationId: rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
@@ -406,7 +406,7 @@ export function resolveExpressionCarrierUncached(
         !rustTargetTypeRefEquals(falseCarrier, resultCarrier)) {
         return undefined;
       }
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "conditional", "analysis/expressions/value-resolution.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "conditional", "analysis/source-evidence/types/resolution/expression-values.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "conditional",
         operationId: "tsonic.rust.syntax.conditional",
@@ -435,7 +435,7 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const resultCarrier = rustStringTargetType();
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "typeof", "analysis/expressions/value-resolution.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "typeof", "analysis/source-evidence/types/resolution/expression-values.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "typeof",
         operationId: `tsonic.rust.syntax.typeof.${typeof result === "string" ? result : "runtime-union"}`,
@@ -461,7 +461,7 @@ export function resolveExpressionCarrierUncached(
       }
       const resultCarrier = rustAbsenceTargetType();
       const operationId = "tsonic.rust.syntax.void";
-      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "void-expression", "analysis/expressions/value-resolution.ts");
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "void-expression", "analysis/source-evidence/types/resolution/expression-values.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "void-expression",
         operationId,

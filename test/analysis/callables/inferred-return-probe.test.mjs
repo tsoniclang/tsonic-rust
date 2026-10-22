@@ -8,7 +8,7 @@ import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-p
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
-import { resolveExpressionCarrier } from "../../../dist/analysis/expressions/carriers.js";
+import { resolveExpressionCarrier } from "../../../dist/analysis/source-evidence/types/resolution/expression-carriers.js";
 
 for (const [name, source, callsSignature] of [
   ["property and callable scope", `

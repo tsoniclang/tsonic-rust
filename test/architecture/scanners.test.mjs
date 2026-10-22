@@ -607,14 +607,14 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   const ownershipUses = readFileSync(join(sourceRoot, "analysis/ownership/uses.ts"), "utf8");
   assert.match(ownershipUses, /records\.optionalChain\.get\(node\)\?\.guard/u);
   assert.match(planner, /overrides\.set\(fact\.guard/u);
-  const emission = readFileSync(join(sourceRoot, "analysis/expressions/optional-chains.ts"), "utf8");
+  const emission = readFileSync(join(sourceRoot, "analysis/operations/optional-chains.ts"), "utf8");
   assert.match(emission, /guardDepth/u);
   assert.doesNotMatch(planner, /rustOptionNestingDepth|resolveRustTargetTypeRef/u);
   assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
 });
 
 test("plain identifier binding cannot become a provider-value identity workaround", () => {
-  const semantics = readFileSync(join(sourceRoot, "analysis/expressions/references.ts"), "utf8");
+  const semantics = readFileSync(join(sourceRoot, "analysis/source-evidence/types/resolution/references.ts"), "utf8");
   const resolver = sourceSection(semantics, "export function resolveIdentifierCarrier(", "export function resolveCallLikeCarrier(");
   assert.match(resolver, /declarationKind === KindParameter \|\| declarationKind === KindVariableDeclaration/u);
   assert.doesNotMatch(resolver, /providerVirtualDeclarationFactKey|moduleSpecifier|exportName|resolveRustTargetTypeRef/u);
@@ -887,8 +887,8 @@ test("provider purity uses one generic operation-form writability policy", () =>
 test("operation carriers and selected identities are admitted before native rendering", () => {
   const calls = readFileSync(join(sourceRoot, "analysis/callables/source-calls.ts"), "utf8");
   const arguments_ = readFileSync(join(sourceRoot, "analysis/callables/source-call-arguments.ts"), "utf8");
-  const binary = readFileSync(join(sourceRoot, "analysis/expressions/expression-binary.ts"), "utf8");
-  const unary = readFileSync(join(sourceRoot, "analysis/expressions/expression-unary.ts"), "utf8");
+  const binary = readFileSync(join(sourceRoot, "analysis/operations/binary-emission.ts"), "utf8");
+  const unary = readFileSync(join(sourceRoot, "analysis/operations/expression-unary.ts"), "utf8");
   const closure = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
   const provider = readFileSync(join(sourceRoot, "analysis/operations/provider-inputs.ts"), "utf8");
   assert.match(calls, /sourceCallEffectsMatch\(fact, effects, program\.typeDefinitions, native\)/u);
@@ -918,7 +918,7 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   const semantics = collectFiles(join(sourceRoot, "analysis"), ".ts")
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
-  const sourceArrays = readFileSync(join(sourceRoot, "analysis/expressions/array-literals.ts"), "utf8");
+  const sourceArrays = readFileSync(join(sourceRoot, "analysis/operations/array-literals.ts"), "utf8");
   const sourceCallables = readFileSync(join(sourceRoot, "analysis/callables/lambda-emission.ts"), "utf8");
   assert.match(sourceArrays, /presentElements\.length/u);
   assert.match(sourceArrays, /Fixed-array literal has/u);

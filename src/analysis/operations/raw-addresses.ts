@@ -2,7 +2,7 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { setCarrierFact } from "./project-calls.js";
 import type { RustSourceRawAddress } from "../../source/extension/raw-addresses.js";
 import { rustSourceRawAddressWidth } from "../../source/extension/raw-addresses.js";

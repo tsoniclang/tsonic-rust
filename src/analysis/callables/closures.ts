@@ -9,7 +9,7 @@ import { rustSourceOptionalTargetType, rustOptionElementCarrier, rustCallablePro
 import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "./parameter-facts.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";

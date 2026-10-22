@@ -9,7 +9,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 import { resolveParameterAbi } from "../callables/parameter-facts.js";
 
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "../project-types/type-family-normalization.js";

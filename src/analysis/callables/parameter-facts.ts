@@ -11,7 +11,7 @@ import type { RustSourceParameterAbiFact } from "../../target-model/records/call
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { recordBindingPatternFacts } from "../control-flow/binding-patterns.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 
 export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
