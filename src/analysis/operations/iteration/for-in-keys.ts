@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, orderEnumerableOwnStringProperties } from "@tsonic/target-api/source";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustOperationsProviderOptions } from "./model.js";
+import type { RustOperationsProviderOptions } from "../members/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 

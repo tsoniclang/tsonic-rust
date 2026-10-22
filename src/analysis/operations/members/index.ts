@@ -11,6 +11,6 @@ export {
 } from "../member-access.js";
 export {
   selectRustCheckedIteration,
-} from "../iteration.js";
+} from "../iteration/selection.js";
 export { selectRustCheckedElementAccess, selectRustCheckedPropertyAccess } from "../selected-members.js";
 export { selectRustCheckedConversion } from "./conversions.js";
