@@ -39,8 +39,10 @@ export function instantiateProviderTargetType(
   const typeSubstitutions = new Map<string, TargetTypeRef>();
   const lifetimeSubstitutions = new Map<string, import("../../../target-model/lifetimes/model.js").RustLifetimeRef>();
   const constSubstitutions = new Map<string, import("../../../target-model/types/model.js").RustTargetConstArgument>();
+  const defaulted = new Set<string>();
   for (const [index, parameter] of parameters.entries()) {
     const authored = arguments_[index];
+    if (authored === undefined && parameter.kind !== "lifetime") defaulted.add(parameter.targetIdentity);
     const selected = authored ?? (parameter.kind === "lifetime"
       ? undefined
       : parameter.defaultArgument === undefined
@@ -62,8 +64,10 @@ export function instantiateProviderTargetType(
       constSubstitutions.set(parameter.targetIdentity, selected.value);
     }
   }
+  // A defaulted parameter's bounds hold by the provider declaration itself (rustc checks a default at its definition,
+  // e.g. `Rc<T, A: Allocator = Global>`); only authored arguments are checked against their requirements.
   if (!rustProviderGenericRequirementsAreSatisfied(
-    relation.typeRequirements,
+    relation.typeRequirements?.filter((parameter) => !defaulted.has(parameter.identity)),
     {
       types: typeSubstitutions,
       lifetimes: lifetimeSubstitutions,
