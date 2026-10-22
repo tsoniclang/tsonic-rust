@@ -72,6 +72,21 @@ export function retainRustStructuralInstantiation(
     return arguments_.length === 1 && arguments_[0] !== undefined &&
       retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options, resolving, elementNode);
   }
+  // A tuple retains each element's instantiation; an element without structural storage is identical in both carriers.
+  if (templateCarrier.kind === "tuple" || carrier.kind === "tuple") {
+    if (templateCarrier.kind !== "tuple" || carrier.kind !== "tuple" ||
+      templateCarrier.elements.length !== carrier.elements.length || !context.currentSemantics.types.isTuple(sourceType)) return false;
+    const infos = context.currentSemantics.types.tupleElementInfos(sourceType);
+    if (infos.length !== carrier.elements.length) return false;
+    const elementNodes = authoredTypeNode !== undefined && context.ast.kindName(authoredTypeNode) === "KindTupleType"
+      ? context.ast.elements(authoredTypeNode) : undefined;
+    return infos.every((info, index) => {
+      const elementNode = elementNodes?.[index];
+      return retainRustStructuralInstantiation(info.type, templateCarrier.elements[index]!, carrier.elements[index]!,
+        context, options, resolving, elementNode !== undefined && context.ast.kindName(elementNode) !== "KindNamedTupleMember"
+          ? elementNode : undefined);
+    });
+  }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural === undefined || rustStructuralObjectCarrierValue(templateCarrier) === undefined) return false;
   if (rustTargetTypeRefEquals(templateCarrier, carrier) &&
@@ -175,6 +190,7 @@ function containsStructuralStorage(carrier: TargetTypeRef, options: RustTargetTy
     const element = rustOptionElementCarrier(current) ?? (current.kind === "array" ? current.element :
       isRustJsArrayCarrier(current) ? rustJsArrayLikeElementTargetType(current) : undefined);
     if (element !== undefined && !append([element])) return undefined;
+    if (current.kind === "tuple" && !append(current.elements)) return undefined;
   }
   return false;
 }
