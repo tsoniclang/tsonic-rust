@@ -1,3 +1,4 @@
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { requireRustReadOwnership } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
@@ -113,8 +114,17 @@ export function planRustValueProjection(node: Node, expression: RustExpr, fact: 
     ?? failRustPlannerInvariant("An admitted project projection requires its native payload read.", node);
 }
 
+// A match evaluates its subject once, and temporaries in the subject live until the match ends, so a plain subject
+// stays in place (a `let` would free a borrowed temporary such as `x.clone().as_ref()` too early, E0716). Only a
+// statement-bearing subject this planner built (an evaluate-then or a block with statements) is moved out: under
+// Rust 2021 by an expected-lint value block that keeps the match temporary scope, otherwise into a binding.
 function bindSubject(expression: RustExpr, node: Node, context: RustPlanContext): RustExpr {
   if (expression.kind !== "match") failRustPlannerInvariant("An admitted native flow dispatch requires its selected match form.", node);
+  const subject = expression.expression;
+  if (subject.kind !== "evaluate-then" &&
+    (subject.kind !== "block" || subject.body.statements.every(statement => statement.kind === "tail"))) return expression;
+  if (context.input.program.records.programEmission.get()?.configuration.edition === "2021")
+    return rustValueBlock([], expression, { value: [rustLintAttributes.matchTemporaryScope] });
   const name = allocateRustSyntheticName(context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_input");
   return rustValueBlock([{ name, value: expression.expression }], { ...expression, expression: { kind: "path", path: name } });
 }
