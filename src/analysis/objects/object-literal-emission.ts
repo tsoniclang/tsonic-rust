@@ -12,6 +12,7 @@ import { selectRustObjectLiteralDispatch } from "../../policy/types/objects/obje
 import { analyzeRustProjectLiteralEmission } from "./project-literal-emission.js";
 import { rustJsValueTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
@@ -61,7 +62,12 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       const raw = field?.presence === "optional" ? rustOptionElementCarrier(physical?.methodStorageCarrier) : physical?.methodStorageCarrier;
       const construction = physical?.methodConstructions?.find(selected => selected.object === node && selected.property === part.property &&
         selected.expression === part.expression && selected.storageIndex === part.targetStorageIndex);
-      if (field?.method !== true || raw === undefined || construction === undefined || !rustTargetTypeRefEquals(construction.destinationCarrier, raw))
+      // A generic method is stored as its generic callable family value, which its sealed implementation constructs.
+      const generic = raw !== undefined && rustGenericCallableValue(raw) !== undefined;
+      if (field?.method !== true || raw === undefined || (generic
+        ? program.callableValues.generic.definitionFor(raw) === undefined ||
+          program.callableValues.generic.implementationFor(part.expression) === undefined
+        : construction === undefined || !rustTargetTypeRefEquals(construction.destinationCarrier, raw)))
         refuse(part.property, "rust.backend.record-fields", "Object literal syntax does not match its finalized ordered contribution fact.");
     }
   }

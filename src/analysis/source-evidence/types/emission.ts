@@ -81,6 +81,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const callable = program.records.projectCallableSignature.get(node);
     if (callable !== undefined) pending.push(callable.returnCarrier,
       ...(callable.errorCarrier === undefined ? [] : [callable.errorCarrier]));
+    // A retained callable renders an outlives bound for each retained carrier in its source and Promise-body items.
+    const retained = program.records.nativeGenerics.get(node)?.retention;
+    if (retained !== undefined) pending.push(...retained.source, ...retained.body);
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     const contract = program.records.declarationRequirements.get(node);

@@ -272,5 +272,7 @@ function resolveExactNativePointerOperandCarrier(
   sourceFile: SourceFile,
   contextualCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
-  return resolveExpressionCarrier(walk, expression, sourceFile, contextualCarrier, "value", "exact");
+  // The operand keeps its own carrier: a native-pointer store value or offset is never converted to fit the pointer.
+  return resolveExpressionCarrier(walk, expression, sourceFile, undefined) ??
+    resolveExpressionCarrier(walk, expression, sourceFile, contextualCarrier);
 }

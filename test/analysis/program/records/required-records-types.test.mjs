@@ -10,7 +10,7 @@ const temporary = join(root, ".temp/required-records-types");
 const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
 import { requireRustRecord, type RustRequiredRecord } from "${join(root, "dist/analysis/program/records/required-records.js")}";
-import { recordRustConversionSelection } from "${join(root, "dist/analysis/conversions/value-carrier-queries.js")}";
+import { recordRustConversionSelection } from "${join(root, "dist/analysis/program/records/value-carrier-admission.js")}";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
 declare const subject: Node;

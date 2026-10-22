@@ -28,6 +28,9 @@ export function analyzeRustConstructionEmission(input: {
   for (const definition of program.projectTypes.definitions) {
     if (definition.kind !== "class") continue;
     if (program.records.classDeclaration.get(definition.declaration) === undefined) continue;
+    // An abstract class is never constructed itself; its layers are prepared within each concrete subclass, and the
+    // emission contexts request no constructor layer for it.
+    if (program.source.ast.hasModifierKind(definition.declaration, "abstract")) continue;
     const plan = program.projectConstructions.forDefinition(definition);
     if (plan === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted class requires its complete construction readiness plan.", definition.declaration);
     const rejected = [...plan.issues, ...plan.emission.issues];

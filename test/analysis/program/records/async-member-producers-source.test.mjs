@@ -40,8 +40,10 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(records.generator.get(declaration) === undefined, true, "ordinary async has no generator protocol");
     assert.equal(records.asyncFunction.get({}) === undefined, true);
     if (selected.kind === "js-promise") {
-      assert.equal(selected.capturedParameters.every(parameter => ast.parameters(declaration).includes(parameter)), true);
-      assert.equal(selected.storage.kind, "static");
+      // A body without a pending point settles at once; it has no suspended factory storage to capture parameters.
+      assert.equal(selected.lowering.kind, "settled", "an await-free JS body is a settled Promise");
+      assert.deepEqual(selected.lowering.settledAwaits, [], "no settled await is consumed");
+      assert.equal(Object.hasOwn(selected.lowering, "storage"), false, "no factory storage is selected");
       assert.equal(selected.futureCarrier.genericArguments[2].type.id, "rust.program.TsonicError");
     } else {
       assert.equal(Object.hasOwn(selected, "storage"), false);

@@ -30,7 +30,7 @@ export function rustNodeIsOutsideNativeCode(
   safetyOperation: (expression: Node) => { readonly kind: string } | undefined,
   node: Node,
 ): boolean {
-  for (let current: Node | undefined = node; current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
+  for (let current: Node | undefined = node; current !== undefined; current = ast.parent(current))
     if (records.compileTimeSource.get(current) !== undefined || records.nativeUnreachable.get(current) === true ||
       safetyOperation(current)?.kind === "safety-builder") return true;
   return false;
