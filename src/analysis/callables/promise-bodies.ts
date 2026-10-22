@@ -132,7 +132,12 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         if (asynchronous?.kind !== "js-promise") continue;
         const name = rustPromiseBodyNativeName(context, declaration);
         const selectedDemands = new Set(demands.get(declaration));
-        if (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration)) selectedDemands.add(declaration);
+        // An exported module async function is an authored export, retained in a binary as in a library: its
+        // Promise-returning function keeps the authored name (direct awaits still call the native body).
+        if (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration) ||
+          context.ast.is.IsFunctionDeclaration(declaration) && context.ast.hasModifierKind(declaration, "export") &&
+          sourceDeclarationIsModuleScoped(declaration, context.ast))
+          selectedDemands.add(declaration);
         if (selectedDemands.size > 0) producer.object(declaration, Object.freeze([...selectedDemands].sort((left, right) => {
           const leftFile = context.ast.getSourceFile(left);
           const rightFile = context.ast.getSourceFile(right);
