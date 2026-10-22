@@ -18,6 +18,7 @@ import { selectRustOptionalCallResult } from "../operations/members/calls/option
 
 import { resolveRustContextualParameterAbi } from "./source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -248,7 +249,8 @@ export function applySelectedRuntimeCallableCall(
       };
   if (target.form === "callable" && optionalCall === undefined) {
     const projection = calleeCarrier === undefined ? undefined : walk.context.records.flowReadProjections.resolve(
-      walk.context.requiredRecords, callee, calleeCarrier, carrier, walk.context.projectTypes, walk.context.typeDefinitions);
+      walk.context.requiredRecords, callee, calleeCarrier, rustCallableTargetForSourceLifetime(calleeCarrier, carrier),
+      walk.context.projectTypes, walk.context.typeDefinitions);
     if (projection === undefined || projection.kind === "incompatible") {
       appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
         "The runtime callee cannot project to its exact checked callable carrier.", callee,

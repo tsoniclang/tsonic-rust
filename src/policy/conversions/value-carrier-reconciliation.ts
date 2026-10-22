@@ -145,20 +145,24 @@ export function selectRustFlowReadProjection(
   };
 }
 
+/** A callable target whose lifetime is still a placeholder takes the concrete lifetime of the callable value flowing into it. */
+export function rustCallableTargetForSourceLifetime(sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef): TargetTypeRef {
+  const sourceCallable = rustCallableProtocol(sourceCarrier);
+  const targetCallable = rustCallableProtocol(targetCarrier);
+  return targetCarrier.kind === "target-named" && targetCarrier.id === rustCallableTargetId &&
+    targetCallable?.lifetime?.kind === "placeholder" && sourceCallable?.lifetime !== undefined &&
+    sourceCallable.lifetime.kind !== "placeholder"
+    ? rustCallableTargetType(targetCallable.parameters, targetCallable.result, sourceCallable.lifetime, targetCallable.error)
+    : targetCarrier;
+}
+
 export function selectRustValueCarrierReconciliation(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueCarrierReconciliation {
-  const sourceCallable = rustCallableProtocol(sourceCarrier);
-  const targetCallable = rustCallableProtocol(targetCarrier);
-  if (targetCarrier.kind === "target-named" && targetCarrier.id === rustCallableTargetId &&
-    targetCallable?.lifetime?.kind === "placeholder" && sourceCallable?.lifetime !== undefined &&
-    sourceCallable.lifetime.kind !== "placeholder") {
-    targetCarrier = rustCallableTargetType(targetCallable.parameters, targetCallable.result,
-      sourceCallable.lifetime, targetCallable.error);
-  }
+  targetCarrier = rustCallableTargetForSourceLifetime(sourceCarrier, targetCarrier);
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
   }
