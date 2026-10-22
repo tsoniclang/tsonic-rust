@@ -41,10 +41,15 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     const region = { ...ownedBody, statements: [
       ...lowered.body.statements,
       ...(terminates ? [] : [{ kind: "tail" as const, expr: errorType === undefined ? normal : call("Ok", normal) }])] };
+    // A region that is exactly one break to its own label with a value is that value: `'l: { break 'l v; }` is
+    // clippy::diverging_sub_expression (syntax only).
+    const [only] = region.statements;
+    const direct = !scope.asynchronous && region.statements.length === 1 && only?.kind === "expr" &&
+      only.expr.kind === "break-expression" && only.expr.label === name ? only.expr.expr : undefined;
     return { kind: "let", name, mutable: false, type: resultType(type, errorType),
-      init: scope.asynchronous
+      init: direct ?? (scope.asynchronous
         ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true) } }
-        : { kind: "block", ...(lowered.breaksToLabel ? { label: name } : {}), body: region } };
+        : { kind: "block", ...(lowered.breaksToLabel ? { label: name } : {}), body: region }) };
   };
   const statements: RustStmt[] = [];
   if (scope.kind === "try-scope") {
@@ -195,6 +200,8 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
       { kind: "tail", expr: matched },
     ] } } : matched;
   };
+  // A break to the region label diverges, so it is always a statement: as a block's tail it is
+  // clippy::diverging_sub_expression.
   const statement = (value: RustStmt): RustStmt => {
     switch (value.kind) {
       case "completion-exit": {
@@ -206,14 +213,14 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
           return value.resultWrapped ? call("Ok", completion) : completion;
         };
         return label === undefined ? { kind: value.tail ? "tail" : "return", expr: lowerResult() }
-          : { kind: value.tail ? "tail" : "expr", expr: exitLowered(lowerResult) };
+          : { kind: "expr", expr: exitLowered(lowerResult) };
       }
       case "return": return label === undefined
         ? { ...value, ...(value.expr === undefined ? {} : { expr: expression(value.expr) }) }
         : { kind: "expr", expr: exitLowered(() => value.expr === undefined ? undefined : expression(value.expr)) };
       case "throw": return label === undefined
         ? { kind: value.tail ? "tail" : "return", expr: call("Err", expression(value.error)) }
-        : { kind: value.tail ? "tail" : "expr", expr: exitLowered(() => call("Err", expression(value.error))) };
+        : { kind: "expr", expr: exitLowered(() => call("Err", expression(value.error))) };
       case "let": return value.init === undefined ? value : { ...value, init: expression(value.init) };
       case "let-pattern": return { ...value, init: expression(value.init) };
       case "expr":

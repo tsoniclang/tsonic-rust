@@ -20,14 +20,15 @@ const styled = statement => finalizeRustSourceStyle({ headerComment: "native com
 test("completion semantics are lowered before printing, never interpreted by the printer", () => {
   for (const asynchronous of [false, true]) {
     assert.throws(() => printRustBlockStatements({ statements: [region({ asynchronous })] }, 0),
-      /must be normalized to native AST/u);
+      /Unsupported Rust unnormalized completion region syntax reached printer: (try|resource)-scope/u);
     const normalized = lowerRustCompletionScope(region({ asynchronous }));
     assert.equal(normalized.kind, "scope");
-    assert.equal(normalized.body.statements[0].init.kind, asynchronous ? "await" : "block");
+    // A synchronous region that is exactly one exit is that exit's value (no single-break labeled block).
+    assert.equal(normalized.body.statements[0].init.kind, asynchronous ? "await" : "call");
     const text = printRustBlockStatements({ statements: [normalized] }, 0);
     assert.doesNotMatch(text, /completion_region|\|\||MaybeUninit|assume_init/u);
     assert.match(text, asynchronous ? /async \{[\s\S]*Ok\(rt::Completion::Return/u
-      : /'body_flow:[\s\S]*break 'body_flow Ok\(rt::Completion::Return/u);
+      : /let body_flow: [^=]*= Ok\(rt::Completion::Return\(selected\)\);/u);
     if (asynchronous) assert.doesNotMatch(text, /return Ok\(rt::Completion::Return/u);
   }
 });
@@ -71,7 +72,7 @@ test("resource cleanup retains suppression, loop targets and ordered continue pr
     propagate: false, dispatchReturn: false, dispatchTargets: [{ kind: "loop", id: 3, label: "outer",
       continuePrelude: [{ kind: "expr", expr: { kind: "call", path: "increment", args: [] } }] }], terminates: true };
   const text = printRustBlockStatements({ statements: [lowerRustCompletionScope(statement)] }, 0);
-  assert.match(text, /break 'resource_flow Ok\(rt::Completion::Continue\(3\)\)/u);
+  assert.match(text, /let resource_flow: [^=]*= Ok\(rt::Completion::Continue\(3\)\);/u);
   assert.match(text, /Err\(error\) => break 'cleanup_flow Err\(error\)/u);
   assert.match(text, /rt::finish_resource\(resource_flow, cleanup_flow\)\?/u);
   assert.match(text, /rt::Completion::Continue\(3\)[\s\S]*increment\(\);[\s\S]*continue 'outer/u);
