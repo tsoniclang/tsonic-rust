@@ -86,6 +86,23 @@ export function analyzeRustAssignmentWrites(input: {
       records.compileTimeSource.get(node) !== undefined || records.nativeParticipation.get(node) === "erased") continue;
     const selected = records.targetOperation.get(node);
     const assignment = records.assignmentCompletion.get(node) ?? (selected?.kind === "nullish-assignment" ? selected.assignment : undefined);
+    // A runtime setter used as a value (`return values[0] = 43`) writes through its setter statement and yields the
+    // right-hand value, like any value assignment.
+    if (assignment === undefined && selected?.kind === "runtime-set" && sourceExpressionResultDisposition(ast, node).kind !== "discarded") {
+      const target = BinaryExpression_Left(ast, node);
+      const value = BinaryExpression_Right(ast, node);
+      const carrier = value === undefined ? undefined : rustValueCarrierBeforeContextualConversion(records, value);
+      if (target === undefined || value === undefined || carrier === undefined || !rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(node)?.carrier)) {
+        issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+          message: `An assignment expression requires its exact finalized right-hand value carrier before storage projection. Node kind: ${ast.kindName(node)}.`,
+          evidence: ["target.capability=rust.backend.assignment-value-carrier"] });
+        continue;
+      }
+      requireRustRecord(input.required, "assignmentWrite", node, "native assignment write", "analyzeRustAssignmentWrites");
+      input.producer.assignment(node, { target, value, valueField: false, deferReceiverBorrow: false, stringAppend: undefined,
+        valueResult: Object.freeze({ carrier, copy: isRustCopyCarrier(carrier) }) });
+      continue;
+    }
     if (assignment === undefined) continue;
     let target = BinaryExpression_Left(ast, node);
     while (target !== undefined) {

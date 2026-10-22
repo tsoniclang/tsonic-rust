@@ -15,6 +15,14 @@ export interface RustSourceCallEmission {
   readonly constructor: { readonly name: string } | undefined;
   readonly constructorOwner: Node | undefined;
   readonly dispatch: RustProjectMethodDispatchVariant | undefined;
+  /**
+   * For a call whose generic arguments name type parameters of an enclosing specialized callable: the dispatch
+   * variant selected for each of that callable's specializations (its type-parameter substitutions).
+   */
+  readonly specializedDispatch: readonly {
+    readonly substitutions: ReadonlyMap<string, TargetTypeRef>;
+    readonly variant: RustProjectMethodDispatchVariant;
+  }[];
   readonly callable: "direct" | "generic" | "input" | "tuple" | undefined;
   readonly callableCarrier: TargetTypeRef | undefined;
   readonly eliminateInfallible: boolean;

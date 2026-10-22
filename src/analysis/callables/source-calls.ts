@@ -20,6 +20,8 @@ import { rustInfallibleTargetId } from "../../target-model/types/carriers/source
 import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustNativeCallableOperand } from "./native-conversions.js";
 import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import type { RustProjectMethodDispatchVariant } from "../../target-model/records/method-dispatch.js";
 
 export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall): boolean {
@@ -76,7 +78,23 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     const constructor = fact.target.form === "constructor-value" ? program.structuralShapes.definitionForCarrier(fact.target.receiverCarrier)?.construction : undefined;
     const dispatch = fact.target.form !== "method" || fact.target.dispatch === undefined || declaration === undefined ? undefined
       : program.projectMethodDispatch.variantForMember(declaration, rustTargetGenericTypeArguments(fact.targetGenericArguments ?? []), fact.target.dispatch.ownerCarrier);
-    if (fact.target.form === "method" && fact.target.dispatch !== undefined && dispatch === undefined) {
+    // A call inside a specialized callable dispatches per specialization: its generic arguments and owner name the
+    // enclosing callable's type parameters, which each specialization substitutes.
+    const specializedDispatch: { readonly substitutions: ReadonlyMap<string, TargetTypeRef>; readonly variant: RustProjectMethodDispatchVariant }[] = [];
+    if (fact.target.form === "method" && fact.target.dispatch !== undefined && dispatch === undefined && declaration !== undefined) {
+      let enclosing = sourceEnclosingCallable(node, program.source.ast);
+      while (enclosing !== undefined && !program.sourceCallableSpecializations.requiresSpecialization(enclosing))
+        enclosing = sourceEnclosingCallable(enclosing, program.source.ast);
+      for (const variant of enclosing === undefined ? [] : program.sourceCallableSpecializations.variantsForCallable(enclosing)) {
+        const substitutions = new Map(variant.sourceTypeParameterIdentities.map((identity, index) => [identity, variant.targetTypeArguments[index]!] as const));
+        const selected = program.projectMethodDispatch.variantForMember(declaration,
+          rustTargetGenericTypeArguments(fact.targetGenericArguments ?? []).map(argument => substituteRustTargetGenerics(argument, substitutions, new Map())),
+          substituteRustTargetGenerics(fact.target.dispatch.ownerCarrier, substitutions, new Map()));
+        if (selected === undefined) { specializedDispatch.length = 0; break; }
+        specializedDispatch.push(Object.freeze({ substitutions, variant: selected }));
+      }
+    }
+    if (fact.target.form === "method" && fact.target.dispatch !== undefined && dispatch === undefined && specializedDispatch.length === 0) {
       refuse(node, "rust.backend.project-method-specialization", "Selected polymorphic project call has no exact finalized Rust dispatch specialization."); continue;
     }
     const carrier = rustSourceCallCallableStorageCarrier(fact, program.structuralShapes);
@@ -127,7 +145,7 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
       witnesses: Object.freeze(inputs.map(input => program.callableValues.nativeStorage.invocationWitnessFor(input, node))), specialized,
       constructor: constructor === undefined ? undefined : Object.freeze({ name: constructor.targetName }),
       constructorOwner: fact.target.form === "constructor" ? program.projectTypes.definitionForCarrier(fact.target.typeCarrier)?.declaration : undefined,
-      dispatch, callable, callableCarrier: carrier, eliminateInfallible, never: isRustNeverCarrier(fact.resultCarrier),
+      dispatch, specializedDispatch: Object.freeze(specializedDispatch), callable, callableCarrier: carrier, eliminateInfallible, never: isRustNeverCarrier(fact.resultCarrier),
       errorEdge: directError ? edges![0] : undefined,
       pinnedBodies: new Set([...(pinned ?? [])].filter(([, calls]) => fact.asyncBody?.maySuspend === true && calls.has(node)).map(([name]) => name)),
     }, specializations);
