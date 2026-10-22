@@ -80,6 +80,7 @@ test("constructor contracts remain logical even when their enclosing value has p
   const signature = {};
   selected.context.ast.typeParameters = () => [];
   selected.context.ast.typeNode = () => undefined;
+  selected.context.ast.is = { IsMethodDeclaration: () => false };
   selected.context.sourceStorage = { subject: () => ({ kind: "unresolved", reason: "A signature is not a value." }) };
   selected.context.pointerReturns = { resolve: () => undefined };
   selected.context.semanticsFor = () => selected.context.currentSemantics;
