@@ -100,7 +100,9 @@ function planSelectedRustCallableConversion(
   let invocation: RustExpr = invoked;
   if (conversion.eliminatedInvokeError === true) {
     const errorName = allocateRustSyntheticName(names, "error");
-    invocation = { kind: "method-call", receiver: invoked, method: "map_err", args: [{
+    // The eliminated error has no value, so the mapped error type is named for inference.
+    invocation = { kind: "method-call", receiver: invoked, method: "map_err",
+      genericArguments: [{ kind: "type", type: errorType }, { kind: "type", type: { kind: "infer" } }], args: [{
       kind: "closure", params: [{ name: errorName, byRefCopy: false }],
       body: { kind: "match", expression: { kind: "path", path: errorName }, arms: [] },
     }] };
