@@ -1,11 +1,11 @@
 import type { RustNativeCallableProtocol } from "../../../../target-model/records/native-protocols.js";
 import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustNativeProducerBridge } from "./native-producer-bridges.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
+import { planRustNativeProtocolObligations } from "./native-protocol-obligations.js";
 import { planRustNativeGenericProducerBridges } from "./native-generic-producers.js";
 
 export function planRustNativeCallableProtocolItems(context: RustPlanContext): readonly RustItem[] {
@@ -41,9 +41,9 @@ export function planRustNativeCallableProtocol(
   if (parameters.some(parameter => parameter === undefined) || returnType === undefined)
     failRustPlannerInvariant("An admitted native callable protocol requires its renderable method signature.");
   return { kind: "trait", name: protocol.targetName, visibility: "public",
-    generics: { ...emptyRustGenerics, parameters: signature.environmentParameters.map(parameter => ({
+    generics: { parameters: signature.environmentParameters.map(parameter => ({
       kind: "type", name: parameter.name, bounds: [],
-    })) },
+    })), wherePredicates: planRustNativeProtocolObligations(protocol, context) },
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, bounds: [] },
       ...emission.nativeFutures
         .map(future => ({ kind: "type" as const,
