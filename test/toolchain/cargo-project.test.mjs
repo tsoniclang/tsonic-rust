@@ -15,10 +15,7 @@ import {
   analyzeRustRuntimeReferences,
 } from "../../dist/analysis/project/index.js";
 import { printCargoManifest } from "../../dist/print/project/manifest.js";
-import {
-  fakeCompileInput,
-  fakeSourceFile,
-} from "../helpers/fake-compile-input.mjs";
+import { checkedRustCompileInput } from "../helpers/rust-session.mjs";
 import { expectedAuthoredRustSource } from "../helpers/generated-rust-source.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -110,8 +107,7 @@ function runtimeReference(crate, path, {
 }
 
 test("empty program emits a deterministic cargo library project", () => {
-  const result = compile(fakeCompileInput({
-    sourceFiles: [fakeSourceFile({ fileName: "src/empty.ts", text: "", statements: [] })],
+  const result = compile(checkedRustCompileInput({
     runtimeReferences: [runtimeReference(
       "tsonic_rust_runtime",
       runtimeCrate,
@@ -157,7 +153,7 @@ test("empty program emits a deterministic cargo library project", () => {
 });
 
 test("bin output without an exported entry main fails closed", () => {
-  const result = compile(fakeCompileInput({
+  const result = compile(checkedRustCompileInput({
     target: { id: "rust", options: { outputType: "bin", crateName: "my_app", edition: "2024" } },
     runtimeReferences: [runtimeReference(
       "tsonic_rust_runtime",
@@ -188,9 +184,8 @@ test("core, alloc, and std foundations emit exact crate roots and Cargo features
       "",
     ]],
   ]) {
-    const result = compile(fakeCompileInput({
+    const result = compile(checkedRustCompileInput({
       target: { id: "rust", options: { foundation } },
-      sourceFiles: [fakeSourceFile({ fileName: "src/empty.ts", text: "", statements: [] })],
       runtimeReferences: [runtimeReference(
         "tsonic_rust_runtime",
         runtimeCrate,
@@ -216,7 +211,7 @@ test("core, alloc, and std foundations emit exact crate roots and Cargo features
 });
 
 test("foundation requirements fail closed before Cargo", () => {
-  const result = compile(fakeCompileInput({
+  const result = compile(checkedRustCompileInput({
     target: { id: "rust", options: { foundation: "core" } },
     runtimeReferences: [runtimeReference("hosted_provider", materializedCrate("hosted_provider"))],
   }));
@@ -284,7 +279,7 @@ test("cargo dependencies are sorted and deduplicated deterministically", () => {
 });
 
 test("unknown runtime reference kinds fail closed without artifacts", () => {
-  const result = compile(fakeCompileInput({
+  const result = compile(checkedRustCompileInput({
     runtimeReferences: [{ kind: "project", include: "/repos/x/x.csproj" }],
   }));
 
