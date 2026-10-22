@@ -52,6 +52,7 @@ import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
+import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -362,6 +363,8 @@ export function analyzeRustAnalysisProgram(
   if (binaryExecution.kind === "rejected") return binaryExecution;
   analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,
     producer: context.records.statementExits, required: context.requiredRecords });
+  eraseRustCompileTimeVariableStatements({ ast: context.ast, nodes: context.nativeNodes, records,
+    producer: context.records.compileTimeSources, required: context.requiredRecords });
   analyzeRustResourceScopes({ ast: context.ast, nodes: context.nativeNodes, records,
     producer: context.records.resourceScopes, required: context.requiredRecords });
   context.records.ownershipEmissionPlans.publish(ownership.ownership);
