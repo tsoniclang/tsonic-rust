@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -15,6 +16,7 @@ import { rustCallableWithError, rustUninhabitedError } from "../../policy/conver
 import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
@@ -150,6 +152,10 @@ function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">
     value = parent;
   const owner = ast.parent(value);
   if (owner === undefined) return undefined;
+  // An object-literal accessor is stored in its record's accessor slot, a callable with the program error
+  // (rustStructuralPropertyGetterStorageCarrier / rustStructuralPropertySetterStorageCarrier).
+  if ((ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node)) && ast.is.IsObjectLiteralExpression(owner))
+    return rustProgramErrorTargetType();
   const operation = program.records.targetOperation.get(owner);
   let slot: TargetTypeRef | undefined;
   if (operation?.kind === "provider-operation" && ast.is.IsCallExpression(owner)) {
@@ -157,6 +163,12 @@ function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">
     slot = index < 0 ? undefined
       : operation.abi.sourceArguments.find(argument => argument.sourceIndex === index && argument.form === "value")?.carrier;
   } else if (operation?.kind === "array-literal" && ast.is.IsArrayLiteralExpression(owner)) slot = operation.elementCarrier;
+  else if (ast.is.IsBinaryExpression(owner) && BinaryExpression_Right(ast, owner) === value) {
+    // A closure assigned to a writable method property is stored in the method's override slot.
+    const left = BinaryExpression_Left(ast, owner);
+    const target = left === undefined ? undefined : program.records.targetOperation.get(left);
+    if (target?.kind === "source-method-property" && target.write !== undefined) slot = target.callableCarrier;
+  }
   const erased = slot === undefined ? undefined : rustOptionElementCarrier(slot) ?? slot;
   return erased?.kind === "target-named" && erased.id === rustCallableTargetId ? rustCallableProtocol(erased)?.error : undefined;
 }
