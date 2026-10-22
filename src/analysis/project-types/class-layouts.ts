@@ -96,6 +96,15 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
         evidence: ["target.capability=rust.backend.project-dispatch-object-safety"] });
     } else producer.callable(member, signature);
   }
+  // A field whose declared type has no native storage carrier (e.g. `never`) is refused here, as the checkpoint
+  // planner refused it; it cannot become a stored slot.
+  for (const definition of program.projectTypes.definitions) for (const field of program.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []) {
+    const declared = program.callableValues.projectFieldStorage.get(field.declaration) ??
+      program.records.runtimeCarrier.get(field.declaration)?.carrier ?? program.records.runtimeCarrier.get(Node_Type(ast, field.declaration))?.carrier;
+    if (declared !== undefined && isRustNeverCarrier(declared)) issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust",
+      sourceNode: field.declaration, message: `Class field '${field.sourceName}' has no supported Rust storage identity or carrier fact. Node kind: ${ast.kindName(field.declaration)}.`,
+      evidence: ["target.capability=rust.backend.class-field-storage"] });
+  }
   if (issues.length !== 0) return Object.freeze(issues);
   for (const definition of program.projectTypes.definitions) {
     const index = new Map<Node, Map<Node, Map<string, RustProjectCallableAdapter>>>();
