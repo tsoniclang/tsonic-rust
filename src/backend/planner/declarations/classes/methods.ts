@@ -16,7 +16,6 @@ import { readRustProjectMethodOverride } from "../../objects/project-objects.js"
 import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustJsPromiseReturnType } from "../callables/return-types.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
-import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
@@ -221,7 +220,7 @@ export function planProjectMethod(
     };
   }
   const generics = genericPlan.finalizeGenerics();
-  const finalizedBody = applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined);
+  const finalizedBody = { statements: [...parameterStatements, ...body.statements] };
   const overridePrelude = options?.promiseBody !== true && options?.targetName === undefined && !isStatic
     ? planDirectProjectMethodOverridePrelude(member, params, syntheticNames, context)
     : [];
