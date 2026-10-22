@@ -1,4 +1,4 @@
-import { failRustPlannerInvariant } from "../diagnostics.js";
+import { failRustPlannerInvariant, planRustSyntaxNormalization } from "../diagnostics.js";
 import {
   rejectedTargetStage,
   resolvedTargetStage,
@@ -412,11 +412,11 @@ function finalizeRustPlannedArtifact(
     ? Object.freeze(artifact)
     : Object.freeze({
         ...artifact,
-        model: finalizeRustDeadCode(
+        model: planRustSyntaxNormalization(() => finalizeRustDeadCode(
           finalizeRustSourceStyle(
             applyRustFoundationImports(artifact.model, foundation),
           ),
-        ),
+        )),
       });
 }
 
