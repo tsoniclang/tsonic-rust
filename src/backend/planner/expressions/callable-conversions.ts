@@ -89,14 +89,23 @@ function planSelectedRustCallableConversion(
     arguments_.push(value);
   }
   const tuple: RustExpr = { kind: "tuple-literal", elements: arguments_ };
-  const invocation: RustExpr | undefined = source.input !== undefined
+  const invoked: RustExpr | undefined = source.input !== undefined
     ? planRustNativeProtocolInvocation(source.input, borrowed ? { kind: "path", path: callable }
       : { kind: "reference", expr: { kind: "path", path: callable } }, arguments_, undefined, context)
     : inline
     ? { kind: "invoke", callee: { kind: "path", path: callable }, args: [tuple] }
     : { kind: "method-call", receiver: { kind: "path", path: callable },
         method: emission.invocation, args: [tuple] };
-  if (invocation === undefined) return undefined;
+  if (invoked === undefined) return undefined;
+  let invocation: RustExpr = invoked;
+  if (conversion.errorPlan !== undefined) {
+    const errorName = allocateRustSyntheticName(names, "error");
+    const converted = lowerRustValueConversion(conversion.errorPlan, { kind: "path", path: errorName }, context, node);
+    if (converted === undefined) return undefined;
+    invocation = { kind: "method-call", receiver: invoked, method: "map_err", args: [{
+      kind: "closure", params: [{ name: errorName, byRefCopy: false }], body: converted,
+    }] };
+  }
   const resultName = allocateRustSyntheticName(names,
     conversion.resultPlan.kind === "absence" || conversion.resultPlan.kind === "discard" ? "_result" : "result");
   const result = conversion.resultPlan.kind === "absence" ? planRustAbsentValue(conversion.result, context)

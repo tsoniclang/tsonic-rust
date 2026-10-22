@@ -40,7 +40,8 @@ export function rustCallableConversionMatches(
   target: TargetTypeRef,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
-  if (!isClosedMetadata(conversion) || !hasExactObjectKeys(conversion, ["kind", "source", "target", "parameters", "result"]) ||
+  if (!isClosedMetadata(conversion) || !(hasExactObjectKeys(conversion, ["kind", "source", "target", "parameters", "result"]) ||
+    hasExactObjectKeys(conversion, ["kind", "source", "target", "parameters", "result", "error"])) ||
     conversion.kind !== "callable-adapter" || !isDenseDataArray(conversion.parameters) ||
     !isRustTargetTypeRef(source) || !isRustTargetTypeRef(target) || rustCallableInputMatches(source, target) ||
     rustNativeRepresentationMatches(source, target) ||
@@ -49,7 +50,10 @@ export function rustCallableConversionMatches(
   const targetCallable = callableConversionTarget(target);
   return rustTargetTypeRefEquals(conversion.source, source) && rustTargetTypeRefEquals(conversion.target, target) &&
     sourceCallable !== undefined && targetCallable !== undefined &&
-    (!("error" in targetCallable) || rustTargetTypeRefEquals(sourceCallable.error, targetCallable.error)) &&
+    (conversion.error === undefined
+      ? !("error" in targetCallable) || rustTargetTypeRefEquals(sourceCallable.error, targetCallable.error)
+      : "error" in targetCallable && targetCallable.error !== undefined && sourceCallable.error !== undefined &&
+        rustCallableErrorConversionMatches(conversion.error, sourceCallable.error, targetCallable.error, definitions)) &&
     sourceCallable.parameters.length <= targetCallable.parameters.length &&
     conversion.parameters.length === sourceCallable.parameters.length &&
     conversion.parameters.every((parameter, index) =>
@@ -71,8 +75,16 @@ export function selectRustCallableConversion(
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);
   if (sourceCallable === undefined || targetCallable === undefined ||
-    "error" in targetCallable && !rustTargetTypeRefEquals(sourceCallable.error, targetCallable.error) ||
     sourceCallable.parameters.length > targetCallable.parameters.length) return undefined;
+  // A callable whose error differs from the destination's is adapted only through an exact, infallible error conversion.
+  const targetError = "error" in targetCallable ? targetCallable.error : undefined;
+  let error: RustValueConversion | undefined;
+  if (targetError !== undefined && !rustTargetTypeRefEquals(sourceCallable.error, targetError)) {
+    const sourceError = sourceCallable.error;
+    error = sourceError === undefined ? undefined : selectValue(sourceError, targetError);
+    if (sourceError === undefined || error === undefined ||
+      !rustCallableErrorConversionMatches(error, sourceError, targetError, definitions)) return undefined;
+  }
   const select = (sourceValue: TargetTypeRef, targetValue: TargetTypeRef): RustCallableValueConversion | undefined => {
     if (rustTargetTypeRefEquals(sourceValue, targetValue)) return { kind: "identity" };
     const conversion = selectRustCallableConversion(sourceValue, targetValue, selectValue, definitions) ??
@@ -92,8 +104,15 @@ export function selectRustCallableConversion(
         ? { kind: "discard" } : select(sourceCallable.result, targetCallable.result);
   if (parameters.some(parameter => parameter === undefined) || result === undefined) return undefined;
   const conversion: RustCallableConversion = { kind: "callable-adapter", source, target,
-    parameters: parameters as readonly RustCallableValueConversion[], result };
+    parameters: parameters as readonly RustCallableValueConversion[], result, ...(error === undefined ? {} : { error }) };
   return rustCallableConversionMatches(conversion, source, target, definitions) ? snapshotClosedMetadata(conversion) : undefined;
+}
+
+function rustCallableErrorConversionMatches(conversion: RustValueConversion, source: TargetTypeRef, target: TargetTypeRef,
+  definitions: RustTypeDefinitions): boolean {
+  const contract = rustValueConversionContract(conversion, definitions);
+  return contract !== undefined && contract.sourceMode === "value" && !contract.fallible && contract.category === "exact" &&
+    rustTargetTypeRefEquals(contract.source, source) && rustTargetTypeRefEquals(contract.target, target);
 }
 
 function callableConversionTarget(target: TargetTypeRef) {

@@ -63,8 +63,10 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
       parameters.length - leading.length !== sourceParameters.length + closure.ignoredParameterCarriers.length ||
       !closure.ignoredParameterCarriers.every((carrier, index) => rustTargetTypeRefEquals(carrier, parameters[leading.length + sourceParameters.length + index])))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted closure requires its exact receiver and source parameter ABI.", node);
+    // A receiver-independent construction carrier takes only the parameters after the leading (receiver) parameters.
+    const constructed = constructionCarrier === closure.resultCarrier ? parameters : parameters.slice(leading.length);
     if (protocol !== undefined && (!rustTargetTypeRefEquals(protocol.result, resultCarrier) ||
-      protocol.parameters.length !== parameters.length || !protocol.parameters.every((carrier, index) => rustTargetTypeRefEquals(carrier, parameters[index]))))
+      protocol.parameters.length !== constructed.length || !protocol.parameters.every((carrier, index) => rustTargetTypeRefEquals(carrier, constructed[index]))))
       failTargetAnalysisInvariant("tsonic-rust", "An admitted closure requires its exact native construction parameter and result ABI.", node);
     const selected: RustLambdaParameterEmission[] = sourceParameters.map((parameter, index) => {
       if (parameter === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted closure requires dense source parameter slots.", node);

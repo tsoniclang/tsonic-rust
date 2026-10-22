@@ -19,6 +19,8 @@ export function substituteRustCallableConversion(
     source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
     target: substituteRustTargetGenerics(value.target, substitutions, lifetimeSubstitutions, constSubstitutions),
     parameters: Object.freeze(value.parameters.map(part)), result: part(value.result),
+    ...(value.error === undefined ? {} : {
+      error: substituteRustValueConversion(value.error, substitutions, lifetimeSubstitutions, constSubstitutions) }),
   });
 }
 
