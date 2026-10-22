@@ -9,6 +9,7 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { instantiateRustSourceUnionPayloads } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
@@ -281,6 +282,15 @@ export function createRustNativeStorageQueries(input: {
       const physical = substituteRustTargetGenerics(produced, types, generic.bindings.lifetimes, generic.bindings.consts);
       return rustPhysicalPayloadFor(logical, physical, current, input.definitions);
     };
+    // The one stored payload of a union carrier that is a type-erased runtime callable with the destination's signature.
+    const erasedUnionCallablePayload = (union: TargetTypeRef | undefined, current: TargetTypeRef): TargetTypeRef | undefined => {
+      const value = rustSourceUnionCarrierValue(union);
+      const payloads = value?.payloads.kind === "physical" ? value.payloads.types
+        : union === undefined ? undefined : rustUnionAlternatives(union, input.definitions)?.map(variant => variant.carrier);
+      const matching = (payloads ?? []).filter(payload => payload.kind === "target-named" && payload.id === rustCallableTargetId &&
+        rustCallableInvocationSignaturesMatch(current, payload));
+      return matching.length === 1 ? matching[0] : undefined;
+    };
     // A class field reached through an unbound receiver holds the field's own storage; a frame-callable field stores
     // its physical frame callable directly, so that storage is the producer's physical implementation.
     const frameFieldCarrier = (origin: SourceStorageSubject): TargetTypeRef | undefined => {
@@ -288,6 +298,13 @@ export function createRustNativeStorageQueries(input: {
       const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
         : input.records.runtimeCarrier.get(component.declaration)?.carrier;
       return carrier !== undefined && rustFrameCallableValue(carrier) !== undefined ? carrier : undefined;
+    };
+    const erasedFieldCallable = (origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined => {
+      const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
+      const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
+        : input.records.runtimeCarrier.get(component.declaration)?.carrier;
+      return carrier?.kind === "target-named" && carrier.id === rustCallableTargetId &&
+        rustCallableInvocationSignaturesMatch(current, carrier) ? carrier : undefined;
     };
     // Binds the free type parameters of a producer signature from the destination signature it is stored at.
     const instanceTypeBindings = (producer: TargetTypeRef, destination: TargetTypeRef): ReadonlyMap<string, TargetTypeRef> | undefined => {
@@ -380,6 +397,18 @@ export function createRustNativeStorageQueries(input: {
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
                 : frameFieldCarrier(origin);
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
+              // A callable narrowed out of a union-typed value is the union's stored payload for that member, which
+              // is already a type-erased runtime callable; it has no separate producer implementation.
+              // Likewise a class field declared as a type-erased runtime callable stores that erased callable.
+              const unionPayload = origin.projection.length === 0 ? erasedUnionCallablePayload(originCarrier, current)
+                : erasedFieldCallable(origin, current);
+              if (unionPayload !== undefined) {
+                candidatePhysical = unionPayload;
+                if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
+                  return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                physical = candidatePhysical;
+                continue;
+              }
               const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
               if (generics.kind === "unresolved") return fail(generics.reason);
               const { types, lifetimes, consts } = generics.bindings;
