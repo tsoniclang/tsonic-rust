@@ -1,3 +1,4 @@
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -27,11 +28,11 @@ function planTest(node: Node, expression: RustExpr, test: RustClosedTypeTestEmis
   if (test.kind === "project") return planRustProjectTypeTest(node, expression, test.plan, context)
     ?? failRustPlannerInvariant("An admitted project type test requires its native dispatch.", node);
   if (test.kind === "error") {
-    if (test.errorKind === "any") return { kind: "method-call", receiver: expression, method: "is_error", args: [] };
+    if (test.errorKind === "any") return { kind: "method-call", receiver: rustAutoBorrowedReceiver(expression), method: "is_error", args: [] };
     context.usedAliases?.add("rt");
     const kind: RustExpr = { kind: "path", path: `rt::JsErrorKind::${test.errorKind}` };
     return test.lowering === "native-error" ? { kind: "binary", left: { kind: "call", path: "rt::ErrorObject::error_kind", args: [expression] }, operator: "==", right: kind }
-      : { kind: "method-call", receiver: expression, method: "is_error_kind", args: [kind] };
+      : { kind: "method-call", receiver: rustAutoBorrowedReceiver(expression), method: "is_error_kind", args: [kind] };
   }
   const names = context.syntheticNames ?? failRustPlannerInvariant("An admitted type test requires its native binding scope.", node);
   if (test.kind === "option") {

@@ -170,7 +170,8 @@ export function planForOfStatement(
           : iterable],
       }
     : fact.lowering.kind === "js-array"
-      ? { kind: "method-call", receiver: iterable, method: "iter_values", args: [] }
+      // A method receiver is auto-borrowed; an explicit `&` on the shared iterable is clippy::needless_borrow.
+      ? { kind: "method-call", receiver: iterable.kind === "reference" ? iterable.expr : iterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
         ? { kind: "method-call", receiver: iterable, method: fact.lowering.name, args: [] }
       : fact.lowering.kind === "owned-call"

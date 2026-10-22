@@ -4,6 +4,7 @@ import type { RustFinalizedOperationAbi } from "../../../target-model/records/fi
 import type { RustCallGenericArgument, RustExpr, RustGenericArgument } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustPrimitiveTypeName } from "../../../target-model/types/carriers/primitives.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -48,7 +49,7 @@ export function planRustFinalizedOperationForm(
       }
       return {
         kind: "method-call",
-        receiver: typeUnsuffixedIntegerReceiver(receiver, abi.targetReceiver.input.parameterCarrier),
+        receiver: typeUnsuffixedIntegerReceiver(rustAutoBorrowedReceiver(receiver), abi.targetReceiver.input.parameterCarrier),
         method: form.name,
         args,
         ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
@@ -156,7 +157,7 @@ export function planRustFinalizedOperationForm(
         ? failRustPlannerInvariant("An admitted native method requires its finalized receiver.", operationNode)
         : {
             kind: "method-call",
-            receiver,
+            receiver: receiverMode === "ref" ? rustAutoBorrowedReceiver(receiver) : receiver,
             method: form.name,
             args,
             ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
