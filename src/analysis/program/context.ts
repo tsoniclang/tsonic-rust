@@ -40,12 +40,13 @@ import { analyzeRustLifetimes } from "../declarations/lifetimes.js";
 import { emptyRustLifetimeIndex, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { createRustGeneratedDeclarationUseRegistry, type RustGeneratedDeclarationUseRegistry } from "./records/generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
-import { analyzeSourceReceiverOccurrences, createSourceExplicitUnsafeContextIndex, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../callables/borrowed-returns.js";
+import { createRustExplicitUnsafeContexts } from "../safety/explicit-regions.js";
 import { createRustRetainedEnvironmentQueries } from "../callables/retained-environment-shapes.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
@@ -180,7 +181,7 @@ export function createRustAnalysisContext(
     isNativeNode,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage,
-      createSourceExplicitUnsafeContextIndex(ast, sourceFiles, node => safetyApplications.operationForExpression(node))),
+      createRustExplicitUnsafeContexts(ast, sourceFiles, node => safetyApplications.operationForExpression(node))),
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage, declarations: nativeNodes,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
     callableOwnership: createRustCallableOwnershipRegistry(),
