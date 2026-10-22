@@ -1,6 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
-  type SourceProgramNavigation } from "@tsonic/target-api/source";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -30,10 +29,7 @@ export function analyzeRustLocalBindings(input: {
   };
   for (const node of input.nodes) {
     if (input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
-    // A statement whose authored declarations are all compile-time or erased keeps an empty sealed sequence and
-    // emits nothing; only a statement without authored declarations is refused.
-    if (input.ast.is.IsVariableStatement(node) && input.records.variableDeclarations.get(node)?.length === 0 &&
-      (VariableDeclarationList_Declarations(input.ast, VariableStatement_DeclarationList(input.ast, node))?.length ?? 0) === 0) {
+    if (input.ast.is.IsVariableStatement(node) && input.records.variableDeclarations.get(node)?.length === 0) {
       refuse(node, "rust.backend.variable", "Variable statement has no exact variable declaration.");
     }
     if (!input.ast.is.IsVariableDeclaration(node)) continue;
