@@ -4,7 +4,7 @@ import type { RustGenericParameter, RustGenerics, RustWherePredicate, RustTypeBo
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
-import { rustGenericRequirementBounds } from "../../types/generic-bounds.js";
+import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function planRustNativeCallableGenerics(
@@ -68,7 +68,8 @@ export function planRustNativeCallableGenerics(
       parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!, bounds: selectedBounds });
     }
   }
-  const generics: RustGenerics = { parameters: [...sourceGenerics.parameters, ...parameters],
-    wherePredicates: predicates };
+  // An input the source predicates already name (its associated error obligation names its owner trait) keeps all its
+  // bounds in that one predicate; a bound in both places is rejected by clippy (multiple_bound_locations).
+  const generics: RustGenerics = rustGenericsWithAssociatedBounds([...sourceGenerics.parameters, ...parameters], predicates);
   return { ...source, context, parameterSlots, finalizeGenerics: () => generics };
 }
