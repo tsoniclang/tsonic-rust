@@ -6,12 +6,13 @@ import { finalizeProviderOperationFact } from "../../../dist/analysis/program/re
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/dispatch-contexts.js";
 import { collectRustProviderSemanticsFromDefinitions } from "../../../dist/providers/packages/index.js";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import { dispatchProviderDefinition } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
 import { rustFoundationForFinalizedOperationAbi } from "../../../dist/analysis/foundation/conversion-requirements.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const unit = { kind: "tuple", elements: [] };
-const contexts = collectRustProviderSemanticsFromDefinitions([dispatchProviderDefinition()]).dispatchContexts;
+const contexts = collectRustProviderSemanticsFromDefinitions([dispatchProviderDefinition()], rustProviderContractValidation).dispatchContexts;
 const catalogResult = analyzeRustDispatchContextCatalog(contexts, ["acme_dispatch"]);
 assert.equal(catalogResult.kind, "resolved");
 const catalog = catalogResult.plan;

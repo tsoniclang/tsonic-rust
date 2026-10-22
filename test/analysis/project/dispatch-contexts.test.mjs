@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
 import { collectRustProviderSemanticsFromDefinitions } from "../../../dist/providers/packages/index.js";
+import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import {
   dispatchContextDefinition as context,
@@ -11,7 +12,7 @@ import {
 const projection = contextId => ({ contextId, project: { form: "receiver-method", name: contextId } });
 
 function catalog(contexts) {
-  const semantics = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts: contexts })]);
+  const semantics = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts: contexts })], rustProviderContractValidation);
   const result = analyzeRustDispatchContextCatalog(semantics.dispatchContexts, ["acme_dispatch"]);
   assert.equal(result.kind, "resolved", "exact native context declarations resolve");
   return result.plan;
@@ -68,12 +69,12 @@ test("context catalog rejects missing, cyclic, duplicate and inactive compositio
       context({ id: "inner", composedContexts: [projection("outer")] })],
   ];
   for (const dispatchContexts of declarations) {
-    const rows = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts })]).dispatchContexts;
+    const rows = collectRustProviderSemanticsFromDefinitions([definition({ dispatchContexts })], rustProviderContractValidation).dispatchContexts;
     const result = analyzeRustDispatchContextCatalog(rows, ["acme_dispatch"]);
     assert.equal(result.kind, "rejected");
     assert.equal(result.diagnostics[0]?.code, "RUST_DISPATCH_CONTEXT_INVALID");
   }
-  const rows = collectRustProviderSemanticsFromDefinitions([definition()]).dispatchContexts;
+  const rows = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation).dispatchContexts;
   assert.equal(analyzeRustDispatchContextCatalog([...rows, ...rows], ["acme_dispatch"]).kind, "rejected");
   const inactiveChild = [
     { ...rows[0], id: "outer", composedContexts: [projection("inner")] },
