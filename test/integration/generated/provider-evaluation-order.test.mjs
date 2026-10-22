@@ -243,7 +243,7 @@ test("evaluation-only provider temporaries retain native Drop scope through read
       { exportId: "Token", memberId: "Token.consume", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::consume", argModes: ["value"] },
         parameterCarriers: [number], resultCarrier: number },
     ] });
-  const { result } = compileRust({ surfaces: [], packages: [provider],
+  const options = { surfaces: [], packages: [provider],
     target: { id: "rust", options: { outputType: "lib", crateName: "r14_provider_drop" } }, files: { "index.ts": `
 import { receiver, value, omit, abort, owner } from "@r14/drop";
 export function read(): number { return receiver().read; }
@@ -270,9 +270,11 @@ export function borrowingUnwind(): number {
   const stored = owner();
   return stored.guard.consume(abort());
 }
-` } });
+` } };
+  const { result } = compileRust(options);
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 2048));
-  const program = result.program;
+  // Analysis catalogs (source files) belong to the complete analysis program, not the sealed program.
+  const { program } = analyzeRust(options);
   const { ast } = program.source;
   let omitted;
   const borrowingCalls = [];

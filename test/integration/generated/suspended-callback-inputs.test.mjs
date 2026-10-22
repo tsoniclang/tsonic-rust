@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { suspendedCallbackInputsSource } from "../../../../tsonic/test/fixtures/suspended-callback-inputs.mjs";
-import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("suspended callback inputs preserve borrowed function and owning method result lifetimes", { timeout: 300_000 }, () => {
-  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": (suspendedCallbackInputsSource + "\nawait main();\n") } });
+  const options = { surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": (suspendedCallbackInputsSource + "\nawait main();\n") } };
+  const { result } = compileRust(options);
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  const program = result.program;
+  // Promise bodies and source files are analysis catalogs of the complete analysis program.
+  const { program } = analyzeRust(options);
   const ast = program.source.ast;
   const owners = [];
   const visit = node => {

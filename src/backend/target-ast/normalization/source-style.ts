@@ -58,18 +58,21 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     const localItems = value.statements.flatMap(statement => statement.kind === "item" ? [statement.item] : []);
     const scope = finalizeRustItemScope(localItems);
     let itemIndex = 0;
-    return { ...value, statements: [
+    return { ...value, statements: foldRustDirectLateInitializations([
       ...scope.aliases.map((item): RustStmt => ({ kind: "item", item })),
       ...value.statements.flatMap((statement): RustStmt[] => {
         if (statement.kind === "item") return [{ ...statement, item: scope.items[itemIndex++]! }];
         const styled = styleStatement(statement);
         return isRustUnitLiteralStatement(styled) ? [] : [styled];
       }),
-    ] };
+    ]) };
   };
   const expression = (value: RustExpr): RustExpr => {
     namingAllowance ||= rustExpressionDeclaresNonSnakeName(value);
     const mapped = mapRustExpressionChildren(value, expression, block);
+    // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
+    if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
+      return mapped.value;
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
       : { ...parameter, type: nameType(parameter.type, parameter.name) }) };
@@ -122,6 +125,24 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
   return { block, expression, requiresNamingAllowance: () => namingAllowance };
 }
 
+
+// `let x: T;` immediately followed by `x = value;` is `let x: T = value;` (clippy::needless_late_init). Syntax only:
+// the assignment cannot read the still-uninitialized binding, so moving it into the declaration changes nothing.
+function foldRustDirectLateInitializations(statements: readonly RustStmt[]): readonly RustStmt[] {
+  const folded: RustStmt[] = [];
+  for (let index = 0; index < statements.length; index++) {
+    const statement = statements[index]!;
+    const next = statements[index + 1];
+    if (statement.kind === "let" && statement.init === undefined && next?.kind === "assign" && next.operator === "=" &&
+      next.target.kind === "path" && next.target.path === statement.name) {
+      folded.push({ ...statement, init: next.value });
+      index++;
+      continue;
+    }
+    folded.push(statement);
+  }
+  return folded;
+}
 
 // A unit literal used as a statement (`();` or `let _ = ();`) has no effect by construction; it is dropped as
 // syntax only. Attributed statements are kept.

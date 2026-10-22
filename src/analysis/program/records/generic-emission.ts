@@ -2,6 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { rustGenericCallableSignaturesMatch } from "../../../policy/conversions/generic-callable.js";
 import type { RustGenericCallableImplementation, RustGenericCallablePhysicalDefinition } from "../../../target-model/records/generic-callables.js";
 import type { RustGenericDeclarationInventory, RustGenericDefinitionEmission, RustGenericEmissionRecords,
   RustGenericImplementationEmission, RustGenericValueEmission, RustGenericIdentityEmission } from "../../../target-model/records/generic-emission.js";
@@ -23,7 +24,15 @@ export function createRustGenericEmissionProducer(assertOpen: () => void): RustG
   const inventories = new WeakMap<SourceFile, RustGenericDeclarationInventory>();
   return Object.freeze({ records: Object.freeze({
     genericIdentity: Object.freeze({ get: (node: Node) => identities.get(node) }),
-    genericValue: Object.freeze({ get: (node: Node, carrier: TargetTypeRef) => values.get(node)?.get(closedMetadataKey(carrier)) }),
+    // A construction is published under its physical operand carrier; a planner holding the logical construction
+    // carrier reads the one construction of that node whose physical signature matches it.
+    genericValue: Object.freeze({ get: (node: Node, carrier: TargetTypeRef) => {
+      const rows = values.get(node);
+      const exact = rows?.get(closedMetadataKey(carrier));
+      if (exact !== undefined || rows === undefined) return exact;
+      const matching = [...rows.values()].filter(row => rustGenericCallableSignaturesMatch(carrier, row.carrier));
+      return matching.length === 1 ? matching[0] : undefined;
+    } }),
     genericImplementation: Object.freeze({ get: (subject: RustGenericCallableImplementation) => implementations.get(subject) }),
     genericDefinition: Object.freeze({ get: (subject: RustGenericCallablePhysicalDefinition) => definitions.get(subject) }),
     genericDeclarations: Object.freeze({ get: (subject: SourceFile) => inventories.get(subject) }),

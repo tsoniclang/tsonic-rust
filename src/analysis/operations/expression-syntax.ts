@@ -35,6 +35,9 @@ export function analyzeRustExpressionSyntax(program: Omit<RustAnalysisProgram, "
     if (kind === "KindNullKeyword" || kind === "KindIdentifier" && (fact?.kind === "option-none" || binding === undefined && isRustAbsenceCarrier(carrier))) {
       // A null literal reads as the absent value of its own carrier: the unit absence, an Option, a custom optional
       // storage or a source union with an absence lane (the same optional storage that type emission selects).
+      // A null literal without a value read (a `case null:` label or an operand that a nullish comparison consumes)
+      // is never planned as a value; the consuming operation owns it, as in the checkpoint's planner.
+      if (carrier === undefined && fact?.kind !== "option-none") continue;
       const absentStorage = carrier !== undefined && (isRustAbsenceCarrier(carrier) ||
         rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined ||
         rustSourceUnionCarrierValue(carrier) !== undefined &&

@@ -68,8 +68,9 @@ export function analyzeRustLocalBindings(input: {
       continue;
     }
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted local binding requires its finalized carrier.", node);
+    // The physical value destination is selected for the initializer; a declaration without one keeps its carrier.
     const physical = input.nativeStorage.valueFor(node);
-    if (physical.kind === "unresolved") {
+    if (physical.kind === "unresolved" && initializer !== undefined) {
       refuse(node, "rust.backend.value-destination", physical.reason, "RUST_MISSING_TARGET_FACT");
       continue;
     }

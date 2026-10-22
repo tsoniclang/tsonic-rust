@@ -37,13 +37,16 @@ export function analyzeRustCallableDeclarationEmission(input: {
     const asyncFact = program.records.asyncFunction.get(declaration);
     const generator = program.records.generator.get(declaration);
     const carrier = generator?.returnType ?? asyncFact?.outputCarrier ?? sourceReturn?.returnCarrier;
-    if (sourceReturn === undefined || carrier === undefined)
+    // The return record is finalized only for callables whose signature some emission requested; a callable body
+    // no emission finalized is not planned as a callable body here (as in the checkpoint's planner).
+    if (sourceReturn === undefined && carrier === undefined) continue;
+    if (carrier === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted callable body requires its finalized source return and control-flow evidence.", declaration);
     const alwaysExits = ast.is.IsBlock(body) ? program.records.statementExit.get(body) : true;
     if (alwaysExits === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted callable body requires its sealed source statement exit.", body);
     const canFallThrough = !alwaysExits;
     const method = ast.is.IsMethodDeclaration(declaration) || ast.is.IsGetAccessorDeclaration(declaration) || ast.is.IsSetAccessorDeclaration(declaration);
-    if (!isRustUnitCarrier(carrier) && canFallThrough && sourceReturn.fallthroughUndefined !== true) {
+    if (!isRustUnitCarrier(carrier) && canFallThrough && sourceReturn?.fallthroughUndefined !== true) {
       reject(body, generator === undefined ? "rust.backend.return-flow" : "rust.backend.generator-return-flow",
         generator === undefined ? method ? "Value-returning methods require finalized control flow that returns or throws on every path."
           : "Value-returning functions require finalized control flow that returns or throws on every path."

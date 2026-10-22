@@ -20,6 +20,7 @@ import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { applyFinalizedRustArgumentMode } from "./input-shaping.js";
 import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./calls/rest-assembly.js";
 import { planRustFinalizedOperationForm } from "./finalized-operation-form.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr {
   switch (argument.kind) {
@@ -161,7 +162,7 @@ export function planFinalizedTargetInput(context: RustPlanContext, input: RustFi
         : planFinalizedSourceInput(context, element, receiverNode, argumentNodes, operationNode, "target-argument", overrides);
       if (value === undefined) return undefined;
       elements.push(element.elementView === "str" && !directLiteral
-        ? { kind: "method-call", receiver: value, method: "as_str", args: [] } : value);
+        ? { kind: "method-call", receiver: rustAutoBorrowedReceiver(value), method: "as_str", args: [] } : value);
       sequences.push(element.conversion.kind === "semantic" && element.conversion.conversion.kind === "rest-sequence");
     }
     if (sequences.some(Boolean)) {
