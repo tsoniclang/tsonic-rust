@@ -8,6 +8,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCallableConstructionType } from "../types/constructions.js";
 import { rustEliminateInfallibleResult } from "../types/fallible-shape.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { isRustUnitCarrier } from "../../../target-model/types/carriers/js.js";
 
 // A callable whose error is uninhabited, written into storage shared with other producers, keeps its own invocation
 // inside the shared boxed callable and eliminates its error.
@@ -26,8 +27,11 @@ export function planRustCallableJoinWrite(
   const value = rustEliminateInfallibleResult({ kind: "method-call", receiver: { kind: "path", path: callable },
     method: "call", args: [{ kind: "path", path: argumentsName }] },
   allocateRustSyntheticName(names, "call_value"), allocateRustSyntheticName(names, "call_error"));
-  const body: RustExpr = { kind: "call", path: "Ok", genericArguments: [{ kind: "type", type: { kind: "infer" } },
-    { kind: "type", type: errorType }], args: [value] };
+  // A unit result is evaluated before Ok(()) rather than passed as the argument (clippy::unit_arg).
+  const unit = isRustUnitCarrier(signature.result);
+  const result: RustExpr = { kind: "call", path: "Ok", genericArguments: [{ kind: "type", type: { kind: "infer" } },
+    { kind: "type", type: errorType }], args: [unit ? { kind: "tuple-literal", elements: [] } : value] };
+  const body: RustExpr = unit ? { kind: "evaluate-then", effect: value, discard: "unit", value: result } : result;
   return { kind: "block", body: { statements: [{ kind: "let", mutable: false, name: callable, init: expression }, { kind: "tail", expr: {
     kind: "associated-call", owner: targetType, method: "new", args: [{
       kind: "closure", move: true, params: [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
