@@ -252,12 +252,9 @@ export function createRustStructuralMethodStorage(input: {
           }
         }
         if (invocations.length === 0) return { kind: "open" };
-        for (const activation of invocations) {
-          const origins = sourceStorage.boundOriginsFor(producer.subject, activation.bindings);
-          if (origins.kind === "unresolved") return origins;
-          if (origins.subjects.length === 0) return { kind: "open" };
-          for (const origin of origins.subjects) pending.push({ subject: origin, bindings: activation.callerBindings, transported: true });
-        }
+        // The bound input under each invocation yields its producers with their own creation bindings; re-querying its
+        // unbound origins under the caller's bindings would drop the defining call's context (aliased spread copies).
+        for (const activation of invocations) pending.push({ subject: producer.subject, bindings: activation.bindings, transported: true });
       }
     }
     return { kind: "complete", producers: Object.freeze(producers), transported };
