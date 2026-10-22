@@ -172,7 +172,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
     });
     // An absence default the constructor can never observe is not emitted: the field is initialized by its first write.
     const settle = (field: RustConstructionField): RustConstructionField => field.absenceDefault &&
-      !readiness.observedAbsenceDefaults.has(physicalDeclaration(field.declaration)) ? Object.freeze({ ...field, absenceDefault: false }) : field;
+      !readiness.observesInitialValue(physicalDeclaration(field.declaration)) ? Object.freeze({ ...field, absenceDefault: false }) : field;
     const settledLayers = layers.map(layer => Object.freeze({ ...layer, fields: Object.freeze(layer.fields.map(settle)) }));
     const settledFields = Object.freeze(fields.map(settle));
     const emission = prepareRustConstructionEmission(input, definition, settledLayers, settledFields, readiness);
@@ -184,6 +184,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       layerHasEarlyReturn: readiness.layerHasEarlyReturn,
       mutatesUnpublishedField: readiness.mutatesUnpublishedField,
       accessesUnpublishedField: readiness.accessesUnpublishedField,
+      observesInitialValue: readiness.observesInitialValue,
       expressionsWithin: readiness.expressionsWithin, publishesReceiver: readiness.publishesReceiver,
       mutatesPublishedFields: readiness.mutatesPublishedFields }));
   }
