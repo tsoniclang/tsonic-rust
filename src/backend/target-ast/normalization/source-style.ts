@@ -50,8 +50,23 @@ function styleCallable<Callable extends RustImplFunction>(
 ): Callable {
   const styler = createRustBodyStyler(isFunctionItem, nameType);
   const body = styler.block(callable.body);
-  return { ...callable, body, ...(styler.requiresNamingAllowance()
-    ? { attrs: appendRustNamingAllowance(callable.attrs, "snake") } : {}) };
+  const lifted = liftRustUnusedParameterExpectation(callable);
+  return { ...lifted, body, ...(styler.requiresNamingAllowance()
+    ? { attrs: appendRustNamingAllowance(lifted.attrs, "snake") } : {}) };
+}
+
+// An unused-parameter expectation is written on the function item, so the parameter list prints as authored
+// (`fn has_text(text: &str) -> bool`); the attribute covers the same lint for the whole signature (syntax only).
+function liftRustUnusedParameterExpectation<Callable extends Pick<RustImplFunction, "attrs" | "params">>(callable: Callable): Callable {
+  const expected = rustLintAttributes.unusedVariables;
+  if (!callable.params.some(parameter => parameter.attrs?.includes(expected) === true)) return callable;
+  return { ...callable, attrs: callable.attrs?.includes(expected) === true ? callable.attrs : [...callable.attrs ?? [], expected],
+    params: callable.params.map(parameter => {
+      if (parameter.attrs?.includes(expected) !== true) return parameter;
+      const attrs = parameter.attrs.filter(attribute => attribute !== expected);
+      const { attrs: _attrs, ...rest } = parameter;
+      return attrs.length === 0 ? rest : { ...rest, attrs };
+    }) };
 }
 
 function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionItemQuery): RustItem {
@@ -62,7 +77,7 @@ function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionIte
       ? finalizeRustFunctionNames(member, item.trait === undefined) : member) };
     case "trait": return { ...item, members: item.members.map(member => {
       if (member.kind !== "function") return member;
-      const fn = finalizeRustFunctionNames(member);
+      const fn = liftRustUnusedParameterExpectation(finalizeRustFunctionNames(member));
       if (fn.body === undefined) return fn;
       const styler = createRustBodyStyler(isFunctionItem);
       const body = styler.block(fn.body);
@@ -101,6 +116,10 @@ function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: 
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
+    // A literal left operand decides a short-circuit operator: `true && value` is `value`, `false && value` is `false`
+    // (syntax only; the right operand is evaluated exactly when the operator evaluates it).
+    if (mapped.kind === "binary" && mapped.left.kind === "bool-literal" && (mapped.operator === "&&" || mapped.operator === "||"))
+      return (mapped.operator === "&&" ? mapped.left.value : !mapped.left.value) ? mapped.right : mapped.left;
     // A closure that only forwards its parameters is the callee itself (`|value| Ok(value)` is `Ok`,
     // `|left, right| compare(left, right)` is `compare`). A bare lowercase callee collapses only when it names a
     // function item of this file that no binding shadows: a local callable would be moved instead of borrowed.

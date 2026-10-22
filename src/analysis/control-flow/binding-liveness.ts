@@ -6,6 +6,7 @@ import type { RustOwnershipFlow } from "../../target-model/records/ownership-flo
 import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import { rustStaticComparisonSkipsOperand } from "../operations/static-comparison-operands.js";
 
 export function analyzeRustBindingLiveness(
   source: TargetSourceProgram, flow: RustOwnershipFlow, records: RustProgramRecords, names: RustNamePlan,
@@ -83,8 +84,11 @@ export function analyzeRustBindingLiveness(
     for (const point of graph.points) {
       if (!liveness.reachable.has(point.id)) continue;
       const operation = point.operation;
-      // A discarded callable is erased from the native program, so its capture never reads the binding.
-      if (operation.kind === "read" && (point.source === undefined || !notEmitted(point.source)) || operation.kind === "capture" &&
+      // A discarded callable is erased from the native program, so its capture never reads the binding; an unemitted
+      // read and a statically decided comparison operand are not evaluated natively.
+      if (operation.kind === "read" && (point.source === undefined || !notEmitted(point.source) &&
+          !rustStaticComparisonSkipsOperand(source.ast, records, point.source)) ||
+        operation.kind === "capture" &&
         (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);
       if (operation.kind === "read" && point.source !== undefined &&
         observesInitializerThroughCompletion(point.source, operation.binding, false) ||
