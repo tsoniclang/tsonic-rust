@@ -10,7 +10,7 @@ import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/inde
 import {
   dispatchContextDefinition as context,
   dispatchProviderDefinition as definition,
-} from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+} from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 
 test("dispatch contexts materialize exact native carriers, generic errors and factory aliases", () => {
   const semantics = collectRustProviderSemanticsFromDefinitions([definition()], rustProviderContractValidation);

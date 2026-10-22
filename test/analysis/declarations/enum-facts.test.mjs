@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";

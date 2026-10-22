@@ -5,7 +5,7 @@ import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { collectRustProviderSemanticsFromDefinitions, mergeRustProviderSemantics } from "../../../dist/providers/packages/index.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 import { analyzeRustBinaryHooks } from "../../../dist/analysis/project/hooks.js";
-import { dispatchContextDefinition, dispatchProviderDefinition } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+import { dispatchContextDefinition, dispatchProviderDefinition } from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 
 export function dispatchGroup(overrides = {}) {
   return {

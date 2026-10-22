@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";

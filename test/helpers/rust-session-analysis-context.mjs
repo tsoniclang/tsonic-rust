@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
-import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
-import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
+import { createRustAnalysisContext } from "../../dist/analysis/program/context.js";
+import { analyzeRustProgram } from "../../dist/analysis/program/analyze.js";
+import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../dist/analysis/project/index.js";
 
 export function analyzeRustCheckedContext(request, configureContext) {
   const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation, request.runtimeCrates);

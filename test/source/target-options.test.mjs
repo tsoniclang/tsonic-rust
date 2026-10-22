@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readRustCrateName, readRustEdition, readRustFoundation, readRustOutputType, readRustUserProjectFile, validateRustTargetOptions } from "../../../dist/options/target.js";
+import { readRustCrateName, readRustEdition, readRustFoundation, readRustOutputType, readRustUserProjectFile, validateRustTargetOptions } from "../../dist/options/target.js";
 
 function target(options) {
   return { id: "rust", ...(options === undefined ? {} : { options }) };

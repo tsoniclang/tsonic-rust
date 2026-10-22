@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { selectRustSourceCallResult } from "../../../dist/analysis/source-evidence/types/resolution/call-results.js";
 import { rustDirectPromiseBodyCallee } from "../../../dist/analysis/callables/promise-bodies.js";
 

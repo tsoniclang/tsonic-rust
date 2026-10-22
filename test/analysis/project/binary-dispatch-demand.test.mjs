@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustBinaryDispatchDemand } from "../../../dist/analysis/project/binary-dispatch-demand.js";
 import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/dispatch-contexts.js";
-import { dispatchContextDefinition } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+import { dispatchContextDefinition } from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 
 function group() {
   return { contextIds: ["acme.dispatch"], targetArgumentIndex: 0,

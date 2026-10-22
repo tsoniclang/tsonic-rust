@@ -3,8 +3,8 @@ import { test } from "node:test";
 import {
   artifactText,
   compileRust,
-} from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+} from "../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../helpers/cargo-projects.mjs";
 
 test("authored declarations preserve exact names without renaming unused parameters", { timeout: 300_000 }, () => {
   const { result } = compileRust({

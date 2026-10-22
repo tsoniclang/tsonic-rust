@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/syntax/nodes.js";
-import { printRustItem } from "../../../dist/print/source/declarations.js";
-import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/syntax/module-references.js";
-import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
+import { emptyRustGenerics, createRustSourceFile } from "../../dist/backend/target-ast/syntax/nodes.js";
+import { printRustItem } from "../../dist/print/source/declarations.js";
+import { rustItemsReferenceModuleAlias } from "../../dist/backend/target-ast/syntax/module-references.js";
+import { finalizeRustSourceStyle } from "../../dist/backend/target-ast/normalization/source-style.js";
 
 const family = {
   kind: "trait", name: "Storage", visibility: "public", generics: emptyRustGenerics,

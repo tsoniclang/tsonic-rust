@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createTargetRegistry } from "@tsonic/target-api";
-import { createRustTargetPack, rustTargetId } from "../../../dist/index.js";
+import { createRustTargetPack, rustTargetId } from "../../dist/index.js";
 
 test("rust target pack registers under the rust target id", () => {
   const registry = createTargetRegistry([createRustTargetPack()]);
@@ -20,7 +20,7 @@ test("rust target pack declares only the js surface; capabilities install separa
 });
 
 test("createTsonicPlugin exposes the installed target plugin contract", async () => {
-  const { createTsonicPlugin } = await import("../../../dist/index.js");
+  const { createTsonicPlugin } = await import("../../dist/index.js");
   const plugin = createTsonicPlugin();
   assert.equal(plugin.kind, "target");
   assert.equal(plugin.id, "@tsonic/target-rust");
@@ -113,7 +113,7 @@ test("the compilation session rejects foreign capability payloads before provide
 test("package manifest declares the installed plugin contract", async () => {
   const { readFileSync } = await import("node:fs");
   const { createRequire } = await import("node:module");
-  const manifest = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8"));
+  const manifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
   assert.deepEqual(manifest.tsonic, { kind: "plugin", contractVersion: 1, entry: "." });
   assert.equal(manifest.exports["./package.json"], "./package.json");
   assert.equal(manifest.exports["."], "./dist/index.js");
@@ -121,7 +121,7 @@ test("package manifest declares the installed plugin contract", async () => {
   // package.json resolves through package exports from a consumer.
   const require = createRequire(new URL("../../../node_modules/x/index.js", import.meta.url));
   void require;
-  const { createTsonicPlugin } = await import("../../../dist/index.js");
+  const { createTsonicPlugin } = await import("../../dist/index.js");
   assert.equal(createTsonicPlugin().id, "@tsonic/target-rust");
 });
 

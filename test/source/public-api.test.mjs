@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 test("Rust target entrypoints expose one API per audience", async () => {
   const manifest = JSON.parse(
-    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+    readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
   );
   assert.deepEqual(Object.keys(manifest.exports).sort(), [
     ".",
@@ -12,7 +12,7 @@ test("Rust target entrypoints expose one API per audience", async () => {
     "./provider",
   ]);
 
-  const root = await import("../../../dist/index.js");
+  const root = await import("../../dist/index.js");
   assert.deepEqual(Object.keys(root).sort(), [
     "createRustStarterProject",
     "createRustTargetPack",
@@ -23,7 +23,7 @@ test("Rust target entrypoints expose one API per audience", async () => {
   assert.equal("createRustProviderPackage" in root, false);
   assert.equal("printRustSourceFile" in root, false);
 
-  const provider = await import("../../../dist/public/provider.js");
+  const provider = await import("../../dist/public/provider.js");
   assert.equal(typeof provider.createRustProviderPackage, "function");
   assert.equal(typeof provider.rustCallableTargetType, "function");
   assert.equal(typeof provider.rustSourcePrimitiveTargetType, "function");

@@ -1,8 +1,8 @@
-import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
+import { rustValueBlock } from "../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { mapRustExpressionChildren } from "../../../dist/backend/target-ast/syntax/expression-children.js";
+import { printRustExpr } from "../../dist/print/source/expressions/core.js";
+import { mapRustExpressionChildren } from "../../dist/backend/target-ast/syntax/expression-children.js";
 
 test("native block lets preserve explicit type, lexical scope and external writes", () => {
   const path = name => ({ kind: "path", path: name });

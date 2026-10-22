@@ -1,15 +1,15 @@
-import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
+import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
   artifactText,
   compileRust,
-} from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+} from "../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../helpers/cargo-projects.mjs";
 import {
   collectTargetSourcePackageGraph,
-} from "../../../../tsonic/packages/host/dist/source-package-inputs.js";
+} from "../../../tsonic/packages/host/dist/source-package-inputs.js";
 
 const authoredDeadCode =
   '#[allow(dead_code, reason = "retains an unused authored declaration")]';

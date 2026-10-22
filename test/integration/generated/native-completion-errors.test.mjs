@@ -4,7 +4,7 @@ import { lowerRustCompletionScope } from "../../../dist/backend/target-ast/norma
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustRuntimeCratePath } from "../../helpers/rust-session/paths.mjs";
+import { rustRuntimeCratePath } from "../../helpers/rust-session-paths.mjs";
 
 const path = name => ({ kind: "path", path: name });
 const callMethod = (receiver, method, args = []) => ({ kind: "method-call", receiver: path(receiver), method, args });

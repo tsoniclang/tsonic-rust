@@ -12,7 +12,7 @@ import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 import { awaitOperandCallableSource, nativeAwaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
-import { dispatchProviderPackage } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+import { dispatchProviderPackage } from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 
 
 const source = `

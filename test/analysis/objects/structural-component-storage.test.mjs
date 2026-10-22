@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { createRustStructuralShapePlan, createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";

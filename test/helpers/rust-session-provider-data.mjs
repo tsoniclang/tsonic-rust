@@ -1,6 +1,6 @@
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { fixtureCratesRoot } from "./paths.mjs";
-import { int32Carrier, stringCarrier, unitCarrier } from "./provider-core.mjs";
+import { createRustProviderPackage } from "../../dist/public/provider.js";
+import { fixtureCratesRoot } from "./rust-session-paths.mjs";
+import { int32Carrier, stringCarrier, unitCarrier } from "./rust-session-provider-core.mjs";
 import { relative, resolve } from "node:path";
 
 export const vectorCarrier = { kind: "target-named", id: "acme.vectors.Vector" };

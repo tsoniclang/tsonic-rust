@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
-import { createRustProviderPackage, rustCallableTargetType } from "../../../dist/public/provider.js";
-import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { createRustProviderPackage, rustCallableTargetType } from "../../dist/public/provider.js";
+import { rustProgramErrorTargetType } from "../../dist/target-model/types/carriers/js.js";
 
 export function dispatchContextDefinition(overrides = {}) {
   return {

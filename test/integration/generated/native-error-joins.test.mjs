@@ -11,7 +11,7 @@ import { lowerRustCompletionScope } from "../../../dist/backend/target-ast/norma
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustRuntimeCratePath } from "../../helpers/rust-session/paths.mjs";
+import { rustRuntimeCratePath } from "../../helpers/rust-session-paths.mjs";
 
 test("native error sums derive Debug conditionally without constraining arbitrary payloads", { timeout: 300_000 }, () => {
   const joined = planRustNativeErrorJoin({ identity: "fixture:conditional-debug", name: "NativeErrors", visibility: "public",

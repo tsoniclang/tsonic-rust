@@ -1,12 +1,12 @@
-import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
+import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
-import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeMethods } from "../../helpers/native-ast.mjs";
+import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeMethods } from "../helpers/native-ast.mjs";
 import { test } from "node:test";
 import {
   artifactText,
   compileRust,
-} from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+} from "../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../helpers/cargo-projects.mjs";
 
 test("direct-only module callables lower to native functions across exact import forms", { timeout: 300_000 }, () => {
   const { result } = compileRust({

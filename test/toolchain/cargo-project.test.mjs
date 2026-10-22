@@ -1,27 +1,27 @@
 import { test } from "node:test";
-import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
+import { rustProviderContractValidation } from "../../dist/providers/packages/contracts.js";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compileRustTarget } from "../../../dist/backend/compile.js";
-import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
-import { createRustTargetConfiguration } from "../../../dist/options/target.js";
-import { analyzeRustPackageCargo } from "../../../dist/analysis/source-modules/package-cargo.js";
-import { createRustSourcePackageEmissionProducer } from "../../../dist/analysis/program/records/source-packages.js";
-import { materializeRustRuntimeReferences } from "../../../dist/providers/runtime/materialization.js";
-import { planRustCargoProject } from "../../../dist/backend/planner/project/project-artifacts.js";
+import { compileRustTarget } from "../../dist/backend/compile.js";
+import { composeRustProviderSemantics } from "../../dist/providers/packages/semantics.js";
+import { createRustTargetConfiguration } from "../../dist/options/target.js";
+import { analyzeRustPackageCargo } from "../../dist/analysis/source-modules/package-cargo.js";
+import { createRustSourcePackageEmissionProducer } from "../../dist/analysis/program/records/source-packages.js";
+import { materializeRustRuntimeReferences } from "../../dist/providers/runtime/materialization.js";
+import { planRustCargoProject } from "../../dist/backend/planner/project/project-artifacts.js";
 import {
   analyzeRustRuntimeReferences,
-} from "../../../dist/analysis/project/index.js";
-import { printCargoManifest } from "../../../dist/print/project/manifest.js";
+} from "../../dist/analysis/project/index.js";
+import { printCargoManifest } from "../../dist/print/project/manifest.js";
 import {
   fakeCompileInput,
   fakeSourceFile,
-} from "../../helpers/fake-compile-input.mjs";
-import { expectedAuthoredRustSource } from "../../helpers/generated-rust-source.mjs";
+} from "../helpers/fake-compile-input.mjs";
+import { expectedAuthoredRustSource } from "../helpers/generated-rust-source.mjs";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
 const jsCrate = resolve(repositoryRoot, "../rust-js/crates/tsonic_rust_js");
 const fixtureRoot = resolve(repositoryRoot, ".temp/cargo-project-fixtures");

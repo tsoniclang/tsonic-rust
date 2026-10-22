@@ -7,7 +7,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import {
   dispatchContextDefinition as context,
   dispatchProviderDefinition as definition,
-} from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+} from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 
 const projection = contextId => ({ contextId, project: { form: "receiver-method", name: contextId } });
 

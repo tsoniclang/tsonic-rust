@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
-import { createRustSourceFile, emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
-import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
+import { finalizeRustSourceStyle } from "../../dist/backend/target-ast/normalization/source-style.js";
+import { createRustSourceFile, emptyRustGenerics } from "../../dist/backend/target-ast/syntax/nodes.js";
+import { printRustExpr } from "../../dist/print/source/expressions/core.js";
 
 test("conditional and if-let arms preserve their exact lexical block targets", () => {
   const selected = { kind: "block", label: "selected", body: { statements: [{ kind: "tail", expr: {

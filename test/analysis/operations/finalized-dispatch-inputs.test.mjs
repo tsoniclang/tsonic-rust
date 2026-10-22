@@ -7,7 +7,7 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/dispatch-contexts.js";
 import { collectRustProviderSemanticsFromDefinitions } from "../../../dist/providers/packages/index.js";
 import { rustProviderContractValidation } from "../../../dist/providers/packages/contracts.js";
-import { dispatchProviderDefinition } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+import { dispatchProviderDefinition } from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 import { rustFoundationForFinalizedOperationAbi } from "../../../dist/analysis/foundation/conversion-requirements.js";
 
 const integer = { kind: "source-primitive", name: "int32" };

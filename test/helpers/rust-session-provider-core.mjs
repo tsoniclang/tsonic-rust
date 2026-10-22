@@ -1,5 +1,5 @@
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { fixtureCratesRoot } from "./paths.mjs";
+import { createRustProviderPackage } from "../../dist/public/provider.js";
+import { fixtureCratesRoot } from "./rust-session-paths.mjs";
 import { resolve } from "node:path";
 
 export const stringCarrier = { kind: "target-named", id: "rust.std.String" };

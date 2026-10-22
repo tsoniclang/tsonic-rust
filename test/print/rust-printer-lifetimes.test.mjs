@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
-import { printRustType } from "../../../dist/print/source/types.js";
-import { rustTypeEquals } from "../../../dist/backend/target-ast/syntax/type-equality.js";
+import { printRustSourceFile } from "../helpers/printed-rust-source.mjs";
+import { printRustType } from "../../dist/print/source/types.js";
+import { rustTypeEquals } from "../../dist/backend/target-ast/syntax/type-equality.js";
 
 const namedLifetime = (name) => ({ kind: "named", name });
 const lifetimeParameter = (name, outlives = []) => ({

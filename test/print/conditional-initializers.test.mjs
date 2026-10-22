@@ -1,9 +1,9 @@
-import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
-import { rustListAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/syntax/attributes.js";
+import { rustValueBlock } from "../../dist/backend/target-ast/syntax/value-block.js";
+import { rustListAttribute, rustWordAttribute } from "../../dist/backend/target-ast/syntax/attributes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { cloneRustExpression } from "../../../dist/backend/target-ast/syntax/expressions.js";
+import { printRustExpr } from "../../dist/print/source/expressions/core.js";
+import { cloneRustExpression } from "../../dist/backend/target-ast/syntax/expressions.js";
 
 const literal = value => ({ kind: "int-literal", text: String(value) });
 const path = value => ({ kind: "path", path: value });

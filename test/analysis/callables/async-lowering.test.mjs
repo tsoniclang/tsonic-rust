@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { selectRustAsyncBodyLowering } from "../../../dist/analysis/callables/async-results.js";
 
 function fixture(text) {

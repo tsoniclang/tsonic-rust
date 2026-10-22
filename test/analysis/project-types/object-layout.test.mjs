@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustProjectObjectLayout } from "../../../dist/analysis/project-types/object-layout.js";
 import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 
 test("project layouts read only admitted leaf names and never partial computed fields", () => {
   const field = (kind, value, optional = false) => ({ kind: "KindPropertySignature", name: { kind, value }, optional });

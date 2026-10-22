@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/promise-recursion.js";
 import { rustDirectPromiseBodyCallee } from "../../../dist/analysis/callables/promise-bodies.js";

@@ -3,7 +3,7 @@ import test from "node:test";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { createRustProjectMethodPropertyPlanRegistry } from "../../../dist/analysis/project-types/method-properties.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 
 function fixture(text, diagnosticCodes = []) {
   let context;

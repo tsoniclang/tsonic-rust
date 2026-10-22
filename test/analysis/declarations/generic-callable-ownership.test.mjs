@@ -22,7 +22,7 @@ import { createRustObjectRepresentationPlan } from "../../../dist/analysis/proje
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 
 
 

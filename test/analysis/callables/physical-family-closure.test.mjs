@@ -3,7 +3,7 @@ import test from "node:test";
 import { createTargetSourceProgram, sourceNodeIdentity, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analysis/callables/generic-dispatch.js";

@@ -2,17 +2,17 @@ import assert from "node:assert/strict";
 import {
   collectImportActivatedTargetCapabilities,
   collectRuntimeActivatedTargetCapabilities,
-} from "../../../../tsonic/packages/host/dist/target/capability-activation.js";
+} from "../../../tsonic/packages/host/dist/target/capability-activation.js";
 import {
   captureTargetCapabilityContributions,
   createTargetSourceCompilerComposition,
   getTargetRequiredProviderModules,
   selectInstalledTargetCapabilities,
   selectTargetSurfaceImplementations,
-} from "../../../../tsonic/packages/host/dist/target/extensions.js";
-import { collectTargetRuntimeContributions } from "../../../../tsonic/packages/host/dist/target/runtime-contributions.js";
-import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
-import { collectTargetSourcePackageGraph } from "../../../../tsonic/packages/host/dist/source-package-inputs.js";
+} from "../../../tsonic/packages/host/dist/target/extensions.js";
+import { collectTargetRuntimeContributions } from "../../../tsonic/packages/host/dist/target/runtime-contributions.js";
+import { collectTargetSourceProfileContributions } from "../../../tsonic/packages/host/dist/target/source-profile.js";
+import { collectTargetSourcePackageGraph } from "../../../tsonic/packages/host/dist/source-package-inputs.js";
 import {
   createCompilerSessionFromFiles,
   formatDiagnostics,
@@ -21,13 +21,13 @@ import {
   createTargetSourceProgram,
   sourceProjectFiles,
 } from "@tsonic/target-api/source";
-import { createRustTargetPack } from "../../../dist/index.js";
-import { createRustCompilationSession } from "../../../dist/compilation/session.js";
-import { compileRustTarget } from "../../../dist/backend/compile.js";
-import { formatRustCompileResult } from "../../../dist/toolchain/rustfmt.js";
-import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
-import { analyzeRustCheckedContext } from "./analysis-context.mjs";
-import { repositoryRoot } from "./paths.mjs";
+import { createRustTargetPack } from "../../dist/index.js";
+import { createRustCompilationSession } from "../../dist/compilation/session.js";
+import { compileRustTarget } from "../../dist/backend/compile.js";
+import { formatRustCompileResult } from "../../dist/toolchain/rustfmt.js";
+import { analyzeRustAnalysisProgram } from "../../dist/analysis/program/index.js";
+import { analyzeRustCheckedContext } from "./rust-session-analysis-context.mjs";
+import { repositoryRoot } from "./rust-session-paths.mjs";
 
 export function createRustSession({
   files,

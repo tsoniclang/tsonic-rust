@@ -4,7 +4,7 @@ import { createSourceStorageQuery, targetUseSiteRef } from "@tsonic/target-api/a
 import { createTargetSourceProgram, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-context.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";

@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
-import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
-import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { mapRustExpressionChildren } from "../../../dist/backend/target-ast/syntax/expression-children.js";
-import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/syntax/module-references.js";
+import { emptyRustGenerics } from "../../dist/backend/target-ast/syntax/nodes.js";
+import { printRustSourceFile } from "../helpers/printed-rust-source.mjs";
+import { printRustExpr } from "../../dist/print/source/expressions/core.js";
+import { mapRustExpressionChildren } from "../../dist/backend/target-ast/syntax/expression-children.js";
+import { rustItemsReferenceModuleAlias } from "../../dist/backend/target-ast/syntax/module-references.js";
 
 test("array repetition retains exact constants and visits its element and named extent", () => {
   const expression = { kind: "array-repeat", element: { kind: "call", path: "values::empty", args: [] },

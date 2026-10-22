@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { compileRust } from "./rust-session.mjs";
-import { analyzeRustCheckedContext } from "./rust-session/analysis-context.mjs";
+import { analyzeRustCheckedContext } from "./rust-session-analysis-context.mjs";
 
 export function analyzeRustErrorEffects(text, options = {}, configureContext) {
   let context;

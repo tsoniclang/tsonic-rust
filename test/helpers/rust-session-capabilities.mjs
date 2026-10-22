@@ -9,10 +9,10 @@ import {
   statSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import { createRustProviderPackage } from "../../dist/public/provider.js";
 import { dirname, matchesGlob, relative, resolve } from "node:path";
-import { fixtureCratesRoot, packageRoot } from "./paths.mjs";
-import { int32Carrier, stringCarrier } from "./provider-core.mjs";
+import { fixtureCratesRoot, packageRoot } from "./rust-session-paths.mjs";
+import { int32Carrier, stringCarrier } from "./rust-session-provider-core.mjs";
 
 let cachedNodeCapability;
 export async function nodejsCapability() {

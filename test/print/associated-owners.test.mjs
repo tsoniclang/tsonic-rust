@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { printRustExpr } from "../../../dist/print/source/index.js";
+import { printRustExpr } from "../../dist/print/source/index.js";
 
 test("associated calls and values qualify non-path native types without inventing new carriers", () => {
   const element = { kind: "primitive", name: "i32" };

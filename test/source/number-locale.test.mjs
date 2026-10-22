@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust, createRustSession, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
+import { compileRust, createRustSession, rustSourceDiagnostics } from "../helpers/rust-session.mjs";
 
 function sourceDiagnostics(sourceText, surfaces = ["js"]) {
   return rustSourceDiagnostics(createRustSession({

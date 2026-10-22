@@ -2,7 +2,7 @@ import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagn
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { dispatchProviderPackage } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
+import { dispatchProviderPackage } from "../../helpers/rust-session-provider-dispatch-contexts.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 function compile(name, source, options = {}) {

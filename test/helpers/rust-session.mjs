@@ -2,7 +2,7 @@ export {
   fixtureCratesRoot,
   repositoryRoot,
   rustRuntimeCratePath,
-} from "./rust-session/paths.mjs";
+} from "./rust-session-paths.mjs";
 export {
   acmeFilesPackage,
   acmePlatformPackage,
@@ -13,7 +13,7 @@ export {
   storeCarrier,
   stringCarrier,
   unitCarrier,
-} from "./rust-session/provider-core.mjs";
+} from "./rust-session-provider-core.mjs";
 export {
   artifactText,
   rustSourceText,
@@ -24,17 +24,17 @@ export {
   compileRustThroughTargetPack,
   createRustSession,
   rustSourceDiagnostics,
-} from "./rust-session/compiler-session.mjs";
+} from "./rust-session-compiler-session.mjs";
 export {
   acmeDbPackage,
   acmeVectorsPackage,
   dbCarrier,
   vectorCarrier,
-} from "./rust-session/provider-data.mjs";
+} from "./rust-session-provider-data.mjs";
 export {
   acmeLogsinkCapability,
   acmeSuperbunapiCapability,
   acmeTelemetryCapability,
   buildInstalledLayout,
   nodejsCapability,
-} from "./rust-session/capabilities.mjs";
+} from "./rust-session-capabilities.mjs";
