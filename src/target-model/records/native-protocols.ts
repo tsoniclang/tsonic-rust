@@ -5,6 +5,9 @@ import type { RustLifetimeBinder, RustLifetimeRef } from "../lifetimes/index.js"
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 
+/** Identity prefix of every generated native callable protocol trait. */
+export const rustNativeCallableProtocolIdPrefix = "native-protocol:";
+
 export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
   readonly owner: Node;
   readonly subject: SourceStorageSubject;

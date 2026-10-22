@@ -19,6 +19,7 @@ import { rustCallablePhysicalSignature } from "../../../target-model/conversions
 import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 
 import { rustStructuralGenericCarrier } from "../../../policy/types/objects/structural-generics.js";
+import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/source-types.js";
 
 
@@ -211,6 +212,22 @@ function createRustStructuralShapeConstruction(
     selected.add(templateKey);
     parents.set(instanceKey, selected);
   }
+  const carrierByKey = new Map<string, TargetTypeRef>();
+  for (const carrier of [...shapes.map(shape => shape.carrier), ...instantiations.flatMap(entry => [entry.template, entry.instance])]) {
+    if (rustStructuralObjectCarrierValue(carrier) === undefined) continue;
+    const key = physicalKey(carrier);
+    if (!carrierByKey.has(key)) carrierByKey.set(key, physicalSelection(carrier).carrier);
+  }
+  // Two storage roots for one instance are one storage when one root is a generic instantiation of the other (a generic
+  // object literal shape and an authored type with the same layout): the more general root owns the storage.
+  const generalizes = (general: string, specific: string): boolean => {
+    const generalCarrier = carrierByKey.get(general);
+    const specificCarrier = carrierByKey.get(specific);
+    if (generalCarrier === undefined || specificCarrier === undefined) return false;
+    const typeIdentities = new Set(rustTargetGenericReferences(generalCarrier).typeIdentities);
+    return typeIdentities.size !== 0 && inferRustTargetGenericBindings(generalCarrier, specificCarrier,
+      { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() }) !== undefined;
+  };
   const roots = new Map<string, string>();
   const resolving = new Set<string>();
   const rootFor = (key: string): string => {
@@ -222,6 +239,8 @@ function createRustStructuralShapeConstruction(
     for (const parent of parents.get(key) ?? []) {
       const selected = rootFor(parent);
       if (root !== undefined && root !== selected) {
+        if (generalizes(selected, root)) { root = selected; continue; }
+        if (generalizes(root, selected)) continue;
         throw new Error("Rust structural instantiation has contradictory storage templates.");
       }
       root = selected;

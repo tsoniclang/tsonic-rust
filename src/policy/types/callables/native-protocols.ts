@@ -8,7 +8,10 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
-import { type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding, type RustNativeCallableOutlivesBound } from "../../../target-model/records/native-protocols.js";
+import { type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding, type RustNativeCallableOutlivesBound,
+  rustNativeCallableProtocolIdPrefix } from "../../../target-model/records/native-protocols.js";
+import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
+import { rustCallableTargetId } from "../../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseTargetId } from "../../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseOutputTargetType } from "../../../target-model/types/carriers/promises.js";
 import { rustJsValueTargetType } from "../../../target-model/types/carriers/js.js";
@@ -63,6 +66,23 @@ type RustNativeCallableProtocolResultInput = Pick<RustNativeCallableProtocol, "i
 function nativeCallableMethodArguments(protocol: RustNativeCallableProtocolResultInput): readonly RustTargetGenericArgument[] {
   return Object.freeze([...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const,
     lifetime: parameter.lifetime })), ...rustTypeGenericArguments(protocol.signature.typeParameters)]);
+}
+
+/**
+ * The invocation error of a type-erased runtime callable seen through a native callable protocol:
+ * `<rt::Callable<'a, Arguments, Result<Output, Error>> as NativeCallable_x<..>>::InvocationError` is `Error`, because
+ * every protocol's producer bridge implements it for each `rt::CallableImplementation` with that output.
+ */
+export function rustErasedCallableInvocationError(carrier: TargetTypeRef): TargetTypeRef | undefined {
+  if (carrier.kind !== "associated-type" || carrier.name !== "InvocationError" ||
+    carrier.trait?.id.startsWith(rustNativeCallableProtocolIdPrefix) !== true) return undefined;
+  const owner = carrier.owner.kind === "target-named" ? carrier.owner : rustNamedTypeCarrierValue(carrier.owner);
+  if (owner?.id !== rustCallableTargetId || owner.genericArguments?.length !== 3) return undefined;
+  const output = owner.genericArguments[2];
+  const result = output?.kind !== "type" ? undefined
+    : output.type.kind === "target-named" ? output.type : rustNamedTypeCarrierValue(output.type);
+  const error = result?.id === "rust.core.Result" && result.genericArguments?.length === 2 ? result.genericArguments[1] : undefined;
+  return error?.kind === "type" ? error.type : undefined;
 }
 
 export function rustNativeCallableErrorChannel(

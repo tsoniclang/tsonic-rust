@@ -20,10 +20,14 @@ export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reac
   for (const node of nodes) {
     const carrier = program.records.runtimeCarrier.get(node)?.carrier;
     if (carrier !== undefined) pending.push(carrier);
+    // A flow-read projection copies or clones its selected payload, so the planner reads that carrier's guarantees.
+    const flow = program.records.flowReadProjection.get(node);
+    if (flow !== undefined) pending.push(flow.selectedCarrier);
     const operation = program.records.targetOperation.get(node);
     if (operation !== undefined) {
       const result = rustTargetOperationResultCarrier(operation);
       if (result !== undefined) pending.push(result);
+      if (operation.kind === "source-call" && operation.resultProjection !== undefined) pending.push(operation.resultProjection.selectedCarrier);
       if (operation.kind === "source-field") pending.push(operation.receiverCarrier);
       if (operation.kind === "source-accessor" && operation.receiver.kind === "instance") {
         const receiver = Node_Expression(program.source.ast, node);

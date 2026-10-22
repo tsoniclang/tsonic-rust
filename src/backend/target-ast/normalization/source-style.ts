@@ -5,6 +5,8 @@ import { lowerRustCompletionScope } from "./completion-regions.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustValueBlock } from "../syntax/value-block.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
+import { applyRustFreeFunctionLints, applyRustInherentMethodLints, applyRustTraitFunctionLints,
+  rustPublicDeclaredTypeNames } from "./function-lints.js";
 import { rustConditionPrintsAsBlock } from "../syntax/expressions.js";
 import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
@@ -20,8 +22,9 @@ type RustFunctionItemQuery = (name: string) => boolean;
 
 function finalizeRustItemScope(items: readonly RustItem[], isFunctionItem: RustFunctionItemQuery): RustNamedSignatureScope {
   const named = nameRustSignatureTypes(items, (callable, nameType) => styleCallable(callable, isFunctionItem, nameType));
-  return { aliases: named.aliases.map(item => finalizeRustItemStyle(item, isFunctionItem)),
-    items: named.items.map(item => finalizeRustItemStyle(item, isFunctionItem)) };
+  const publicTypes = rustPublicDeclaredTypeNames([...named.aliases, ...named.items]);
+  return { aliases: named.aliases.map(item => finalizeRustItemStyle(item, isFunctionItem, publicTypes)),
+    items: named.items.map(item => finalizeRustItemStyle(item, isFunctionItem, publicTypes)) };
 }
 
 // Names of the file's function items (module level or nested in bodies) that no binding of the file reuses.
@@ -69,15 +72,23 @@ function liftRustUnusedParameterExpectation<Callable extends Pick<RustImplFuncti
     }) };
 }
 
-function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionItemQuery): RustItem {
+function finalizeRustItemStyle(source: RustItem, isFunctionItem: RustFunctionItemQuery, publicTypes: ReadonlySet<string>): RustItem {
   const item = finalizeRustItemNames(source);
   switch (item.kind) {
     case "mod-decl": return item.body === undefined ? item : { ...item, body: finalizeRustSourceStyle(item.body) };
-    case "impl": return { ...item, members: item.members.map(member => member.kind === "function"
-      ? finalizeRustFunctionNames(member, item.trait === undefined) : member) };
+    case "function": return applyRustFreeFunctionLints(item);
+    case "impl": {
+      const inherent = item.trait === undefined;
+      const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
+      return { ...item, members: item.members.map(member => {
+        if (member.kind !== "function") return member;
+        const named = finalizeRustFunctionNames(member, inherent);
+        return inherent ? applyRustInherentMethodLints(named, publicOwner) : named;
+      }) };
+    }
     case "trait": return { ...item, members: item.members.map(member => {
       if (member.kind !== "function") return member;
-      const fn = liftRustUnusedParameterExpectation(finalizeRustFunctionNames(member));
+      const fn = applyRustTraitFunctionLints(liftRustUnusedParameterExpectation(finalizeRustFunctionNames(member)));
       if (fn.body === undefined) return fn;
       const styler = createRustBodyStyler(isFunctionItem);
       const body = styler.block(fn.body);
@@ -127,6 +138,21 @@ function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: 
       const collapsed = collapseRustForwardingClosure(mapped);
       if (collapsed !== mapped && (collapsed.kind !== "path" || rustItemCallPath(collapsed.path) || isFunctionItem(collapsed.path)))
         return collapsed;
+    }
+    // The single expression a closure returns: its body, or the tail of a one-statement synchronous block body.
+    const result = mapped.kind === "closure" ? mapped.body
+      : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
+        mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
+    // `|value| Type::Variant(value)` is the associated item `Type::Variant` itself; an associated item is never a local
+    // callable, so the path form is always the same value (clippy::redundant_closure).
+    if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 &&
+      result?.kind === "associated-call" && result.genericArguments === undefined && result.args.length === 1) {
+      const parameter = mapped.params[0];
+      const argument = result.args[0];
+      if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
+        (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
+        return { kind: "associated-value", owner: result.owner, ...(result.trait === undefined ? {} : { trait: result.trait }),
+          name: result.method };
     }
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter

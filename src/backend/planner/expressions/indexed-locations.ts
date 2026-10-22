@@ -23,17 +23,20 @@ export function planRustIndexedFieldLocation(node: Node, fact: RustIndexedFieldO
     : planExpression(selected.key, context) ?? failRustPlannerInvariant("An admitted indexed location requires its native key.", selected.key);
   const receiverName = allocateRustSyntheticName(names, "field_owner");
   const keyName = allocateRustSyntheticName(names, "field_key");
-  const owner: RustExpr = selected.stableReceiver ? receiver : { kind: "path", path: receiverName };
+  // The field traits take the owner by reference: an evaluated owner is bound as a shared borrow, so later reads of the
+  // same place (the read half of a compound or self-referencing write) still see it.
+  const owner: RustExpr = selected.stableReceiver ? { kind: "reference", expr: receiver } : { kind: "path", path: receiverName };
   const keyReference: RustExpr = { kind: "path", path: keyName };
   return {
     bindings: [
-      ...(selected.stableReceiver ? [] : [{ name: receiverName, value: receiver }]),
+      ...(selected.stableReceiver ? [] : [{ name: receiverName, value: planRustSharedReceiver(selected.receiver, receiver, context)
+        ?? failRustPlannerInvariant("An admitted indexed location requires its shared native owner.", selected.receiver) }]),
       { name: keyName, value: selected.key === undefined ? { kind: "reference", expr: key }
         : planRustSharedReceiver(selected.key, key, context) ?? failRustPlannerInvariant("An admitted indexed key requires its native shared read.", selected.key) },
     ],
-    read: planRustIndexedFieldCall(node, fact, { kind: "reference", expr: owner }, keyReference, undefined, context),
+    read: planRustIndexedFieldCall(node, fact, owner, keyReference, undefined, context),
     write: value => access === "write"
-      ? planRustIndexedFieldCall(node, fact, { kind: "reference", expr: owner }, keyReference, value, context) : undefined,
+      ? planRustIndexedFieldCall(node, fact, owner, keyReference, value, context) : undefined,
   };
 }
 

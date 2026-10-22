@@ -186,13 +186,21 @@ function classifyStaticCarrier(
         [implementation.capture.captures, implementation.captures],
         [implementation.capture.receiverFields, implementation.receiverFields],
       ] as const) {
-        if (retained.some(capture => !original.some(candidate => candidate === capture)) || original.some(capture =>
-          !retained.some(candidate => candidate === capture) && !definition.bindings.some(binding => binding.declaration === capture.declaration)))
+        // An entry keeps each capture as a copy that adds its storage carrier, so correspondence is by captured
+        // declaration and reference, not object identity.
+        const same = (left: { readonly declaration: Node; readonly reference: Node },
+          right: { readonly declaration: Node; readonly reference: Node }): boolean =>
+          left.declaration === right.declaration && left.reference === right.reference;
+        if (retained.some(capture => !original.some(candidate => same(candidate, capture))) || original.some(capture =>
+          !retained.some(candidate => same(candidate, capture)) && !definition.bindings.some(binding => binding.declaration === capture.declaration)))
           return unresolved("A native frame entry lost its exact source-to-physical capture correspondence.");
         selected.push(...retained.map(capture => apply(capture.carrier, bindings)));
       }
-      if (implementation.receivers.some(receiver => !implementation.capture.receivers.some(candidate => candidate === receiver)) ||
-        implementation.capture.receivers.some(receiver => !implementation.receivers.some(candidate => candidate === receiver) &&
+      const sameReceiver = (left: { readonly owner: Node; readonly reference: Node },
+        right: { readonly owner: Node; readonly reference: Node }): boolean =>
+        left.owner === right.owner && left.reference === right.reference;
+      if (implementation.receivers.some(receiver => !implementation.capture.receivers.some(candidate => sameReceiver(candidate, receiver))) ||
+        implementation.capture.receivers.some(receiver => !implementation.receivers.some(candidate => sameReceiver(candidate, receiver)) &&
           (definition.activation.kind !== "class" || receiver.owner !== definition.activation.ownerDeclaration)))
         return unresolved("A native frame entry lost its exact receiver-to-activation correspondence.");
       selected.push(...implementation.receivers.map(receiver => apply(receiver.carrier, bindings)));
@@ -262,9 +270,17 @@ function classifyStaticCarrier(
       return selected === undefined ? unresolved("A source field lacks its exact native instance storage carrier.") : visit(selected, bound);
     }), ...(definition.kind === "class" ? [classEnvironment(carrier, false, bound)] : [])]);
   };
+  const recursiveProjectObject = (value: TargetTypeRef): boolean => {
+    const source = rustSourceTypeCarrierValue(value);
+    return source !== undefined && source.shape !== "enum" && evidence?.projectTypes?.definitionForCarrier(value) !== undefined;
+  };
   const visit = (value: TargetTypeRef, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
     const key = closedMetadataKey([value, [...bound]]);
-    if (active.has(key)) return unresolved("Native static retention requires a completed recursive physical storage contract.");
+    // A project object that reaches itself through its own fields (class Link { next: Link | undefined }) stores that
+    // occurrence behind its native object handle, so the occurrence adds no requirement beyond the rest of the cycle,
+    // which this visit already collects. Any other recursive carrier has no completed physical storage contract.
+    if (active.has(key)) return recursiveProjectObject(value) ? supported
+      : unresolved("Native static retention requires a completed recursive physical storage contract.");
     active.add(key);
     try {
       switch (value.kind) {

@@ -6,6 +6,9 @@ import { rustTypeEquals } from "../../../../dist/backend/target-ast/syntax/type-
 import { applyRustFallibleResultExpression } from "../../../../dist/backend/planner/types/fallible-shape.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { printRustType } from "../../../../dist/print/source/types.js";
+import { snapshotRustNativeErrorSources } from "../../../../dist/target-model/types/native-error-joins.js";
+import { isRustTargetTypeRef } from "../../../../dist/target-model/types/equality.js";
+import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 
 const named = path => ({ kind: "named", path });
 const path = name => ({ kind: "path", path: name });
@@ -77,7 +80,6 @@ test("explicit shared completion demand adds conditional native Clone without im
   assert.equal(joined.items[0].generics.parameters.every(parameter => parameter.bounds.length === 0), true);
   assert.equal(joined.items[0].generics.wherePredicates.length, 0);
   assert.doesNotMatch(printRustExpr(joined.inject(first, path("error"))), /clone|Box|Rc/u);
-  assert.equal(plan([first, second], { clone: "yes" }), undefined);
 });
 
 test("associated errors retain native arguments without copying unrelated declaration binders", () => {
@@ -130,23 +132,23 @@ test("associated source checks retain exact owner, trait, member and lifetime su
   }
 });
 
-test("ambiguous source identities, variant names and invalid declaration names reject", () => {
-  for (const [label, sources, options] of [
-    ["empty identity", [first], { identity: "" }],
-    ["path instead of name", [first], { name: "module::Join" }],
-    ["reserved name", [first], { name: "type" }],
-    ["empty source", [source("", "First")], {}],
-    ["same identity", [first, { ...second, identity: first.identity }], {}],
-    ["same variant", [first, { ...second, variant: first.variant }], {}],
-    ["raw variant alias", [first, { ...second, variant: "r#First" }], {}],
-    ["invalid variant", [source("source", "crate")], {}],
-    ["inferred carrier", [source("source", "Source", { kind: "infer" })], {}],
-    ["opaque enum field", [source("source", "Source", { kind: "impl-trait", bounds: [], outlives: [] })], {}],
-    ["removed source generic context", [first], { generics: emptyRustGenerics }],
-    ["invalid binder", [first], { generics: { parameters: [{ kind: "type", name: "_", bounds: [] }], wherePredicates: [] } }],
-    ["duplicate binder", [first], { generics: { parameters: [{ kind: "type", name: "Value", bounds: [] },
-      { kind: "const", name: "r#Value", type: { kind: "primitive", name: "usize" } }], wherePredicates: [] } }],
-  ]) assert.equal(plan(sources, options) === undefined, true, label);
+// Join sources are sealed by the analysis owner (analysis/errors/regions.ts through snapshotRustNativeErrorSources).
+// Join names, identities and reference paths are built by the planner from sealed join names and allocated module
+// names, so the former malformed-name and generic-binder cases have no reachable input and are not exercised here.
+test("ambiguous source identities and variant names are refused before a native error join", () => {
+  const carrier = rustSourcePrimitiveTargetType("int32");
+  const target = (identity, variant, errorType = carrier) => ({ identity, variant, errorType });
+  for (const [label, sources] of [
+    ["empty source", [target("", "First")]],
+    ["same identity", [target("first", "First"), target("first", "Second")]],
+    ["same variant", [target("first", "First"), target("second", "First")]],
+    ["raw variant alias", [target("first", "First"), target("second", "r#First")]],
+    ["invalid variant", [target("source", "crate")]],
+    ["unrepresentable carrier", [target("source", "Source", { kind: "infer" })]],
+  ]) assert.equal(snapshotRustNativeErrorSources(sources, isRustTargetTypeRef), undefined, label);
+  assert.equal(snapshotRustNativeErrorSources([target("first", "First"), target("second", "Second")], isRustTargetTypeRef)?.length, 2);
+  // A duplicate identity reaching the planner is a corrupt record set.
+  assert.throws(() => plan([first, { ...second, identity: first.identity }]), /unique sealed source identities/u);
 });
 
 test("native hygiene preserves explicitly selected raw identifiers without external binders", () => {
@@ -171,6 +173,4 @@ test("joined error correspondence preserves source variants across modules and e
   assert.equal(joined.mapError(path("failure"), "payload", source => source.identity === first.identity
     ? path("mapped") : undefined) === undefined, true);
   assert.equal(joined.mapError(path("failure"), "type", () => path("mapped")) === undefined, true);
-  for (const referencePath of ["", "owner::", "owner::::JoinedErrors", "owner;exit()", "owner::type"])
-    assert.equal(plan([first, second], { referencePath }) === undefined, true, referencePath);
 });

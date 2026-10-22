@@ -78,6 +78,23 @@ export function selectRustCopiedMethods(
     walk.context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of files) visit(file);
+  // An instantiated structural shape stores the method values its template's constructions created: each method slot
+  // of an instance takes a constructed template slot as a source. A template slot with no construction (an authored
+  // type) contributes no values.
+  for (const { template, instance } of walk.sourceTypes.structuralInstantiations()) {
+    const templateFields = rustStructuralObjectCarrierValue(template)?.fields;
+    const instanceFields = rustStructuralObjectCarrierValue(instance)?.fields;
+    if (templateFields === undefined || instanceFields === undefined || templateFields.length !== instanceFields.length) continue;
+    for (const [index, field] of instanceFields.entries()) {
+      if (field.method !== true || templateFields[index]?.method !== true) continue;
+      const target = key(instance, index);
+      const source = key(template, index);
+      if (target === source || !implementations.has(source)) continue;
+      const sources = incoming.get(target) ?? new Set<string>();
+      sources.add(source);
+      incoming.set(target, sources);
+    }
+  }
   const pending = [...demands.keys()];
   for (let index = 0; index < pending.length; index++) {
     const identity = pending[index]!;

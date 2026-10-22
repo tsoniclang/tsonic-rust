@@ -17,6 +17,7 @@ import { rustTypeFamilyNormalizer } from "../project-types/type-family-normaliza
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
@@ -88,7 +89,8 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
   const classifyUse = (node: Node, carrier: TargetTypeRef,
     requirements: readonly RustGenericRequirement[]): RustCarrierRequirementSelection => {
     const normalized = mapRustTargetTypes(carrier, normalizeFamily);
-    const physical = requirements.includes("static")
+    // A JS-rejection requirement names an error channel, so it is classified on that channel's physical error type.
+    const physical = requirements.includes("static") || requirements.includes("js-rejection")
       ? normalizeRustErrorType(normalized, input.errorTypes, node) : normalized;
     return physical === undefined ? { kind: "unresolved",
       reason: "A native static requirement has no exact admitted physical error-boundary carrier." }
@@ -183,8 +185,10 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
       asynchronous.outputCarrier,
       lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
     );
+    // A factory task owns its settled output; an output that cannot be owned for 'static is the same storage refusal as
+    // a retained borrowed capture.
     if (error !== undefined) {
-      return { kind: "rejected", reason: error };
+      return lowering.kind === "factory" ? { kind: "rejected", promiseStorage: true, reason: error } : { kind: "rejected", reason: error };
     }
     if (lowering.kind === "factory") {
       if (lowering.storage.kind === "receiver") return { kind: "rejected", promiseStorage: true,
@@ -210,6 +214,14 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
         }
       }
     }
+  }
+  // A JS Promise object returned by a callable body that is not itself suspended outlives that callable's activation; a JS
+  // Promise object requires a 'static payload (RULINGS 2026-10-22), so its payload carries the bound in this contract.
+  const returnedPromise = asynchronous === undefined && generator === undefined && input.ast.body(declaration) !== undefined
+    ? rustJsPromiseOutputTargetType(records.sourceCallableReturn.get(declaration)?.returnCarrier) : undefined;
+  if (returnedPromise !== undefined && input.promiseObjectFacet !== true) {
+    const error = addUse(declaration, returnedPromise, ["static"]);
+    if (error !== undefined) return { kind: "rejected", reason: error };
   }
   const visit = createRustCallableRequirementVisitor(input, {
     declared, dependencies, definition, normalizeFamily, optionalStorage, associated, projections, addUse,

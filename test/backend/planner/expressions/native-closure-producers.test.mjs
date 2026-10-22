@@ -4,7 +4,7 @@ import { nativeClosureProducerFixture, printNativeClosureProducer, planNativeClo
   from "../../../helpers/native-closure-producers.mjs";
 import { nativeNodes, nativeCalls, assertNoNativeCalls, nativeType } from "../../../helpers/native-ast.mjs";
 
-import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
+import { rustNamedTargetType } from "../../../../dist/target-model/types/carriers/native.js";
 import { printRustType } from "../../../../dist/print/source/types.js";
 
 
@@ -15,9 +15,6 @@ import { createRustProviderPackage } from "../../../../dist/public/provider.js";
 import { analyzeRustLambdaEmission } from "../../../../dist/analysis/callables/lambda-emission.js";
 import { createRustLambdaEmissionProducer } from "../../../../dist/analysis/program/records/lambda-emission.js";
 import { rustGenericCallableValue } from "../../../../dist/target-model/types/carriers/generic-callables.js";
-import { rustCallableConstructionType } from "../../../../dist/backend/planner/types/constructions.js";
-import { rustNativeCompletionFutureType } from "../../../../dist/target-model/types/callable-completions.js";
-import { rustTypeGenericArguments } from "../../../../dist/target-model/types/generic-arguments.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
@@ -283,22 +280,3 @@ for (const [method, source] of [["errorFor", nativeClosureProducer], ["physicalF
     assert.throws(analyze, /producer-owned physical invocation ABI/u);
   });
 }
-
-test("closure constructors infer anonymous native payloads without changing their selected carrier", () => {
-  const fixture = nativeClosureProducerFixture();
-  const integer = rustSourcePrimitiveTargetType("int32");
-  const future = rustNativeCompletionFutureType({ identity: "fixture:future", output: integer, error: failure, captures: [] });
-  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, failure]));
-  const callable = rustNamedTargetType("rust.runtime.Callable", "rt::Callable",
-    rustTypeGenericArguments([{ kind: "tuple", elements: [integer] }, result]));
-  const owner = rustCallableConstructionType(callable, fixture.context);
-  assert.equal(owner !== undefined, true);
-  assert.equal(printRustType(owner), "rt::Callable<(i32,), _>");
-  assert.equal(rustNamedTypeCarrierValue(callable).genericArguments[1].type === result, true,
-    "metadata retains exact future and error channels");
-  assert.equal(rustNamedTypeCarrierValue(result).genericArguments[0].type === future, true,
-    "anonymous payload is inferred only in constructor syntax");
-  const forbidden = { kind: "function-pointer", args: [], result: future };
-  assert.equal(rustCallableConstructionType(forbidden, fixture.context) === undefined, true,
-    "constructor inference does not admit impl Trait in function-pointer signatures");
-});

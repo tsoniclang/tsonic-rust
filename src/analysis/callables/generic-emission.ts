@@ -69,7 +69,9 @@ export function analyzeRustGenericEmission(input: {
     if (implementation === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted generic source callable requires its exact native implementation.", node);
     const definition = generic.physical.definitionFor(carrier);
     if (definition === undefined) continue;
-    const member = definition.members.length === 1 ? definition.members[0] : undefined;
+    // A value stored with other implementations (a record member family) constructs the one member built from it.
+    const built = definition.members.filter(candidate => candidate.implementation === implementation);
+    const member = built.length === 1 ? built[0] : undefined;
     const environment = generic.physical.environmentFor(implementation);
     if (member?.implementation !== implementation || environment === undefined || !rustGenericCallableSignaturesMatch(implementation.carrier, carrier))
       failTargetAnalysisInvariant("tsonic-rust", "A generic callable requires one sealed native implementation and environment.", node);

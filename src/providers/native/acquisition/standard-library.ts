@@ -1,7 +1,7 @@
 import type {
   RustCompilerDependency, RustCompilerFunction, RustCompilerGenericArgument, RustCompilerGenericParameter,
   RustCompilerModuleModel, RustCompilerProjectSnapshot, RustCompilerStandardLibrarySnapshot,
-  RustCompilerStandardTypeLocation, RustCompilerType,
+  RustCompilerStandardTypeLocation, RustCompilerType, RustCompilerTypeRequirement, RustCompilerTypeTraits,
 } from "../model/model.js";
 import { verifyRustCompilerDependencySource, verifyRustCompilerStandardLibraryMetadata } from "./cargo-snapshot.js";
 import { standardModuleSpecifier } from "../projection/module-specifier.js";
@@ -515,6 +515,18 @@ export function collectModuleStandardTypeLocations(
       }
     }
   };
+  const visitRequirement = (requirement: RustCompilerTypeRequirement): void => {
+    if (typeof requirement === "string") selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+    else visitTrait(requirement.trait);
+  };
+  // A nominal type's trait contract names its implemented traits; each one resolves to its single standard identity
+  // in every module that projects the type.
+  const visitTypeTraits = (traits: RustCompilerTypeTraits): void => {
+    for (const implementation of traits.implementations) {
+      visitRequirement(implementation.trait);
+      implementation.requirements.forEach((requirement) => visitRequirement(requirement.requirement));
+    }
+  };
   const visitFunction = (fn: RustCompilerFunction): void => {
     visitParameters(fn.genericParameters);
     visitParameters(fn.typeRequirements);
@@ -549,6 +561,7 @@ export function collectModuleStandardTypeLocations(
       case "union":
         selectCanonicalPath(exported.canonicalPath);
         visitParameters(exported.genericParameters);
+        visitTypeTraits(exported.traits);
         exported.fields.forEach((field) => visitType(field.type));
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
@@ -559,6 +572,7 @@ export function collectModuleStandardTypeLocations(
       case "enum":
         selectCanonicalPath(exported.canonicalPath);
         visitParameters(exported.genericParameters);
+        visitTypeTraits(exported.traits);
         exported.variants.forEach((variant) => {
           if (variant.kind === "struct") {
             variant.fields.forEach((field) => visitType(field.type));

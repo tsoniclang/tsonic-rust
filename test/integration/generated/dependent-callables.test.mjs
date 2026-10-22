@@ -149,7 +149,8 @@ main();
   });
   assert.deepEqual(result.diagnostics, []);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
-  assert.match(output, /Rc::ptr_eq/u);
+  // Generic callable identity compares the variant environments by address (checkpoint callable-identities.ts).
+  assert.match(output, /core::ptr::addr_eq/u);
   assert.doesNotMatch(output, /capture_0: on_call\.clone\(\)/u);
   validateGeneratedProject("cross-file-generic-callbacks", result.artifacts, { run: true });
 });

@@ -1,60 +1,56 @@
-import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustSession } from "../../../helpers/rust-session.mjs";
-
+import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
 import { planRustNativeControl } from "../../../../dist/backend/planner/expressions/native-controls.js";
-import { rustNamedTargetType } from "../../../../dist/target-model/types/index.js";
-import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
+// The native propagation fact is produced only by the analysis owner (analysis/operations/native-controls.ts), which
+// refuses an operand or enclosing callable without the exact Result contract. The planner renders the sealed fact.
 test("native propagation validates sealed operand, result and authored callable boundary", () => {
-  const harness = createRustSession({ files: { "index.ts": `
-declare function selected(value: number): number;
-export function forward(value: number): number { return selected(value); }
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Result } from "@tsonic/rust/core/result.js";
+import { propagate } from "@tsonic/rust/lang.js";
+export function forward(value: Result<int32, int32>): Result<int32, int32> {
+  return Result.Ok<int32, int32>(propagate(value));
+}
 ` } });
-  const source = harness.session.checkSource();
-  const calls = [];
+  const { ast } = program.source;
+  const propagations = [];
   const visit = node => {
-    if (source.ast.is.IsCallExpression(node)) calls.push(node);
-    for (const child of source.ast.children(node)) visit(child);
+    if (program.records.targetOperation.get(node)?.kind === "native-propagation") propagations.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const file of source.sourceFiles) if (file !== undefined && !file.IsDeclarationFile) visit(file);
-  assert.equal(calls.length, 1);
-  const node = calls[0];
-  let callableDeclaration = source.ast.parent(node);
-  while (!source.ast.is.IsFunctionDeclaration(callableDeclaration)) callableDeclaration = source.ast.parent(callableDeclaration);
-  const operandExpression = source.ast.arguments(node)[0];
-  const scalar = { kind: "source-primitive", name: "int32" };
-  const result = rustNamedTargetType("fixture.Result", "core::result::Result",
-    [{ kind: "type", type: scalar }, { kind: "type", type: scalar }]);
-  const fact = Object.freeze({ kind: "native-propagation", operationId: "tsonic.rust.propagate",
-    callableDeclaration, callableReturnCarrier: result, operandExpression,
-    operandCarrier: result, operandErrorCarrier: scalar, resultErrorCarrier: scalar, resultCarrier: scalar });
-  const program = Object.freeze({ source, typeDefinitions: emptyRustTypeDefinitions,
-    records: Object.freeze(createRustRecordFixture({sourceCallableReturn: { get: (selected) => selected === callableDeclaration
-    ? { returnCarrier: result } : undefined },
-runtimeCarrier: { get: (selected) => selected === operandExpression ? { carrier: result } : undefined }})) });
-  harness.targetSession.close();
-  const context = () => ({ input: { program }, diagnostics: [],
-    sourceFile: program.source.ast.getSourceFile(node), callableDeclaration: fact.callableDeclaration,
-    moduleName: "index", usedAliases: new Set(), moduleNameByFileName: new Map(),
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
+  assert.equal(propagations.length, 1);
+  const node = propagations[0];
+  const fact = program.records.targetOperation.get(node);
+  assert.equal(fact.operandExpression, ast.arguments(node)[0]);
+  assert.equal(ast.is.IsFunctionDeclaration(fact.callableDeclaration), true);
+  const context = callableDeclaration => ({ input: { program }, diagnostics: [],
+    sourceFile: ast.getSourceFile(node), callableDeclaration,
+    moduleName: "index", usedAliases: new Set(), moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
     externalStructuralShapeModuleByFileName: new Map(), structuralShapesModuleName: "shapes" });
-  const planned = planRustNativeControl(node, fact, context(), () => ({ kind: "path", path: "value" }));
+  const selected = context(fact.callableDeclaration);
+  const planned = planRustNativeControl(node, fact, selected, () => ({ kind: "path", path: "value" }));
   assert.equal(planned.kind, "try");
   assert.equal(planned.nativeReturn, true);
-  for (const mutation of [
-    { operandExpression: node },
-    { callableDeclaration: node },
-    { callableReturnCarrier: fact.resultCarrier },
-    { operandErrorCarrier: fact.operandCarrier },
-    { resultErrorCarrier: fact.callableReturnCarrier },
-    { resultCarrier: fact.operandCarrier },
-  ]) {
-    const selected = context();
-    assert.equal(planRustNativeControl(node, { ...fact, ...mutation }, selected,
-      () => ({ kind: "path", path: "value" })), undefined);
-    assert.equal(selected.diagnostics.length, 1);
-    assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-  }
+  assert.equal(selected.diagnostics.length, 0);
+  // A sealed propagation planned outside its authored callable is a corrupt emission context.
+  assert.throws(() => planRustNativeControl(node, fact, context(node), () => ({ kind: "path", path: "value" })),
+    /selected callable emission context/u);
+
+  // An enclosing callable or closure without the operand's Result contract is refused before emission.
+  const { result } = compileRust({ files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Result } from "@tsonic/rust/core/result.js";
+import { propagate } from "@tsonic/rust/lang.js";
+export function scalar(value: Result<int32, int32>): int32 { return propagate(value); }
+export function closure(value: Result<int32, int32>): int32 {
+  const read = (): int32 => propagate(value);
+  return read();
+}
+` } });
+  assert.equal(result.artifacts.length, 0);
+  assert.equal(result.diagnostics.filter(diagnostic => diagnostic.code === "RUST_NATIVE_CONTROL_CONTRACT_REQUIRED").length, 2);
 });
