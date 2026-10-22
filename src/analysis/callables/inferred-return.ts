@@ -95,7 +95,20 @@ function selectReturn(
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
     const carriers = expressions.map(expression => expressionCarrier(expression, inferEnvironment ? baseline : undefined));
-    if (carriers.some(carrier => carrier === undefined)) return { kind: "pending", hint: baseline };
+    if (carriers.some(carrier => carrier === undefined)) {
+      // A refusal inside a returned expression is that expression's own exact source diagnostic; the probe's records
+      // are discarded, so the refusal is kept on the walk that owns the declaration.
+      const failed = expressions.filter((_, index) => carriers[index] === undefined);
+      for (const diagnostic of probe.context.diagnostics) {
+        const node = diagnostic.sourceNode;
+        let owner: Node | undefined = node;
+        while (owner !== undefined && !failed.includes(owner)) owner = ast.parent(owner);
+        if (owner === undefined || walk.context.diagnostics.some(existing => existing.code === diagnostic.code &&
+          existing.sourceNode === node && existing.message === diagnostic.message)) continue;
+        walk.context.diagnostics.push(diagnostic);
+      }
+      return { kind: "pending", hint: baseline };
+    }
     let selected: TargetTypeRef | undefined;
     for (const carrier of carriers) {
       if (carrier !== undefined && isRustAbsenceCarrier(carrier) && rustOptionElementCarrier(baseline) !== undefined) continue;

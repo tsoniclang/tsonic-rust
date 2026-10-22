@@ -91,3 +91,11 @@ export function rustNativeCallableInputPhysicalSignature(
     result: resultArguments[0]!, error: resultArguments[1]!,
   });
 }
+
+/** The physical Future of an optional Future slot that only ever holds absence: a never-created ready future with the
+ * slot's output, the same witness form absent native callables use for their completions. */
+export function rustAbsentFutureWitness(output: TargetTypeRef): TargetTypeRef {
+  return snapshotClosedMetadata(rustNamedTargetType("rust.core.future.Ready", "core::future::Ready", rustTypeGenericArguments([
+    rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([output, { kind: "target-named", id: rustInfallibleTargetId }])),
+  ])));
+}

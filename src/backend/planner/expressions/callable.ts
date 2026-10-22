@@ -26,6 +26,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { planRustFrameCallableValue, rustIndependentFrameConstruction } from "./frame-callables.js";
+import { planRustCallableJoinWrite } from "./shared-callable-writes.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";
 import { planRustGeneratorBody } from "../declarations/callables/generator-body.js";
 import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.js";
@@ -449,6 +450,7 @@ export function planRustCallableExpressionBody(
     args: [closure],
   };
   const result = finishRuntimeCallableExpression(callable, captureBindings);
-  return { expression: frameAlternative === undefined ? result : frameAlternative.wrap(result) };
+  const written = emission.independentWrite === undefined ? result : planRustCallableJoinWrite(emission.independentWrite, result, node, context);
+  return { expression: frameAlternative === undefined ? written : frameAlternative.wrap(written) };
 }
 import { planRustReturnValueExpression } from "./value-destinations.js";

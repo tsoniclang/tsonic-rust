@@ -5,6 +5,6 @@ export function sealRustPhysicalCallableStorage(input: RustPhysicalCallableStora
     valueFor: input.valueFor, operandFor: input.operandFor, returnFor: input.returnFor,
     invocationCallableFor: input.invocationCallableFor, parameterFor: input.parameterFor,
     futureEnvironmentFor: input.futureEnvironmentFor, invocationWitnessFor: input.invocationWitnessFor,
-    invocationArgumentWitnessFor: input.invocationArgumentWitnessFor,
+    invocationArgumentWitnessFor: input.invocationArgumentWitnessFor, joinWriteFor: input.joinWriteFor,
   });
 }

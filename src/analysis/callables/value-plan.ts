@@ -309,6 +309,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
+  let producerErrors: Pick<RustErrorRegionRecords, "producerError"> | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     carrierHost: input.carrierHost,
@@ -316,7 +317,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       if (physicalCarrierFor === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical storage requires its finalized declaration inputs.");
       return physicalCarrierFor(carrier, ownerFileName, subject, bindings, producers);
     },
-    lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
+    lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes,
+    producerErrorFor: reference => producerErrors?.producerError(reference) });
   const captures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
     nativeStorage: nativeStorageQueries });
   const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,
@@ -417,6 +419,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">) {
       if (structuralMethodStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical storage requires selected callable families.");
       structuralMethodStorage.validateErrors(errors);
+      producerErrors = errors;
     },
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
