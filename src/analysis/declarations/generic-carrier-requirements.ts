@@ -347,7 +347,7 @@ function classifyStaticCarrier(
               const selected = structuralMethodStorage(evidence?.structuralShapes, value, index);
               return selected === undefined
                 ? unresolved("A structural method requires its completed physical storage, not its logical call signature.")
-                : visit(selected, bound);
+                : visit(structuralMethodWithoutSelf(selected, value), bound);
             });
             return every([...structural.bases.map(base => visit(base, bound)), ...fields]);
           }
@@ -408,11 +408,21 @@ function classifyStaticCarrier(
 
 // Static retention reads carriers whose program errors are already physical, while structural storage is keyed by the
 // logical instance; every error owner of one instance names the same physical method slot.
+const logicalProgramErrorKey = (type: TargetTypeRef): string => closedMetadataKey(mapRustTargetTypes(type, current =>
+  rustProgramErrorOwner(current) === undefined ? current : rustProgramErrorTargetType()));
+
+// A method slot receives the object that owns it; that receiver is the carrier under classification, so its own
+// requirement holds exactly when the rest of the slot's storage holds.
+function structuralMethodWithoutSelf(storage: TargetTypeRef, owner: TargetTypeRef): TargetTypeRef {
+  const key = logicalProgramErrorKey(owner);
+  return mapRustTargetTypes(storage, (current, source) =>
+    logicalProgramErrorKey(source) === key ? { kind: "tuple", elements: [] } : current);
+}
+
 function structuralMethodStorage(shapes: RustStructuralShapePlan | undefined, carrier: TargetTypeRef, index: number):
   TargetTypeRef | undefined {
   if (shapes === undefined) return undefined;
-  const logical = (type: TargetTypeRef): string => closedMetadataKey(mapRustTargetTypes(type, current =>
-    rustProgramErrorOwner(current) === undefined ? current : rustProgramErrorTargetType()));
+  const logical = logicalProgramErrorKey;
   const key = logical(carrier);
   const selected = new Map<string, TargetTypeRef>();
   for (const instance of shapes.instances) {
