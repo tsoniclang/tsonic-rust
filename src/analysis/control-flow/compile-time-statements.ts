@@ -18,3 +18,18 @@ export function eraseRustCompileTimeVariableStatements(input: {
     input.producer.erase(node);
   }
 }
+
+/**
+ * A node written inside compile-time source - a safety builder such as `safety<T>().property(value => value.field)`,
+ * or erased memory metadata and its field selectors - selects declarations and contracts; it is never native code.
+ */
+export function rustNodeIsInsideCompileTimeSource(
+  ast: AstReader,
+  records: Pick<RustProgramRecords, "compileTimeSource">,
+  safetyOperation: (expression: Node) => { readonly kind: string } | undefined,
+  node: Node,
+): boolean {
+  for (let current = ast.parent(node); current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
+    if (records.compileTimeSource.get(current) !== undefined || safetyOperation(current)?.kind === "safety-builder") return true;
+  return false;
+}

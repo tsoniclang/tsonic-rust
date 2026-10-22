@@ -9,6 +9,7 @@ import { isRustUnitCarrier } from "../../target-model/types/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
+import { rustNodeIsInsideCompileTimeSource } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -23,15 +24,8 @@ export function analyzeRustCallableDeclarationEmission(input: {
     issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
-  // A callable written inside compile-time source (a safety builder such as `safety<T>().property(value => value.field)`,
-  // or erased memory metadata and its field selectors) selects a declaration; it is never a native function and has no
-  // runtime return or control flow.
-  const insideCompileTimeSource = (node: Node): boolean => {
-    for (let current = ast.parent(node); current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
-      if (program.records.compileTimeSource.get(current) !== undefined ||
-        program.safetyApplications.operationForExpression(current)?.kind === "safety-builder") return true;
-    return false;
-  };
+  const insideCompileTimeSource = (node: Node): boolean => rustNodeIsInsideCompileTimeSource(ast, program.records,
+    expression => program.safetyApplications.operationForExpression(expression), node);
   for (const declaration of input.nodes) {
     if (!ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsFunctionExpression(declaration) && !ast.is.IsArrowFunction(declaration) &&
       !ast.is.IsMethodDeclaration(declaration) && !ast.is.IsGetAccessorDeclaration(declaration) && !ast.is.IsSetAccessorDeclaration(declaration)) continue;
