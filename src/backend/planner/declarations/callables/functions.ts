@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
@@ -306,7 +307,7 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   }
   const generics = genericPlan.finalizeGenerics();
-  const finalizedBody: RustBlock = { statements: [...parameterStatements, ...body.statements] };
+  const finalizedBody: RustBlock = applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined);
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name: nativeBody === undefined ? name : nativeBodyName!,

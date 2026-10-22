@@ -1,4 +1,5 @@
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import {
@@ -219,7 +220,7 @@ export function planProjectMethod(
     };
   }
   const generics = genericPlan.finalizeGenerics();
-  const finalizedBody = { statements: [...parameterStatements, ...body.statements] };
+  const finalizedBody = applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined);
   const overridePrelude = options?.promiseBody !== true && options?.targetName === undefined && !isStatic
     ? planDirectProjectMethodOverridePrelude(member, params, syntheticNames, context)
     : [];
