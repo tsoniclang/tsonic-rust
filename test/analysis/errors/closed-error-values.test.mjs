@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorTransportFixture, rustErrorDomainFixture } from "../../helpers/error-transport.mjs";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../dist/target-model/types/index.js";
+import { selectRustProgramErrorConversion } from "../../../dist/policy/conversions/program-error.js";
 
 const closedValue = (records, target, component = "root", identity = "root:error") =>
   records.programErrorClosedValue.get(component, identity, target);
@@ -160,4 +161,22 @@ test("deep component evidence remains bounded without producing a partial value"
   const value = closedValue(records, rustTsValueTargetType());
   assert.equal(value.kind, "rejected");
   assert.match(value.reason, /bounded acyclic component graph/u);
+});
+
+test("a closed thrown value outside a project error domain is refused before planning", () => {
+  const thrown = { kind: "KindThrowStatement" };
+  const throwOperation = target => ({ targetOperation: { get: node => node === thrown
+    ? { kind: "throw-op", operationId: "tsonic.rust.error.throw",
+      error: { kind: "conversion", expression: {}, conversion: selectRustProgramErrorConversion(target) } } : undefined } });
+  for (const target of [rustTsValueTargetType(), rustJsValueTargetType()]) {
+    const runtime = analyzeRustErrorTransportFixture(rustErrorDomainFixture("runtime"),
+      { nodes: [thrown], records: throwOperation(target) });
+    assert.deepEqual(runtime.issues.map(({ code, message }) => ({ code, message })), [{
+      code: "RUST_MISSING_TARGET_FACT",
+      message: "Closed thrown values require their own sealed source-package payload transport. Node kind: KindThrowStatement.",
+    }], "the user-visible refusal is an analysis diagnostic, not a planner invariant");
+    const project = analyzeRustErrorTransportFixture(rustErrorDomainFixture("project", [target], true),
+      { nodes: [thrown], records: throwOperation(target) });
+    assert.deepEqual(project.issues, [], "the own project domain transports the closed value");
+  }
 });

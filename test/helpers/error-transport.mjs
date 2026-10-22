@@ -33,7 +33,8 @@ export function rustErrorDomainFixture(errorDomain, thrownCarriers = [], retaine
 // Runs the analysis owners of error transport in pipeline order (analysis/program/emission.ts): payload transport,
 // source-package boundaries, variant inventory, closed error values. A stage that reports issues ends the run, as it
 // rejects the analysis stage. Returns the records sealed so far and that stage's issues.
-export function analyzeRustErrorTransportFixture({ program, errors }) {
+// `nodes` and `records` let a case run the closed-value stage over source nodes whose records it supplies.
+export function analyzeRustErrorTransportFixture({ program, errors }, { nodes = [], records = {} } = {}) {
   const components = [...errors.domainsByComponentId.values()].flatMap(domain => {
     const selected = program.sourcePackageComponents.forComponent(domain.componentId);
     return selected === undefined ? [] : [{ ...domain, closedErrorDemand: selected.closedErrorDemand }];
@@ -46,6 +47,6 @@ export function analyzeRustErrorTransportFixture({ program, errors }) {
   analyzeRustSourcePackageErrorBoundaries(program, errors, builder.sourcePackageEmission);
   const variants = analyzeRustErrorVariantEmission({ errorTransport: transport.value }, errors, builder.errorTransportEmissionPlans);
   if (variants.length !== 0) return done(variants);
-  return done(analyzeRustClosedErrorValues({ ...program, records: builder.readers, sourcePackageComponents }, errors, [],
+  return done(analyzeRustClosedErrorValues({ ...program, records: { ...builder.readers, ...records }, sourcePackageComponents }, errors, nodes,
     builder.errorTransportEmissionPlans, builder.conversionEmissionPlans));
 }

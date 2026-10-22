@@ -11,6 +11,7 @@ import { admitRustConversionEmission } from "../conversions/emission.js";
 import { rustTsValueTargetType, rustJsValueTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
+import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 
 export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, "reachability">, errors: RustSourcePackageErrorPlan,
   nodes: readonly Node[], producer: RustErrorTransportEmissionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
@@ -78,10 +79,27 @@ export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, 
     if (conversion.kind === "native-join") { for (const arm of conversion.arms) rejection(node, component, arm); return; }
     if (conversion.kind === "program-error") required(node, rustJsValueTargetType(), program.records.physicalProgramErrorBoundary.get(component, conversion.owner));
   };
+  // A closed thrown value is transported only by the project error domain of its own source package; a runtime domain
+  // or a forwarded boundary cannot carry it, so the program is refused here instead of reaching planning.
+  const closedRoute = (route: RustProgramErrorRoute): boolean => route.kind === "closed" || route.kind === "closed-admission" ||
+    route.kind === "union" && route.arms.some(arm => closedRoute(arm.route));
+  const closedThrow = (node: Node, component: string): void => {
+    const operation = program.records.targetOperation.get(node);
+    const thrown = operation?.kind === "throw-op" && operation.error.kind === "conversion" ? operation.error.conversion : undefined;
+    const contextual = program.records.contextualValueConversion.get(node)?.conversion;
+    const conversion = thrown ?? (contextual?.kind === "program-error" ? contextual : undefined);
+    if (conversion === undefined || !closedRoute(conversion.route)) return;
+    const boundary = program.records.sourcePackageErrorBoundary.get(component, component);
+    if (boundary !== undefined && boundary.errorDomain === "project" && boundary.componentId === component) return;
+    issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
+      message: `Closed thrown values require their own sealed source-package payload transport. Node kind: ${program.source.ast.kindName(node)}.`,
+      evidence: ["target.capability=rust.backend.closed-throw-domain"] });
+  };
   for (const node of nodes) {
     const file = program.source.ast.getSourceFile(node);
     const component = file === undefined ? undefined : program.sourcePackageComponents.componentForFile(program.source.ast.getFileName(file));
     if (component === undefined) continue;
+    closedThrow(node, component.componentId);
     const region = program.records.nativeErrorRegion.get(node);
     if (region?.jsRejection !== undefined) {
       if (region.jsRejection.local !== undefined) rejection(node, component.componentId, region.jsRejection.local);
