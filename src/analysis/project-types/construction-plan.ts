@@ -170,8 +170,13 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       unreachable: node => input.records.nativeUnreachable.get(node) === true,
       mayThrow: input.mayThrow,
     });
-    const emission = prepareRustConstructionEmission(input, definition, layers, fields, readiness);
-    plans.set(definition, Object.freeze({ definition, layers: Object.freeze(layers), fields, emission,
+    // An absence default the constructor can never observe is not emitted: the field is initialized by its first write.
+    const settle = (field: RustConstructionField): RustConstructionField => field.absenceDefault &&
+      !readiness.observedAbsenceDefaults.has(physicalDeclaration(field.declaration)) ? Object.freeze({ ...field, absenceDefault: false }) : field;
+    const settledLayers = layers.map(layer => Object.freeze({ ...layer, fields: Object.freeze(layer.fields.map(settle)) }));
+    const settledFields = Object.freeze(fields.map(settle));
+    const emission = prepareRustConstructionEmission(input, definition, settledLayers, settledFields, readiness);
+    plans.set(definition, Object.freeze({ definition, layers: Object.freeze(settledLayers), fields: settledFields, emission,
       issues: Object.freeze([...issues, ...readiness.issues]), pointFor: readiness.pointFor,
       points: readiness.points, returnLayerFor: readiness.returnLayerFor,
       expressions: readiness.expressions,
