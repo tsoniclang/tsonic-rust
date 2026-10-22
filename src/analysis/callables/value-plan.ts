@@ -470,7 +470,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem,
-        isConcreteCallableParameter: native.isConcreteCallableParameter });
+        isConcreteCallableParameter: native.isConcreteCallableParameter,
+        isNativeRetainedParameter: native.isNativeRetainedParameter });
       publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs, frames,
         emissionContexts: emission.value.contexts });
       sealResult = resolvedTargetStage(publishedPlan);

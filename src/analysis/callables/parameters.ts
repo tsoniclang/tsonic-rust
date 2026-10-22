@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableParameterProducer } from "../program/records/parameter-emission.js";
@@ -29,7 +31,9 @@ export function analyzeRustCallableParameterEmission(input: {
     const requiresImplementation = program.callableValues.native.inputsFor(owner).some(input => input.subject.node === parameter);
     const physical = requiresImplementation ? program.callableValues.nativeStorage.parameterFor(parameter) : undefined;
     if (physical?.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust", "An admitted native parameter requires its finalized physical callable storage.", parameter);
-    const carrier = physical?.carrier ?? abi.parameterCarrier;
+    // A callable retained by native code outlives the call: its concrete carrier takes the 'static lifetime.
+    const carrier = physical?.carrier ?? (program.callableValues.native.isNativeRetainedParameter(parameter)
+      ? substituteElidedLifetime(abi.parameterCarrier, rustStaticLifetime) : abi.parameterCarrier);
     const sourceCarrier = program.records.runtimeCarrier.get(parameter)?.carrier;
     const storage = program.records.bindingStorage.get(parameter);
     if (pattern !== undefined && (abi.mode !== "value" || sourceCarrier === undefined || !rustTargetTypeRefEquals(sourceCarrier, abi.valueCarrier) || storage !== undefined))
