@@ -185,8 +185,15 @@ export function planRustProviderEvaluationScope(
     if (!stabilizationKeys.has(slot.key)) {
       continue;
     }
-    let valueContext = context;
     const carrier = selected.slots[index]!.ownerCarrier;
+    // An operand the enclosing expression already bound to a local (a compound assignment receiver or index) is
+    // stable; binding it into a second local would move it before its later read or write.
+    const bound = context.expressionOverrides?.get(slot.node);
+    if (carrier === undefined && bound !== undefined && bound.expression.kind === "path") {
+      sourceValues.set(slot.node, bound.expression);
+      continue;
+    }
+    let valueContext = context;
     if (carrier !== undefined) {
       const owner = planExpressionBeforeContextualConversion(slot.node, context);
       if (owner === undefined) return { kind: "failed" };
