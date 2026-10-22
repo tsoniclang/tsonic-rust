@@ -47,7 +47,7 @@ function fixture(body = `
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(file);
-  const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
+  const profiles = createRustSourceProfileRegistry(source, jsEnabled);
   const effects = createRustSourceProfileStorageEffects(source, profiles);
   const selected = name => {
     const invocation = variables.get(name);
@@ -224,7 +224,7 @@ test("local Object and ObjectConstructor lookalikes cannot contribute JavaScript
 test("disabled or ambiguous source-profile provenance cannot invent an effect", () => {
   const current = fixture();
   const { invocation, call } = current.selected("frozen");
-  const disabled = createRustSourceProfileRegistry(current.source.sourceFiles, current.source.ast, false);
+  const disabled = createRustSourceProfileRegistry(current.source, false);
   assert.equal(createRustSourceProfileStorageEffects(current.source, disabled).call(invocation, call) === undefined, true);
   assert.equal(createRustSourceProfileStorageEffects(current.source, {
     profileForNode: () => undefined,
