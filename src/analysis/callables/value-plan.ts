@@ -308,7 +308,13 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
       input.ast.is.IsConstructorDeclaration(owner) || input.ast.is.IsGetAccessorDeclaration(owner) ||
       input.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
-      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved", genericImplementations });
+      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved", genericImplementations,
+    ownedRetainedParameter: parameter => {
+      const declaration = input.ast.parent(parameter);
+      return declaration !== undefined && !input.ast.hasModifierKind(declaration, "async") &&
+        input.retainedEnvironments.ownsRetainedInputs(declaration) &&
+        input.retainedEnvironments.suspendedParametersFor(declaration)?.includes(parameter) === true;
+    } });
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
     nodes: input.nativeNodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {

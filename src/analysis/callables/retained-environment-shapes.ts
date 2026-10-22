@@ -76,10 +76,21 @@ export function createRustRetainedEnvironmentQueries(
     return false;
   };
   const owned = new Map<Node, boolean>();
+  // A declared class or interface result is a nominal native record without lifetime parameters: storage it retains
+  // from the inputs is owned by the record, so those inputs are 'static rather than an environment lifetime.
+  const returnsNominalRecord = (declaration: Node): boolean => {
+    const semantics = input.source.semantics.forNode(declaration);
+    const result = semantics.types.declarationSignatureInfo(declaration)?.returnType;
+    const symbol = result === undefined ? undefined
+      : semantics.declarations.typeSymbol(semantics.types.nonNullableType(result) ?? result);
+    const declarations = symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol);
+    return declarations.length !== 0 && declarations.every((node: Node) =>
+      ast.is.IsInterfaceDeclaration(node) || ast.is.IsClassDeclaration(node));
+  };
   const ownsRetainedInputs = (declaration: Node): boolean => {
     const cached = owned.get(declaration);
     if (cached !== undefined) return cached;
-    const selected = ast.hasModifierKind(declaration, "async") && resultEscapes(declaration);
+    const selected = ast.hasModifierKind(declaration, "async") ? resultEscapes(declaration) : returnsNominalRecord(declaration);
     owned.set(declaration, selected);
     return selected;
   };

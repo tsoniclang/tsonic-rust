@@ -81,6 +81,8 @@ export function createRustNativeCallableInputPlan(input: {
   readonly declaresGenericInputs: (owner: Node) => boolean;
   /** Generic callable family implementations: their captures live in the family's named environment. */
   readonly genericImplementations: ReadonlySet<Node>;
+  /** Whether a parameter is retained by a synchronous declaration whose nominal record result owns it ('static). */
+  readonly ownedRetainedParameter: (parameter: Node) => boolean;
 }): RustNativeCallableInputPlan {
   const registry = createRustNativeCallableProtocolRegistry(input);
   const componentByFile = new Map(input.sourcePackages.packages.flatMap(entry =>
@@ -119,6 +121,10 @@ export function createRustNativeCallableInputPlan(input: {
       if (input.ast.is.IsParameterDeclaration(capture.declaration)) nativeRetainedParameters.add(capture.declaration);
     }
   }
+  // A parameter retained natively, or retained by a nominal record result (stored in that record's concrete field type),
+  // keeps its concrete callable carrier.
+  const keepsConcreteCarrier = (parameter: Node): boolean =>
+    nativeRetainedParameters.has(parameter) || input.ownedRetainedParameter(parameter);
   const bindings = new Map<Node, SourceStorageBindings | null>();
   const inputs = new Map<Node, Map<SourceStorageSubject, RustNativeCallableInput>>();
   const captures = new Map<Node, Set<RustNativeCallableInput>>();
@@ -141,7 +147,7 @@ export function createRustNativeCallableInputPlan(input: {
     if (subject.kind !== "input") return undefined;
     const owner = input.ast.parent(subject.node);
     if (owner === undefined || !input.ast.parameters(owner).includes(subject.node)) return undefined;
-    if (!input.declaresGenericInputs(owner) || nativeRetainedParameters.has(subject.node)) return undefined;
+    if (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(subject.node)) return undefined;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableProtocol(selected) === undefined && rustCallableProtocol(selected) === undefined) return undefined;
     const members = inputs.get(owner) ?? new Map<SourceStorageSubject, RustNativeCallableInput>();
@@ -189,7 +195,7 @@ export function createRustNativeCallableInputPlan(input: {
       if (origin.kind !== "input" || closureParameter(origin) || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
         rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined ||
         inputOwner !== undefined && input.ast.parameters(inputOwner).includes(origin.node) &&
-          (!input.declaresGenericInputs(inputOwner) || nativeRetainedParameters.has(origin.node))) {
+          (!input.declaresGenericInputs(inputOwner) || keepsConcreteCarrier(origin.node))) {
         implementations.add(origin);
         continue;
       }
@@ -258,10 +264,10 @@ export function createRustNativeCallableInputPlan(input: {
   const isConcreteCallableParameter = (parameter: Node): boolean => {
     const owner = input.ast.parent(parameter);
     return owner !== undefined && input.ast.parameters(owner).includes(parameter) &&
-      (!input.declaresGenericInputs(owner) || nativeRetainedParameters.has(parameter));
+      (!input.declaresGenericInputs(owner) || keepsConcreteCarrier(parameter));
   };
   return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter,
-    isNativeRetainedParameter: (parameter: Node) => nativeRetainedParameters.has(parameter), inputs: selectedInputs, protocols: definitions,
+    isNativeRetainedParameter: keepsConcreteCarrier, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
     inputsFor: (declaration: Node) => declarationInputs.get(declaration) ?? emptyInputs,
     capturesFor: (declaration: Node) => declarationCaptures.get(declaration) ?? emptyInputs,
