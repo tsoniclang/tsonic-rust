@@ -373,6 +373,8 @@ export function createRustNativeStorageQueries(input: {
         const result = substituteRustTargetGenerics(signature.result, types, caller.bindings.lifetimes, caller.bindings.consts);
         return rustPhysicalPayloadFor(logical, result, current, input.definitions);
       }
+      // A call of a native Promise body produces that body's own anonymous native Future, not the Promise facade's result.
+      if (operation.asyncBody !== undefined) return isRustNativeFutureCarrier(logical) && rustTargetTypeRefEquals(logical, current) ? logical : undefined;
       const implementations = input.storage.invocationImplementationsFor(origin.node, bindings);
       if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length !== 1) return undefined;
       const declaration = implementations.nodes[0]!;
