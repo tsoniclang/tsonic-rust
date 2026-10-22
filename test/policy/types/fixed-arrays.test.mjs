@@ -25,7 +25,6 @@ import { rustTupleTargetType } from "../../../dist/policy/types/collections/tupl
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSpreadElementCarrier } from "../../../dist/target-model/operations/rest-assembly.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
-import { planRustBindingPattern } from "../../../dist/backend/planner/bindings/binding-patterns.js";
 import { printRustType } from "../../../dist/print/source/types.js";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -228,32 +227,20 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
       sourceCarrier, projectedCarrier: remainder, storageCarrier: remainder, bindingCarrier: remainder,
       projection: { kind: "fixed-array-rest", start: 1 }, normalization: "identity",
     });
-    const diagnostics = [];
-    const source = { kind: "path", path: "values" };
-    const statements = planRustBindingPattern(pattern, source, sourceCarrier, {
-      diagnostics,
-      input: { program: {
-        source: { ast }, records: records.seal(requiredRecords),
-        names: { nameForDeclaration: node => node === first ? "first" : "rest" },
-      } },
-    }, () => assert.fail("fixed-array rest must not reconstruct a source expression"));
-    assertNoTargetDiagnostics(diagnostics);
-    assert.deepEqual(statements?.[0]?.init, {
-      kind: "index", receiver: source, index: { kind: "int-literal", text: "0" },
-    });
-    assert.equal(printRustType(statements?.[1]?.type), `[u32; ${length - 1n}]`);
-    assert.deepEqual(statements?.[1]?.init, {
-      kind: "method-call", method: "expect",
-      args: [{ kind: "str-literal", value: "validated fixed-array destructuring length" }],
-      receiver: {
-        kind: "method-call", method: "try_into", args: [],
-        receiver: {
-          kind: "index", receiver: source,
-          index: { kind: "range", start: { kind: "int-literal", text: "1" },
-            end: { kind: "int-literal", text: length.toString() } },
-        },
-      },
-    });
+    // The planner renders the projection analysis sealed for a compiled destructuring of the same extent.
+    const { result } = compileRust({ files: { "index.ts": `import type { FixedArray, uint32 } from "@tsonic/core/types.js";
+export function split(values: FixedArray<uint32, ${length}n>): uint32 {
+  const [first, ...rest] = values;
+  return first + rest[0];
+}
+` } });
+    assertNoTargetDiagnostics(result.diagnostics);
+    const output = artifactText(result, "src/index.rs");
+    const binding = output.match(/let (\w+) = values;/u)?.[1];
+    assert.equal(binding !== undefined, true, "the destructured source is evaluated once");
+    assert.match(output, new RegExp(`let first: u32 = ${binding}\\[0\\];`, "u"));
+    assert.match(output, new RegExp(`let rest: \\[u32; ${length - 1n}\\] = ${binding}\\[1\\.\\.${length}\\]\\s*` +
+      `\\.try_into\\(\\)\\s*\\.expect\\("validated fixed-array destructuring length"\\);`, "u"));
   }
 });
 
