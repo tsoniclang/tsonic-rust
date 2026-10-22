@@ -98,7 +98,13 @@ function planSelectedRustCallableConversion(
         method: emission.invocation, args: [tuple] };
   if (invoked === undefined) return undefined;
   let invocation: RustExpr = invoked;
-  if (conversion.errorPlan !== undefined) {
+  if (conversion.eliminatedInvokeError === true) {
+    const errorName = allocateRustSyntheticName(names, "error");
+    invocation = { kind: "method-call", receiver: invoked, method: "map_err", args: [{
+      kind: "closure", params: [{ name: errorName, byRefCopy: false }],
+      body: { kind: "match", expression: { kind: "path", path: errorName }, arms: [] },
+    }] };
+  } else if (conversion.errorPlan !== undefined) {
     const errorName = allocateRustSyntheticName(names, "error");
     const converted = lowerRustValueConversion(conversion.errorPlan, { kind: "path", path: errorName }, context, node);
     if (converted === undefined) return undefined;
