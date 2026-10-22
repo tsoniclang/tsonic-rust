@@ -70,6 +70,9 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
   const expression = (value: RustExpr): RustExpr => {
     namingAllowance ||= rustExpressionDeclaresNonSnakeName(value);
     const mapped = mapRustExpressionChildren(value, expression, block);
+    // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
+    if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
+      return mapped.value;
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
       : { ...parameter, type: nameType(parameter.type, parameter.name) }) };
