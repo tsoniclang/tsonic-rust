@@ -127,7 +127,10 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
       witnesses: Object.freeze(inputs.map(input => program.callableValues.nativeStorage.invocationWitnessFor(input, node))), specialized,
       constructor: constructor === undefined ? undefined : Object.freeze({ name: constructor.targetName }),
       constructorOwner: fact.target.form === "constructor" ? program.projectTypes.definitionForCarrier(fact.target.typeCarrier)?.declaration : undefined,
-      dispatch, callable, callableCarrier: carrier, eliminateInfallible, never: isRustNeverCarrier(fact.resultCarrier),
+      dispatch, callable, callableCarrier: carrier, eliminateInfallible,
+      ...(fact.target.form === "callable" && native === undefined && generic === undefined && error !== undefined && !eliminateInfallible
+        ? { physicalCallableError: error } : {}),
+      never: isRustNeverCarrier(fact.resultCarrier),
       errorEdge: directError ? edges![0] : undefined,
       pinnedBodies: new Set([...(pinned ?? [])].filter(([, calls]) => fact.asyncBody?.maySuspend === true && calls.has(node)).map(([name]) => name)),
     }, specializations);
