@@ -3,6 +3,7 @@ import test from "node:test";
 import { rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/source-call-lifetimes.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const declared = { kind: "parameter", identity: "read::lifetime", name: "Region" };
 const actual = { kind: "parameter", identity: "caller::lifetime", name: "Region" };
@@ -85,7 +86,8 @@ test("the backend independently rejects stale, missing and widened generic lifet
     parameters: [{ form: "required", valueCarrier: carrier, parameterCarrier: carrier, mode: "value", inputs: [binding] }],
     resultCarrier: carrier, targetGenericArguments: [argument(actual)] };
   const matches = (candidate, input = carrier, signature = selected) =>
-    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [input]);
+    sourceCallSelectedMemberMatches(candidate, signature, member.returnType, type => type, undefined, [input],
+      emptyRustTypeDefinitions, new Map());
   assert.equal(matches(fact), true);
   assert.equal(matches(fact, reference({ ...actual, identity: "other" })), false);
   assert.equal(matches(fact, reference(undefined)), false);

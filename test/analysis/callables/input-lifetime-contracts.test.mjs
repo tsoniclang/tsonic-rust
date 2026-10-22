@@ -13,7 +13,8 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   const integer = rustSourcePrimitiveTargetType("int64");
   const lifetime = { kind: "parameter", identity: "callback/input", name: "input" };
   const carrier = rustCallableInputTargetType([integer], integer, lifetime);
-  const ast = { parameters: declaration => declaration === owner ? [parameter] : [] };
+  const ast = { parameters: declaration => declaration === owner ? [parameter] : [],
+    is: { IsClassDeclaration: () => false, IsClassExpression: () => false } };
   let selected = { parameterCarrier: carrier, inputLifetime: lifetime };
   const records = createRustRecordFixture({sourceParameterAbi: { get: (node) => node === parameter ? selected : undefined }});
   const contract = rustCallableInputLifetimeParameters(owner, ast, records);

@@ -5,7 +5,21 @@ import { rustCallArgumentIsOwned } from "../../../dist/analysis/callables/parame
 
 
 
-function query({ operation, mode = "by-value", syntax = "call", argumentSelected = true, withParent = true }) {
+const integer = { kind: "source-primitive", name: "int32" };
+
+// A provider call reads its argument mode from its finalized ABI input; a source call reads the argument-passing record.
+function providerAbiInputs(mode) {
+  if (mode === "missing") return [];
+  return [{ source: { kind: "argument", sourceIndex: 0 },
+    mode: mode === "borrow-shared" ? "ref" : mode === "borrow-mut" ? "mut-ref" : "value",
+    sourceCarrier: integer, parameterCarrier: integer,
+    conversion: { kind: "identity", sourceCarrier: integer, targetCarrier: integer, fallible: false } }];
+}
+
+function query({ operation: authored, mode = "by-value", syntax = "call", argumentSelected = true, withParent = true }) {
+  const operation = authored?.kind === "provider-operation" && authored.abi.target.form !== "expression-macro"
+    ? { ...authored, abi: { ...authored.abi, targetReceiver: { kind: "none" }, targetArguments: providerAbiInputs(mode) } }
+    : authored;
   const argument = {};
   const call = {};
   const ast = {

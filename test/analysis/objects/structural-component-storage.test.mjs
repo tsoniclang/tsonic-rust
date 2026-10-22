@@ -238,7 +238,7 @@ test("physical method witnesses reject mismatched complete signatures before pub
   ]);
   for (const label of ["input", "result", "error", "logical source", "destination", "field index"]) {
     const builder = createRustStructuralShapePlanRegistry();
-    builder.initialize([{ carrier: shape }], [], () => "source", []);
+    builder.initialize([{ carrier: shape }], [], () => "source", [], []);
     builder.initializeUnions([]);
     const definition = builder.definitions[0];
     const original = builder.field(shape, 0);
@@ -491,7 +491,7 @@ test("a remapped physical method rejects its old source index without partially 
     { sourceName: "read", type: rustCallableTargetType([], integer, lifetime), presence: "required", readonly: false, method: true },
   ]);
   const builder = createRustStructuralShapePlanRegistry();
-  builder.initialize([{ carrier: shape }], [], () => "source", []);
+  builder.initialize([{ carrier: shape }], [], () => "source", [], []);
   builder.initializeUnions([]);
   const definition = builder.definitions[0];
   const originalFields = definition.fields;
