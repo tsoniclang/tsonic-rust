@@ -275,6 +275,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }),
     ]);
     const mainErrorType = errors.errorType;
+    // A fallible hook whose error boundary is the root error domain returns the lifecycle error type itself.
+    const hookOperandErrorType = (hook: (typeof activeHooks)[number]) =>
+      hook.isFallible && (hook.errorBoundary === "target-runtime" && rootErrorDomain.errorDomain === "runtime" ||
+        hook.errorBoundary === "source-program" && rootErrorDomain.errorDomain !== "runtime") ? lifecycleErrorType : undefined;
     const executor = binaryExecution.kind === "native" ? binaryExecution.executor : undefined;
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
     for (const hook of activeHooks) {
@@ -286,13 +290,18 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       binaryExecution.kind === "owned" ? { kind: "await", expr: future }
       : planRustAsyncExecution(executor === undefined
         ? { kind: "call", path: "tsonic_rust_runtime::block_on", args: [future] }
-        : hookCalls.get(executor)!.call([future]), executor, execution => errors.lifecycle(execution));
+        : hookCalls.get(executor)!.call([future]), executor,
+        execution => errors.lifecycle(execution, executor === undefined ? undefined : hookOperandErrorType(executor)));
     const completionType: import("../../target-ast/syntax/nodes.js").RustType = { kind: "unit" };
     const successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr = {
       kind: "path", path: "()",
     };
+    // The crate initializer returns its own package error type; when that is the lifecycle error type the result
+    // propagates without a From conversion. An executor hook result carries the hook's error channel instead.
+    const initializerOperandErrorType = crateInitializer?.asynchronous === true && executor !== undefined
+      ? undefined : crateInitializer?.errorType;
     const propagateInitialization = (expression: import("../../target-ast/syntax/nodes.js").RustExpr) =>
-      initializerError === undefined ? errors.lifecycle(expression)
+      initializerError === undefined ? errors.lifecycle(expression, initializerOperandErrorType)
         : errors.propagate(initializerError, expression);
     const initializationStatements = crateInitializer === undefined
       ? []
@@ -329,7 +338,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }
       return {
         kind: "expr" as const,
-        expr: errors.lifecycle(call),
+        expr: errors.lifecycle(call, hookOperandErrorType(epilogue)),
       };
     };
     const startupStatements = activeHooks.filter(hook => hook.phase === "before-initialization").map(planHook);
@@ -365,6 +374,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       : [];
     const mainBody = binaryExecution.kind === "owned" ? planRustOwnedBinaryEntry({ execution: binaryExecution,
       hook: hookCalls.get(binaryExecution.owner)!, errors, fallible: mainFallible,
+      hookErrorType: hookOperandErrorType(binaryExecution.owner),
       afterEntry: epilogueStatements,
       body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...completionStatements] } })
       : { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...epilogueStatements, ...completionStatements] };
