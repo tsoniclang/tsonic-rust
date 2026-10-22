@@ -9,7 +9,7 @@ import type { RustSourceCallEffectsFact } from "../../target-model/records/objec
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustNativeCallableCall } from "../../target-model/records/native-protocols.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
+import { rustCallableProtocol, rustCallableInputProtocol, isRustNeverCarrier, rustOptionElementCarrier, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -109,7 +109,14 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     // A producer-owned error channel is decided by its closed producer error (an infallible closure yields Infallible).
     const declaredError = physical?.signature.error;
     const producerError = declaredError === undefined ? undefined : rustProducerErrorReference(declaredError);
-    const error = producerError === undefined ? declaredError : program.errorRegions.producerError(producerError);
+    // A stored structural method slot is invoked through its sealed physical storage, whose error is the one its
+    // producers selected (an infallible method stores Infallible), not the method's declared logical error.
+    const slot = fact.target.form === "structural-method"
+      ? program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex) : undefined;
+    const slotStorage = slot === undefined || slot.nativeMethod === true ? undefined
+      : slot.presence === "optional" ? rustOptionElementCarrier(slot.methodStorageCarrier) : slot.methodStorageCarrier;
+    const slotError = slotStorage === undefined ? undefined : rustCallableProtocol(slotStorage)?.error;
+    const error = slotError ?? (producerError === undefined ? declaredError : program.errorRegions.producerError(producerError));
     const eliminateInfallible = error?.kind === "target-named" && error.id === rustInfallibleTargetId;
     const edges = program.records.sourceErrorEffects.get(node)?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === declaration);
     const directError = effects!.invocation === "fallible" && native === undefined && generic === undefined && declaration !== undefined &&
