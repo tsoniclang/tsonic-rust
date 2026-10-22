@@ -18,3 +18,11 @@ export function eraseRustCompileTimeVariableStatements(input: {
     input.producer.erase(node);
   }
 }
+
+/** A node inside compile-time source (memory metadata, value-struct schemas, callable aliases) is never emitted. */
+export function rustWithinCompileTimeSource(ast: AstReader, records: Pick<RustProgramRecords, "compileTimeSource">, node: Node): boolean {
+  for (let current = ast.parent(node); current !== undefined; current = ast.parent(current)) {
+    if (records.compileTimeSource.get(current) !== undefined) return true;
+  }
+  return false;
+}

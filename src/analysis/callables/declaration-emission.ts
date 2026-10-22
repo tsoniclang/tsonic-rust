@@ -9,6 +9,7 @@ import { isRustUnitCarrier } from "../../target-model/types/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
+import { rustWithinCompileTimeSource } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -28,7 +29,8 @@ export function analyzeRustCallableDeclarationEmission(input: {
       !ast.is.IsMethodDeclaration(declaration) && !ast.is.IsGetAccessorDeclaration(declaration) && !ast.is.IsSetAccessorDeclaration(declaration)) continue;
     const body = ast.body(declaration);
     if (body === undefined || program.records.nativeParticipation.get(declaration) === "erased" ||
-      program.records.nativeUnreachable.get(declaration) === true || program.records.compileTimeSource.get(declaration) !== undefined) continue;
+      program.records.nativeUnreachable.get(declaration) === true || program.records.compileTimeSource.get(declaration) !== undefined ||
+      rustWithinCompileTimeSource(ast, program.records, declaration)) continue;
     const sourceReturn = program.records.sourceCallableReturn.get(declaration);
     const asyncFact = program.records.asyncFunction.get(declaration);
     const generator = program.records.generator.get(declaration);
