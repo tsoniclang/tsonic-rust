@@ -445,6 +445,17 @@ export function createRustNativeStorageQueries(input: {
         { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
       return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
     };
+    const frameInstanceBindings = (producer: TargetTypeRef, destination: TargetTypeRef): ReadonlyMap<string, TargetTypeRef> | undefined => {
+      const source = rustFrameCallableValue(producer);
+      const target = rustFrameCallableValue(destination);
+      if (source?.owner.kind !== "class" || target?.owner.kind !== "class" ||
+        closedMetadataKey(source.owner.origin) !== closedMetadataKey(target.owner.origin)) return undefined;
+      const typeIdentities = new Set(rustTargetGenericReferences(producer).typeIdentities);
+      if (typeIdentities.size === 0) return undefined;
+      const inferred = inferRustTargetGenericBindings(producer, destination,
+        { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
+      return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
+    };
     const visit = (current: TargetTypeRef, selectedSubject: SourceStorageSubject,
       bindings: SourceStorageBindings, depth: number, permitsAbsence: boolean,
       position: "value" | "input" = "value"): TargetTypeRef | undefined => {
@@ -558,8 +569,13 @@ export function createRustNativeStorageQueries(input: {
               const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
                 ? undefined : rustFrameCallableValue(originCarrier) !== undefined
                   ? originCarrier : input.producers.physicalFor(origin.node, originCarrier);
-              const instantiated = produced === undefined || classBindings === undefined ? produced
+              const classBound = produced === undefined || classBindings === undefined ? produced
                 : substituteRustTargetGenerics(produced, classBindings, new Map(), new Map());
+              // A field write made in a method body of a generic class is reached with that method's declaration
+              // bindings; the instance whose field is read supplies the class type arguments.
+              const readInstance = classBound === undefined ? undefined : frameInstanceBindings(classBound, current);
+              const instantiated = classBound === undefined || readInstance === undefined ? classBound
+                : substituteRustTargetGenerics(classBound, readInstance, new Map(), new Map());
               candidatePhysical = instantiated === undefined ? undefined : substituteRustTargetGenerics(instantiated, types, lifetimes, consts);
             }
             if (candidatePhysical === undefined)
