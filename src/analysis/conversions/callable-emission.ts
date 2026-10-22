@@ -10,6 +10,11 @@ import { rustProducerErrorReference } from "../../target-model/types/carriers/pr
 import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustCallableWithError, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import { rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
 import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
@@ -68,13 +73,34 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const error = owner?.kind === "logical" || owner?.kind === "physical" && owner.domain === "runtime" ? rustRuntimeErrorTargetType() : resolved;
     return rustTargetTypeRefEquals(error, signature.error) ? signature : Object.freeze({ ...signature, error });
   };
+  // A producer-selected callable value whose error is uninhabited, wrapped into a union whose payload is the fixed
+  // type-erased callable with an inhabited error, is written into that payload through the eliminating adapter.
+  const erasedPayloadWrite = (node: Node): RustCallableJoinWrite | undefined => {
+    const conversion = program.records.contextualValueConversion.get(node)?.conversion;
+    // The payload is placed as is, or through a native representation change (a lifetime) that lowers to identity.
+    if (conversion?.kind !== "source-union-variant" ||
+      conversion.payloadConversion !== null && conversion.payloadConversion.kind !== "native-representation") return undefined;
+    const payload = conversion.payloadCarrier;
+    const slotError = payload.kind === "target-named" && payload.id === rustCallableTargetId ? rustCallableProtocol(payload)?.error : undefined;
+    if (slotError === undefined || rustUninhabitedError(slotError)) return undefined;
+    const binding = program.records.sourceBinding.get(node);
+    const local = binding === undefined ? undefined : program.records.localBinding.get(binding.sourceDeclaration);
+    const physical = local?.kind === "value" ? local.nativeCarrier : undefined;
+    const produced = physical === undefined ? undefined : rustCallablePhysicalSignature(physical)?.error;
+    const reference = rustProducerErrorReference(produced);
+    const error = reference === undefined ? produced : program.errorRegions.producerError(reference);
+    if (physical === undefined || error === undefined || !rustUninhabitedError(error)) return undefined;
+    const carrier = rustCallableWithError(physical, slotError);
+    if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "An erased union payload write requires the payload's exact callable error.", node);
+    return Object.freeze({ source: physical, carrier });
+  };
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const read = program.records.valueRead.get(node);
     for (const source of [program.records.runtimeCarrier.get(node)?.carrier, read?.source, read?.contextualInput]) operand(node, source);
     const selected = program.records.contextualValueConversion.get(node);
     if (selected?.conversion.kind === "callable-adapter") contract(node, selected.conversion);
-    const joinWrite = program.callableValues.nativeStorage.joinWriteFor(node);
+    const joinWrite = program.callableValues.nativeStorage.joinWriteFor(node) ?? erasedPayloadWrite(node);
     if (joinWrite !== undefined) producer.joinWrite(node, joinWrite);
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-conversion" && operation.conversion?.kind === "callable-input") operand(node, operation.conversion.source);
