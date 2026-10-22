@@ -18,8 +18,10 @@ export function analyzeRustNativeParticipation(input: {
   const failure = input.storage.failureReason();
   if (failure !== undefined) return Object.freeze({ kind: "unresolved", reason: failure });
   return sourceNodesOutsideErasedSubtrees(input.ast, input.storage.nodes, node => {
-    // An object literal method is a callable value created where the literal is evaluated, like a function expression.
-    const literalMethod = input.ast.is.IsMethodDeclaration(node) && input.ast.parent(node) !== undefined &&
+    // An object literal method or accessor is a callable value created where the literal is evaluated, like a function
+    // expression.
+    const literalMethod = (input.ast.is.IsMethodDeclaration(node) || input.ast.is.IsGetAccessorDeclaration(node) ||
+      input.ast.is.IsSetAccessorDeclaration(node)) && input.ast.parent(node) !== undefined &&
       input.ast.is.IsObjectLiteralExpression(input.ast.parent(node)!);
     const anonymous = input.ast.is.IsArrowFunction(node) || input.ast.is.IsFunctionExpression(node) || literalMethod;
     let participation: RustNativeParticipation;
