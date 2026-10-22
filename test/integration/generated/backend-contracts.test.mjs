@@ -14,6 +14,7 @@ import {
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { requireProviderArgumentPassingFacts } from "../../../dist/backend/planner/expressions/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import {
   isRustNamedTypeTraitContract,
   rustNamedTypeCarrierValue,
@@ -247,10 +248,10 @@ test("project-source call consumption requires exact selected member kind, targe
   };
   const selected = { member };
   const normalize = carrier => carrier;
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize, undefined), true);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType, normalize, undefined), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType, normalize, undefined), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType, normalize, undefined), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), false);
 });
 
 test("project-source call consumption accepts only proven target-finalized inferred type arguments", () => {
@@ -304,21 +305,21 @@ test("project-source call consumption accepts only proven target-finalized infer
   };
 
   const normalize = carrier => carrier;
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize, undefined), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), true);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     sourceSelectedMethodTypeArguments: [{
       ...inferredSourceArgument,
       explicitTypeNode: {},
     }],
-  }, member.returnType, normalize, undefined), false);
+  }, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), false);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     member: {
       ...member,
       genericParameters: [{ kind: "lifetime", sourceName: "T", targetIdentity: "life:T" }],
     },
-  }, member.returnType, normalize, undefined), false);
+  }, member.returnType, normalize, undefined, [], emptyRustTypeDefinitions, new Map()), false);
 });
 
 test("evaluation-only provider arguments do not require native parameter-passing facts", () => {
