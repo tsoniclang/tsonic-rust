@@ -44,13 +44,17 @@ export function planRustOptionBranch(option: RustExpr, carrier: TargetTypeRef, p
   });
 }
 
+// The pre-rewrite literal rules (target-ast/inspection/literal-defaults.ts): a literal equal to its type's Default
+// value, and a literal whose eager evaluation has no effect or allocation.
 function isNativeDefaultLiteral(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "string-literal":
     case "str-literal": return expression.value === "";
-    case "int-literal": return expression.text === "0" || /^0_[iu]\d+$/u.test(expression.text);
-    case "float-literal": return /^0(\.0)?(_f(32|64))?$/u.test(expression.text);
+    case "int-literal": return expression.text === "0";
+    case "float-literal": return expression.text === "0" || expression.text === "0.0";
     case "bool-literal": return expression.value === false;
+    case "char-literal": return expression.value === "\0";
+    case "tuple-literal": return expression.elements.length === 0;
     case "none": return true;
     default: return false;
   }
@@ -65,6 +69,8 @@ function isConstantLiteral(expression: RustExpr): boolean {
     case "str-literal":
     case "none": return true;
     case "unary": return isConstantLiteral(expression.operand);
+    case "numeric-cast": return isConstantLiteral(expression.expression);
+    case "tuple-literal": return expression.elements.every(isConstantLiteral);
     default: return false;
   }
 }
