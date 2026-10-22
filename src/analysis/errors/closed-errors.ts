@@ -11,6 +11,7 @@ import { isRustClosedValueCarrier } from "../../target-model/types/carriers/clos
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { rustProgramErrorConversionMatches } from "../../policy/conversions/program-error.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
+import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
 
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
@@ -38,6 +39,15 @@ export function rustClosedErrorTransportDemand(
       retained = true;
     } else if (route.kind === "union") {
       for (const arm of route.arms) collect(arm.carrier, arm.route);
+    }
+  };
+  const collectAdapterErrors = (conversion: RustCallableConversion, depth: number): void => {
+    if (depth > 128) return;
+    if (conversion.error?.kind === "program-error") collect(conversion.error.source, conversion.error.route);
+    for (const value of [...conversion.parameters, conversion.result]) {
+      if (value.kind !== "value") continue;
+      if (value.conversion.kind === "callable-adapter") collectAdapterErrors(value.conversion, depth + 1);
+      else if (value.conversion.kind === "program-error") collect(value.conversion.source, value.conversion.route);
     }
   };
   const seen = new Set<Node>();
@@ -75,6 +85,9 @@ export function rustClosedErrorTransportDemand(
         collect(source, contextual.conversion.route);
       }
     }
+    // A callable adapter converts its invoked callable's error (a Promise resolver's JsValue) into the target callable's
+    // program error; a closed route there is a closed thrown value like any other and needs its payload transport.
+    if (contextual?.conversion.kind === "callable-adapter") collectAdapterErrors(contextual.conversion, 0);
     const projection = records.flowReadProjection.get(node);
     for (const carrier of [records.runtimeCarrier.get(node)?.carrier,
       records.sourceCallableReturn.get(node)?.returnCarrier,

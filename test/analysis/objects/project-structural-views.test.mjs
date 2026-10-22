@@ -86,7 +86,10 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
     types: { typeArgumentBindings: () => [], structuralMembers: () => ({ kind: "available", destination: { calls: [], constructs: [], indexes: [] },
       members: [{ kind: "present", destination: { declarations: [destination], property: { symbol } },
         source: { read: "field", declarations: [member], getters: [], setters: [], property: { readonly: false } } }] }) } };
-  const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined } };
+  // A generalized destination registers its own shape storage as an instance of the view's structural template.
+  const registrations = [];
+  const sourceTypes = { structuralInstantiations: () => [{ template, instance: carrier }], typeFamilies: { get: () => undefined },
+    registerStructuralObject: (shape, selectedTemplate) => { registrations.push({ shape, template: selectedTemplate }); return true; } };
   const walk = { sourceTypes, operationOptions: { projectTypes, sourceTypes, receiverFieldAliases: { aliasFor: () => undefined } },
     context: { ast, projectTypes, typeDefinitions: emptyRustTypeDefinitions, semanticsFor: () => semantics,
       sourceStorage: {
