@@ -25,7 +25,11 @@ export function planRustVirtualProjectMethodCall(
     context.syntheticNames,
     "dispatch_receiver",
   );
-  return rustValueBlock([{ name: receiverName, value: { kind: "reference", expr: receiver } }], {
+  // A receiver planned as the place behind a temporary pointer (`*match value.as_ref() { .. }`) binds that temporary
+  // itself, not `&*temporary` (clippy::borrow_deref_ref); a pointer that is a place stays borrowed, so it is not moved.
+  const borrowed: RustExpr = receiver.kind === "dereference" && receiver.pointer.kind !== "path" && receiver.pointer.kind !== "field"
+    ? receiver.pointer : { kind: "reference", expr: receiver };
+  return rustValueBlock([{ name: receiverName, value: borrowed }], {
       kind: "method-call",
       receiver: cloneRustExpression({
           kind: "field",
