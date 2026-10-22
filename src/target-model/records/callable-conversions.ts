@@ -4,6 +4,7 @@ import type { RustCallableConversion } from "../conversions/callable.js";
 import type { RustCallablePhysicalSignature, RustCallablePhysicalConversion } from "../conversions/callable-physical.js";
 import type { RustNativeCallableInput } from "./native-protocols.js";
 import type { RustSourceCallableValueFact } from "./operation-selections.js";
+import type { RustCallableJoinWrite } from "./native-storage.js";
 
 export interface RustNativeCallablePhysicalSource {
   readonly carrier: TargetTypeRef;
@@ -28,4 +29,5 @@ export interface RustCallableConversionEmission {
 export interface RustCallableConversionRecords {
   readonly callableOperand: { readonly get: (node: Node, source: TargetTypeRef) => RustCallableOperandEmission | undefined };
   readonly callableContract: { readonly get: (node: Node, conversion: RustCallableConversion) => RustCallableConversionEmission | undefined };
+  readonly callableJoinWrite: { readonly get: (node: Node) => RustCallableJoinWrite | undefined };
 }
