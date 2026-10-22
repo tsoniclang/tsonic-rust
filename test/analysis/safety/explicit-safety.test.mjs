@@ -317,7 +317,7 @@ export function read(pointer: NativePointer<int32>): int32 {
     result.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
       code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
-      message: "Rust native-pointer load requires an explicit unsafecontext() source region.",
+      message: "Rust native-pointer 'load' requires an explicit unsafecontext() source region.",
     }],
   );
 });

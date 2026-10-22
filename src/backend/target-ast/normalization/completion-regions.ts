@@ -62,7 +62,7 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     }
     let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
-      // An unused authored catch binding is expected to warn; the wildcard `_` of a binding-less catch never does.
+      // A catch without a variable matches `Err(_)`, which binds nothing and so never triggers unused_variables.
       ...(caught?.bindingUsed === false && caught.binding !== "_" ? { attrs: [rustLintAttributes.unusedVariables] } : {}),
       type: resultType(completionType, errorType),
       init: caught === undefined ? path(scope.bodyName) : { kind: "match", expression: path(scope.bodyName), arms: [
