@@ -189,22 +189,29 @@ test("runtime throw equality retains the independently selected native error bou
 });
 
 test("optional chain selection preserves exact opaque source identities", () => {
-  const fact = {
-    expression: first, guard: second, operationKind: "property",
+  const contract = {
     sourceGuardCarrier: { kind: "target-named", id: "rust.core.Option", typeArguments: [text] },
     selectedGuardCarrier: text, guardDepth: 1, innerResultCarrier: integer,
     resultCarrier: { kind: "target-named", id: "rust.core.Option", typeArguments: [integer] },
     lowering: "map",
   };
+  const fact = { expression: first, guard: second, operationKind: "property", ...contract };
   const model = createRustProgramRecordBuilder();
-  model.optionalChain.set(first, fact);
-  model.optionalChain.set(first, copyMetadata(fact));
-  for (const mutation of [
-    { expression: second }, { guard: first }, { operationKind: "method" },
-    { guardDepth: 2 }, { selectedGuardCarrier: integer },
-    { innerResultCarrier: text }, { lowering: "and-then" },
+  model.optionalChains.guard(first, second, "property", contract);
+  assert.deepEqual(model.optionalChain.get(first), fact);
+  assert.throws(() => model.optionalChains.guard(first, second, "property", copyMetadata(contract)),
+    /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("optionalChain", first, fact,
+    candidate => candidate.optionalChains.guard(first, second, "property", copyMetadata(contract)));
+  assertRustInheritedRecordConflict("optionalChain", first, { ...fact, expression: second },
+    candidate => candidate.optionalChains.guard(first, second, "property", contract), /Conflicting Rust semantic plan/u);
+  for (const [guard, operationKind, mutation] of [
+    [first, "property", {}], [second, "method", {}],
+    [second, "property", { guardDepth: 2 }], [second, "property", { selectedGuardCarrier: integer }],
+    [second, "property", { innerResultCarrier: text }], [second, "property", { lowering: "and-then" }],
   ]) {
-    assert.throws(() => model.optionalChain.set(first, { ...fact, ...mutation }),
+    assertRustInheritedRecordConflict("optionalChain", first, fact,
+      candidate => candidate.optionalChains.guard(first, guard, operationKind, { ...contract, ...mutation }),
       /Conflicting Rust semantic plan/u);
   }
 });
