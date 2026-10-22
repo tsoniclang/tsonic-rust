@@ -9,6 +9,8 @@ import { isRustProgramErrorCarrier, rustProgramErrorTargetType } from "../../tar
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { selectRustStandaloneTypeIdentity } from "../../policy/types/resolution/standalone-emission.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedDispatchContextInput, RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { isRustFinalizedDispatchContextInput } from "../../target-model/operations/finalized-inputs.js";
@@ -32,7 +34,10 @@ export function analyzeRustDispatchRootEmission(program: Omit<RustAnalysisProgra
     for (const [index, identity] of demand.rootContextIds.entries()) {
       const declaration = program.dispatchContexts.declaration(identity);
       if (declaration === undefined) { refuse("A demanded physical dispatch root has no exact declaration."); continue; }
-      const carrier = mapRustTargetTypes(declaration.rootCarrier, type => isRustProgramErrorCarrier(type) ? error : type);
+      // A dispatch root is program-lived thread-local storage: callables it retains live for the whole program, so a
+      // provider-declared placeholder callable lifetime closes as 'static.
+      const carrier = closeRustRetainedCallableCarrier(
+        mapRustTargetTypes(declaration.rootCarrier, type => isRustProgramErrorCarrier(type) ? error : type), rustStaticLifetime);
       if (selectRustStandaloneTypeIdentity(carrier, { programError: true }) === undefined) {
         refuse("A demanded native dispatch root has no exact renderable carrier.");
         continue;
