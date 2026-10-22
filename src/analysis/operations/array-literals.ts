@@ -1,4 +1,5 @@
 import { type Node, type SourceFile, type Type } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { isSourceCallableBodyBoundary, sourceBoundTypeRelationship, KindOmittedExpression, Node_Expression, type SourceLiteralValue } from "@tsonic/target-api/source";
 import { type TargetDiagnostic, failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { type RustAnalysisProgram } from "../program/model.js";
@@ -29,6 +30,7 @@ export function analyzeRustArrayLiterals(program: Omit<RustAnalysisProgram, "rea
   nodes: readonly Node[], producer: RustArrayLiteralProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const literal = program.records.targetOperation.get(node);
     if (literal?.kind !== "array-literal") continue;
     let owner: Node | undefined = program.source.ast.parent(node);

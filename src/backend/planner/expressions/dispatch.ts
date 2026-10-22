@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, ConditionalExpression_Condition, ConditionalExpression_WhenTrue, ConditionalExpression_WhenFalse,
   BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
-import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import { rustSourceBindingPath } from "../program/plan-context.js";
@@ -86,9 +86,23 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
       return planExpression(inner, context, resultUse, access === "value" ? "value" : "shared-place");
     }
     case "KindAsExpression":
-    case "KindTypeAssertionExpression": return planSourceConversion(node, context, access);
+    case "KindTypeAssertionExpression": {
+      // A discarded type assertion only evaluates its operand, which is itself discarded (TypeScript assertions have no
+      // runtime effect); the conversion is planned only when the value is used.
+      if (resultUse === "discarded") {
+        const inner = Node_Expression(ast, node);
+        if (inner === undefined) failRustPlannerInvariant("An admitted discarded assertion requires its checked source operand.", node);
+        return planExpression(inner, context, "discarded");
+      }
+      return planSourceConversion(node, context, access);
+    }
     case "KindNonNullExpression": {
       const inner = Node_Expression(ast, node);
+      // A discarded non-null assertion has no runtime effect beyond evaluating its discarded operand.
+      if (resultUse === "discarded") {
+        if (inner === undefined) failRustPlannerInvariant("An admitted discarded non-null assertion requires its checked source operand.", node);
+        return planExpression(inner, context, "discarded");
+      }
       const value = inner === undefined ? undefined : planExpression(inner, context);
       if (syntax?.kind !== "non-null" || value === undefined) failRustPlannerInvariant("An admitted non-null read requires its exact native payload projection.", node);
       return syntax.operation === "identity" ? value : syntax.operation === "unwrap"
@@ -100,6 +114,20 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
       const yes = ConditionalExpression_WhenTrue(ast, node);
       const no = ConditionalExpression_WhenFalse(ast, node);
       const condition = test === undefined ? undefined : planExpression(test, context);
+      if (resultUse === "discarded") {
+        // A discarded conditional evaluates its test and then only the selected branch, itself discarded.
+        if (condition === undefined || yes === undefined || no === undefined)
+          failRustPlannerInvariant("An admitted discarded conditional requires its native test and branches.", node);
+        const whenTrue = planExpression(yes, context, "discarded");
+        const whenFalse = planExpression(no, context, "discarded");
+        const branch = (expr: RustExpr): RustBlock => ({ statements: [{ kind: "expr", expr }] });
+        // Only branches with work are emitted; with none, the test is still evaluated once.
+        const statement: RustStmt | undefined = whenTrue !== undefined
+          ? { kind: "if", condition, then: branch(whenTrue), ...(whenFalse === undefined ? {} : { else: branch(whenFalse) }) }
+          : whenFalse !== undefined ? { kind: "if", condition: { kind: "unary", operator: "!", operand: condition }, then: branch(whenFalse) }
+          : undefined;
+        return statement === undefined ? condition : { kind: "block", body: { statements: [statement] } };
+      }
       const destination = context.valueDestinations?.get(node);
       const whenTrue = yes === undefined ? undefined : planExpression(yes, rustValueDestinationContext(yes, destination, context));
       const whenFalse = no === undefined ? undefined : planExpression(no, rustValueDestinationContext(no, destination, context));

@@ -1,4 +1,5 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourcePackageErrorPlan } from "../../target-model/records/source-package-errors.js";
 import type { RustDispatchRootEmission } from "../../target-model/records/dispatch-contexts.js";
@@ -44,6 +45,7 @@ export function analyzeRustDispatchRootEmission(program: Omit<RustAnalysisProgra
   if (components === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native dispatch input publication requires its exact source components.");
   const published = new Map<string, Set<RustFinalizedDispatchContextInput>>();
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const file = program.source.ast.getSourceFile(node);
     const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
     const component = fileName === undefined ? undefined : components.find(selected => selected.sourceFileNames.has(fileName));

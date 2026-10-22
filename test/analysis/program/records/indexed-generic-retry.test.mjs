@@ -9,6 +9,13 @@ import { finalizeProjectSourceGenericArguments } from "../../../../dist/analysis
 import { finalizeRustCallableSignature } from "../../../../dist/analysis/callables/signature-query.js";
 import { closedMetadataEquals } from "../../../../dist/target-model/metadata/closed-data.js";
 
+// Families keyed by closed carrier metadata or physical owners, not by source nodes; the node snapshot skips them.
+const closedMetadataKeyedFamilies = new Set(["typeEmission", "frameType", "structuralView", "classImplementationGenerics",
+  "optionalStorageTypeArguments", "checkedProjectProjection", "structuralShape", "sourceUnion", "physicalProgramErrorBoundary",
+  "projectUnionMapping", "projectUpcastEmission", "conversionContract", "carrierRead", "indexedRecordStorage", "projectClosedValue",
+  "storedField", "structuralFieldStorage", "structuralObjectStorage", "structuralMethodInvocation", "projectRootEmission",
+  "projectInstanceContracts", "receiverAlias"]);
+
 for (const [keySource, evaluate] of [['"value"', false], ['`value`', false], ["selected()", true]]) {
   test(`indexed ${keySource} survives a pending outer generic callback and retries once`, () => {
     const { context, walk } = analyzeRustOperations(`
@@ -48,7 +55,7 @@ for (const [keySource, evaluate] of [['"value"', false], ['`value`', false], ["s
     assert.equal(parentKey !== undefined, true, "the checked source already selected an indexed key");
     assert.equal(parentKey.evaluate, evaluate);
     const parentReaders = createRustRecordFixture({}, parentRecords);
-    const parentSnapshot = Object.entries(parentReaders).map(([family, reader]) => ({
+    const parentSnapshot = Object.entries(parentReaders).filter(([family]) => !closedMetadataKeyedFamilies.has(family)).map(([family, reader]) => ({
       family, reader, values: nodes.map(node => reader.get(node)),
     }));
     const inherited = createRustRecordFixture({

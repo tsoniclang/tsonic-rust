@@ -93,8 +93,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const generic = rustGenericCallableValue(carrier);
     const physical = generic === undefined ? undefined : program.callableValues.generic.physical.existingSelectionFor(carrier);
     // A carrier that still names source type parameters is rendered only after its emission context substitutes them;
-    // the substituted closed carrier is the one prepared and selected.
-    if (generic !== undefined && physical === undefined && rustTargetTypeParameterIdentities(carrier).length === 0)
+    // the substituted closed carrier is the one prepared and selected. Only a physical key (one naming its selected
+    // members and arguments) has a prepared selection; a logical generic callable carrier has none by construction.
+    if (generic?.physical !== undefined && physical === undefined && rustTargetTypeParameterIdentities(carrier).length === 0)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted native generic carrier requires its exact selected physical definition and arguments.");
     const union = rustSourceUnionCarrierValue(carrier);
     const unionArguments = union === undefined ? undefined : rustSourceUnionPayloadArguments(carrier, program.typeDefinitions);

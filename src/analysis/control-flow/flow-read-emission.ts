@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "./compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustFlowReadEmissionProducer } from "../program/records/flow-read-emission.js";
@@ -54,6 +55,7 @@ export function analyzeRustFlowReadEmission(program: Omit<RustAnalysisProgram, "
     } else producer.publish(node, fact, { kind: fact.kind === "closed-native" ? "closed-native" : fact.kind === "program-error-variant" ? "program-error-variant" : "project" });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.flowReadProjection.get(node);
     if (fact !== undefined && !rustTargetTypeRefEquals(program.records.runtimeCarrier.get(node)?.carrier, fact.sourceCarrier))
       refuse(node, "rust.backend.flow-read-source", "The finalized flow-read projection conflicts with the expression's raw Rust carrier.");

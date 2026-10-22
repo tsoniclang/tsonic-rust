@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustObjectReferenceEmissionProducer } from "../program/records/object-reference-views.js";
@@ -18,6 +19,7 @@ export function analyzeRustObjectReferenceEmission(program: Omit<RustAnalysisPro
       evidence: ["target.capability=rust.backend.object-reference-view"] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const view = program.records.objectReferenceView.get(node);
     if (view === undefined) continue;
     if (view.kind === "project") { producer.publish(node, { kind: "project", view }); continue; }

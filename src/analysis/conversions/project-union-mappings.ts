@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectUnionMappingProducer } from "../program/records/project-union-mappings.js";
@@ -64,6 +65,7 @@ export function analyzeRustProjectUnionMappings(program: Omit<RustAnalysisProgra
     }
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const contextual = program.records.contextualValueConversion.get(node);
     if (contextual?.conversion.kind === "project-union-map") {
       const flow = program.records.flowReadProjection.get(node);

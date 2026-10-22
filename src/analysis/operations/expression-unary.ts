@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { Node_Operand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -17,6 +18,7 @@ export function analyzeRustUnaryEmission(program: Omit<RustAnalysisProgram, "rea
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     if (!ast.is.IsPrefixUnaryExpression(node) && !ast.is.IsPostfixUnaryExpression(node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "operator-token" && !(fact?.kind === "source-conversion" && fact.conversion === undefined)) continue;

@@ -1,14 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { isSourceCallableBodyBoundary, Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { RustRetainedEnvironmentSelection } from "../../target-model/records/retained-environments.js";
 
-type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
-  readonly declarations: readonly Node[];
-};
+type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes">;
 import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../target-model/records/retained-environments.js";
 
 export function createRustRetainedEnvironmentQueries(
@@ -200,15 +198,15 @@ export function createRustRetainedEnvironmentQueries(
         name: allocateRustGeneratedName(names, "environment") }), parameters: Object.freeze(selected) });
     return Object.freeze({ kind: "selected", environment });
   };
-  for (const declaration of input.declarations) {
-    if (!isSourceCallableBodyBoundary(ast, declaration)) continue;
-    suspendedParametersFor(declaration);
-    lexicalFor(declaration);
-    environments.set(declaration, select(declaration));
-  }
-  return Object.freeze({
-    suspendedParametersFor: (declaration: Node) => suspended.get(declaration),
-    lexicalFor: (declaration: Node) => lexical.get(declaration) ?? unresolved(),
-    environmentFor: (declaration: Node) => environments.get(declaration) ?? unresolved(),
-  });
+  // Selected on demand by the analysis passes that need them, after the source storage facts they read exist
+  // (the checkpoint behaviour). Selecting every declaration while the analysis context is still being created ran
+  // source storage queries too early, and the first unresolved collector failed the shared storage budget for the
+  // whole program.
+  return Object.freeze({ suspendedParametersFor, lexicalFor, environmentFor(declaration: Node) {
+    const cached = environments.get(declaration);
+    if (cached !== undefined) return cached;
+    const selected = select(declaration);
+    environments.set(declaration, selected);
+    return selected;
+  } });
 }
