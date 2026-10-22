@@ -172,7 +172,7 @@ closureCapture: { get: (node) => {
       projectFieldProjection() { assert.fail("logical carrier fixtures have no checked project-field projections"); },
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
       semantics: currentSource.semantics.forFile };
-    const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage, declarations: participation.nodes,
+    const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,
       sourceLifetimes: emptyRustLifetimeIndex });
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
       isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
