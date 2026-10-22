@@ -55,3 +55,19 @@ export function rustStringConcatenationParts(parts: readonly RustExpr[]): readon
     ? { kind: "str-literal", value: part.value }
     : { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: part }] });
 }
+
+/** Whether a condition prints as a statement block (clippy::blocks_in_conditions). */
+export function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "block":
+    case "evaluate-then": return true;
+    case "bottom":
+    case "numeric-cast":
+    case "unsafe":
+    case "owned-string-from-borrowed-str": return rustConditionPrintsAsBlock(expression.expression);
+    case "option-try":
+    case "try":
+    case "await": return rustConditionPrintsAsBlock(expression.expr);
+    default: return false;
+  }
+}

@@ -1,6 +1,6 @@
 import type { Node, Symbol } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
-import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustDirectStorageProducer } from "../program/records/direct-storage.js";
@@ -241,6 +241,10 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
         admit(receiver, [...(index === undefined ? [] : [index]), right]);
       }
     }
+    // An increment or decrement writes through its operand place like an assignment does.
+    const updateOperator = ast.is.IsPrefixUnaryExpression(node) || ast.is.IsPostfixUnaryExpression(node) ? ast.operatorKindName(node) : undefined;
+    const updated = updateOperator === "KindPlusPlusToken" || updateOperator === "KindMinusMinusToken" ? Node_Operand(ast, node) : undefined;
+    if (updated !== undefined) admitPlace(updated);
   }
   return Object.freeze(issues);
 }

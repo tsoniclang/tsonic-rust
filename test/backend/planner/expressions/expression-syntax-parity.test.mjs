@@ -631,7 +631,23 @@ main();
     source,
     /values\.delete_number\(1\.0\)/u,
   );
-  validateGeneratedProject("expression-delete-js-array", [...result.artifacts, {
+  const run = validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr);
+  // Bin crates do not re-export their entry module (RULINGS 2026-10-22, cd9644e5e), so the deletion test links the
+  // same function built as a library.
+  const { result: library } = compileRust({
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "lib", crateName: "delete_proof" } },
+    files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function remove(values: (int32 | undefined)[]): boolean {
+  return delete values[1];
+}
+` },
+  });
+  assert.deepEqual(library.diagnostics, []);
+  validateGeneratedProject("expression-delete-js-array-lib", [...library.artifacts, {
     path: "tests/dense_delete.rs",
     text: `use std::panic::{catch_unwind, AssertUnwindSafe};
 use tsonic_rust_js::JsArray;
@@ -645,7 +661,7 @@ fn deletion_rejects_without_mutation() {
     assert_eq!(values.enumerable_own_keys(), vec!["0", "1", "2"]);
 }
 `,
-  }], { run: true });
+  }]);
 });
 
 test("delete rejects non-JS-array targets without target-name inference", () => {

@@ -1,3 +1,4 @@
+import { rustConditionPrintsAsBlock } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, ConditionalExpression_Condition, ConditionalExpression_WhenTrue, ConditionalExpression_WhenFalse,
   BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
@@ -133,6 +134,9 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
       const whenFalse = no === undefined ? undefined : planExpression(no, rustValueDestinationContext(no, destination, context));
       if (condition === undefined || whenTrue === undefined || whenFalse === undefined || context.syntheticNames === undefined)
         failRustPlannerInvariant("An admitted conditional requires its native test, branch values and name scope.", node);
+      // A test that prints as a statement block is bound first (clippy::blocks_in_conditions); any other test is the
+      // condition itself, as in the checkpoint output.
+      if (!rustConditionPrintsAsBlock(condition)) return { kind: "conditional", condition, whenTrue, whenFalse };
       const name = allocateRustSyntheticName(context.syntheticNames, "conditional_test");
       return rustValueBlock([{ name, value: condition }], { kind: "conditional", condition: { kind: "path", path: name }, whenTrue, whenFalse });
     }
