@@ -73,18 +73,19 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
-    // `|value| Ok(value)` (or `|value| { Ok(value) }`) with an unannotated parameter is the variant constructor `Ok`
-    // itself (clippy::redundant_closure).
+    // `|value| f(value)` (or `|value| { f(value) }`) with an unannotated parameter is the function or variant
+    // constructor path `f` itself (clippy::redundant_closure), e.g. `Ok` or `js_abi::JsValue::from_error`. A bare
+    // lowercase path may be a local callable, which the closure borrows and the path would move, so it stays.
     const result = mapped.kind === "closure" ? mapped.body
       : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
         mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
     if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 && result?.kind === "call" &&
-      result.path === "Ok" && result.genericArguments === undefined && result.args.length === 1) {
+      result.genericArguments === undefined && result.args.length === 1 && rustItemCallPath(result.path)) {
       const parameter = mapped.params[0];
       const argument = result.args[0];
       if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
         (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
-        return { kind: "path", path: "Ok" };
+        return { kind: "path", path: result.path };
     }
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
@@ -249,4 +250,8 @@ function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
 function isReflexivePathComparison(condition: RustExpr): boolean {
   return condition.kind === "binary" && (condition.operator === "==" || condition.operator === "!=") &&
     condition.left.kind === "path" && condition.right.kind === "path" && condition.left.path === condition.right.path;
+}
+
+function rustItemCallPath(path: string): boolean {
+  return path.includes("::") || /^[A-Z]/u.test(path);
 }
