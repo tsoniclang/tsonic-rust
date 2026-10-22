@@ -6,6 +6,8 @@ import { rustClosedTypeTestMatches } from "../../../../dist/analysis/operations/
 import { planRustClosedTypeTest } from "../../../../dist/backend/planner/expressions/type-tests.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { analyzeRustClosedTypeTests } from "../../../../dist/analysis/operations/type-test-emission.js";
+import { createRustClosedTypeTestProducer } from "../../../../dist/analysis/program/records/type-tests.js";
 
 for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests reject missing, forged and reordered test evidence`, () => {
   const operation = kind === "array" ? "Array.isArray(value)" : kind === "error" ? "value instanceof TypeError" : "value instanceof RegExp";
@@ -51,8 +53,22 @@ for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests rej
   ]) {
     const altered = { ...fact, ...changes };
     assert.equal(rustClosedTypeTestMatches(altered, program.projectTypes, program.typeDefinitions), false);
-    const selected = { ...context, diagnostics: [] };
-    assert.equal(planRustClosedTypeTest(node, altered, selected), undefined);
-    assert.ok(selected.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+    // A forged operation record never reaches the planner (RULINGS 2026-10-22): the analysis owner either stops at its
+    // invariant or seals no emission plan, and the planner then stops at its own invariant.
+    const forged = { ...program, records: { ...program.records,
+      targetOperation: { get: selected => selected === node ? altered : program.records.targetOperation.get(selected) } } };
+    const producer = createRustClosedTypeTestProducer(() => undefined);
+    let rejected = false;
+    try { analyzeRustClosedTypeTests(forged, [node], producer); }
+    catch (error) {
+      assert.match(String(error.message), /Type predicate requires its exact selected operation, carrier and retained test plan/u);
+      rejected = true;
+    }
+    if (!rejected) {
+      assert.equal(producer.records.closedTypeTestEmission.get(node), undefined, "no emission plan is sealed for a forged record");
+      const sealed = { ...program, records: { ...program.records, closedTypeTestEmission: producer.records.closedTypeTestEmission } };
+      assert.throws(() => planRustClosedTypeTest(node, altered, { ...context, input: { program: sealed }, diagnostics: [] }),
+        /An admitted type predicate requires its native emission plan/u);
+    }
   }
 });
