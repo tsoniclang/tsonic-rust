@@ -22,6 +22,7 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
@@ -71,6 +72,7 @@ export function analyzeRustPromiseResults(input: {
   readonly uses: RustPromiseResultUses;
   readonly definitions: RustTypeDefinitions;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly promiseBodies: RustPromiseBodies;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly errorTypes: RustErrorTypeContext;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
@@ -347,6 +349,11 @@ export function analyzeRustPromiseResults(input: {
     }
     const active = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
     const classify = (carrier: TargetTypeRef, owner: Node | undefined): ReturnType<typeof classifyCarrierRequirements> => {
+      // A native Promise body with no Promise object facet runs only as a native future awaited by its callers: the
+      // value is moved into that future, whose storage has the caller's lifetime. Only a JS Promise object (or other
+      // erased storage) requires 'static (RULINGS 2026-10-22: an only-awaited Promise is a native future).
+      if (owner !== undefined && input.promiseBodies.declarations.has(owner) && !input.promiseBodies.objects.has(owner))
+        return { kind: "supported" };
       const nativeEvidence = { ...input.evidence,
         lifetimeContract: rustEnclosingStorageContract(owner ?? value.node, input.ast, input.sourceLifetimes) };
       if (rustTargetTypeParameterIdentities(carrier).length === 0) return classifyCarrierRequirements(carrier, ["static"],
