@@ -194,7 +194,8 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
       { kind: "tail", expr: matched },
     ] } } : matched;
   };
-  const statement = (value: RustStmt): RustStmt => {
+  // The region tail is the labelled block value itself: a tail exit there is the value, not a break to the label.
+  const statement = (value: RustStmt, regionTail = false): RustStmt => {
     switch (value.kind) {
       case "completion-exit": {
         const lowerResult = (): RustExpr => {
@@ -205,6 +206,7 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
           return value.resultWrapped ? call("Ok", completion) : completion;
         };
         return label === undefined ? { kind: value.tail ? "tail" : "return", expr: lowerResult() }
+          : regionTail && value.tail ? { kind: "tail", expr: lowerResult() }
           : { kind: value.tail ? "tail" : "expr", expr: exitLowered(lowerResult) };
       }
       case "return": return label === undefined
@@ -212,6 +214,7 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
         : { kind: "expr", expr: exitLowered(() => value.expr === undefined ? undefined : expression(value.expr)) };
       case "throw": return label === undefined
         ? { kind: value.tail ? "tail" : "return", expr: call("Err", expression(value.error)) }
+        : regionTail && value.tail ? { kind: "tail", expr: call("Err", expression(value.error)) }
         : { kind: value.tail ? "tail" : "expr", expr: exitLowered(() => call("Err", expression(value.error))) };
       case "let": return value.init === undefined ? value : { ...value, init: expression(value.init) };
       case "let-pattern": return { ...value, init: expression(value.init) };
@@ -234,7 +237,7 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
       case "continue": return value;
     }
   };
-  const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(statement) });
-  const lowered = block(body);
+  const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(nested => statement(nested)) });
+  const lowered = { ...body, statements: body.statements.map((value, index) => statement(value, index === body.statements.length - 1)) };
   return { body: lowered, breaksToLabel: breaks !== 0 };
 }
