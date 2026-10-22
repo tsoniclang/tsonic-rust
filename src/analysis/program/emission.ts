@@ -321,8 +321,13 @@ export function finalizeRustNativeEmission(
     [...nativeLayoutTypes, ...sourceCallableEmission.types, ...objectReferenceEmission.types]);
   const errorModuleIssues = analyzeRustProgramErrorModuleEmission(program, errorEmission.plan, context.records.errorTransportEmissionPlans);
   if (errorModuleIssues.length !== 0) return rejectedTargetStage(errorModuleIssues);
-  analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition =>
-    sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined)), context.records.classEmissionPlans);
+  // Storage visibility covers every declaration a native class layout stores: members, constructor parameter
+  // properties and inherited external fields, as well as the class members themselves.
+  analyzeRustNativeMemberVisibility(program.source.ast, program.projectTypes.definitions.flatMap(definition => [
+    ...sourceObjectMemberDeclarations(program.source.ast, definition.declaration).filter((member): member is Node => member !== undefined),
+    ...(program.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []).map(field => field.declaration),
+    ...(program.projectTypes.externalBaseForDefinition(definition)?.fields ?? []).map(field => field.declaration),
+  ]), context.records.classEmissionPlans);
   analyzeRustDeclarationLiveness({ program, reachability, nodes: context.nativeNodes,
     producer: context.records.nativeLiveness, required: context.requiredRecords });
   analyzeRustStructuralLivenessEmission(program, reachability, context.records.nativeLiveness);
