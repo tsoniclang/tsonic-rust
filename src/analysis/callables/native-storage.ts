@@ -19,7 +19,7 @@ import { rustOptionElementCarrier } from "../../target-model/types/carriers/opti
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
-import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
+import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
@@ -32,7 +32,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "../../policy/conversions/native-callables.js";
-import { rustNativeCallableAbsenceWitness } from "../../policy/conversions/native-callables.js";
+import { rustAbsentFutureWitness, rustNativeCallableAbsenceWitness } from "../../policy/conversions/native-callables.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import { createRustEffectsWorkBudget } from "../errors/effects-work-budget.js";
@@ -282,6 +282,15 @@ export function createRustNativeStorageQueries(input: {
       const physical = substituteRustTargetGenerics(produced, types, generic.bindings.lifetimes, generic.bindings.consts);
       return rustPhysicalPayloadFor(logical, physical, current, input.definitions);
     };
+    const absentOrigin = (subject: SourceStorageSubject): boolean => {
+      if (subject.projection.length !== 0) return false;
+      if (isRustAbsenceCarrier(input.records.runtimeCarrier.get(subject.node)?.carrier)) return true;
+      // A sync callable's return produces no Future when every value it returns is absent, including an implicit
+      // `undefined` completion and a body that never returns.
+      if (subject.kind !== "return" || input.records.asyncFunction.get(subject.node) !== undefined) return false;
+      return directReturnedValues(input.ast, subject.node)?.every(value =>
+        isRustAbsenceCarrier(input.records.runtimeCarrier.get(value)?.carrier)) === true;
+    };
     // The one stored payload of a union carrier that is a type-erased runtime callable with the destination's signature.
     const erasedUnionCallablePayload = (union: TargetTypeRef | undefined, current: TargetTypeRef): TargetTypeRef | undefined => {
       const value = rustSourceUnionCarrierValue(union);
@@ -338,8 +347,12 @@ export function createRustNativeStorageQueries(input: {
         const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
         if (origins.kind === "unresolved") return fail(origins.reason);
         let physical: TargetTypeRef | undefined;
+        let absent = false;
         for (const origin of origins.frontier) {
           if (!step(depth)) return undefined;
+          // An optional Future slot also receives absent values (`return undefined`, a sync callable whose every
+          // returned value is absent); they produce no Future, as absent origins of optional callables do below.
+          if (permitsAbsence && absentOrigin(origin.subject)) { absent = true; continue; }
           const candidates = futures.forSubject(origin.subject);
           const generics = candidates.length === 0 ? undefined : genericsFor(ownerFor(origin.subject.node), origin.bindings, depth + 1);
           if (generics?.kind === "unresolved") return fail(generics.reason);
@@ -353,7 +366,10 @@ export function createRustNativeStorageQueries(input: {
             return fail("Native Future storage has distinct physical alternatives requiring a sealed join.");
           physical = Object.isFrozen(candidate) ? candidate : snapshotClosedMetadata(candidate);
         }
-        return physical ?? fail("Native Future storage has no exact physical input implementation.");
+        // A slot whose every origin is absent never holds a Future; it is stored with the absent-Future witness.
+        const output = physical === undefined && absent ? rustFutureOutputCarrier(current) : undefined;
+        return physical ?? (output === undefined ? fail("Native Future storage has no exact physical input implementation.")
+          : rustAbsentFutureWitness(output));
       }
       if (rustCallableProtocol(current) !== undefined) {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
@@ -685,3 +701,22 @@ function callableValueCarrier(carrier: TargetTypeRef): TargetTypeRef | undefined
 }
 
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
+
+/** The values a block-bodied callable returns directly (not from nested callables or classes); undefined for an expression body. */
+function directReturnedValues(ast: AstReader, declaration: Node): readonly Node[] | undefined {
+  const body = ast.body(declaration);
+  if (body === undefined || !ast.is.IsBlock(body)) return undefined;
+  const values: Node[] = [];
+  const pending: Node[] = [body];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node !== body && (ast.is.IsFunctionDeclaration(node) || ast.is.IsFunctionExpression(node) ||
+      ast.is.IsArrowFunction(node) || ast.is.IsMethodDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) ||
+      ast.is.IsSetAccessorDeclaration(node) || ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node))) continue;
+    if (ast.is.IsReturnStatement(node)) {
+      const expression = Node_Expression(ast, node);
+      if (expression !== undefined) values.push(expression);
+    } else ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  return values;
+}
