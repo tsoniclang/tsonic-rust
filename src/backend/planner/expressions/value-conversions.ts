@@ -275,6 +275,11 @@ export function lowerRustValueConversion(
         ? { kind: "path", path: "String::from" }
         : contract.element.sourceMode === "value" && contract.element.lowering === "call"
         ? { kind: "path", path: contract.element.path }
+        // A union variant built from the unconverted element is its tuple-variant constructor (clippy::redundant_closure).
+        : contract.element.sourceMode === "value" && contract.element.lowering === "source-union-variant" &&
+          contract.element.payloadConversion === null && converted.kind === "call" && converted.genericArguments === undefined &&
+          converted.args.length === 1 && converted.args[0]?.kind === "path" && converted.args[0].path === valueName
+        ? { kind: "path", path: converted.path }
         : undefined;
       const mapped: RustExpr = {
         kind: "method-call",
