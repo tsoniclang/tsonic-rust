@@ -83,7 +83,9 @@ main();
   assert.equal(itemHasAttribute(helpers, "fn unusedOuter("), true);
   assert.equal(itemHasAttribute(index, "fn usedMiddle("), false);
   assert.equal(itemHasAttribute(index, "fn callbackTarget("), false);
-  assert.equal(itemHasAttribute(index, "fn invoke("), false);
+  // A function-typed parameter is a native generic callable input (`fn invoke<Implementation0: …>(`), as in the
+  // pre-rewrite output.
+  assert.equal(itemHasAttribute(index, "fn invoke<"), false);
   assert.equal(itemHasAttribute(index, "fn usedRecursive("), false);
   assert.equal(itemHasAttribute(index, "fn usedOverload("), false);
   assert.equal(itemHasAttribute(index, "fn unusedOverload("), true);
