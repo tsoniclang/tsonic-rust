@@ -9,7 +9,7 @@ import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
 import { planRustAssignmentWrite } from "../statements/assignment-writes.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression } from "./entry.js";
-import { planRustDirectStorage } from "./updates/target.js";
+import { planRustDirectStorage } from "./update-target.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
 
 export function planCompoundAssignmentExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

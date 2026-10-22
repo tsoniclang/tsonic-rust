@@ -1,6 +1,7 @@
 import type { ProviderDeclarationModel, SourceDeclarationProvider } from "@tsonic/tsts";
 import { createSourceSemanticsVirtualModuleProvider, nativePointerProviderDeclaration, providerExportDeclarationsForSemanticsModule } from "@tsonic/source-core/extension";
-import { rustLifetimeTypeDeclarations, rustReferenceOperationDeclarations } from "../extension/declarations/index.js";
+import { rustLifetimeTypeDeclarations } from "../extension/lifetime-type-declarations.js";
+import { rustReferenceOperationDeclarations } from "../extension/reference-operation-declarations.js";
 import { rustLangModule, rustConstPointerExport, rustMutPointerExport, rustSourceProviderVersion, rustSourceTypeExportIds, rustSourceVirtualModulesProviderId, rustTypesModule } from "../../target-model/identities/source.js";
 import { rustSourceSemanticsModules } from "./source-modules.js";
 

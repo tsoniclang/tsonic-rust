@@ -1,14 +1,14 @@
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustPlanContext } from "../../program/plan-context.js";
-import { planRustRuntimeSetExpression } from "../runtime-setters.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { planExpression } from "../entry.js";
-import { planRustRuntimeIndexInputs } from "../runtime-index-inputs.js";
-import { planRustUpdateValue } from "./target.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { planRustRuntimeSetExpression } from "./runtime-setters.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
+import { planExpression } from "./entry.js";
+import { planRustRuntimeIndexInputs } from "./runtime-index-inputs.js";
+import { planRustUpdateValue } from "./update-target.js";
 
 export function planRustRuntimeIndexUpdate(
   expression: Node,

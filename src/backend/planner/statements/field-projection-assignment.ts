@@ -4,7 +4,7 @@ import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustAssignmentOperationPlan } from "../../../target-model/records/operator-selection.js";
 import { planExpression } from "../expressions/index.js";
-import { planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/updates/target.js";
+import { planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/update-target.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustMutableProjectReceiver } from "../expressions/typed-locations.js";
 import { mutateRustStoredObjectField } from "../objects/project-storage.js";

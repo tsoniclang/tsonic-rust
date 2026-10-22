@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../../target-model/records/finalized-operation.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustFinalizedInputPlanOverrides } from "../../project/provider-evaluation-scope.js";
-import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustSourceBindingPath } from "../../program/plan-context.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { rustCapturedBinding, type RustExpressionPlanner } from "../typed-locations.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { rustSourceBindingPath } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustCapturedBinding, type RustExpressionPlanner } from "./typed-locations.js";
 
 export type RustProviderOperationExpressionPlanner = (context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>, receiverNode: Node | undefined,

@@ -1,23 +1,23 @@
-import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
-import { planRustValueFieldLocation } from "../../objects/value-fields.js";
-import { finishRustSourceAccessorCall, planRustSourceAccessorCall } from "../properties.js";
-import { planRustIndexedRecordStorage, planRustSourceIndexKey } from "../../objects/indexed-records.js";
-import { planExpression } from "../entry.js";
-import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
-import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
-import { planRustSourceStaticFieldStorage } from "../../declarations/classes/static-field-storage.js";
+import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
+import { planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./update-target.js";
+import { planRustValueFieldLocation } from "../objects/value-fields.js";
+import { finishRustSourceAccessorCall, planRustSourceAccessorCall } from "./properties.js";
+import { planRustIndexedRecordStorage, planRustSourceIndexKey } from "../objects/indexed-records.js";
+import { planExpression } from "./entry.js";
+import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "./typed-locations.js";
+import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "./unions.js";
+import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustExpressionResultUse } from "../entry.js";
-import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { RustUnaryUpdateEmission } from "../../../../target-model/records/expression-unary.js";
-import { planRustSourceAccessorReceiver } from "../../objects/accessor-receivers.js";
-import { planRustRuntimeIndexUpdate } from "./runtime.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import type { RustExpressionResultUse } from "./entry.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustUnaryUpdateEmission } from "../../../target-model/records/expression-unary.js";
+import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
+import { planRustRuntimeIndexUpdate } from "./update-runtime.js";
 
 export function planRustUpdateExpression(expression: Node, selected: RustUnaryUpdateEmission,
   resultUse: RustExpressionResultUse, context: RustPlanContext): RustExpr {

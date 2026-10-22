@@ -8,7 +8,7 @@ import { planNumericLiteralWithCarrier } from "./literal-conversions.js";
 import { negateRustPlannedBooleanExpression } from "./fundamentals.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { planRustComputedMemberExpression } from "./computed-members.js";
-import { planRustUpdateExpression } from "./updates/source.js";
+import { planRustUpdateExpression } from "./update-source.js";
 
 export function planUnaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse): RustExpr {
   const selected = context.input.program.records.unaryEmission.get(node)

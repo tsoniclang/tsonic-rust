@@ -18,7 +18,7 @@ import {
 import {
   planRustDirectStorageCore,
   type RustProviderOperationExpressionPlanner,
-} from "../expressions/updates/direct-storage.js";
+} from "../expressions/update-direct-storage.js";
 import {
   enterRustProjectObjectMutableState,
 } from "../objects/project-objects.js";

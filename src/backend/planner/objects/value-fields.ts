@@ -8,7 +8,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planExpression } from "../expressions/entry.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
-import { planRustDirectStorage } from "../expressions/updates/target.js";
+import { planRustDirectStorage } from "../expressions/update-target.js";
 import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver,
   rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
 import { rustRecordFieldResult, readRustBoundRecordField, writeRustBoundRecordField } from "./record-fields.js";

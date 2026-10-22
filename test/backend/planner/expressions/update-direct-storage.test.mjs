@@ -1,11 +1,11 @@
-import { createRustRecordFixture } from "../../../../helpers/records.mjs";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRustDirectStorageCore } from "../../../../../dist/backend/planner/expressions/updates/direct-storage.js";
+import { planRustDirectStorageCore } from "../../../../dist/backend/planner/expressions/update-direct-storage.js";
 
 
-import { rustStringTargetType } from "../../../../../dist/target-model/types/index.js";
-import { fakeAstReader } from "../../../../helpers/fake-compile-input.mjs";
+import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
+import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
 
 function fixture(storage, module = false) {
   const node = { kindName: "KindIdentifier" };

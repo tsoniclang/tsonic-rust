@@ -1,22 +1,22 @@
-import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { failRustPlannerInvariant } from "../../diagnostics.js";
-import { rustCarrierHasCopyContract } from "../../types/generic-requirements.js";
-import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
-import { planExpression } from "../entry.js";
-import { planFinalizedTargetInput, planProviderOperationExpression } from "../conversions.js";
-import { planRustMutableProjectReceiver } from "../typed-locations.js";
-import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../objects/project-objects.js";
-import { planRustProjectFieldDispatchRoles } from "../../objects/project-field-dispatch.js";
+import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
+import { mutateRustStoredObjectField } from "../objects/project-storage.js";
+import { planExpression } from "./entry.js";
+import { planFinalizedTargetInput, planProviderOperationExpression } from "./conversions.js";
+import { planRustMutableProjectReceiver } from "./typed-locations.js";
+import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 
 import type { Node } from "@tsonic/tsts";
-import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
-import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustFinalizedSourceInput } from "../../../../target-model/records/finalized-operation.js";
-import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { planRustDirectStorageCore } from "./direct-storage.js";
+import type { RustEffectiveExpressionOverride, RustPlanContext } from "../program/plan-context.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { planRustDirectStorageCore } from "./update-direct-storage.js";
 
 export function planRustSourceFieldUpdate(
   operand: Node,
@@ -237,7 +237,7 @@ export function planRustOwnedUpdateLocation(
   step: RustExpr,
   returnsPrevious: boolean,
   context: RustPlanContext,
-  methods: Pick<import("../binding-storage.js").RustBindingStorageOperations, "read" | "write">,
+  methods: Pick<import("./binding-storage.js").RustBindingStorageOperations, "read" | "write">,
 ): RustExpr | undefined {
   if (context.syntheticNames === undefined) {
     return undefined;

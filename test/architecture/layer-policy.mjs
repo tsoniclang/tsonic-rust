@@ -43,7 +43,7 @@ export const rustSourceRules = Object.freeze([
   }),
   Object.freeze({
     ruleId: "ARCH-RUST-PROVIDER-002",
-    matches: (file, source) => file === "src/providers/packages/materialization.ts" &&
+    matches: (file, source) => file.startsWith("src/providers/packages/materialization/") &&
       /Readonly<Record<[^>]+>>\s*\|\s*ReadonlyMap\s*</u.test(source),
     reason: "Rust provider carrier materialization accepts one canonical immutable metadata representation.",
   }),
