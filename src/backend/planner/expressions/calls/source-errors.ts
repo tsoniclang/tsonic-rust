@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
 
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
+import { rustTypeEquals } from "../../../target-ast/syntax/type-equality.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
 import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustErrorType,
@@ -34,7 +35,7 @@ export function planRustSourceErrorPropagation(
       const owner = rustLocalErrorOwner(active);
       if (owner === undefined) return undefined;
       const targetType = rustErrorType(owner);
-      const imported: RustExpr = {
+      const imported: RustExpr = rustTypeEquals(selected.errorType, targetType) ? payload : {
         kind: "associated-call", owner: targetType, method: "from", args: [payload],
       };
       return rustInjectLocalError(active, imported);

@@ -1,4 +1,5 @@
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
+import { rustTypeEquals } from "../../target-ast/syntax/type-equality.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/source-package-errors.js";
@@ -41,7 +42,8 @@ export function rustInjectNativeError(
   error: RustExpr,
 ): RustExpr | undefined {
   return region.kind === "native" ? region.join.inject(source, error)
-    : { kind: "associated-call", owner: region.errorType, method: "from", args: [error] };
+    : rustTypeEquals(region.errorType, source.errorType) ? error
+      : { kind: "associated-call", owner: region.errorType, method: "from", args: [error] };
 }
 
 export function rustPropagateNativeError(
@@ -62,7 +64,8 @@ export function rustPropagateMappedErrorJoin(
   const error: RustExpr = { kind: "path", path: errorName };
   const mapped = operand.mapError(error, payloadName, select);
   if (mapped === undefined) return undefined;
-  const result: RustExpr = { kind: "method-call", receiver: expression, method: "map_err",
+  const result: RustExpr = mapped === error && rustTypeEquals(operand.errorType, region.errorType) ? expression
+    : { kind: "method-call", receiver: expression, method: "map_err",
       genericArguments: [{ kind: "type", type: region.errorType }, { kind: "type", type: { kind: "infer" } }],
       args: [{ kind: "closure", params: [{ name: errorName }], body: mapped }] };
   return { kind: "try", expr: result, operandErrorType: region.errorType, resultErrorType: region.errorType };
@@ -83,7 +86,7 @@ export function rustPropagateLocalError(
   }
   const local = region.local;
   if (local === undefined) return undefined;
-  const converted: RustExpr = {
+  const converted: RustExpr = rustTypeEquals(operandErrorType, local.source.errorType) ? result : {
     kind: "method-call", receiver: result, method: "map_err",
     args: [{ kind: "associated-value", owner: local.source.errorType, name: "from" }],
   };
