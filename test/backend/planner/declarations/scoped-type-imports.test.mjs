@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
-import { completeRustAuthoredStructScopes } from "../../../../dist/backend/target-ast/normalization/authored-type-scopes.js";
+import { completeRustAuthoredStructScopes } from "../../../../dist/backend/planner/program/authored-type-scopes.js";
 import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
 
 test("hoisted authored type scopes import only selected enclosing bindings", () => {
