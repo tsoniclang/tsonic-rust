@@ -62,6 +62,10 @@ export function rustProviderOperationFormContractViolation(
   };
 
   switch (form.form) {
+    case "native-promise-continuation":
+      return hasExactKeys(form, ["form", "member"], ["form", "member"]) && (form.member === "catch" || form.member === "then") &&
+        operationKind === "method" && sourceArgumentCount >= 1 && sourceArgumentCount <= (form.member === "catch" ? 1 : 2)
+        ? undefined : "native-promise-continuation form requires catch(rejected) or then(fulfilled, rejected?)";
     case "numeric-cast":
       return hasExactKeys(form, ["form", "target"], ["form", "target"]) &&
         rustNumericPromotionKind(form.target, form.target) !== undefined &&

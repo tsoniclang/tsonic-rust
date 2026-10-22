@@ -38,6 +38,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     if (target.form === "arg-structural-method") {
       return `structural-method[${target.storageIndex}]`;
     }
+    if (target.form === "native-promise-continuation") {
+      return `native-promise.${target.member}`;
+    }
     return target.name;
   }
   if (fact.kind === "operator-token" || fact.kind === "operator-call") {
