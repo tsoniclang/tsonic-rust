@@ -30,13 +30,15 @@ import { isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, isRustRetai
 import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints/error-protocols.js";
-import { rustDeclarationEmissionCarriers } from "./emission-inventory.js";
+import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
   pending.push(...program.providerErrorCarriers, ...rustDeclarationEmissionCarriers(program, nodes));
+  pending.push(...rustCapturedLifetimeEmissionCarriers(program, nodes, node =>
+    [...rustPhysicalEmissionRecordCarriers(program.records, node), ...rustDeclarationEmissionCarriers(program, [node])]));
   for (const sourceFile of program.sourceFiles) for (const protocol of program.records.nativeProtocols.get(sourceFile) ?? []) {
     pending.push(...protocol.method.parameters, protocol.method.result, protocol.result, protocol.trait);
     const emission = program.records.nativeProtocol.get(protocol);

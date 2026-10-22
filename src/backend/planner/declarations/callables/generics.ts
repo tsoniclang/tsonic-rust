@@ -14,6 +14,7 @@ import { rustAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustProjectProjectionPredicates } from "../../types/project-projection-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
+import { rustCapturedLifetimeSubstitutions } from "../../../../target-model/names/captured-lifetimes.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";
 import { planRustRetainedGenerics } from "./retained-generics.js";
 
@@ -115,18 +116,15 @@ function planRustSourceCallableGenerics(
     context.typeParameterSubstitutions?.has(parameter.identity) !== true);
   const usedNames = new Set(ordinaryParameters.map(parameter => parameter.targetName));
   const lifetimeSubstitutions = new Map(context.lifetimeSubstitutions);
-  const lifetimeNames = new Set(sourceContract.parameters.flatMap(parameter =>
-    parameter.kind === "lifetime" ? [parameter.lifetime.name] : []));
   for (const parameter of sourceContract.parameters) {
     if (parameter.kind === "lifetime") lifetimeSubstitutions.delete(rustLifetimeKey(parameter.lifetime));
   }
   for (const parameter of selectedCaptures) {
     if (parameter.kind === "type") typeParameterNames.set(parameter.identity,
       allocateRustGeneratedName(usedNames, parameter.targetName));
-    else lifetimeSubstitutions.set(rustLifetimeKey(parameter.lifetime), {
-      ...parameter.lifetime, name: allocateRustGeneratedName(lifetimeNames, parameter.lifetime.name),
-    });
   }
+  for (const [key, lifetime] of rustCapturedLifetimeSubstitutions(sourceContract.parameters, selectedCaptures))
+    lifetimeSubstitutions.set(key, lifetime);
   context = { ...context, typeParameterNames, lifetimeSubstitutions };
   if (ordinaryParameters.some((parameter) =>
     !isValidRustIdentifier(parameter.targetName))) {
