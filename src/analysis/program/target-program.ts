@@ -153,6 +153,10 @@ export function analyzeRustAnalysisProgram(
   })));
   const objectRepresentations = context.objectRepresentations.seal();
   context.records.mutatedReferents.finalizeBindings(declaration => {
+    // Only local variables and parameters own a Rust binding whose mutability a referent write decides; an import
+    // binding of a provider module object has no Rust binding.
+    if (!context.ast.is.IsVariableDeclaration(declaration) && !context.ast.is.IsParameterDeclaration(declaration) &&
+      !context.ast.is.IsBindingElement(declaration)) return false;
     const carrier = context.records.runtimeCarrier.get(declaration)?.carrier;
     if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust", "A mutated referent requires its finalized declaration carrier.", declaration);
     return rustCarrierReferentMutationRequiresMutableBinding(carrier, selected => {
