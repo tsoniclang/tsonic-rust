@@ -234,6 +234,7 @@ function rustFoundationForProviderOperationForm(
     require(rustFoundationForGenericArgument(argument));
   };
   switch (form.form) {
+    case "native-promise-continuation":
     case "numeric-cast":
     case "marker":
     case "method":

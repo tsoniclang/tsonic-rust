@@ -562,6 +562,22 @@ export function createRustNativeStorageQueries(input: {
               const originCarrier = origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
                 : frameFieldCarrier(origin);
+              // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
+              // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
+              const concreteParameter = origin.kind === "input" && origin.projection.length === 0 &&
+                input.native.isConcreteCallableParameter(origin.node)
+                ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
+              if (concreteParameter !== undefined) {
+                const declared = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
+                if (!rustCallableInvocationSignaturesMatch(current, callableValueCarrier(declared) ?? declared))
+                  return fail("Native callable storage conflicts with its exact concrete callable parameter.");
+                joinable = false;
+                if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
+                  return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                physical = declared;
+                alternatives.set(origin, declared);
+                continue;
+              }
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) {
                 absent.add(origin);
                 continue;
@@ -571,8 +587,10 @@ export function createRustNativeStorageQueries(input: {
               // Likewise a class field declared as a type-erased runtime callable stores that erased callable.
               const erasedParameter = origin.projection.length === 0 && origin.kind === "input" ? erasedClosureParameter(origin, current) : undefined;
               if (erasedParameter !== undefined) erasedPhysicals.add(erasedParameter);
-              const unionPayload = origin.projection.length === 0 ? origin.kind === "input" ? erasedParameter
-                : erasedUnionCallablePayload(originCarrier, current) : erasedFieldCallable(origin, current);
+              // A union-typed parameter (`callback: string | Numeric`) narrowed to its callable member reads the union's
+              // erased payload like any other union-typed value.
+              const unionPayload = origin.projection.length === 0
+                ? erasedParameter ?? erasedUnionCallablePayload(originCarrier, current) : erasedFieldCallable(origin, current);
               if (unionPayload !== undefined) {
                 joinable = false;
                 candidatePhysical = unionPayload;
@@ -853,36 +871,5 @@ export function createRustNativeStorageQueries(input: {
   });
 }
 
-function callableValueCarrier(carrier: TargetTypeRef): TargetTypeRef | undefined {
-  let current = carrier;
-  const visited = new Set<TargetTypeRef>();
-  while (!visited.has(current)) {
-    visited.add(current);
-    const optional = rustOptionElementCarrier(current);
-    if (optional !== undefined) current = optional;
-    else if (current.kind === "reference") current = current.referent;
-    else return current;
-  }
-  return undefined;
-}
-
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
-
-/** The values a block-bodied callable returns directly (not from nested callables or classes); undefined for an expression body. */
-function directReturnedValues(ast: AstReader, declaration: Node): readonly Node[] | undefined {
-  const body = ast.body(declaration);
-  if (body === undefined || !ast.is.IsBlock(body)) return undefined;
-  const values: Node[] = [];
-  const pending: Node[] = [body];
-  while (pending.length > 0) {
-    const node = pending.pop()!;
-    if (node !== body && (ast.is.IsFunctionDeclaration(node) || ast.is.IsFunctionExpression(node) ||
-      ast.is.IsArrowFunction(node) || ast.is.IsMethodDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) ||
-      ast.is.IsSetAccessorDeclaration(node) || ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node))) continue;
-    if (ast.is.IsReturnStatement(node)) {
-      const expression = Node_Expression(ast, node);
-      if (expression !== undefined) values.push(expression);
-    } else ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
-  }
-  return values;
-}
+import { callableValueCarrier, directReturnedValues } from "./native-storage-values.js";

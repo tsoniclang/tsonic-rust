@@ -64,6 +64,32 @@ export function resolveIdentifierCarrier(
       if (carrier !== undefined) recordProjectSourceBinding(walk, identifier);
       return carrier === undefined ? undefined : setCarrierFact(walk, identifier, carrier);
     }
+    // Every reference to a function declaration records its own callable value, so this precedes the declaration
+    // carrier shortcut below (the declaration carries the function value's carrier too).
+    if (declarationKind === KindFunctionDeclaration) {
+      const parameters = ast.parameters(declaration);
+      const parameterAbis = parameters.map((parameter) => parameter === undefined
+        ? undefined
+        : walk.context.records.sourceParameterAbi.get(parameter));
+      const returnFact = walk.context.records.sourceCallableReturn.get(declaration);
+      const returnCarrier = returnFact === undefined ? undefined : rustCallableInvocationResult(walk.context.records, declaration);
+      const name = ast.name(declaration);
+      const targetName = walk.context.names.functionNameForDeclaration(declaration);
+      if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&
+        returnCarrier !== undefined && targetName !== undefined) {
+        const closedParameterAbis = parameterAbis as import("../../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
+        const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
+        if (callableCarrier === undefined) return undefined;
+        // The function value's carrier depends only on its declaration; storage origins resolve a reference to the
+        // declaration, so the declaration carries it too (as variable initializers do above).
+        if (setCarrierFact(walk, declaration, callableCarrier) === undefined) return undefined;
+        requireRustRecord(walk.context.requiredRecords, "sourceCallableValue", identifier, "runtime-function", "resolveIdentifierCarrier");
+        walk.context.records.sourceCallableValues.function(identifier, declaration,
+          ast.getFileName(ast.getSourceFile(declaration)), targetName, callableCarrier,
+          closedParameterAbis.map((abi) => abi.parameterCarrier), returnCarrier);
+        return setCarrierFact(walk, identifier, callableCarrier);
+      }
+    }
     const declarationCarrier = walk.context.records.runtimeCarrier.get(declaration);
     if (declarationCarrier !== undefined) {
       return setCarrierFact(walk, identifier, declarationCarrier.carrier);
@@ -87,30 +113,6 @@ export function resolveIdentifierCarrier(
           setCarrierFact(walk, declaration, initializerCarrier);
           return setCarrierFact(walk, identifier, initializerCarrier);
         }
-      }
-    }
-    if (declarationKind === KindFunctionDeclaration) {
-      const parameters = ast.parameters(declaration);
-      const parameterAbis = parameters.map((parameter) => parameter === undefined
-        ? undefined
-        : walk.context.records.sourceParameterAbi.get(parameter));
-      const returnFact = walk.context.records.sourceCallableReturn.get(declaration);
-      const returnCarrier = returnFact === undefined ? undefined : rustCallableInvocationResult(walk.context.records, declaration);
-      const name = ast.name(declaration);
-      const targetName = walk.context.names.functionNameForDeclaration(declaration);
-      if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&
-        returnCarrier !== undefined && targetName !== undefined) {
-        const closedParameterAbis = parameterAbis as import("../../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
-        const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
-        if (callableCarrier === undefined) return undefined;
-        // The function value's carrier depends only on its declaration; storage origins resolve a reference to the
-        // declaration, so the declaration carries it too (as variable initializers do above).
-        if (setCarrierFact(walk, declaration, callableCarrier) === undefined) return undefined;
-        requireRustRecord(walk.context.requiredRecords, "sourceCallableValue", identifier, "runtime-function", "resolveIdentifierCarrier");
-        walk.context.records.sourceCallableValues.function(identifier, declaration,
-          ast.getFileName(ast.getSourceFile(declaration)), targetName, callableCarrier,
-          closedParameterAbis.map((abi) => abi.parameterCarrier), returnCarrier);
-        return setCarrierFact(walk, identifier, callableCarrier);
       }
     }
   }
