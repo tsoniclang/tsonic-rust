@@ -102,12 +102,17 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     const retained = nativeGenerics?.retention;
     if (retained !== undefined) pending.push(...retained.source, ...retained.body);
     // A retained native input renders a where predicate from its invocation error into each error target.
-    for (const input of nativeGenerics?.inputs ?? []) if (input.retained !== undefined)
-      pending.push(input.retained.error, ...input.retained.targets);
+    for (const input of nativeGenerics?.inputs ?? []) {
+      if (input.retained !== undefined) pending.push(input.retained.error, ...input.retained.targets);
+      if (input.caught !== undefined) pending.push(input.caught.error, input.caught.target);
+    }
     // A generic invocation propagates through its native error join, which renders every source error carrier.
     const invocation = program.records.genericCallableInvocation.get(node);
     if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
       ...invocation.awaiting.map(source => source.errorType));
+    // A native input invocation propagates its invocation error, which renders as the input's associated error type.
+    const nativeInvocation = program.records.nativeInputInvocation.get(node)?.call;
+    if (nativeInvocation !== undefined) pending.push(nativeInvocation.invocationError);
     // A callable adapter constructs its physical callable (and each nested adapter's), which renders as a constructor type.
     const adapter = program.records.contextualValueConversion.get(node)?.conversion;
     const adapterContract = adapter?.kind === "callable-adapter" ? program.records.callableContract.get(node, adapter) : undefined;

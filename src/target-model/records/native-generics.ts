@@ -15,6 +15,8 @@ export interface RustNativeCallableGenericInput {
   readonly implementation: Extract<TargetTypeRef, { readonly kind: "type-parameter" }>;
   readonly traits: readonly TargetTypeRef[];
   readonly retained: { readonly error: TargetTypeRef; readonly targets: readonly TargetTypeRef[] } | undefined;
+  /** The invocation error converted into the program error where the input is invoked in a catching try body. */
+  readonly caught: { readonly error: TargetTypeRef; readonly target: TargetTypeRef } | undefined;
 }
 
 export interface RustNativeCallableGenericContext {
