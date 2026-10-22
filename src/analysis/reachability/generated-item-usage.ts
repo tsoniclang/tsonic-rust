@@ -27,6 +27,8 @@ import type { RustGeneratedItemUsage } from "../../target-model/records/reachabi
 
 import { createRustGeneratedItemUsageState } from "./generated-item-usage-state.js";
 import { admitRustConversionEmission } from "../conversions/emission.js";
+import type { RustAwaitSelection } from "../../target-model/types/await.js";
+import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
 
 export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput): RustGeneratedItemUsage {
   const nativeNodes = new Set(input.nativeNodes);
@@ -203,6 +205,16 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
   };
   const visitFact = (node: Node, fact: RustTargetOperationFact, selectedReceiver?: TargetTypeRef): void => {
     switch (fact.kind) {
+      case "logical-value":
+        if (fact.leftConversion !== null) visitFinalizedConversion(fact.leftConversion);
+        if (fact.rightConversion !== null) visitFinalizedConversion(fact.rightConversion);
+        return;
+      case "option-coalesce":
+        visitConversion(fact.leftConversion);
+        return;
+      case "closure":
+        if (fact.invocationResult !== undefined) visitFinalizedConversion(fact.invocationResult);
+        return;
       case "operator-token":
       case "operator-call":
         visitConversion(fact.leftConversion);
@@ -467,11 +479,9 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       case "tuple-literal":
       case "tuple-index":
       case "await-op":
-      case "closure":
       case "regexp-create":
       case "option-none":
       case "option-wrap":
-      case "option-coalesce":
       case "nullish-identity":
       case "reference-operation":
       case "typed-location":
@@ -517,6 +527,18 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
           markProjectTypeReified(callable.carrier);
           visitCallableAdapter(callable.resultAdapter);
         }
+      }
+      // An awaited value converts each settled leaf (the future's awaited value and the completion value).
+      const awaited = input.records.awaitValue.get(node);
+      if (awaited !== undefined) {
+        const visitAwait = (selection: RustAwaitSelection<RustAwaitValueLeafFact>): void => {
+          if (selection.kind === "leaf") {
+            if (selection.value.future !== undefined) visitFinalizedConversion(selection.value.future.awaitedConversion);
+            if (selection.value.completion.kind === "value") visitFinalizedConversion(selection.value.completion.conversion);
+          } else if (selection.kind === "optional") visitAwait(selection.present);
+          else for (const alternative of selection.alternatives) visitAwait(alternative.selection);
+        };
+        visitAwait(awaited.selection);
       }
       const memoryBinding = input.records.memoryBindingPlan.get(node);
       if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
