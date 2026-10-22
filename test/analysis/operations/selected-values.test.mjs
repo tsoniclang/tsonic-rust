@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { selectedValueCarrier } from "../../../dist/analysis/operations/selected-values.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustEmptyObjectTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
@@ -13,7 +14,10 @@ function selected(carrier, sourceType, use) {
   const other = { kindName: "KindIdentifier" };
   const parent = use === undefined ? undefined : { kindName: "KindBinaryExpression" };
   const operator = { kindName: use === "coalesce" ? "KindQuestionQuestionToken" : "KindEqualsEqualsEqualsToken" };
-  const writes = [];
+  const requiredRecords = [];
+  const records = createRustProgramRecordBuilder(undefined, createRustRecordFixture({
+    runtimeCarrier: { get: () => ({ carrier }) },
+  }));
   const types = {
     expressionType: node => node === other ? { nullish: true } : sourceType,
     isUnion: type => Array.isArray(type.members),
@@ -40,13 +44,15 @@ function selected(carrier, sourceType, use) {
     semanticsFor: () => semantics,
     semantics: () => semantics,
     typeDefinitions: emptyRustTypeDefinitions,
-    records: createRustRecordFixture({
-      runtimeCarrier: { get: () => ({ carrier }) },
-      flowReadProjection: { get: () => undefined,
-        set: (subject, fact) => writes.push({ subject, family: "flowReadProjection", fact }) },
-    }),
+    records,
+    requiredRecords,
   };
-  return { carrier: selectedValueCarrier(expression, selectedType, context, { projectTypes: {} }), writes, expression };
+  const result = selectedValueCarrier(expression, selectedType, context, { projectTypes: {} });
+  const fact = records.flowReadProjection.get(expression);
+  const writes = fact === undefined ? [] : [{ subject: expression, family: "flowReadProjection", fact }];
+  assert.deepEqual(requiredRecords.map(required => [required.family, required.subject === expression]),
+    writes.map(() => ["flowReadProjection", true]), "each published projection is a required sealed record");
+  return { carrier: result, writes, expression };
 }
 
 test("required present source reads select the exact physical payload and one checked projection", () => {
