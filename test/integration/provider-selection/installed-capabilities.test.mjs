@@ -101,7 +101,7 @@ test("capability composition enforces required selected surfaces", () => {
 });
 
 test("wrong-target capabilities are not selected for the active target", async () => {
-  const capability = { ...acmeSuperbunapiCapability(), targetId: "csharp" };
+  const capability = { ...acmeSuperbunapiCapability(), targetId: "foreign-target" };
   assert.deepEqual(
     selectInstalledTargetCapabilities({ id: "rust", options: {} }, [capability], []),
     { selectedCapabilities: [] },

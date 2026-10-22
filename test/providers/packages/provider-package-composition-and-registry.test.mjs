@@ -485,7 +485,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      types: [{ exportId: "@acme/validation::Value", targetCarrier: { kind: "target-named", id: "acme.validation.Value" }, target: "csharp" }],
+      types: [{ exportId: "@acme/validation::Value", targetCarrier: { kind: "target-named", id: "acme.validation.Value" }, target: "foreign-target" }],
     }),
     /type relation has unsupported field 'target'/u,
   );
