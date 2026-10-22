@@ -62,8 +62,9 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     }
     let errorType = caught === undefined ? scope.bodyErrorType : caught.errorType;
     statements.push({ kind: "let", name: scope.flowName, mutable: false,
-      // A catch without a variable matches `Err(_)`, which binds nothing and so never triggers unused_variables.
-      ...(caught?.bindingUsed === false && caught.binding !== "_" ? { attrs: [rustLintAttributes.unusedVariables] } : {}),
+      // A catch without a variable matches `Err(_)`, and an authored `_name` binding is exempt: neither triggers
+      // unused_variables.
+      ...(caught?.bindingUsed === false && !caught.binding.startsWith("_") ? { attrs: [rustLintAttributes.unusedVariables] } : {}),
       type: resultType(completionType, errorType),
       init: caught === undefined ? path(scope.bodyName) : { kind: "match", expression: path(scope.bodyName), arms: [
         { pattern: variant("Ok", binding("completion")), expression: caught.errorType === undefined
