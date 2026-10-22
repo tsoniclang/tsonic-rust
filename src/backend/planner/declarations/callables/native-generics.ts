@@ -49,9 +49,11 @@ export function planRustNativeCallableGenerics(
       }
     }
     if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
+      // A substituted implementation is named only where it carries a bound (a transport-only capture needs none).
+      if (selectedBounds.length === 0) continue;
       const type = rustTypeFromCarrierInContext(input.implementation, context);
       if (type === undefined) failRustPlannerInvariant("An admitted native generic input requires its renderable implementation carrier.", declaration);
-      if (selectedBounds.length > 0) predicates.push({ kind: "type", type, bounds: selectedBounds });
+      predicates.push({ kind: "type", type, bounds: selectedBounds });
     } else {
       parameterSlots.set(input.implementation.identity, sourceGenerics.parameters.length + parameters.length);
       parameters.push({ kind: "type", name: typeParameterNames.get(input.implementation.identity)!, bounds: selectedBounds });
