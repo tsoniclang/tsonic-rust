@@ -128,11 +128,11 @@ test("source-output identities are published once with the analyzed program", ()
     "index.ts": 'export { value } from "./nested/value.js";',
     "nested/value.ts": "export const value = 1;",
   } });
-  const identity = program.records.sourceOutputIdentity.get("/src/nested/value.ts");
+  const identity = program.sourceOutputIdentities.get("/src/nested/value.ts");
   assert.equal(identity !== undefined, true, "an emitted module has its admitted identity");
   assert.equal(identity.moduleName, "nested::value", "complete native module identity is retained");
   assert.deepEqual(identity.moduleSegments, ["nested", "value"], "the source identity retains its exact native module segments");
-  assert.equal(program.records.sourceOutputIdentity.get("/src/nested/value.ts") === identity, true,
+  assert.equal(program.sourceOutputIdentities.get("/src/nested/value.ts") === identity, true,
     "consumers receive the identical selected identity without running a selector");
   assert.equal(Object.isFrozen(identity) && Object.isFrozen(identity.moduleSegments), true,
     "published identity and path data are immutable");
