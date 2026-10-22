@@ -22,6 +22,7 @@ import { resolveExpressionCarrier } from "../source-evidence/types/resolution/ex
 
 import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
+import { rustClassReceiverCarriers } from "./classes/receivers.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -154,19 +155,14 @@ export function selectRustCapturedFieldStorageFact(
 
 export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
-  const classCarrier = sourceTypeCarrierForDeclaration(walk, declaration);
-  if (classCarrier === undefined) {
+  const receivers = rustClassReceiverCarriers(walk, declaration);
+  if (receivers === undefined) {
     return;
   }
   const previousThis = walk.currentThisCarrier;
   const previousSuper = walk.currentSuperCarrier;
-  walk.currentThisCarrier = classCarrier;
-  const definition = walk.context.projectTypes.definitionForDeclaration(declaration);
-  walk.currentSuperCarrier = definition === undefined
-    ? undefined
-    : walk.context.projectTypes.heritageForDefinition(definition).find((edge) =>
-        edge.kind === "extends" && edge.target.kind === "class")?.targetType ??
-      walk.context.projectTypes.externalBaseForDefinition(definition)?.targetType;
+  walk.currentThisCarrier = receivers.thisCarrier;
+  walk.currentSuperCarrier = receivers.superCarrier;
   const members = requireDenseSourceNodes(walk, ast.members(declaration), "Class declaration contains an undefined or non-data member slot.");
   if (members === undefined) {
     walk.currentThisCarrier = previousThis;
