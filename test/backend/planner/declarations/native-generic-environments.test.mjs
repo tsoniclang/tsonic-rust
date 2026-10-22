@@ -1,142 +1,148 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustRecordFixture } from "../../../helpers/records.mjs";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
+import { analyzeRustNativeCallableGenerics } from "../../../../dist/analysis/callables/native-inputs.js";
+import { createRustNativeGenericProducer } from "../../../../dist/analysis/program/records/native-generics.js";
 import { planRustNativeCallableGenerics } from "../../../../dist/backend/planner/declarations/callables/native-generics.js";
 import { rustCallablePayloadContext } from "../../../../dist/backend/planner/expressions/capture-payloads.js";
-import { nativeProducerFixture } from "../../../helpers/native-producer-bridges.mjs";
 
+// Native callable generic contexts are selected by analyzeRustNativeCallableGenerics (inputs, bounds and Future
+// environments) and sealed as records.nativeGenerics; planRustNativeCallableGenerics names and substitutes them.
+// Each case compiles a real program; a case that needs an analysis query in a specific state replaces only that
+// query of the real program.
+const header = 'import type { int32 } from "@tsonic/core/types.js";\n';
 
-
-function fixture(substitutions = new Map()) {
-  const { context, protocol } = nativeProducerFixture({ result: { kind: "source-primitive", name: "float64" } });
-  const declaration = {};
-  const implementation = { kind: "type-parameter", identity: "exact-input-1", name: "Implementation" };
-  const input = { implementation, protocol, trait: protocol.trait };
-  const original = context.input.program.callableValues.native;
-  context.input.program.callableValues.native = { ...original,
-    inputsFor: owner => owner === declaration ? [input] : [], capturesFor: () => [],
-    callFor: node => node === declaration ? { input } : undefined };
-  context.input.program.callableValues.nativeGenericProducers.forwardingFor = () => [];
-  context.input.program.callableValues.nativeStorage = {
-    futureEnvironmentFor: () => ({ kind: "resolved", inputs: [], captures: [] }),
+function declarationNamed(program, name) {
+  const { ast } = program.source;
+  let declaration;
+  const visit = node => {
+    if (ast.is.IsFunctionDeclaration(node) && program.records.sourceName.get(node) === name) declaration = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  context.input.program.source = { ast: { forEachChild() {} } };
-  context.input.program.records = createRustRecordFixture();
-  context.typeParameterSubstitutions = substitutions;
-  const source = { context, sourceTypeParameterIdentities: [], preservesExplicitLifetimes: false,
-    finalizeGenerics: () => ({ parameters: [], wherePredicates: [] }) };
-  return { declaration, implementation, input, source };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declaration !== undefined, true, `the authored ${name} declaration`);
+  return declaration;
 }
 
+function fixture(body, name) {
+  const { program } = analyzeRust({ files: { "index.ts": header + body } });
+  return { program, declaration: declarationNamed(program, name) };
+}
+
+function seal({ program, declaration }, replace = {}) {
+  const producer = createRustNativeGenericProducer(() => {});
+  const values = program.callableValues;
+  const result = analyzeRustNativeCallableGenerics({ ast: program.source.ast, lifetimes: program.sourceLifetimes,
+    records: program.records, producer, native: { ...values.native, ...replace.native },
+    nativeStorage: { ...values.nativeStorage, ...replace.nativeStorage }, nativeProducers: values.nativeProducers,
+    nativeGenericProducers: values.nativeGenericProducers, retainedCallableInputs: program.retainedCallableInputs,
+    declarationGenericRequirements: program.declarationGenericRequirements });
+  return { result, selected: producer.records.get(declaration),
+    program: { ...program, records: { ...program.records, nativeGenerics: producer.records } } };
+}
+
+function generics(current, sealed, substitutions, typeParameterNames) {
+  const context = rustSourceFilePlanContext(sealed.program, current.declaration, {
+    ...(substitutions === undefined ? {} : { typeParameterSubstitutions: substitutions }),
+    ...(typeParameterNames === undefined ? {} : { typeParameterNames }) });
+  const source = { context, sourceTypeParameterIdentities: [], preservesExplicitLifetimes: false, parameterSlots: new Map(),
+    finalizeGenerics: () => ({ parameters: [], wherePredicates: [] }) };
+  return planRustNativeCallableGenerics(current.declaration, source).finalizeGenerics();
+}
+
+const invoked = "function inner(first: () => int32): int32 { return first(); }\n" +
+  "export function outer(first: () => int32): int32 { return inner(first) + 1; }";
+const protocol = /^crate::index::NativeCallable_[0-9a-f]+$/u;
+
 test("native generic implementation parameters are not redeclared after exact environment substitution", () => {
-  const capture = { kind: "type-parameter", identity: "physical-capture", name: "Captured" };
-  const current = fixture(new Map([["exact-input-1", capture]]));
-  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
-  assert.equal(selected !== undefined, true);
-  const generics = selected.finalizeGenerics();
-  assert.equal(generics.parameters.length, 0);
-  assert.equal(generics.wherePredicates.length, 1);
-  assert.equal(generics.wherePredicates[0].type.path, "Captured");
-  assert.equal(generics.wherePredicates[0].bounds[0].reference.trait.path,
-    `crate::proof::${current.input.protocol.targetName}`);
+  const current = fixture(invoked, "inner");
+  const sealed = seal(current);
+  const [input] = sealed.selected.inputs;
+  // The environment substitutes the caller's implementation (outer's own input) for inner's.
+  const capture = sealed.program.records.nativeGenerics.get(declarationNamed(sealed.program, "outer")).inputs[0].implementation;
+  assert.notEqual(capture.identity, input.implementation.identity);
+  const selected = generics(current, sealed, new Map([[input.implementation.identity, capture]]),
+    new Map([[capture.identity, "Captured"]]));
+  assert.equal(selected.parameters.length, 0);
+  assert.equal(selected.wherePredicates.length, 1);
+  assert.equal(selected.wherePredicates[0].type.path, "Captured");
+  assert.match(selected.wherePredicates[0].bounds[0].reference.trait.path, protocol);
 });
 
 test("unsubstituted native input still declares its own exact generic parameter", () => {
-  const current = fixture();
-  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
-  assert.equal(selected !== undefined, true);
-  const generics = selected.finalizeGenerics();
-  assert.equal(generics.parameters.length, 1);
-  assert.equal(generics.parameters[0].name, "Implementation");
-  assert.equal(generics.parameters[0].bounds.length, 1);
-  assert.equal(generics.wherePredicates.length, 0);
+  const current = fixture(invoked, "inner");
+  const selected = generics(current, seal(current));
+  assert.equal(selected.parameters.length, 1);
+  assert.equal(selected.parameters[0].name, "Implementation0");
+  assert.equal(selected.parameters[0].bounds.length, 1);
+  assert.equal(selected.wherePredicates.length, 0);
 });
 
-for (const position of ["return", "conversion"]) {
+for (const [position, body, name] of [
+  ["return", "export function pass(first: () => int32): () => int32 { return first; }", "pass"],
+  ["conversion", "export function convert(first: () => int32): (value: int32) => int32 { return first; }", "convert"],
+]) {
   test(`native generic bounds include associated types in physical ${position} storage without an authored call`, () => {
-    const current = fixture();
-    const program = current.source.context.input.program;
-    program.callableValues.native.callFor = () => undefined;
-    const trait = current.input.protocol.trait;
-    const carrier = { kind: "associated-type", owner: current.implementation, name: "InvocationError", trait };
-    program.callableValues.nativeStorage = {
-      ...program.callableValues.nativeStorage,
-      returnFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
-      valueFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
-    };
-    program.records = createRustRecordFixture({
-      sourceCallableReturn: { get: node => node === current.declaration && position === "return"
-        ? { returnCarrier: carrier } : undefined },
-      contextualValueConversion: { get: node => node === current.declaration && position === "conversion"
-        ? { conversion: { kind: "callable-adapter" } } : undefined },
-    });
-    const selected = planRustNativeCallableGenerics(current.declaration, current.source);
-    assert.equal(selected !== undefined, true);
-    const parameters = selected.finalizeGenerics().parameters;
-    assert.equal(parameters.length, 1);
-    assert.equal(parameters[0].bounds.length, 1);
-    assert.equal(parameters[0].bounds[0].reference.trait.path, `crate::proof::${current.input.protocol.targetName}`);
-    program.callableValues.nativeStorage.returnFor = program.callableValues.nativeStorage.valueFor =
-      () => ({ kind: "unresolved", reason: "missing exact physical selection" });
-    assert.equal(planRustNativeCallableGenerics(current.declaration, current.source) === undefined, true,
-      "unresolved physical requirements cannot silently omit the native bound");
+    const current = fixture(body, name);
+    const sealed = seal(current);
+    const selected = generics(current, sealed);
+    assert.equal(selected.parameters.length, 1);
+    assert.equal(selected.parameters[0].bounds.length, 1);
+    assert.match(selected.parameters[0].bounds[0].reference.trait.path, protocol);
+    const unresolved = () => ({ kind: "unresolved", reason: "missing exact physical selection" });
+    const rejected = seal(current, { nativeStorage: { returnFor: unresolved, valueFor: unresolved } });
+    assert.equal(rejected.result.kind, "rejected", "unresolved physical requirements cannot silently omit the native bound");
+    assert.equal(rejected.selected === undefined, true);
   });
 }
 
 test("native generic bounds do not invent obligations for unused inputs", () => {
-  const current = fixture();
-  current.source.context.input.program.callableValues.native.callFor = () => undefined;
-  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.finalizeGenerics().parameters[0].bounds.length, 0);
+  const current = fixture("export function unused(first: () => int32): int32 { return 1; }", "unused");
+  assert.equal(generics(current, seal(current)).parameters[0].bounds.length, 0);
 });
 
+const futureFirst = { implementation: { kind: "type-parameter", identity: "future:first", name: "Future0" } };
+const futureSecond = { implementation: { kind: "type-parameter", identity: "future:second", name: "Future0" } };
+function futureOnly(current, environment) {
+  return seal(current, { native: { inputsFor: () => [], capturesFor: () => [], callFor: () => undefined },
+    nativeStorage: { futureEnvironmentFor: declaration => declaration === current.declaration ? environment
+      : current.program.callableValues.nativeStorage.futureEnvironmentFor(declaration) } });
+}
+
 test("unobserved Future inputs and captures declare exact implementation parameters without callable or output bounds", () => {
-  const current = fixture();
-  const program = current.source.context.input.program;
-  program.callableValues.native.inputsFor = () => [];
-  program.callableValues.native.callFor = () => undefined;
-  const first = { implementation: { kind: "type-parameter", identity: "future:first", name: "Future0" } };
-  const second = { implementation: { kind: "type-parameter", identity: "future:second", name: "Future0" } };
-  program.callableValues.nativeStorage.futureEnvironmentFor = () => ({ kind: "resolved", inputs: [first], captures: [first, second] });
-  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
-  assert.equal(selected !== undefined, true);
-  const generics = selected.finalizeGenerics();
-  assert.equal(generics.parameters.length, 2, "a repeated input capture remains one exact implementation");
-  assert.equal(new Set(generics.parameters.map(parameter => parameter.name)).size, 2, "independent inputs cannot share a generated name");
-  assert.equal(generics.parameters.every(parameter => parameter.bounds.length === 0), true, "transport does not impose Future<Output=Result<T,E>>");
-  assert.equal(generics.wherePredicates.length, 0);
+  const current = fixture(invoked, "inner");
+  const selected = generics(current, futureOnly(current, { kind: "resolved", inputs: [futureFirst], captures: [futureFirst, futureSecond] }));
+  assert.equal(selected.parameters.length, 2, "a repeated input capture remains one exact implementation");
+  assert.equal(new Set(selected.parameters.map(parameter => parameter.name)).size, 2, "independent inputs cannot share a generated name");
+  assert.equal(selected.parameters.every(parameter => parameter.bounds.length === 0), true, "transport does not impose Future<Output=Result<T,E>>");
+  assert.equal(selected.wherePredicates.length, 0);
 });
 
 test("substituted Future captures are not redeclared or constrained merely for transport", () => {
-  const current = fixture(new Map([["future:captured", { kind: "type-parameter", identity: "outer", name: "Outer" }]]));
-  const program = current.source.context.input.program;
-  program.callableValues.native.inputsFor = () => [];
-  program.callableValues.native.callFor = () => undefined;
-  program.callableValues.nativeStorage.futureEnvironmentFor = () => ({ kind: "resolved", inputs: [], captures: [{ implementation: {
-    kind: "type-parameter", identity: "future:captured", name: "Future0",
-  } }] });
-  const selected = planRustNativeCallableGenerics(current.declaration, current.source);
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.finalizeGenerics().parameters.length, 0);
-  assert.equal(selected.finalizeGenerics().wherePredicates.length, 0);
+  const current = fixture(invoked, "inner");
+  const captured = { implementation: { kind: "type-parameter", identity: "future:captured", name: "Future0" } };
+  const selected = generics(current, futureOnly(current, { kind: "resolved", inputs: [], captures: [captured] }),
+    new Map([["future:captured", { kind: "type-parameter", identity: "outer", name: "Outer" }]]));
+  assert.equal(selected.parameters.length, 0);
+  assert.equal(selected.wherePredicates.length, 0);
 });
 
 test("unresolved Future environments reject without silently omitting implementation parameters", () => {
-  const current = fixture();
-  current.source.context.input.program.callableValues.nativeStorage.futureEnvironmentFor = () => ({
-    kind: "unresolved", reason: "missing exact capture identity",
-  });
-  assert.equal(planRustNativeCallableGenerics(current.declaration, current.source) === undefined, true);
+  const current = fixture(invoked, "inner");
+  const rejected = futureOnly(current, { kind: "unresolved", reason: "missing exact capture identity" });
+  assert.equal(rejected.result.kind, "rejected");
+  assert.equal(rejected.selected === undefined, true);
 });
 
 test("callable payload bindings retain exact selected physical carriers without changing capture storage", () => {
-  const current = fixture();
+  const current = fixture(invoked, "inner");
+  const sealed = seal(current);
   const logical = { kind: "source-primitive", name: "float64" };
-  const physical = current.implementation;
+  const physical = sealed.selected.inputs[0].implementation;
   const capture = { declaration: {}, reference: {}, carrier: logical, storageCarrier: physical, storage: "value" };
   const selected = rustCallablePayloadContext({ captures: [capture], receiverFields: [], receivers: [] },
-    { kind: "path", path: "environment" }, current.source.context);
+    { kind: "path", path: "environment" }, rustSourceFilePlanContext(sealed.program, current.declaration));
   assert.equal(selected.capturedBindings[0].valueCarrier === physical, true);
   assert.equal(selected.capturedBindings[0].storage, capture.storage);
   assert.equal(selected.capturedBindings[0].declaration === capture.declaration, true);

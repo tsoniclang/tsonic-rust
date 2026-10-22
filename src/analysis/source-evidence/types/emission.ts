@@ -66,6 +66,18 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
     ...(operand.destination === undefined ? [] : [operand.destination]));
   for (const definition of program.projectTypes.definitions) pending.push(program.projectTypes.openCarrier(definition));
+  // An inherited constructor layer renders the instantiated parameters of its implicit constructor.
+  for (const definition of program.projectTypes.definitions) {
+    if (definition.kind !== "class") continue;
+    const root = program.projectTypes.openCarrier(definition);
+    for (const layer of program.projectConstructions.forDefinition(definition)?.layers ?? []) {
+      if (layer.constructor !== undefined) continue;
+      const relation = program.projectTypes.relationship(root, layer.definition);
+      if (relation.kind !== "related") continue;
+      for (const parameter of program.records.implicitConstructorParameters.get(layer.signature, relation.targetType) ?? [])
+        pending.push(parameter.carrier);
+    }
+  }
   for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
     [field.carrier, ...(field.methodStorageCarrier === undefined ? [] : [field.methodStorageCarrier])]));
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,

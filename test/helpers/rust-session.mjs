@@ -20,6 +20,7 @@ export {
   analyzeRust,
   assertRustTargetRejection,
   checkRustSession,
+  checkedRustCompileInput,
   compileRust,
   compileRustThroughTargetPack,
   createRustSession,
