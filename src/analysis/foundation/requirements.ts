@@ -143,7 +143,8 @@ function rustFoundationForTargetNamedCarrier(id: string): RustFoundation {
   if (id === rustFutureTargetId || id === rustNativeScalarTargetId) {
     return "core";
   }
-  return "core";
+  // A target-named carrier without a built-in definition (for example a provider type) is not known to be no_std.
+  return "std";
 }
 
 export function rustFoundationForSelectedCall(
