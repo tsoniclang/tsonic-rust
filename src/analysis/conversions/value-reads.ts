@@ -56,6 +56,10 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     for (const callable of program.records.projectCallableAdapters.get(node) ?? []) for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
     for (const callable of program.records.objectLiteralMethodAdapter.get(node)?.dispatches ?? [])
       for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
+    // Class values forward construction and static callable fields through the same callable adapters.
+    for (const view of program.classValues.forDeclaration(node)?.views ?? [])
+      for (const callable of [view.construction, ...view.fields.map(field => field.callable)])
+        if (callable !== undefined) for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
   }
   // The planner binds an optional chain guard as `Some(optional_receiver)` and reads it with the chain's present carrier.
   const presentGuards = new Map<Node, TargetTypeRef>();
