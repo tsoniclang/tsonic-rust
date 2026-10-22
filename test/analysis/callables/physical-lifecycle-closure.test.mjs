@@ -562,21 +562,22 @@ test("published callable storage contains only finite read ports and keeps every
 
 test("every selected generic flow is one immutable physical application, including both conditional arms", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedSource } });
-  const applications = program.callableValues.flowApplications;
+  // Flow applications are a sealed record family; the planner refuses a missing application with its invariant.
+  const applications = program.records.genericCallableFlow;
   let flows = 0;
   for (const node of sourceNodes(program)) {
     const conversion = program.records.contextualValueConversion.get(node)?.conversion;
     if (conversion?.kind !== "generic-callable-flow") continue;
-    const application = applications.forNode(node, conversion, undefined);
-    assert.equal(applications.forNode(node, conversion, undefined) === application, true, "one selected flow record");
+    const application = applications.get(node, conversion, undefined);
+    assert.notEqual(application, undefined, "every admitted generic flow has its selected application");
+    assert.equal(applications.get(node, conversion, undefined) === application, true, "one selected flow record");
     assert.equal(Object.isFrozen(application), true, "immutable selected flow record");
     flows += 1;
   }
   assert.equal(flows > 0, true, "the witness contains actual admitted generic value flows");
   let inspected = 0;
   const foreign = Object.defineProperty({}, "kind", { get() { inspected += 1; throw new Error("foreign source"); } });
-  assert.throws(() => applications.forNode(foreign, foreign, foreign),
-    failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT", "unknown required source key");
+  assert.equal(applications.get(foreign, foreign, foreign), undefined, "an unknown source key has no flow record");
   assert.equal(inspected, 0, "a missing source key never inspects foreign conversion metadata");
 });
 
