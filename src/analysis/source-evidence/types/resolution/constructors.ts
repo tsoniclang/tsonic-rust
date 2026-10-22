@@ -1,4 +1,5 @@
 import type { TypeSignatureInfo, Type } from "@tsonic/tsts";
+import { closeRustRetainedCallableCarrier } from "../../../../policy/ownership/retained-storage.js";
 import { sourceCallableParameterEvidence } from "@tsonic/target-api/source";
 import type { RustSourceObjectShape } from "../../../../target-model/records/source-types.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -42,8 +43,10 @@ export function resolveRustConstructSignature(
     parameters: selected.parameters.map(parameter => sourceCallableParameterEvidence(parameter, context.ast)),
     result: { selectedType: result, declaration, ...(typeNode === undefined ? {} : { authoredTypeNode: typeNode }) },
   }, { ...context, callableRepresentation: "signature" }, options, resolving);
+  // An object type stores its construct signature as an owned callable: its open environment closes as 'static, so
+  // structural templates and the instances selected from them agree.
   return carrier === undefined || rustCallableProtocol(carrier) === undefined ? undefined :
-    Object.freeze({ declaration, signatureInfo: selected, carrier });
+    Object.freeze({ declaration, signatureInfo: selected, carrier: closeRustRetainedCallableCarrier(carrier, { kind: "static" }) });
 }
 
 export function resolveRustConstructType(
