@@ -7,6 +7,7 @@ import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/control
 
 import { selectRustCallableValueAdapter } from "../../../../dist/policy/conversions/callable-adapters.js";
 import { recordRustValueCarrierReconciliation } from "../../../../dist/analysis/program/records/value-carrier-admission.js";
+import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
@@ -37,17 +38,13 @@ test("native upcasts precede exact union injection in expression and callable co
   assert.deepEqual(selected.fact, { sourceCarrier: base, targetCarrier: union,
     conversion: { kind: "source-union-variant", source: base, target: union, variantName: "Variant1",
       payloadCarrier: base, payloadConversion: null } });
-  const written = new Map();
   const subject = {};
-  const records = createRustRecordFixture({
+  const records = createRustProgramRecordBuilder(definitions, createRustRecordFixture({
     runtimeCarrier: { get: node => node === subject ? { carrier: derived } : undefined },
-    projectUpcast: { get: node => node === subject ? written.get("projectUpcast") : undefined,
-      set: (node, value) => { assert.equal(node === subject, true); written.set("projectUpcast", value); } },
-    contextualValueConversion: { get: node => node === subject ? written.get("contextualValueConversion") : undefined,
-      set: (node, value) => { assert.equal(node === subject, true); written.set("contextualValueConversion", value); } },
-  });
+  }));
   recordRustValueCarrierReconciliation(records, [], subject, selected);
-  assert.deepEqual([...written.keys()], ["projectUpcast", "contextualValueConversion"]);
+  assert.deepEqual(records.projectUpcast.get(subject), selected.upcast);
+  assert.deepEqual(records.contextualValueConversion.get(subject), selected.fact);
   assert.deepEqual(rustEffectiveValueCarrier(records, subject), union);
   assert.equal(rustEffectiveValueCarrier(records, {}) === undefined, true, "foreign source subjects have no evidence");
   const adapter = selectRustCallableValueAdapter(derived, union, projectTypes, definitions);
