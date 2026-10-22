@@ -163,7 +163,9 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     seen.add(key);
     pending.push(...rustTargetTypeChildren(carrier));
     const definition = program.projectTypes.definitionForCarrier(carrier);
-    if (definition === undefined || !members.has(definition)) continue;
+    // A type-only contract (a type-family predicate interface) has no native object layout or instance.
+    if (definition === undefined || !members.has(definition) ||
+      program.records.typeOnlyDeclaration.get(definition.declaration) !== undefined) continue;
     const contracts = rustProjectInstanceContracts(program.projectTypes, definition, carrier);
     if (contracts === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native instance requires its exact checked contract graph.", definition.declaration);
     producer.contracts(carrier, contracts);
