@@ -5,6 +5,7 @@ import type { RustNativeComparisonProducer } from "../program/records/native-com
 import type { RustNativeComparison } from "../../target-model/records/native-comparisons.js";
 import { isRustIntegerCarrier, isRustSignedNumericCarrier, isRustBoolCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustNativeComparisonProducer): void {
@@ -72,6 +73,7 @@ export function analyzeRustNativeComparisons(program: Omit<RustAnalysisProgram, 
       form: operator === "||" && !lower.integer ? "outside-float" : "contains" };
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind !== "operator-token" || !ast.is.IsBinaryExpression(node)) continue;
     const left = BinaryExpression_Left(ast, node);
