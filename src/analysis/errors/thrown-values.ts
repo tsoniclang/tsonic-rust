@@ -1,6 +1,9 @@
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
+import { rustProgramErrorRuntimeRouteMatches, selectRustProgramErrorConversion } from "../../policy/conversions/program-error.js";
+import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { appendRustDiagnostic } from "../program/walk.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { Node_Expression } from "@tsonic/target-api/source";
@@ -44,6 +47,11 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
   const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
     undefined, walk.context.typeDefinitions);
+  if (conversion !== undefined && !runtimeRoutesRegistered(conversion.route, conversion.source, walk.providerErrorCarriers)) {
+    appendRustDiagnostic(walk, "RUST_MISSING_TARGET_FACT", "Runtime error construction has no exact registered native error carrier.",
+      statement, ["target.capability=rust.backend.throw-runtime-error-route"]);
+    return;
+  }
   if (conversion !== undefined) {
     requireRustRecord(walk.context.requiredRecords, "targetOperation", statement, "throw-op", "analysis/errors/thrown-values.ts");
     walk.context.records.targetOperations.source(statement, Object.freeze({
@@ -61,4 +69,13 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
       error: { kind: "program", expression, carrier },
     });
   }
+}
+
+// Every runtime route of a thrown value must name a registered native error carrier (the JS Error for the target
+// runtime, a declared provider error carrier for a provider-native route); union routes are checked per arm.
+function runtimeRoutesRegistered(route: RustProgramErrorRoute, carrier: TargetTypeRef,
+  providerErrorCarriers: readonly TargetTypeRef[]): boolean {
+  if (route.kind === "runtime") return rustProgramErrorRuntimeRouteMatches(route, carrier, providerErrorCarriers);
+  if (route.kind === "union") return route.arms.every(arm => runtimeRoutesRegistered(arm.route, arm.carrier, providerErrorCarriers));
+  return true;
 }
