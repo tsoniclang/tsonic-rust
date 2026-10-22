@@ -40,8 +40,13 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     }
     if (ast.is.IsVariableDeclaration(parent)) return Node_Initializer(ast, parent) === current && Node_Type(ast, parent) !== undefined;
     if (ast.is.IsReturnStatement(parent)) return true;
-    return ast.is.IsCallExpression(parent) && ast.arguments(parent).includes(current) &&
-      program.records.targetOperation.get(parent)?.kind === "source-call";
+    if (!ast.is.IsCallExpression(parent) || program.records.targetOperation.get(parent)?.kind !== "source-call") return false;
+    // A source-call argument is typed only by a parameter declared with a closed carrier (not a type parameter).
+    const index = ast.arguments(parent).indexOf(current);
+    const declaration = program.records.selectedCall.get(parent)?.sourceDeclaration;
+    const parameter = index < 0 || declaration === undefined ? undefined : ast.parameters(declaration)[index];
+    const declared = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.valueCarrier;
+    return declared !== undefined && declared.kind === "source-primitive";
   };
   const request = (node: Node | undefined, carrier: TargetTypeRef | undefined): void => {
     if (node === undefined || !ast.is.IsNumericLiteral(node) && !ast.is.IsBigIntLiteral(node)) return;
