@@ -316,7 +316,9 @@ export function equal(): boolean { return High.Value === 9007199254740992; }
   }
 
   test(`Rust ${surfaces[0] ?? "native"} refuses cross-file checked merged enum membership once`, () => {
-    const compiled = compileRust({ surfaces, files: {
+    // RULINGS 2026-10-22: the merged-enum refusal test sets script mode for its own fixtures; the subject is merging
+    // across script files, which module mode (the helper default) cannot express.
+    const compiled = compileRust({ surfaces, compilerOptions: { moduleDetection: "auto" }, files: {
       "index.ts": "export function run(): number { return 42; }",
       "first.ts": "enum Value { First = 9007199254740992 }",
       "second.ts": "enum Value { Second = 9007199254740993 }",

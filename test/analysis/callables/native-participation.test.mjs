@@ -187,24 +187,16 @@ test("anonymous callable participation is published once from checked creation d
   const records = builder.seal(requiredRecords);
   ast.revoke();
   navigation.revoke();
-  assert.equal(requiredRecords.filter(record => record.construct === "anonymous-callable-creation").length, 7,
+  assert.equal(requiredRecords.filter(record => record.construct === "anonymous-callable-creation").length, 8,
     "exactly the reached original anonymous definitions have one required record");
-  for (const name of ["unused", "typeOnly", "branchVoid", "parent"]) {
+  // RULINGS 2026-10-22: an arrow stored in a binding is created, and its captures evaluated, even if the binding is never
+  // read, so every stored definition here (read or not) keeps its native body.
+  for (const name of ["unused", "typeOnly", "branchVoid", "parent", "nested", "invoked", "escaped", "conditional"]) {
     const declaration = definitions.get(name);
     assert.equal(declaration !== undefined, true, `${name}: original checked creation exists`);
-    assert.equal(records.nativeParticipation.get(declaration), "erased", `${name}: an unobserved creation is sealed data`);
-    assert.equal(domain.nodes.includes(declaration), false, `${name}: no native body demand survives`);
-  }
-  for (const name of ["invoked", "escaped", "conditional"]) {
-    const declaration = definitions.get(name);
-    assert.equal(declaration !== undefined, true, `${name}: original checked creation exists`);
-    assert.equal(records.nativeParticipation.get(declaration), "body", `${name}: observed creation remains native`);
+    assert.equal(records.nativeParticipation.get(declaration), "body", `${name}: a stored creation remains native`);
     assert.equal(domain.nodes.includes(declaration), true, `${name}: native demand keeps its original owner`);
   }
-  const nested = definitions.get("nested");
-  assert.equal(nested !== undefined, true, "the checked nested definition is not fabricated");
-  assert.equal(records.nativeParticipation.get(nested) === undefined, true, "an erased parent prevents a second nested admission");
-  assert.equal(domain.nodes.includes(nested), false, "the unobserved subtree creates no native work");
   assert.equal(records.nativeParticipation.get({}) === undefined, true, "a foreign node never inherits the creation decision");
 });
 
