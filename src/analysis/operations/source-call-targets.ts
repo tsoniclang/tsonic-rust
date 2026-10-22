@@ -64,7 +64,10 @@ export function selectRustProjectSourceCallTarget(input: {
       calleeImplementation.implementation.declaration === selectedDeclaration);
   const lexicalBinding = walk.context.sourceCallables.directLexicalBinding(selectedDeclaration);
   const directLexical = lexicalBinding !== undefined && lexicalBinding === calleeReferenceDeclaration;
-  const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction || directLexical ||
+  // A Promise call alias holds no value: its calls invoke the aliased function declaration itself.
+  const promiseAlias = calleeReferenceDeclaration !== undefined &&
+    walk.context.sourceCallables.promiseCallAliasTarget(calleeReferenceDeclaration) === selectedDeclaration;
+  const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction || directLexical || promiseAlias ||
     declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);

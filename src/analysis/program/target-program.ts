@@ -412,7 +412,8 @@ export function analyzeRustAnalysisProgram(
   const localBindingIssues = analyzeRustLocalBindings({ ast: context.ast, nodes: context.nativeNodes, records,
     navigation: context.source.navigation, names: context.names, aliases: localStorageAliases,
     representations: objectRepresentations, projectTypes, nativeStorage: callableValues.value.nativeStorage,
-    lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords });
+    lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
+    runtimeValueUses: context.runtimeValueUses });
   if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const program: Omit<RustAnalysisProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;

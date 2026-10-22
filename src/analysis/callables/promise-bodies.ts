@@ -180,6 +180,7 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
     if (reference !== declaration &&
       !(referencedBody?.kind === "resolved" && referencedBody.implementation.declaration === declaration) &&
       !(lexical !== undefined && lexical === reference) &&
+      !(reference !== undefined && context.runtimeValueUses.callAliasTarget(reference) === declaration) &&
       !(binding?.storage === "native-callable" && binding.callableDeclaration === declaration)) return undefined;
   } else if (ast.is.IsMethodDeclaration(declaration) && ast.is.IsPropertyAccessExpression(callee)) {
     const access = semantics.operations.propertyAccess(callee);

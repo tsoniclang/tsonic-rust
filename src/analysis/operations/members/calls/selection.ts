@@ -375,7 +375,8 @@ export function resolveRustCheckedCall(
       (binding.callableDeclaration === sourceDeclaration ||
         declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
     const lexicalBinding = context.sourceCallables.directLexicalBinding(sourceDeclaration);
-    const directLexical = lexicalBinding !== undefined && lexicalBinding === reference?.declaration;
+    const directLexical = lexicalBinding !== undefined && lexicalBinding === reference?.declaration ||
+      reference !== undefined && context.sourceCallables.promiseCallAliasTarget(reference.declaration) === sourceDeclaration;
     const calleeKind = calleeDeclaration === undefined ? undefined : context.ast.kindName(calleeDeclaration);
     const storedCallable = calleeKind !== undefined && ["KindVariableDeclaration", "KindParameter",
       "KindPropertyDeclaration", "KindPropertySignature", "KindPropertyAssignment", "KindShorthandPropertyAssignment"].includes(calleeKind);
