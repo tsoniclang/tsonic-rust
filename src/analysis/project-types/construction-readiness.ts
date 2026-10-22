@@ -79,8 +79,10 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
 function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessInput, observedInitialValues: ReadonlySet<Node>,
   observing: Set<Node> | undefined): RustConstructionReadiness {
   const absenceDeclarations = new Set(input.fields.filter(field => field.absenceDefault).map(field => field.declaration));
+  // A field initialized by its external base (e.g. a builtin Error's name) has an initial value like an authored
+  // initializer: a later write can leave it unobserved.
   const initialValueDeclarations = new Set(input.fields.filter(field => field.absenceDefault ||
-    field.initializer !== undefined && !field.externallyInitialized).map(field => field.declaration));
+    field.initializer !== undefined || field.externallyInitialized).map(field => field.declaration));
   // While observing, a field whose initial value is needed before any write takes that value at this point.
   const observe = (state: ConstructionState, selected: Iterable<Node>): ConstructionState => {
     if (observing === undefined) return state;
@@ -454,8 +456,8 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
         state = enter(field.initializer, state, [field.initializer]);
         state = expression(field.initializer, state, 0);
       } else record(field.declaration, state);
-      if (field.initializer !== undefined && observing === undefined || field.absenceDefault && appliedAbsence.has(field.declaration) ||
-        field.externallyInitialized)
+      if ((field.initializer !== undefined || field.externallyInitialized) && observing === undefined ||
+        field.absenceDefault && appliedAbsence.has(field.declaration))
         state = Object.freeze({ ...state, initialized: new Set([...state.initialized, field.declaration]),
           possiblyInitialized: new Set([...state.possiblyInitialized, field.declaration]) });
     }

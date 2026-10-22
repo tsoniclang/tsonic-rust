@@ -4,6 +4,7 @@ import { nameRustSignatureTypes, type RustNamedSignatureScope } from "./signatur
 import { lowerRustCompletionScope } from "./completion-regions.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustValueBlock } from "../syntax/value-block.js";
+import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { rustConditionPrintsAsBlock } from "../syntax/expressions.js";
 import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
@@ -75,18 +76,10 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
-    // `|value| Ok(value)` (or `|value| { Ok(value) }`) with an unannotated parameter is the variant constructor `Ok`
-    // itself (clippy::redundant_closure).
-    const result = mapped.kind === "closure" ? mapped.body
-      : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
-        mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
-    if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 && result?.kind === "call" &&
-      result.path === "Ok" && result.genericArguments === undefined && result.args.length === 1) {
-      const parameter = mapped.params[0];
-      const argument = result.args[0];
-      if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
-        (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
-        return { kind: "path", path: "Ok" };
+    // A closure that only forwards its parameters is the callee itself (`|value| Ok(value)` is `Ok`).
+    if (mapped.kind === "closure" || mapped.kind === "closure-block") {
+      const collapsed = collapseRustForwardingClosure(mapped);
+      if (collapsed !== mapped) return collapsed;
     }
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
