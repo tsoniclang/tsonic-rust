@@ -19,7 +19,7 @@ test("associated storage outputs stay typed until the final Rust printer", () =>
   assert.equal(printRustItem(family), "pub trait Storage {\n    type Output: Clone;\n}");
   assert.equal(printRustItem(implementation), "impl Storage for i32 {\n    type Output = i32;\n}");
   assert.throws(() => printRustItem({ ...implementation, trait: undefined }),
-    /Associated type definitions require an exact trait implementation/u);
+    /Unsupported Rust associated type without trait implementation syntax reached printer: impl/u);
 });
 
 test("associated bounds and definitions retain their module dependencies", () => {
