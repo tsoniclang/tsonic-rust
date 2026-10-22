@@ -65,6 +65,7 @@ export function applyFinalizedRustArgumentMode(
   expression: RustExpr,
   input: RustFinalizedSourceInput,
   sourceIsSharedReference: boolean,
+  stabilized = false,
 ): RustExpr {
   if (input.mode === "value") {
     return expression;
@@ -72,12 +73,15 @@ export function applyFinalizedRustArgumentMode(
   const passThrough = context.input.program.records.providerReference.get(sourceNode, input)
     ?? failRustPlannerInvariant("An admitted provider reference requires its exact source parameter and reborrow contract.", sourceNode);
   if (passThrough) return expression;
+  // A value stabilized by the provider evaluation scope is borrowed as bound; the source node's own slice and
+  // storage views would re-read the original place and leave the stabilized binding unused.
+  const viewNode = stabilized ? undefined : sourceNode;
   if (sourceIsSharedReference && input.mode === "ref") {
-    return createRustSharedReferenceArgument(context, expression, sourceNode);
+    return createRustSharedReferenceArgument(context, expression, viewNode);
   }
   return input.mode === "mut-ref"
-    ? createRustMutableReferenceArgument(context, expression, sourceNode)
-    : createRustSharedReferenceArgument(context, expression, sourceNode);
+    ? createRustMutableReferenceArgument(context, expression, viewNode)
+    : createRustSharedReferenceArgument(context, expression, viewNode);
 }
 
 export function createRustSharedReferenceArgument(
