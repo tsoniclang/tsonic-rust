@@ -35,7 +35,13 @@ export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reac
     if (captures !== undefined) pending.push(...captures.captures.map(capture => capture.carrier), ...captures.receiverFields.map(capture => capture.carrier),
       ...captures.receivers.map(capture => capture.carrier));
   }
-  for (const definition of program.projectTypes.definitions) pending.push(program.projectTypes.openCarrier(definition));
+  for (const definition of program.projectTypes.definitions) {
+    pending.push(program.projectTypes.openCarrier(definition));
+    for (const field of program.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []) {
+      const stored = program.callableValues.projectFieldStorage.get(field.declaration);
+      if (stored !== undefined) pending.push(stored);
+    }
+  }
   for (const shape of program.structuralShapes.instances) {
     pending.push(shape.carrier, ...shape.fields.map(field => field.carrier));
     for (const field of shape.fields) if (field.nativeLayout !== undefined) pending.push(rustLocationTargetType(field.carrier));
@@ -66,5 +72,8 @@ export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reac
     producer.carrier(carrier, { copy: isRustCopyCarrier(carrier, selected => program.callableValues.generic.definitionFor(selected)?.copy === true),
       clone: rustCarrierSupportsClone(carrier, program.typeDefinitions) });
     pending.push(...rustTargetTypeChildren(carrier));
+    // A project instance stores its fields at their instantiated carriers.
+    const definition = program.projectTypes.definitionForCarrier(carrier);
+    if (definition !== undefined) pending.push(...(program.records.projectClassFields.get(definition, carrier) ?? []).map(field => field.carrier));
   }
 }

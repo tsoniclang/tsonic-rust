@@ -146,7 +146,10 @@ export function prepareRustCallableEmissionContexts(
     }
     const returned = input.records.sourceCallableReturn.get(declaration);
     const generator = input.records.generator.get(declaration);
-    const selected = returned === undefined || physicalReturn !== undefined || generator !== undefined
+    // A declaration without a body (an interface call signature) stores no returned value; its destination is the
+    // declared return carrier, not a native storage selection.
+    const bodiless = input.ast.body(declaration) === undefined;
+    const selected = returned === undefined || physicalReturn !== undefined || generator !== undefined || bodiless
       ? undefined : input.nativeStorage.returnFor(declaration);
     if (selected?.kind === "unresolved") {
       diagnostics.push(emissionDiagnostic(declaration, selected.reason));
@@ -160,6 +163,8 @@ export function prepareRustCallableEmissionContexts(
     const returnDestination: RustEmissionReturnDestination = physicalReturn !== undefined
       ? Object.freeze({ kind: "value", carrier: physicalReturn, borrowedParameter: returned?.borrowedParameter })
       : generator !== undefined ? Object.freeze({ kind: "value", carrier: generator.returnType, borrowedParameter: undefined })
+      : bodiless && returned !== undefined
+        ? Object.freeze({ kind: "value", carrier: returned.returnCarrier, borrowedParameter: returned.borrowedParameter })
       : selected === undefined ? Object.freeze({ kind: "none" })
       : Object.freeze({ kind: "value", carrier: selected.carrier, borrowedParameter: returned?.borrowedParameter });
     const error: RustEmissionErrorContext = region === undefined ? Object.freeze({ kind: "none" })

@@ -207,6 +207,25 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       }
       else return undefined;
     }
+    // A producer that fills a callable slot is materialized with the slot's parameter carriers, so each of the
+    // producer's own native callable inputs is the slot's formal parameter at the same position. Without this the
+    // producer's error keeps its inputs' implementation parameters, which no caller outside the producer can bind.
+    for (const [identity, producer] of producers) {
+      const slot = inputs.get(identity)!.carrier;
+      const slotCarrier = rustOptionElementCarrier(slot) ?? slot;
+      const formal = rustGenericCallableProtocol(slotCarrier) ?? rustCallableProtocol(slotCarrier) ??
+        rustNativeCallableProtocol(slotCarrier);
+      if (formal === undefined) continue;
+      const parameters = walk.context.ast.parameters(producer.declaration);
+      for (const own of native.inputsFor(producer.declaration)) {
+        if (types.has(own.implementation.identity)) continue;
+        const position = parameters.indexOf(own.subject.node);
+        const parameter = position < 0 ? undefined : formal.parameters[position];
+        if (parameter === undefined) continue;
+        const carrier = substituteRustTargetGenerics(parameter, types, lifetimes, consts);
+        types.set(own.implementation.identity, rustOptionElementCarrier(carrier) ?? carrier);
+      }
+    }
     const substitute = (carrier: TargetTypeRef, selectedTypes: ReadonlyMap<string, TargetTypeRef>): TargetTypeRef | undefined => {
       let valid = true;
       const selected = substituteRustTargetGenerics(carrier, selectedTypes, lifetimes, consts, (type, original) => {
