@@ -121,6 +121,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     // A native input invocation propagates its invocation error, which renders as the input's associated error type.
     const nativeInvocation = program.records.nativeInputInvocation.get(node)?.call;
     if (nativeInvocation !== undefined) pending.push(nativeInvocation.invocationError);
+    // A source call renders the absence witness of each native input it leaves absent, and passes an omitted argument as
+    // that witness's absent value (no argument node carries it).
+    for (const witness of program.records.sourceCall.get(node)?.witnesses ?? []) if (witness !== undefined) pending.push(witness, rustSourceOptionalTargetType(witness));
     // A callable adapter constructs its physical callable (and each nested adapter's), which renders as a constructor type.
     const adapter = program.records.contextualValueConversion.get(node)?.conversion;
     const adapterContract = adapter?.kind === "callable-adapter" ? program.records.callableContract.get(node, adapter) : undefined;

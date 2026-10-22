@@ -5,6 +5,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
+import type { RustSourceCallParameterPlan } from "../../target-model/operations/model.js";
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -78,11 +79,13 @@ export function collectRustNativeAbsenceWitnesses(input: RustNativeStorageSource
     for (const selected of input.native.inputsFor(declaration)) {
       witnessBudget.step();
       if (rustOptionElementCarrier(selected.carrier) === undefined) continue;
-      const bindings = invocationBindingsFor(selected.owner, invocation);
-      const origins = bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
-      if (origins.kind !== "resolved" || origins.subjects.length === 0 || origins.subjects.some(subject => subject.projection.length !== 0 ||
-        !isRustAbsenceCarrier(input.records.runtimeCarrier.get(subject.node)?.carrier) &&
-        !(subject.kind === "return" && isRustNeverCarrier(input.records.sourceCallableReturn.get(subject.node)?.returnCarrier)))) continue;
+      if (!omittedOptionalInput(input.ast, operation.parameters, selected)) {
+        const bindings = invocationBindingsFor(selected.owner, invocation);
+        const origins = bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
+        if (origins.kind !== "resolved" || origins.subjects.length === 0 || origins.subjects.some(subject => subject.projection.length !== 0 ||
+          !isRustAbsenceCarrier(input.records.runtimeCarrier.get(subject.node)?.carrier) &&
+          !(subject.kind === "return" && isRustNeverCarrier(input.records.sourceCallableReturn.get(subject.node)?.returnCarrier)))) continue;
+      }
       const prototype = rustNativeCallableAbsenceWitness(selected, input.definitions);
       const generics = rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], operation.targetGenericArguments ?? []);
       if (prototype === undefined || generics === undefined) continue;
@@ -108,4 +111,12 @@ export function collectRustNativeAbsenceWitnesses(input: RustNativeStorageSource
   return { absenceWitnesses, argumentWitnesses, issues: Object.freeze(witnessFailure === undefined || witnessSubject === undefined ? [] : [{
     subject: witnessSubject, message: witnessFailure.message,
   }]) };
+}
+
+// An optional callable parameter the invocation supplies no argument for is absent at that call; no source node carries
+// its absence.
+function omittedOptionalInput(ast: AstReader, parameters: readonly RustSourceCallParameterPlan[], selected: RustNativeCallableInput): boolean {
+  if (selected.subject.projection.length !== 0) return false;
+  const plan = parameters[ast.parameters(selected.owner).indexOf(selected.subject.node)];
+  return plan?.form === "optional" && plan.inputs.length === 0;
 }

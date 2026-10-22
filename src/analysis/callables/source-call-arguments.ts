@@ -12,7 +12,8 @@ import { rustValueCarrierTransitionTarget } from "../conversions/value-carrier-q
 import { rustFinalizedCarrierTransitionMatches } from "../../policy/operations/members/native-contracts.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
-import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
+import { asSourceNode, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { sourceCallSelectedMemberMatches } from "./source-call-evidence.js";
 import { rustSourceCallArgumentCarriers } from "./source-call-lifetimes.js";
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
@@ -57,6 +58,7 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
       if (expression === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted spread argument requires its exact source operand.", source);
       return { source, expression, destination: program.callableValues.nativeStorage.invocationArgumentWitnessFor(call, source), mutable: false, borrow: "value", elements: [] };
     });
+    const declaration = asSourceNode(selectedCall.sourceDeclaration, program.source.ast);
     const elements = new Map<number, Map<number, "value" | "ref" | "mut-ref">>();
     const mutable = new Set<number>();
     const borrowedRoots = new Map<number, "identity" | "ref" | "mut-ref">();
@@ -125,7 +127,13 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           passing: parameter.mode === "value" ? "value" : identity || projection?.kind === "element" ? "identity" : parameter.mode,
           sequence: input.sourceForm !== "spread-sequence" ? "value" : isRustJsArrayCarrier(input.carrier) ? "js" : "native" }));
       }
-      return Object.freeze({ form: parameter.form, carrier: parameter.parameterCarrier, rest: isRustJsArrayCarrier(parameter.parameterCarrier) ? "js" : "native",
+      // An omitted optional native callable input is passed as the absent value of its invocation witness.
+      const omitted = parameter.inputs.length !== 0 || declaration === undefined ? undefined
+        : program.callableValues.native.inputsFor(declaration).find(candidate => candidate.subject.projection.length === 0 &&
+          candidate.subject.node === program.source.ast.parameters(declaration)[parameterIndex]);
+      const witness = omitted === undefined ? undefined : program.callableValues.nativeStorage.invocationWitnessFor(omitted, call);
+      const carrier = witness === undefined ? parameter.parameterCarrier : rustSourceOptionalTargetType(witness);
+      return Object.freeze({ form: parameter.form, carrier, rest: isRustJsArrayCarrier(parameter.parameterCarrier) ? "js" : "native",
         inputs: Object.freeze(inputs) });
     });
     producer.call(call, fact, { spread: fact.parameters.some(parameter => parameter.inputs.some(input => input.sourceForm !== "value")),
