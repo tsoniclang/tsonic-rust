@@ -25,7 +25,7 @@ type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "rec
     readonly generic: Pick<RustGenericCallablePlan, "definitionFor" | "implementationFor">;
     readonly native: Pick<RustNativeCallableInputPlan, "bindingsFor">;
     readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;
-    readonly nativeStorage: Pick<RustNativeStoragePlan, "genericBindingsFor">;
+    readonly nativeStorage: Pick<RustNativeStoragePlan, "genericBindingsFor" | "extendRecordMemberProducers">;
   };
 };
 
@@ -58,7 +58,8 @@ export function prepareRustGenericCallableInvocation(
   const subject = callee === undefined ? undefined : storage.subjectFor(callee);
   const owner = sourceEnclosingCallable(node, ast);
   const bindings = owner === undefined ? storage.emptyBindings : callableValues.native.bindingsFor(owner);
-  const producers = subject?.kind !== "resolved" || bindings === undefined ? undefined : storage.storageProducersFor(subject.subject, bindings);
+  const reached = subject?.kind !== "resolved" || bindings === undefined ? undefined : storage.storageProducersFor(subject.subject, bindings);
+  const producers = reached === undefined ? undefined : callableValues.nativeStorage.extendRecordMemberProducers(reached);
   const definition = logical === undefined ? undefined : callableValues.generic.definitionFor(logical);
   if (definition === undefined || producers?.kind !== "complete" || producers.producers.length === 0) return undefined;
   const invocation: RustGenericCallableInvocationFact["invocation"][number][] = [];
@@ -69,8 +70,12 @@ export function prepareRustGenericCallableInvocation(
   // A callee supplied by an input (a parameter or a method value read from one) carries some member of the family its
   // logical carrier names, so its channels are those of every implementation of that family.
   const inputCallee = producers.producers.every(selected => selected.subject.kind === "input");
-  for (const [ordinal, implementation] of (inputCallee ? definition.implementations : []).entries()) {
-    const declaration = implementation.declaration;
+  // A callee read from a record member stores the member's whole family, including values written by activations this
+  // invocation does not reach; its channels are those of each implementation the member stores.
+  const memberCallee = !inputCallee && producers !== reached;
+  const familyDeclarations = inputCallee ? definition.implementations.map(implementation => implementation.declaration)
+    : memberCallee ? [...new Set(producers.producers.map(selected => selected.subject.node))] : [];
+  for (const [ordinal, declaration] of familyDeclarations.entries()) {
     const producer = callableValues.nativeProducers.forDeclaration(declaration);
     const effect = effectsFor(declaration);
     if (producer === undefined || effect === undefined) return undefined;
@@ -87,7 +92,7 @@ export function prepareRustGenericCallableInvocation(
       implementationRequests.push(Object.freeze({ declaration, channel, identity }));
     }
   }
-  for (const [ordinal, selected] of (inputCallee ? [] : producers.producers).entries()) {
+  for (const [ordinal, selected] of (inputCallee || memberCallee ? [] : producers.producers).entries()) {
     const subject = selected.subject;
     if (subject.kind !== "value" || subject.projection.length !== 0) return undefined;
     const declaration = subject.node;
@@ -184,7 +189,9 @@ function resolveRustGenericCallableInvocation(
       const supplied = context.callableValues.nativeStorage.boundSubjectFor(producer.subject, logical, producer.bindings);
       if (supplied.kind === "unresolved") return undefined;
       const source = physical.definitionFor(supplied.carrier);
-      const sourceMember = source?.members.length === 1 ? source.members[0] : undefined;
+      // A producer stored with other values (a record member family) is the one member built from its implementation.
+      const built = source?.members.filter(member => member.implementation.declaration === producer.subject.node) ?? [];
+      const sourceMember = built.length === 1 ? built[0] : undefined;
       if (sourceMember?.implementation.declaration !== producer.subject.node) return undefined;
       const conversion = physical.conversionFor(supplied.carrier, storage.carrier);
       const mappings = conversion?.kind === "variants"

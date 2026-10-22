@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageQueries } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageProducersSelection, SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -206,6 +206,7 @@ export function selectRustSourceCallableInvocationBindings(input: {
   readonly records: RustProgramRecords;
   readonly lifetimes: RustLifetimeIndex;
   readonly generic: Pick<RustGenericCallablePlan, "implementationFor">;
+  readonly extendProducers: (selection: SourceStorageProducersSelection) => SourceStorageProducersSelection;
 }, declaration: Node, invocation: Node, bindings: SourceStorageBindings,
   arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings): RustNativeStorageTargetBindingsSelection | undefined {
   const operation = input.records.targetOperation.get(invocation);
@@ -218,7 +219,8 @@ export function selectRustSourceCallableInvocationBindings(input: {
     reason: "A generic activation lost its exact source implementation-to-invocation correspondence." });
   const callee = Node_Expression(input.ast, invocation);
   const subject = callee === undefined ? undefined : input.storage.subjectFor(callee);
-  const producers = subject?.kind !== "resolved" ? undefined : input.storage.storageProducersFor(subject.subject, bindings);
+  const producers = subject?.kind !== "resolved" ? undefined
+    : input.extendProducers(input.storage.storageProducersFor(subject.subject, bindings));
   const implementation = input.generic.implementationFor(declaration);
   if (producers?.kind !== "complete" || implementation === undefined || !producers.producers.some(producer =>
     producer.subject.kind === "value" && producer.subject.projection.length === 0 && producer.subject.node === declaration)) return unresolved();

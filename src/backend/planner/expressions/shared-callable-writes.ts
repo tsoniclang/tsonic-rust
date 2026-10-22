@@ -23,7 +23,7 @@ export function planRustCallableJoinWrite(
   if (signature === undefined || targetType === undefined || argumentsType === undefined || errorType === undefined || names === undefined)
     failRustPlannerInvariant("An admitted shared callable write requires its rendered native callable and name scope.", node);
   const callable = allocateRustSyntheticName(names, "callable");
-  const argumentsName = allocateRustSyntheticName(names, signature.parameters.length === 0 ? "_arguments" : "arguments");
+  const argumentsName = allocateRustSyntheticName(names, "arguments");
   const value = rustEliminateInfallibleResult({ kind: "method-call", receiver: { kind: "path", path: callable },
     method: "call", args: [{ kind: "path", path: argumentsName }] },
   allocateRustSyntheticName(names, "call_value"), allocateRustSyntheticName(names, "call_error"));

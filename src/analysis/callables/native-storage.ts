@@ -46,6 +46,7 @@ import { rustNativeCallableInvocationArguments } from "../../policy/types/callab
 import { createRustNativeStorageGenericSelection, selectRustNativeStorageGenericBindings, rustNativeStorageProjectionSteps, rustNativeStorageProjectionDepth, type RustNativeStorageGenericSelection } from "./native-storage-generics.js";
 import { createRustNativeFutureInputPlan } from "./native-future-inputs.js";
 import { collectRustNativeAbsenceWitnesses, selectRustNativeConversionBoundaries } from "./native-storage-witnesses.js";
+import { createRustRecordMemberProducers } from "./native-storage-members.js";
 import { type RustNativeFutureEnvironmentSelection } from "../../target-model/records/native-future-inputs.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
@@ -79,6 +80,7 @@ export interface RustNativeStoragePlan {
   invocationWitnessFor(input: RustNativeCallableInput, invocation: Node): TargetTypeRef | undefined;
   invocationArgumentWitnessFor(invocation: Node, argument: Node): TargetTypeRef | undefined;
   joinWriteFor(node: Node): RustCallableJoinWrite | undefined;
+  extendRecordMemberProducers(selection: SourceStorageProducersSelection): SourceStorageProducersSelection;
   invocationOriginsFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection;
   implementationOriginsFor(input: RustNativeCallableInput): SourceStorageProducersSelection;
 }
@@ -153,8 +155,8 @@ export function createRustNativeStorageQueries(input: {
   const genericInvocationBindingsFor = (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
     arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings):
     ReturnType<typeof selectRustSourceCallableInvocationBindings> =>
-    input.native.callFor(invocation) !== undefined ? undefined : selectRustSourceCallableInvocationBindings(input,
-      declaration, invocation, bindings, arguments_, caller);
+    input.native.callFor(invocation) !== undefined ? undefined : selectRustSourceCallableInvocationBindings({ ...input,
+      extendProducers: selection => recordMembers.extend(selection) }, declaration, invocation, bindings, arguments_, caller);
   const invocationBindingsFor = (implementation: Node, invocation: Node, owner?: Node): SourceStorageBindingsSelection => {
     if (!nodes.has(implementation) || !nodes.has(invocation))
       return unresolved("Native invocation storage requires its exact owned invocation and implementation.");
@@ -625,13 +627,13 @@ export function createRustNativeStorageQueries(input: {
         // Generic methods read from inputs are those inputs' stored generic callable family values.
         if (values.length !== 0 && values.every(storedMethodValue)) return current;
         if (values.every(origin => !inputs.has(origin))) {
-          const producers = input.storage.storageProducersFor(selectedSubject, bindings);
+          const producers = recordMembers.extend(input.storage.storageProducersFor(selectedSubject, bindings));
           if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
             : "A generic callable physical environment requires its exact closed source producers.");
           const present = producers.producers.filter(producer => materialized(producer.subject) &&
             (!permitsAbsence || producer.subject.projection.length !== 0 ||
               !isRustAbsenceCarrier(input.records.runtimeCarrier.get(producer.subject.node)?.carrier)));
-          const ownerFileName = input.ast.getFileName(input.ast.getSourceFile(selectedSubject.node));
+          const ownerFileName = recordMembers.ownerFileFor(producers) ?? input.ast.getFileName(input.ast.getSourceFile(selectedSubject.node));
           const physical = input.physicalCarrierFor(current, ownerFileName, selectedSubject, bindings, present);
           if (physical === undefined) return fail("A generic callable producer lacks its exact bound physical capture environment.");
           for (const selected of physical.inputs) selectedInputs.add(selected);
@@ -731,6 +733,7 @@ export function createRustNativeStorageQueries(input: {
     return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindings);
   };
   const witnesses = collectRustNativeAbsenceWitnesses(input, invocationBindingsFor);
+  const recordMembers = createRustRecordMemberProducers({ ...input, bindingsFor });
   const { absenceWitnesses, argumentWitnesses } = witnesses;
   return Object.freeze({
     logicalCarrierFor,
@@ -800,6 +803,7 @@ export function createRustNativeStorageQueries(input: {
     invocationWitnessFor: (selected: RustNativeCallableInput, invocation: Node) => absenceWitnesses.get(invocation)?.get(selected),
     invocationArgumentWitnessFor: (invocation: Node, argument: Node) => argumentWitnesses.get(invocation)?.get(argument),
     joinWriteFor: (node: Node) => joinWrites.get(node),
+    extendRecordMemberProducers: (selection: SourceStorageProducersSelection) => recordMembers.extend(selection),
     invocationOriginsFor(selected: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection {
       if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
       const bindings = invocationInputBindingsFor(selected, invocation, owner);
