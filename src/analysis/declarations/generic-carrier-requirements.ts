@@ -22,6 +22,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustClassConstructorContract } from "../../target-model/types/carriers/class-constructors.js";
 import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
@@ -333,10 +334,10 @@ function classifyStaticCarrier(
           if (structural !== undefined) {
             const fields = structural.fields.map((field, index) => {
               if (field.method !== true) return visit(field.type, bound);
-              const selected = evidence?.structuralShapes?.field(value, index);
-              return selected?.methodStorageCarrier === undefined
+              const selected = structuralMethodStorage(evidence?.structuralShapes, value, index);
+              return selected === undefined
                 ? unresolved("A structural method requires its completed physical storage, not its logical call signature.")
-                : visit(selected.methodStorageCarrier, bound);
+                : visit(selected, bound);
             });
             return every([...structural.bases.map(base => visit(base, bound)), ...fields]);
           }
@@ -393,4 +394,22 @@ function classifyStaticCarrier(
     }
   };
   return visit(carrier, new Set());
+}
+
+// Static retention reads carriers whose program errors are already physical, while structural storage is keyed by the
+// logical instance; every error owner of one instance names the same physical method slot.
+function structuralMethodStorage(shapes: RustStructuralShapePlan | undefined, carrier: TargetTypeRef, index: number):
+  TargetTypeRef | undefined {
+  if (shapes === undefined) return undefined;
+  const logical = (type: TargetTypeRef): string => closedMetadataKey(mapRustTargetTypes(type, current =>
+    rustProgramErrorOwner(current) === undefined ? current : rustProgramErrorTargetType()));
+  const key = logical(carrier);
+  const selected = new Map<string, TargetTypeRef>();
+  for (const instance of shapes.instances) {
+    if (logical(instance.carrier) !== key) continue;
+    const storage = instance.fields[index]?.methodStorageCarrier;
+    if (storage === undefined) return undefined;
+    selected.set(closedMetadataKey(storage), storage);
+  }
+  return selected.size === 1 ? [...selected.values()][0] : undefined;
 }
