@@ -11,7 +11,8 @@ export function selectRustRuntimeCallableGenerics(
   context: RustOperationPolicyContext,
 ): readonly RustTargetGenericArgument[] | undefined {
   const selected = request.source.sourceSelectedMethodTypeArguments ?? [];
-  const binder = carrier.kind === "closure" ? carrier.lifetimeBinder : undefined;
+  // Closures and higher-ranked function pointers (function values with lifetime parameters) carry the call binder.
+  const binder = carrier.kind === "closure" || carrier.kind === "function-pointer" ? carrier.lifetimeBinder : undefined;
   if (binder === undefined) return selected.length === 0 ? [] : undefined;
   if (selected.length !== binder.parameters.length) return undefined;
   const call = asNode(request.source.call, context);
@@ -24,8 +25,10 @@ export function selectRustRuntimeCallableGenerics(
         const parameter = context.sourceLifetimes.parameterFor(asNode(subject, context));
         return parameter === undefined ? [] : [parameter];
       });
+    // A function value's binder (analysis/callables/higher-ranked-function.ts) substitutes fresh bound lifetimes for the
+    // declaration's lifetime parameters in order, so it is matched by position; a closure binder is matched by identity.
     if (parameters.length === 0 || parameters.some(parameter => parameter.kind !== "lifetime" ||
-      rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(bound))) return undefined;
+      carrier.kind !== "function-pointer" && rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(bound))) return undefined;
     const lifetime = argument.explicitTypeNode === undefined
       ? rustCallScopedElisionLifetime(identity, rustLifetimeKey(bound))
       : context.sourceLifetimes.resolve(argument.explicitTypeNode);
