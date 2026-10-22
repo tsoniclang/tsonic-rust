@@ -55,5 +55,7 @@ export function rustErrorFieldComparisonView(node: Node | undefined, expression:
     ?? failRustPlannerInvariant("An admitted borrowed source string requires its native operand.", selected.operand);
   if (selected.kind === "contextual") return planExpressionBeforeContextualConversion(node, context)
     ?? failRustPlannerInvariant("An admitted borrowed string requires its native pre-conversion value.", node);
-  return expression;
+  // An equality reads a borrowed str directly; owning it first is clippy::cmp_owned (a provider str result converted
+  // to String, as before the rewrite).
+  return expression.kind === "owned-string-from-borrowed-str" ? expression.expression : expression;
 }
