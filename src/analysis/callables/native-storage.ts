@@ -587,8 +587,10 @@ export function createRustNativeStorageQueries(input: {
               // Likewise a class field declared as a type-erased runtime callable stores that erased callable.
               const erasedParameter = origin.projection.length === 0 && origin.kind === "input" ? erasedClosureParameter(origin, current) : undefined;
               if (erasedParameter !== undefined) erasedPhysicals.add(erasedParameter);
-              const unionPayload = origin.projection.length === 0 ? origin.kind === "input" ? erasedParameter
-                : erasedUnionCallablePayload(originCarrier, current) : erasedFieldCallable(origin, current);
+              // A union-typed parameter (`callback: string | Numeric`) narrowed to its callable member reads the union's
+              // erased payload like any other union-typed value.
+              const unionPayload = origin.projection.length === 0
+                ? erasedParameter ?? erasedUnionCallablePayload(originCarrier, current) : erasedFieldCallable(origin, current);
               if (unionPayload !== undefined) {
                 joinable = false;
                 candidatePhysical = unionPayload;
