@@ -8,6 +8,7 @@ import { bindRustExactTypeParameters } from "../../target-model/types/carriers/g
 import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 
 import type { Node } from "@tsonic/tsts";
+import { Node_Expression } from "@tsonic/target-api/source";
 
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 
@@ -154,6 +155,26 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
             : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier ??
               (frame?.owner.kind === "class" ? frame.owner.instance : undefined);
           const receiverDeclaration = ast.parent(selectedDeclaration);
+          // An object literal member binds its captured parameters against the literal's own carrier; a member of a
+          // generic interface or type literal binds them against the receiver's structural template (its open shape).
+          const structuralReceiver = operation.target.form === "constructor-value"
+            ? (() => { const value = Node_Expression(ast, node); return value === undefined ? undefined : records.runtimeCarrier.get(value)?.carrier; })()
+            : operation.target.form === "structural-method" ? receiver : undefined;
+          const interfaceMember = receiverDeclaration !== undefined && (ast.is.IsInterfaceDeclaration(receiverDeclaration) ||
+            ast.is.IsTypeLiteralNode(receiverDeclaration));
+          if (callee.capturedTypeParameters.length !== 0 && structuralReceiver !== undefined && interfaceMember) {
+            const template = input.structuralShapes.templateForCarrier(structuralReceiver)?.carrier;
+            const bindings = template === undefined ? undefined : bindRustStructuralReceiverParameters(template, structuralReceiver,
+              new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
+            if (bindings === undefined) return "A structural member call lost its exact captured interface type bindings.";
+            for (const [identity, carrier] of bindings) {
+              const existing = substitutions.get(identity);
+              if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
+                return "A structural member call has conflicting captured interface type bindings.";
+              }
+              substitutions.set(identity, carrier);
+            }
+          }
           if (operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
             receiverDeclaration !== undefined && ast.is.IsObjectLiteralExpression(receiverDeclaration)) {
             const template = records.runtimeCarrier.get(receiverDeclaration)?.carrier;
