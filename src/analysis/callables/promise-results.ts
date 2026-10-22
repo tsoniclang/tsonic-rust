@@ -452,6 +452,10 @@ export function analyzeRustPromiseResults(input: {
       if (carrier === undefined) return unresolved(value.node,
         "A native continuation requires its completed checked logical completion contract.");
       const awaited = rustAwaitSelection(carrier, input.definitions);
+      // A value of a native type parameter is stored as that parameter, never as a pending native future: awaiting a
+      // Promise of it does not adopt it, so it does not suspend.
+      if (awaited === undefined && carrier.kind === "type-parameter") return Object.freeze({ kind: "never" as const, value,
+        contractDeclaration: value.node, checkedType: checked.type });
       if (awaited === undefined) return undefined;
       const future = rustAwaitSelectionLeaves(awaited).some(leaf => leaf.future !== undefined);
       const nativeCall = input.native.callFor(value.node);
