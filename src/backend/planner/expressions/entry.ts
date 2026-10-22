@@ -25,6 +25,9 @@ import { planRustDiscardedPromise } from "./discarded-promises.js";
 import { planRustExpressionExit } from "./eager-exits.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
+import { substituteRustTargetGenerics } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
 export type RustExpressionAccess = "value" | "shared-reference" | "shared-place" | "shared-receiver";
@@ -62,7 +65,7 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   }
   let value = planExpressionBeforeValueProjections(node, context, resultUse, ownership?.source.kind === "borrow" ? "shared-place" : selectedBorrow ? "value" : access);
   if (value === undefined || resultUse === "discarded") return value;
-  const selected = context.input.program.records.valueProjection.get(node, override?.carrier)
+  const selected = rustValueProjectionFor(node, override?.carrier, context)
     ?? failRustPlannerInvariant("An admitted expression requires its exact sealed projection composition.", node);
   if (selected.exits) return value;
   const flowOverridden = context.flowReadOverrides?.has(node) === true;
@@ -89,6 +92,17 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   if (access === "shared-place") return borrowFlow ? { kind: "dereference", pointer: value } : value;
   return access !== "shared-reference" || borrowFlow || selected.option === undefined && selected.referenceReborrow
     ? value : createRustSharedReferenceArgument(context, value, node);
+}
+
+// An override may carry the node's own carrier specialized by the planning context (a dispatch specialization or a
+// generic instantiation); it then composes the projections sealed for the node's own carrier.
+function rustValueProjectionFor(node: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext) {
+  const records = context.input.program.records;
+  const exact = records.valueProjection.get(node, carrier);
+  if (exact !== undefined || carrier === undefined) return exact;
+  const raw = records.runtimeCarrier.get(node)?.carrier;
+  return raw !== undefined && rustTargetTypeRefEquals(substituteRustTargetGenerics(raw, context.typeParameterSubstitutions ?? new Map(),
+    context.lifetimeSubstitutions ?? new Map()), carrier) ? records.valueProjection.get(node, raw) : undefined;
 }
 
 export function planExpressionBeforeValueProjections(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse,

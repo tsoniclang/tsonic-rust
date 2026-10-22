@@ -397,6 +397,12 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       "A declared runtime union has no complete, consistent set of native variant carriers.", declaration,
       ["target.capability=rust.type.source-union"]);
   }
+  // Pass 0: close method receiver modes from checked source identity before
+  // any call ABI is recorded, including the calls that return inference probes
+  // in pass 1. Direct writes and mutating provider receivers seed a
+  // source-method call graph in the object representation plan; mutability
+  // then propagates to callers to a fixpoint.
+  recordMethodSelfModeFacts(walk, projectSourceFiles);
   // Pass 1: finalize every callable declaration ABI before walking any body.
   // Cross-file and forward calls therefore observe the same parameter facts.
   const signatureDiagnosticCount = context.diagnostics.length;
@@ -423,11 +429,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     recordPredeclaredNativeFunctionBindingFacts(walk, sourceFile);
     recordRustModuleValueDeclarations(walk, sourceFile);
   }
-  // Pass 1b: close method receiver modes from checked source identity before
-  // any call ABI is recorded. Direct writes and finalized mutating provider
-  // receivers seed a source-method call graph; mutability then propagates to
-  // callers to a fixpoint.
-  recordMethodSelfModeFacts(walk, projectSourceFiles);
   // Pass 2: finalize bodies and expressions against the closed declaration
   // ABI from pass 1.
   for (const sourceFile of projectSourceFiles) {
