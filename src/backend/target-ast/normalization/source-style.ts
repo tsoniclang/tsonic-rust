@@ -2,6 +2,8 @@ import type { RustBlock, RustExpr, RustImplFunction, RustItem, RustSourceFileMod
 import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { nameRustSignatureTypes, type RustNamedSignatureScope } from "./signature-aliases.js";
 import { lowerRustCompletionScope } from "./completion-regions.js";
+import { rustLintAttributes } from "./lint-policy.js";
+import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
 
@@ -86,9 +88,24 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
       case "assign": return { ...value, target: expression(value.target), value: expression(value.value) };
       case "index-assign": return { ...value, receiver: expression(value.receiver), index: expression(value.index),
         value: expression(value.value) };
-      case "if": return { ...value, condition: expression(value.condition), then: block(value.then),
-        ...(value.else === undefined ? {} : { else: block(value.else) }) };
-      case "while": return { ...value, condition: expression(value.condition), body: block(value.body) };
+      case "if": {
+        const condition = expression(value.condition);
+        const then = block(value.then);
+        const nested = then.statements.length === 1 ? then.statements[0] : undefined;
+        const attrs = withLintAttributes(value.attrs, [
+          rustConditionPrintsAsBlock(condition) ? rustLintAttributes.blocksInConditions : undefined,
+          isReflexivePathComparison(condition) ? rustLintAttributes.reflexiveComparison : undefined,
+          value.else === undefined && nested?.kind === "if" && nested.else === undefined ? rustLintAttributes.collapsibleIf : undefined,
+        ]);
+        return { ...value, ...(attrs === undefined ? {} : { attrs }), condition, then,
+          ...(value.else === undefined ? {} : { else: block(value.else) }) };
+      }
+      case "while": {
+        const condition = expression(value.condition);
+        const attrs = withLintAttributes(value.attrs, [
+          rustConditionPrintsAsBlock(condition) ? rustLintAttributes.blocksInConditions : undefined]);
+        return { ...value, ...(attrs === undefined ? {} : { attrs }), condition, body: block(value.body) };
+      }
       case "while-let-some": return { ...value, expression: expression(value.expression), body: block(value.body) };
       case "for": return { ...value, iterable: expression(value.iterable), body: block(value.body) };
       case "loop":
@@ -114,4 +131,33 @@ function isRustUnitLiteralStatement(statement: RustStmt): boolean {
       ? statement.init : undefined;
   const attributed = "attrs" in statement && (statement.attrs?.length ?? 0) !== 0;
   return !attributed && value?.kind === "tuple-literal" && value.elements.length === 0;
+}
+
+// Syntax-only lint expectations for conditions, as before the rewrite: each attribute names a lint that the printed
+// form of this one statement triggers, so the expectation is always fulfilled.
+function withLintAttributes(existing: readonly RustAttribute[] | undefined,
+  selected: readonly (RustAttribute | undefined)[]): readonly RustAttribute[] | undefined {
+  const added = selected.filter((attribute): attribute is RustAttribute => attribute !== undefined &&
+    !(existing ?? []).includes(attribute));
+  return added.length === 0 ? existing : [...existing ?? [], ...added];
+}
+
+function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "block":
+    case "evaluate-then": return true;
+    case "bottom":
+    case "numeric-cast":
+    case "unsafe":
+    case "owned-string-from-borrowed-str": return rustConditionPrintsAsBlock(expression.expression);
+    case "option-try":
+    case "try":
+    case "await": return rustConditionPrintsAsBlock(expression.expr);
+    default: return false;
+  }
+}
+
+function isReflexivePathComparison(condition: RustExpr): boolean {
+  return condition.kind === "binary" && (condition.operator === "==" || condition.operator === "!=") &&
+    condition.left.kind === "path" && condition.right.kind === "path" && condition.left.path === condition.right.path;
 }
