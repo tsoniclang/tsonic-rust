@@ -3,6 +3,7 @@ import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { applyRustTailShape } from "./block-flow.js";
 import { rustLintAttributes } from "./lint-policy.js";
+import { rustTypeEquals } from "../syntax/type-equality.js";
 
 type CompletionScope = Extract<RustStmt, { readonly kind: "try-scope" | "resource-scope" }>;
 const path = (name: string): RustExpr => ({ kind: "path", path: name });
@@ -36,13 +37,14 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     const ownedBody = { ...body, statements: [
       ...bindings,
       ...body.statements] };
+    const lowered = lowerRegion(ownedBody, scope.asynchronous ? undefined : name);
     const region = { ...ownedBody, statements: [
-      ...lowerRegion(ownedBody, scope.asynchronous ? undefined : name).statements,
+      ...lowered.body.statements,
       ...(terminates ? [] : [{ kind: "tail" as const, expr: errorType === undefined ? normal : call("Ok", normal) }])] };
     return { kind: "let", name, mutable: false, type: resultType(type, errorType),
       init: scope.asynchronous
         ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true) } }
-        : { kind: "block", label: name, body: region } };
+        : { kind: "block", ...(lowered.breaksToLabel ? { label: name } : {}), body: region } };
   };
   const statements: RustStmt[] = [];
   if (scope.kind === "try-scope") {
@@ -146,9 +148,13 @@ function abruptVariants(fallible: boolean): Extract<RustExpr, { readonly kind: "
   });
 }
 
-function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
+// Lowers the region's exits into breaks to its label. `breaksToLabel` records whether this lowering produced any
+// such break, so an unused label is not printed.
+function lowerRegion(body: RustBlock, label: string | undefined): { readonly body: RustBlock; readonly breaksToLabel: boolean } {
+  let breaksToLabel = false;
   const exit = (expr: RustExpr | undefined): RustExpr => {
     if (label === undefined) return { kind: "return-expression", ...(expr === undefined ? {} : { expr }) };
+    breaksToLabel = true;
     if (expr !== undefined) {
       return { kind: "block", body: { statements: [
         { kind: "let", name: label, mutable: false, init: expr },
@@ -162,7 +168,8 @@ function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
     const mapped = mapRustExpressionChildren(value, expression, block);
     if (mapped.kind === "return-expression") return exit(mapped.expr);
     if (mapped.kind !== "try" || label === undefined) return mapped;
-    const error: RustExpr = { kind: "associated-call", owner: mapped.resultErrorType, method: "from", args: [path("error")] };
+    const error: RustExpr = rustTypeEquals(mapped.operandErrorType, mapped.resultErrorType) ? path("error")
+      : { kind: "associated-call", owner: mapped.resultErrorType, method: "from", args: [path("error")] };
     const matched: RustExpr = { kind: "match", expression: path(label), arms: [
       { pattern: variant("Ok", binding("value")), expression: path("value") },
       { pattern: variant("Err", binding("error")), expression: exit(call("Err", error)) },
@@ -211,5 +218,6 @@ function lowerRegion(body: RustBlock, label: string | undefined): RustBlock {
     }
   };
   const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(statement) });
-  return block(body);
+  const lowered = block(body);
+  return { body: lowered, breaksToLabel };
 }
