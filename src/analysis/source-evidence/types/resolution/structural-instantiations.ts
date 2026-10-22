@@ -7,6 +7,7 @@ import { rustOptionElementCarrier } from "../../../../target-model/types/index.j
 import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../../target-model/types/carriers/js.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../../../target-model/types/placeholder-lifetimes.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../../../project-types/type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
@@ -116,7 +117,8 @@ export function retainRustStructuralInstantiation(
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const expected = mapRustTargetTypes(targetField.type, normalize);
     if (declared.some(carrier => carrier === undefined ||
-      !rustTargetTypeRefEquals(mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize), expected))) return undefined;
+      !rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(
+        mapRustTargetTypes(rustSourcePropertyTargetType(carrier, selected.source.property.optional), normalize), expected), expected))) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {

@@ -1,4 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustCarrierWithTargetPlaceholderLifetimes } from "../../target-model/types/placeholder-lifetimes.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustUnionArmMapping, rustUnionProjectionContract } from "./union-relations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -185,36 +186,6 @@ export function rustCallableTargetForSourceLifetime(sourceCarrier: TargetTypeRef
     : targetCarrier;
 }
 
-/**
- * A placeholder lifetime in a source carrier is inferred by rustc at its binding (for example the element callable of a
- * local `(() => int32)[]` annotation), so it takes the target's lifetime at the same generic position. The walk follows
- * named generic arguments only; any other shape difference leaves the source unchanged.
- */
-function rustSourcePlaceholderLifetimesFromTarget(source: TargetTypeRef, target: TargetTypeRef): TargetTypeRef {
-  if (source.kind !== "target-named" || target.kind !== "target-named" || source.id !== target.id) return source;
-  const sourceArguments = source.genericArguments ?? [];
-  const targetArguments = target.genericArguments ?? [];
-  if (sourceArguments.length !== targetArguments.length || sourceArguments.length === 0) return source;
-  let changed = false;
-  const genericArguments = sourceArguments.map((argument, index) => {
-    const selected = targetArguments[index]!;
-    if (argument.kind === "lifetime" && selected.kind === "lifetime" && argument.lifetime.kind === "placeholder" &&
-      selected.lifetime.kind !== "placeholder") {
-      changed = true;
-      return selected;
-    }
-    if (argument.kind === "type" && selected.kind === "type") {
-      const type = rustSourcePlaceholderLifetimesFromTarget(argument.type, selected.type);
-      if (type !== argument.type) {
-        changed = true;
-        return { kind: "type" as const, type };
-      }
-    }
-    return argument;
-  });
-  return changed ? { ...source, genericArguments } : source;
-}
-
 export function selectRustValueCarrierReconciliation(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
@@ -223,7 +194,7 @@ export function selectRustValueCarrierReconciliation(
 ): RustValueCarrierReconciliation {
   targetCarrier = rustCallableTargetForSourceLifetime(sourceCarrier, targetCarrier);
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier) ||
-    rustTargetTypeRefEquals(rustSourcePlaceholderLifetimesFromTarget(sourceCarrier, targetCarrier), targetCarrier)) {
+    rustTargetTypeRefEquals(rustCarrierWithTargetPlaceholderLifetimes(sourceCarrier, targetCarrier), targetCarrier)) {
     return { kind: "identity" };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
