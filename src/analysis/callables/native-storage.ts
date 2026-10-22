@@ -121,7 +121,12 @@ export function createRustNativeStorageQueries(input: {
     if (selected.kind === "unresolved") { boundaryFailure ??= selected.reason; continue; }
     const declaration = input.ast.is.IsIdentifier(node)
       ? input.storage.source.navigation.sourceReferenceFor(node)?.declaration : undefined;
-    if (declaration === undefined) { conversionBoundaries.push(selected.subject); continue; }
+    // A reference to a native callable input is transported as the input itself and is never on a frontier; any other
+    // adapted reference (a local binding read) is a frontier stop of the storage it is written into.
+    if (declaration === undefined || !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
+      conversionBoundaries.push(selected.subject);
+      continue;
+    }
     // A query of the reference itself reads the declaration's unconverted value, so it is not a frontier stop.
     const references = adaptedReferences.get(declaration) ?? [];
     references.push({ node, subject: selected.subject });
