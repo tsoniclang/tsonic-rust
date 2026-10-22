@@ -127,6 +127,7 @@ export interface RustCallableValuePlanInput {
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly carrierHost: RustValueDomainCarrierHost;
   readonly retainedEnvironments: RustRetainedEnvironmentQueries;
+  readonly normalizeTypeFamily: (carrier: TargetTypeRef) => TargetTypeRef;
 }
 
 export interface RustCallableValueConstruction {
@@ -324,7 +325,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       return physicalCarrierFor(carrier, ownerFileName, subject, bindings, producers);
     },
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes,
-    producerErrorFor: reference => producerErrors?.producerError(reference) });
+    producerErrorFor: reference => producerErrors?.producerError(reference), normalizeTypeFamily: input.normalizeTypeFamily });
   const captures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
     nativeStorage: nativeStorageQueries });
   const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,

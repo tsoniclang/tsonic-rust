@@ -579,7 +579,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
-    retainedEnvironments: context.retainedEnvironments,
+    retainedEnvironments: context.retainedEnvironments, normalizeTypeFamily: rustTypeFamilyNormalizer(context.typeFamilies),
     carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: context.semantics,
       types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier } } });

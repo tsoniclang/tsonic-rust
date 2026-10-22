@@ -29,7 +29,7 @@ import { rustUnionAlternatives } from "../../target-model/types/union-relations.
 import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
@@ -105,6 +105,8 @@ export function createRustNativeStorageQueries(input: {
   readonly carrierHost: RustValueDomainCarrierHost;
   // Resolved after the error regions; storage shared by distinct producers is selected only once it is available.
   readonly producerErrorFor: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;
+  // Source type families (indexed field outputs) resolved to their selected native carriers.
+  readonly normalizeTypeFamily: (carrier: TargetTypeRef) => TargetTypeRef;
 }): RustNativeStorageQueries {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
@@ -611,7 +613,8 @@ export function createRustNativeStorageQueries(input: {
                 ? undefined : instanceTypeBindings(ownerBound, current);
               const boundCarrier = classBindings === undefined ? ownerBound
                 : callableValueCarrier(substituteRustTargetGenerics(ownerBound!, classBindings, new Map(), new Map()));
-              const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
+              const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(mapRustTargetTypes(current, input.normalizeTypeFamily),
+                  mapRustTargetTypes(boundCarrier, input.normalizeTypeFamily))
                 ? undefined : rustFrameCallableValue(originCarrier) !== undefined
                   ? originCarrier : input.producers.physicalFor(origin.node, originCarrier);
               const classBound = produced === undefined || classBindings === undefined ? produced
