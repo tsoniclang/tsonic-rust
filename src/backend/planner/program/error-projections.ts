@@ -30,7 +30,7 @@ export function planRustErrorProjectionTransport(plan: RustErrorTransportPlan): 
           ? { kind: "if-let", expression, pattern: arms[0]!.pattern,
               whenTrue: { kind: "block", body: { statements: [{ kind: "expr", expr: arms[0]!.expression }] } } }
           : { kind: "match", expression, arms: [...arms, { pattern: { kind: "wildcard" }, expression: unit }] };
-        return projectionFunction(owned, value);
+        return projectionFunction(owned, value, arms.length !== 0);
       }),
     }));
 }
@@ -43,10 +43,12 @@ export function planRustSourceErrorProjectionDelegates(): readonly RustItem[] {
       })) }));
 }
 
-function projectionFunction(owned: boolean, value: RustExpr): RustImplFunction {
+// Without projection arms the body never reads `output`; the parameter is then named `_output` (unused_variables).
+function projectionFunction(owned: boolean, value: RustExpr, readsOutput = true): RustImplFunction {
+  const output = rustCheckedNativeProjectionOutputParameter();
   return { kind: "function", name: owned ? "into_project_error" : "project_error", visibility: "public",
     generics: emptyRustGenerics, selfParam: owned ? { kind: "value" } : { kind: "reference", mutable: false },
-    params: [rustCheckedNativeProjectionOutputParameter()],
+    params: [readsOutput ? output : { ...output, name: "_output" }],
     body: { statements: [{ kind: "tail", expr: value }] },
   };
 }
