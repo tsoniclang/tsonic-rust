@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 
@@ -8,11 +8,12 @@ import { rustRetainedEnvironment, rustRetainedValueLifetime } from "./retained-v
 import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage.js";
 import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
-import { rustCallScopedElisionLifetime, rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustCallScopedElisionLifetime, rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carriers.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 
 export function rustRetainedCallLifetimes(
   walk: RustFactWalk, invocation: Node, declaration: Node, parameters: readonly TargetTypeRef[], result: TargetTypeRef,
@@ -22,7 +23,13 @@ export function rustRetainedCallLifetimes(
   if (references.lifetimes.length === 0) return new Map();
   const selected = rustRetainedEnvironment(declaration, parameters, walk.context);
   if (selected.kind === "unresolved") return undefined;
-  if (selected.kind === "none") return new Map();
+  if (selected.kind === "none") {
+    // The callee's signature names its own retained environment (selected for its open generic inputs), but at this
+    // instantiation no input is open storage, so the result retains only storage it owns: 'static.
+    const declared = walk.context.retainedEnvironments.environmentFor(declaration);
+    return declared.kind === "selected" && references.lifetimeIdentities.includes(rustLifetimeKey(declared.environment.lifetime))
+      ? new Map([[rustLifetimeKey(declared.environment.lifetime), rustStaticLifetime]]) : new Map();
+  }
   const environment = selected.environment;
   if (!references.lifetimeIdentities.includes(rustLifetimeKey(environment.lifetime))) return new Map();
   const caller = sourceEnclosingCallable(invocation, ast);
@@ -82,14 +89,42 @@ export function rustRetainedCallLifetimes(
   };
   const reference = (lifetime: RustLifetimeRef): TargetTypeRef => ({ kind: "reference", mutable: false,
     referent: { kind: "tuple", elements: [] }, lifetime });
+  // An origin inside another callee's body carries that callee's own retained lifetimes; each invocation the origin
+  // was produced through substitutes them with its recorded call-site lifetimes, out to this call's caller.
+  const throughCalls = (origin: SourceStorageSubject, bindings: SourceStorageBindings | undefined,
+    carrier: TargetTypeRef): TargetTypeRef | undefined => {
+    if (bindings === undefined) return carrier;
+    let selected = carrier;
+    let owner = sourceEnclosingCallable(origin.kind === "value" && ast.body(origin.node) !== undefined
+      ? ast.parent(origin.node) : origin.node, ast);
+    let current = bindings;
+    for (let depth = 0; owner !== undefined && owner !== caller; depth += 1) {
+      if (depth > 64) return undefined;
+      const activations = storage.boundActivationsFor(owner, current);
+      if (activations.kind !== "resolved") return undefined;
+      const invocations = activations.activations.filter(entry => entry.kind === "invocation");
+      if (invocations.length !== 1) return selected;
+      const entry = invocations[0]!;
+      if (entry.kind !== "invocation") return selected;
+      const lifetimes = rustRetainedCallSubstitutions(records, entry.invocation);
+      if (lifetimes.size !== 0) selected = substituteRustTargetGenerics(selected, new Map(), lifetimes);
+      owner = sourceEnclosingCallable(entry.invocation, ast);
+      current = entry.callerBindings;
+    }
+    return selected;
+  };
   for (const parameter of environment.parameters) {
     const subject = storage.subject(parameter, "input");
     if (subject.kind !== "resolved") return undefined;
     const sources = storage.boundOriginsFor(subject.subject, activation.bindings);
     if (sources.kind !== "resolved" || sources.subjects.length === 0) return undefined;
+    const producers = storage.storageProducersFor(subject.subject, activation.bindings);
+    const producerBindings = new Map(producers.kind === "unresolved" ? []
+      : producers.producers.map(producer => [producer.subject, producer.bindings] as const));
     for (const source of sources.subjects) {
       const node = source.node;
-      const carrier = carrierFor(source);
+      const unsubstituted = carrierFor(source);
+      const carrier = unsubstituted === undefined ? undefined : throughCalls(source, producerBindings.get(source), unsubstituted);
       if (carrier === undefined) return undefined;
       const lifetime = rustCallableProtocol(carrier)?.lifetime;
       if (lifetime !== undefined && lifetime.kind !== "placeholder") {

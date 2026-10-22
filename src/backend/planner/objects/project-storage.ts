@@ -282,8 +282,11 @@ export function invokeRustStructuralObjectMethod(
   const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [
     cloneExpression(receiverPath),
   ]), ...arguments_];
-  // The receiver is only read (its stored method) and cloned as the method's first argument, so it is bound by reference.
-  return rustValueBlock([{ name: receiverName, value: { kind: "reference", expr: receiver } }, {
+  // The receiver is only read (its stored method) and cloned as the method's first argument, so a place is bound by
+  // reference. Any other receiver expression may borrow temporaries that end with the binding statement, so its handle
+  // is cloned first and the reference extends that clone.
+  const place = receiver.kind === "path" || receiver.kind === "field";
+  return rustValueBlock([{ name: receiverName, value: { kind: "reference", expr: place ? receiver : cloneExpression(receiver) } }, {
       name: methodName,
       value: method,
     }], {

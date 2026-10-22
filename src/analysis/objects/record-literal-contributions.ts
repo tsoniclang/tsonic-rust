@@ -11,7 +11,7 @@ import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier,
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 
-import { selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
+import { rustCallableTargetForSourceLifetime, selectRustValueCarrierReconciliation } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation } from "../program/records/value-carrier-admission.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -84,7 +84,8 @@ export function collectRustRecordLiteralContributions(
         if (targetField === undefined) {
           continue;
         }
-        if (!rustTargetTypeRefEquals(sourceField.carrier, targetField.carrier) ||
+        // A destination method slot whose callable lifetime is still a placeholder takes the copied slot's lifetime.
+        if (!rustTargetTypeRefEquals(sourceField.carrier, rustCallableTargetForSourceLifetime(sourceField.carrier, targetField.carrier)) ||
           sourceField.method !== targetField.method ||
           sourceField.method === true && (
             sourceShape.storage !== "structural-object" ||
