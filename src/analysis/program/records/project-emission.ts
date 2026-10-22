@@ -156,8 +156,8 @@ export function createRustProjectEmissionProducer(assertOpen: () => void): RustP
       if (declarations.has(definition.declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native project definition is published exactly once.", definition.declaration);
       let source = definitions.get(definition.fileName);
       if (source === undefined) { source = new Map(); definitions.set(definition.fileName, source); }
-      if (source.has(definition.targetPath)) failTargetAnalysisInvariant("tsonic-rust", "A native project definition requires one exact carrier identity.", definition.declaration);
-      source.set(definition.targetPath, definition);
+      if (source.has(definition.sourceName)) failTargetAnalysisInvariant("tsonic-rust", "A native project definition requires one exact carrier identity.", definition.declaration);
+      source.set(definition.sourceName, definition);
       declarations.set(definition.declaration, definition);
       if (representation !== undefined) representations.set(definition, representation);
     },

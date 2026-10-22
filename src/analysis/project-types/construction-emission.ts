@@ -82,7 +82,10 @@ export function analyzeRustConstructionEmission(input: {
     }
     const preparations = new Map<Node, RustConstructionPreparationSelection>();
     const retainedReferences = new Set<Node>();
-    for (const point of plan.points) {
+    // An abstract class is never constructed on its own: its constructor runs only as a layer of a concrete
+    // subclass's construction, which prepares those points with its own physical layer contexts.
+    const constructible = !program.source.ast.hasModifierKind(definition.declaration, "abstract");
+    for (const point of constructible ? plan.points : []) {
       const selected = plan.emission.preparationFor(point.node);
       if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted construction point requires its selected preparation.", point.node);
       const physical = contexts.get(selected.layer);

@@ -175,10 +175,10 @@ export function createRustClassEmissionProducer(assertOpen: () => void): RustCla
       if (environments.has(subject.declaration)) failTargetAnalysisInvariant("tsonic-rust", "A native class environment is written exactly once.", subject.declaration);
       let declarations = environmentsByFile.get(subject.fileName);
       if (declarations === undefined) { declarations = new Map(); environmentsByFile.set(subject.fileName, declarations); }
-      if (declarations.has(subject.targetPath)) failTargetAnalysisInvariant("tsonic-rust", "A native class environment requires one exact source carrier identity.", subject.declaration);
+      if (declarations.has(subject.sourceName)) failTargetAnalysisInvariant("tsonic-rust", "A native class environment requires one exact source carrier identity.", subject.declaration);
       const selected = Object.freeze(value);
       environments.set(subject.declaration, selected);
-      declarations.set(subject.targetPath, selected);
+      declarations.set(subject.sourceName, selected);
     },
     visibilityRecords: Object.freeze({ nativeMemberVisibility: Object.freeze({ get: (subject: Node, publiclyReachable: boolean) => {
       const selected = visibility.get(subject);

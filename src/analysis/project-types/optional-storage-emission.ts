@@ -8,6 +8,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustPhysicalEmissionRecordCarriers } from "../callables/emission-contexts.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 
 export function analyzeRustOptionalStorageEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustProjectEmissionProducer): void {
@@ -31,6 +32,9 @@ export function analyzeRustOptionalStorageEmission(program: Omit<RustAnalysisPro
     if (seen.has(key)) continue;
     seen.add(key);
     pending.push(...rustTargetTypeChildren(carrier));
+    // A class constructor value renders its class environment from the instance it constructs.
+    const constructed = rustClassConstructorInstance(carrier);
+    if (constructed !== undefined) pending.push(constructed);
     const definition = program.projectTypes.definitionForCarrier(carrier);
     if (definition === undefined) { producer.optionalType(carrier, undefined, Object.freeze([])); continue; }
     const source = rustSourceTypeCarrierValue(carrier);

@@ -8,9 +8,10 @@ import { rustVecTargetType } from "../../../target-model/types/carriers/native.j
 /**
  * The carriers that declaration-level and binding-level emission records hand to the planner: generated union payload
  * templates, structural shape storage and accessors, native type aliases, lexical function capture environments, local
- * binding storage, binding-pattern projections (element storage and defaults), frame callable bindings, lambda bodies,
- * project callable adapters and native closure bodies (construction, body, physical and invocation-error carriers). Every one needs sealed type emission metadata before
- * planning, including the storage wrappers the planner composes from them (location cells and rest vectors).
+ * binding storage, binding-pattern projections (element storage and defaults), source call argument destinations, frame
+ * callable bindings, lambda bodies, project callable adapters and native closure bodies (construction, body, physical and
+ * invocation-error carriers). Every one needs sealed type emission metadata before planning, including the storage
+ * wrappers the planner composes from them (location cells and rest vectors).
  */
 export function rustDeclarationEmissionCarriers(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[]): readonly TargetTypeRef[] {
@@ -55,6 +56,7 @@ export function rustDeclarationEmissionCarriers(program: Omit<RustAnalysisProgra
     collect(program.records.lambdaBody.get(node));
     collect(program.records.bindingProjection.get(node));
     collect(program.records.bindingProjectionEmission.get(node));
+    collect(program.records.sourceCallEvaluation.get(node));
   }
   return carriers;
 }
