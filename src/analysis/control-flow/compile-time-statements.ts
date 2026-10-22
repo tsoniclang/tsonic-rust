@@ -35,3 +35,16 @@ export function rustNodeIsOutsideNativeCode(
       safetyOperation(current)?.kind === "safety-builder") return true;
   return false;
 }
+
+/** rustNodeIsOutsideNativeCode over an analysis program's syntax reader, records and safety applications. */
+export function rustProgramNodeIsOutsideNativeCode(
+  program: {
+    readonly source: { readonly ast: AstReader };
+    readonly records: Pick<RustProgramRecords, "compileTimeSource" | "nativeUnreachable">;
+    readonly safetyApplications: { operationForExpression(expression: Node): { readonly kind: string } | undefined };
+  },
+  node: Node,
+): boolean {
+  return rustNodeIsOutsideNativeCode(program.source.ast, program.records,
+    expression => program.safetyApplications.operationForExpression(expression), node);
+}

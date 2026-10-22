@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -14,6 +15,7 @@ export function admitRustCalls(program: Omit<RustAnalysisProgram, "reachability"
   };
   const { ast } = program.source;
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     if (!ast.is.IsCallExpression(node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact === undefined) continue;

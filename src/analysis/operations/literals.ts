@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Operand } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -59,6 +60,7 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     refuse(node, "Numeric literal carrier is not a supported Rust numeric carrier.");
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     request(node, program.records.valueRead.get(node)?.contextualInput);
     const operation = program.records.targetOperation.get(node);
     if (ast.is.IsPrefixUnaryExpression(node) && (operation?.kind === "source-conversion" || operation?.kind === "operator-token"))

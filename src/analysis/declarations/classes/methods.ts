@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { sourceObjectMemberDeclarations } from "@tsonic/target-api/source";
@@ -24,6 +25,7 @@ export function analyzeRustMethodEmission(input: {
     input.producer.classDeclaration(definition.declaration, members);
   }
   for (const member of input.nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, member)) continue;
     if (!ast.is.IsMethodDeclaration(member) && !ast.is.IsGetAccessorDeclaration(member) && !ast.is.IsSetAccessorDeclaration(member)) continue;
     const owner = program.projectTypes.definitionContainingDeclaration(member);
     if (owner === undefined) continue;

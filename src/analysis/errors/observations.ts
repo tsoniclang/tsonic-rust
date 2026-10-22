@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -25,6 +26,7 @@ export function admitRustErrorObservations(program: Omit<RustAnalysisProgram, "r
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "program-error-equality") {
       const valid = operation.comparison.kind === "project"
