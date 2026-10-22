@@ -8,6 +8,8 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustCallableInputMatches } from "./callable-input.js";
 import { rustNativeRepresentationMatches } from "./native-representation.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 
 import type { RustCallableValueConversion, RustCallableConversion } from "../../target-model/conversions/callable.js";
 export function rustCallableValueConversionMatches(
@@ -34,6 +36,11 @@ export function rustCallableValueConversionMatches(
     rustTargetTypeRefEquals(contract.source, source) && rustTargetTypeRefEquals(contract.target, target);
 }
 
+// A frame callable's entry returns its component's program error (see rustNativeCallablePhysicalSource).
+function callableSourceError(source: TargetTypeRef, protocol: { readonly error?: TargetTypeRef }): TargetTypeRef | undefined {
+  return "error" in protocol ? protocol.error : rustFrameCallableValue(source) !== undefined ? rustProgramErrorTargetType() : undefined;
+}
+
 export function rustCallableConversionMatches(
   conversion: RustCallableConversion,
   source: TargetTypeRef,
@@ -48,12 +55,13 @@ export function rustCallableConversionMatches(
     rustCallableInputProtocol(source) !== undefined && rustCallableInputProtocol(target) === undefined) return false;
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);
+  const sourceError = sourceCallable === undefined ? undefined : callableSourceError(source, sourceCallable);
   return rustTargetTypeRefEquals(conversion.source, source) && rustTargetTypeRefEquals(conversion.target, target) &&
     sourceCallable !== undefined && targetCallable !== undefined &&
     (conversion.error === undefined
-      ? !("error" in targetCallable) || rustTargetTypeRefEquals(sourceCallable.error, targetCallable.error)
-      : "error" in targetCallable && targetCallable.error !== undefined && sourceCallable.error !== undefined &&
-        rustCallableErrorConversionMatches(conversion.error, sourceCallable.error, targetCallable.error, definitions)) &&
+      ? !("error" in targetCallable) || rustTargetTypeRefEquals(sourceError, targetCallable.error)
+      : "error" in targetCallable && targetCallable.error !== undefined && sourceError !== undefined &&
+        rustCallableErrorConversionMatches(conversion.error, sourceError, targetCallable.error, definitions)) &&
     sourceCallable.parameters.length <= targetCallable.parameters.length &&
     conversion.parameters.length === sourceCallable.parameters.length &&
     conversion.parameters.every((parameter, index) =>
@@ -79,8 +87,8 @@ export function selectRustCallableConversion(
   // A callable whose error differs from the destination's is adapted only through an exact, infallible error conversion.
   const targetError = "error" in targetCallable ? targetCallable.error : undefined;
   let error: RustValueConversion | undefined;
-  if (targetError !== undefined && !rustTargetTypeRefEquals(sourceCallable.error, targetError)) {
-    const sourceError = sourceCallable.error;
+  const sourceError = callableSourceError(source, sourceCallable);
+  if (targetError !== undefined && !rustTargetTypeRefEquals(sourceError, targetError)) {
     error = sourceError === undefined ? undefined : selectValue(sourceError, targetError);
     if (sourceError === undefined || error === undefined ||
       !rustCallableErrorConversionMatches(error, sourceError, targetError, definitions)) return undefined;
