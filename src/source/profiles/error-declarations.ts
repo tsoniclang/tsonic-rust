@@ -6,7 +6,7 @@ export function readRustSourceProfileErrorContract(
   source: TargetSourceProgram,
   file: SourceFile,
 ): RustSourceProfileErrorContract | undefined {
-  const { ast, navigation } = source;
+  const { ast } = source;
   const statements = ast.statements(file);
   const interfaces = statements.filter((node): node is Node => node !== undefined && ast.is.IsInterfaceDeclaration(node));
   const instances = interfaces.filter(node => ast.text(ast.name(node)) === "Error");
@@ -18,10 +18,14 @@ export function readRustSourceProfileErrorContract(
   const instance = instances[0]!;
   const constructor = constructors[0]!;
   const value = values[0]!;
+  // Profile files are declaration files, which the project reference index does not cover; a type reference in the
+  // profile names one of the profile file's own interfaces.
   const referenced = (node: Node | undefined): Node | undefined => {
     const reference = node === undefined ? undefined : ast.as.AsTypeReferenceNode(node);
-    return reference === undefined || ast.typeArguments(node).length !== 0 ? undefined :
-      navigation.sourceReferenceFor(reference.TypeName)?.declaration;
+    if (reference === undefined || ast.typeArguments(node).length !== 0 || !ast.is.IsIdentifier(reference.TypeName)) return undefined;
+    const name = ast.text(reference.TypeName);
+    const matching = interfaces.filter(declaration => ast.text(ast.name(declaration)) === name);
+    return matching.length === 1 ? matching[0] : undefined;
   };
   if (ast.variableDeclarationKind(value) !== "var" || referenced(ast.typeNode(value)) !== constructor ||
     ast.typeParameters(instance).length !== 0 || ast.typeParameters(constructor).length !== 0) return undefined;
