@@ -182,7 +182,7 @@ export function createRustAnalysisContext(
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage,
       createRustExplicitUnsafeContexts(ast, sourceFiles, node => safetyApplications.operationForExpression(node))),
-    retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage, declarations: nativeNodes,
+    retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,

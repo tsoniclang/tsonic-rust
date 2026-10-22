@@ -39,7 +39,9 @@ export function analyzeRustLocalBindings(input: {
     if (statement !== undefined && (input.ast.is.IsForInStatement(statement) || input.ast.is.IsForOfStatement(statement))) continue;
     requireRustRecord(input.required, "localBinding", node, input.ast.kindName(node), "analyzeRustLocalBindings");
     const owner = input.aliases.owner(node);
-    if (input.records.compileTimeSource.get(node) !== undefined || owner !== undefined && owner !== node) {
+    // An ambient declaration is type-only: it has no native value and the planner skips its statement.
+    if (input.records.compileTimeSource.get(node) !== undefined || owner !== undefined && owner !== node ||
+      input.records.typeOnlyDeclaration.get(node) !== undefined) {
       input.producer.declaration(node, { kind: "erased" });
       continue;
     }
