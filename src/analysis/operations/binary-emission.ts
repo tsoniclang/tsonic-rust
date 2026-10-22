@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, sourceBooleanShortCircuitBranch, sourceEnclosingCallable, sourceSequenceInputChoice } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustBinaryEmissionProducer } from "../program/records/expression-binary.js";
 import type { RustBinaryEmission } from "../../target-model/records/expression-binary.js";
@@ -38,8 +38,16 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     }
     result.push(node);
   };
+  // A nullish choice that selects a spread's sequence input is lowered as that choice, not as an operator.
+  const spreadChoiceControl = (node: Node): boolean => {
+    let current = ast.parent(node);
+    while (current !== undefined && (ast.is.IsParenthesizedExpression(current) || ast.is.IsSatisfiesExpression(current) ||
+      ast.is.IsBinaryExpression(current) && ast.operatorKindName(current) === "KindQuestionQuestionToken")) current = ast.parent(current);
+    const spread = current !== undefined && ast.is.IsSpreadElement(current) ? Node_Expression(ast, current) : undefined;
+    return spread !== undefined && sourceSequenceInputChoice(ast, spread)?.controlNodes.includes(node) === true;
+  };
   for (const node of nodes) {
-    if (!ast.is.IsBinaryExpression(node) || ast.operatorKindName(node) === "KindEqualsToken" ||
+    if (!ast.is.IsBinaryExpression(node) || ast.operatorKindName(node) === "KindEqualsToken" || spreadChoiceControl(node) ||
       program.records.nativeParticipation.get(node) === "erased" || rustNodeIsOutsideNativeCode(ast, program.records,
         expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     const fact = program.records.targetOperation.get(node);
