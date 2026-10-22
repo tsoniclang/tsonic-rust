@@ -10,6 +10,7 @@ import { createRustSharedReferenceArgument } from "../input-shaping.js";
 import type { RustErasedInputArgument } from "../../../../target-model/records/erased-input-arguments.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
+import { rustCallableProtocol } from "../../../../target-model/types/index.js";
 
 export function planRustNativeInputInvocation(
   call: RustNativeCallableCall,
@@ -38,9 +39,12 @@ function planRustErasedInputArgument(argument: RustErasedInputArgument, value: R
     Array.from({ length: argument.parameterCount }, (_unused, index): RustExpr =>
       ({ kind: "field", receiver: { kind: "path", path: argumentsName }, name: String(index) })), undefined, context)
     ?? failRustPlannerInvariant("An erased native input argument requires its native protocol invocation.", node);
+  const parameters = rustCallableProtocol(argument.carrier)?.parameters;
+  const argumentsType = parameters === undefined ? undefined : rustTypeFromCarrierInContext({ kind: "tuple", elements: parameters }, context);
+  if (argumentsType === undefined) failRustPlannerInvariant("An erased native input argument requires its rendered argument tuple.", node);
   context.usedAliases?.add("rt");
   return rustValueBlock([{ name, mutable: false, value }], { kind: "associated-call", owner: { kind: "named", path: "rt::Callable" },
-    method: "new", args: [{ kind: "closure", move: true, params: [{ name: argumentsName, byRefCopy: false }],
+    method: "new", args: [{ kind: "closure", move: true, params: [{ name: argumentsName, byRefCopy: false, type: argumentsType }],
       body: { kind: "method-call", receiver: invocation, method: "map_err", args: [{ kind: "path", path: "core::convert::Into::into" }] } }] });
 }
 
