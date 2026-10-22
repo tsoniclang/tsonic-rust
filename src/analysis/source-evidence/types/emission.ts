@@ -98,6 +98,10 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     // A retained callable renders an outlives bound for each retained carrier in its source and Promise-body items.
     const retained = program.records.nativeGenerics.get(node)?.retention;
     if (retained !== undefined) pending.push(...retained.source, ...retained.body);
+    // A generic invocation propagates through its native error join, which renders every source error carrier.
+    const invocation = program.records.genericCallableInvocation.get(node);
+    if (invocation !== undefined) pending.push(...invocation.invocation.map(source => source.errorType),
+      ...invocation.awaiting.map(source => source.errorType));
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
     const contract = program.records.declarationRequirements.get(node);
