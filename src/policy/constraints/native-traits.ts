@@ -2,7 +2,7 @@ import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, rustMutableJsErr
 
 import { rustJsArrayValueTargetId } from "../../target-model/types/carriers/array-values.js";
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "../../target-model/types/carriers/primitives.js";
-import { rustRawPointerTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustInfallibleTargetId, rustRawPointerTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
@@ -272,7 +272,9 @@ export function rustCarrierSatisfiesTraitRef(
     argument.type.kind === "target-named" && argument.type.id === rustRetainedErrorTargetId &&
     (argument.type.genericArguments?.length ?? 0) === 0) {
     const owner = rustProgramErrorOwner(carrier);
+    // The runtime converts each of these into RetainedError (`From<...> for RetainedError`), Infallible included.
     return rustTargetTypeRefEquals(carrier, rustRuntimeErrorTargetType()) ||
+      carrier.kind === "target-named" && carrier.id === rustInfallibleTargetId ||
       owner?.kind === "physical" && owner.domain === "runtime" ||
       carrier.kind === "target-named" && carrier.id === rustJsErrorTargetId &&
         (carrier.genericArguments?.length ?? 0) === 0 ||
