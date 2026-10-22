@@ -9,29 +9,21 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { instantiateRustSourceUnionPayloads } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
-import { rustCallableConversionPhysical, rustCallableErrorJoin, rustCallablePhysicalCarrier, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
-import { rustProducerErrorReference, type RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
-import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustCallableConversionPhysical, rustCallablePhysicalCarrier } from "../../policy/conversions/callable-physical.js";
+import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { substituteRustCallableConversion } from "../../target-model/conversions/substitution.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
-import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
@@ -196,93 +188,8 @@ export function createRustNativeStorageQueries(input: {
       return false;
     };
     const genericsFor = createRustNativeStorageGenericSelection({ ...input, step, genericInvocationBindingsFor });
-    // Distinct callable producers reaching one storage share one boxed callable of their shared signature (RULINGS
-    // ruling 2), selected once their errors are resolved. A value written into the storage carries the shared error
-    // already, or its own error is uninhabited and the write eliminates it.
-    const errorOf = (physical: TargetTypeRef): TargetTypeRef | undefined => {
-      const error = rustCallablePhysicalSignature(physical)?.error;
-      const reference = rustProducerErrorReference(error);
-      return reference === undefined ? error : input.producerErrorFor(reference);
-    };
-    const shareProducers = (physicals: Iterable<TargetTypeRef>): TargetTypeRef | undefined => {
-      const alternatives: { readonly physical: TargetTypeRef; readonly error: TargetTypeRef }[] = [];
-      for (const physical of physicals) {
-        const error = errorOf(physical);
-        if (error === undefined) return fail("Native callable storage with distinct producers requires their resolved errors.");
-        alternatives.push({ physical, error });
-      }
-      return rustCallableErrorJoin(alternatives)
-        ?? fail("Native callable storage has distinct producers without one shared callable signature and error.");
-    };
-    const joinProducers = (selectedSubject: SourceStorageSubject, bindings: SourceStorageBindings, position: "value" | "input",
-      alternatives: ReadonlyMap<SourceStorageSubject, TargetTypeRef>, absent: ReadonlySet<SourceStorageSubject>): TargetTypeRef | undefined => {
-      const carrier = shareProducers(new Set(alternatives.values()));
-      const shared = carrier === undefined ? undefined : errorOf(carrier);
-      if (carrier === undefined || shared === undefined) return undefined;
-      const incoming = input.storage.incomingFor(selectedSubject);
-      if (incoming.kind === "unresolved") return fail(incoming.reason);
-      for (const written of incoming.subjects) {
-        if (!step(0)) return undefined;
-        if (absent.has(written)) continue;
-        let source = alternatives.get(written);
-        if (source === undefined) {
-          const reached = input.storage.boundValueFrontierFor(written, bindings, boundaries, position);
-          if (reached.kind === "unresolved") return fail(reached.reason);
-          const physicals = new Set<TargetTypeRef>();
-          for (const frontier of reached.frontier) {
-            if (absent.has(frontier.subject)) continue;
-            const physical = alternatives.get(frontier.subject);
-            if (physical === undefined) return fail("A shared callable storage write reaches a producer outside its storage.");
-            physicals.add(physical);
-          }
-          source = physicals.size === 1 ? [...physicals][0] : shareProducers(physicals);
-          if (source === undefined) return undefined;
-        }
-        const error = errorOf(source);
-        if (error === undefined) return fail("A shared callable storage write requires its resolved error.");
-        if (!rustUninhabitedError(error) || rustUninhabitedError(shared)) continue;
-        if (written.kind !== "value" || written.projection.length !== 0)
-          return fail("A shared callable storage write requires its exact written value.");
-        const write: RustCallableJoinWrite = snapshotClosedMetadata({ source, carrier });
-        const previous = joinWrites.get(written.node);
-        if (previous !== undefined && closedMetadataKey(previous) !== closedMetadataKey(write))
-          return fail("A callable value written into shared storage has one exact shared callable.");
-        joinWrites.set(written.node, write);
-      }
-      return carrier;
-    };
-    const containsCallable = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
-      if (!step(depth)) return undefined;
-      if (visited.has(type)) return false;
-      visited.add(type);
-      // A type-erased runtime callable has one physical layout whatever produced it (values are erased into it when
-      // stored), so an aggregate of erased callables (`JsArray<rt::Callable<..>>`) needs no producer selection.
-      if (type.kind === "target-named" && type.id === rustCallableTargetId) return false;
-      if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
-      const variants = input.definitions.sourceUnionVariants(type);
-      const shape = rustStructuralObjectCarrierValue(type);
-      const children: TargetTypeRef[] = [];
-      if (shape !== undefined) {
-        for (const [index, sourceField] of shape.fields.entries()) {
-          const field = input.structuralShapes.field(type, index);
-          if (field === undefined) {
-            fail("Native aggregate storage requires its exact structural field layout owner.");
-            return undefined;
-          }
-          if (sourceField.method === true) {
-            if (field.method !== true || field.methodStorageCarrier === undefined) {
-              fail("Native aggregate method storage requires its canonical callable field layout owner.");
-              return undefined;
-            }
-          } else if (field.storage === "stored" && field.nativeMethod !== true) children.push(sourceField.type);
-        }
-      } else if (type.kind !== "function-pointer") children.push(...rustTargetTypeChildren(type));
-      for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
-        const selected = containsCallable(child, depth + 1, visited);
-        if (selected !== false) return selected;
-      }
-      return false;
-    };
+    const { joinProducers, containsCallable } =
+      createRustNativeStorageJoins({ input, boundaries, joinWrites, fail, step });
     const project = (subject: SourceStorageSubject, component: SourceStorageSubject["projection"][number]): SourceStorageSubject | undefined => {
       const selected = input.storage.subject(subject.node, subject.kind, [...subject.projection, component]);
       return selected.kind === "resolved" ? selected.subject : fail(selected.reason);
@@ -388,78 +295,13 @@ export function createRustNativeStorageQueries(input: {
       const physical = substituteRustTargetGenerics(produced, types, generic.bindings.lifetimes, generic.bindings.consts);
       return rustPhysicalPayloadFor(logical, physical, current, input.definitions);
     };
-    const absentOrigin = (subject: SourceStorageSubject): boolean => {
-      if (subject.projection.length !== 0) return false;
-      if (isRustAbsenceCarrier(input.records.runtimeCarrier.get(subject.node)?.carrier)) return true;
-      // A sync callable's return produces no Future when every value it returns is absent, including an implicit
-      // `undefined` completion and a body that never returns.
-      if (subject.kind !== "return" || input.records.asyncFunction.get(subject.node) !== undefined) return false;
-      return directReturnedValues(input.ast, subject.node)?.every(value =>
-        isRustAbsenceCarrier(input.records.runtimeCarrier.get(value)?.carrier)) === true;
-    };
-    // The one stored payload of a union carrier that is a type-erased runtime callable with the destination's signature.
-    const erasedUnionCallablePayload = (union: TargetTypeRef | undefined, current: TargetTypeRef): TargetTypeRef | undefined => {
-      const value = rustSourceUnionCarrierValue(union);
-      const payloads = value?.payloads.kind === "physical" ? value.payloads.types
-        : union === undefined ? undefined : rustUnionAlternatives(union, input.definitions)?.map(variant => variant.carrier);
-      const matching = (payloads ?? []).filter(payload => payload.kind === "target-named" && payload.id === rustCallableTargetId &&
-        rustCallableInvocationSignaturesMatch(current, payload));
-      return matching.length === 1 ? matching[0] : undefined;
-    };
-    // A class field reached through an unbound receiver holds the field's own storage; a frame-callable field stores
-    // its physical frame callable directly, so that storage is the producer's physical implementation.
-    const frameFieldCarrier = (origin: SourceStorageSubject): TargetTypeRef | undefined => {
-      const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
-      const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
-        : input.records.runtimeCarrier.get(component.declaration)?.carrier;
-      return carrier !== undefined && rustFrameCallableValue(carrier) !== undefined ? carrier : undefined;
-    };
-    // A closure's callable parameter is not a native input (a closure cannot be generic); it holds its type-erased
-    // runtime callable carrier.
-    const erasedClosureParameter = (origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined => {
-      const owner = input.ast.parent(origin.node);
-      if (owner === undefined || !input.ast.is.IsArrowFunction(owner) && !input.ast.is.IsFunctionExpression(owner)) return undefined;
-      const carrier = input.records.sourceParameterAbi.get(origin.node)?.valueCarrier;
-      const selected = rustOptionElementCarrier(carrier) ?? carrier;
-      const protocol = rustCallableProtocol(selected);
-      if (selected?.kind !== "target-named" || selected.id !== rustCallableTargetId || protocol?.lifetime === undefined ||
-        protocol.error === undefined || !rustCallableInvocationSignaturesMatch(current, selected)) return undefined;
-      // Its physical storage is the runtime callable over its argument tuple and fallible result.
-      return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(protocol.lifetime),
-        ...rustTypeGenericArguments([{ kind: "tuple", elements: protocol.parameters },
-          rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([protocol.result, protocol.error]))])]);
-    };
-    const erasedFieldCallable = (origin: SourceStorageSubject, current: TargetTypeRef): TargetTypeRef | undefined => {
-      const component = origin.projection.length === 1 ? origin.projection[0] : undefined;
-      const carrier = origin.kind !== "receiver" || component?.kind !== "member" ? undefined
-        : input.records.runtimeCarrier.get(component.declaration)?.carrier;
-      return carrier?.kind === "target-named" && carrier.id === rustCallableTargetId &&
-        rustCallableInvocationSignaturesMatch(current, carrier) ? carrier : undefined;
-    };
-    // Binds the free type parameters of a producer signature from the destination signature it is stored at.
-    const instanceTypeBindings = (producer: TargetTypeRef, destination: TargetTypeRef): ReadonlyMap<string, TargetTypeRef> | undefined => {
-      const source = rustCallableProtocol(producer);
-      const target = rustCallableProtocol(destination);
-      if (source === undefined || target === undefined || source.parameters.length !== target.parameters.length) return undefined;
-      const pattern: TargetTypeRef = { kind: "tuple", elements: [...source.parameters, source.result] };
-      const actual: TargetTypeRef = { kind: "tuple", elements: [...target.parameters, target.result] };
-      const typeIdentities = new Set(rustTargetGenericReferences(pattern).typeIdentities);
-      if (typeIdentities.size === 0) return undefined;
-      const inferred = inferRustTargetGenericBindings(pattern, actual,
-        { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
-      return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
-    };
-    const frameInstanceBindings = (producer: TargetTypeRef, destination: TargetTypeRef): ReadonlyMap<string, TargetTypeRef> | undefined => {
-      const source = rustFrameCallableValue(producer);
-      const target = rustFrameCallableValue(destination);
-      if (source?.owner.kind !== "class" || target?.owner.kind !== "class" ||
-        closedMetadataKey(source.owner.origin) !== closedMetadataKey(target.owner.origin)) return undefined;
-      const typeIdentities = new Set(rustTargetGenericReferences(producer).typeIdentities);
-      if (typeIdentities.size === 0) return undefined;
-      const inferred = inferRustTargetGenericBindings(producer, destination,
-        { typeIdentities, lifetimeIdentities: new Set(), constIdentities: new Set() });
-      return inferred === undefined || inferred.types.size !== typeIdentities.size ? undefined : inferred.types;
-    };
+    const absentOrigin = (subject: SourceStorageSubject) => rustNativeStorageAbsentOrigin(input, subject);
+    const erasedUnionCallablePayload = (union: TargetTypeRef | undefined, current: TargetTypeRef) => rustNativeStorageErasedUnionCallablePayload(input, union, current);
+    const frameFieldCarrier = (origin: SourceStorageSubject) => rustNativeStorageFrameFieldCarrier(input, origin);
+    const erasedClosureParameter = (origin: SourceStorageSubject, current: TargetTypeRef) => rustNativeStorageErasedClosureParameter(input, origin, current);
+    const erasedFieldCallable = (origin: SourceStorageSubject, current: TargetTypeRef) => rustNativeStorageErasedFieldCallable(input, origin, current);
+    const instanceTypeBindings = (producer: TargetTypeRef, destination: TargetTypeRef) => rustNativeStorageInstanceTypeBindings(producer, destination);
+    const frameInstanceBindings = (producer: TargetTypeRef, destination: TargetTypeRef) => rustNativeStorageFrameInstanceBindings(producer, destination);
     const visit = (current: TargetTypeRef, selectedSubject: SourceStorageSubject,
       bindings: SourceStorageBindings, depth: number, permitsAbsence: boolean,
       position: "value" | "input" = "value"): TargetTypeRef | undefined => {
@@ -817,4 +659,6 @@ export function createRustNativeStorageQueries(input: {
 }
 
 import type { RustNativeStorageSelection } from "../../target-model/records/native-storage.js";
-import { callableValueCarrier, directReturnedValues } from "./native-storage-values.js";
+import { callableValueCarrier } from "./native-storage-values.js";
+import { createRustNativeStorageJoins } from "./native-storage-joins.js";
+import { rustNativeStorageAbsentOrigin, rustNativeStorageErasedUnionCallablePayload, rustNativeStorageFrameFieldCarrier, rustNativeStorageErasedClosureParameter, rustNativeStorageErasedFieldCallable, rustNativeStorageInstanceTypeBindings, rustNativeStorageFrameInstanceBindings } from "./native-storage-carriers.js";
