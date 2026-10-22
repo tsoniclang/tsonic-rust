@@ -8,7 +8,7 @@ import { rustSourceUnionTargetType } from "../../../dist/target-model/types/carr
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustUnitTargetType, rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
-import { instantiateRustSourceUnionPayloads } from "../../../dist/target-model/types/source-union-definitions.js";
+import { instantiateRustSourceUnionPayloads, rustSourceUnionPayloadArguments } from "../../../dist/target-model/types/source-union-definitions.js";
 import { planRustSourceUnionPayloadTemplate } from "../../../dist/backend/planner/types/source-union-payloads.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier-syntax.js";
 import { rustTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
@@ -30,7 +30,8 @@ function nativeFixture() {
     { name: "Immediate", carrier: integer }, { name: "Pending", carrier: rustFutureTargetType(unit) },
   ] }, true), true);
   const typeDefinitions = registry.seal();
-  const rendering = { typeDefinitions, pathFor: value => `crate::definitions::${value.typeName}`, additionalArgumentsFor: () => [] };
+  const rendering = { payloadArgumentsFor: value => rustSourceUnionPayloadArguments(value, typeDefinitions),
+    pathFor: value => `crate::definitions::${value.typeName}`, additionalArgumentsFor: () => [] };
   const plan = planRustSourceUnionPayloadTemplate(typeDefinitions.sourceUnionPayloadTemplate(carrier), emptyRustGenerics,
     type => rustTypeFromCarrier(type, rendering));
   assert.equal(plan !== undefined, true);

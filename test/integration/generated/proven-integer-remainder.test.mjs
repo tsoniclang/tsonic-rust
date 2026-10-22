@@ -15,7 +15,7 @@ test("proven integer remainder preserves all number results and rejects uncertai
     assert.ok(declaration, entry.name);
     let selected = 0;
     const visit = node => {
-      if (analysis.program.numericRepresentations.usesInt32Remainder(node)) selected++;
+      if (analysis.program.numericRepresentations.int32Remainder.get(node)) selected++;
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     visit(declaration);
