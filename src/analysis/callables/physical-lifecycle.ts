@@ -335,6 +335,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         futureEnvironmentFor: queries.futureEnvironmentFor,
         invocationWitnessFor: queries.invocationWitnessFor,
         invocationArgumentWitnessFor: queries.invocationArgumentWitnessFor,
+        joinWriteFor: queries.joinWriteFor,
       });
       return resolvedTargetStage(Object.freeze({ nativeStorage, nativeProducers }));
     },

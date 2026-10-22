@@ -136,7 +136,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const nodes = selected.concatParts ?? failRustPlannerInvariant("An admitted concatenation requires its ordered source operands.", node);
     const parts: RustStringConcatPart[] = [];
     for (const operand of nodes) {
-      const value = planExpression(operand, context);
+      // The selected concatenation borrows every part as a str, so each operand is read as a shared place.
+      const value = planExpression(operand, context, "value", "shared-place");
       if (value === undefined) return undefined;
       parts.push(planRustStringConcatOperand(operand, value, context));
     }

@@ -7,6 +7,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression, planRawExpression } from "./entry.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
+import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 
 export function effectiveMemberResultCarrier(node: Node, innerResultCarrier: TargetTypeRef,
   context: RustPlanContext): TargetTypeRef {
@@ -38,8 +39,14 @@ export function planOptionalChainExpression(node: Node, context: RustPlanContext
   };
   const pattern = { kind: "tuple-variant" as const, path: "Some", elements: [{ kind: "binding" as const, name: receiverName }] };
   if (selected.unit) return { kind: "if-let", expression: borrowedGuard, pattern, whenTrue: body };
-  if (selected.mapClosure) return planRustCheckedSourceOptional({ kind: "method-call", receiver: borrowedGuard, method: "map",
-    args: [{ kind: "closure", params: [{ name: receiverName, byRefCopy: false }], body }] }, fact.innerResultCarrier, context);
+  if (selected.closure !== undefined) {
+    const closure: RustExpr = { kind: "closure", params: [{ name: receiverName, byRefCopy: false }], body };
+    // An and_then chain over optional storage reads its stored value through the checked optional form.
+    const storageValue = selected.closure === "and_then" && rustOptionalStorageValue(fact.innerResultCarrier) !== undefined;
+    const method = selected.closure === "map" || storageValue ? "map" : "and_then";
+    const mapped: RustExpr = { kind: "method-call", receiver: borrowedGuard, method, args: [closure] };
+    return method === "map" ? planRustCheckedSourceOptional(mapped, fact.innerResultCarrier, context) : mapped;
+  }
   const value: RustExpr = { kind: "match", expression: borrowedGuard, arms: [
     { pattern, expression: fact.lowering === "map" ? { kind: "call", path: "Some", args: [body] } : body },
     { pattern: { kind: "path", path: "None" }, expression: fact.lowering === "map"

@@ -103,6 +103,9 @@ export function resolveIdentifierCarrier(
         const closedParameterAbis = parameterAbis as import("../../../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
         const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
         if (callableCarrier === undefined) return undefined;
+        // The function value's carrier depends only on its declaration; storage origins resolve a reference to the
+        // declaration, so the declaration carries it too (as variable initializers do above).
+        if (setCarrierFact(walk, declaration, callableCarrier) === undefined) return undefined;
         requireRustRecord(walk.context.requiredRecords, "sourceCallableValue", identifier, "runtime-function", "resolveIdentifierCarrier");
         walk.context.records.sourceCallableValues.function(identifier, declaration,
           ast.getFileName(ast.getSourceFile(declaration)), targetName, callableCarrier,

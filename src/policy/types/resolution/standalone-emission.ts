@@ -52,7 +52,15 @@ export function selectRustStandaloneTypeIdentity(carrier: TargetTypeRef,
       const owner = carrier.errorOwner;
       return context.programError && owner?.kind === "physical" ? closedMetadataKey(["program-error", owner]) : undefined;
     }
-    if (carrier.id === rustCallableInputTargetId || carrier.id === rustCallableTargetId) return undefined;
+    if (carrier.id === rustCallableInputTargetId) return undefined;
+    if (carrier.id === rustCallableTargetId) {
+      // A standalone item (a thread-local dispatch root) can store a callable only when every lifetime it names is
+      // 'static; its argument and error types must be standalone as well.
+      const arguments_ = carrier.genericArguments ?? [];
+      if (arguments_.some(argument => argument.kind === "lifetime" && argument.lifetime.kind !== "static")) return undefined;
+      const values = argumentsFor(arguments_);
+      return values === undefined ? undefined : closedMetadataKey(["callable", values]);
+    }
     if (carrier.id === rustStringTargetId) return closedMetadataKey(["string"]);
     if (carrier.id === rustStrTargetId) return closedMetadataKey(["str"]);
     const path = rustBuiltInCarrierDefinitions[carrier.id]?.renderPath;

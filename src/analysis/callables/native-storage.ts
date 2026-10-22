@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
@@ -13,7 +13,10 @@ import { rustCallableTargetId } from "../../target-model/types/carriers/source-t
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
-import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
+import { rustCallableConversionPhysical, rustCallableErrorJoin, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
+import { rustProducerErrorReference, type RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
+import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { substituteRustCallableConversion } from "../../target-model/conversions/substitution.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
@@ -55,6 +58,7 @@ import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } fr
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
 
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
@@ -72,6 +76,7 @@ export interface RustNativeStoragePlan {
   invocationInputFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): RustNativeStorageSelection;
   invocationWitnessFor(input: RustNativeCallableInput, invocation: Node): TargetTypeRef | undefined;
   invocationArgumentWitnessFor(invocation: Node, argument: Node): TargetTypeRef | undefined;
+  joinWriteFor(node: Node): RustCallableJoinWrite | undefined;
   invocationOriginsFor(input: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection;
   implementationOriginsFor(input: RustNativeCallableInput): SourceStorageProducersSelection;
 }
@@ -96,19 +101,36 @@ export function createRustNativeStorageQueries(input: {
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
   readonly carrierHost: RustValueDomainCarrierHost;
+  // Resolved after the error regions; storage shared by distinct producers is selected only once it is available.
+  readonly producerErrorFor: (reference: RustProducerErrorReference) => TargetTypeRef | undefined;
 }): RustNativeStorageQueries {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
   const ownedInputs = new Set(input.native.inputs);
   const absenceWitnesses = new Map<Node, Map<RustNativeCallableInput, TargetTypeRef>>();
   const argumentWitnesses = new Map<Node, Map<Node, TargetTypeRef>>();
+  const joinWrites = new Map<Node, RustCallableJoinWrite>();
   const conversionBoundaries: SourceStorageSubject[] = [];
+  // Source storage transports an identifier operand as its declaration, so a callable adapter recorded on an identifier
+  // reference is never reached as a frontier boundary. Index those adapted references by the declaration they name.
+  const adaptedReferences = new Map<Node, { readonly node: Node; readonly subject: SourceStorageSubject }[]>();
   let boundaryFailure: string | undefined;
   for (const node of input.nativeNodes) {
     if (input.records.contextualValueConversion.get(node)?.conversion.kind !== "callable-adapter") continue;
     const selected = input.storage.subject(node, "value");
-    if (selected.kind === "unresolved") boundaryFailure ??= selected.reason;
-    else conversionBoundaries.push(selected.subject);
+    if (selected.kind === "unresolved") { boundaryFailure ??= selected.reason; continue; }
+    const declaration = input.ast.is.IsIdentifier(node)
+      ? input.storage.source.navigation.sourceReferenceFor(node)?.declaration : undefined;
+    // A reference to a native callable input is transported as the input itself and is never on a frontier; any other
+    // adapted reference (a local binding read) is a frontier stop of the storage it is written into.
+    if (declaration === undefined || !input.native.inputs.some(candidate => candidate.subject.node === declaration)) {
+      conversionBoundaries.push(selected.subject);
+      continue;
+    }
+    // A query of the reference itself reads the declaration's unconverted value, so it is not a frontier stop.
+    const references = adaptedReferences.get(declaration) ?? [];
+    references.push({ node, subject: selected.subject });
+    adaptedReferences.set(declaration, references);
   }
   const boundaries = Object.freeze(conversionBoundaries);
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
@@ -118,6 +140,9 @@ export function createRustNativeStorageQueries(input: {
   const bindingsFor = (owner: Node | undefined): SourceStorageBindings | undefined => owner === undefined
     ? input.storage.emptyBindings : nodes.has(owner) ? input.native.bindingsFor(owner) : undefined;
   const ownerFor = (node: Node): Node | undefined => sourceEnclosingCallable(node, input.ast);
+  // A callable expression's value is created in the callable that contains it, not in its own activation.
+  const valueOwnerFor = (node: Node): Node | undefined => isSourceCallableBodyBoundary(input.ast, node)
+    ? sourceEnclosingCallable(input.ast.parent(node), input.ast) : ownerFor(node);
   const futures = createRustNativeFutureInputPlan({ ...input, bindingsFor });
   const logicalCarriers = new Map<SourceStorageSubject, Map<SourceStorageBindings, TargetTypeRef>>();
   const logicalCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined => {
@@ -188,6 +213,61 @@ export function createRustNativeStorageQueries(input: {
       return false;
     };
     const genericsFor = createRustNativeStorageGenericSelection({ ...input, step, genericInvocationBindingsFor });
+    // Distinct callable producers reaching one storage share one boxed callable of their shared signature (RULINGS
+    // ruling 2), selected once their errors are resolved. A value written into the storage carries the shared error
+    // already, or its own error is uninhabited and the write eliminates it.
+    const errorOf = (physical: TargetTypeRef): TargetTypeRef | undefined => {
+      const error = rustCallablePhysicalSignature(physical)?.error;
+      const reference = rustProducerErrorReference(error);
+      return reference === undefined ? error : input.producerErrorFor(reference);
+    };
+    const shareProducers = (physicals: Iterable<TargetTypeRef>): TargetTypeRef | undefined => {
+      const alternatives: { readonly physical: TargetTypeRef; readonly error: TargetTypeRef }[] = [];
+      for (const physical of physicals) {
+        const error = errorOf(physical);
+        if (error === undefined) return fail("Native callable storage with distinct producers requires their resolved errors.");
+        alternatives.push({ physical, error });
+      }
+      return rustCallableErrorJoin(alternatives)
+        ?? fail("Native callable storage has distinct producers without one shared callable signature and error.");
+    };
+    const joinProducers = (selectedSubject: SourceStorageSubject, bindings: SourceStorageBindings, position: "value" | "input",
+      alternatives: ReadonlyMap<SourceStorageSubject, TargetTypeRef>, absent: ReadonlySet<SourceStorageSubject>): TargetTypeRef | undefined => {
+      const carrier = shareProducers(new Set(alternatives.values()));
+      const shared = carrier === undefined ? undefined : errorOf(carrier);
+      if (carrier === undefined || shared === undefined) return undefined;
+      const incoming = input.storage.incomingFor(selectedSubject);
+      if (incoming.kind === "unresolved") return fail(incoming.reason);
+      for (const written of incoming.subjects) {
+        if (!step(0)) return undefined;
+        if (absent.has(written)) continue;
+        let source = alternatives.get(written);
+        if (source === undefined) {
+          const reached = input.storage.boundValueFrontierFor(written, bindings, boundaries, position);
+          if (reached.kind === "unresolved") return fail(reached.reason);
+          const physicals = new Set<TargetTypeRef>();
+          for (const frontier of reached.frontier) {
+            if (absent.has(frontier.subject)) continue;
+            const physical = alternatives.get(frontier.subject);
+            if (physical === undefined) return fail("A shared callable storage write reaches a producer outside its storage.");
+            physicals.add(physical);
+          }
+          source = physicals.size === 1 ? [...physicals][0] : shareProducers(physicals);
+          if (source === undefined) return undefined;
+        }
+        const error = errorOf(source);
+        if (error === undefined) return fail("A shared callable storage write requires its resolved error.");
+        if (!rustUninhabitedError(error) || rustUninhabitedError(shared)) continue;
+        if (written.kind !== "value" || written.projection.length !== 0)
+          return fail("A shared callable storage write requires its exact written value.");
+        const write: RustCallableJoinWrite = snapshotClosedMetadata({ source, carrier });
+        const previous = joinWrites.get(written.node);
+        if (previous !== undefined && closedMetadataKey(previous) !== closedMetadataKey(write))
+          return fail("A callable value written into shared storage has one exact shared callable.");
+        joinWrites.set(written.node, write);
+      }
+      return carrier;
+    };
     const containsCallable = (type: TargetTypeRef, depth: number, visited = new Set<TargetTypeRef>()): boolean | undefined => {
       if (!step(depth)) return undefined;
       if (visited.has(type)) return false;
@@ -227,6 +307,43 @@ export function createRustNativeStorageQueries(input: {
         return fail("Native callable storage conflicts with its exact input callable contract.");
       selectedInputs.add(candidate);
       return candidate.implementation;
+    };
+    const inputSignatureMatches = (candidate: RustNativeCallableInput, current: TargetTypeRef): boolean => {
+      const candidateCarrier = callableValueCarrier(candidate.carrier);
+      return candidateCarrier !== undefined && rustCallableInvocationSignaturesMatch(current, candidateCarrier);
+    };
+    // The physical carrier of a value that reaches `current` through the finalized callable adapter recorded at `origin`.
+    // `optional` reports a target that does not match `current` as absent instead of refusing the whole selection.
+    const adaptedPhysical = (origin: SourceStorageSubject, bindings: SourceStorageBindings, current: TargetTypeRef,
+      depth: number, optional = false, input_?: RustNativeCallableInput): TargetTypeRef | undefined => {
+      const fact = input.records.contextualValueConversion.get(origin.node);
+      if (origin.projection.length !== 0 || fact?.conversion.kind !== "callable-adapter" ||
+        !rustTargetTypeRefEquals(fact.sourceCarrier, rustValueCarrierBeforeContextualConversion(input.records, origin.node)))
+        return fail("Native callable conversion storage requires its exact finalized source and destination contract.");
+      const generics = genericsFor(valueOwnerFor(origin.node), bindings, depth + 1);
+      if (generics.kind === "unresolved") return fail(generics.reason);
+      const { types, lifetimes, consts } = generics.bindings;
+      const conversion = substituteRustCallableConversion(fact.conversion, types, lifetimes, consts);
+      const target = callableValueCarrier(conversion.target);
+      if (target === undefined || !rustCallableInvocationSignaturesMatch(current, target))
+        return optional ? undefined : fail("Native callable conversion storage conflicts with its selected activation signature.");
+      // An adapted reference to a native input reads that input directly; its storage frontier is the input itself,
+      // bound in the activation that creates the adapter.
+      const inputImplementation = input_ === undefined ? undefined : formalCarrier(input_, conversion.source);
+      const operand = input_ !== undefined
+        ? inputImplementation === undefined ? undefined : substituteRustTargetGenerics(inputImplementation, types, lifetimes, consts)
+        : visit(conversion.source, origin, bindings, depth + 1, false, "input");
+      const physicalInputs = operand === undefined ? [] : [...selectedInputs].filter(candidate =>
+        rustTargetTypeRefEquals(candidate.implementation, operand));
+      const sourceCarrier = physicalInputs.length === 0 ? conversion.source : physicalInputs.length === 1 &&
+        rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
+        ? physicalInputs[0]!.carrier : undefined;
+      const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
+        { kind: "selected", carrier: operand, inputs: [...selectedInputs] });
+      const file = input.ast.getSourceFile(origin.node);
+      const physical = source === undefined || file === undefined ? undefined
+        : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions)?.carrier;
+      return physical ?? fail("Native callable conversion storage has no exact physical adaptation contract.");
     };
     const producerFuture = (origin: SourceStorageSubject, bindings: SourceStorageBindings,
       current: TargetTypeRef, depth: number): TargetTypeRef | undefined => {
@@ -376,49 +493,51 @@ export function createRustNativeStorageQueries(input: {
         const selected = input.storage.boundValueFrontierFor(selectedSubject, bindings, boundaries, position);
         if (selected.kind === "unresolved") return fail(selected.reason);
         let physical: TargetTypeRef | undefined;
+        let distinct = false;
+        let joinable = true;
+        const alternatives = new Map<SourceStorageSubject, TargetTypeRef>();
+        const absent = new Set<SourceStorageSubject>();
         for (const frontier of selected.frontier) {
           if (!step(depth)) return undefined;
           const origin = frontier.subject;
           let candidatePhysical: TargetTypeRef | undefined;
           if (frontier.kind === "boundary") {
-            const fact = input.records.contextualValueConversion.get(origin.node);
-            if (origin.projection.length !== 0 || fact?.conversion.kind !== "callable-adapter" ||
-              !rustTargetTypeRefEquals(fact.sourceCarrier, rustValueCarrierBeforeContextualConversion(input.records, origin.node)))
-              return fail("Native callable conversion storage requires its exact finalized source and destination contract.");
-            const generics = genericsFor(ownerFor(origin.node), frontier.bindings, depth + 1);
-            if (generics.kind === "unresolved") return fail(generics.reason);
-            const { types, lifetimes, consts } = generics.bindings;
-            const conversion = substituteRustCallableConversion(fact.conversion, types, lifetimes, consts);
-            const target = callableValueCarrier(conversion.target);
-            if (target === undefined || !rustCallableInvocationSignaturesMatch(current, target))
-              return fail("Native callable conversion storage conflicts with its selected activation signature.");
-            const operand = visit(conversion.source, origin, frontier.bindings, depth + 1, false, "input");
-            const physicalInputs = operand === undefined ? [] : [...selectedInputs].filter(candidate =>
-              rustTargetTypeRefEquals(candidate.implementation, operand));
-            const sourceCarrier = physicalInputs.length === 0 ? conversion.source : physicalInputs.length === 1 &&
-              rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
-              ? physicalInputs[0]!.carrier : undefined;
-            const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
-              { kind: "selected", carrier: operand, inputs: [...selectedInputs] });
-            const file = input.ast.getSourceFile(origin.node);
-            candidatePhysical = source === undefined || file === undefined ? undefined
-              : rustCallableConversionPhysical(conversion, source.signature, input.ast.getFileName(file), input.definitions)?.carrier;
-            if (candidatePhysical === undefined)
-              return fail("Native callable conversion storage has no exact physical adaptation contract.");
+            joinable = false;
+            candidatePhysical = adaptedPhysical(origin, frontier.bindings, current, depth);
+            if (candidatePhysical === undefined) return undefined;
           } else {
             const candidate = inputs.get(origin);
-            if (candidate !== undefined) candidatePhysical = formalCarrier(candidate, current);
+            if (candidate !== undefined) joinable = false;
+            const adapted = candidate === undefined ? undefined : adaptedReferences.get(origin.node);
+            if (candidate !== undefined && adapted !== undefined && !inputSignatureMatches(candidate, current)) {
+              // The input reaches this formal only through an adapted reference whose target is the formal's signature.
+              for (const reference of adapted) {
+                const fact = input.records.contextualValueConversion.get(reference.node);
+                const target = fact?.conversion.kind === "callable-adapter" ? callableValueCarrier(fact.conversion.target) : undefined;
+                if (target === undefined || ownerFor(reference.node) !== ownerFor(origin.node)) continue;
+                const selectedPhysical = adaptedPhysical(reference.subject, frontier.bindings, current, depth, true, candidate);
+                if (selectedPhysical === undefined) continue;
+                if (candidatePhysical !== undefined && !rustTargetTypeRefEquals(candidatePhysical, selectedPhysical))
+                  return fail("Native callable storage has distinct adapted input alternatives requiring a sealed join.");
+                candidatePhysical = selectedPhysical;
+              }
+              if (candidatePhysical === undefined) return fail("Native callable storage conflicts with its exact input callable contract.");
+            } else if (candidate !== undefined) candidatePhysical = formalCarrier(candidate, current);
             else {
               const originCarrier = origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
                 : frameFieldCarrier(origin);
-              if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
+              if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) {
+                absent.add(origin);
+                continue;
+              }
               // A callable narrowed out of a union-typed value is the union's stored payload for that member, which
               // is already a type-erased runtime callable; it has no separate producer implementation.
               // Likewise a class field declared as a type-erased runtime callable stores that erased callable.
               const unionPayload = origin.projection.length === 0 ? erasedUnionCallablePayload(originCarrier, current)
                 : erasedFieldCallable(origin, current);
               if (unionPayload !== undefined) {
+                joinable = false;
                 candidatePhysical = unionPayload;
                 if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
                   return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
@@ -446,11 +565,14 @@ export function createRustNativeStorageQueries(input: {
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");
           }
-          if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
-            return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
-          physical = candidatePhysical;
+          alternatives.set(origin, candidatePhysical);
+          if (physical === undefined || rustTargetTypeRefEquals(physical, candidatePhysical)) physical = candidatePhysical;
+          else distinct = true;
         }
-        return physical ?? fail("Native callable storage has no selected physical input implementation.");
+        if (!distinct) return physical ?? fail("Native callable storage has no selected physical input implementation.");
+        // Inputs and conversion boundaries keep one physical implementation: no signature-based choice among them.
+        return joinable ? joinProducers(selectedSubject, bindings, position, alternatives, absent)
+          : fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
       }
       if (rustGenericCallableValue(current) !== undefined) {
         const origins = input.storage.boundOriginsFor(selectedSubject, bindings);
@@ -631,7 +753,7 @@ export function createRustNativeStorageQueries(input: {
       const carrier = rustEffectiveValueCarrier(input.records, node);
       if (carrier === undefined) return unresolved("Native callable value has no finalized logical carrier.");
       const subject = input.storage.subjectFor(node);
-      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(ownerFor(node)));
+      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)));
     },
     operandFor(node: Node): RustNativeStorageSelection {
       if (!nodes.has(node)) return unresolved("Native callable operand requires an owned source node.");
@@ -639,7 +761,7 @@ export function createRustNativeStorageQueries(input: {
       if (carrier === undefined) return unresolved("Native callable operand has no finalized logical carrier.");
       const subject = input.storage.subjectFor(node);
       return subject.kind === "unresolved" ? subject
-        : select(subject.subject, carrier, bindingsFor(ownerFor(node)), "input");
+        : select(subject.subject, carrier, bindingsFor(valueOwnerFor(node)), "input");
     },
     subjectFor(subject: SourceStorageSubject, carrier: TargetTypeRef, owner?: Node): RustNativeStorageSelection {
       const checked = input.storage.typeFor(subject);
@@ -675,6 +797,7 @@ export function createRustNativeStorageQueries(input: {
     },
     invocationWitnessFor: (selected: RustNativeCallableInput, invocation: Node) => absenceWitnesses.get(invocation)?.get(selected),
     invocationArgumentWitnessFor: (invocation: Node, argument: Node) => argumentWitnesses.get(invocation)?.get(argument),
+    joinWriteFor: (node: Node) => joinWrites.get(node),
     invocationOriginsFor(selected: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection {
       if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
       const bindings = invocationInputBindingsFor(selected, invocation, owner);

@@ -13,6 +13,9 @@ import { rustArgumentPassingMode } from "../../policy/ownership/argument-passing
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableInvocationSignaturesMatch } from "../../policy/conversions/callable-input.js";
+import { reconcileRequiredCarrier } from "../conversions/contextual-values.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -76,6 +79,22 @@ export function prepareSelectedSourceCallArguments(
         walk,
         "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING",
         `Selected source argument ${index} has no exact carrier matching its effective parameter bindings.`,
+        argument,
+        ["target.capability=rust.source-call.argument-carrier"],
+      );
+      return undefined;
+    }
+    // A callable argument (for example a Promise resolver) whose invocation signature is wider than the instantiated
+    // callable parameter reaches it through the finalized callable adapter, decided here like any contextual conversion.
+    if (expected !== undefined && rustCallableProtocol(expected) !== undefined &&
+      walk.context.records.contextualValueConversion.get(argument) === undefined &&
+      rustCallableProtocol(resolvedArgumentCarrier) !== undefined &&
+      !rustCallableInvocationSignaturesMatch(expected, resolvedArgumentCarrier) &&
+      !reconcileRequiredCarrier(walk, argument, resolvedArgumentCarrier, expected)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING",
+        `Selected source argument ${index} has no callable adaptation to its effective parameter contract.`,
         argument,
         ["target.capability=rust.source-call.argument-carrier"],
       );

@@ -6,8 +6,11 @@ import type { RustRecordFamily } from "./program.js";
 export interface RustOptionalChainEmission {
   readonly fact: RustOptionalChainFact;
   readonly unit: boolean;
-  /** A mapped chain whose present branch is evaluated by Option::map: infallible and free of await and yield. */
-  readonly mapClosure: boolean;
+  /**
+   * The closure form of a chain whose present branch is free of error effects, await and yield: Option::map for a
+   * mapped result, Option::and_then when the present branch already yields the Option. Undefined selects the match form.
+   */
+  readonly closure: "map" | "and_then" | undefined;
   readonly structuralGuard: {
     readonly receiverNode: Node;
     readonly receiverCarrier: TargetTypeRef;

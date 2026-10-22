@@ -78,6 +78,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly providerForm: import("./provider-forms.js").RustProviderFormRecords["providerForm"];
   readonly callableOperand: import("./callable-conversions.js").RustCallableConversionRecords["callableOperand"];
   readonly callableContract: import("./callable-conversions.js").RustCallableConversionRecords["callableContract"];
+  readonly callableJoinWrite: import("./callable-conversions.js").RustCallableConversionRecords["callableJoinWrite"];
   readonly conversionContract: import("./conversion-emission.js").RustConversionEmissionRecords["conversionContract"];
   readonly programErrorClosedValue: import("./error-transport.js").RustErrorTransportEmissionRecords["programErrorClosedValue"];
   readonly sourcePackageFacades: import("./source-packages.js").RustSourcePackageEmissionRecords["sourcePackageFacades"];

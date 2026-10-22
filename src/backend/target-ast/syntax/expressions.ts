@@ -36,5 +36,22 @@ export function rustStringConcat(parts: readonly RustStringConcatPart[]): RustEx
     return value.kind === "literal" ? { kind: "string-literal", value: value.value } : value.value;
   }
   return { kind: "string-concat", parts: normalized.map(part => part.kind === "literal" ? { kind: "str-literal", value: part.value }
-    : { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: part.borrowed ?? part.value }] }) };
+    : rustBorrowedStringView(part.borrowed ?? part.value)) };
+}
+
+/** A concatenation only borrows its parts, so an owned String materialized from a borrowed str is read as that str. */
+export function rustBorrowedStringView(expression: RustExpr): RustExpr {
+  if (expression.kind === "evaluate-then") {
+    const value = rustBorrowedStringView(expression.value);
+    return value === expression.value ? expression : { ...expression, value };
+  }
+  return expression.kind === "string-literal" ? { kind: "str-literal", value: expression.value }
+    : expression.kind === "owned-string-from-borrowed-str" ? expression.expression : expression;
+}
+
+/** The printed operands of a string concatenation: each non-literal part is borrowed as a str. */
+export function rustStringConcatenationParts(parts: readonly RustExpr[]): readonly RustExpr[] {
+  return parts.map(part => part.kind === "string-literal" || part.kind === "str-literal"
+    ? { kind: "str-literal", value: part.value }
+    : { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: part }] });
 }

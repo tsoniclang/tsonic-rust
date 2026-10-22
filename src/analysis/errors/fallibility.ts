@@ -211,6 +211,9 @@ function collectFallibilityFacts(
     if (declaration === undefined || !selectedDeclarationIsProjectSource(walk, declaration)) return undefined;
     if ((ast.is.IsClassDeclaration(declaration) || ast.is.IsClassExpression(declaration)) && isDeclaration(declaration)) return declaration;
     if (projectImplementations.has(declaration)) return declaration;
+    // A contract member dispatched through fallible implementation adapters carries those effects itself (recorded
+    // above from the adapter records); its calls take them even when no body implements the member directly.
+    if (effectsByDeclaration.has(declaration)) return declaration;
     const selectedImplementation = walk.context.source.navigation.callableImplementation(declaration);
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };

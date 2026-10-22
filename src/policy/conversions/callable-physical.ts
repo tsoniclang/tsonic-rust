@@ -1,8 +1,9 @@
-import { hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArray, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
 import { rustCallableInputProtocol, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
-import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { rustCallableTargetId, rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
+import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -31,7 +32,14 @@ export function rustCallableConversionPhysical(
     const source = rustCallableProtocol(logical.source)!;
     const target = rustCallableProtocol(logical.target) ?? rustClosureProtocol(logical.target);
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
-    const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0", errorType: actual.error }];
+    const errorContract = logical.error === undefined ? undefined : rustValueConversionContract(logical.error, definitions);
+    if (logical.error !== undefined && errorContract === undefined) return undefined;
+    // A concrete invoked error is converted here; an abstract one (a native input's associated error) is carried
+    // through the native error join unchanged, like every other native input error.
+    const errorPlan = errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
+      ? errorContract : undefined;
+    const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0",
+      errorType: errorPlan?.target ?? actual.error }];
     const parameters: TargetTypeRef[] = [...target.parameters];
     const arguments_: RustCallablePhysicalValueConversion[] = [];
     for (const [index, parameter] of logical.parameters.entries()) {
@@ -76,7 +84,7 @@ export function rustCallableConversionPhysical(
     const signature = { parameters, result, error };
     const carrier = physicalTarget(logical.target, signature);
     return carrier === undefined ? undefined : snapshotClosedMetadata({ logical, source: actual, carrier,
-      ...signature, arguments: arguments_, resultPlan, errors });
+      ...signature, arguments: arguments_, resultPlan, errors, ...(errorPlan === undefined ? {} : { errorPlan }) });
 
     function valuePlan(contract: RustValueConversionContract, identity: string): RustCallablePhysicalValueConversion {
       const errorType = conversionError(contract);
@@ -130,4 +138,49 @@ function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalS
   return logical.kind !== "target-named" || logical.id !== rustCallableTargetId || lifetime === undefined ? undefined
     : rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(lifetime),
       ...rustTypeGenericArguments([tuple, result])]);
+}
+
+// Distinct producers stored in one place share one boxed callable of their shared signature (RULINGS ruling 2). The
+// producers must agree on lifetime, parameters and result. Their resolved errors must be one inhabited error, which the
+// shared callable carries, or uninhabited, which each such producer's write eliminates.
+export function rustCallableErrorJoin(
+  alternatives: readonly { readonly physical: TargetTypeRef; readonly error: TargetTypeRef }[],
+): TargetTypeRef | undefined {
+  const first = rustNamedTypeCarrierValue(alternatives[0]?.physical);
+  const lifetime = first?.genericArguments?.[0];
+  const signature = alternatives[0] === undefined ? undefined : rustCallablePhysicalSignature(alternatives[0].physical);
+  if (first?.id !== rustCallableTargetId || lifetime?.kind !== "lifetime" || signature === undefined || alternatives.length > 4096) return undefined;
+  let error: TargetTypeRef | undefined;
+  for (const alternative of alternatives) {
+    const selected = rustCallablePhysicalSignature(alternative.physical);
+    const named = rustNamedTypeCarrierValue(alternative.physical);
+    if (selected === undefined || named?.id !== rustCallableTargetId ||
+      closedMetadataKey(named.genericArguments?.[0]) !== closedMetadataKey(lifetime) ||
+      selected.parameters.length !== signature.parameters.length ||
+      !selected.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, signature.parameters[index])) ||
+      !rustTargetTypeRefEquals(selected.result, signature.result)) return undefined;
+    if (rustUninhabitedError(alternative.error)) continue;
+    if (error !== undefined && !rustTargetTypeRefEquals(error, alternative.error)) return undefined;
+    error = alternative.error;
+  }
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result,
+    error ?? { kind: "target-named", id: rustInfallibleTargetId }]));
+  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
+    [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
+}
+
+export function rustUninhabitedError(error: TargetTypeRef): boolean {
+  return isRustNeverCarrier(error) || error.kind === "target-named" && error.id === rustInfallibleTargetId;
+}
+
+// The same boxed callable carrying another error; an independent frame family member with an uninhabited error is
+// written into its family's callable this way.
+export function rustCallableWithError(physical: TargetTypeRef, error: TargetTypeRef): TargetTypeRef | undefined {
+  const named = rustNamedTypeCarrierValue(physical);
+  const lifetime = named?.genericArguments?.[0];
+  const signature = rustCallablePhysicalSignature(physical);
+  if (named?.id !== rustCallableTargetId || lifetime?.kind !== "lifetime" || signature === undefined) return undefined;
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, error]));
+  return snapshotClosedMetadata(rustNamedTargetType(rustCallableTargetId, "rt::Callable",
+    [lifetime, ...rustTypeGenericArguments([{ kind: "tuple", elements: signature.parameters }, result])]));
 }

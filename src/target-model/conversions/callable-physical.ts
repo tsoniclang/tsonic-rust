@@ -27,6 +27,8 @@ export interface RustCallablePhysicalConversion extends RustCallablePhysicalSign
   readonly arguments: readonly RustCallablePhysicalValueConversion[];
   readonly resultPlan: RustCallablePhysicalValueConversion;
   readonly errors: readonly RustNativeErrorSource<TargetTypeRef>[];
+  /** The invoked callable's error conversion when the logical adapter converts errors. */
+  readonly errorPlan?: RustValueConversionContract;
 }
 
 export function rustCallablePhysicalSignature(carrier: TargetTypeRef): RustCallablePhysicalSignature | undefined {
