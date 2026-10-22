@@ -28,6 +28,39 @@ export function analyzeRustBindingLiveness(
     }
     return false;
   };
+  // The native completion scope of a try statement keeps every arm reachable for the Rust compiler: its catch block
+  // may be skipped, and a try statement that awaits runs inside a native async block that captures the binding. An
+  // initial value is then observable to the Rust compiler through such a write or reference even when no source path
+  // reads it, so its unused-initializer expectation would be unfulfilled.
+  const initializerObservedByCompletion = new Set<Node>();
+  const awaitingTry = new Map<Node, boolean>();
+  const tryAwaits = (statement: Node): boolean => {
+    const known = awaitingTry.get(statement);
+    if (known !== undefined) return known;
+    let found = false;
+    const visit = (node: Node): void => {
+      if (found) return;
+      if (source.ast.kindName(node) === "KindAwaitExpression") { found = true; return; }
+      if (node !== statement && (source.ast.is.IsArrowFunction(node) || source.ast.is.IsFunctionExpression(node) ||
+        source.ast.is.IsFunctionDeclaration(node))) return;
+      source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(statement);
+    awaitingTry.set(statement, found);
+    return found;
+  };
+  const insideCompletionScope = (reference: Node, binding: Node, kinds: { readonly catchClause: boolean }): boolean => {
+    const owner = sourceEnclosingCallable(binding, source.ast);
+    for (let node = source.ast.parent(reference); node !== undefined && node !== owner; node = source.ast.parent(node)) {
+      if (node === binding) return false;
+      const kind = source.ast.kindName(node);
+      if (kinds.catchClause && kind === "KindCatchClause") return true;
+      if (kind === "KindTryStatement" && tryAwaits(node)) return true;
+    }
+    return false;
+  };
+  const observesInitializerThroughCompletion = (reference: Node, binding: Node, write: boolean): boolean =>
+    insideCompletionScope(reference, binding, { catchClause: write });
   for (const { graph, liveness } of flow.regions) {
     const writes = analyzeSourceWrites(graph);
     if (writes.kind === "unresolved") return [{ code: "RUST_LIVENESS_FLOW_UNRESOLVED", source: "tsonic-rust",
@@ -41,6 +74,11 @@ export function analyzeRustBindingLiveness(
       // A discarded callable is erased from the native program, so its capture never reads the binding.
       if (operation.kind === "read" || operation.kind === "capture" &&
         (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);
+      if (operation.kind === "read" && point.source !== undefined &&
+        observesInitializerThroughCompletion(point.source, operation.binding, false) ||
+        operation.kind === "write" && !operation.initialization &&
+          observesInitializerThroughCompletion(operation.reference, operation.binding, true))
+        initializerObservedByCompletion.add(operation.binding);
       if (operation.kind !== "write") continue;
       if (writeRepeatsThroughCompletion(operation.reference, operation.binding)) repeatedByCompletionScope.add(operation.binding);
       const observed = liveness.after.get(point.id)?.has(operation.binding) === true;
@@ -50,7 +88,10 @@ export function analyzeRustBindingLiveness(
       // binding or to a binding of an enclosing callable stays observable outside this region.
       else if (records.bindingStorage.get(operation.binding) === undefined &&
         sourceEnclosingCallable(operation.binding, source.ast) === graph.declaration) {
-        writesBySource.set(operation.reference, (writesBySource.get(operation.reference) ?? true) && !observed);
+        // A write inside an awaiting try statement is a write through the async block's capture, which the Rust
+        // compiler does not report as unused.
+        writesBySource.set(operation.reference, (writesBySource.get(operation.reference) ?? true) && !observed &&
+          !insideCompletionScope(operation.reference, operation.binding, { catchClause: false }));
       }
     }
     for (const binding of graph.bindings) {
@@ -61,6 +102,7 @@ export function analyzeRustBindingLiveness(
       bindings.set(binding, { unused: (previous?.unused ?? true) && !reads.has(binding) && !stored &&
           names.nameForDeclaration(binding)?.startsWith("_") !== true,
         unusedInitializer: (previous?.unusedInitializer ?? true) && initialWrites.get(binding) === true &&
+          !initializerObservedByCompletion.has(binding) &&
           names.nameForDeclaration(binding)?.startsWith("_") !== true,
         multipleWrites: previous?.multipleWrites === true || (writes.maximum.get(binding) ?? 0) > 1 ||
           repeatedByCompletionScope.has(binding) });
