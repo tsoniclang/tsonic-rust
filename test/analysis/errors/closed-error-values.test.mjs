@@ -180,3 +180,26 @@ test("a closed thrown value outside a project error domain is refused before pla
     assert.deepEqual(project.issues, [], "the own project domain transports the closed value");
   }
 });
+
+test("a closed throw is checked against the error boundary of its enclosing callable", () => {
+  const thrown = { kind: "KindThrowStatement" };
+  const callable = { kind: "KindFunctionDeclaration" };
+  const owner = Object.freeze({ kind: "physical-owner" });
+  const target = rustTsValueTargetType();
+  const fixture = rustErrorDomainFixture("project", [target], true);
+  fixture.program.source.ast = { ...fixture.program.source.ast, parent: node => node === thrown ? callable : undefined,
+    is: { IsTryStatement: () => false } };
+  const records = {
+    targetOperation: { get: node => node === thrown ? { kind: "throw-op", operationId: "tsonic.rust.error.throw",
+      error: { kind: "conversion", expression: {}, conversion: selectRustProgramErrorConversion(target) } } : undefined },
+    nativeErrorRegion: { get: node => node === callable ? { localOwner: owner, sources: [] } : undefined },
+    physicalProgramErrorBoundary: { get: (component, selected) => component === "root" && selected === owner
+      ? { componentId: "dependency", errorDomain: "project", errorTypeIdentity: "dependency:error", errorTypePath: "dependency::Error" }
+      : undefined },
+  };
+  const { issues } = analyzeRustErrorTransportFixture(fixture, { nodes: [thrown], records });
+  assert.deepEqual(issues.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_MISSING_TARGET_FACT",
+    message: "Closed thrown values require their own sealed source-package payload transport. Node kind: KindThrowStatement.",
+  }], "the callable's physical owner, not the package boundary, decides the closed throw");
+});

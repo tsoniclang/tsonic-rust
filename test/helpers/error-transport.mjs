@@ -24,7 +24,7 @@ export function rustErrorDomainFixture(errorDomain, thrownCarriers = [], retaine
       typeDefinitions: emptyRustTypeDefinitions,
       errorStorageDemands: { retainedBoundaries: [] },
       sourcePackageComponents: { forComponent: () => ({ closedErrorDemand: { thrownCarriers, retained, sourceView: false } }) },
-      source: { ast: { kindName: node => node.kind, pos: () => 0, end: () => 0,
+      source: { ast: { kindName: node => node.kind, pos: () => 0, end: () => 0, parent: () => undefined,
         getSourceFile: () => sourceFile, getFileName: () => "/src/index.ts", getSourceText: () => "" } },
     },
   };

@@ -12,6 +12,7 @@ import { rustTsValueTargetType, rustJsValueTargetType } from "../../target-model
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeErrorTypeIdentity } from "../../target-model/operations/error-boundary.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
+import { isSourceCallableBodyBoundary, TryStatement_CatchClause, TryStatement_TryBlock } from "@tsonic/target-api/source";
 
 export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, "reachability">, errors: RustSourcePackageErrorPlan,
   nodes: readonly Node[], producer: RustErrorTransportEmissionProducer, conversions: RustConversionEmissionProducer): readonly TargetDiagnostic[] {
@@ -83,13 +84,30 @@ export function analyzeRustClosedErrorValues(program: Omit<RustAnalysisProgram, 
   // or a forwarded boundary cannot carry it, so the program is refused here instead of reaching planning.
   const closedRoute = (route: RustProgramErrorRoute): boolean => route.kind === "closed" || route.kind === "closed-admission" ||
     route.kind === "union" && route.arms.some(arm => closedRoute(arm.route));
+  // The error boundary the planner constructs a throw against: the package boundary in the body of a try with a catch
+  // clause, otherwise the physical owner of the enclosing callable's error region, and the package boundary outside
+  // every callable.
+  const throwOwner = (node: Node, component: string): RustSourcePackageErrorBoundary | undefined => {
+    const { ast } = program.source;
+    let child = node;
+    for (let current = ast.parent(node); current !== undefined; child = current, current = ast.parent(current)) {
+      if (ast.is.IsTryStatement(current) && TryStatement_TryBlock(ast, current) === child && TryStatement_CatchClause(ast, current) !== undefined)
+        return program.records.sourcePackageErrorBoundary.get(component, component);
+      if (isSourceCallableBodyBoundary(ast, current)) {
+        const owner = program.records.nativeErrorRegion.get(current)?.localOwner;
+        return owner === undefined ? undefined : program.records.physicalProgramErrorBoundary.get(component, owner);
+      }
+    }
+    return program.records.sourcePackageErrorBoundary.get(component, component);
+  };
   const closedThrow = (node: Node, component: string): void => {
     const operation = program.records.targetOperation.get(node);
     const thrown = operation?.kind === "throw-op" && operation.error.kind === "conversion" ? operation.error.conversion : undefined;
     const contextual = program.records.contextualValueConversion.get(node)?.conversion;
     const conversion = thrown ?? (contextual?.kind === "program-error" ? contextual : undefined);
     if (conversion === undefined || !closedRoute(conversion.route)) return;
-    const boundary = program.records.sourcePackageErrorBoundary.get(component, component);
+    const boundary = thrown === undefined ? program.records.sourcePackageErrorBoundary.get(component, component)
+      : throwOwner(node, component);
     if (boundary !== undefined && boundary.errorDomain === "project" && boundary.componentId === component) return;
     issues.push({ code: "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `Closed thrown values require their own sealed source-package payload transport. Node kind: ${program.source.ast.kindName(node)}.`,
