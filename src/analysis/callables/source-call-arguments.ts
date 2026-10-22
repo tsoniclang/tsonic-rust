@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -75,8 +76,10 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
         let projection: RustSourceCallInputEmission["projection"];
         let valid = sourceCarrier !== undefined;
         if (sourceCarrier !== undefined && (input.sourceForm === "value" || input.sourceForm === "spread-sequence")) {
+          // A callable parameter whose lifetime is still a placeholder takes the concrete lifetime of the value passed.
+          const target = rustCallableTargetForSourceLifetime(converted ?? sourceCarrier, input.carrier);
           valid = rustFinalizedCarrierTransitionMatches(mapRustTargetTypes(sourceCarrier, program.typeFamilies.normalize),
-            converted === undefined ? undefined : mapRustTargetTypes(converted, program.typeFamilies.normalize), mapRustTargetTypes(input.carrier, program.typeFamilies.normalize)) ||
+            converted === undefined ? undefined : mapRustTargetTypes(converted, program.typeFamilies.normalize), mapRustTargetTypes(target, program.typeFamilies.normalize)) ||
             converted === undefined && program.structuralShapes.sharesStorage(sourceCarrier, input.carrier);
         } else if (sourceCarrier !== undefined && converted === undefined && input.spreadElementIndex !== undefined) {
           const element = rustSpreadElementCarrier(sourceCarrier, input.spreadElementIndex);

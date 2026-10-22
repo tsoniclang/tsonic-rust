@@ -38,4 +38,16 @@ export function analyzeRustFieldWrites(input: {
     input.producer.receiver(node, { representation, check: program.frozenDataWrites.receiverForDeclaration(operation.declaration) });
     requireRustRecord(input.required, "methodWriteReceiver", node, "native method replacement", "analyzeRustFieldWrites");
   }
+  // Field writes through a project contract resolve their dispatch by the contract field declaration, which may lie
+  // outside the native nodes (an inherited interface member or a declaration-file property).
+  const nodes = new Set(input.nodes);
+  for (const definition of program.projectTypes.definitions) {
+    const fields = [...program.projectTypes.externalBaseForDefinition(definition)?.fields ?? [],
+      ...program.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []];
+    for (const { declaration } of fields) {
+      if (nodes.has(declaration) || program.records.projectFieldDispatch.get(declaration) !== undefined) continue;
+      const dispatch = program.projectFieldDispatch.planFor(declaration);
+      if (dispatch !== undefined) input.producer.dispatch(declaration, dispatch);
+    }
+  }
 }
