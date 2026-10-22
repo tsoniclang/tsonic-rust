@@ -20,6 +20,8 @@ import { applyRustCallableValueAdapterRaw } from "../../../../dist/backend/plann
 import { analyzeRustGeneratedItemUsage } from "../../../../dist/analysis/reachability/generated-item-usage.js";
 
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { rustProgramSourceFiles, rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 
 function fixture({ siblings = false, nested = false, retainDerived = false, relationKind = "related", includeRoot = false } = {}) {
   const fileName = "/src/index.ts";
@@ -160,33 +162,54 @@ test("project union facts reject omitted proof, forged paths, getters, cycles an
     { programErrorOrigin: () => undefined, sourceUnionVariants: () => undefined }, relation), false);
 });
 
+const wideningSource = `
+class Base { value: number = 3; read(): number { return this.value; } }
+class Derived extends Base { read(): number { return this.value + 1; } }
+type Narrow = string | Derived;
+type Wide = string | Base;
+export function widen(value: Narrow): Wide { return value; }
+`;
+
+// The checked return of widen: its contextual project-union-map record and the sealed program that holds it.
+function compiledWidening() {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": wideningSource } });
+  const { ast } = program.source;
+  const widened = [];
+  const visit = node => {
+    if (program.records.contextualValueConversion.get(node)?.conversion.kind === "project-union-map") widened.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  rustProgramSourceFiles(program).forEach(visit);
+  assert.equal(widened.length, 1, "one checked nominal union widening");
+  const [node] = widened;
+  return { program, node, contextual: program.records.contextualValueConversion.get(node) };
+}
+
+function planWidening(program, node, contextual, expression, owned, project) {
+  const context = rustSourceFilePlanContext(program, node);
+  return planRustProjectUnionMapping(node, expression, contextual.conversion, contextual.sourceCarrier,
+    contextual.targetCarrier, context, owned, project ?? ((value, fact, owns) =>
+      planRustProjectUpcast(node, value, fact, context, owns ? "owned" : "borrowed")));
+}
+
 test("canonical nominal union emission moves owned fields and borrows views without a redundant Derived clone", () => {
-  const { source, target, definitions, projectTypes, fileName, declarationGenericRequirements } = fixture();
-  const conversion = selectRustProjectUnionMapping(source, target, projectTypes, definitions);
-  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
-  const sourceFile = fakeSourceFile({ fileName, text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
-    projectTypes, ownership: createRustOwnershipFixture(node, source), declarationGenericRequirements,
-    callableValues: { native: { protocolForSourceItem: () => undefined } },
-    names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
-    sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
-    externalCrateNameByFileName: new Map() };
+  const { program, node, contextual } = compiledWidening();
   const expression = { kind: "call", path: "produce", args: [] };
   for (const owned of [true, false]) {
-    const planned = planRustProjectUnionMapping(node, expression, conversion, source, target, context, owned,
-      (value, fact, owned) => planRustProjectUpcast(node, value, fact, fact.sourceCarrier, context, owned ? "owned" : "borrowed"));
+    const planned = planWidening(program, node, contextual, expression, owned);
     assert.equal(planned.kind, "match");
     assert.deepEqual(planned.expression, owned ? expression : { kind: "reference", expr: expression });
     assert.equal(planned.arms.length, 2);
-    const upcast = planned.arms[1].expression.args[0];
-    assert.equal(upcast.kind, "block");
+    const upcasts = planned.arms.map(arm => arm.expression.args?.[0]).filter(value => value?.kind === "block");
+    assert.equal(upcasts.length, 1, "only the Derived arm is upcast");
+    const [upcast] = upcasts;
     assert.equal(upcast.body.statements.length, 2);
     assert.equal(upcast.body.statements[0].kind, "let");
     assert.equal(upcast.body.statements[0].init.kind, "path");
     assert.equal(upcast.body.statements[1].kind, "tail");
     const constructed = upcast.body.statements[1].expr;
     assert.equal(constructed.kind, "struct-literal");
-    assert.equal(constructed.path, "Base");
+    assert.match(constructed.path, /(^|::)Base$/u);
     assert.deepEqual(constructed.fields.map(field => field.name), ["identity", "dispatch"]);
     for (const field of constructed.fields) {
       assert.equal(field.value.kind, owned ? "field" : "method-call");
@@ -195,29 +218,23 @@ test("canonical nominal union emission moves owned fields and borrows views with
     assert.doesNotMatch(JSON.stringify(upcast), /Box|Rc::|RefCell|Any|downcast|reflect|alloc/u);
     if (owned) assert.doesNotMatch(JSON.stringify(planned), /clone/u);
   }
-  const failed = planRustProjectUnionMapping(node, expression, conversion, source, target, context, true, () => undefined);
-  assert.equal(failed, undefined);
-  for (const [actualSource, actualTarget] of [[target, target], [source, source]]) {
-    assert.equal(planRustProjectUnionMapping(node, expression, conversion, actualSource, actualTarget,
-      context, true, () => assert.fail("inconsistent outer carriers cannot emit an upcast")), undefined);
-    assert.equal(rustCompilerOwnedContextualConversionMatches(actualSource, actualTarget, conversion,
-      definitions, rustProjectUnionUpcastRelation(projectTypes)), false);
-  }
-  const adapted = applyRustCallableValueAdapterRaw(expression,
-    selectRustCallableValueAdapter(source, target, projectTypes, definitions), node, context);
+  assert.throws(() => planWidening(program, node, contextual, expression, true, () => undefined),
+    /An admitted union map requires its native payload value/u);
+  const viaRecord = planExpression(node, rustSourceFilePlanContext(program, node));
+  assert.deepEqual(viaRecord, planWidening(program, node, contextual, { kind: "path", path: "value" }, true));
+});
+
+test("callable adapters plan the same nominal union mapping as the contextual record", () => {
+  const { program, node, contextual } = compiledWidening();
+  const expression = { kind: "call", path: "produce", args: [] };
+  const adapter = selectRustCallableValueAdapter(contextual.sourceCarrier, contextual.targetCarrier,
+    program.projectTypes, program.typeDefinitions);
+  const adapted = applyRustCallableValueAdapterRaw(expression, adapter, node, rustSourceFilePlanContext(program, node));
   assert.equal(adapted.fallible, false);
   assert.equal(adapted.expression.kind, "match");
   assert.deepEqual(adapted.expression.expression, expression);
   assert.doesNotMatch(JSON.stringify(adapted), /clone|Box|Rc::|RefCell|Any|downcast|reflect|alloc/u);
-  const contextual = { sourceCarrier: source, targetCarrier: target, conversion };
-  const projected = planExpression(node, { ...context,
-    expressionOverrides: new Map([[node, { expression, carrier: source, valueForm: "owned" }]]),
-    input: { program: { ...context.input.program, records: createRustRecordFixture({contextualValueConversion: { get: (subject) => subject === node ? contextual : undefined },
-runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined },
-conversion: { get: () => undefined }}) } },
-  });
-  assert.deepEqual(projected, adapted.expression);
-  assertNoTargetDiagnostics(context.diagnostics);
+  assert.deepEqual(adapted.expression, planWidening(program, node, contextual, expression, true));
 });
 
 test("nominal union liveness reuses exact upcast fields and retains every nested source and target path", () => {
