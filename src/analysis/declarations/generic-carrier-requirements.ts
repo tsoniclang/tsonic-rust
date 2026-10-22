@@ -270,9 +270,17 @@ function classifyStaticCarrier(
       return selected === undefined ? unresolved("A source field lacks its exact native instance storage carrier.") : visit(selected, bound);
     }), ...(definition.kind === "class" ? [classEnvironment(carrier, false, bound)] : [])]);
   };
+  const recursiveProjectObject = (value: TargetTypeRef): boolean => {
+    const source = rustSourceTypeCarrierValue(value);
+    return source !== undefined && source.shape !== "enum" && evidence?.projectTypes?.definitionForCarrier(value) !== undefined;
+  };
   const visit = (value: TargetTypeRef, bound: ReadonlySet<string>): RustCarrierRequirementSelection => {
     const key = closedMetadataKey([value, [...bound]]);
-    if (active.has(key)) return unresolved("Native static retention requires a completed recursive physical storage contract.");
+    // A project object that reaches itself through its own fields (class Link { next: Link | undefined }) stores that
+    // occurrence behind its native object handle, so the occurrence adds no requirement beyond the rest of the cycle,
+    // which this visit already collects. Any other recursive carrier has no completed physical storage contract.
+    if (active.has(key)) return recursiveProjectObject(value) ? supported
+      : unresolved("Native static retention requires a completed recursive physical storage contract.");
     active.add(key);
     try {
       switch (value.kind) {
