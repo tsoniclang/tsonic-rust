@@ -25,7 +25,7 @@ export function analyzeRustPackageCargo(program: Omit<RustAnalysisProgram, "reac
   return Object.freeze(issues);
 }
 
-function selectCargoManifests(
+export function selectCargoManifests(
   rootManifest: CargoManifestPlan,
   components: readonly RustSourcePackageComponentPlan[],
   diagnostics: TargetDiagnostic[],

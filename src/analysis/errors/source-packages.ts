@@ -230,7 +230,7 @@ export function selectRustPhysicalProgramErrorBoundary(
   return boundary?.errorTypeIdentity === actualOwner.errorTypeIdentity ? boundary : undefined;
 }
 
-function selectRustProgramErrorRoute(
+export function selectRustProgramErrorRoute(
   plan: RustSourcePackageErrorPlan,
   componentId: string,
   definition: RustProjectTypeDefinition,

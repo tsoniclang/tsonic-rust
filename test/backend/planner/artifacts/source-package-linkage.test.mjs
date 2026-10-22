@@ -2,19 +2,12 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  planRustSourcePackageComponents,
-} from "../../../../dist/backend/planner/program/source-package-components.js";
+import { analyzeRustSourcePackageComponentEmission } from "../../../../dist/analysis/source-modules/package-components.js";
 import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/source-modules/component-semantics.js";
-import {
-  planRustSourcePackageCargo,
-} from "../../../../dist/backend/planner/program/source-package-crates.js";
+import { selectCargoManifests } from "../../../../dist/analysis/source-modules/package-cargo.js";
 import { printCargoManifest } from "../../../../dist/print/project/manifest.js";
-import {
-  planRustSourcePackageErrors,
-  resolveRustProgramErrorRoute,
-  resolveRustSourcePackageErrorBoundary,
-} from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { analyzeRustSourcePackageErrors, selectRustProgramErrorRoute, selectRustSourcePackageErrorBoundary }
+  from "../../../../dist/analysis/errors/source-packages.js";
 import {
   artifactText,
   compileRust,
@@ -57,7 +50,7 @@ test("source-package components are dependency ordered and ignore inactive packa
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
     ["/dep/index.ts", sourceIdentity("/dep/index.ts", "dependency", "dependency_crate")],
   ]);
-  const result = planRustSourcePackageComponents(planningContext({
+  const result = analyzeRustSourcePackageComponentEmission(planningProgram({
     sourcePackageComponents: sourcePackageClassifications("root", [{
       componentId: "dependency",
       sourceFileNames: ["/dep/index.ts"],
@@ -98,7 +91,7 @@ test("source-package components are dependency ordered and ignore inactive packa
 
 test("library roots retain exact facade linkage and component cycles fail closed", () => {
   const rootIdentity = sourceIdentity("/root/index.ts", "root");
-  const library = planRustSourcePackageComponents(planningContext({
+  const library = analyzeRustSourcePackageComponentEmission(planningProgram({
     sourcePackageComponents: sourcePackageClassifications("root", [{
       componentId: "root",
       sourceFileNames: ["/root/index.ts"],
@@ -152,7 +145,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
 
 test("source-package components become one exact generated Cargo workspace", () => {
   const diagnostics = [];
-  const plan = planRustSourcePackageCargo({
+  const plan = selectCargoManifests({
     packageName: "application",
     edition: "2024",
     outputType: "bin",
@@ -202,7 +195,7 @@ test("source-package components become one exact generated Cargo workspace", () 
 
 test("source-package Cargo identities fail closed on target crate collisions", () => {
   const diagnostics = [];
-  const plan = planRustSourcePackageCargo({
+  const plan = selectCargoManifests({
     packageName: "acme_domain",
     edition: "2024",
     outputType: "lib",
@@ -219,7 +212,7 @@ test("source-package Cargo identities fail closed on target crate collisions", (
   ]);
 
   const duplicateDiagnostics = [];
-  const duplicate = planRustSourcePackageCargo({
+  const duplicate = selectCargoManifests({
     packageName: "application",
     edition: "2024",
     outputType: "lib",
@@ -541,7 +534,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     errorDomain: "project",
     errorOwnerComponentId: "dependency",
   }];
-  const result = planRustSourcePackageErrors(planningContext({
+  const result = analyzeRustSourcePackageErrors(planningProgram({
     sourcePackageComponents: sourcePackageClassifications("root", components.map(component => ({
       ...component, sourceFileNames: [...component.sourceFileNames],
       closedErrorDemand: { thrownCarriers: [], retained: false, sourceView: false },
@@ -556,7 +549,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
   assertNoTargetDiagnostics(result.diagnostics);
   assert.notEqual(result.plan, undefined);
   assert.deepEqual(
-    resolveRustSourcePackageErrorBoundary(result.plan, "root", "dependency"),
+    selectRustSourcePackageErrorBoundary(result.plan, "root", "dependency"),
     {
       componentId: "dependency",
       errorDomain: "project",
@@ -565,7 +558,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     },
   );
   assert.deepEqual(
-    resolveRustSourcePackageErrorBoundary(result.plan, "root", "root"),
+    selectRustSourcePackageErrorBoundary(result.plan, "root", "root"),
     {
       componentId: "root",
       errorDomain: "project",
@@ -574,15 +567,15 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     },
   );
   assert.deepEqual(
-    resolveRustProgramErrorRoute(result.plan, "dependency", engineError, "EngineFailure"),
+    selectRustProgramErrorRoute(result.plan, "dependency", engineError, "EngineFailure"),
     { kind: "local", variant: "EngineFailure" },
   );
   assert.deepEqual(
-    resolveRustProgramErrorRoute(result.plan, "root", engineError, "EngineFailure"),
+    selectRustProgramErrorRoute(result.plan, "root", engineError, "EngineFailure"),
     { kind: "local", variant: "EngineFailure" },
   );
   assert.equal(
-    resolveRustSourcePackageErrorBoundary(result.plan, "dependency", "root"),
+    selectRustSourcePackageErrorBoundary(result.plan, "dependency", "root"),
     undefined,
   );
 });
@@ -593,7 +586,7 @@ test("source-package error planning rejects unowned project errors", () => {
     sourceName: "MissingFailure",
     declaration: {},
   };
-  const result = planRustSourcePackageErrors(planningContext({
+  const result = analyzeRustSourcePackageErrors(planningProgram({
     projectTypes: {
       programErrorDefinitions: [missingError],
       programErrorVariant: () => "MissingFailure",
@@ -641,18 +634,18 @@ function facadePlan(rootComponentId, componentIds) {
   };
 }
 
-function planningContext({
+// The analysis inputs of source-package component, error and Cargo selection.
+function planningProgram({
   sourcePackageComponents = sourcePackageClassifications("root", []),
   projectTypes,
   outputType = "bin",
 }) {
   return {
-    program: {
-      configuration: { outputType },
-      projectTypes,
-      sourcePackageComponents,
-      sourceModuleConstructions: emptySourceModuleConstructions(),
-    },
+    configuration: { outputType },
+    projectTypes,
+    sourcePackageComponents,
+    sourceModuleConstructions: emptySourceModuleConstructions(),
+    source: { ast: { getFileName: sourceFile => sourceFile.fileName } },
   };
 }
 
