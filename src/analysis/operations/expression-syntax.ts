@@ -10,6 +10,7 @@ import { rustUnionPayloadAdmission } from "../../policy/conversions/union-inject
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { sourceCharCodeUnit } from "../../source/extension/literals.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustExpressionSyntax(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustExpressionSyntaxProducer): readonly TargetDiagnostic[] {
@@ -20,6 +21,8 @@ export function analyzeRustExpressionSyntax(program: Omit<RustAnalysisProgram, "
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    // Literals and names inside compile-time source or unreachable roots are never planned.
+    if (rustNodeIsOutsideNativeCode(ast, program.records, expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     const fact = program.records.targetOperation.get(node);
     const carrier = program.records.valueRead.get(node)?.source;
     const binding = program.records.sourceBinding.get(node);

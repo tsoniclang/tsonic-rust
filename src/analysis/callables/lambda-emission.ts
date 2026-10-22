@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLambdaEmissionProducer } from "../program/records/lambda-emission.js";
@@ -20,6 +21,7 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const closure = program.records.targetOperation.get(node);
     if (closure?.kind !== "closure" || program.records.nativeParticipation.get(node) === "erased") continue;
     const captures = program.records.closureCapture.get(node);

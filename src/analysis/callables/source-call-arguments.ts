@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceCallArgumentProducer } from "../program/records/source-call-arguments.js";
@@ -25,6 +26,7 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
       message: `${message} Node kind: ${program.source.ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const call of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, call)) continue;
     const fact = program.records.targetOperation.get(call);
     if (fact?.kind !== "source-call") continue;
     const arguments_ = program.source.ast.arguments(call);

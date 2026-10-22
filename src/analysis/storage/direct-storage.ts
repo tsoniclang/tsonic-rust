@@ -1,4 +1,5 @@
 import type { Node, Symbol } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -137,6 +138,7 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
   };
   for (const node of nodes) { select(node); effect(node); }
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     let current: Node | undefined = node;
     let memberNode: Node | undefined = node;
     const memberVisited = new Set<Node>();
@@ -199,6 +201,7 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     producer.field(node, field);
   }
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const computed = program.records.computedMember.get(node);
     const accessor = program.records.accessorReceiver.get(node);
     if (computed?.evaluateKey && computed.evaluateReceiver && accessor?.value) {

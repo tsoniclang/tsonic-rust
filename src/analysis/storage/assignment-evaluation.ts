@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, ElementAccessExpression_ArgumentExpression } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -20,6 +21,7 @@ export function analyzeRustAssignmentEvaluation(program: Omit<RustAnalysisProgra
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     if (!ast.is.IsBinaryExpression(node) || program.records.nativeUnreachable.get(node) === true ||
       program.records.nativeParticipation.get(node) === "erased" || program.records.compileTimeSource.get(node) !== undefined) continue;
     const fact = program.records.targetOperation.get(node);

@@ -24,6 +24,28 @@ import {
 import { createRustTargetPack } from "../../dist/index.js";
 import { createRustCompilationSession } from "../../dist/compilation/session.js";
 import { compileRustTarget } from "../../dist/backend/compile.js";
+import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
+import { planRustOutput } from "../../dist/backend/planner/program/index.js";
+import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
+import { materializeRustOutputPlan } from "../../dist/backend/emission/materialize.js";
+import { sealRustAnalysisProgram } from "../../dist/analysis/program/index.js";
+
+// The stages of compileRustTarget, with the observer receiving the complete analysis program (records plus the
+// analysis catalogs) so analysis tests can read the catalogs. The planner receives the sealed program exactly as
+// analyzeRustTargetProgram produces it.
+export function compileRustAnalysisTarget(request, observer) {
+  let analysis;
+  return runTargetCompilationStages({
+    analyze: () => {
+      const analyzed = analyzeRustAnalysisProgram(request);
+      if (analyzed.kind === "rejected") return analyzed;
+      analysis = analyzed.value;
+      return resolvedTargetStage(sealRustAnalysisProgram(analyzed.value), analyzed.diagnostics);
+    },
+    plan: program => planRustOutput(createRustPlanningContext(program)),
+    materialize: materializeRustOutputPlan,
+  }, { analyzed: () => observer?.analyzed?.(analysis), planned: value => observer?.planned?.(value) });
+}
 import { formatRustCompileResult } from "../../dist/toolchain/rustfmt.js";
 import { analyzeRustAnalysisProgram } from "../../dist/analysis/program/index.js";
 import { analyzeRustCheckedContext } from "./rust-session-analysis-context.mjs";
@@ -268,7 +290,7 @@ export function compileRust(options) {
   let program;
   let plan;
   let requiredRecords;
-  const compileTarget = options.compileTarget ?? compileRustTarget;
+  const compileTarget = options.compileTarget ?? compileRustAnalysisTarget;
   const harness = createRustSession({ ...compilationOptions, compileTarget(request) {
     const compiled = compileTarget(request, {
       analyzed(value) { program = value; },

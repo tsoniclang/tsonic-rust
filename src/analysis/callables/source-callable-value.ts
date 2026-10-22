@@ -9,6 +9,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustSourceCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourceCallableEmissionProducer) {
@@ -23,6 +24,9 @@ export function analyzeRustSourceCallableEmission(program: Omit<RustAnalysisProg
     requests.set(value.sourceDeclaration, rows);
   };
   for (const node of nodes) {
+    // A callable referenced from compile-time source (a safety builder target) is selected there, never constructed.
+    if (rustNodeIsOutsideNativeCode(program.source.ast, program.records,
+      expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     add(program.records.sourceCallableValue.get(node));
     add(program.records.directCallableReference.get(node));
     const binding = program.records.moduleBinding.get(node);

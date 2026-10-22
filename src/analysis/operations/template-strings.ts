@@ -1,4 +1,5 @@
 import { type Node, type SourceFile } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { TemplateExpression_Head, TemplateExpression_TemplateSpans, TemplateSpan_Expression, TemplateSpan_Literal } from "@tsonic/target-api/source";
 import { type RustAnalysisProgram } from "../program/model.js";
@@ -23,6 +24,7 @@ export function analyzeRustTemplateStrings(program: Omit<RustAnalysisProgram, "r
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind !== "template-string") continue;
     const head = TemplateExpression_Head(ast, node);

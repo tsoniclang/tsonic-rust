@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -10,6 +11,7 @@ export function analyzeRustSourceAssertions(program: Omit<RustAnalysisProgram, "
   const issues: TargetDiagnostic[] = [];
   const { ast } = program.source;
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind !== "source-conversion") continue;
     const operand = ast.is.IsPrefixUnaryExpression(node) ? Node_Operand(ast, node) : Node_Expression(ast, node);

@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -58,6 +59,7 @@ export function analyzeRustPropertyReads(program: Omit<RustAnalysisProgram, "rea
     }
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "source-method-property") method(node, fact.declaration, fact.receiverCarrier, fact.callableCarrier);
     if (fact?.kind === "record-literal") for (const contribution of fact.contributions) {

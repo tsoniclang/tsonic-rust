@@ -18,6 +18,10 @@ const ast = {
   getSourceFile(node) {
     return node.source ?? node;
   },
+  // The registry also reads each profile file's Error contract; these provenance fixtures declare no statements.
+  statements() {
+    return [];
+  },
 };
 
 test("source profile provenance is tied to one exact compiler source file", () => {

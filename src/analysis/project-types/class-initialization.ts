@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { ClassStaticBlock_Body, Node_Initializer } from "@tsonic/target-api/source";
 import { rustProjectStaticFieldStorage } from "./object-layout.js";
@@ -8,7 +9,7 @@ import type { RustClassInitializationEntry } from "../../target-model/records/cl
 import type { RustClassInitializationProducer } from "../program/records/class-initialization.js";
 
 export function analyzeRustClassInitialization(input: {
-  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "projectTypes" | "typeDefinitions" | "classValues">;
+  readonly program: Pick<RustAnalysisProgram, "source" | "records" | "projectTypes" | "typeDefinitions" | "classValues" | "safetyApplications">;
   readonly nodes: readonly Node[];
   readonly producer: RustClassInitializationProducer;
 }): readonly TargetDiagnostic[] {
@@ -20,6 +21,7 @@ export function analyzeRustClassInitialization(input: {
       evidence: [`target.capability=${capability}`] });
   };
   for (const node of input.nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     if (!ast.is.IsClassDeclaration(node) && !ast.is.IsClassExpression(node) || program.records.nativeUnreachable.get(node) === true ||
       program.records.compileTimeSource.get(node) !== undefined || program.records.nativeParticipation.get(node) === "erased") continue;
     const entries: RustClassInitializationEntry[] = [];

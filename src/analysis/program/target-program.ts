@@ -9,6 +9,7 @@ import { analyzeRustNumericRepresentations } from "../numeric/representations.js
 import { analyzeRustBinaryDispatchDemand } from "../project/binary-dispatch-demand.js";
 import { createRustAnalysisContext } from "./context.js";
 import type { AnalyzeRustTargetProgramResult, RustTargetAnalysisRequest, RustAnalysisProgram, RustCompleteAnalysisProgram } from "./model.js";
+import type { RustTargetProgram } from "../../target-model/records/target-program.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 
 import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
@@ -63,8 +64,13 @@ export function analyzeRustTargetProgram(
 ): AnalyzeRustTargetProgramResult {
   const analysis = analyzeRustAnalysisProgram(request);
   if (analysis.kind === "rejected") return analysis;
-  const { host, source, records } = analysis.value;
-  return resolvedTargetStage(Object.freeze({ host, source: Object.freeze({ ast: source.ast }), records }), analysis.diagnostics);
+  return resolvedTargetStage(sealRustAnalysisProgram(analysis.value), analysis.diagnostics);
+}
+
+/** The sealed target program the planner receives: the host, the syntax reader and the sealed records only. */
+export function sealRustAnalysisProgram(program: RustCompleteAnalysisProgram): RustTargetProgram {
+  const { host, source, records } = program;
+  return Object.freeze({ host, source: Object.freeze({ ast: source.ast }), records });
 }
 
 /** The complete analysis program: every plan and record the analysis publishes, before sealing. */

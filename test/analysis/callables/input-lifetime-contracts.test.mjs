@@ -25,7 +25,7 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   assert.equal(Object.isFrozen(contract[0]), true);
   assert.deepEqual(contract[0].outlives, []);
   const otherParameter = {};
-  const sharedAst = { parameters: () => [parameter, otherParameter] };
+  const sharedAst = { parameters: () => [parameter, otherParameter], is: ast.is };
   const sharedFacts = createRustRecordFixture({sourceParameterAbi: { get: (node) => (node === parameter || node === otherParameter)
     ? selected : undefined }});
   assert.equal(rustCallableInputLifetimeParameters(owner, sharedAst, sharedFacts).length, 1,

@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { BinaryExpression_Left, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -92,11 +93,13 @@ export function analyzeRustLocationStorage(program: Omit<RustAnalysisProgram, "r
     if (program.records.locationStorageRoot.get(node) != null) admit(node);
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const reference = program.sourceNavigation.sourceReferenceFor(node);
     if (reference !== undefined) producer.reference(node, reference.declaration);
     select(node);
   }
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const location = analysisRecords.typedLocationPlan.get(node);
     if (location?.operation === "address-of") admit(location.storageExpression);
     const operation = program.records.targetOperation.get(node);
