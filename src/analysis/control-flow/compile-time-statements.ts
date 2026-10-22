@@ -20,16 +20,18 @@ export function eraseRustCompileTimeVariableStatements(input: {
 }
 
 /**
- * A node written inside compile-time source - a safety builder such as `safety<T>().property(value => value.field)`,
- * or erased memory metadata and its field selectors - selects declarations and contracts; it is never native code.
+ * A node outside native code: it lies inside compile-time source (a safety builder such as
+ * `safety<T>().property(value => value.field)`, or erased memory metadata and its field selectors) or inside a root the
+ * analysis proved unreachable. Such a node selects declarations and contracts or is never executed; it is never planned.
  */
-export function rustNodeIsInsideCompileTimeSource(
+export function rustNodeIsOutsideNativeCode(
   ast: AstReader,
-  records: Pick<RustProgramRecords, "compileTimeSource">,
+  records: Pick<RustProgramRecords, "compileTimeSource" | "nativeUnreachable">,
   safetyOperation: (expression: Node) => { readonly kind: string } | undefined,
   node: Node,
 ): boolean {
-  for (let current = ast.parent(node); current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
-    if (records.compileTimeSource.get(current) !== undefined || safetyOperation(current)?.kind === "safety-builder") return true;
+  for (let current: Node | undefined = node; current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
+    if (records.compileTimeSource.get(current) !== undefined || records.nativeUnreachable.get(current) === true ||
+      safetyOperation(current)?.kind === "safety-builder") return true;
   return false;
 }

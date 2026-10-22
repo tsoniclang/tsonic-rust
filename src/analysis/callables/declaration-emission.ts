@@ -9,7 +9,7 @@ import { isRustUnitCarrier } from "../../target-model/types/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
-import { rustNodeIsInsideCompileTimeSource } from "../control-flow/compile-time-statements.js";
+import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -24,7 +24,7 @@ export function analyzeRustCallableDeclarationEmission(input: {
     issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
-  const insideCompileTimeSource = (node: Node): boolean => rustNodeIsInsideCompileTimeSource(ast, program.records,
+  const insideCompileTimeSource = (node: Node): boolean => rustNodeIsOutsideNativeCode(ast, program.records,
     expression => program.safetyApplications.operationForExpression(expression), node);
   for (const declaration of input.nodes) {
     if (!ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsFunctionExpression(declaration) && !ast.is.IsArrowFunction(declaration) &&
