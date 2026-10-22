@@ -9,7 +9,7 @@ import { isRustUnitCarrier } from "../../target-model/types/index.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
-import { rustWithinCompileTimeSource } from "../control-flow/compile-time-statements.js";
+import { rustNodeIsInsideCompileTimeSource } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustCallableDeclarationEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -24,13 +24,15 @@ export function analyzeRustCallableDeclarationEmission(input: {
     issues.push({ code: "RUST_UNSUPPORTED_AST", source: "tsonic-rust", category: "error", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: [`target.capability=${capability}`] });
   };
+  const insideCompileTimeSource = (node: Node): boolean => rustNodeIsInsideCompileTimeSource(ast, program.records,
+    expression => program.safetyApplications.operationForExpression(expression), node);
   for (const declaration of input.nodes) {
     if (!ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsFunctionExpression(declaration) && !ast.is.IsArrowFunction(declaration) &&
       !ast.is.IsMethodDeclaration(declaration) && !ast.is.IsGetAccessorDeclaration(declaration) && !ast.is.IsSetAccessorDeclaration(declaration)) continue;
     const body = ast.body(declaration);
     if (body === undefined || program.records.nativeParticipation.get(declaration) === "erased" ||
       program.records.nativeUnreachable.get(declaration) === true || program.records.compileTimeSource.get(declaration) !== undefined ||
-      rustWithinCompileTimeSource(ast, program.records, declaration)) continue;
+      insideCompileTimeSource(declaration)) continue;
     const sourceReturn = program.records.sourceCallableReturn.get(declaration);
     const asyncFact = program.records.asyncFunction.get(declaration);
     const generator = program.records.generator.get(declaration);

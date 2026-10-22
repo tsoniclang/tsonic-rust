@@ -19,10 +19,17 @@ export function eraseRustCompileTimeVariableStatements(input: {
   }
 }
 
-/** A node inside compile-time source (memory metadata, value-struct schemas, callable aliases) is never emitted. */
-export function rustWithinCompileTimeSource(ast: AstReader, records: Pick<RustProgramRecords, "compileTimeSource">, node: Node): boolean {
-  for (let current = ast.parent(node); current !== undefined; current = ast.parent(current)) {
-    if (records.compileTimeSource.get(current) !== undefined) return true;
-  }
+/**
+ * A node written inside compile-time source - a safety builder such as `safety<T>().property(value => value.field)`,
+ * or erased memory metadata and its field selectors - selects declarations and contracts; it is never native code.
+ */
+export function rustNodeIsInsideCompileTimeSource(
+  ast: AstReader,
+  records: Pick<RustProgramRecords, "compileTimeSource">,
+  safetyOperation: (expression: Node) => { readonly kind: string } | undefined,
+  node: Node,
+): boolean {
+  for (let current = ast.parent(node); current !== undefined && !ast.is.IsSourceFile(current); current = ast.parent(current))
+    if (records.compileTimeSource.get(current) !== undefined || safetyOperation(current)?.kind === "safety-builder") return true;
   return false;
 }
