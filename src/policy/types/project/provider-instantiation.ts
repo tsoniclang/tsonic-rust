@@ -10,6 +10,7 @@ import type { RustProviderTypeRow } from "../../../target-model/identities/provi
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function providerCarrierFromRelations(
   identity: ProviderDeclarationIdentity,
@@ -42,17 +43,16 @@ export function instantiateProviderTargetType(
   const defaulted = new Set<string>();
   for (const [index, parameter] of parameters.entries()) {
     const authored = arguments_[index];
-    if (authored === undefined && parameter.kind !== "lifetime") defaulted.add(parameter.targetIdentity);
-    const selected = authored ?? (parameter.kind === "lifetime"
+    const declaredDefault = parameter.kind === "lifetime" || parameter.defaultArgument === undefined
       ? undefined
-      : parameter.defaultArgument === undefined
-        ? undefined
-        : substituteGenericArgument(
-            parameter.defaultArgument,
-            typeSubstitutions,
-            lifetimeSubstitutions,
-            constSubstitutions,
-          ));
+      : substituteGenericArgument(parameter.defaultArgument, typeSubstitutions, lifetimeSubstitutions, constSubstitutions);
+    // The checker reports defaulted arguments as actual arguments, so an argument equal to its declared default counts
+    // as defaulted as well as an omitted one.
+    if (declaredDefault !== undefined && (authored === undefined ||
+      authored.kind === "type" && declaredDefault.kind === "type" && rustTargetTypeRefEquals(authored.type, declaredDefault.type))) {
+      defaulted.add(parameter.targetIdentity);
+    }
+    const selected = authored ?? declaredDefault;
     if (selected === undefined || selected.kind !== parameter.kind) {
       return undefined;
     }
