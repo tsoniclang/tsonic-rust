@@ -14,7 +14,7 @@ import { rustProjectProjectionPredicates } from "../../types/project-projection-
 import { planNativeModuleFunction } from "./functions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { genericCallableCopyStateItems, genericCallableStorageItems } from "./generic-storage.js";
-import { rustAuthoredTypeParameterNames } from "../../../../target-model/names/type-parameters.js";
+import { authoredTypeParameterNames } from "@tsonic/target-api/source";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustInvariantTypeMarker } from "../../types/invariant-marker.js";
 import { planRustGenericNativeFutureDispatch, type RustGenericNativeFutureInvocation } from "./generic-native-futures.js";
@@ -69,7 +69,7 @@ function planImplementation(
   const arguments_ = emission.arguments;
   const helperContext = rustGeneratedTypeParameterContext(arguments_.flatMap(argument =>
     argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type] : []),
-    rustAuthoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
+    authoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
     { ...context, typeParameterSubstitutions: selected.substitutions.types, lifetimeSubstitutions: selected.substitutions.lifetimes });
   const captures = rustCallablePayloadTypes(selected, helperContext);
   if (captures === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");

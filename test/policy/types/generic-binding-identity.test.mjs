@@ -5,7 +5,7 @@ import { substituteRustTargetTypeParameters } from "../../../dist/target-model/t
 import { inferRustTargetTypeParameterBindings } from "../../../dist/target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
-import { rustGeneratedTypeParameterNames } from "../../../dist/target-model/names/type-parameters.js";
+import { generatedTypeParameterNames } from "@tsonic/target-api/source";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 
 const outer = Object.freeze({ kind: "type-parameter", identity: "source:outer/0", name: "T" });
@@ -42,7 +42,7 @@ test("quantified signatures remain alpha-equivalent without capturing free param
 
 test("generated generic scopes reserve authored binders and render nested references consistently", () => {
   const reserved = { kind: "type-parameter", identity: "source:reserved/0", name: "CapturedT" };
-  const names = rustGeneratedTypeParameterNames([outer, reserved], [inner.name]);
+  const names = generatedTypeParameterNames([outer, reserved], [inner.name]);
   assert.equal(names.get(outer.identity), "CapturedT2");
   assert.equal(names.get(reserved.identity), "CapturedT");
   assert.equal(names.has(inner.identity), false);

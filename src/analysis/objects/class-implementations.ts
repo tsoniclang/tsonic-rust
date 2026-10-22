@@ -13,7 +13,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue, rustTargetGenericReferences, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../target-model/types/carriers/class-constructors.js";
-import { rustAuthoredTypeParameterNames, rustGeneratedTypeParameterNames } from "../../target-model/names/type-parameters.js";
+import { authoredTypeParameterNames, generatedTypeParameterNames } from "@tsonic/target-api/source";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
@@ -37,8 +37,8 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
       else if (parameter.kind === "lifetime" && argument?.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       else failTargetAnalysisInvariant("tsonic-rust", "An admitted class implementation requires exact native generic argument kinds.", definition.declaration);
     }
-    const value = Object.freeze({ types, lifetimes, names: rustGeneratedTypeParameterNames(rustTargetGenericReferences(carrier).typeParameters,
-      rustAuthoredTypeParameterNames(definition.declaration, program.source.ast, new Set(definition.typeParameterIdentities))) });
+    const value = Object.freeze({ types, lifetimes, names: generatedTypeParameterNames(rustTargetGenericReferences(carrier).typeParameters,
+      authoredTypeParameterNames(definition.declaration, program.source.ast, new Set(definition.typeParameterIdentities))) });
     instances.set(key, value);
     producer.implementationContext(definition.declaration, carrier, value);
     return value;
