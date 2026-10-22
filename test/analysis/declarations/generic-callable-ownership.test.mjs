@@ -67,7 +67,10 @@ function input() {
       AsBinaryExpression: node => node.binary,
     },
   };
-  const records = createRustRecordFixture({runtimeCarrier: { get: (node) => {
+  // The plan reads the pre-seal participation that materialize() publishes through the same record builder.
+  let participationRecords;
+  const records = createRustRecordFixture({nativeParticipation: { get: node => participationRecords?.get(node) },
+runtimeCarrier: { get: (node) => {
     if (node.carrier !== undefined)
         return { carrier: node.carrier };
     if (!closures.includes(node))
@@ -128,6 +131,7 @@ closureCapture: { get: (node) => {
   const materialize = () => {
     const sourceStorage = createSourceStorageQuery(currentSource, files);
     const builder = createRustProgramRecordBuilder();
+    participationRecords = builder.nativeParticipations.records;
     const participation = analyzeRustNativeParticipation({ ast, storage: sourceStorage,
       navigation: currentSource.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
     assert.equal(participation.kind, "resolved", "the current mutated fixture has one complete canonical native domain");
