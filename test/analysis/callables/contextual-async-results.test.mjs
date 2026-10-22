@@ -198,3 +198,23 @@ test("contextual async result selection preserves source checking of required bo
 export function make(): () => Promise<number> { return async () => {}; }
 ` } }), /TS2322/u);
 });
+
+test("an unannotated async callback given to an async callee takes its parameters from the callee input", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+async function apply(callback: (value: int32) => Promise<int32>): Promise<int32> { return await callback(2); }
+export async function run(): Promise<int32> { return await apply(async value => value * 2); }
+` } });
+  const { ast } = program.source;
+  const arrows = [];
+  const visit = node => {
+    if (ast.is.IsArrowFunction(node)) arrows.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
+  assert.equal(arrows.length, 1);
+  // The callee input retains the callback, so the argument is expected at the input's shape, not at source number.
+  assert.deepEqual(program.records.sourceParameterAbi.get(ast.parameters(arrows[0])[0])?.valueCarrier,
+    { kind: "source-primitive", name: "int32" });
+  assert.equal(program.records.sourceCallableReturn.get(arrows[0]) !== undefined, true);
+});
