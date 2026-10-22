@@ -1,4 +1,5 @@
 import { type Node, type SourceFile, type Type } from "@tsonic/tsts";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { isSourceCallableBodyBoundary, sourceBoundTypeRelationship, KindOmittedExpression, Node_Expression, type SourceLiteralValue } from "@tsonic/target-api/source";
 import { type TargetDiagnostic, failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -285,7 +286,9 @@ function resolveArrayElementCarrier(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, expected);
-  if (carrier !== undefined && expected !== undefined && !rustTargetTypeRefEquals(carrier, expected)) {
+  // An element destination whose callable lifetime is still a placeholder takes the lifetime of the element value.
+  if (carrier !== undefined && expected !== undefined &&
+    !rustTargetTypeRefEquals(carrier, rustCallableTargetForSourceLifetime(carrier, expected))) {
     appendRustDiagnostic(walk, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH",
       "Array element requires an exact carrier matching its selected destination storage.", expression, []);
     return undefined;
