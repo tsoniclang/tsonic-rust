@@ -2,16 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustProgramErrorTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustSourcePackageErrorTypeIdentity } from "../../../../dist/analysis/errors/source-packages.js";
+import { analyzeRustSourcePackageErrorBoundaries, rustSourcePackageErrorTypeIdentity } from "../../../../dist/analysis/errors/source-packages.js";
+import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
 import { rustTypeEquals } from "../../../../dist/backend/target-ast/syntax/type-equality.js";
-import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
+import { rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
-function context(componentId, errorDomain) {
-  return { usedAliases: new Set(), sourcePackageComponentId: componentId,
-    input: { program: { typeDefinitions: emptyRustTypeDefinitions } },
-    sourcePackageErrors: { domainsByComponentId: new Map([[componentId, { componentId, errorDomain,
-      errorTypeIdentity: rustSourcePackageErrorTypeIdentity(componentId, errorDomain) }]]) } };
+// Type emission records for the program error carriers rendered below, selected by their analysis owner.
+const emitted = rustProgramWithTypeEmissions([rustProgramErrorTargetType(), rustVecTargetType(rustProgramErrorTargetType()),
+  rustProgramErrorTargetType({ kind: "physical", domain: "runtime" })]);
+
+// A rendering context for one component in errorDomain, whose error boundaries are sealed by
+// analyzeRustSourcePackageErrorBoundaries over that component's error plan (an empty plan when not selected).
+function context(componentId, errorDomain, selected = true) {
+  const errors = { componentIdByFileName: new Map(), componentIdByDefinition: new Map(),
+    domainsByComponentId: new Map(selected ? [[componentId, { componentId, errorDomain,
+      errorOwnerComponentId: errorDomain === "project" ? componentId : undefined,
+      errorTypeIdentity: rustSourcePackageErrorTypeIdentity(componentId, errorDomain), definitions: [], externalErrors: [] }]] : []),
+    dependencyErrorsByComponentId: new Map() };
+  const builder = createRustProgramRecordBuilder();
+  analyzeRustSourcePackageErrorBoundaries({ projectTypes: { programErrorDefinitions: [] } }, errors, builder.sourcePackageEmission);
+  return { usedAliases: new Set(), sourcePackageComponentId: componentId, sourcePackageErrors: errors,
+    input: { program: { source: emitted.source, records: { ...emitted.records,
+      sourcePackageErrorBoundary: builder.readers.sourcePackageErrorBoundary,
+      physicalProgramErrorBoundary: builder.readers.physicalProgramErrorBoundary } } } };
 }
 
 test("program error rendering preserves scoped ABI identity recursively", () => {
@@ -49,13 +63,12 @@ test("physical runtime errors reuse only the actual native runtime alias and nev
 });
 
 test("program error rendering fails closed without its selected domain or with malformed arity", () => {
-  const scope = context("owner", "project");
-  scope.sourcePackageErrors.domainsByComponentId.clear();
-  assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), scope) === undefined, true);
-  assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), {
-    input: { program: { typeDefinitions: emptyRustTypeDefinitions } },
-  }) === undefined, true);
+  assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context("owner", "project", false)) === undefined, true);
+  const { sourcePackageErrors: _errors, ...unscoped } = context("owner", "project");
+  assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), unscoped) === undefined, true);
   assert.equal(rustTypeFromCarrier(rustProgramErrorTargetType()) === undefined, true);
-  assert.equal(rustTypeFromCarrierInContext({ ...rustProgramErrorTargetType(),
-    genericArguments: [{ kind: "type", type: rustProgramErrorTargetType() }] }, context("owner", "project")) === undefined, true);
+  // A malformed carrier has no sealed type emission record: rendering it is a planner invariant (no-fallback rule).
+  assert.throws(() => rustTypeFromCarrierInContext({ ...rustProgramErrorTargetType(),
+    genericArguments: [{ kind: "type", type: rustProgramErrorTargetType() }] }, context("owner", "project")),
+  error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT");
 });
