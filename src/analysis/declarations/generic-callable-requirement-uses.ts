@@ -463,6 +463,26 @@ export function createRustCallableRequirementVisitor(input: RustCallableRequirem
         const error = addUse(node, capture.carrier, ["clone"]);
         if (error !== undefined) return error;
       }
+      // A native struct without lifetime parameters owns its fields, so a stored callable field is static and every
+      // type parameter it carries must outlive static.
+      const classDefinition = input.projectTypes.definitionForDeclaration(node);
+      if (classDefinition !== undefined && !classDefinition.genericParameters.some(parameter => parameter.kind === "lifetime")) {
+        for (const field of input.projectTypes.objectLayoutForDefinition(classDefinition)?.fields ?? []) {
+          const carrier = records.runtimeCarrier.get(field.declaration)?.carrier;
+          if (carrier === undefined || rustCallableProtocol(carrier) === undefined) continue;
+          const parameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
+          const pending: TargetTypeRef[] = [carrier];
+          for (let index = 0; index < pending.length && index < 4096; index++) {
+            const current = pending[index]!;
+            if (current.kind === "type-parameter") parameters.set(current.identity, current);
+            else pending.push(...rustTargetTypeChildren(current));
+          }
+          for (const parameter of parameters.values()) {
+            const error = addUse(field.declaration, parameter, ["static"]);
+            if (error !== undefined) return error;
+          }
+        }
+      }
     }
     const yieldFact = records.yield.get(node);
     if (yieldFact?.kind === "delegate") {
