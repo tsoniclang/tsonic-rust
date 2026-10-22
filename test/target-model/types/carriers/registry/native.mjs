@@ -350,4 +350,11 @@ export const nativeCarrierRegistry = Object.freeze([
     responsibility: "js/js-error-target-type",
     frozen: false,
   },
+  {
+    id: "src/target-model/types/placeholder-lifetimes.ts#rustCarrierWithTargetPlaceholderLifetimes",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/target-model/types/placeholder-lifetimes.ts", symbol: "rustCarrierWithTargetPlaceholderLifetimes" },
+    responsibility: "vocabulary/fill-placeholder-lifetimes",
+    frozen: false,
+  },
 ]);
