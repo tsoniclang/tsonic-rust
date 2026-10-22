@@ -672,8 +672,8 @@ test("a physical reader captured during construction becomes the same terminal l
   const implementation = generic.definitions[0].implementations[0];
   const subject = context.sourceStorage.subject(implementation.declaration, "value");
   assert.equal(subject.kind, "resolved", "actual source producer");
-  const selected = construction.carrierFor(implementation.carrier, implementation.sourceFileName,
-    [{ subject: subject.subject, bindings: context.sourceStorage.emptyBindings }]);
+  const selected = construction.carrierFor(implementation.carrier, implementation.sourceFileName, subject.subject,
+    context.sourceStorage.emptyBindings, [{ subject: subject.subject, bindings: context.sourceStorage.emptyBindings }]);
   assert.equal(selected !== undefined, true, "actual owned physical source admitted");
   const captured = construction.plan;
   construction.closeAdmission();

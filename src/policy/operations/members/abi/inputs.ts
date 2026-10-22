@@ -88,6 +88,13 @@ export function finalizeTargetInputs(
     (values ?? []).map((value) => ({ source: { kind: "constant", value } }));
 
   switch (form.form) {
+    case "native-promise-continuation": {
+      // The receiver future and every callback move into the continuation's async block.
+      const receiver = input.receiver("value");
+      const args = mappedArguments(undefined, undefined, undefined);
+      return receiver === undefined || args === undefined ? undefined
+        : { targetReceiver: { kind: "input", input: receiver }, targetArguments: args };
+    }
     case "numeric-cast": {
       const source = input.sourceArgumentCarrier(0);
       const value = source?.kind !== "source-primitive" || sourceArgumentCount !== 1

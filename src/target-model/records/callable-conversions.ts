@@ -10,6 +10,8 @@ export interface RustNativeCallablePhysicalSource {
   readonly carrier: TargetTypeRef;
   readonly signature: RustCallablePhysicalSignature;
   readonly input?: RustNativeCallableInput;
+  /** A type-erased runtime callable: its invocation error is carried through the native error join. */
+  readonly erased?: true;
 }
 
 export interface RustCallableOperandEmission {

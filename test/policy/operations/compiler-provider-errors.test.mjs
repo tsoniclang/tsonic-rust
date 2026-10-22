@@ -54,7 +54,9 @@ main();
   assert.match(source, /JsValue::from_error/u);
   assert.match(source, /\.is_error\(\)/u);
   assert.match(source, /\.is_error_kind\(rt::JsErrorKind::RangeError\)/u);
-  assert.match(source, /\.error_value\(\)/u);
+  // `value instanceof Error` is a comparison use (045994f12), so `const selected = value` is the last use and moves
+  // the closed value out (checkpoint output).
+  assert.match(source, /\.into_error\(\)/u);
   assert.equal(validateGeneratedProject("compiler-provider-errors", result.artifacts, { run: true }).status, 0);
 });
 

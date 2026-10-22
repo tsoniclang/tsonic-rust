@@ -102,6 +102,7 @@ export interface RustProgramRecords extends RustStatementExitRecords, RustStatem
   readonly optionEquality: RustRecordFamily<import("./option-equality.js").RustOptionEqualityEmission>;
   readonly indexedLocation: RustRecordFamily<import("./indexed-locations.js").RustIndexedLocationEmission>;
   readonly locationCallback: { readonly get: (node: import("@tsonic/tsts").Node, argument: number) => import("./location-callbacks.js").RustLocationCallbackEmission | undefined };
+  readonly erasedInputArgument: { readonly get: (node: import("@tsonic/tsts").Node, argument: number) => import("./erased-input-arguments.js").RustErasedInputArgument | undefined };
   readonly directStorage: RustRecordFamily<import("./direct-storage.js").RustDirectStorageEmission>;
   readonly directStorageIdentity: RustRecordFamily<import("./direct-storage.js").RustDirectStorageIdentity>;
   readonly storageEffectful: RustRecordFamily<boolean>;

@@ -10,7 +10,9 @@ export function planRustLexicalFunctionValues(
 ): readonly RustStmt[] {
   const statements: RustStmt[] = [];
   for (const { declaration, name, value } of context.input.program.records.lexicalValues.get(statement) ?? []) {
-    const type = rustTypeFromCarrierInContext(value.carrier, context);
+    // The binding holds the value as constructed: a callable construction stores its selected physical carrier.
+    const construction = context.input.program.records.sourceCallableEmission.get(value.sourceDeclaration, value.carrier)?.construction;
+    const type = rustTypeFromCarrierInContext(construction?.kind === "callable" ? construction.physical : value.carrier, context);
     if (type === undefined) failRustPlannerInvariant("An admitted lexical callable value requires its native storage type.", declaration);
     const initializer = planRustSourceCallableValueConstruction(value, context);
     if (initializer === undefined) failRustPlannerInvariant("An admitted lexical callable value requires its native initializer.", declaration);

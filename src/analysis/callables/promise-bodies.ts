@@ -12,6 +12,7 @@ import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { selectRustPromiseBodyRecursion } from "./promise-recursion.js";
+import { rustAwaitedPromiseLocal } from "./promise-locals.js";
 
 type SourceCall = Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
 
@@ -159,7 +160,8 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
   if (context.records.optionalChain.get(call) !== undefined) return undefined;
   const use = context.promiseResultUses.get(call);
   const awaited = use?.kind === "awaited-in-scope" ? Node_Expression(ast, use.use) : undefined;
-  if (awaited === undefined || rustUnparenthesizedExpression(ast, awaited) !== call) return undefined;
+  if ((awaited === undefined || rustUnparenthesizedExpression(ast, awaited) !== call) &&
+    !rustAwaitedPromiseLocal(ast, context.source.navigation, call)) return undefined;
   const expression = Node_Expression(ast, call);
   const callee = expression === undefined ? undefined : rustUnparenthesizedExpression(ast, expression);
   if (callee === undefined) return undefined;

@@ -421,8 +421,12 @@ export function planRustCallableExpressionBody(
   }
   if (closureFact.invocationResult !== undefined) {
     const conversion = closureFact.invocationResult;
-    const converted = applyFinalizedValueConversion(callableClosureContext, { kind: "block", body: finalizedBlock },
-      conversion, node);
+    // A body that is one unattributed tail expression is converted as that expression (a braced block argument is
+    // clippy::unused_braces).
+    const tail = finalizedBlock.statements.length === 1 && (finalizedBlock.innerAttrs?.length ?? 0) === 0
+      ? finalizedBlock.statements[0] : undefined;
+    const bodyValue: RustExpr = tail?.kind === "tail" && (tail.attrs?.length ?? 0) === 0 ? tail.expr : { kind: "block", body: finalizedBlock };
+    const converted = applyFinalizedValueConversion(callableClosureContext, bodyValue, conversion, node);
     if (converted === undefined) return undefined;
     finalizedBlock = { statements: [{ kind: "tail", expr: converted }] };
   }

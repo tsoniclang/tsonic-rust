@@ -43,6 +43,7 @@ export function rustProviderOperationFormDeclaresWritableInput(
     case "receiver-method":
       return form.mutatesReceiver === true ||
         form.argModes?.includes("mut-ref") === true;
+    case "native-promise-continuation":
     case "marker":
     case "numeric-cast":
     case "struct-variant":
@@ -75,6 +76,8 @@ export function rustProviderOperationSourceReceiverMayMutate(
       return form.receiverMode === "mut-ref";
     case "receiver-method":
       return form.mutatesReceiver === true;
+    case "native-promise-continuation":
+      return false;
     case "arg-receiver-method":
     case "arg-structural-method":
       return form.argModes?.[0] === "mut-ref";
@@ -141,6 +144,7 @@ export function rustProviderOperationSourceArgumentMayMutate(
       return sourceIndex < form.leadingArguments.length
         ? form.leadingArguments[sourceIndex]?.mode === "mut-ref"
         : form.alternatives.some((alternative) => alternative.mode === "mut-ref");
+    case "native-promise-continuation":
     case "marker":
     case "numeric-cast":
     case "path":

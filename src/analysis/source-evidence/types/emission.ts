@@ -116,6 +116,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     if (adapterContract !== undefined) pending.push(...adapterCarriers(adapterContract));
     const hoisted = program.records.moduleHoistedCallable.get(node);
     if (hoisted !== undefined) pending.push(hoisted.carrier);
+    // A callable written through the eliminating adapter renders the callable carrying the destination's error.
+    const joinWrite = program.records.callableJoinWrite.get(node);
+    if (joinWrite !== undefined) pending.push(joinWrite.source, joinWrite.carrier);
     const contract = program.records.declarationRequirements.get(node);
     if (contract !== undefined) pending.push(...contract.optionalStorage.map(storage => storage.carrier),
       ...contract.associatedTypes.flatMap(requirement => [requirement.carrier, ...(requirement.output === undefined ? [] : [requirement.output])]),

@@ -61,6 +61,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
         transferred.add(capture.declaration);
         captureTransfers.set(point.source, transferred);
       } else if (point.operation.kind === "read" && liveness.lastUses.has(point.source) &&
+        !isFunctionScopedLoopRead(point.source, point.operation.binding, input) &&
         !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input) &&
         (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads) ||
           input.isOnceCallable(declaration) && ownedCaptures.has(point.operation.binding))) {
@@ -145,6 +146,17 @@ function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipF
   const summary = navigation.declarationUseSummary(binding);
   return !summary.exported && (!summary.hasUnclassifiedValueUse || summary.uses.every(use =>
     use.role !== "value" || awaitedReads.has(use.reference)));
+}
+
+// A function-scoped `var` is one storage that stays readable after the loop reading it (RULINGS 2026-10-22), so a
+// read inside a loop is never its final use; block-scoped loop bindings are fresh per iteration and may move.
+function isFunctionScopedLoopRead(reference: Node, binding: Node, input: RustOwnershipFlowInput): boolean {
+  const { ast } = input.source;
+  if (!ast.is.IsVariableDeclaration(binding) || ast.variableDeclarationKind(binding) !== "var") return false;
+  for (let parent = ast.parent(reference); parent !== undefined && !isSourceCallableBodyBoundary(ast, parent); parent = ast.parent(parent))
+    if (ast.is.IsForStatement(parent) || ast.is.IsForOfStatement(parent) || ast.is.IsForInStatement(parent) ||
+      ast.is.IsWhileStatement(parent) || ast.is.IsDoStatement(parent)) return true;
+  return false;
 }
 
 function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: RustOwnershipFlowInput): boolean {

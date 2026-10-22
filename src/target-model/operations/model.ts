@@ -276,6 +276,9 @@ export type RustValueConversion =
 
 export type RustProviderOperationForm =
   | { readonly form: "numeric-cast"; readonly target: SourcePrimitiveKind }
+  // A continuation on a native Promise body (native surface): the receiver future is awaited inside an async block and
+  // its settlement is routed to the fulfilled/rejected callbacks (RULINGS 2026-10-22). Not available to provider rows.
+  | { readonly form: "native-promise-continuation"; readonly member: "catch" | "then" }
   | {
       // Value exports with no runtime representation (receiver markers).
       // Any direct lowering fails closed.
