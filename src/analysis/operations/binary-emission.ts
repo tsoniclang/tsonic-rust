@@ -27,7 +27,9 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     const selected = program.sourceNavigation.expressionEffects(node);
     const read = program.ownership.reads.get(node);
     if (selected.invokes || selected.mutates || selected.suspends || selected.mayThrow) return true;
-    return !(ast.is.IsIdentifier(node) && read?.pure === true && read.value.kind !== "clone" ||
+    // The global undefined (an identifier with no source binding) evaluates nothing.
+    const globalUndefined = ast.is.IsIdentifier(node) && ast.text(node) === "undefined" && program.records.sourceBinding.get(node) === undefined;
+    return !(globalUndefined || ast.is.IsIdentifier(node) && read?.pure === true && read.value.kind !== "clone" ||
       ast.is.IsNumericLiteral(node) || ast.kindName(node) === "KindTrueKeyword" || ast.kindName(node) === "KindFalseKeyword" || ast.kindName(node) === "KindNullKeyword");
   };
   const parts = (node: Node, result: Node[]): void => {

@@ -21,7 +21,7 @@ export function rustBorrowValueIsUnprojected(node: Node, records: RustProgramRec
   return rustBorrowValueIsUnconverted(node, records) && records.optionProjection.get(node) === undefined;
 }
 
-function rustBorrowValueIsUnconverted(node: Node, records: RustProgramRecords): boolean {
+export function rustBorrowValueIsUnconverted(node: Node, records: RustProgramRecords): boolean {
   const carrier = records.runtimeCarrier.get(node)?.carrier;
   return carrier !== undefined && rustTargetTypeRefEquals(carrier, rustValueCarrierBeforeOptionProjection(records, node)) &&
     records.conversion.get(node) === undefined &&

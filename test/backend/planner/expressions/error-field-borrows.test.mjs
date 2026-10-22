@@ -95,12 +95,12 @@ test("read-only callbacks and unrelated writes remain zero-copy instead of all-i
 });
 
 test("pure provider evidence exempts its invocation, not independently evaluated mutations", () => {
-  const source = `${mutate}export function probe(error: Error, text: string): boolean { mutate(error); return error.message === text.toUpperCase(); }`;
+  const source = `${mutate}export function probe(error: Error, text: string): boolean { mutate(error); return error.message === text[0]; }`;
   assert.doesNotMatch(probe(source, ["js"]), /error_snapshot/u);
   const decisions = borrowDecisions(source, () => ({ kind: "preserved" }), ["js"]);
   const [query] = decisions.queries;
   assert.equal(query.pure.has(decisions.right), true);
-  assert.equal([...query.pure].some(node => decisions.ast.text(node) === "text"), false);
+  assert.equal([...query.pure].some(node => decisions.ast.is.IsIdentifier(node)), false, "the independently evaluated argument is not exempt");
 });
 
 test("transparent syntax retains the original selected Error owner", () => {
