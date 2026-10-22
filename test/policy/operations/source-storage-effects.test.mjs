@@ -375,7 +375,8 @@ test("the real Rust target session wires the same freeze alias query into its co
   const { result } = compileRust({ surfaces: ["js"], files: {
     "index.ts": "export function run(): number { const original = { count: 3 }; const frozen = Object.freeze(original); return frozen.count; }",
   }, compileTarget(request) {
-    const runtime = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation);
+    const runtime = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation,
+      request.runtimeCrates);
     assert.equal(runtime.kind, "resolved");
     const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, runtime.plan.activeCrates);
     assert.equal(dispatch.kind, "resolved");
