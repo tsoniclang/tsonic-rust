@@ -56,6 +56,7 @@ export function run(): number { const result = acquire(); return result; }
   const body = source.slice(source.indexOf("pub fn run"));
   assert.equal((body.match(/acquire\(\)/gu) ?? []).length, 1, "the authored terminal initializer is evaluated exactly once");
   assert.match(body, /let result[^;]*acquire\(\);/u, "the authored binding remains in its original native scope");
-  assert.match(body, /return result;/u, "the exact initialized value reaches the source return");
+  // The source return of a function body is its tail expression (checkpoint tail shape, restored in 160656657).
+  assert.match(body, /let result[^;]*acquire\(\);\s*result\s*\}/u, "the exact initialized value reaches the source return");
   assert.doesNotMatch(body, /Box::new|Rc::new|Arc::new|\.clone\(/u, "retaining a lexical binding introduces no allocation or copy");
 });
