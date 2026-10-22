@@ -19,6 +19,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 import type { RustStructuralMethodConstruction, RustStructuralMethodStorageSelection, RustStructuralShapeDefinition } from "../../target-model/records/structural-shapes.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/shapes/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
@@ -164,7 +165,8 @@ export function createRustStructuralMethodStorage(input: {
             const destination = destinations.get(field.targetStorageIndex)!;
             const original = shape?.fields[field.sourceStorageIndex];
             if (original?.method !== true || original.declarations.length === 0 ||
-              original.storageIndex !== field.sourceStorageIndex || !rustTargetTypeRefEquals(original.resultCarrier, field.carrier)) {
+              original.storageIndex !== field.sourceStorageIndex ||
+              !rustTargetTypeRefEquals(original.resultCarrier, rustCallableTargetForSourceLifetime(original.resultCarrier, field.carrier))) {
               sourceIssues.push({ subject: contribution.expression, message: "Structural method spread storage requires its exact checked source field layout." });
               continue;
             }
@@ -474,7 +476,7 @@ export function createRustStructuralMethodStorage(input: {
           const transported = root.spread.fields.filter(field => field.method === true && field.targetStorageIndex === root.index);
           if (sourceField === undefined || transported.length !== 1 ||
             transported[0]!.sourceStorageIndex !== sourceField.storageIndex ||
-            !rustTargetTypeRefEquals(transported[0]!.carrier, sourceField.resultCarrier) ||
+            !rustTargetTypeRefEquals(sourceField.resultCarrier, rustCallableTargetForSourceLifetime(sourceField.resultCarrier, transported[0]!.carrier)) ||
             projected?.kind !== "method-value" || !sourceField.declarations.includes(projected.declaration) ||
             structuralShapes.field(root.spread.sourceValueCarrier, sourceField.storageIndex)?.method !== true)
             failTargetAnalysisInvariant("tsonic-rust", "Structural method spread lost its exact source field and destination contribution.");
