@@ -44,8 +44,15 @@ export function analyzeRustExpressionSyntax(program: Omit<RustAnalysisProgram, "
       else producer.publish(node, { kind: "absence", carrier });
     }
     if (kind === "KindIdentifier" && binding !== undefined && program.records.sourceCallableValue.get(node) === undefined && program.records.classValue.get(node) === undefined) {
-      if (ast.kindName(binding.sourceDeclaration) === "KindClassDeclaration")
-        refuse(node, "rust.backend.class-value", "Class constructor used as a value has no exact finalized constructor-object view.", true);
+      // A class name that is the receiver of a member access names a static member path (`Counter.count`), not a
+      // constructor-object value; its static member owner plans it.
+      const parent = ast.parent(node);
+      const staticMemberReceiver = parent !== undefined &&
+        (ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent)) && Node_Expression(ast, parent) === node;
+      if (ast.kindName(binding.sourceDeclaration) === "KindClassDeclaration") {
+        if (!staticMemberReceiver)
+          refuse(node, "rust.backend.class-value", "Class constructor used as a value has no exact finalized constructor-object view.", true);
+      }
       else {
         const name = program.names.nameForDeclaration(binding.sourceDeclaration);
         if (name === undefined || !isValidRustIdentifier(name))
