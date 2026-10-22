@@ -14,4 +14,6 @@ export interface RustCallableConversion {
   readonly target: TargetTypeRef;
   readonly parameters: readonly RustCallableValueConversion[];
   readonly result: RustCallableValueConversion;
+  /** Present only when the source callable's error differs from the target's: the exact infallible error conversion. */
+  readonly error?: RustValueConversion;
 }

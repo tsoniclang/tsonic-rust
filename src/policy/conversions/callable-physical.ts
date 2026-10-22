@@ -31,7 +31,14 @@ export function rustCallableConversionPhysical(
     const source = rustCallableProtocol(logical.source)!;
     const target = rustCallableProtocol(logical.target) ?? rustClosureProtocol(logical.target);
     if (target === undefined || source.parameters.length !== actual.parameters.length) return undefined;
-    const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0", errorType: actual.error }];
+    const errorContract = logical.error === undefined ? undefined : rustValueConversionContract(logical.error, definitions);
+    if (logical.error !== undefined && errorContract === undefined) return undefined;
+    // A concrete invoked error is converted here; an abstract one (a native input's associated error) is carried
+    // through the native error join unchanged, like every other native input error.
+    const errorPlan = errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
+      ? errorContract : undefined;
+    const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0",
+      errorType: errorPlan?.target ?? actual.error }];
     const parameters: TargetTypeRef[] = [...target.parameters];
     const arguments_: RustCallablePhysicalValueConversion[] = [];
     for (const [index, parameter] of logical.parameters.entries()) {
@@ -76,7 +83,7 @@ export function rustCallableConversionPhysical(
     const signature = { parameters, result, error };
     const carrier = physicalTarget(logical.target, signature);
     return carrier === undefined ? undefined : snapshotClosedMetadata({ logical, source: actual, carrier,
-      ...signature, arguments: arguments_, resultPlan, errors });
+      ...signature, arguments: arguments_, resultPlan, errors, ...(errorPlan === undefined ? {} : { errorPlan }) });
 
     function valuePlan(contract: RustValueConversionContract, identity: string): RustCallablePhysicalValueConversion {
       const errorType = conversionError(contract);
