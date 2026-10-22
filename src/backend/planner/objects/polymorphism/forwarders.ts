@@ -1,6 +1,7 @@
 import {
   cloneField,
   projectCallableShape,
+  rustFunctionTypesMatch,
   projectLifetimeSubstitutions,
   projectTypeSubstitutions,
 } from "./model.js";
@@ -186,7 +187,7 @@ export function planRootAccessorForwarder(
       fallibleBoundary,
     },
   );
-  if (planned === undefined) return rejectRootContractErrorAbi(implementation);
+  if (planned === undefined || !rootCallableMatchesShape(planned, contractShape)) return rejectRootContractErrorAbi(implementation);
   return planned;
 }
 
@@ -324,7 +325,7 @@ export function planRootMethodForwarder(
       fallibleBoundary,
     },
   );
-  if (direct === undefined) {
+  if (direct === undefined || !rootCallableMatchesShape(direct, contractShape)) {
     return rejectRootContractErrorAbi(implementation);
   }
   return applyRootMethodOverride(
@@ -379,6 +380,13 @@ function applyRootMethodOverride(
         } } } }, ...callable.body.statements],
     },
   };
+}
+
+// A directly emitted root implementation must have the contract's exact native ABI: error type, safety, parameter
+// and return types. A mismatch would print a trait implementation that does not match its trait.
+function rootCallableMatchesShape(callable: RustImplFunction, shape: ProjectCallableShape): boolean {
+  return rustTypeEquals(callable.errorType, shape.errorType) && (callable.isUnsafe === true) === shape.isUnsafe &&
+    rustFunctionTypesMatch(callable.params, callable.returnType, shape.params, shape.returnType);
 }
 
 function rejectRootContractErrorAbi(implementation: Node): never {
