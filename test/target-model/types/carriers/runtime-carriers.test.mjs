@@ -10,6 +10,7 @@ import { rustStructuralObjectTargetType } from "../../../../dist/target-model/ty
 import { rustCallableTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { planRustStructuralShapeModule } from "../../../../dist/backend/planner/objects/structural-shapes.js";
 import { planRustNativeMemoryCall } from "../../../../dist/backend/planner/expressions/native-memory.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 test("native runtime type applications preserve exact Rust value/error identities and native AST", () => {
   const value = { kind: "source-primitive", name: "int64" };
@@ -75,9 +76,10 @@ test("native runtime trait contracts match their existing Rust implementations w
 test("native memory free-function qualification emits the exact existing Rust call AST", () => {
   const layout = { kind: "scalar", pointeeCarrier: { kind: "source-primitive", name: "uint32" },
     size: 4, alignment: 4, width: 64, littleEndian: true, fields: [] };
-  const context = { input: { program: {} }, usedAliases: new Set() };
-  const value = { kind: "path", path: "value" };
   const error = { kind: "source-primitive", name: "int64" };
+  // The planner renders the pointee and error carriers from their sealed type emission records.
+  const context = rustProgramPlanContext(rustProgramWithTypeEmissions([layout.pointeeCarrier, error]), { usedAliases: new Set() });
+  const value = { kind: "path", path: "value" };
   for (const method of ["allocate_native_location", "location_to_raw", "reinterpret_raw_location"]) {
     assert.deepEqual(planRustNativeMemoryCall(method, value, layout, context, error), {
       kind: "call", path: `rt::raw_memory::${method}`, genericArguments: [
