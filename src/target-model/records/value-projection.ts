@@ -17,6 +17,8 @@ export interface RustValueProjection {
   readonly borrowConversion: boolean;
   readonly referenceReborrow: boolean;
   readonly contextualIdentity: boolean;
+  /** The applied contextual conversion takes its source by value (`JsValue::from(handle)`), even when its result is borrowed. */
+  readonly contextualConsumesSource: boolean;
   readonly preserveAbsenceEffect: boolean;
   readonly absenceDiscard: "unit" | "value";
 }

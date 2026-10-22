@@ -64,9 +64,15 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
     if (effect === undefined) failRustPlannerInvariant("An admitted field-key argument requires its original source effects.", node);
     return { kind: "evaluate-then", effect, discard: "value", value: selected };
   }
-  let value = planExpressionBeforeValueProjections(node, context, resultUse, ownership?.source.kind === "borrow" ? "shared-place" : selectedBorrow ? "value" : access);
+  const projection = resultUse === "discarded" ? undefined : rustValueProjectionFor(node, override?.carrier, context);
+  // A contextual conversion that consumes its source (`JsValue::from(handle)`) reads an owned value even when the
+  // converted result is then borrowed; the read ownership (move or clone) applies to that source read.
+  const consumes = access !== "value" && finalStage !== "source" && projection?.contextualConsumesSource === true &&
+    !projection.contextualIdentity;
+  let value = planExpressionBeforeValueProjections(node, context, resultUse, ownership?.source.kind === "borrow" ? "shared-place"
+    : selectedBorrow || consumes ? "value" : access);
   if (value === undefined || resultUse === "discarded") return value;
-  const selected = rustValueProjectionFor(node, override?.carrier, context)
+  const selected = projection
     ?? failRustPlannerInvariant("An admitted expression requires its exact sealed projection composition.", node);
   if (selected.exits) return value;
   const flowOverridden = context.flowReadOverrides?.has(node) === true;

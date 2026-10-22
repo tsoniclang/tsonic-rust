@@ -16,7 +16,7 @@ import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/ca
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
 import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustInfallibleTargetId, rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
-import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { rustFrameCallableProtocol, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 
 export function rustNativeCallableAbsenceWitness(
@@ -47,11 +47,7 @@ export function rustNativeCallablePhysicalSource(
     | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs" | "erased">,
 ): RustNativeCallablePhysicalSource | undefined {
   if (storage.kind === "unresolved") return undefined;
-  // A frame callable is an rt::FrameCallable: its call takes the argument tuple and returns its entry's Result, whose
-  // error is the owning component's program error (frame entries use the source package error boundary).
-  const frame = rustFrameCallableValue(storage.carrier);
-  const signature = frame === undefined ? rustCallablePhysicalSignature(storage.carrier) : Object.freeze({
-    parameters: frame.signature.parameters, result: frame.signature.result, error: rustProgramErrorTargetType() });
+  const signature = rustCallablePhysicalSignature(storage.carrier) ?? rustFramePhysicalSignature(storage.carrier);
   if (signature !== undefined) return Object.freeze({ carrier: storage.carrier, signature,
     ...(storage.kind === "selected" && storage.erased === true ? { erased: true as const } : {}) });
   const inputs = storage.kind === "selected" ? storage.inputs.filter(input =>
@@ -105,4 +101,17 @@ export function rustAbsentFutureWitness(output: TargetTypeRef): TargetTypeRef {
   return snapshotClosedMetadata(rustNamedTargetType("rust.core.future.Ready", "core::future::Ready", rustTypeGenericArguments([
     rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([output, { kind: "target-named", id: rustInfallibleTargetId }])),
   ])));
+}
+
+// A frame entry's result is Result<R, E> with E the owning package's program error (frame-implementations.ts), so a
+// frame value invoked as a callable input carries the logical program error.
+export function rustFrameCallableError(carrier: TargetTypeRef): TargetTypeRef | undefined {
+  return rustFrameCallableValue(carrier) === undefined ? undefined : rustProgramErrorTargetType();
+}
+
+function rustFramePhysicalSignature(carrier: TargetTypeRef): RustCallablePhysicalSignature | undefined {
+  const protocol = rustFrameCallableProtocol(carrier);
+  const error = rustFrameCallableError(carrier);
+  return protocol === undefined || error === undefined ? undefined
+    : Object.freeze({ parameters: protocol.parameters, result: protocol.result, error });
 }
