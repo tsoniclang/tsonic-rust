@@ -6,7 +6,7 @@ import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStringTar
 import { rustAwaitSelection } from "../../dist/policy/operations/flow/await.js";
 import { rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
-import { createRustGeneratedUnionPlan } from "../../dist/analysis/objects/generated-union-plan.js";
+import { createRustGeneratedUnionPlan } from "../../dist/analysis/objects/shapes/generated-union-plan.js";
 
 const text = rustStringTargetType();
 const integer = rustSourcePrimitiveTargetType("int64");

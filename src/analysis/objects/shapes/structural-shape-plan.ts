@@ -1,25 +1,25 @@
-import { structuralStorageKey, instantiateStructuralDefinition } from "../../policy/types/objects/structural-storage.js";
-import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../names/structural-storage.js";
-import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection } from "../../target-model/records/structural-shapes.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { structuralStorageKey, instantiateStructuralDefinition } from "../../../policy/types/objects/structural-storage.js";
+import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../../names/structural-storage.js";
+import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection } from "../../../target-model/records/structural-shapes.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
-import type { RustStructuralInstantiation } from "../../target-model/records/source-types.js";
-import type { RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
+import { rustPropertyStorageNames } from "../../../target-model/names/property-storage.js";
+import type { RustStructuralInstantiation } from "../../../target-model/records/source-types.js";
+import type { RustSourceUnionDefinition } from "../../../target-model/types/source-union-definitions.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
-import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
-import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
-import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import type { RustNativeObjectField } from "../../../target-model/operations/native-memory.js";
+import { rustNativeMemoryLayoutsEqual } from "../../../target-model/operations/native-memory.js";
+import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
-import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType } from "../../target-model/types/index.js";
-import { rustStructuralMethodStorageCarrier } from "../../policy/types/objects/member-storage.js";
-import { rustRuntimeRecordFieldTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
-import { rustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
-import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences, rustOptionElementCarrier, rustCallableProtocol, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { rustStructuralMethodStorageCarrier } from "../../../policy/types/objects/member-storage.js";
+import { rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
+import { rustCallablePhysicalSignature } from "../../../target-model/conversions/callable-physical.js";
+import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 
-import { rustStructuralGenericCarrier } from "../../policy/types/objects/structural-generics.js";
-import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../target-model/records/source-types.js";
+import { rustStructuralGenericCarrier } from "../../../policy/types/objects/structural-generics.js";
+import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/source-types.js";
 
 
 export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {

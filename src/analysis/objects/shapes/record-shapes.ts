@@ -3,21 +3,21 @@ import {
   rustClosureTargetType,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
-} from "../../target-model/types/index.js";
+} from "../../../target-model/types/index.js";
 import {
   Node_Type,
   sourcePresentCallableType,
 } from "@tsonic/target-api/source";
-import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
-import { resolveParameterAbi } from "../callables/parameter-facts.js";
-import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
+import { requireDenseSourceNodes } from "../../source-evidence/dense-nodes.js";
+import { resolveParameterAbi } from "../../callables/parameter-facts.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
+import { resolveTypeNodeCarrier } from "../../source-evidence/types/source-carriers.js";
 
-import { rustResolutionContext } from "../program/walk.js";
+import { rustResolutionContext } from "../../program/walk.js";
 
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustFactWalk } from "../../program/walk.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveProjectMethodPropertyCarrier(
   walk: RustFactWalk,

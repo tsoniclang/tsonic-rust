@@ -3,7 +3,7 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/generated-union-plan.js";
+import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/shapes/generated-union-plan.js";
 import { rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustUnitTargetType, rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";

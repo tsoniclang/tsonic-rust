@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 
-import { rustProjectTypeTestMatches } from "../../../dist/analysis/operations/contracts/type-tests.js";
+import { rustProjectTypeTestMatches } from "../../../dist/analysis/operations/type-tests.js";
 import { rustFlowReadProjectionMatches } from "../../../dist/analysis/control-flow/flow-read-projections.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 

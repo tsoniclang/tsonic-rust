@@ -4,7 +4,7 @@ import { selectRustAbsenceComparisonOperation, selectRustCoalesceOperation, sele
 import { requireRustRecord } from "../program/records/required-records.js";
 import { selectedOptionNullishRelationship } from "../../policy/operations/operators/nullish-comparisons.js";
 import { BinaryExpression_Left, Node_Operand, KindBinaryExpression, KindEqualsEqualsEqualsToken, KindEqualsToken, KindExpressionStatement, KindExclamationEqualsEqualsToken, KindIdentifier, KindBigIntLiteral, KindQuestionQuestionToken, KindQuestionQuestionEqualsToken } from "@tsonic/target-api/source";
-import { selectRustGenericNumericOperation } from "./generic-numeric.js";
+import { selectRustGenericNumericOperation } from "./numeric/generic.js";
 import { selectRustGuardedIntegerOperation } from "../../policy/operations/numeric/guarded.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
 import { selectRustUnionEquality } from "../../policy/operations/operators/union-equality.js";

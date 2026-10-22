@@ -12,7 +12,7 @@ import { recordRustCompoundWrite } from "../../../../dist/analysis/operations/me
 import { recordRustNativeBacking, resolveRustRawLocationCarrier } from "../../../../dist/analysis/operations/native-memory.js";
 import { resolveRustMemoryBindingCarrier } from "../../../../dist/analysis/operations/memory-bindings.js";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../../../../dist/analysis/operations/raw-addresses.js";
-import { selectRustGenericNumericOperation } from "../../../../dist/analysis/operations/generic-numeric.js";
+import { selectRustGenericNumericOperation } from "../../../../dist/analysis/operations/numeric/generic.js";
 import { recordRustTypedLocationCall, selectRustTypedLocationCall } from "../../../../dist/analysis/operations/typed-locations.js";
 
 const selected = analyzeRustOperations(`

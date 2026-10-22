@@ -6,7 +6,7 @@ import { admitRustNativeValueDeclaration, type RustNativeValueDeclarationInput }
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
-import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 
 export type AnalyzeRustNativeDeclarationFormsResult =
   | { readonly kind: "resolved"; readonly forms: RustNativeDeclarationForms }

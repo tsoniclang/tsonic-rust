@@ -13,7 +13,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { resolveArrayLiteralCarrier } from "../../../dist/analysis/operations/array-literals.js";
-import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/fixed-arrays.js";
+import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/collections/fixed-arrays.js";
 import { resolveRustTargetTypeRef, resolveRustTargetTypeSyntax } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
 import { resolveRustTargetType } from "../../../dist/analysis/source-evidence/types/resolution/target.js";
 import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustTargetConstInteger, rustTargetConstSafeInteger, rustVecTargetType, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustOptionTargetType, rustAbsenceTargetType, rustCallableTargetType } from "../../../dist/target-model/types/index.js";

@@ -7,7 +7,7 @@ import type { RustBindingEmissionProducer } from "../program/records/binding-emi
 import { rustFixedArrayCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
-import { selectRustBindingProjectionEmission } from "../../policy/control-flow/binding-projections.js";
+import { selectRustBindingProjectionEmission } from "../../policy/operations/control-flow/binding-projections.js";
 
 export function analyzeRustBindingProjectionEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;

@@ -4,7 +4,7 @@ import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustSourceTypeCarrier, rustSourceUnionTargetType, rustSourceUnionCarrierValue } from "../../../dist/target-model/types/index.js";
-import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/generated-union-plan.js";
+import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/shapes/generated-union-plan.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 
 test("generated union definitions require complete exact payload identities and deterministic ownership", () => {

@@ -8,7 +8,7 @@ import { selectedArgumentMatchScore } from "../result.js";
 import { selectedCallReceiverValueCarrier } from "./instantiation.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { canRequireSourceClone } from "../clone-requirements.js";
-import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
+import { rustOperandSupportsSourceNumeric } from "../../numeric/generic.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { JsOperationRequest } from "../../../../policy/operations/source-profiles/js/model.js";

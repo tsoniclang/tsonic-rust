@@ -43,7 +43,7 @@ import { analyzeRustFlowReadEmission } from "../control-flow/flow-read-emission.
 import { analyzeRustProjectUnionMappings } from "../conversions/project-union-mappings.js";
 import { analyzeRustReceiverCaptureEmission } from "../storage/receiver-captures.js";
 import { analyzeRustErrorFieldBorrows } from "../operations/error-field-borrows.js";
-import { analyzeRustStringComparisonViews } from "../operations/string-comparison-views.js";
+import { analyzeRustStringComparisonViews } from "../operations/strings/string-comparison-views.js";
 import { analyzeRustClosedTypeTests } from "../operations/type-test-emission.js";
 import { analyzeRustSourceAssertions } from "../conversions/source-assertions.js";
 import { analyzeRustPackageCargo } from "../source-modules/package-cargo.js";

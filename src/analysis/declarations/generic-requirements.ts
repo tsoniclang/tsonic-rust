@@ -8,7 +8,7 @@ import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type
 import type { RustProjectTypePolicy } from "../project-types/index.js";
 import { analyzeRustShapeGenericRequirements } from "./generic-shape-requirements.js";
 import type { RustShapeGenericRequirementContract } from "../../target-model/records/generic-requirements.js";
-import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProjectProjectionImplementation } from "../../target-model/records/project-projections.js";
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";

@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
+import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustStructuralUsageKey } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
 import { analyzeRustGeneratedItemUsage } from "../../../dist/analysis/reachability/generated-item-usage.js";

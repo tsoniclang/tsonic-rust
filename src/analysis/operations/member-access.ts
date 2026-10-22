@@ -6,7 +6,7 @@ import { acceptDeclarationOperation, acceptRustOperation } from "../program/reco
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 
 import { selectStructuralSourceProperty } from "./members/structural-properties.js";
-import { selectRustFixedArrayLengthProperty } from "./fixed-arrays.js";
+import { selectRustFixedArrayLengthProperty } from "./collections/fixed-arrays.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 
 import { resolveRustProjectField } from "./members/project-fields.js";

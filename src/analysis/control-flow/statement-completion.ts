@@ -24,7 +24,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRecordCarrierValue } from "../../target-model/types/carriers/records.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
-import { rustSwitchComparisonMatches } from "../operations/contracts/switch.js";
+import { rustSwitchComparisonMatches } from "../operations/control-flow/switch.js";
 import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-selections.js";
 import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
 import type { RustStatementCompletionProducer } from "../program/records/statement-completion.js";

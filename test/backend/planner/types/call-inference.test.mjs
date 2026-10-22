@@ -6,7 +6,7 @@ import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, ru
   rustSourceUnionTargetType, rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
-import { createRustGeneratedUnionPlan } from "../../../../dist/analysis/objects/generated-union-plan.js";
+import { createRustGeneratedUnionPlan } from "../../../../dist/analysis/objects/shapes/generated-union-plan.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 

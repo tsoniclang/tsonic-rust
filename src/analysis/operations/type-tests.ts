@@ -1,9 +1,9 @@
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
-import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
-import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
-import { closedMetadataEquals, closedMetadataKey, hasExactObjectKeys } from "../../../target-model/metadata/closed-data.js";
-import { selectRustClosedTypeTestPlan, selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
+import { closedMetadataEquals, closedMetadataKey, hasExactObjectKeys } from "../../target-model/metadata/closed-data.js";
+import { selectRustClosedTypeTestPlan, selectRustProjectTypeTestPlan } from "../../policy/operations/operators/type-tests.js";
 
 export function rustProjectTypeTestMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>,

@@ -7,7 +7,7 @@ import type { RustUnionEqualityOperand, RustUnionEqualityEmission } from "../../
 import { isRustUnitCarrier, isRustBoolCarrier } from "../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
-import { rustUnionEqualityFactMatches } from "./contracts/union-equality.js";
+import { rustUnionEqualityFactMatches } from "./union-equality-facts.js";
 
 export function analyzeRustUnionEquality(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustUnionEqualityProducer): void {
   for (const node of nodes) {

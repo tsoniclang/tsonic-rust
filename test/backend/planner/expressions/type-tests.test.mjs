@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
-import { rustClosedTypeTestMatches } from "../../../../dist/analysis/operations/contracts/type-tests.js";
+import { rustClosedTypeTestMatches } from "../../../../dist/analysis/operations/type-tests.js";
 import { planRustClosedTypeTest } from "../../../../dist/backend/planner/expressions/type-tests.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";

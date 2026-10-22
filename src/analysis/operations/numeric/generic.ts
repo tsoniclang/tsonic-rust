@@ -1,15 +1,15 @@
-import { requireRustRecord } from "../program/records/required-records.js";
+import { requireRustRecord } from "../../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustFactWalk } from "../program/walk.js";
-import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
-import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric/union.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../../target-model/types/carriers/source-numeric.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import type { RustFactWalk } from "../../program/walk.js";
+import { rustResolutionContext } from "../../program/walk.js";
+import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
+import { selectRustNumericConstraintComparison } from "../../../policy/operations/numeric/union.js";
 
-import type { RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
-import type { RustOperationsProviderOptions } from "./members/model.js";
+import type { RustTargetTypeResolutionContext } from "../../source-evidence/types/resolution/model.js";
+import type { RustOperationsProviderOptions } from "../members/model.js";
 
 export function rustOperandSupportsSourceNumeric(
   operand: Node,

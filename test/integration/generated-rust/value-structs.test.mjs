@@ -6,7 +6,7 @@ import { fixedArrayMemoryProofFiles } from "../../../../tsonic/test/fixtures/fix
 import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
+import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 
 import { isRustCopyCarrier, rustCarrierSupportsTrait } from "../../../dist/policy/constraints/native-traits.js";
 import { rustOptionTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";

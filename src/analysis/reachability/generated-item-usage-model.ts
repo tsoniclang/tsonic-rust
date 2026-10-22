@@ -4,7 +4,7 @@ import type { RustSourceCallableSpecializationPlan } from "../callables/speciali
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustClassValuePlan } from "../../target-model/records/class-values.js";
-import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";

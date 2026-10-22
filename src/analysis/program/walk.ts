@@ -6,7 +6,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Operand, KindBinary
 import { selectRustCheckedCall, selectRustCheckedConversion, selectRustCheckedElementAccess, selectRustCheckedOperator, selectRustCheckedPropertyAccess, selectRustCheckedValue } from "../operations/members/index.js";
 import { selectRustCheckedDelete } from "../operations/member-access.js";
 import { isSharedSourceMarkerOperation } from "../operations/source-markers.js";
-import { resolveRegExpCreation } from "../operations/regexp.js";
+import { resolveRegExpCreation } from "../operations/syntax/regexp.js";
 
 import { rustPolicyTargetDiagnostic } from "./policy-diagnostics.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";

@@ -15,7 +15,7 @@ import type { RustProjectFieldDispatchQueries } from "../project-types/field-dis
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
-import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustModuleInitializationPlan } from "../../target-model/records/module-initialization.js";

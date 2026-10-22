@@ -7,7 +7,7 @@ import { numberArrayUnionFiles } from "../../../../tsonic/test/fixtures/number-a
 import { isRustNumberArrayPayload, isRustNumberArrayUnion } from "../../../dist/target-model/types/carriers/array-unions.js";
 import { rustJsArrayTargetType, rustJsTypedArrayTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/generated-union-plan.js";
+import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/shapes/generated-union-plan.js";
 
 test("numeric array unions require exact numeric arms and sealed capability selection", () => {
   const payloads = [rustJsArrayTargetType(rustSourcePrimitiveTargetType("float64")), rustJsTypedArrayTargetType("Uint8Array")];

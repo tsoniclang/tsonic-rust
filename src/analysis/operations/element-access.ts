@@ -19,7 +19,7 @@ import { canRequireSourceClone } from "./members/clone-requirements.js";
 
 import { selectJsSurfaceMemberRead } from "../../policy/operations/source-profiles/js/member-reads.js";
 import { selectRustSourceProfileIndexMembers } from "./members/selected-members.js";
-import { selectRustFixedArrayElementAccess } from "./fixed-arrays.js";
+import { selectRustFixedArrayElementAccess } from "./collections/fixed-arrays.js";
 import { isIntrinsicSourceQualifier } from "./members/source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";

@@ -7,7 +7,7 @@ import type { RustClosedTypeTestEmission } from "../../target-model/records/type
 import type { RustClosedTypeTestPlan, RustClosedTypePredicate } from "../../target-model/operations/type-tests.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustClosedTypeTestConstant } from "../../target-model/operations/type-tests.js";
-import { rustClosedTypeTestMatches } from "./contracts/type-tests.js";
+import { rustClosedTypeTestMatches } from "./type-tests.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustClosedTypeTestProducer): void {

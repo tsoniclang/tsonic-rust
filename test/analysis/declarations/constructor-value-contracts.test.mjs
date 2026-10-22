@@ -6,7 +6,7 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../../dist/target-model/types/carriers/generic-inference.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
-import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
+import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 const number = { kind: "source-primitive", name: "float64" };

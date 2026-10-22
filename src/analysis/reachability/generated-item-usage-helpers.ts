@@ -4,7 +4,7 @@ import type { RustValueConversionContract } from "../../target-model/conversions
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
 
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 

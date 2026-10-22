@@ -6,7 +6,7 @@ import { analyzeRustFrozenReceiverCaptures } from "./frozen-receiver-captures.js
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustStructuralShapePlan } from "./structural-shape-plan.js";
+import type { RustStructuralShapePlan } from "./shapes/structural-shape-plan.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import type { RustFrozenWriteReceiver } from "../../target-model/records/field-writes.js";
