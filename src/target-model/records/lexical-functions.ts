@@ -35,6 +35,8 @@ export interface RustLexicalFunctionEnvironmentPlan extends RustLexicalFunctionE
 
 export interface RustLexicalFunctionQueries extends RustLexicalFunctionEnvironments {
   forDeclaration(declaration: Node): RustLexicalFunctionSelection | undefined;
+  /** The lexical functions a lexical function body invokes directly. */
+  calleesFor(declaration: Node): readonly Node[];
 }
 
 export interface RustLexicalCaptureEmission {
