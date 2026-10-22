@@ -43,7 +43,7 @@ test("four producer APIs require exact source/domain inputs and reject every rem
   }));
   const positive = check(directory, `
 builder.asyncFunctions.native(node, carrier);
-builder.asyncFunctions.promise(node, carrier, carrier, selected);
+builder.asyncFunctions.promise(node, carrier, carrier, selected.lowering);
 builder.yields.value(node, node, generator);
 builder.yields.delegate(node, node, generator, carrier, carrier);
 const computed: RustComputedMemberFact = builder.computedMembers.evaluate(ast, node, node, node, "read");

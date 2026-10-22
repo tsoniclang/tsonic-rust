@@ -21,7 +21,7 @@ test("the ownership handoff rejects executable queries and writable catalogs at 
   }));
   const header = [
     'import type { Node } from "@tsonic/tsts";',
-    'import type { RustTargetProgram } from "../../dist/analysis/program/model.js";',
+    'import type { RustTargetProgram } from "../../dist/target-model/records/target-program.js";',
     'import * as locations from "../../dist/backend/planner/expressions/typed-locations.js";',
     "declare const program: RustTargetProgram;",
     "declare const node: Node;",
@@ -33,9 +33,8 @@ test("the ownership handoff rejects executable queries and writable catalogs at 
     });
   };
   const valid = compile(header + [
-    "export const read = program.ownership.reads.get(node);",
-    "export const capture = program.ownership.captures.get(node);",
-    "export const write = program.ownership.writes.get(node);",
+    "export const read = program.records.readOwnership.get(node);",
+    "export const capture = program.records.captureOwnership.get(node);",
     "export const render = locations.planRustValueRead;",
   ].join("\n"));
   assert.equal(valid.status, 0, valid.stdout + valid.stderr);
@@ -45,14 +44,14 @@ test("the ownership handoff rejects executable queries and writable catalogs at 
     "void locations.rustReadRequiresClone;",
     "void locations.planRustNonConsumingValue;",
     "void locations.rustExpressionReadsStorage;",
-    "void program.ownership.reads.set;",
-    "void program.ownership.captures.set;",
-    "void program.ownership.writes.set;",
-    "void program.ownership.reads.get(node)?.borrowedAcross.add;",
+    "void program.records.readOwnership.set;",
+    "void program.records.captureOwnership.set;",
+    "void program.ownership;",
+    "void program.records.readOwnership.get(node)?.borrowedAcross.add;",
   ].join("\n"));
   const output = invalid.stdout + invalid.stderr;
   assert.equal(invalid.status, 1, output);
   assert.equal((output.match(/error TS2339:/gu) ?? []).length, 9, output);
   for (const member of ["valueLifetimes", "borrowStability", "rustReadRequiresClone", "planRustNonConsumingValue",
-    "rustExpressionReadsStorage", "set", "add"]) assert.equal(output.includes("Property '" + member + "' does not exist"), true, member);
+    "rustExpressionReadsStorage", "set", "add", "ownership"]) assert.equal(output.includes("Property '" + member + "' does not exist"), true, member);
 });
