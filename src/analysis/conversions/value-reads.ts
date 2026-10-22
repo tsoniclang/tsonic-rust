@@ -57,6 +57,12 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     for (const callable of program.records.objectLiteralMethodAdapter.get(node)?.dispatches ?? [])
       for (const value of rustCallableAdapterValues(callable)) adapter(node, value);
   }
+  // The planner binds an optional chain guard as `Some(optional_receiver)` and reads it with the chain's present carrier.
+  const presentGuards = new Map<Node, TargetTypeRef>();
+  for (const node of nodes) {
+    const chain = program.records.optionalChainEmission.get(node);
+    if (chain !== undefined) presentGuards.set(chain.fact.guard, chain.structuralGuard?.selectedStorageCarrier ?? chain.fact.selectedGuardCarrier);
+  }
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const source = program.records.runtimeCarrier.get(node)?.carrier;
@@ -107,7 +113,7 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
       cast === undefined && downcast === undefined && lifetime === undefined && optional === undefined && object === undefined;
     const ownership = program.records.readOwnership.get(node);
     const plans: { readonly carrier: TargetTypeRef | undefined; readonly value: RustValueProjection }[] = [];
-    const candidates = [undefined, input, ...transitions.flatMap(transition => [transition.input, transition.output])];
+    const candidates = [undefined, input, ...transitions.flatMap(transition => [transition.input, transition.output]), presentGuards.get(node)];
     const seen = new Set<string>();
     for (const carrier of candidates) {
       const identity = carrier === undefined ? "default" : closedMetadataKey(carrier);
