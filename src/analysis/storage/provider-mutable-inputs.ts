@@ -23,23 +23,6 @@ export type RustProviderMutableInputSelection =
       readonly inputs: readonly { readonly input: RustFinalizedSourceInput; readonly key: string; readonly node: Node }[] }
   | { readonly kind: "rejected"; readonly node: Node; readonly reason: string };
 
-export interface RustProviderMutableInputPlan {
-  forOperation(node: Node): RustProviderMutableInputSelection | undefined;
-}
-
-export function createRustProviderMutableInputPlan(input: RustProviderMutableInputContext & {
-  readonly nodes: readonly Node[];
-}): RustProviderMutableInputPlan {
-  const selections = new Map<Node, RustProviderMutableInputSelection>();
-  for (const node of input.nodes) {
-    const operation = input.records.compoundWrite.get(node) ?? input.records.targetOperation.get(node);
-    if (operation?.kind !== "provider-operation" && operation?.kind !== "runtime-set") continue;
-    const selected = selectRustProviderMutableInputs(node, operation, input);
-    if (selected !== undefined) selections.set(node, selected);
-  }
-  return Object.freeze({ forOperation: (node: Node) => selections.get(node) });
-}
-
 export function selectRustProviderMutableInputs(
   operationNode: Node, operation: ProviderOperation, input: RustProviderMutableInputContext,
 ): RustProviderMutableInputSelection | undefined {
