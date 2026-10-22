@@ -17,18 +17,25 @@ for (const edition of ["2021", "2024"]) {
     const sourceFile = fakeSourceFile({ text: "value", statements: [node] });
     const selectedCarrier = rustSourcePrimitiveTargetType("uint32");
     const sourceCarrier = rustOptionTargetType(selectedCarrier);
+    // The sealed records the planner reads: the read ownership and the analysis-selected option projection emission.
+    const fact = { kind: "option-value", sourceCarrier, selectedCarrier };
+    const ownership = createRustOwnershipFixture(node, sourceCarrier);
     const context = {
       input: { program: {
         source: { ast: fakeAstReader([sourceFile]) },
-        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-        ownership: createRustOwnershipFixture(node, sourceCarrier),
+        records: createRustRecordFixture({
+          runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) },
+          readOwnership: { get: candidate => ownership.reads.get(candidate) },
+          flowReadEmission: { get: candidate => candidate === fact
+            ? { kind: "option", custom: false, reborrow: false, readonlyReference: false } : undefined },
+        }),
         configuration: { edition },
       } },
       diagnostics: [], sourceFile,
     };
     const trace = { kind: "path", path: "trace" };
     const probe = digit => ({ kind: "call", path: "probe", args: [trace, { kind: "int-literal", text: String(digit) }] });
-    const projection = planRustFlowReadProjection(node, rustValueBlock([{ name: "_guard", value: probe(1) }], { kind: "method-call", receiver: probe(2), method: "value", args: [] }), { kind: "option-value", sourceCarrier, selectedCarrier }, context);
+    const projection = planRustFlowReadProjection(node, rustValueBlock([{ name: "_guard", value: probe(1) }], { kind: "method-call", receiver: probe(2), method: "value", args: [] }), fact, context);
     assert.ok(projection);
     assertNoTargetDiagnostics(context.diagnostics);
     const generated = printRustSourceFile({
