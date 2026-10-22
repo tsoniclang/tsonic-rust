@@ -359,7 +359,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
       }
       const lexical = input.lexicalFunctions.forDeclaration(node);
       if (lexical?.kind === "unresolved") diagnostics.push(emissionDiagnostic(node, lexical.reason));
-      else if (lexical?.kind === "resolved") for (const capture of lexical.captures) request(node, capture.reference, "capture", { kind: "value" }, capture.reference);
+      else if (lexical?.kind === "resolved") for (const capture of lexical.captures) request(node, capture.reference, "capture", { kind: "operand" }, capture.reference);
       const body = ast.body(node);
       if (body !== undefined) {
         if (sourceExpressionValueInputs(ast, body) !== undefined) visitUse(body, node, "return", node);

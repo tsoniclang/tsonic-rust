@@ -22,7 +22,9 @@ export function analyzeRustLexicalFunctionEmission(input: {
     const captures: RustLexicalCaptureEmission[] = [];
     for (const capture of selection.captures) {
       const carrier = program.records.runtimeCarrier.get(capture.declaration)?.carrier ?? program.records.runtimeCarrier.get(capture.reference)?.carrier;
-      const physical = program.callableValues.nativeStorage.valueFor(capture.reference);
+      // The capture carries the binding as read, before the contextual conversion at that one use (`reject(original)`
+      // converts the read to the rejection value); the caller passes the binding itself.
+      const physical = program.callableValues.nativeStorage.operandFor(capture.reference);
       const storage = program.records.bindingStorage.get(capture.declaration);
       if (carrier === undefined || physical.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust",
         "An admitted lexical capture requires its exact source and physical native carrier.", capture.reference);
