@@ -5,7 +5,11 @@ import type { RustCallableConversionProducer } from "../program/records/callable
 import type { RustCallableOperandEmission, RustCallableConversionEmission, RustNativeCallablePhysicalSource } from "../../target-model/records/callable-conversions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
-import { type RustCallablePhysicalConversion } from "../../target-model/conversions/callable-physical.js";
+import { type RustCallablePhysicalConversion, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
+import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
+import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableConversionPhysical } from "../../policy/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
@@ -39,7 +43,7 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const file = program.source.ast.getSourceFile(node);
     const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
     const physical = source === undefined || fileName === undefined ? undefined
-      : rustCallableConversionPhysical(conversion, source.signature, fileName, program.typeDefinitions);
+      : rustCallableConversionPhysical(conversion, providerCallbackSignature(conversion, source.signature), fileName, program.typeDefinitions);
     if (source === undefined || fileName === undefined || physical === undefined)
       failTargetAnalysisInvariant("tsonic-rust", "An admitted callable adapter requires its exact physical source and closed native conversion.", node);
     const compile = (selected: RustCallablePhysicalConversion, actual: RustNativeCallablePhysicalSource): RustCallableConversionEmission => {
@@ -51,6 +55,18 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
         invocation: rustCallableInputProtocol(selected.logical.source) === undefined ? "call" : "invoke", nested });
     };
     producer.contract(node, conversion, compile(physical, source));
+  };
+  // A provider callback (native closure target) is adapted from the invoked callable's resolved error: its producer
+  // error once the error regions sealed it. This component's program error and the runtime-domain program error are
+  // the runtime error type itself (both render as tsonic_rust_runtime::TsonicError).
+  const providerCallbackSignature = (conversion: RustCallableConversion, signature: RustCallablePhysicalSignature): RustCallablePhysicalSignature => {
+    if (conversion.target.kind !== "closure") return signature;
+    const reference = rustProducerErrorReference(signature.error);
+    const resolved = reference === undefined ? signature.error : program.errorRegions.producerError(reference);
+    if (resolved === undefined) return signature;
+    const owner = rustProgramErrorOwner(resolved);
+    const error = owner?.kind === "logical" || owner?.kind === "physical" && owner.domain === "runtime" ? rustRuntimeErrorTargetType() : resolved;
+    return rustTargetTypeRefEquals(error, signature.error) ? signature : Object.freeze({ ...signature, error });
   };
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;

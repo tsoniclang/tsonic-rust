@@ -263,8 +263,10 @@ export function resolveFunctionExpressionCarrier(
     if (selectedValueResult === undefined) {
       return undefined;
     }
-    const recursiveCarrier = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
+    // The self binding holds the closure value itself, so it takes the value's retained lifetime, not the expected one.
+    const rebound = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
       { typeParameters: genericParameters ?? [] });
+    const recursiveCarrier = rebound === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, rebound);
     if (recursiveCarrier === undefined) return undefined;
     setCarrierFact(walk, expression, recursiveCarrier);
     setCarrierFact(walk, expressionName, recursiveCarrier);

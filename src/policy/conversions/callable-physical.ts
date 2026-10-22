@@ -38,8 +38,11 @@ export function rustCallableConversionPhysical(
     // through the native error join unchanged, like every other native input error.
     const errorPlan = errorContract !== undefined && rustTargetTypeRefEquals(errorContract.source, actual.error)
       ? errorContract : undefined;
+    // A provider callback (a fallible native closure) carries the runtime error; an invoked callable whose error is
+    // uninhabited is adapted by eliminating that error.
+    const eliminated = errorPlan === undefined && logical.target.kind === "closure" && rustUninhabitedError(actual.error);
     const errors: RustNativeErrorSource<TargetTypeRef>[] = [{ identity: "invoke", variant: "Error0",
-      errorType: errorPlan?.target ?? actual.error }];
+      errorType: eliminated ? rustRuntimeErrorTargetType() : errorPlan?.target ?? actual.error }];
     const parameters: TargetTypeRef[] = [...target.parameters];
     const arguments_: RustCallablePhysicalValueConversion[] = [];
     for (const [index, parameter] of logical.parameters.entries()) {
@@ -84,7 +87,8 @@ export function rustCallableConversionPhysical(
     const signature = { parameters, result, error };
     const carrier = physicalTarget(logical.target, signature);
     return carrier === undefined ? undefined : snapshotClosedMetadata({ logical, source: actual, carrier,
-      ...signature, arguments: arguments_, resultPlan, errors, ...(errorPlan === undefined ? {} : { errorPlan }) });
+      ...signature, arguments: arguments_, resultPlan, errors, ...(errorPlan === undefined ? {} : { errorPlan }),
+      ...(eliminated ? { eliminatedInvokeError: true as const } : {}) });
 
     function valuePlan(contract: RustValueConversionContract, identity: string): RustCallablePhysicalValueConversion {
       const errorType = conversionError(contract);

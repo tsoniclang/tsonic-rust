@@ -457,7 +457,8 @@ main();
   assert.deepEqual(callableTypes[1].genericArguments[0].type, nativeType("()"));
   assert.equal(callableTypes[1].genericArguments[1].type.identity, "tsonic-rust-runtime:TsonicError",
     "the timer callback keeps the same exact fallible unit ABI, independent of Result alias spelling");
-  assert.equal(nativeCalls(nativeFunction(result, "main", "src/main.rs"), "tsonic_rust_node::run_with_contexts").length,
+  // The Node provider declares its binary hook as run_entry_with_contexts (rust-nodejs nodejs/src/provider/package.ts).
+  assert.equal(nativeCalls(nativeFunction(result, "main", "src/main.rs"), "tsonic_rust_node::run_entry_with_contexts").length,
     1, "the selected providers activate the Node event loop");
   validateGeneratedProject("node-server-contract", result.artifacts);
 });

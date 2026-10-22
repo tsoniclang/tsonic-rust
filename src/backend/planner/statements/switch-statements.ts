@@ -76,6 +76,9 @@ export function planSwitchStatement(
     }
     return { statements };
   };
+  // A switch that never completes normally (sealed statement completion) ends every generated branch in an exit, so its
+  // if/else chain may take the function tail shape.
+  const switchExits = context.input.program.records.statementExit.get(node) === true;
   const defaultIndex = sections.findIndex((section) => section.condition === undefined);
   let selection: RustBlock = defaultIndex < 0
     ? { statements: [] }
@@ -91,6 +94,7 @@ export function planSwitchStatement(
         condition: section.condition,
         then: fallthroughBody(index),
         ...(selection.statements.length === 0 ? {} : { else: selection }),
+        ...(switchExits ? { tailEligible: true as const } : {}),
       }],
     };
   }

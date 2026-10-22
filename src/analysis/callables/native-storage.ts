@@ -272,6 +272,9 @@ export function createRustNativeStorageQueries(input: {
       if (!step(depth)) return undefined;
       if (visited.has(type)) return false;
       visited.add(type);
+      // A type-erased runtime callable has one physical layout whatever produced it (values are erased into it when
+      // stored), so an aggregate of erased callables (`JsArray<rt::Callable<..>>`) needs no producer selection.
+      if (type.kind === "target-named" && type.id === rustCallableTargetId) return false;
       if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
       const variants = input.definitions.sourceUnionVariants(type);
       const shape = rustStructuralObjectCarrierValue(type);

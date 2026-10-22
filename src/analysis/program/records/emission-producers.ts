@@ -16,6 +16,7 @@ import { createRustClosedTypeTestProducer } from "./type-tests.js";
 import { createRustOptionEqualityProducer } from "./option-equality.js";
 import { createRustIndexedLocationProducer } from "./indexed-locations.js";
 import { createRustLocationCallbackProducer } from "./location-callbacks.js";
+import { createRustErasedInputArgumentProducer } from "./erased-input-arguments.js";
 import { createRustDirectStorageProducer } from "./direct-storage.js";
 import { createRustUnaryEmissionProducer } from "./expression-unary.js";
 import { createRustFlowReadEmissionProducer } from "./flow-read-emission.js";
@@ -136,6 +137,7 @@ export function createRustEmissionRecordProducers(assertOpen: () => void) {
   const optionEqualityPlans = createRustOptionEqualityProducer(assertOpen);
   const indexedLocationPlans = createRustIndexedLocationProducer(assertOpen);
   const locationCallbackPlans = createRustLocationCallbackProducer(assertOpen);
+  const erasedInputArgumentPlans = createRustErasedInputArgumentProducer(assertOpen);
   const directStoragePlans = createRustDirectStorageProducer(assertOpen);
   const unaryEmissionPlans = createRustUnaryEmissionProducer(assertOpen);
   const flowReadEmissionPlans = createRustFlowReadEmissionProducer(assertOpen);
@@ -245,6 +247,7 @@ export function createRustEmissionRecordProducers(assertOpen: () => void) {
     ...optionEqualityPlans.records,
     ...indexedLocationPlans.records,
     ...locationCallbackPlans.records,
+    ...erasedInputArgumentPlans.records,
     ...directStoragePlans.records,
     ...locationStoragePlans.records,
     ...unaryEmissionPlans.records,
@@ -345,6 +348,7 @@ export function createRustEmissionRecordProducers(assertOpen: () => void) {
     optionEqualityPlans,
     indexedLocationPlans,
     locationCallbackPlans,
+    erasedInputArgumentPlans,
     directStoragePlans,
     locationStoragePlans,
     unaryEmissionPlans,

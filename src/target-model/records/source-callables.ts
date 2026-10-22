@@ -8,4 +8,6 @@ export interface RustSourceLexicalCallableQueries {
 export interface RustSourceCallableQueries {
   directLexicalBinding(declaration: Node): Node | undefined;
   borrowedReturnParameter(declaration: Node): Node | undefined;
+  /** The async function whose every call through this `const` binding is a native Promise edge. */
+  promiseCallAliasTarget(binding: Node): Node | undefined;
 }

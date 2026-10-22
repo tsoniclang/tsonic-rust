@@ -97,7 +97,12 @@ export function rustPhysicalEmissionOperationCarriers(abi: RustFinalizedOperatio
     ...abi.targetGenericArguments.flatMap(argument => argument.kind === "type" ? [argument.type] : []),
     ...(abi.result.kind === "sync" ? [abi.result.rawCarrier, abi.result.carrier, ...converted(abi.result.conversion)]
       : [abi.result.futureCarrier, abi.result.awaitedRawCarrier, abi.result.awaitedCarrier, ...converted(abi.result.awaitedConversion)]),
-    ...(abi.effects.errorCarrier === undefined ? [] : [abi.effects.errorCarrier]), ...abi.effects.nativeErrorCarriers ?? []];
+    ...(abi.effects.errorCarrier === undefined ? [] : [abi.effects.errorCarrier]), ...abi.effects.nativeErrorCarriers ?? [],
+    // A typed None constant input renders its payload type (`Option::<i32>::None`).
+    ...abi.targetArguments.flatMap(input => {
+      const source = input.source;
+      return source.kind === "constant" && source.value.kind === "none" && source.value.element !== undefined ? [source.value.element] : [];
+    })];
 }
 
 export function rustEmissionSourceIdentity(ast: AstReader, declaration: Node): string | undefined {

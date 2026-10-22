@@ -37,6 +37,7 @@ import { analyzeRustOptionEquality } from "../operations/option-equality.js";
 import { analyzeRustIndexedLocations } from "../storage/indexed-locations.js";
 import { admitRustComputedMembers } from "../operations/computed-members.js";
 import { analyzeRustLocationCallbacks } from "../callables/location-callbacks.js";
+import { analyzeRustErasedInputArguments } from "../callables/erased-input-arguments.js";
 import { analyzeRustDirectStorage } from "../storage/direct-storage.js";
 import { analyzeRustUnaryEmission } from "../operations/expression-unary.js";
 import { analyzeRustFlowReadEmission } from "../control-flow/flow-read-emission.js";
@@ -291,6 +292,7 @@ export function finalizeRustNativeEmission(
   analyzeRustOptionEquality(program, context.nativeNodes, context.records.optionEqualityPlans);
   analyzeRustIndexedLocations(program, context.nativeNodes, context.records.indexedLocationPlans);
   analyzeRustLocationCallbacks(program, context.nativeNodes, context.records.locationCallbackPlans, context.records);
+  analyzeRustErasedInputArguments(program, context.records.erasedInputArgumentPlans);
   const sourceCallArgumentIssues = analyzeRustSourceCallArguments(program, context.nativeNodes, context.records.sourceCallArgumentPlans);
   if (sourceCallArgumentIssues.length !== 0) return rejectedTargetStage(sourceCallArgumentIssues);
   analyzeRustUnionCalls(program, context.nativeNodes, context.records.unionCallPlans, context.records.conversionEmissionPlans);
