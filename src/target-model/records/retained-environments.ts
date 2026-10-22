@@ -18,4 +18,6 @@ export interface RustRetainedEnvironmentQueries {
   suspendedParametersFor(declaration: Node): readonly Node[] | undefined;
   lexicalFor(declaration: Node): RustRetainedLexicalSelection;
   environmentFor(declaration: Node): RustRetainedEnvironmentSelection;
+  /** An async function whose Promise escapes its callers' activations owns its retained inputs ('static). */
+  ownsRetainedInputs(declaration: Node): boolean;
 }

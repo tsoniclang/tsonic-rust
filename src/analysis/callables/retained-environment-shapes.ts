@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceLexicalEnvironment,
+  sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
@@ -53,6 +54,43 @@ export function createRustRetainedEnvironmentQueries(
     }), body];
     const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, "source");
     lexical.set(declaration, selected);
+    return selected;
+  };
+  // An async function's Promise stays within its callers' activations when every use is a direct call whose result
+  // is awaited there, directly or through a local binding read only by awaits in the same activation. Otherwise the
+  // Promise escapes and its retained inputs must be owned.
+  const resultEscapes = (declaration: Node): boolean => {
+    if (!ast.is.IsFunctionDeclaration(declaration)) return false;
+    const summary = navigation.declarationUseSummary(declaration);
+    if (summary.exported || summary.bindingWritten) return true;
+    const awaitedIn = (reference: Node, owner: Node | undefined): boolean =>
+      sourceExpressionResultDisposition(ast, reference).kind === "awaited-in-scope" && sourceEnclosingCallable(reference, ast) === owner;
+    for (const use of navigation.declarationUses(declaration)) {
+      if (!step()) return true;
+      if (use.kind === "type-only") continue;
+      const call = ast.parent(use.reference);
+      if (use.kind !== "direct-call" || call === undefined || !ast.is.IsCallExpression(call) ||
+        Node_Expression(ast, call) !== use.reference) return true;
+      const owner = sourceEnclosingCallable(call, ast);
+      const disposition = sourceExpressionResultDisposition(ast, call);
+      if (disposition.kind === "awaited-in-scope") continue;
+      const binding = disposition.use;
+      if (disposition.kind !== "stored" || !ast.is.IsVariableDeclaration(binding) || Node_Initializer(ast, binding) !== call) return true;
+      const local = navigation.declarationUseSummary(binding);
+      if (local.exported || local.bindingWritten) return true;
+      for (const read of navigation.declarationUses(binding)) {
+        if (!step()) return true;
+        if (read.kind !== "type-only" && !awaitedIn(read.reference, owner)) return true;
+      }
+    }
+    return false;
+  };
+  const owned = new Map<Node, boolean>();
+  const ownsRetainedInputs = (declaration: Node): boolean => {
+    const cached = owned.get(declaration);
+    if (cached !== undefined) return cached;
+    const selected = ast.hasModifierKind(declaration, "async") && resultEscapes(declaration);
+    owned.set(declaration, selected);
     return selected;
   };
   const isSuspended = (declaration: Node): boolean => ast.hasModifierKind(declaration, "async") ||
@@ -184,7 +222,7 @@ export function createRustRetainedEnvironmentQueries(
       }
     }
     const selected = parameters.filter((parameter): parameter is Node => parameter !== undefined && retained.has(parameter));
-    if (selected.length === 0) return none;
+    if (selected.length === 0 || ownsRetainedInputs(declaration)) return none;
     const identity = sourceNodeIdentity(ast, declaration);
     if (identity === undefined) return unresolved();
     const names = new Set<string>();
@@ -202,7 +240,7 @@ export function createRustRetainedEnvironmentQueries(
   // (the checkpoint behaviour). Selecting every declaration while the analysis context is still being created ran
   // source storage queries too early, and the first unresolved collector failed the shared storage budget for the
   // whole program.
-  return Object.freeze({ suspendedParametersFor, lexicalFor, environmentFor(declaration: Node) {
+  return Object.freeze({ suspendedParametersFor, lexicalFor, ownsRetainedInputs, environmentFor(declaration: Node) {
     const cached = environments.get(declaration);
     if (cached !== undefined) return cached;
     const selected = select(declaration);
