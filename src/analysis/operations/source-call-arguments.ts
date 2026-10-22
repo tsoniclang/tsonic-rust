@@ -75,13 +75,16 @@ export function prepareSelectedSourceCallArguments(
           parameters.flatMap((parameter) => parameter.inputs.filter((input) =>
             input.sourceArgumentIndex === index)),
         )) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING",
-        `Selected source argument ${index} has no exact carrier matching its effective parameter bindings.`,
-        argument,
-        ["target.capability=rust.source-call.argument-carrier"],
-      );
+      // An argument whose own selection was refused already reported that refusal; no second diagnostic follows it.
+      if (!walk.rejectedExpressions.has(argument)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING",
+          `Selected source argument ${index} has no exact carrier matching its effective parameter bindings.`,
+          argument,
+          ["target.capability=rust.source-call.argument-carrier"],
+        );
+      }
       return undefined;
     }
     // A callable argument (for example a Promise resolver) whose invocation signature is wider than the instantiated
