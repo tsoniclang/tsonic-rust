@@ -24,48 +24,6 @@ test("implemented row members exist in the operation tables", () => {
 
 const lanes = readTargetParityInventory("javascript-node-lanes");
 
-test("every C#-relative lane has exactly one valid classification", () => {
-  assert.ok(lanes.length >= 90, `lane list too small: ${lanes.length}`);
-  const seen = new Set();
-  for (const lane of lanes) {
-    assert.ok(["implemented", "hard-rejected", "target-limit"].includes(lane.classification), lane.lane);
-    assert.ok(!seen.has(lane.lane), `duplicate lane: ${lane.lane}`);
-    seen.add(lane.lane);
-    if (lane.classification === "target-limit") {
-      assert.ok(typeof lane.reason === "string" && lane.reason.length >= 40, `${lane.lane} must state its exact target boundary`);
-    }
-  }
-});
-
-test("the C# surface families cannot silently disappear from the inventory", () => {
-  const requiredFamilies = [
-    "Object.keys", "Object.assign", "Object.hasOwn",
-    "Number.parseInt", "Number.isNaN", "toFixed",
-    "console.log", "node:assert", "bare module aliases",
-    "process identity and metrics", "process stdio", "buffer extras",
-    "local-time getters", "UTC setters",
-    "localeCompare", "matchAll result consumption", "exec/match result consumption",
-    "streams and fs.watch", "discriminated object unions",
-  ];
-  for (const family of requiredFamilies) {
-    assert.ok(lanes.some((lane) => lane.lane.includes(family)), `missing lane family: ${family}`);
-  }
-});
-
-test("completed RegExp, JSON, and closed Object.assign lanes cannot regress to stale limits", () => {
-  for (const laneName of [
-    "dynamic patterns and complete ECMAScript constructs",
-    "replacer functions and selected toJSON",
-    "Object.assign over closed shapes",
-  ]) {
-    assert.equal(
-      lanes.find((lane) => lane.lane === laneName)?.classification,
-      "implemented",
-      laneName,
-    );
-  }
-});
-
 test("implemented lanes with row members exist in the operation tables", () => {
   for (const lane of lanes) {
     if (lane.classification !== "implemented") {

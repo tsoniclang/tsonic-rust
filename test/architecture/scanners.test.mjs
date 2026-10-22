@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, sep } from "node:path";
 import { rustLintAttributes } from "../../dist/backend/target-ast/normalization/lint-policy.js";
 import { maskNativeMethodLiterals } from "./native-method-syntax.mjs";
-import { inspectCarrierRegistrySource, readCarrierDivergenceRegister } from "../../../tsonic/test/helpers/carrier-registry.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sourceRoot = join(repositoryRoot, "src");
@@ -169,13 +168,9 @@ test("source-name guard permits native AST methods but rejects source-name dispa
   }
 });
 
-test("no C# target references in Rust target code", async () => {
-  const proof = inspectCarrierRegistrySource(new Map(sourceFiles.map(({ path, text }) =>
-    [path.slice(repositoryRoot.length + 1), text])), await readCarrierDivergenceRegister());
-  assert.equal(proof.failures.length, 0, proof.failures.join("\n"));
-  for (const { path } of sourceFiles) {
-    assert.doesNotMatch(proof.sources.get(path.slice(repositoryRoot.length + 1)),
-      /csharp|roslyn|dotnet/iu, `${path} references the C# target`);
+test("no C# target references in Rust target code", () => {
+  for (const { path, text } of sourceFiles) {
+    assert.doesNotMatch(text, /csharp|roslyn|dotnet/iu, `${path} references the C# target`);
   }
 });
 

@@ -643,16 +643,16 @@ for (const [name, declarations, invoked] of cases) {
   });
 }
 
-test("Rust adoption provenance has the same fixed Unicode/CRLF payload as C#", () => {
+test("adoption provenance carries its fixed Unicode/CRLF payload independent of the project root", () => {
   const source = 'const marker = "界😀";\r\nasync function identity<Value>(value: Value) {\r\n\treturn value;\r\n}\r\n' +
     "export function reject(promised: Promise<number>): void {\r\n\tvoid identity(promised);\r\n}";
   const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
-  assert.equal(compilation.harness.paths.projectRoot, "/src", "the actual Rust root differs from the paired C# checkout");
+  assert.equal(compilation.harness.paths.projectRoot, "/src", "the project root is part of the proof");
   const issue = rejected(compilation, "identity(promised)", "KindCallExpression", "identity");
   assert.deepEqual(issue.sourceSpan, { fileName: "index.ts", line: 6, column: 7, endLine: 6, endColumn: 25 },
     "exact actual instantiation coordinates, not the related declaration");
   assert.deepEqual(issue.evidence, ["declaration index.ts:2:1", "first-sensitive-operation index.ts:3:2"],
-    "byte-identical to the paired C# expectation, independent of the physical checkout");
+    "byte-identical, independent of the physical checkout");
 });
 
 test("Rust generic class adoption is refused at the checked constructor", () => {

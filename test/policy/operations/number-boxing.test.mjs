@@ -49,7 +49,7 @@ test("sealed number boxing rejects source-domain and conversion mutations", () =
   assert.equal(validateRustFinalizedOperationAbi(malformed), false);
 });
 
-test("number boxing executes the shared C# and Rust source proof", { timeout: 300_000 }, () => {
+test("number boxing executes the shared source proof", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "number_boxing" } },
     files: { "index.ts": (`${numberBoxingProof}\nexport function main(): void { if (!run()) throw new Error("boxing effects"); }` + "\nmain();\n") },

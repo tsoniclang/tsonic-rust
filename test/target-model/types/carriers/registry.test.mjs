@@ -17,7 +17,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const current = await loadCarrierRegistry(root);
 
 test("Rust carrier registry covers the actual native kind union and every concrete constructor contract", () => {
-  assert.equal(current.files.has("src/target-model/types/carriers/registry.ts"), true);
+  assert.equal([...current.files.keys()].some(file => file.includes("carriers/registry")), false, "product source ships no registry");
   assert.deepEqual(validateCarrierRegistry(current.rows, current.vocabulary), []);
 });
 
@@ -80,7 +80,7 @@ test("retained E71 vocabulary is explicitly frozen, without admitting additional
   }
 });
 
-test("native array const extents and trait-associated projections retain exact Rust syntax rather than phantom counterparts", () => {
+test("native array const extents and trait-associated projections retain exact Rust syntax without another target's carriers", () => {
   const value = { kind: "source-primitive", name: "int64" };
   const key = { kind: "source-primitive", name: "uint32" };
   const extent = { kind: "integer", value: "9007199254740993" };

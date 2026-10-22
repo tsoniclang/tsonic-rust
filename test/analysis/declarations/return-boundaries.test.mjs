@@ -3,8 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
 // A return statement inside a nested callable body is not a return of the enclosing function. The callable body
-// boundary is the shared isSourceCallableBodyBoundary from @tsonic/target-api/source. The C# owner test
-// test/analysis/declarations/return-boundaries.test.mjs uses the same sources once its C# predicate is migrated.
+// boundary is the shared isSourceCallableBodyBoundary from @tsonic/target-api/source.
 const localClass = constructorBody => `export function make() {
   class Local {
     tag: number = 2;

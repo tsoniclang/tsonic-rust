@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
-// Paired with the C# owner test test/analysis/safety/application-index.test.mjs: the same sources and the same
-// expected membership. Membership is decided once by @tsonic/target-api's createTargetSafetyApplicationIndex.
+// Membership is decided once by @tsonic/target-api's createTargetSafetyApplicationIndex.
 const header = `import { safety, unsafecontext } from "@tsonic/core/lang.js";
 import type { int32 } from "@tsonic/core/types.js";
 

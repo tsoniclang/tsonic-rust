@@ -9,7 +9,7 @@ function sourceDiagnostics(sourceText, surfaces = ["js"]) {
   }));
 }
 
-test("Rust JS Number locale declaration checks the same source argument contract as C#", () => {
+test("JS Number locale declaration checks its source argument contract", () => {
   const diagnostics = sourceDiagnostics(`
     export function observe(value: number, locales: string[], options: object): string {
       const defaultText: string = value.toLocaleString();
