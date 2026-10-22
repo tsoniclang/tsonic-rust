@@ -32,7 +32,7 @@ export function materializeClosedMetadata<T>(value: T): T {
 
 export function isClosedMetadata(value: unknown): boolean {
   try {
-    return validateClosedMetadata(value, new WeakSet<object>());
+    return validateClosedMetadata(value, []);
   } catch {
     return false;
   }
@@ -73,7 +73,8 @@ function closedMetadataKeyValidated(value: unknown): string {
   }
 }
 
-function validateClosedMetadata(value: unknown, active: WeakSet<object>): boolean {
+// The recursion path is an array stack: validating a key is a pure read and must not mutate any collection.
+function validateClosedMetadata(value: unknown, active: object[]): boolean {
   if (value === null || value === undefined || typeof value === "string" ||
     typeof value === "boolean" || typeof value === "bigint") {
     return true;
@@ -81,10 +82,10 @@ function validateClosedMetadata(value: unknown, active: WeakSet<object>): boolea
   if (typeof value === "number") {
     return Number.isFinite(value);
   }
-  if (typeof value !== "object" || active.has(value)) {
+  if (typeof value !== "object" || active.includes(value)) {
     return false;
   }
-  active.add(value);
+  active.push(value);
   try {
     if (Array.isArray(value)) {
       return isDenseDataArray(value) && value.every((entry) => validateClosedMetadata(entry, active));
@@ -101,7 +102,7 @@ function validateClosedMetadata(value: unknown, active: WeakSet<object>): boolea
         validateClosedMetadata(descriptor.value, active);
     });
   } finally {
-    active.delete(value);
+    active.pop();
   }
 }
 
