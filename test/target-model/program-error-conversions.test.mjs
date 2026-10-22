@@ -2,7 +2,9 @@ import { createRustRecordFixture } from "../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rustProgramErrorConversionMatches } from "../../dist/policy/conversions/program-error.js";
+import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches } from "../../dist/policy/conversions/program-error.js";
+import { selectRustProgramErrorRoute } from "../../dist/analysis/errors/source-packages.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../helpers/plan-context.mjs";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
   rustSourceTypeCarrier } from "../../dist/target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../dist/policy/types/value-carrier-reconciliation.js";
@@ -47,42 +49,42 @@ test("program-error construction retains its exact class, variant and native pay
   }
 });
 
+// Route ownership and runtime carrier registration moved into analysis (selectRustProgramErrorRoute;
+// rustProgramErrorRuntimeRouteMatches checked when the throw fact is recorded); the planner renders the sealed route.
+function plannerContext(routes = () => undefined) {
+  const program = rustProgramWithTypeEmissions([target]);
+  const records = { ...program.records,
+    projectType: { get: carrier => carrier === source ? definition : program.records.projectType.get(carrier) },
+    projectError: { get: selected => selected === definition ? { variant: "Failure", carrier: source, sourceError: false }
+      : program.records.projectError.get(selected) },
+    programErrorRoute: { get: routes } };
+  return rustProgramPlanContext({ ...program, records }, { sourcePackageComponentId: "root" });
+}
+
 test("program-error emission rejects stale variants and unrelated source-package routes", () => {
   const boundary = { componentId: "root", errorDomain: "program", errorTypePath: "rt::TsonicError" };
   const value = { kind: "identifier", name: "original" };
-  for (const variant of ["Failure", "Changed"]) {
-    for (const owner of ["root", "unrelated"]) {
-      const context = {
-        diagnostics: [], usedAliases: new Set(),
-        input: { program: { projectTypes: policy, typeDefinitions: definitions, source: { ast: {
-          getFileName: () => "/failure.ts", getSourceText: () => "", pos: () => 0, end: () => 0,
-          kindName: () => "KindIdentifier",
-        } } } },
-        sourcePackageErrors: {
-          componentIdByDefinition: new Map([[definition, owner]]),
-          domainsByComponentId: new Map([["root", { definitions: [definition], externalErrors: [] }]]),
-          dependencyErrorsByComponentId: new Map(),
-        },
-      };
-      const result = planRustProgramErrorConstruction({ kind: "program-error", source, target, route: { kind: "project", variant } },
-        value, undefined, context, boundary);
-      if (variant === "Failure" && owner === "root") {
-        assert.deepEqual(result, { kind: "call", path: "rt::TsonicError::Failure", args: [value] });
-        assertNoTargetDiagnostics(context.diagnostics);
-      } else {
-        assert.equal(result, undefined);
-        assert.equal(context.diagnostics.length, 1);
-      }
-    }
-  }
+  const plan = owner => ({ componentIdByFileName: new Map(), componentIdByDefinition: new Map([[definition, owner]]),
+    domainsByComponentId: new Map([["root", { definitions: [definition], externalErrors: [] }]]),
+    dependencyErrorsByComponentId: new Map() });
+  assert.deepEqual(selectRustProgramErrorRoute(plan("root"), "root", definition, "Failure"), { kind: "local", variant: "Failure" });
+  assert.equal(selectRustProgramErrorRoute(plan("unrelated"), "root", definition, "Failure"), undefined,
+    "an unrelated source-package owner has no route");
+  const local = (consumer, selected, variant) => consumer === "root" && selected === definition && variant === "Failure"
+    ? { kind: "local", variant: "Failure" } : undefined;
+  const conversion = variant => ({ kind: "program-error", source, target, route: { kind: "project", variant } });
+  assert.deepEqual(planRustProgramErrorConstruction(conversion("Failure"), value, undefined, plannerContext(local), boundary),
+    { kind: "call", path: "rt::TsonicError::Failure", args: [value] });
+  assert.throws(() => planRustProgramErrorConstruction(conversion("Changed"), value, undefined, plannerContext(local), boundary),
+    "a stale variant produces no value");
+  assert.throws(() => planRustProgramErrorConstruction(conversion("Failure"), value, undefined, plannerContext(), boundary),
+    "a missing route produces no value");
 });
 
 test("runtime error emission requires an exact registered carrier and selected boundary", () => {
   const native = { kind: "target-named", id: "example.NativeFailure" };
   const unrelated = { kind: "target-named", id: "example.UnrelatedFailure" };
   const builtin = rustJsErrorTargetType();
-  const boundary = { componentId: "root", errorDomain: "runtime", errorTypePath: "rt::TsonicError" };
-  const value = { kind: "identifier", name: "original" };
   for (const [carrier, registered, selectedBoundary, accepted] of [
     [native, [native], "provider-native", true],
     [native, [], "provider-native", false],
@@ -92,25 +94,15 @@ test("runtime error emission requires an exact registered carrier and selected b
     [builtin, [], "target-runtime", true],
     [builtin, [builtin], "provider-native", false],
   ]) {
-    const registry = createRustTypeDefinitionRegistry();
-    for (const registeredCarrier of registered) {
-      assert.equal(registry.registerProgramErrorOrigin(registeredCarrier, { kind: "provider" }), true);
-    }
-    const context = { diagnostics: [], usedAliases: new Set(), input: { program: {
-      providerErrorCarriers: registered, typeDefinitions: registry.seal(), source: { ast: {
-        getFileName: () => "/failure.ts", getSourceText: () => "", pos: () => 0, end: () => 0,
-        kindName: () => "KindIdentifier",
-      } },
-    } } };
-    const result = planRustProgramErrorConstruction({ kind: "program-error", source: carrier, target,
-      route: { kind: "runtime", boundary: selectedBoundary } }, value, undefined, context, boundary);
-    if (accepted) {
-      assert.deepEqual(result, { kind: "call", path: "rt::TsonicError::from", args: [value] });
-      assertNoTargetDiagnostics(context.diagnostics);
-    } else {
-      assert.equal(result, undefined);
-      assert.equal(context.diagnostics.length, 1);
-    }
+    assert.equal(rustProgramErrorRuntimeRouteMatches({ kind: "runtime", boundary: selectedBoundary }, carrier, registered),
+      accepted, `${carrier.id}:${selectedBoundary}:${registered.length}`);
+  }
+  const boundary = { componentId: "root", errorDomain: "runtime", errorTypePath: "rt::TsonicError" };
+  const value = { kind: "identifier", name: "original" };
+  for (const [carrier, selectedBoundary] of [[native, "provider-native"], [builtin, "target-runtime"]]) {
+    assert.deepEqual(planRustProgramErrorConstruction({ kind: "program-error", source: carrier, target,
+      route: { kind: "runtime", boundary: selectedBoundary } }, value, undefined, plannerContext(), boundary),
+      { kind: "call", path: "rt::TsonicError::from", args: [value] });
   }
 });
 
