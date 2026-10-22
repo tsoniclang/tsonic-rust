@@ -6,6 +6,7 @@ import { rustRetainedEnvironment } from "./retained-values.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
 export function closeRustRetainedResult(
   declaration: Node, result: TargetTypeRef, parameters: readonly (TargetTypeRef | undefined)[], context: RustSourcePolicyContext,
@@ -20,7 +21,8 @@ export function closeRustRetainedResult(
   const retained = rustRetainedEnvironment(declaration, parameters, context);
   if (retained.kind === "unresolved") return undefined;
   const environment = retained.kind === "selected" ? retained.environment : undefined;
-  const carrier = closeRustSuspendedStorage(result, "callable-result", environment?.lifetime);
+  // Without an open input the result can retain only storage it owns, so its open callable storage is 'static.
+  const carrier = closeRustSuspendedStorage(result, "callable-result", environment?.lifetime ?? rustStaticLifetime);
   return carrier === undefined ? undefined : Object.freeze({ carrier, ...(environment === undefined ? {} : { environment }) });
 }
 

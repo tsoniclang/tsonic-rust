@@ -146,17 +146,20 @@ function structuralViewMemberMatches(
 }
 
 function structuralViewTemplate(carrier: TargetTypeRef, walk: RustFactWalk): TargetTypeRef | undefined {
-  const visited: TargetTypeRef[] = [];
   const instantiations = walk.sourceTypes.structuralInstantiations();
-  for (;;) {
-    if (visited.some(previous => rustTargetTypeRefEquals(previous, carrier))) return undefined;
-    visited.push(carrier);
-    const parents = instantiations.filter(entry => rustTargetTypeRefEquals(entry.instance, carrier) &&
-      !rustTargetTypeRefEquals(entry.template, carrier));
-    if (parents.length === 0) return carrier;
-    if (parents.some(entry => !rustTargetTypeRefEquals(entry.template, parents[0]!.template))) return undefined;
-    carrier = parents[0]!.template;
-  }
+  // An instance may be recorded under several templates of one chain (a retained-lifetime result is an instance of the
+  // placeholder instance, which is an instance of the generic template); they agree when they share one root.
+  const rootFor = (current: TargetTypeRef, visited: readonly TargetTypeRef[]): TargetTypeRef | undefined => {
+    if (visited.some(previous => rustTargetTypeRefEquals(previous, current))) return undefined;
+    const parents = instantiations.filter(entry => rustTargetTypeRefEquals(entry.instance, current) &&
+      !rustTargetTypeRefEquals(entry.template, current));
+    if (parents.length === 0) return current;
+    const roots = parents.map(entry => rootFor(entry.template, [...visited, current]));
+    const root = roots[0];
+    return root !== undefined && roots.every(candidate => candidate !== undefined && rustTargetTypeRefEquals(candidate, root))
+      ? root : undefined;
+  };
+  return rootFor(carrier, []);
 }
 
 function collectStructuralViewBindings(
