@@ -23,24 +23,29 @@ export function prepareRustProjectCallableFieldStorage(input: {
   readonly projectTypes: RustProjectTypePolicy;
 }, subjectFor: (subject: Extract<ReturnType<SourceStorageQueries["subject"]>, { readonly kind: "resolved" }>["subject"],
   carrier: TargetTypeRef) => RustNativeStorageSelection): RustProjectCallableFieldStorage {
-  const select = (): ReadonlyMap<Node, TargetTypeRef> => {
-    const fields = new Map<Node, TargetTypeRef>();
-    for (const definition of input.projectTypes.definitions) {
-      for (const field of input.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []) {
-        const declared = input.records.runtimeCarrier.get(field.declaration)?.carrier ??
-          input.records.runtimeCarrier.get(Node_Type(input.ast, field.declaration))?.carrier;
-        if (declared === undefined || rustCallableProtocol(declared) === undefined) continue;
-        // The declaration is its own storage origin; its stored producer is the initializer value.
-        const initializer = Node_Initializer(input.ast, field.declaration);
-        if (initializer === undefined) continue;
-        const subject = input.storage.subject(initializer, "value");
-        if (subject.kind === "unresolved") continue;
-        const selected = subjectFor(subject.subject, declared);
-        if (selected.kind !== "unresolved") fields.set(field.declaration, selected.carrier);
-      }
+  const fields = new Map<Node, Node>();
+  for (const definition of input.projectTypes.definitions) {
+    for (const field of input.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []) {
+      // The declaration is its own storage origin; its stored producer is the initializer value.
+      const initializer = Node_Initializer(input.ast, field.declaration);
+      if (initializer !== undefined) fields.set(field.declaration, initializer);
     }
-    return fields;
-  };
-  let fields: ReadonlyMap<Node, TargetTypeRef> | undefined;
-  return Object.freeze({ get: (declaration: Node) => (fields ??= select()).get(declaration) });
+  }
+  const selected = new Map<Node, TargetTypeRef>();
+  return Object.freeze({ get(declaration: Node): TargetTypeRef | undefined {
+    const existing = selected.get(declaration);
+    if (existing !== undefined) return existing;
+    const initializer = fields.get(declaration);
+    const declared = initializer === undefined ? undefined : input.records.runtimeCarrier.get(declaration)?.carrier ??
+      input.records.runtimeCarrier.get(Node_Type(input.ast, declaration))?.carrier;
+    if (initializer === undefined || declared === undefined || rustCallableProtocol(declared) === undefined) return undefined;
+    const subject = input.storage.subject(initializer, "value");
+    if (subject.kind === "unresolved") return undefined;
+    // Only a completed selection is kept: before the producers seal their physical implementations the selection is
+    // not yet available, and the declared logical carrier stays in use until it is.
+    const selection = subjectFor(subject.subject, declared);
+    if (selection.kind === "unresolved") return undefined;
+    selected.set(declaration, selection.carrier);
+    return selection.carrier;
+  } });
 }
