@@ -98,10 +98,15 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
       const receiverNode = rustMemberAccessReceiver(context.input.program.source.ast, callee);
       if (fact.target.dispatch !== undefined) {
         const variant = selection.dispatch ?? failRustPlannerInvariant("An admitted method requires its native dispatch specialization.", node);
+        // An exact call (super.method()) dispatches through the active project root; only a virtual call evaluates its
+        // receiver expression (`super` has no value of its own).
+        if (fact.target.dispatch.selected === "exact") {
+          planned = planRustExactProjectMethodCall(node, context.projectDispatchRoot, fact.target.dispatch.ownerCarrier, variant.exactSlot, shaped, context);
+          break;
+        }
         const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-        planned = fact.target.dispatch.selected === "exact"
-          ? planRustExactProjectMethodCall(node, context.projectDispatchRoot, fact.target.dispatch.ownerCarrier, variant.exactSlot, shaped, context)
-          : receiver === undefined ? undefined : planRustVirtualProjectMethodCall(node, receiver, fact.target.dispatch.ownerCarrier, variant.virtualSlot, shaped, context);
+        planned = receiver === undefined ? undefined
+          : planRustVirtualProjectMethodCall(node, receiver, fact.target.dispatch.ownerCarrier, variant.virtualSlot, shaped, context);
         break;
       }
       const promoted = receiverNode === undefined || !fact.target.mutatesSelf ? { kind: "not-promoted" as const }
