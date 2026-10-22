@@ -300,8 +300,14 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       usedNames.add(implementation.stateName);
     }
   }
+  const genericImplementations = new Set(generic.definitions.flatMap(definition =>
+    definition.implementations.map(implementation => implementation.declaration)));
   const native = createRustNativeCallableInputPlan({ ast: input.ast, records: input.records, sourcePackages: input.sourcePackages,
-    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, usedNames });
+    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, usedNames,
+    declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
+      input.ast.is.IsConstructorDeclaration(owner) || input.ast.is.IsGetAccessorDeclaration(owner) ||
+      input.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
+      input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved" });
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
     nodes: input.nativeNodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {
@@ -463,7 +469,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       genericRegistry.publishPhysical(finalPhysical);
       const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
-        capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
+        capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem,
+        isConcreteCallableParameter: native.isConcreteCallableParameter });
       publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs, frames,
         emissionContexts: emission.value.contexts });
       sealResult = resolvedTargetStage(publishedPlan);

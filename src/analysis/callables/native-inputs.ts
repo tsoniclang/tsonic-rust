@@ -56,6 +56,8 @@ export interface RustNativeCallableInputPlan {
   originsForValue(node: Node): RustNativeCallableOrigins;
   bindingsFor(declaration: Node): SourceStorageBindings | undefined;
   protocolForSourceItem(fileName: string, typeName: string): RustNativeCallableProtocol | undefined;
+  /** Whether a callable parameter keeps its concrete callable carrier because its owner is emitted as a closure value. */
+  isConcreteCallableParameter(parameter: Node): boolean;
 }
 
 export function createRustNativeCallableInputPlan(input: {
@@ -66,6 +68,12 @@ export function createRustNativeCallableInputPlan(input: {
   readonly definitions: RustTypeDefinitions;
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
+  /**
+   * Whether a callable owner is emitted as a native item (function, method, constructor, accessor, lexical function or
+   * generic callable implementation) that can declare generic callable inputs. Owners emitted as closure values cannot
+   * declare type parameters, so their callable parameters keep their concrete callable carrier.
+   */
+  readonly declaresGenericInputs: (owner: Node) => boolean;
 }): RustNativeCallableInputPlan {
   const registry = createRustNativeCallableProtocolRegistry(input);
   const componentByFile = new Map(input.sourcePackages.packages.flatMap(entry =>
@@ -92,6 +100,7 @@ export function createRustNativeCallableInputPlan(input: {
     if (subject.kind !== "input") return undefined;
     const owner = input.ast.parent(subject.node);
     if (owner === undefined || !input.ast.parameters(owner).includes(subject.node)) return undefined;
+    if (!input.declaresGenericInputs(owner)) return undefined;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableProtocol(selected) === undefined && rustCallableProtocol(selected) === undefined) return undefined;
     const members = inputs.get(owner) ?? new Map<SourceStorageSubject, RustNativeCallableInput>();
@@ -133,8 +142,12 @@ export function createRustNativeCallableInputPlan(input: {
         isRustNeverCarrier(input.records.sourceCallableReturn.get(origin.node)?.returnCarrier)) continue;
       // A generic method read from an input is that input's stored generic callable family value, not a callable
       // input of this declaration.
+      // A callable parameter of an owner emitted as a closure value keeps its concrete callable carrier; it is a concrete
+      // value of this declaration, not a generic native input.
+      const inputOwner = origin.kind === "input" ? input.ast.parent(origin.node) : undefined;
       if (origin.kind !== "input" || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
-        rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined) {
+        rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined ||
+        inputOwner !== undefined && input.ast.parameters(inputOwner).includes(origin.node) && !input.declaresGenericInputs(inputOwner)) {
         implementations.add(origin);
         continue;
       }
@@ -200,7 +213,11 @@ export function createRustNativeCallableInputPlan(input: {
   const declarationInputs = new Map([...inputs].map(([owner, members]) => [owner, Object.freeze([...members.values()])]));
   const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
   const emptyInputs: readonly RustNativeCallableInput[] = Object.freeze([]);
-  return Object.freeze({ bindingsFor, originsFor, inputs: selectedInputs, protocols: definitions,
+  const isConcreteCallableParameter = (parameter: Node): boolean => {
+    const owner = input.ast.parent(parameter);
+    return owner !== undefined && input.ast.parameters(owner).includes(parameter) && !input.declaresGenericInputs(owner);
+  };
+  return Object.freeze({ bindingsFor, originsFor, isConcreteCallableParameter, inputs: selectedInputs, protocols: definitions,
     calls: Object.freeze([...calls.values()]), callFor: (node: Node) => calls.get(node),
     inputsFor: (declaration: Node) => declarationInputs.get(declaration) ?? emptyInputs,
     capturesFor: (declaration: Node) => declarationCaptures.get(declaration) ?? emptyInputs,

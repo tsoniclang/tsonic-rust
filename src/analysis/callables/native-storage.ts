@@ -530,6 +530,22 @@ export function createRustNativeStorageQueries(input: {
               const originCarrier = origin.projection.length === 0
                 ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
                 : frameFieldCarrier(origin);
+              // A callable parameter of an owner emitted as a closure value is a concrete runtime callable supplied by
+              // the caller; its physical carrier is its declared parameter carrier, with no producer of its own.
+              const concreteParameter = origin.kind === "input" && origin.projection.length === 0 &&
+                input.native.isConcreteCallableParameter(origin.node)
+                ? input.records.sourceParameterAbi.get(origin.node)?.parameterCarrier : undefined;
+              if (concreteParameter !== undefined) {
+                const declared = rustOptionElementCarrier(concreteParameter) ?? concreteParameter;
+                if (!rustCallableInvocationSignaturesMatch(current, callableValueCarrier(declared) ?? declared))
+                  return fail("Native callable storage conflicts with its exact concrete callable parameter.");
+                joinable = false;
+                if (physical !== undefined && !rustTargetTypeRefEquals(physical, declared))
+                  return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
+                physical = declared;
+                alternatives.set(origin, declared);
+                continue;
+              }
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) {
                 absent.add(origin);
                 continue;
