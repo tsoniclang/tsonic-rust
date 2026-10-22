@@ -3,6 +3,7 @@ import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { nameRustSignatureTypes, type RustNamedSignatureScope } from "./signature-aliases.js";
 import { lowerRustCompletionScope } from "./completion-regions.js";
 import { rustLintAttributes } from "./lint-policy.js";
+import { rustValueBlock } from "../syntax/value-block.js";
 import type { RustAttribute } from "../syntax/attributes.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,
   rustExpressionDeclaresNonSnakeName, rustStatementDeclaresNonSnakeName } from "./authored-names.js";
@@ -191,7 +192,76 @@ function foldRustDirectLateInitializations(statements: readonly RustStmt[]): rea
     }
     folded.push(...run.filter(declaration => pending.has(declaration.name)), ...initialized);
   }
-  return foldRustLetAndReturn(folded);
+  return foldRustLetAndReturn(foldRustConditionalLateInitializations(folded));
+}
+
+// `let x: T;` followed by an `if` whose every branch ends by assigning x is `let x: T = if c { … } else { … };`
+// (clippy::needless_late_init). Each branch may first bind immutable locals or evaluate effects that do not mention x;
+// an else-if chain folds branch by branch. Syntax only: x is unread before its assignment in every branch.
+function foldRustConditionalLateInitializations(statements: readonly RustStmt[]): readonly RustStmt[] {
+  const folded: RustStmt[] = [];
+  for (let index = 0; index < statements.length; index++) {
+    const declaration = statements[index]!;
+    const next = statements[index + 1];
+    const initializer = declaration.kind === "let" && declaration.init === undefined && (declaration.attrs?.length ?? 0) === 0 &&
+      next !== undefined ? rustConditionalLateInitializer(next, declaration.name) : undefined;
+    if (declaration.kind !== "let" || initializer === undefined) {
+      folded.push(declaration);
+      continue;
+    }
+    folded.push({ ...declaration, init: initializer });
+    index++;
+  }
+  return folded;
+}
+
+function rustConditionalLateInitializer(statement: RustStmt, path: string): RustExpr | undefined {
+  if (statement.kind !== "if" || statement.else === undefined || (statement.attrs?.length ?? 0) !== 0 ||
+    (statement.then.innerAttrs?.length ?? 0) !== 0 || (statement.else.innerAttrs?.length ?? 0) !== 0 ||
+    rustSyntaxReferencesPath(statement.condition, path)) return undefined;
+  const whenTrue = rustBranchAssignmentValue(statement.then, path);
+  const whenFalse = whenTrue === undefined ? undefined : rustBranchAssignmentValue(statement.else, path);
+  return whenTrue === undefined || whenFalse === undefined ? undefined
+    : { kind: "conditional", condition: statement.condition, whenTrue, whenFalse };
+}
+
+function rustBranchAssignmentValue(block: RustBlock, path: string): RustExpr | undefined {
+  const last = block.statements[block.statements.length - 1];
+  if (last === undefined) return undefined;
+  let value = last.kind === "assign" && last.operator === "=" && last.target.kind === "path" && last.target.path === path &&
+    !rustSyntaxReferencesPath(last.value, path) ? last.value : rustConditionalLateInitializer(last, path);
+  if (value === undefined) return undefined;
+  for (let index = block.statements.length - 2; index >= 0; index--) {
+    const setup = block.statements[index]!;
+    if (rustSyntaxReferencesPath(setup, path)) return undefined;
+    const binding = (statement: RustStmt | undefined) => statement?.kind === "let" && statement.init !== undefined &&
+      !statement.mutable && (statement.attrs?.length ?? 0) === 0
+      ? { name: statement.name, value: statement.init, ...(statement.type === undefined ? {} : { type: statement.type }) } : undefined;
+    const selected = binding(setup);
+    if (selected !== undefined) {
+      const bindings = [selected];
+      for (let previous = binding(block.statements[index - 1]); previous !== undefined; previous = binding(block.statements[index - 1])) {
+        bindings.unshift(previous);
+        index--;
+      }
+      value = rustValueBlock(bindings, value);
+    } else if (setup.kind === "expr" || setup.kind === "assign") {
+      value = { kind: "evaluate-then", discard: "unit", value, effect: setup.kind === "expr" ? setup.expr
+        : { kind: "assignment", target: setup.target, operator: setup.operator, value: setup.value } };
+    } else return undefined;
+  }
+  return value;
+}
+
+// Whether a syntax subtree mentions `path` as a path expression or assignment target (conservative: nested
+// bindings that shadow it still count).
+function rustSyntaxReferencesPath(value: unknown, path: string): boolean {
+  if (Array.isArray(value)) return value.some(entry => rustSyntaxReferencesPath(entry, path));
+  if (value === null || typeof value !== "object") return false;
+  const node = value as { readonly kind?: unknown; readonly path?: unknown; readonly name?: unknown };
+  if (node.kind === "path" && node.path === path) return true;
+  if (node.kind === "let" && node.name === path) return true;
+  return Object.values(value).some(entry => rustSyntaxReferencesPath(entry, path));
 }
 
 // A block ending in `let x = value; x` is the value itself (clippy::let_and_return). Only an unannotated, unattributed,
