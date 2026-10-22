@@ -3,7 +3,8 @@ import { Node_Expression, Node_Initializer, sourceDeclarationIsModuleScoped, sou
 
 import type { RustSourceLexicalCallableQueries } from "../../target-model/records/source-callables.js";
 
-export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram, nodes: readonly Node[]): RustSourceLexicalCallableQueries {
+export function createRustSourceLexicalCallableQueries(source: TargetSourceProgram, nodes: readonly Node[],
+  explicitUnsafe: ReadonlySet<Node>): RustSourceLexicalCallableQueries {
   const bindings = new WeakMap<Node, Node | null>();
   const calls = new WeakMap<Node, WeakMap<Node, readonly Node[] | null>>();
   const callsFor = (binding: Node, implementation: Node): readonly Node[] | undefined => {
@@ -18,7 +19,9 @@ export function createRustSourceLexicalCallableQueries(source: TargetSourceProgr
   for (const declaration of nodes) {
     if (source.ast.is.IsFunctionDeclaration(declaration)) callsFor(declaration, declaration);
     else if (source.ast.is.IsArrowFunction(declaration)) {
-      const selected = selectDirectLexicalCallableBinding(declaration, source, callsFor);
+      // A lexical function is emitted as a separate Rust item, which does not inherit an enclosing unsafe block; an
+      // arrow inside an explicit unsafecontext() region stays a closure so that it keeps the region's unsafety.
+      const selected = explicitUnsafe.has(declaration) ? undefined : selectDirectLexicalCallableBinding(declaration, source, callsFor);
       bindings.set(declaration, selected ?? null);
     }
   }

@@ -136,7 +136,7 @@ closureCapture: { get: (node) => {
     const runtimeValueUses = createRustRuntimeValueUsePlan({ ast, navigation: currentSource.navigation,
       safetyApplications: { isCompileTimeApplicationReference: () => false } });
     const lexicalFunctions = createRustLexicalFunctionEnvironmentPlan(currentSource, participation.nodes, records,
-      runtimeValueUses, createRustSourceCallableQueries(sourceStorage));
+      runtimeValueUses, createRustSourceCallableQueries(sourceStorage, new Set()));
     const typeDefinitions = createRustTypeDefinitionRegistry();
     const sourceTypes = createRustSourceTypeRegistry(undefined, typeDefinitions);
     const projectTypes = createRustProjectTypePolicy({ ast, names, navigation: currentSource.navigation,

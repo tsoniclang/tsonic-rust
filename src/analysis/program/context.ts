@@ -40,7 +40,7 @@ import { analyzeRustLifetimes } from "../declarations/lifetimes.js";
 import { emptyRustLifetimeIndex, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { createRustGeneratedDeclarationUseRegistry, type RustGeneratedDeclarationUseRegistry } from "./records/generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
-import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { analyzeSourceReceiverOccurrences, createSourceExplicitUnsafeContextIndex, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../source-profiles/source-storage-effects.js";
@@ -179,7 +179,8 @@ export function createRustAnalysisContext(
     nativeNodes,
     isNativeNode,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
-    sourceCallables: createRustSourceCallableQueries(sourceStorage),
+    sourceCallables: createRustSourceCallableQueries(sourceStorage,
+      createSourceExplicitUnsafeContextIndex(ast, sourceFiles, node => safetyApplications.operationForExpression(node))),
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage, declarations: nativeNodes,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
     callableOwnership: createRustCallableOwnershipRegistry(),

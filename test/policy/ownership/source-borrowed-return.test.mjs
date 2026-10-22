@@ -25,7 +25,7 @@ function checkedFixture(text, name = "read", valid = true) {
 function fixture(text, name = "read", valid = true) {
   const current = checkedFixture(text, name, valid);
   const { declaration, binding, sourceStorage } = current;
-  const queries = createRustSourceCallableQueries(sourceStorage);
+  const queries = createRustSourceCallableQueries(sourceStorage, new Set());
   return { ...current,
     direct: queries.directLexicalBinding(declaration) === binding,
     selected: queries.borrowedReturnParameter(declaration) };
@@ -62,7 +62,7 @@ function observedQueries(current) {
       reads.returnOrigins++;
       return sourceStorage.boundOriginsFor(...arguments_);
     },
-  }));
+  }), new Set());
   return { queries, reads };
 }
 
