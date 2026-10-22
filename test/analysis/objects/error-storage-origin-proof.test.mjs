@@ -26,7 +26,7 @@ for (const jsEnabled of [false, true]) {
     assert.equal(checked.diagnostics.length === 0, true);
     const source = createTargetSourceProgram(checked);
     const file = source.sourceFiles.find(file => source.ast.getFileName(file) === "/src/index.ts");
-    const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
+    const profiles = createRustSourceProfileRegistry(source, jsEnabled);
     const storage = createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
       createRustSourceProfileStorageEffects(source, profiles));
     const demand = createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" }));
@@ -87,7 +87,7 @@ for (const jsEnabled of [false, true]) {
       assert.equal(checked.diagnostics.length === 0, true);
       const source = createTargetSourceProgram(checked);
       const file = source.sourceFiles.find(file => source.ast.getFileName(file) === "/src/index.ts");
-      const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
+      const profiles = createRustSourceProfileRegistry(source, jsEnabled);
       const storage = createSourceStorageQuery(source, [file], defaultSourceStorageLimits,
         createRustSourceProfileStorageEffects(source, profiles));
       const demand = createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" }));

@@ -26,7 +26,7 @@ function analyzed(files, jsEnabled) {
     formatDiagnostics(checked.diagnostics.filter(diagnostic => diagnostic !== undefined), "/src"));
   const source = createTargetSourceProgram(checked);
   const projectFiles = source.sourceFiles.filter(file => Object.keys(files).some(name => source.ast.getFileName(file) === `/src/${name}`));
-  const profiles = createRustSourceProfileRegistry(source.sourceFiles, source.ast, jsEnabled);
+  const profiles = createRustSourceProfileRegistry(source, jsEnabled);
   const storage = createSourceStorageQuery(source, projectFiles, undefined, createRustSourceProfileStorageEffects(source, profiles));
   assert.equal(storage.failureReason() === undefined, true, "production source storage is complete");
   return { source, projectFiles, storage, demand: createRustErrorStorageDemandQuery(source, profiles, storage, () => ({ kind: "ordinary" })) };

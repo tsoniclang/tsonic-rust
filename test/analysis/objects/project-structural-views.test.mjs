@@ -75,6 +75,8 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
     },
     definitionForDeclaration: node => node === declaration ? definition : undefined,
     definitionContainingDeclaration: node => node === member ? definition : undefined,
+    objectLayoutForDefinition: owner => owner === definition ? { declaration, kind: "class",
+      fields: [{ declaration: member, sourceName: "value", storageIndex: 0, presence: "required" }], indexSignatures: [] } : undefined,
     isPolymorphic: () => true, openCarrier: () => source(parameter), externalBaseForDefinition: () => undefined,
     relationship: receiver => ({ kind: "related", targetType: receiver }), memberSlotName: (_, access) => `slot_${access}`,
     instantiateMemberCarrier: (_, receiver, declared) => substituteRustTargetTypeParameters(declared,

@@ -42,7 +42,7 @@ test("source qualifiers require exact intrinsic, declaration, profile and read e
   const context = { source, ast: source.ast };
   const options = {
     jsEnabled: true,
-    sourceProfiles: createRustSourceProfileRegistry(source.sourceFiles, source.ast, true),
+    sourceProfiles: createRustSourceProfileRegistry(source, true),
   };
   const requests = [];
   function visit(node) {

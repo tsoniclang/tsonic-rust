@@ -23,7 +23,7 @@ test("recursive constructor contracts terminate at the exact already visited typ
   } };
   const contracts = collectRustImplicitInterfaceContracts({ context: {
     ast: { kindName: () => "KindIdentifier", forEachChild() {} },
-    sourceFiles: [node], semanticsFor: () => semantics,
+    sourceFiles: [node], semanticsFor: () => semantics, isNativeNode: () => true,
   } });
   assert.deepEqual(contracts, []);
   assert.equal(reads, 2);

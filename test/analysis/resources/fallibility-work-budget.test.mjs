@@ -15,7 +15,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 function fixture(text) {
   let program;
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text }, compileTarget(request) {
-    const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation);
+    const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation, request.runtimeCrates);
     assert.equal(references.kind, "resolved");
     const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, references.plan.activeCrates);
     assert.equal(dispatch.kind, "resolved");

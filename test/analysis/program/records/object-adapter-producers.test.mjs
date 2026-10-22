@@ -50,7 +50,7 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, valueSemantics: { kind: "method" } }
     : undefined } }, builder);
   if (receiver) method.children = [{ kind: "KindThisExpression" }];
-  const walk = { context: { requiredRecords: [], records, diagnostics: [], ast: {
+  const walk = { context: { requiredRecords: [], records, diagnostics: [], isNativeNode: () => true, ast: {
     forEachChild(node, visit) { for (const child of node.children ?? []) visit(child); },
     kindName: node => node.kind ?? "KindIdentifier",
   } }, rejectedExpressions: new WeakSet(), resolving: new Set() };
