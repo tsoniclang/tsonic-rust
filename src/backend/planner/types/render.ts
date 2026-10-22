@@ -13,6 +13,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustSourceTypePathInContext, rustStructuralTypePathInContext } from "./paths.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
+import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTypes } from "./frame-callables.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
@@ -80,6 +81,8 @@ export function rustTypeFromCarrierInContext(
       return { kind: "named", path: `${external !== undefined && external !== context.crateName ? external : "crate"}::${module}::${generic.name}`,
         genericArguments: arguments_ };
     }
+    // A logical generic callable carrier (no physical key) has no selected storage type; it has no native rendering.
+    if (rustGenericCallableValue(shapeCarrier) !== undefined) return undefined;
     const shape = selected.structural;
     if (shape === undefined) failRustPlannerInvariant("An admitted structural native type requires its exact sealed definition.");
     const arguments_ = rustGenericArgumentsFromCarrier(shape.arguments, sourceRendering, resolveStructuralShape);
