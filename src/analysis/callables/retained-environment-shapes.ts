@@ -85,6 +85,34 @@ export function createRustRetainedEnvironmentQueries(
   };
   const isSuspended = (declaration: Node): boolean => ast.hasModifierKind(declaration, "async") ||
     input.source.semantics.forNode(declaration).operations.generator(declaration) !== undefined;
+  // A call to a suspended source implementation keeps that implementation's suspended parameters in its result
+  // (the Promise or generator), bound at the invocation's activation. "not-suspended" leaves the value to the
+  // structural walk.
+  type SuspendedInputs = { readonly kind: "not-suspended" } | { readonly kind: "unresolved" } |
+    { readonly kind: "inputs"; readonly inputs: readonly { subject: SourceStorageSubject; bindings: SourceStorageBindings }[] };
+  const suspendedCallInputs = (subject: SourceStorageSubject, bindings: SourceStorageBindings): SuspendedInputs => {
+    const node = subject.node;
+    if (subject.kind !== "value" || subject.projection.length !== 0 || !ast.is.IsCallExpression(node))
+      return { kind: "not-suspended" };
+    const semantics = input.source.semantics.forNode(node);
+    const call = semantics.operations.call(node);
+    const selected = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
+    const implementation = selected === undefined ? undefined : navigation.callableImplementation(selected);
+    if (implementation?.kind !== "resolved") return { kind: "not-suspended" };
+    const owner = implementation.implementation.declaration;
+    if (!isSuspended(owner)) return { kind: "not-suspended" };
+    const activation = storage.bindingsForInvocation(owner, node, bindings);
+    const parameters = suspendedParametersFor(owner);
+    if (activation.kind !== "resolved" || parameters === undefined) return { kind: "unresolved" };
+    const inputs: { subject: SourceStorageSubject; bindings: SourceStorageBindings }[] = [];
+    for (const parameter of parameters) {
+      if (!step()) return { kind: "unresolved" };
+      const selectedInput = storage.subject(parameter, "input");
+      if (selectedInput.kind !== "resolved") return { kind: "unresolved" };
+      inputs.push({ subject: selectedInput.subject, bindings: activation.bindings });
+    }
+    return { kind: "inputs", inputs };
+  };
   const select = (declaration: Node): RustRetainedEnvironmentSelection => {
     if (!step()) return unresolved();
     if (ast.body(declaration) === undefined) return none;
@@ -174,6 +202,9 @@ export function createRustRetainedEnvironmentQueries(
               if (candidates.has(origin.node)) retained.add(origin.node);
               continue;
             }
+            const suspendedInputs = suspendedCallInputs(origin, bindings);
+            if (suspendedInputs.kind === "unresolved") return false;
+            if (suspendedInputs.kind === "inputs") { pending.push(...suspendedInputs.inputs); continue; }
             if (origin.kind !== "value" || origin.projection.length !== 0 || ast.body(origin.node) === undefined) {
               if (!components(origin, bindings)) return false;
               continue;
@@ -192,23 +223,11 @@ export function createRustRetainedEnvironmentQueries(
       };
       for (const producer of producers.producers) {
         if (!step() || !retain(producer.subject, producer.bindings)) return unresolved();
-        const node = producer.subject.node;
-        if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 || !ast.is.IsCallExpression(node)) continue;
-        const semantics = input.source.semantics.forNode(node);
-        const call = semantics.operations.call(node);
-        const selected = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
-        const implementation = selected === undefined ? undefined : navigation.callableImplementation(selected);
-        if (implementation?.kind !== "resolved") continue;
-        const owner = implementation.implementation.declaration;
-        if (!isSuspended(owner)) continue;
-        const activation = storage.bindingsForInvocation(owner, node, producer.bindings);
-        const parameters = suspendedParametersFor(owner);
-        if (activation.kind !== "resolved" || parameters === undefined) return unresolved();
-        for (const parameter of parameters) {
-          if (!step()) return unresolved();
-          const input = storage.subject(parameter, "input");
-          if (input.kind !== "resolved" || !retain(input.subject, activation.bindings)) return unresolved();
-        }
+        const suspendedInputs = suspendedCallInputs(producer.subject, producer.bindings);
+        if (suspendedInputs.kind === "unresolved") return unresolved();
+        if (suspendedInputs.kind === "inputs")
+          for (const { subject, bindings } of suspendedInputs.inputs)
+            if (!step() || !retain(subject, bindings)) return unresolved();
       }
     }
     const selected = parameters.filter((parameter): parameter is Node => parameter !== undefined && retained.has(parameter));
