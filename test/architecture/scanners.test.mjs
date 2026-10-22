@@ -653,7 +653,7 @@ test("native module-function eligibility is finalized before backend planning", 
     "utf8",
   );
   assert.match(runtimeUses, /navigation\.declarationUses\(declaration\)/u);
-  assert.match(runtimeUses, /use\.kind === "first-class"/u);
+  assert.match(runtimeUses, /use\.kind !== "first-class"/u);
   assert.match(runtimeUses, /isCompileTimeApplicationReference/u);
   for (const { path, text } of sourceFiles) {
     if (!path.includes("/backend/")) {
