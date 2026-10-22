@@ -69,7 +69,10 @@ export function analyzeRustDirectStorage(program: Omit<RustAnalysisProgram, "rea
     if (ast.is.IsIdentifier(node)) {
       const binding = program.records.sourceBinding.get(node);
       const module = binding === undefined ? undefined : program.records.moduleBinding.get(binding.sourceDeclaration);
-      if (binding !== undefined && program.records.bindingStorage.get(binding.sourceDeclaration) === undefined &&
+      // A native array binding is emitted as its native array handle even when an element address promoted its storage
+      // (bindings/locals.ts), so it is written directly.
+      if (binding !== undefined && (program.records.bindingStorage.get(binding.sourceDeclaration) === undefined ||
+        program.records.nativeArrayStorage.get(binding.sourceDeclaration) !== undefined) &&
         module?.storage !== "module-cell" && !(module?.storage === "native-callable" && module.value !== undefined)) value = { kind: "identifier" };
     } else if (ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword") value = { kind: "this" };
     else if (ast.is.IsParenthesizedExpression(node)) {
