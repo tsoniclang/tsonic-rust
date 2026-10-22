@@ -367,7 +367,7 @@ export function planContractImplementation(
         visibility: "private",
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"),
-        params: method.parameters,
+        params: adapted.parameters,
         ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
         ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
         ...(method.isUnsafe ? { isUnsafe: true } : {}),
