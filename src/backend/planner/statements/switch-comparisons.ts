@@ -39,6 +39,10 @@ export function planRustSwitchComparison(
     const convertedRight = applyRustValueConversion(context, rightValue, operation.rightConversion, undefined);
     if (convertedLeft === undefined || convertedRight === undefined)
       failRustPlannerInvariant("An admitted switch comparison requires its operand conversions.", node);
+    // A boolean discriminant compared with a boolean case literal is the discriminant itself (or its negation).
+    if (convertedRight.kind === "bool-literal") {
+      return convertedRight.value ? convertedLeft : { kind: "unary", operator: "!", operand: convertedLeft };
+    }
     return {
       kind: "binary", operator: "==", left: convertedLeft, right: convertedRight,
     };

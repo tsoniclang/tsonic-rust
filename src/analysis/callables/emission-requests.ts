@@ -173,6 +173,13 @@ export function prepareRustPhysicalCallableEmissionRequests(
   const inputRole = (value: SourceValueInput): string => value.slot.kind +
     ("position" in value.slot ? `:${value.slot.position}` : "branch" in value.slot ? `:${value.slot.branch}`
       : "index" in value.slot ? `:${value.slot.index}` : "");
+  // A location callback argument is adapted from its operand storage (location-callbacks.ts), so it requests the operand
+  // as well as its value uses.
+  const callback = (node: Node, owner: Node, role: string, sourceOwner: Node): void => {
+    visitUse(node, owner, role, sourceOwner);
+    if (input.isNativeNode(node) && records.compileTimeSource.get(node) !== true && records.nativeUnreachable.get(node) !== true)
+      request(owner, node, role, { kind: "operand" }, sourceOwner);
+  };
   const visitUse = (node: Node, owner: Node, role: string, sourceOwner: Node): void => {
     if (!input.isNativeNode(node) || records.compileTimeSource.get(node) === true || records.nativeUnreachable.get(node) === true) return;
     const key = site(owner, sourceOwner, role);
@@ -230,18 +237,18 @@ export function prepareRustPhysicalCallableEmissionRequests(
           break;
         case "bind-pointer":
           visitUse(plan.identityExpression, owner, "location:identity", node);
-          visitUse(plan.readExpression, owner, "location:read", node);
-          visitUse(plan.writeExpression, owner, "location:write", node);
+          callback(plan.readExpression, owner, "location:read", node);
+          callback(plan.writeExpression, owner, "location:write", node);
           break;
         case "view-pointer":
           visitUse(plan.pointerExpression, owner, "location:pointer", node);
-          visitUse(plan.readExpression, owner, "location:read", node);
-          visitUse(plan.writeExpression, owner, "location:write", node);
+          callback(plan.readExpression, owner, "location:read", node);
+          callback(plan.writeExpression, owner, "location:write", node);
           break;
         case "project-pointer":
           visitUse(plan.pointerExpression, owner, "location:pointer", node);
-          visitUse(plan.fromSourceExpression, owner, "location:from-source", node);
-          visitUse(plan.toSourceExpression, owner, "location:to-source", node);
+          callback(plan.fromSourceExpression, owner, "location:from-source", node);
+          callback(plan.toSourceExpression, owner, "location:to-source", node);
           break;
       }
     } else if (sourceOccurrences.has(node)) {

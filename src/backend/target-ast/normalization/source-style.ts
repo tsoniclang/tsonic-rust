@@ -73,6 +73,19 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
+    // `|value| Ok(value)` (or `|value| { Ok(value) }`) with an unannotated parameter is the variant constructor `Ok`
+    // itself (clippy::redundant_closure).
+    const result = mapped.kind === "closure" ? mapped.body
+      : mapped.kind === "closure-block" && !mapped.async && mapped.body.statements.length === 1 &&
+        mapped.body.statements[0]?.kind === "tail" ? mapped.body.statements[0].expr : undefined;
+    if ((mapped.kind === "closure" || mapped.kind === "closure-block") && mapped.params.length === 1 && result?.kind === "call" &&
+      result.path === "Ok" && result.genericArguments === undefined && result.args.length === 1) {
+      const parameter = mapped.params[0];
+      const argument = result.args[0];
+      if (parameter !== undefined && parameter.type === undefined && parameter.mutable !== true && parameter.byRefCopy !== true &&
+        (parameter.attrs?.length ?? 0) === 0 && argument?.kind === "path" && argument.path === parameter.name)
+        return { kind: "path", path: "Ok" };
+    }
     if ((mapped.kind !== "closure" && mapped.kind !== "closure-block") || nameType === undefined) return mapped;
     return { ...mapped, params: mapped.params.map(parameter => parameter.type === undefined ? parameter
       : { ...parameter, type: nameType(parameter.type, parameter.name) }) };
@@ -127,8 +140,9 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
 
 
 // `let x: T;` followed by `x = value;` is `let x: T = value;` (clippy::needless_late_init). A run of such declarations
-// followed by their assignments folds the same way (`let a; let b; a = e1; b = e2;`). Syntax only: an assignment in
-// the run cannot read a still-uninitialized binding, so moving each declaration to its first write changes nothing.
+// followed by their assignments folds the same way (`let a; let b; a = e1; b = e2;`), also across initialized `let`s
+// of other names between them (`let a; let b = e1; a = e2;`). Syntax only: no statement in the run can read or capture
+// a still-uninitialized binding, so moving each declaration to its first write changes nothing.
 function foldRustDirectLateInitializations(statements: readonly RustStmt[]): readonly RustStmt[] {
   const deferred = (statement: RustStmt | undefined): statement is Extract<RustStmt, { readonly kind: "let" }> =>
     statement?.kind === "let" && statement.init === undefined && (statement.attrs?.length ?? 0) === 0;
@@ -152,13 +166,28 @@ function foldRustDirectLateInitializations(statements: readonly RustStmt[]): rea
       continue;
     }
     const initialized: RustStmt[] = [];
-    for (let next = statements[index]; next?.kind === "assign" && next.operator === "=" && next.target.kind === "path";
-      next = statements[index]) {
+    let accepted = index;
+    let crossed = 0;
+    for (let next = statements[index]; next !== undefined && pending.size !== 0; next = statements[index]) {
+      if (next.kind === "let" && next.init !== undefined && !pending.has(next.name)) {
+        initialized.push(next);
+        crossed++;
+        index++;
+        continue;
+      }
+      if (next.kind !== "assign" || next.operator !== "=" || next.target.kind !== "path") break;
       const declaration = pending.get(next.target.path);
       if (declaration === undefined) break;
       initialized.push({ ...declaration, init: next.value });
       pending.delete(next.target.path);
       index++;
+      accepted = index;
+      crossed = 0;
+    }
+    // Initialized `let`s after the last folded assignment stay where they were.
+    if (crossed !== 0) {
+      initialized.splice(initialized.length - crossed);
+      index = accepted;
     }
     folded.push(...run.filter(declaration => pending.has(declaration.name)), ...initialized);
   }

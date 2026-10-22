@@ -4,6 +4,8 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLocationCallbackProducer } from "../program/records/location-callbacks.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "./native-conversions.js";
+import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
+import { rustCallableTargetForSourceLifetime } from "../../policy/conversions/value-carrier-reconciliation.js";
 
 export function analyzeRustLocationCallbacks(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLocationCallbackProducer,
@@ -18,9 +20,13 @@ export function analyzeRustLocationCallbacks(program: Omit<RustAnalysisProgram, 
         producer.publish(node, index, { kind: "direct" });
         continue;
       }
-      const callable = rustCallableProtocol(carrier);
       const argument = program.source.ast.arguments(node)[index];
-      const source = argument === undefined || carrier === undefined ? undefined : rustNativeCallableOperand(carrier, argument, {
+      // A declared callback whose lifetime is still a placeholder takes the lifetime of the value passed in (the shared
+      // provider-callback rule), so a 'static local callable matches its declared callback.
+      const supplied = argument === undefined ? undefined : rustValueCarrierBeforeContextualConversion(program.records, argument);
+      const declared = carrier === undefined || supplied === undefined ? carrier : rustCallableTargetForSourceLifetime(supplied, carrier);
+      const callable = rustCallableProtocol(declared);
+      const source = argument === undefined || declared === undefined ? undefined : rustNativeCallableOperand(declared, argument, {
         records: program.records, storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers,
       });
       const boundary = program.retainedCallableInputs.forBoundary(node, index);

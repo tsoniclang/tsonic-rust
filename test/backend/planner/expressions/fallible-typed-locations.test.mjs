@@ -4,7 +4,7 @@ import { falliblePointerFiles, falliblePointerPackageFiles, falliblePointerPacka
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { rustLocationCallbackCarrier } from "../../../../dist/policy/types/callables/location-callbacks.js";
-import { rustCallableProtocol, rustClosureProtocol, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustCallableProtocol, rustClosureProtocol, rustProgramErrorTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 for (const [name, files] of [["files", falliblePointerFiles], ["packages", falliblePointerPackageFiles]]) {
@@ -34,7 +34,8 @@ test("inline location callbacks have an explicit Result ABI without a first-clas
   const retained = rustLocationCallbackCarrier({ kind: "KindIdentifier" }, [integer], integer, ast);
   assert.equal(rustClosureProtocol(inline).fallible, true);
   assert.equal(rustCallableProtocol(inline), undefined);
+  // A protocol without an explicit error argument reads the program error (35d6c3097).
   assert.deepEqual(rustCallableProtocol(retained), { parameters: [integer], result: integer,
-    lifetime: { kind: "placeholder" } });
+    error: rustProgramErrorTargetType(), lifetime: { kind: "placeholder" } });
   assert.equal(rustTargetTypeRefEquals(inline, { ...inline, fallible: false }), false);
 });
