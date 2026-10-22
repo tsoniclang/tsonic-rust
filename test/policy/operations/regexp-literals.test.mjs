@@ -20,9 +20,12 @@ test("RegExp literal policy retains the complete native operation, pattern, flag
 test("source regexp admission publishes only on the explicit JS profile and preserves canonical identity", () => {
   for (const jsEnabled of [false, true]) {
     const records = createRustProgramRecordBuilder();
+    const requiredRecords = [];
     const subject = {};
     const other = {};
-    const carrier = resolveRegExpCreation({ jsEnabled, context: { records } }, subject, "(?<word>a)[/-]", "gu");
+    const carrier = resolveRegExpCreation({ jsEnabled, context: { records, requiredRecords } }, subject, "(?<word>a)[/-]", "gu");
+    assert.deepEqual(requiredRecords.map(required => [required.family, required.subject === subject]),
+      jsEnabled ? [["targetOperation", true], ["runtimeCarrier", true]] : [], "the admitted literal requires its sealed records");
     if (!jsEnabled) {
       assert.equal(carrier === undefined, true, "native source profile has no regexp admission");
       assert.equal(records.targetOperation.get(subject) === undefined, true);
