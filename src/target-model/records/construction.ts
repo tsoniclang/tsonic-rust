@@ -80,6 +80,7 @@ export interface RustAdmittedConstruction {
   readonly earlyReturnLayers: ReadonlySet<RustProjectTypeDefinition>;
   readonly completingLayers: ReadonlySet<RustProjectTypeDefinition>;
   readonly unpublishedMutations: ReadonlySet<Node>;
+  readonly unpublishedAccesses: ReadonlySet<Node>;
   readonly physicalDeclarations: ReadonlyMap<Node, Node>;
   readonly retainedFieldIdentities: ReadonlySet<Node>;
   readonly retainedReferenceIdentities: ReadonlySet<Node>;

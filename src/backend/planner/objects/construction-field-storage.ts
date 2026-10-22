@@ -34,10 +34,11 @@ export function rustConstructionFieldStorage(
   };
   const storage = rustCapturedFieldStorage(declaration, context);
   // A plain construction local needs `mut` only when the source writes the field again while the object is
-  // unpublished, or mutates the field's content in place. A single (possibly deferred) initialization does not.
+  // unpublished, or mutates the field's content in place while it is still the local (an access through `this`
+  // before publication). Content mutated after publication goes through the published object, not the local.
   const dispatch = context.input.program.records.projectFieldDispatch.get(declaration);
-  const mutable = storage === undefined &&
-    (plan.unpublishedMutations.has(declaration) || dispatch === undefined || dispatch.mutableContent);
+  const mutable = storage === undefined && (plan.unpublishedMutations.has(declaration) || dispatch === undefined ||
+    dispatch.mutableContent && plan.unpublishedAccesses.has(declaration));
   return {
     deferred: storage?.initialization === "deferred", mutable, retainedFieldOwner: storage !== undefined,
     create: value => createRustCapturedField(storage, value),

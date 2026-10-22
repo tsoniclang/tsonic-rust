@@ -22,6 +22,8 @@ export interface RustConstructionPointQueries {
   layerCompletes(definition: RustProjectTypeDefinition): boolean;
   layerHasEarlyReturn(definition: RustProjectTypeDefinition): boolean;
   mutatesUnpublishedField(declaration: Node): boolean;
+  /** The constructor reads or writes the field through `this` before the receiver is published. */
+  accessesUnpublishedField(declaration: Node): boolean;
   pointFor(node: Node): RustConstructionPoint | undefined;
   expressionsWithin(node: Node): readonly RustConstructionExpression[];
   returnLayerFor(node: Node): RustProjectTypeDefinition | undefined;
@@ -61,6 +63,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   const deferredCaptureFields = new Set<Node>();
   const publishedFieldWrites = new Set<Node>();
   const unpublishedFieldWrites = new Set<Node>();
+  const unpublishedFieldAccesses = new Set<Node>();
   const points = new Map<Node, RustConstructionPoint>();
   const expressions = new Map<Node, readonly RustConstructionExpression[]>();
   const issues: RustConstructionIssue[] = [];
@@ -207,6 +210,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
         }
         if (field !== undefined && field.accessMode !== "read" && !state.published &&
           state.possiblyInitialized.has(declaration)) unpublishedFieldWrites.add(declaration);
+        if (field !== undefined && !state.published) unpublishedFieldAccesses.add(declaration);
         return state;
       }
     }
@@ -443,6 +447,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     layerCompletes: (definition: RustProjectTypeDefinition) => layerCompletion.get(definition) === true,
     layerHasEarlyReturn: (definition: RustProjectTypeDefinition) => layerEarlyReturn.has(definition),
     mutatesUnpublishedField: (declaration: Node) => unpublishedFieldWrites.has(declaration),
+    accessesUnpublishedField: (declaration: Node) => unpublishedFieldAccesses.has(declaration),
     expressions: Object.freeze([...indexedExpressions.values()]),
     pointFor: (node: Node) => points.get(node),
     expressionsWithin: (node: Node) => expressions.get(node) ?? emptyExpressions,
