@@ -324,4 +324,18 @@ export const jsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTypeRe
     counterpart: { module: "src/target-model/types/carriers/delegates.ts", symbol: "csharpTaskTargetType" },
     frozen: false,
   },
+  {
+    id: "src/policy/operations/source-profiles/type-carriers.ts#resolveSourceProfileCarrierFromArguments",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/policy/operations/source-profiles/type-carriers.ts", symbol: "resolveSourceProfileCarrierFromArguments" },
+    counterpart: { module: "src/policy/operations/source-profiles/type-carriers.ts", symbol: "selectCsharpSourceProfileCarrier" },
+    frozen: false,
+  },
+  {
+    id: "src/analysis/types/resolution/providers.ts#resolveSourceProfileCarrier",
+    kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
+    declaration: { module: "src/analysis/types/resolution/providers.ts", symbol: "resolveSourceProfileCarrier" },
+    counterpart: { module: "src/analysis/types/resolution/source-profiles.ts", symbol: "resolveCsharpSourceProfileBaseType" },
+    frozen: false,
+  },
 ]);
