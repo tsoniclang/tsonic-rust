@@ -41,11 +41,12 @@ export function lowerRustCompletionScope(scope: CompletionScope): RustStmt {
     const region = { ...ownedBody, statements: [
       ...lowered.body.statements,
       ...(terminates ? [] : [{ kind: "tail" as const, expr: errorType === undefined ? normal : call("Ok", normal) }])] };
-    // A region that is exactly one break to its own label with a value is that value: `'l: { break 'l v; }` is
-    // clippy::diverging_sub_expression (syntax only).
+    // A region that is exactly its exit value (a lone tail, or one break to its own label with a value) is that
+    // value: `'l: { break 'l v; }` is clippy::diverging_sub_expression (syntax only).
     const [only] = region.statements;
-    const direct = !scope.asynchronous && region.statements.length === 1 && only?.kind === "expr" &&
-      only.expr.kind === "break-expression" && only.expr.label === name ? only.expr.expr : undefined;
+    const direct = scope.asynchronous || region.statements.length !== 1 ? undefined
+      : only?.kind === "tail" && !lowered.breaksToLabel ? only.expr
+      : only?.kind === "expr" && only.expr.kind === "break-expression" && only.expr.label === name ? only.expr.expr : undefined;
     return { kind: "let", name, mutable: false, type: resultType(type, errorType),
       init: direct ?? (scope.asynchronous
         ? { kind: "await", expr: { kind: "async-block", move: false, body: applyRustTailShape(region, true) } }
@@ -200,9 +201,8 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
       { kind: "tail", expr: matched },
     ] } } : matched;
   };
-  // A break to the region label diverges, so it is always a statement: as a block's tail it is
-  // clippy::diverging_sub_expression.
-  const statement = (value: RustStmt): RustStmt => {
+  // The region tail is the labelled block value itself: a tail exit there is the value, not a break to the label.
+  const statement = (value: RustStmt, regionTail = false): RustStmt => {
     switch (value.kind) {
       case "completion-exit": {
         const lowerResult = (): RustExpr => {
@@ -213,14 +213,16 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
           return value.resultWrapped ? call("Ok", completion) : completion;
         };
         return label === undefined ? { kind: value.tail ? "tail" : "return", expr: lowerResult() }
-          : { kind: "expr", expr: exitLowered(lowerResult) };
+          : regionTail && value.tail ? { kind: "tail", expr: lowerResult() }
+          : { kind: value.tail ? "tail" : "expr", expr: exitLowered(lowerResult) };
       }
       case "return": return label === undefined
         ? { ...value, ...(value.expr === undefined ? {} : { expr: expression(value.expr) }) }
         : { kind: "expr", expr: exitLowered(() => value.expr === undefined ? undefined : expression(value.expr)) };
       case "throw": return label === undefined
         ? { kind: value.tail ? "tail" : "return", expr: call("Err", expression(value.error)) }
-        : { kind: "expr", expr: exitLowered(() => call("Err", expression(value.error))) };
+        : regionTail && value.tail ? { kind: "tail", expr: call("Err", expression(value.error)) }
+        : { kind: value.tail ? "tail" : "expr", expr: exitLowered(() => call("Err", expression(value.error))) };
       case "let": return value.init === undefined ? value : { ...value, init: expression(value.init) };
       case "let-pattern": return { ...value, init: expression(value.init) };
       case "expr":
@@ -242,7 +244,7 @@ function lowerRegion(body: RustBlock, label: string | undefined): { readonly bod
       case "continue": return value;
     }
   };
-  const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(statement) });
-  const lowered = block(body);
+  const block = (value: RustBlock): RustBlock => ({ ...value, statements: value.statements.map(nested => statement(nested)) });
+  const lowered = { ...body, statements: body.statements.map((value, index) => statement(value, index === body.statements.length - 1)) };
   return { body: lowered, breaksToLabel: breaks !== 0 };
 }

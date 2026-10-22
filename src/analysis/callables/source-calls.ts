@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -105,7 +106,10 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
       : program.records.callableOperand.get(callee, inputCarrier)?.physical ?? (fact.target.form === "callable" && native === undefined
         ? rustNativeCallableOperand(inputCarrier, callee, { records: program.records, storage: program.callableValues.nativeStorage,
           producers: program.callableValues.nativeProducers }) : undefined);
-    const error = physical?.signature.error;
+    // A producer-owned error channel is decided by its closed producer error (an infallible closure yields Infallible).
+    const declaredError = physical?.signature.error;
+    const producerError = declaredError === undefined ? undefined : rustProducerErrorReference(declaredError);
+    const error = producerError === undefined ? declaredError : program.errorRegions.producerError(producerError);
     const eliminateInfallible = error?.kind === "target-named" && error.id === rustInfallibleTargetId;
     const edges = program.records.sourceErrorEffects.get(node)?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === declaration);
     const directError = effects!.invocation === "fallible" && native === undefined && generic === undefined && declaration !== undefined &&

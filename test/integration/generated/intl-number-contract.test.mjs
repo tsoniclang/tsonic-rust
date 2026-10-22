@@ -7,6 +7,7 @@ import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../d
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-read-projections.js";
+import { rustFlowReadProjectionMatches } from "../../../dist/analysis/control-flow/flow-read-projections.js";
 
 test("Intl exact integer, optional precision and grouping contracts execute in Rust", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -140,20 +141,17 @@ test("native result union planning rejects mutated projection evidence", () => {
     diagnostics: [],
   };
   const expression = { kind: "path", path: "grouping" };
-  const fact = { kind: "runtime-union", sourceCarrier: source, dispatchCarrier: source,
-    selectedCarrier: selected, variant: "Strategy" };
+  const fact = program.records.flowReadProjection.get(node);
+  assert.deepEqual({ kind: fact?.kind, variant: fact?.variant }, { kind: "runtime-union", variant: "Strategy" });
+  assert.equal(fact.sourceCarrier, source);
   const planned = planRustFlowReadProjection(node, expression, fact, context);
   assert.equal(planned.kind, "match");
   assert.equal(planned.arms[0].pattern.path, "js_abi::IntlGrouping::Strategy");
+  // Mutated evidence is refused by the flow-read emission analysis before planning ("RUST_MISSING_TARGET_FACT").
   for (const mutation of [
     { ...fact, variant: "Disabled" },
     { ...fact, dispatchCarrier: selected },
     { ...fact, sourceCarrier: selected },
     { ...fact, selectedCarrier: rustSourcePrimitiveTargetType("bool") },
-  ]) {
-    context.diagnostics.length = 0;
-    assert.equal(planRustFlowReadProjection(node, expression, mutation, context), undefined);
-    assert.equal(context.diagnostics.length, 1);
-    assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-  }
+  ]) assert.equal(rustFlowReadProjectionMatches(mutation, program.projectTypes, program.typeDefinitions), false);
 });
