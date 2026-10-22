@@ -6,6 +6,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 
 import type { RustAssociatedTypeRequirement } from "../../target-model/records/generic-requirements.js";
+import { rustErasedCallableInvocationError } from "../../policy/types/callables/native-protocols.js";
 
 export function createRustAssociatedRequirementCollector(
   declared: ReadonlySet<string>,
@@ -21,6 +22,8 @@ export function createRustAssociatedRequirementCollector(
   const entries: { carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; requirements: Set<RustGenericRequirement>; fieldAccess: Set<"read" | "write">; output?: TargetTypeRef }[] = [];
   const require = (carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement?: RustGenericRequirement): boolean => {
     if (carrier.trait === undefined) return false;
+    const erasedError = rustErasedCallableInvocationError(carrier);
+    if (erasedError !== undefined) return requirement === undefined || classify(erasedError, [requirement]);
     const family = families.get(carrier.trait.id);
     if (family === undefined && (carrier.owner.kind !== "type-parameter" || !nativeProjection(carrier))) return false;
     const references = rustTargetTypeParameterIdentities(carrier);

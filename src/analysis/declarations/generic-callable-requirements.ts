@@ -89,7 +89,8 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
   const classifyUse = (node: Node, carrier: TargetTypeRef,
     requirements: readonly RustGenericRequirement[]): RustCarrierRequirementSelection => {
     const normalized = mapRustTargetTypes(carrier, normalizeFamily);
-    const physical = requirements.includes("static")
+    // A JS-rejection requirement names an error channel, so it is classified on that channel's physical error type.
+    const physical = requirements.includes("static") || requirements.includes("js-rejection")
       ? normalizeRustErrorType(normalized, input.errorTypes, node) : normalized;
     return physical === undefined ? { kind: "unresolved",
       reason: "A native static requirement has no exact admitted physical error-boundary carrier." }
