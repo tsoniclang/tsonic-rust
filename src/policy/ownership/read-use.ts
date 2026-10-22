@@ -72,6 +72,9 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     select(ast.arguments(node)[0], operation.state === "moved" ? "move" : operation.state === "borrowed-mut" ? "mutable" : "shared");
   } else if (operation?.kind === "project-type-test" || operation?.kind === "closed-type-test") {
     select(BinaryExpression_Left(ast, node), "shared");
+  } else if (operation?.kind === "option-check") {
+    // An Option presence test (is_some / is_none / is_absent) only borrows its Option operand.
+    select(operation.optionOperand === "left" ? BinaryExpression_Left(ast, node) : BinaryExpression_Right(ast, node), "shared");
   } else if (operation?.kind === "option-equality" || operation?.kind === "union-equality" ||
     operation?.kind === "string-concat") {
     const left = BinaryExpression_Left(ast, node);
