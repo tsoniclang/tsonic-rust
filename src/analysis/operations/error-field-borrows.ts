@@ -10,6 +10,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierProvidesErrorObservation } from "../../policy/constraints/error-protocols.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustBorrowPureOperation, rustBorrowValueIsUnprojected } from "../storage/borrowed-element-purity.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustErrorFieldProducer): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
@@ -25,6 +26,7 @@ export function analyzeRustErrorFieldBorrows(program: Omit<RustAnalysisProgram, 
   };
   const selected = new Map<Node, RustErrorFieldEmission>();
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const expression = unwrap(node);
     const operation = program.records.targetOperation.get(expression);
     if (operation?.kind !== "builtin-error-property" || operation.accessMode === "write") {

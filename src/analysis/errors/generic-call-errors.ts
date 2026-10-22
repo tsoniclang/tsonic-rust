@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
 import type { SourceStorageProducer } from "@tsonic/target-api/analysis";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
@@ -18,7 +19,7 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
-type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage"> & {
+type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage" | "structuralShapes"> & {
   readonly callableValues: {
     readonly generic: Pick<RustGenericCallablePlan, "definitionFor" | "implementationFor">;
     readonly native: Pick<RustNativeCallableInputPlan, "bindingsFor">;
@@ -44,8 +45,10 @@ export function prepareRustGenericCallableInvocation(
   const operation = records.targetOperation.get(node);
   if (operation?.kind !== "source-call") return undefined;
   const target = operation.target;
+  // A structural method is stored, and its generic family defined, with the receiver as its first parameter.
   const logical = target.form === "callable" ? target.carrier
-    : target.form === "structural-method" || target.form === "constructor-value" ? target.callableCarrier : undefined;
+    : target.form === "structural-method" ? rustSourceCallCallableStorageCarrier(operation, context.structuralShapes)
+    : target.form === "constructor-value" ? target.callableCarrier : undefined;
   if (rustGenericCallableValue(logical) === undefined) return undefined;
   const callee = Node_Expression(ast, node);
   const subject = callee === undefined ? undefined : storage.subjectFor(callee);

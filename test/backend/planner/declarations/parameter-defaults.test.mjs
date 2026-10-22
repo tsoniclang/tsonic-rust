@@ -2,10 +2,14 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-session.mjs";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
+import { analyzeRustCallableParameterEmission } from "../../../../dist/analysis/callables/parameters.js";
+import { createRustCallableParameterProducer } from "../../../../dist/analysis/program/records/parameter-emission.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
+import { selectRustOptionalDefaultStorage } from "../../../../dist/policy/conversions/optional-storage.js";
 
 test("destructured defaults consume the sealed initialized value and reject conflicting input evidence", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
@@ -39,12 +43,17 @@ runtimeCarrier: { get: (subject) => subject === parameter
   assert.equal(valid.selected !== undefined, true, "initialized tuple accepts optional transport");
   assert.equal(valid.diagnostics.length, 0);
   assert.deepEqual(valid.selected.prelude.map(entry => entry.kind), ["default", "binding"]);
+  // Conflicting binding input is refused where the parameter emission record is sealed (analysis), so the planner
+  // never receives it.
   for (const selectedAbi of [{ ...abi, mode: "ref" }, { ...abi, mode: "mut-ref" },
     { ...abi, valueCarrier: { kind: "source-primitive", name: "float64" } }]) {
-    const invalid = plan(selectedAbi);
-    assert.equal(invalid.selected === undefined, true, "conflicting exact binding input rejects");
-    assert.equal(invalid.diagnostics.length, 1);
-    assert.equal(invalid.diagnostics[0].evidence.includes("target.capability=rust.backend.binding-parameter-abi"), true);
+    const records = createRustRecordFixture({ sourceParameterAbi: { get: (subject) => subject === parameter
+      ? selectedAbi : program.records.sourceParameterAbi.get(subject) } }, program.records);
+    assert.throws(() => analyzeRustCallableParameterEmission({ program: { ...program, records }, nodes: [parameter],
+      producer: createRustCallableParameterProducer(() => {}), required: [] }),
+    error => error.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
+      error.message === "Binding-pattern parameters require one exact by-value Rust source and initialized value carrier.",
+    "conflicting exact binding input rejects");
   }
 });
 
@@ -53,9 +62,11 @@ test("an absent default preserves the native parameter and independently require
   const initializer = {};
   for (const mutable of [false, true]) {
     let evaluations = 0;
-    const context = { syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } };
+    const context = rustProgramPlanContext(rustProgramWithTypeEmissions([carrier]),
+      { syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() } });
     const selected = planRustCallableParameterPrelude({ params: [], prelude: [{
       kind: "default", initializer, name: "value", mutable, carrier, valueCarrier: carrier,
+      retainStorage: selectRustOptionalDefaultStorage({ storage: carrier, result: carrier }),
     }] }, context, node => {
       evaluations++;
       assert.equal(node === initializer, true, "exact original initializer");

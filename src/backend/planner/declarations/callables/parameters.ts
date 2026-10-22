@@ -74,6 +74,8 @@ export function planRustCallableParameterPrelude(plan: RustCallableParameterPlan
       const initializer = planExpression(entry.initializer, context);
       if (initializer === undefined) failRustPlannerInvariant("An admitted native default parameter requires its initializer expression.", entry.initializer);
       const value = rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer, entry.carrier, context, entry.retainStorage);
+      // An absent default leaves the parameter itself; only a required mutability transition rebinds it.
+      if (!entry.mutable && value.kind === "path" && value.path === entry.name) continue;
       statements.push({ kind: "let", name: entry.name, mutable: entry.mutable, init: value });
       continue;
     }

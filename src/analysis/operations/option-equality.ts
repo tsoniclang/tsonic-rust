@@ -7,9 +7,11 @@ import { rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-q
 import { rustOptionEqualityContract } from "../../policy/operations/operators/option-equality.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustOptionCarrier } from "../../target-model/types/index.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustOptionEquality(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustOptionEqualityProducer): void {
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "option-equality") continue;
     const left = BinaryExpression_Left(program.source.ast, node);

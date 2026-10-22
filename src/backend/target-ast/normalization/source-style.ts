@@ -63,7 +63,7 @@ function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustT
       ...value.statements.flatMap((statement): RustStmt[] => {
         if (statement.kind === "item") return [{ ...statement, item: scope.items[itemIndex++]! }];
         const styled = styleStatement(statement);
-        return isRustUnitLiteralStatement(styled) ? [] : [styled];
+        return isRustUnitLiteralStatement(styled) || isRustEmptyBlockStatement(styled) ? [] : [styled];
       }),
     ]) };
   };
@@ -152,6 +152,14 @@ function isRustUnitLiteralStatement(statement: RustStmt): boolean {
       ? statement.init : undefined;
   const attributed = "attrs" in statement && (statement.attrs?.length ?? 0) !== 0;
   return !attributed && value?.kind === "tuple-literal" && value.elements.length === 0;
+}
+
+// An unlabelled empty block used as a statement (`{}`, e.g. a base constructor call with no effect) has no effect;
+// dropping it lets a late initialization meet its first assignment.
+function isRustEmptyBlockStatement(statement: RustStmt): boolean {
+  const block = statement.kind === "scope" ? statement
+    : statement.kind === "expr" && statement.expr.kind === "block" ? statement.expr : undefined;
+  return block !== undefined && block.label === undefined && block.body.statements.length === 0;
 }
 
 // Syntax-only lint expectations for conditions, as before the rewrite: each attribute names a lint that the printed

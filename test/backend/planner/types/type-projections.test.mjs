@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustSourceTypeFamilyRegistry } from "../../../../dist/analysis/project-types/type-families.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/projections.js";
+import { analyzeRustOptionalStorageEmission } from "../../../../dist/analysis/project-types/optional-storage-emission.js";
+import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
 import { rustOptionalStorageCallArguments } from "../../../../dist/backend/planner/types/type-projections.js";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 
+// A source call's optional storage arguments are substituted and normalized in analysis
+// (analyzeRustOptionalStorageEmission) and sealed as optionalStorageCallArguments; the planner only renders them.
 test("optional call storage consumes the sealed native family output after exact substitution", () => {
   const parameter = { kind: "type-parameter", identity: "payload-identity", name: "Payload" };
   const owner = { kind: "source-primitive", name: "int64" };
@@ -17,14 +22,24 @@ test("optional call storage consumes the sealed native family output after exact
   assert.equal(registry.registerImplementation({ family, arguments: [], owner, output, sourceFileName: "/storage.ts" }), true);
   const carrier = rustSourceOptionalTargetType({ kind: "associated-type", owner: parameter, trait: family.trait, name: "Output" });
   const declaration = {};
-  const context = { input: { program: {
-    typeFamilies: registry.seal(),
-    declarationGenericRequirements: { contractFor: selected => selected === declaration
-      ? { optionalStorage: [{ carrier, captured: false, requirements: [] }] } : undefined },
-  } } };
-  assert.deepEqual(rustOptionalStorageCallArguments(declaration, new Map([[parameter.identity, owner]]), context),
-    [{ kind: "type", type: { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: { kind: "primitive", name: "u64" } }] } }]);
-  assert.deepEqual(rustOptionalStorageCallArguments(declaration, new Map([["other-identity", owner]]), context),
-    [{ kind: "type", type: { kind: "named", path: carrier.name } }]);
-  assert.throws(() => rustOptionalStorageCallArguments({}, new Map(), context), /sealed generic requirements/u);
+  const call = {};
+  const sealed = boundIdentity => {
+    const records = createRustRecordFixture({
+      targetOperation: { get: node => node === call ? { kind: "source-call", target: { form: "callable" },
+        targetGenericArguments: [{ kind: "type", type: owner }] } : undefined },
+      selectedCall: { get: node => node === call ? { sourceDeclaration: declaration } : undefined },
+    });
+    const producer = createRustProjectEmissionProducer(() => {});
+    analyzeRustOptionalStorageEmission({ records, typeFamilies: registry.seal(),
+      declarationGenericRequirements: { contractFor: selected => selected === declaration
+        ? { typeParameters: [{ identity: boundIdentity }], optionalStorage: [{ carrier, captured: false, requirements: [] }] }
+        : undefined },
+      projectTypes: { definitions: [], definitionForCarrier: () => undefined },
+      structuralShapes: { instances: [] }, physicalEmissionContexts: { contexts: [], operands: [] } }, [call], producer);
+    return producer.records;
+  };
+  assert.deepEqual(sealed(parameter.identity).optionalStorageCallArguments.get(call), [rustSourceOptionalTargetType(output)]);
+  assert.deepEqual(sealed("other-identity").optionalStorageCallArguments.get(call), [carrier]);
+  assert.throws(() => rustOptionalStorageCallArguments({}, { input: { program: { records: sealed(parameter.identity) } } }),
+    /exact sealed optional storage arguments/u);
 });

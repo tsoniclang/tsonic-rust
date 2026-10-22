@@ -2,9 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function admitRustUnionProjections(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[]): void {
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "source-union-field" && fact?.kind !== "union-property") continue;
     const variants = program.typeDefinitions.sourceUnionVariants(fact.unionCarrier);

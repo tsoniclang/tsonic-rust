@@ -9,6 +9,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustClosedTypeTestConstant } from "../../target-model/operations/type-tests.js";
 import { rustClosedTypeTestMatches } from "./type-tests.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustClosedTypeTestProducer): void {
   const select = (carrier: TargetTypeRef, test: RustClosedTypeTestPlan, predicate: RustClosedTypePredicate, node: Node): RustClosedTypeTestEmission => {
@@ -31,6 +32,7 @@ export function analyzeRustClosedTypeTests(program: Omit<RustAnalysisProgram, "r
     return Object.freeze({ kind: "union", carrier, form: "match", arms: Object.freeze(arms) });
   };
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "closed-type-test") continue;
     const ast = program.source.ast;

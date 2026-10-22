@@ -8,9 +8,11 @@ import { isRustUnitCarrier, isRustBoolCarrier } from "../../target-model/types/i
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustValueConversionContract } from "../../policy/conversions/contracts.js";
 import { rustUnionEqualityFactMatches } from "./union-equality-facts.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustUnionEquality(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustUnionEqualityProducer): void {
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const fact = program.records.targetOperation.get(node);
     if (fact?.kind !== "union-equality") continue;
     const left = BinaryExpression_Left(program.source.ast, node);

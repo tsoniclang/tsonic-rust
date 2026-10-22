@@ -31,6 +31,7 @@ import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js"
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints/error-protocols.js";
 import { rustDeclarationEmissionCarriers } from "./emission-inventory.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -68,6 +69,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
     ...definition.signature.parameters, definition.signature.result, ...definition.members.flatMap(member => member.arguments.flatMap(argument => argument.kind === "type" ? [argument.type] : [])));
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const parameter = program.records.callableParameter.get(node);
     if (parameter !== undefined) pending.push(parameter.carrier);
     const returned = program.records.callableReturn.get(node);

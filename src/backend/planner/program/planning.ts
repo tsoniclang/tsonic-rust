@@ -19,6 +19,8 @@ import {
 } from "./module-initialization.js";
 import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
+import { rustErrorBoundaryOperandType } from "../types/error-boundary.js";
+import { rustTypeFromCarrier } from "../types/carrier-syntax.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type {
   RustPlannedArtifact,
@@ -275,11 +277,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }),
     ]);
     const mainErrorType = errors.errorType;
-    // A fallible hook returns the lifecycle error type itself when its error boundary is the source program (the root
-    // error domain) or the target runtime under the runtime error domain.
-    const hookOperandErrorType = (hook: (typeof activeHooks)[number]) =>
-      hook.isFallible && (hook.errorBoundary === "source-program" ||
-        hook.errorBoundary === "target-runtime" && rootErrorDomain.errorDomain === "runtime") ? lifecycleErrorType : undefined;
+    // A fallible hook's result carries its boundary's exact error type: the source program's error type (the
+    // lifecycle type in either root domain), the target runtime error or the provider's own error.
+    const hookOperandErrorType = (hook: (typeof activeHooks)[number]) => {
+      if (!hook.isFallible) return undefined;
+      if (hook.errorBoundary !== "provider-native") return rustErrorBoundaryOperandType(hook.errorBoundary, lifecycleErrorType);
+      const providerErrorType = rustTypeFromCarrier(hook.errorCarrier);
+      if (providerErrorType === undefined) failRustPlannerInvariant(`An admitted binary hook '${hook.path}' requires its renderable provider error type.`);
+      return rustErrorBoundaryOperandType(hook.errorBoundary, lifecycleErrorType, providerErrorType);
+    };
     const executor = binaryExecution.kind === "native" ? binaryExecution.executor : undefined;
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
     for (const hook of activeHooks) {

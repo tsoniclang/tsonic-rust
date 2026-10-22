@@ -7,9 +7,11 @@ import { rustContextualRuntimeConversionContract } from "../../../policy/convers
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
 import { rustBorrowValueIsUnprojected } from "../../storage/borrowed-element-purity.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 
 export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustStringComparisonViewProducer): void {
   for (const node of nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     let selected: RustStringComparisonView = { kind: "value" };
     let value = node;
     while (program.source.ast.is.IsParenthesizedExpression(value)) {

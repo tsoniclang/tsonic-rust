@@ -12,6 +12,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 
 export function analyzeRustFrameEmission(input: {
   readonly program: Omit<RustAnalysisProgram, "reachability">;
@@ -94,6 +95,7 @@ export function analyzeRustFrameEmission(input: {
     input.producer.classField(declaration, receiver, { binding: selected, frame });
   };
   for (const node of input.nodes) {
+    if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-field" && operation.declaration !== undefined) field(operation.declaration, operation.receiverCarrier);
   }
