@@ -4,6 +4,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../types/render.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 export function planRustRuntimeCategory(
   value: RustExpr,
@@ -22,7 +23,7 @@ function planRuntimeCategory(
   borrowed: boolean,
 ): RustExpr | undefined {
   if (result.kind === "runtime-method") {
-    return { kind: "method-call", receiver: value,
+    return { kind: "method-call", receiver: rustAutoBorrowedReceiver(value),
       method: result.method, args: [] };
   }
   if (result.kind === "optional") {

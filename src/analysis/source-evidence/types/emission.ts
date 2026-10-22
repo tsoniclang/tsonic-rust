@@ -138,7 +138,8 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       optionPayload: optionalElement === undefined ? undefined : Object.freeze({ str: payloadView(true), shared: payloadView(false) }),
       completion: isRustUnitCarrier(carrier) ? "unit" : isRustNeverCarrier(carrier) ? "never" : "value",
       promiseObject: carrier.kind === "target-named" && carrier.id === rustJsPromiseTargetId,
-      discard: isRustNativeFutureCarrier(optionalElement ?? carrier) ? "drop" : isRustUnitCarrier(carrier) ? "unit" : "value",
+      // A never value has nothing to bind: evaluating it as a statement is the discard (let _ = never is let_unit_value).
+      discard: isRustNativeFutureCarrier(optionalElement ?? carrier) ? "drop" : isRustUnitCarrier(carrier) || isRustNeverCarrier(carrier) ? "unit" : "value",
       optionalStorage: optionalStorage === undefined ? undefined : Object.freeze(optionalStorage), sourceOptional: Object.freeze(sourceOptional),
       emptyRecord: carrier.kind === "target-named" && carrier.id === rustEmptyObjectTargetId ? "native-empty"
         : shape?.fields.length === 0 && rustStructuralObjectCarrierValue(carrier)?.representation === "value" ? "structural" : undefined,
