@@ -12,6 +12,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { applyRustCallableValueAdapter, applyRustCallableValueAdapterRaw } from "./adapters.js";
 import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 
 export function planRustCallableArguments(
   input: {
@@ -21,7 +22,8 @@ export function planRustCallableArguments(
     readonly parameterAdapters: readonly RustCallableParameterAdapter[];
   },
   context: RustPlanContext,
-): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[] } {
+): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[];
+  readonly parameters: readonly RustFunctionParam[] } {
   function missingPlan(): never { return failRustPlannerInvariant("An admitted callable adapter requires its complete native argument adaptation.", input.declaration); }
   if (input.parameters.length !== input.parameterAbis.length) failRustPlannerInvariant(
     "An admitted callable adapter requires its complete rendered parameter vector.", input.declaration);
@@ -97,7 +99,13 @@ export function planRustCallableArguments(
       kind: "reference", expr: value, ...(adapter.target.mode === "mut-ref" ? { mutable: true } : {}),
     });
   }
-  return { statements: Object.freeze(statements), adaptedArguments: Object.freeze(adaptedArguments) };
+  // A contract parameter that no adapter reads (a surplus argument the implementation ignores) is unused by design.
+  const used = new Set(input.parameterAdapters.flatMap(adapter => adapter.kind === "rest"
+    ? adapter.segments.map(segment => segment.contractParameterIndex)
+    : adapter.kind === "omitted" ? [] : [adapter.contractParameterIndex]));
+  const parameters = input.parameters.map((selected, index) => used.has(index) ? selected
+    : { ...selected, attrs: [...selected.attrs ?? [], rustLintAttributes.unusedVariables] });
+  return { statements: Object.freeze(statements), adaptedArguments: Object.freeze(adaptedArguments), parameters: Object.freeze(parameters) };
 
   function planRest(adapter: Extract<RustCallableParameterAdapter, { readonly kind: "rest" }>): RustExpr {
     const vector = rustTypeFromCarrierInContext(rustVecTargetType(adapter.elementCarrier), context);

@@ -17,6 +17,7 @@ import type { RustNativeCallableProducerPlan } from "../../target-model/records/
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage" | "structuralShapes"> & {
@@ -60,8 +61,30 @@ export function prepareRustGenericCallableInvocation(
   const invocation: RustGenericCallableInvocationFact["invocation"][number][] = [];
   const awaiting: RustGenericCallableInvocationFact["awaiting"][number][] = [];
   const requests: { readonly producer: SourceStorageProducer; readonly channel: "invocation" | "awaiting"; readonly identity: string }[] = [];
+  const implementationRequests: { readonly declaration: Node; readonly channel: "invocation" | "awaiting"; readonly identity: string }[] = [];
   const effects: RustSourceCallEffectsFact[] = [];
-  for (const [ordinal, selected] of producers.producers.entries()) {
+  // A callee supplied by an input (a parameter or a method value read from one) carries some member of the family its
+  // logical carrier names, so its channels are those of every implementation of that family.
+  const inputCallee = producers.producers.every(selected => selected.subject.kind === "input");
+  for (const [ordinal, implementation] of (inputCallee ? definition.implementations : []).entries()) {
+    const declaration = implementation.declaration;
+    const producer = callableValues.nativeProducers.forDeclaration(declaration);
+    const effect = effectsFor(declaration);
+    if (producer === undefined || effect === undefined) return undefined;
+    effects.push(effect);
+    for (const channel of ["invocation", "awaiting"] as const) {
+      if (effect[channel] !== "fallible") continue;
+      const error = callableValues.nativeProducers.errorFor(declaration, channel === "invocation" ? "invoke" : 0);
+      if (error === undefined) return undefined;
+      const identity = `pending-generic-error:${closedMetadataKey({ invocation: sourceNodeIdentity(ast, node),
+        producer: producer.identity, implementation: ordinal, channel, errorType: error })}`;
+      const values = channel === "invocation" ? invocation : awaiting;
+      if (values.some(value => value.identity === identity)) continue;
+      values.push(Object.freeze({ identity, variant: `Error${values.length}`, errorType: snapshotClosedMetadata(error) }));
+      implementationRequests.push(Object.freeze({ declaration, channel, identity }));
+    }
+  }
+  for (const [ordinal, selected] of (inputCallee ? [] : producers.producers).entries()) {
     const subject = selected.subject;
     if (subject.kind !== "value" || subject.projection.length !== 0) return undefined;
     const declaration = subject.node;
@@ -105,6 +128,11 @@ export function prepareRustGenericCallableInvocation(
         if (selected === undefined) return undefined;
         replacements.set(request.identity, selected);
       }
+      for (const request of implementationRequests) {
+        const selected = completed.forImplementation(request.declaration, request.channel);
+        if (selected === undefined) return undefined;
+        replacements.set(request.identity, selected);
+      }
       return Object.freeze({ selection: completed.selection, replacements });
     },
   });
@@ -122,7 +150,8 @@ function resolveRustGenericCallableInvocation(
   effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
 ): { readonly selection: RustGenericCallableInvocationFact;
   forProducer(producer: SourceStorageProducer, logical: TargetTypeRef,
-    channel: "invocation" | "awaiting"): RustNativeErrorEffect | undefined } | undefined {
+    channel: "invocation" | "awaiting"): RustNativeErrorEffect | undefined;
+  forImplementation(declaration: Node, channel: "invocation" | "awaiting"): RustNativeErrorEffect | undefined } | undefined {
   const storage = selectRustGenericCallableInvocationStorage(node, {
     ast: context.ast, records: context.records, generic: context.callableValues.generic,
     nativeStorage: context.callableValues.nativeStorage,
@@ -161,6 +190,15 @@ function resolveRustGenericCallableInvocation(
         : mappings?.length === 1 ? mappings[0]!.target : undefined;
       const error = member === undefined || !definition.members.includes(member) ? undefined : selected.members.get(member)?.[channel];
       return error === undefined ? undefined : instantiateOne(error);
+    },
+    // Every physical member built from one implementation carries the same channel error at this invocation, or the
+    // channel is not exact.
+    forImplementation(declaration: Node, channel: "invocation" | "awaiting") {
+      const errors = definition.members.filter(member => member.implementation.declaration === declaration)
+        .map(member => selected.members.get(member)?.[channel]);
+      if (errors.length === 0 || errors.some(error => error === undefined)) return undefined;
+      const [first, ...rest] = errors.map(error => instantiateOne(error!));
+      return rest.every(error => rustTargetTypeRefEquals(error.errorType, first!.errorType)) ? first : undefined;
     },
   });
 }

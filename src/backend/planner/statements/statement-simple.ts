@@ -17,12 +17,20 @@ export function planExpressionStatement(node: Node, context: RustPlanContext): r
 
 export function planExpressionAsStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] {
   const { records } = context.input.program;
-  if (records.compileTimeSource.get(expression) !== undefined) return [];
-  // A parenthesized statement expression is the same discarded expression: `(result = value);` is an assignment
-  // statement, as analysis selects it (its result disposition sees through the parentheses).
+  // Compile-time source and an erased (discarded) callable creation such as `async () => f();` emit nothing.
+  if (records.compileTimeSource.get(expression) !== undefined || records.nativeParticipation.get(expression) === "erased") return [];
+  // A parenthesized statement-form expression is the same statement: `(result = value);` is an assignment statement,
+  // as analysis selects it (its result disposition sees through the parentheses). A parenthesized value expression
+  // (for example a discarded definition `(() => f());`) stays one discarded value.
   if (context.input.program.source.ast.is.IsParenthesizedExpression(expression)) {
-    const inner = Node_Expression(context.input.program.source.ast, expression);
-    if (inner !== undefined) return planExpressionAsStatement(inner, context);
+    const { ast } = context.input.program.source;
+    const inner = Node_Expression(ast, expression);
+    const innerOperation = inner === undefined ? undefined : records.targetOperation.get(inner);
+    if (inner !== undefined && (records.assignmentCompletion.get(inner) !== undefined ||
+      innerOperation?.kind === "runtime-set" || innerOperation?.kind === "nullish-assignment" ||
+      ast.is.IsPrefixUnaryExpression(inner) || ast.is.IsPostfixUnaryExpression(inner) ||
+      records.nativeParticipation.get(inner) === "erased" || ast.is.IsParenthesizedExpression(inner) ||
+      sourceExpressionSequence(ast, inner).length > 1)) return planExpressionAsStatement(inner, context);
   }
   const sequence = sourceExpressionSequence(context.input.program.source.ast, expression);
   if (sequence.length > 1) return sequence.flatMap(item => planExpressionAsStatement(item, context));

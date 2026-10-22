@@ -131,7 +131,10 @@ export function createRustNativeCallableInputPlan(input: {
     for (const origin of origins.subjects) {
       if (origin.kind === "return" && origin.projection.length === 0 &&
         isRustNeverCarrier(input.records.sourceCallableReturn.get(origin.node)?.returnCarrier)) continue;
-      if (origin.kind !== "input") {
+      // A generic method read from an input is that input's stored generic callable family value, not a callable
+      // input of this declaration.
+      if (origin.kind !== "input" || origin.projection[origin.projection.length - 1]?.kind === "method-value" &&
+        rustGenericCallableValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined) {
         implementations.add(origin);
         continue;
       }

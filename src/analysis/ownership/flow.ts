@@ -5,6 +5,7 @@ import { analyzeSourceLiveness, createSourceControlFlow, type SourceControlFlowG
 import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
+import type { RustLexicalFunctionQueries } from "../../target-model/records/lexical-functions.js";
 
 export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;
@@ -16,6 +17,7 @@ export interface RustOwnershipFlowInput {
   readonly isOwnedOperationResult: (expression: Node) => boolean;
   readonly mayBorrowArgument?: (argument: Node, reference: Node) => boolean;
   readonly isInstanceFieldUse?: (reference: Node, declaration: Node) => boolean;
+  readonly lexicalFunctions?: Pick<RustLexicalFunctionQueries, "forDeclaration" | "calleesFor">;
   readonly limits?: Partial<SourceFlowLimits>;
 }
 
@@ -66,6 +68,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       }
     }
   }
+  if (input.lexicalFunctions !== undefined) transferInvokedLexicalCaptures(input, input.lexicalFunctions, captureTransfers);
   for (const node of input.nativeNodes) {
     if (sourceParameterIsProperty(ast, node)) {
       const summary = source.navigation.declarationUseSummary(node);
@@ -87,6 +90,51 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     }
   }
   return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers, regions: Object.freeze(regions) }) };
+}
+
+// A lexical function that is not observed as a value receives its captures as arguments at its invocations. Its
+// declaration-site capture point in the enclosing region is therefore not where the binding is consumed. When such a
+// function is invoked exactly once, from one once-called lexical invoker that itself received the binding by move, and
+// that invoker uses the binding only by making this invocation, the invoker passes its owned capture on by move.
+// Chains (outer -> through -> read) close by repeating until no capture gains a transfer.
+function transferInvokedLexicalCaptures(
+  input: RustOwnershipFlowInput,
+  lexical: Pick<RustLexicalFunctionQueries, "forDeclaration" | "calleesFor">,
+  captureTransfers: Map<Node, ReadonlySet<Node>>,
+): void {
+  const { ast, navigation } = input.source;
+  const invokers = new Map<Node, Node[]>();
+  for (const declaration of input.nativeNodes) {
+    for (const callee of lexical.calleesFor(declaration)) {
+      const owners = invokers.get(callee) ?? [];
+      if (!owners.includes(declaration)) owners.push(declaration);
+      invokers.set(callee, owners);
+    }
+  }
+  const capturesBinding = (callable: Node, binding: Node): boolean => (input.capturesFor(callable)?.captures ?? [])
+    .some(capture => sourceNodesEqual(ast, capture.declaration, binding));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [callee, owners] of invokers) {
+      const selected = lexical.forDeclaration(callee);
+      if (selected?.kind !== "resolved" || selected.valueObserved || !selected.singleInvocation || owners.length !== 1) continue;
+      const invoker = owners[0]!;
+      if (!input.isOnceCallable(invoker)) continue;
+      for (const capture of input.capturesFor(callee)?.captures ?? []) {
+        const binding = capture.declaration;
+        if (capture.storage !== "value" || captureTransfers.get(callee)?.has(binding) === true ||
+          captureTransfers.get(invoker)?.has(binding) !== true ||
+          !(input.capturesFor(invoker)?.captures ?? []).some(owned => owned.storage === "value" &&
+            sourceNodesEqual(ast, owned.declaration, binding)) ||
+          navigation.declarationUses(binding).some(use => use.kind !== "source-linkage" && use.kind !== "type-only" &&
+            sourceEnclosingCallable(use.reference, ast) === invoker) ||
+          lexical.calleesFor(invoker).some(other => other !== callee && capturesBinding(other, binding))) continue;
+        captureTransfers.set(callee, new Set([...captureTransfers.get(callee) ?? [], binding]));
+        changed = true;
+      }
+    }
+  }
 }
 
 function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>): boolean {

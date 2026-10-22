@@ -38,6 +38,8 @@ export function planOptionalChainExpression(node: Node, context: RustPlanContext
   };
   const pattern = { kind: "tuple-variant" as const, path: "Some", elements: [{ kind: "binding" as const, name: receiverName }] };
   if (selected.unit) return { kind: "if-let", expression: borrowedGuard, pattern, whenTrue: body };
+  if (selected.mapClosure) return planRustCheckedSourceOptional({ kind: "method-call", receiver: borrowedGuard, method: "map",
+    args: [{ kind: "closure", params: [{ name: receiverName, byRefCopy: false }], body }] }, fact.innerResultCarrier, context);
   const value: RustExpr = { kind: "match", expression: borrowedGuard, arms: [
     { pattern, expression: fact.lowering === "map" ? { kind: "call", path: "Some", args: [body] } : body },
     { pattern: { kind: "path", path: "None" }, expression: fact.lowering === "map"
