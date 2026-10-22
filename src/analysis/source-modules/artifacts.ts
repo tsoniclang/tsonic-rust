@@ -61,7 +61,9 @@ export function analyzeRustSourceArtifacts(program: Omit<RustAnalysisProgram, "r
     const fileName = program.source.ast.getFileName(file);
     const module = program.records.sourceFileEmission.get(file);
     if (module?.initialization.required) add(fileName, program.records.sourcePackageInitializers.get()?.functionNameByFileName.get(fileName));
-    for (const { definition } of module?.classes ?? []) {
+    for (const { definition, local } of module?.classes ?? []) {
+      // A local class is named through its scope module path, which is how other crates refer to its source type.
+      if (local) add(fileName, definition.targetPath);
       add(fileName, definition.targetName); add(fileName, definition.stateName);
       add(fileName, definition.dispatchName); add(fileName, definition.rootName);
     }
