@@ -29,7 +29,7 @@ import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes 
 import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
 import { rustRetainedEnvironment } from "../callables/retained-values.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustPlaceholderLifetime } from "../../target-model/lifetimes/index.js";
 
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
@@ -353,8 +353,11 @@ export function applySelectedProjectSourceCall(
     for (const [index, argument] of (callArguments as readonly Node[]).entries()) {
       const carriers = parameters.flatMap(parameter => parameter.inputs.filter(input => input.sourceArgumentIndex === index)
         .map(input => input.carrier));
-      const expected = carriers.length !== 0 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, carriers[0])) &&
-        !rustTargetGenericReferences(carriers[0]!).lifetimeIdentities.includes(identity) ? carriers[0] : undefined;
+      // An input that names the callee retained lifetime is expected at its exact shape with that lifetime still
+      // open: the call selects it below from the argument storage, so the argument does not fall back to its source
+      // type (an unannotated async callback would otherwise read its parameters as number).
+      const expected = carriers.length !== 0 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, carriers[0]))
+        ? rustRetainedCallResult(carriers[0]!, new Map([[identity, rustPlaceholderLifetime]])) : undefined;
       if (resolveExpressionCarrier(walk, argument, sourceFile, expected) === undefined) return undefined;
     }
   }
