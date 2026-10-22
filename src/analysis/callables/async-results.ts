@@ -25,6 +25,7 @@ import type {
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../program/records/async-function.js";
 import { rustDirectPromiseBodyCallee } from "./promise-bodies.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 
 export function selectRustAsyncBodyFacts(
   walk: RustFactWalk,
@@ -199,6 +200,8 @@ function loadRustAsyncCompletion(
 }
 
 function expressionSuspension(walk: RustFactWalk, expression: Node): "ready" | "suspending" | "pending" {
+  // An awaited value is never a thenable (`Awaited<T>`); the await itself is classified where it is visited.
+  if (walk.context.ast.is.IsAwaitExpression(rustUnparenthesizedExpression(walk.context.ast, expression))) return "ready";
   const carrier = expressionCarrier(walk, expression);
   if (carrier?.kind === "type-parameter") return "ready";
   const selection = rustAwaitSelection(carrier, walk.context.typeDefinitions);

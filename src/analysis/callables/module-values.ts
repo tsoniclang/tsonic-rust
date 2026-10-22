@@ -42,6 +42,9 @@ export function selectRustModuleCallableStorage(
     rustGenericCallableValue(binding.value.carrier) !== undefined;
   const stored = !declarationValue && (summary.exported || summary.bindingWritten || source.navigation.declarationUses(node).some(use => {
     if (use.kind !== "first-class") return false;
+    // A reference with its own source callable value is planned as that value at the use (planner dispatch), never
+    // as a read of the module cell.
+    if (records.sourceCallableValue.get(use.reference) !== undefined) return false;
     const reference = records.directCallableReference.get(use.reference);
     const selected = records.contextualValueConversion.get(use.reference);
     if (reference === undefined) return true;

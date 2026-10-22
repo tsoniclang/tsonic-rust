@@ -335,11 +335,39 @@ function rustSpreadSlotLifetimes(walk: RustFactWalk, sourceFile: SourceFile, car
   let changed = false;
   const fields = target.fields.map(field => {
     const source = field.method === true && !explicit.has(field.sourceName) ? copied.get(field.sourceName) : undefined;
-    const type = source === undefined ? field.type : rustCallableTargetForSourceLifetime(source, field.type);
+    let type = source === undefined ? field.type : rustCallableTargetForSourceLifetime(source, field.type);
+    // An explicit property whose value is itself a structural object keeps that value's closed method slot lifetimes
+    // (`{ inner: make(7) }`), the same way a spread keeps the copied slots' lifetimes.
+    const property = field.method === true ? undefined : explicit.get(field.sourceName);
+    const value = property === undefined ? undefined : ObjectLiteralProperty_Value(walk.context.ast, property);
+    if (value !== undefined && !walk.context.ast.is.IsArrowFunction(value) && !walk.context.ast.is.IsFunctionExpression(value) &&
+      rustStructuralObjectCarrierValue(field.type) !== undefined) {
+      const valueCarrier = resolveExpressionCarrier(walk, value, sourceFile, undefined);
+      if (valueCarrier !== undefined) type = rustAdoptStructuralSlotLifetimes(type, valueCarrier);
+    }
     if (type === field.type) return field;
     changed = true;
     return { ...field, type };
   });
   return changed ? rustStructuralObjectTargetType(target.ownerFileName, fields, target.representation, target.construction, target.bases)
     : carrier;
+}
+
+/** The target structural carrier with each placeholder method slot taking the matching slot lifetime of the source. */
+function rustAdoptStructuralSlotLifetimes(target: TargetTypeRef, source: TargetTypeRef): TargetTypeRef {
+  const targetValue = rustStructuralObjectCarrierValue(target);
+  const sourceValue = rustStructuralObjectCarrierValue(source);
+  if (targetValue === undefined || sourceValue === undefined || targetValue.fields.length !== sourceValue.fields.length) return target;
+  let changed = false;
+  const fields = targetValue.fields.map(field => {
+    const match = sourceValue.fields.find(candidate => candidate.sourceName === field.sourceName && candidate.method === field.method);
+    if (match === undefined) return field;
+    const type = field.method === true ? rustCallableTargetForSourceLifetime(match.type, field.type)
+      : rustAdoptStructuralSlotLifetimes(field.type, match.type);
+    if (type === field.type) return field;
+    changed = true;
+    return { ...field, type };
+  });
+  return changed ? rustStructuralObjectTargetType(targetValue.ownerFileName, fields, targetValue.representation,
+    targetValue.construction, targetValue.bases) : target;
 }

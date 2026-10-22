@@ -22,6 +22,7 @@ import type { RustGenericRequirement } from "../../target-model/records/generic-
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
@@ -71,6 +72,7 @@ export function analyzeRustPromiseResults(input: {
   readonly uses: RustPromiseResultUses;
   readonly definitions: RustTypeDefinitions;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly promiseBodies: RustPromiseBodies;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly errorTypes: RustErrorTypeContext;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
@@ -316,9 +318,18 @@ export function analyzeRustPromiseResults(input: {
         return unresolved(value.node, "A retained native reference requires its concrete source owner or exact formal input contract.");
       }
       const abi = value.kind === "input" ? input.records.sourceParameterAbi.get(value.node) : undefined;
-      if (value.kind === "input" && abi?.parameterCarrier.kind === "reference" && abi.inputLifetime !== undefined &&
-        rustLifetimesEqual(lifetime, abi.inputLifetime) &&
-        rustLifetimesEqual(abi.parameterCarrier.lifetime, abi.inputLifetime)) {
+      // A formal input borrowed for its own duration: either the ABI introduced the input lifetime, or the input is an
+      // authored reference (`Ref<T, Region>`, a transparent alias with no type-argument bindings) whose region is a
+      // lifetime parameter declared by its own owner.
+      const authoredRegion = abi?.inputLifetime === undefined && abi?.parameterCarrier.kind === "reference" &&
+        rustLifetimesEqual(abi.parameterCarrier.lifetime, lifetime) &&
+        input.ast.typeParameters(owner).some(parameter => {
+          const declared = parameter === undefined ? undefined : input.sourceLifetimes.parameterFor(parameter);
+          return declared?.kind === "lifetime" && rustLifetimesEqual(declared.lifetime, lifetime);
+        });
+      if (value.kind === "input" && abi?.parameterCarrier.kind === "reference" && (authoredRegion ||
+        abi.inputLifetime !== undefined && rustLifetimesEqual(lifetime, abi.inputLifetime) &&
+        rustLifetimesEqual(abi.parameterCarrier.lifetime, abi.inputLifetime))) {
         return Object.freeze({ kind: "resolved", premises: Object.freeze([Object.freeze({ ...evidence,
           kind: "formal-borrowed", executionOwner: owner, mode: carrier.mutable ? "mutable" : "shared",
           region: Object.freeze({ kind: "input-duration", parameter: value.node }) })]) });
@@ -338,6 +349,11 @@ export function analyzeRustPromiseResults(input: {
     }
     const active = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
     const classify = (carrier: TargetTypeRef, owner: Node | undefined): ReturnType<typeof classifyCarrierRequirements> => {
+      // A native Promise body with no Promise object facet runs only as a native future awaited by its callers: the
+      // value is moved into that future, whose storage has the caller's lifetime. Only a JS Promise object (or other
+      // erased storage) requires 'static (RULINGS 2026-10-22: an only-awaited Promise is a native future).
+      if (owner !== undefined && input.promiseBodies.declarations.has(owner) && !input.promiseBodies.objects.has(owner))
+        return { kind: "supported" };
       const nativeEvidence = { ...input.evidence,
         lifetimeContract: rustEnclosingStorageContract(owner ?? value.node, input.ast, input.sourceLifetimes) };
       if (rustTargetTypeParameterIdentities(carrier).length === 0) return classifyCarrierRequirements(carrier, ["static"],
@@ -439,8 +455,12 @@ export function analyzeRustPromiseResults(input: {
       const nativeOperation = operation?.kind === "provider-operation" || operation?.kind === "reference-operation" ||
         operation?.kind === "flow-marker" || operation?.kind === "typed-location";
       if (isCall && nativeCall === undefined && !nativeOperation) return undefined;
-      return Object.freeze({ kind: future ? "may-suspend" : "never", value,
-        contractDeclaration: declaration ?? value.node, checkedType: checked.type });
+      // A provider declaration file is not part of the checked source program, so its suspension contract is attached to
+      // the exact value, as completionFor does for provider calls.
+      const declarationFile = declaration === undefined ? undefined : input.ast.getSourceFile(declaration);
+      const contractDeclaration = declaration !== undefined && declarationFile !== undefined &&
+        input.source.semantics.includes(declarationFile) ? declaration : value.node;
+      return Object.freeze({ kind: future ? "may-suspend" : "never", value, contractDeclaration, checkedType: checked.type });
     },
   };
   const ownership = createSourceOwnershipQuery({ source: input.source, storage: input.storage, budget, premises });
