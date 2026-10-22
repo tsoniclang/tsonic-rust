@@ -1,11 +1,11 @@
 import type { SourceNativeGuard } from "@tsonic/target-api/source";
 import type { Node, ResolvedSourceCallInfo } from "@tsonic/tsts";
 import { selectSourceNativeValueGuard } from "@tsonic/target-api/source";
-import type { RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
-import type { RustSourcePolicyContext } from "../../../policy/model/context.js";
-import type { RustSourceProfileRegistry } from "../../../policy/types/model/source-profile.js";
-import { asNode, resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember, type RustSelectedSourceMemberIdentity } from "../../../policy/identities/selected-source.js";
-import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
+import type { RustClosedTypePredicate } from "../../../../target-model/operations/type-tests.js";
+import type { RustSourcePolicyContext } from "../../../../policy/model/context.js";
+import type { RustSourceProfileRegistry } from "../../../../policy/types/model/source-profile.js";
+import { asNode, resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember, type RustSelectedSourceMemberIdentity } from "../../../../policy/identities/selected-source.js";
+import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
 
 export function selectRustErrorTypePredicate(
   context: RustSourcePolicyContext,

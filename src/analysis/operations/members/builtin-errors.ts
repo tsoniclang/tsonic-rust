@@ -1,7 +1,7 @@
 import { selectRustBuiltinErrorPropertyForm } from "../../../policy/operations/source-profiles/js/error-properties.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { type RustSelectedSourceMemberSet } from "../../../policy/identities/selected-source.js";
-import { selectRustErrorTypePredicate } from "../../source-profiles/js/type-tests.js";
+import { selectRustErrorTypePredicate } from "../source-profiles/js/type-tests.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../../source-evidence/types/resolution/source.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";

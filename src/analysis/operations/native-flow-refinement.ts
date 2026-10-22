@@ -10,7 +10,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../source-evidence/types/resolution/native-flow-refinement.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
-import { selectRustSourceTypeGuard } from "../source-profiles/js/type-tests.js";
+import { selectRustSourceTypeGuard } from "./source-profiles/js/type-tests.js";
 import { resolveRustInstanceType } from "../source-evidence/types/resolution/instance-tests.js";
 
 export function selectRustGuardedValueCarrier(

@@ -10,7 +10,7 @@ import { readRustSourceKeepAlive } from "../../../../source/extension/reachabili
 import { mapSelectedJsSpecialCall } from "../../object-projections.js";
 import { acceptProjectSourceCall } from "../../project-call-signatures.js";
 import { selectRustArrayTypeTest } from "../type-tests.js";
-import { isRustArrayTypeTestMember } from "../../../source-profiles/js/type-tests.js";
+import { isRustArrayTypeTestMember } from "../../source-profiles/js/type-tests.js";
 
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor } from "./instantiation.js";

@@ -7,7 +7,7 @@ import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { rustJsSurfaceSourceProfileContributions, rustNativeSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
-import { createRustSourceProfileStorageEffects } from "../../../dist/analysis/source-profiles/source-storage-effects.js";
+import { createRustSourceProfileStorageEffects } from "../../../dist/analysis/operations/source-profiles/source-storage-effects.js";
 import { rustPolicyNode } from "../../../dist/policy/model/context.js";
 import { resolveSelectedSourceProfileMember } from "../../../dist/policy/identities/selected-source.js";
 import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
