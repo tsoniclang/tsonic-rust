@@ -12,6 +12,8 @@ export function planRustOwnedBinaryEntry(input: {
   readonly afterEntry: readonly RustStmt[];
   readonly errors: RustBinaryErrorPlan;
   readonly fallible: boolean;
+  // The owner hook's error type when it is known to equal the lifecycle error type.
+  readonly hookErrorType?: RustType;
 }): RustBlock {
   const root: RustExpr = input.execution.execution === "entry"
     ? { kind: "closure", params: [], body: { kind: "block", body: input.body } }
@@ -27,7 +29,7 @@ export function planRustOwnedBinaryEntry(input: {
       value: "The selected entry owner stopped without a completed root or a requested exit." }] };
   return { statements: [
     { kind: "let", name: "entry_completion", mutable: false, init: input.execution.owner.isFallible
-      ? input.errors.lifecycle(call) : call },
+      ? input.errors.lifecycle(call, input.hookErrorType) : call },
     { kind: "if", condition: { kind: "method-call", receiver: status, method: "exit_requested", args: [] },
       then: { statements: [{ kind: "return", expr: complete({ kind: "method-call", receiver: status, method: "into", args: [] }) }] } },
     { kind: "expr", expr: input.fallible ? { kind: "try", expr: output,

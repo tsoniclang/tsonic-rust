@@ -49,10 +49,10 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
               kind: "closure",
               params: [{ name: "state", byRefCopy: false }],
               body: {
-                kind: "binary",
+                kind: "assignment",
                 operator: "+=",
-                left: { kind: "path", path: "state.0" },
-                right: { kind: "path", path: "__tsonic_value" },
+                target: { kind: "path", path: "state.0" },
+                value: { kind: "path", path: "__tsonic_value" },
               },
             }],
           },

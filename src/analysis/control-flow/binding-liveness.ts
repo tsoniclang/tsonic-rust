@@ -38,7 +38,9 @@ export function analyzeRustBindingLiveness(
     for (const binding of graph.bindings) {
       if (sourceEnclosingCallable(binding, source.ast) !== graph.declaration) continue;
       const previous = bindings.get(binding);
-      bindings.set(binding, { unused: (previous?.unused ?? true) && !reads.has(binding) &&
+      // A parameter property is read by its implicit field initialization, which has no source read point.
+      const stored = source.navigation.declarationUseSummary(binding).escapeKinds.includes("storage");
+      bindings.set(binding, { unused: (previous?.unused ?? true) && !reads.has(binding) && !stored &&
           names.nameForDeclaration(binding)?.startsWith("_") !== true,
         unusedInitializer: (previous?.unusedInitializer ?? true) && initialWrites.get(binding) === true &&
           names.nameForDeclaration(binding)?.startsWith("_") !== true,

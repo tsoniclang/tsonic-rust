@@ -11,6 +11,7 @@ import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 
 import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
+import { refuseRustUnresolvedParameterCarriers } from "../callables/parameter-facts.js";
 import { createRustSourceCallableAbiResolver } from "../callables/source-callable-abi.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
@@ -407,7 +408,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast, context.isNativeNode)) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
-        finalizeRustCallableSignature(walk, statement);
+        if (finalizeRustCallableSignature(walk, statement) === undefined) refuseRustUnresolvedParameterCarriers(walk, statement);
       } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
       }
