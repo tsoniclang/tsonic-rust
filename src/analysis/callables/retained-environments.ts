@@ -8,7 +8,7 @@ import { rustRetainedEnvironment, rustRetainedValueLifetime } from "./retained-v
 import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-storage.js";
 import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustEnclosingStorageContract } from "./storage-contracts.js";
-import { rustCallScopedElisionLifetime, rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustCallScopedElisionLifetime, rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carriers.js";
@@ -22,7 +22,13 @@ export function rustRetainedCallLifetimes(
   if (references.lifetimes.length === 0) return new Map();
   const selected = rustRetainedEnvironment(declaration, parameters, walk.context);
   if (selected.kind === "unresolved") return undefined;
-  if (selected.kind === "none") return new Map();
+  if (selected.kind === "none") {
+    // The callee's signature names its own retained environment (selected for its open generic inputs), but at this
+    // instantiation no input is open storage, so the result retains only storage it owns: 'static.
+    const declared = walk.context.retainedEnvironments.environmentFor(declaration);
+    return declared.kind === "selected" && references.lifetimeIdentities.includes(rustLifetimeKey(declared.environment.lifetime))
+      ? new Map([[rustLifetimeKey(declared.environment.lifetime), rustStaticLifetime]]) : new Map();
+  }
   const environment = selected.environment;
   if (!references.lifetimeIdentities.includes(rustLifetimeKey(environment.lifetime))) return new Map();
   const caller = sourceEnclosingCallable(invocation, ast);
