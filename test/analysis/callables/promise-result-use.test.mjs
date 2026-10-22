@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/target-program.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 
 for (const [name, statement, observations] of [
   ["ordinary discard", "leaf();", 1],
@@ -31,7 +31,7 @@ test("native discarded async calls are rejected before program publication", () 
     async function leaf(): Promise<number> { return 1; }
     export function outer(): void { leaf(); }
   ` }, compileTarget(request) {
-    const selected = analyzeRustTargetProgram(request);
+    const selected = analyzeRustAnalysisProgram(request);
     published = selected.kind === "resolved";
     return selected.kind === "rejected" ? selected : { kind: "rejected", diagnostics: [] };
   } });

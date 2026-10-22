@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
 import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission-requests.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
@@ -655,7 +655,7 @@ export function ordinary(value: number): number { const stored = value; return s
     compileTarget(request) {
       source = { ...request.input.source, ast: guard(request.input.source.ast, "AST"),
         semantics: guard(request.input.source.semantics, "semantics"), navigation: guard(request.input.source.navigation, "navigation") };
-      const analyzed = analyzeRustTargetProgram({ ...request, input: { ...request.input, source } });
+      const analyzed = analyzeRustAnalysisProgram({ ...request, input: { ...request.input, source } });
       if (analyzed.kind === "rejected") return analyzed;
       program = analyzed.value;
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: analyzed.diagnostics };

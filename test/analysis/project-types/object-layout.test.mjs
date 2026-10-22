@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustProjectObjectLayout } from "../../../dist/analysis/project-types/object-layout.js";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 
@@ -135,7 +135,7 @@ test("the same mixed checked layout is refused before native declaration publica
   let published = false;
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": checkedLayoutSource },
     compileTarget(request) {
-      const selected = analyzeRustTargetProgram(request);
+      const selected = analyzeRustAnalysisProgram(request);
       if (selected.kind === "resolved") published = true;
       return selected.kind === "rejected" ? selected
         : { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };

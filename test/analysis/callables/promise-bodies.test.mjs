@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/target-program.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { Node_Expression } from "@tsonic/target-api/source";
@@ -19,7 +19,7 @@ function analyze(text, options = {}) {
   let program;
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text }, ...options, compileTarget(request) {
     context = analyzeRustCheckedContext(request);
-    const analyzed = analyzeRustTargetProgram(request);
+    const analyzed = analyzeRustAnalysisProgram(request);
     if (analyzed.kind === "rejected") return analyzed;
     program = analyzed.value;
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: analyzed.diagnostics };

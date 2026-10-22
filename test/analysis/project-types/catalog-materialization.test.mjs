@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { projectClassLineage, projectContractsForLineage } from "../../../dist/analysis/project-types/catalog/declaration-heritage.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
@@ -28,7 +28,7 @@ for (const surfaces of [[], ["js"]]) {
         source.ast.forEachChild(node, child => { if (child !== undefined) collect(child); });
       };
       for (const file of source.navigation.sourceFiles) collect(file);
-      const selected = analyzeRustTargetProgram({ ...request, input: { ...request.input, source: {
+      const selected = analyzeRustAnalysisProgram({ ...request, input: { ...request.input, source: {
         ...source, ast: guard(source.ast, "ast"), navigation: guard(source.navigation, "navigation"),
       } } });
       if (selected.kind === "rejected") return selected;

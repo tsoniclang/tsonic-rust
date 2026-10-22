@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 
 const attributeProgram = `
 import { attribute } from "@tsonic/core/lang.js";
@@ -20,7 +20,7 @@ for (const surfaces of [[], ["js"]]) {
       surfaces,
       files: { "index.ts": attributeProgram },
       compileTarget(request) {
-        const analysis = analyzeRustTargetProgram(request);
+        const analysis = analyzeRustAnalysisProgram(request);
         stages.analysis = analysis.kind;
         if (analysis.kind === "rejected") return analysis;
         stages.planning = true;

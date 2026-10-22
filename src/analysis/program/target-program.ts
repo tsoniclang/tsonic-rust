@@ -1,5 +1,5 @@
 import { finalizeRustNativeEmission } from "./emission.js";
-import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { snapshotTargetPlanningSourceNavigation, targetSourceSyntaxProgram } from "@tsonic/target-api/analysis";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
@@ -57,9 +57,20 @@ import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 
+/** Seals the analysis program into the data-only program the backend plans from. */
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
 ): AnalyzeRustTargetProgramResult {
+  const analysis = analyzeRustAnalysisProgram(request);
+  if (analysis.kind === "rejected") return analysis;
+  const { host, source, records } = analysis.value;
+  return resolvedTargetStage(Object.freeze({ host, source: Object.freeze({ ast: source.ast }), records }), analysis.diagnostics);
+}
+
+/** The complete analysis program: every plan and record the analysis publishes, before sealing. */
+export function analyzeRustAnalysisProgram(
+  request: RustTargetAnalysisRequest,
+): TargetStageResult<RustAnalysisProgram> {
   const {
     input,
     configuration,
@@ -458,8 +469,8 @@ export function analyzeRustTargetProgram(
   if (finalFoundation.diagnostics.length !== 0) return rejectedTargetStage(finalFoundation.diagnostics);
   context.records.seal(context.requiredRecords);
   return resolvedTargetStage(Object.freeze({
-    host: program.host,
-    source: Object.freeze({ ast: context.ast }),
+    ...program,
+    reachability: emission.value,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
   }));
 }

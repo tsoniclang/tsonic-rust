@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { analyzeRustNumericLiteralAdmission } from "../../../dist/analysis/numeric/literal-admission.js";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
@@ -105,7 +105,7 @@ function analyzeOnly(source, selected) {
   compileRust({ ...surfaceOptions(selected), files: { "index.ts": source },
     compileTarget(request) {
       ast = request.input.source.ast;
-      analysis = analyzeRustTargetProgram(request);
+      analysis = analyzeRustAnalysisProgram(request);
       return analysis.kind === "rejected" ? analysis : { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     },
   });

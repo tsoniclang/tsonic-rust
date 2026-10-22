@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { retainedPointerInputSource } from "../../../../tsonic/test/fixtures/retained-pointer-inputs.mjs";
 
@@ -34,7 +34,7 @@ for (const [name, source] of [
     };
     let program;
     const compiled = compileRust({ files: { "index.ts": source }, compileTarget(request) {
-      const analysis = analyzeRustTargetProgram({ ...request, input: { ...request.input, source: {
+      const analysis = analyzeRustAnalysisProgram({ ...request, input: { ...request.input, source: {
         ...request.input.source, ast: guard(request.input.source.ast),
         navigation: guard(request.input.source.navigation), semantics: guard(request.input.source.semantics),
       } } });

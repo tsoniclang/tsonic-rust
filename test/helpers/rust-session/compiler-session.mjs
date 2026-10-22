@@ -25,7 +25,7 @@ import { createRustTargetPack } from "../../../dist/index.js";
 import { createRustCompilationSession } from "../../../dist/compilation/session.js";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { formatRustCompileResult } from "../../../dist/toolchain/rustfmt.js";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { analyzeRustCheckedContext } from "./analysis-context.mjs";
 import { repositoryRoot } from "./paths.mjs";
 
@@ -352,7 +352,7 @@ export function compileRust(options) {
 export function analyzeRust(options) {
   let program;
   const { source, result, requiredRecords } = compileRust({ ...options, compileTarget(request) {
-    const analysis = analyzeRustTargetProgram(request);
+    const analysis = analyzeRustAnalysisProgram(request);
     if (analysis.kind === "rejected") return analysis;
     program = analysis.value;
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };

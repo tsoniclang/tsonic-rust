@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import { compileRust, int32Carrier } from "../../helpers/rust-session.mjs";
 import { keelOwnedTargets } from "../../../../tsonic/test/architecture/tooling/keel-owned-contracts.mjs";
 
@@ -31,7 +31,7 @@ export function value(limit: number): number {
         semantics: guardedServices(source.semantics, gate, "semantics"),
         sourceFacts: guardedServices(source.sourceFacts, gate, "sourceFacts"),
       };
-      const result = analyzeRustTargetProgram({ ...request,
+      const result = analyzeRustAnalysisProgram({ ...request,
         input: { ...request.input, source: guardedSource } });
       if (result.kind === "rejected") return result;
       program = result.value;

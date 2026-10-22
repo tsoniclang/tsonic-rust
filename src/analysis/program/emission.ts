@@ -118,13 +118,14 @@ import { analyzeRustCallableParameterEmission } from "../callables/parameters.js
 import { analyzeRustDeclarationLiveness } from "../reachability/declaration-emission.js";
 
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
+import type { RustReachability } from "../../target-model/records/reachability.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
 
 export function finalizeRustNativeEmission(
   program: Omit<RustAnalysisProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords & SourceLiteralIndex },
   context: RustAnalysisContext, genericCallableErrors: RustGenericCallableErrorIndex,
-): TargetStageResult<void> {
+): TargetStageResult<RustReachability> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
   analyzeRustFieldProjectionAssignments({ ast: context.ast, nodes: context.nativeNodes, records,
@@ -324,5 +325,5 @@ export function finalizeRustNativeEmission(
   if (artifactIssues.length !== 0) return rejectedTargetStage(artifactIssues);
   const safetyEmissionIssues = analyzeRustSafetyEmission(program, context.records.safetyEmissionPlans);
   if (safetyEmissionIssues.length !== 0) return rejectedTargetStage(safetyEmissionIssues);
-  return resolvedTargetStage(undefined);
+  return resolvedTargetStage(reachability);
 }

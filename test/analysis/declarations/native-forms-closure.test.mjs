@@ -8,7 +8,7 @@ import { rustProjectCallableTargetName } from "../../../dist/analysis/names/sour
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustAnalysisProgram } from "../../../dist/analysis/program/index.js";
 import * as backendNames from "../../../dist/backend/planner/names/synthetic.js";
 
 function declarationNamed(source, name) {
@@ -55,7 +55,7 @@ test("unsupported enum constant domains reject before backend planning", () => {
   ]) {
     let published = false;
     const { result } = compileRust({ files: { "index.ts": source }, compileTarget(request) {
-      const analysis = analyzeRustTargetProgram(request);
+      const analysis = analyzeRustAnalysisProgram(request);
       if (analysis.kind === "resolved") published = true;
       return analysis.kind === "rejected" ? analysis
         : { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
