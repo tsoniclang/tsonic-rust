@@ -134,6 +134,13 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
           candidate.subject.node === declarationParameters[parameterIndex]);
       const witness = omitted === undefined ? undefined : program.callableValues.nativeStorage.invocationWitnessFor(omitted, call);
       const carrier = witness === undefined ? parameter.parameterCarrier : rustSourceOptionalTargetType(witness);
+      if (parameter.form === "rest" && parameter.parameterCarrier.kind === "tuple") {
+        const wholeSequence = inputs.length === 1 && inputs[0]?.sequence !== "value";
+        if (!wholeSequence && (inputs.length > parameter.parameterCarrier.elements.length || inputs.some(input => input.sequence !== "value")))
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted tuple rest requires its exact checked element or whole-sequence assembly.", call);
+        return Object.freeze({ form: parameter.form, carrier, rest: "tuple", inputs: Object.freeze(inputs),
+          omitted: Object.freeze(wholeSequence ? [] : parameter.parameterCarrier.elements.slice(inputs.length)) });
+      }
       return Object.freeze({ form: parameter.form, carrier, rest: isRustJsArrayCarrier(parameter.parameterCarrier) ? "js" : "native",
         inputs: Object.freeze(inputs) });
     });

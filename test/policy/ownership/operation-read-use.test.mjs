@@ -3,14 +3,60 @@ import test from "node:test";
 import { createTargetSourceProgram, Node_Expression } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
+import { analyzeRustReadUses, rustNativeArgumentBorrowsRead } from "../../../dist/analysis/ownership/uses.js";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
+import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, computedMember: undefined, nativeInputs: [], argumentModes: [],
     arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined });
 }
+
+test("nested native result lifetimes retain only their corresponding reference input", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-native-result-borrow", {
+    "src/index.ts": `
+declare function ref(value: string): string;
+declare function borrowed(value: string): string;
+declare function combined(first: string, second: string): string;
+function run(value: string): string { return combined(borrowed(ref(value)), value); }
+`,
+  }));
+  const { ast } = source;
+  const calls = new Map();
+  const visit = node => {
+    if (ast.is.IsCallExpression(node)) calls.set(ast.text(Node_Expression(ast, node)), node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  assert.equal(calls.size, 3, "the checked source has all three original calls");
+  const nested = calls.get("borrowed");
+  const referenceCall = calls.get("ref");
+  const reference = ast.arguments(referenceCall)[0];
+  const valueCarrier = rustStringTargetType();
+  const lifetime = { kind: "parameter", identity: "native-region", name: "Region" };
+  const nativeReference = { kind: "reference", mutable: false, referent: valueCarrier, lifetime };
+  for (const [label, resultCarrier, parameterCarrier, expected] of [
+    ["matching native region", nativeReference, nativeReference, true],
+    ["same spelling but distinct native region", nativeReference,
+      { ...nativeReference, lifetime: { ...lifetime, identity: "other-region" } }, false],
+    ["owned result does not retain its input", valueCarrier, nativeReference, false],
+    ["unknown native input lifetime is not invented", nativeReference,
+      { kind: "reference", mutable: false, referent: valueCarrier }, false],
+  ]) {
+    const operations = new Map([
+      [referenceCall, { kind: "reference-operation", operation: "shared-reference", operandExpression: reference }],
+      [nested, { kind: "source-call", resultCarrier, parameters: [{ parameterCarrier,
+        inputs: [{ sourceArgumentIndex: 0, sourceForm: "value", sourceParameterForm: "parameter", carrier: nativeReference }] }] }],
+    ]);
+    const records = { targetOperation: { get: node => operations.get(node) },
+      runtimeCarrier: { get: node => node === nested ? { carrier: resultCarrier } : undefined },
+      argumentPassing: { get: () => undefined } };
+    assert.equal(rustNativeArgumentBorrowsRead(nested, reference, ast, records), expected, label);
+    assert.equal(rustNativeArgumentBorrowsRead(referenceCall, reference, ast, records), true,
+      `${label}: the direct explicit reference remains borrowed`);
+  }
+});
 
 test("operator ownership consumes selected operand modes instead of rediscovering them from token or result type", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-native-operand-modes", {

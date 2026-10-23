@@ -207,8 +207,6 @@ export function finalizeRustNativeEmission(
   const callableDeclarationIssues = analyzeRustCallableDeclarationEmission({ program, source: context.source, reachability, nodes: context.nativeNodes,
     producer: context.records.callableDeclarationPlans });
   if (callableDeclarationIssues.length !== 0) return rejectedTargetStage(callableDeclarationIssues);
-  const bindingEmissionIssues = analyzeRustBindingProjectionEmission({ program, nodes: context.nativeNodes, producer: context.records.bindingEmission });
-  if (bindingEmissionIssues.length !== 0) return rejectedTargetStage(bindingEmissionIssues);
   const methodEmissionIssues = analyzeRustMethodEmission({ program, nodes: context.nativeNodes, producer: context.records.methodEmissionPlans });
   if (methodEmissionIssues.length !== 0) return rejectedTargetStage(methodEmissionIssues);
   analyzeRustFrameEmission({ program, sourceFiles: context.sourceFiles, nodes: context.nativeNodes, producer: context.records.frameEmissionPlans });
@@ -229,6 +227,8 @@ export function finalizeRustNativeEmission(
   if (providerEvaluationIssues.length !== 0) return rejectedTargetStage(providerEvaluationIssues);
   const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.source, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
+  const bindingEmissionIssues = analyzeRustBindingProjectionEmission({ program, nodes: context.nativeNodes, producer: context.records.bindingEmission });
+  if (bindingEmissionIssues.length !== 0) return rejectedTargetStage(bindingEmissionIssues);
   const objectLiteralIssues = analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans,
     node => context.semanticsFor(node).propertyNames.get(node),
     node => context.semanticsFor(node).operations.objectLiteralElement(node), context.source);

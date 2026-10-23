@@ -41,7 +41,7 @@ test("native error rendering consumes the sealed template without source or call
     input: { program: { records: program.records, source: { ast: neverRead } } },
     moduleNameByFileName: new Map([[selected.fileName, "index"]]),
     externalCrateNameByFileName: new Map(),
-  }, carrier => { rendered.push(carrier); return { kind: "named", path: "ExactError" }; });
+  }, declaration("invoke"), carrier => { rendered.push(carrier); return { kind: "named", path: "ExactError" }; });
   assert.equal(result !== undefined && result.boundary !== undefined, true, "the selected native region renders");
   assert.equal(rendered.length, selected.sources.length);
   assert.equal(rendered.every((carrier, index) => carrier === selected.sources[index].errorType), true,

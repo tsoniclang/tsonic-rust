@@ -325,6 +325,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ? crateInitializer === undefined
         ? failRustPlannerInvariant("An admitted native task entry requires its exact generated initializer.", entrySourceFile)
         : [{ kind: "expr" as const, expr: errors.lifecycle(executeAsync(planRustNativeTaskEntry({
+            sourceNode: entrySourceFile,
             task: nativeTasks, initialization: initialization.root, initializer: crateInitializer,
             modules: moduleInitializers, lifecycle: initialization.binary.lifecycle, lifecycleType: lifecycleErrorType,
             rendering: typeRenderingContextFor(rootComponentPlan), crateName,
@@ -378,7 +379,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       binaryExecution.kind === "owned" ? [] : epilogueStatements,
       executeAsync,
       nativeTasks === undefined ? undefined : planRustSelectedErrorRegion(initialization.binary.lifecycle.region,
-        typeRenderingContextFor(rootComponentPlan), undefined, crateName)?.boundary,
+        typeRenderingContextFor(rootComponentPlan), entrySourceFile, undefined, crateName)?.boundary,
     );
     if (workerDispatchStatements === undefined || diagnostics.length > 0) {
       return rejectedTargetStage(diagnostics);

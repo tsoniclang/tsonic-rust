@@ -246,7 +246,9 @@ export function planProjectMethod(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise
-      ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody(shapedBody, fallible, asyncFact.lowering).statements] }
+      ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody(shapedBody, fallible, asyncFact.lowering,
+          context.input.program.records.callableReturn.get(member)?.outward ??
+            failRustPlannerInvariant("An admitted Promise method requires its sealed physical native completion.", member)).statements] }
       : shapedBody,
   };
 }

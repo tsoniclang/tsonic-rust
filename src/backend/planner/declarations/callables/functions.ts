@@ -326,7 +326,9 @@ function planRustFunctionItem(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise && nativeBody === undefined
-      ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
+      ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering,
+          context.input.program.records.callableReturn.get(node)?.outward ??
+            failRustPlannerInvariant("An admitted Promise body requires its sealed physical native completion.", node))
       : finalizedBody,
   };
   if (nativeBody === undefined || !emission.promiseObject)

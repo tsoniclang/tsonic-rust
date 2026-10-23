@@ -416,7 +416,9 @@ export function planRustCallableExpressionBody(
     }] };
   } else if (asynchronous?.kind === "js-promise") {
     context.usedAliases?.add("js_abi");
-    finalizedBlock = wrapRustJsPromiseBody(loweredBody, bodyIsFallible, asynchronous.lowering);
+    finalizedBlock = wrapRustJsPromiseBody(loweredBody, bodyIsFallible, asynchronous.lowering,
+      context.input.program.records.callableReturn.get(node)?.outward ??
+        failRustPlannerInvariant("An admitted Promise closure requires its sealed physical native completion.", node));
   }
   if (closureFact.invocationResult !== undefined) {
     const conversion = closureFact.invocationResult;

@@ -30,6 +30,11 @@ export function shapeRustSourceCallParameters(plan: RustSourceArgumentEvaluation
       const input = parameter.inputs[0];
       return input === undefined ? planRustAbsentValue(parameter.carrier, context) : shapeSourceInput(plan, input, context);
     }
+    if (parameter.rest === "tuple") {
+      if (parameter.inputs.length === 1 && parameter.inputs[0]?.sequence !== "value") return shapeSourceInput(plan, parameter.inputs[0]!, context);
+      return { kind: "tuple-literal", elements: [...parameter.inputs.map(input => shapeSourceInput(plan, input, context)),
+        ...parameter.omitted.map(carrier => planRustAbsentValue(carrier, context))] };
+    }
     const sequence = parameter.inputs.some(input => input.sequence !== "value");
     if (sequence && parameter.inputs.length === 1) return shapeSourceInput(plan, parameter.inputs[0]!, context);
     const values = parameter.inputs.map(input => ({ value: shapeSourceInput(plan, input, context), sequence: input.sequence }));
