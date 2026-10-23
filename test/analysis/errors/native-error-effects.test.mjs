@@ -136,6 +136,34 @@ test("pure source bodies stay pure while abstract input invocation carries its e
   assert.equal(current.program.records.fallible.get(current.declaration("invoke")) !== undefined, true);
 });
 
+for (const [name, body, callbacks, localErrors] of [
+  ["one prepared callback", "[0].forEach(() => { left(value); });", ["left"], false],
+  ["nested prepared callbacks", "[0].forEach(() => { [0].forEach(() => { left(value); }); });", ["left"], false],
+  ["independent native errors", "[0].forEach(() => { left(value); right(value); });", ["left", "right"], false],
+  ["native error with actual source throw", "[0].forEach(() => { left(value); throw new Error('local'); });", ["left"], true],
+]) {
+  test(`prepared provider effects preserve exact native error channels: ${name}`, () => {
+    const current = analyzedFixture(analyzeRustErrorEffects(`
+      export function deliver<Value>(left: (value: Value) => void, right: (value: Value) => void, value: Value): void {
+        ${body}
+      }
+    `));
+    const expected = callbacks.map(name => {
+      const calls = current.calls(name);
+      assert.equal(calls.length, 1, `${name}: the complete original source invocation`);
+      const native = current.program.callableValues.native.callFor(calls[0]);
+      assert.equal(native !== undefined, true, `${name}: exact original native callable input`);
+      return { identity: native.invocationErrorSource, errorType: native.invocationError };
+    });
+    assertChannels(current.callable("deliver"), expected, localErrors);
+    const prepared = current.nodes.filter(node => current.ast.is.IsCallExpression(node) &&
+      current.ast.text(Node_Expression(current.ast, node)).endsWith(".forEach"));
+    assert.equal(prepared.length, name === "nested prepared callbacks" ? 2 : 1,
+      "every prepared operation remains in the checked source");
+    for (const operation of prepared) assertChannels(current.effects(operation), expected, localErrors);
+  });
+}
+
 for (const surfaces of [[], ["js"]]) {
   test(`two callbacks retain independent invocation and await errors alongside a local throw (${surfaces[0] ?? "native"})`, () => {
     const current = fixture(`

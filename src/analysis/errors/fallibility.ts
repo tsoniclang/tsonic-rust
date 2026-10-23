@@ -243,7 +243,7 @@ function collectFallibilityFacts(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
             )));
-    return walk.context.callableValues.native.callFor(node) === undefined &&
+    return !walk.preparedCallbackCalls.has(node) && walk.context.callableValues.native.callFor(node) === undefined &&
       !generatorOperation && rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,
@@ -273,7 +273,7 @@ function collectFallibilityFacts(
     ].filter((declaration): declaration is Node => declaration !== undefined);
   };
 
-  const { callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationIsFallible } =
+  const { callbackExpression, callbackValueExpression, callbackValueAnalysis, preparedCallbackOperationEffects } =
     createRustCallbackEffectAnalysis({ walk, budget, isFallible, declarationEffects, expressionRegionEffects });
   function expressionRegionEffects(root: Node): RustErrorEffectsFact | undefined {
     budget.step();
@@ -289,7 +289,7 @@ function collectFallibilityFacts(
     return effects;
   }
   const directEffects = createRustDirectErrorEffects({
-    walk, budget, declarationEffects, operationIsFallible, preparedCallbackOperationIsFallible, isFallible,
+    walk, budget, declarationEffects, operationIsFallible, preparedCallbackOperationEffects, isFallible,
     selectedAccessorDeclarations, selectedProjectDeclaration, genericInvocation, mergeEffects,
     sourceErrorEdges, selectSourceErrors, awaitSourceEdges, effectsByExpression,
   });

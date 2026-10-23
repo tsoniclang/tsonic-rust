@@ -28,7 +28,7 @@ interface RustDirectErrorEffectsInput {
   readonly budget: RustEffectsWorkBudget;
   readonly declarationEffects: (declaration: Node) => RustErrorEffectsFact;
   readonly operationIsFallible: (node: Node) => boolean;
-  readonly preparedCallbackOperationIsFallible: (node: Node) => boolean;
+  readonly preparedCallbackOperationEffects: (node: Node) => RustErrorEffectsFact | undefined;
   readonly isFallible: (declaration: Node) => boolean;
   readonly selectedAccessorDeclarations: (node: Node) => readonly Node[];
   readonly selectedProjectDeclaration: (node: Node) => Node | undefined;
@@ -43,7 +43,7 @@ interface RustDirectErrorEffectsInput {
 export function createRustDirectErrorEffects(
   input: RustDirectErrorEffectsInput,
 ): (node: Node) => RustErrorEffectsFact | undefined {
-  const { walk, budget, declarationEffects, operationIsFallible, preparedCallbackOperationIsFallible, isFallible, selectedAccessorDeclarations,
+  const { walk, budget, declarationEffects, operationIsFallible, preparedCallbackOperationEffects, isFallible, selectedAccessorDeclarations,
     selectedProjectDeclaration, genericInvocation, mergeEffects, sourceErrorEdges, selectSourceErrors, awaitSourceEdges, effectsByExpression } = input;
   const { ast } = walk.context;
   return (node: Node): RustErrorEffectsFact | undefined => {
@@ -93,7 +93,10 @@ export function createRustDirectErrorEffects(
       return true;
     };
     if (kind === "KindThrowStatement" || kind === "KindRegularExpressionLiteral" ||
-      operationIsFallible(node) || preparedCallbackOperationIsFallible(node)) selected.push(rustLocalErrorEffects);
+      operationIsFallible(node)) selected.push(rustLocalErrorEffects);
+    const callbackEffects = preparedCallbackOperationEffects(node);
+    if (callbackEffects === undefined) return undefined;
+    selected.push(callbackEffects);
     const nativeInput = walk.context.callableValues.native.callFor(node);
     if (nativeInput !== undefined) selected.push({ localErrors: false,
       nativeErrors: [{ identity: nativeInput.invocationErrorSource, errorType: nativeInput.invocationError }] });
