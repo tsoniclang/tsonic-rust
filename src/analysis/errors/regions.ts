@@ -133,7 +133,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     const result = asynchronous?.futureCarrier ?? input.records.sourceCallableReturn.get(producer.declaration)?.returnCarrier;
     const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, input.definitions);
     const channels = new Map<RustProducerErrorReference["channel"], TargetTypeRef>();
-    const body: readonly RustProducerErrorReference["channel"][] = asynchronous === undefined ? [] : ["body"];
+    const suspended = asynchronous !== undefined || input.records.generator.get(producer.declaration) !== undefined;
+    const body: readonly RustProducerErrorReference["channel"][] = suspended ? ["body"] : [];
     for (const channel of ["invoke" as const, ...body, ...Array.from({ length: completion?.futures.length ?? 0 }, (_value, index) => index)]) {
       const carrier = normalizeRustErrorType(rustProducerErrorTargetType({ identity: producer.identity,
         fileName: producer.fileName, channel, genericArguments: producer.environment }), input);

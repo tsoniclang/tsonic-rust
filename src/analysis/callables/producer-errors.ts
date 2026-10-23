@@ -40,8 +40,9 @@ export function selectRustProducerError(
   if (bindings === undefined) return undefined;
   const { types, lifetimes, consts } = bindings;
   const asynchronous = input.records.asyncFunction.get(producer.declaration);
-  if (reference.channel === "body" && asynchronous === undefined) return undefined;
-  const suspended = asynchronous !== undefined || input.records.generator.get(producer.declaration) !== undefined;
+  const generator = input.records.generator.get(producer.declaration);
+  if (reference.channel === "body" && asynchronous === undefined && generator === undefined) return undefined;
+  const suspended = asynchronous !== undefined || generator !== undefined;
   if (reference.channel === "invoke" && suspended) return Object.freeze({ kind: "carrier",
     carrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
   const closure = input.records.targetOperation.get(producer.declaration);
