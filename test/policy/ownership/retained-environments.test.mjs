@@ -97,6 +97,27 @@ export async function outer(callback: () => number, unused: () => number): Promi
 }
 `;
 
+test("unfinished retained input evidence stays retryable without changing its finite work budget", () => {
+  let complete = false;
+  const current = fixture(suspended, input => ({ ...input,
+    source: { ...input.source, navigation: { ...input.source.navigation,
+      parameterUseSummary(parameter) { return complete ? input.source.navigation.parameterUseSummary(parameter) : undefined; },
+    } },
+  }));
+  const owner = current.declarations.get("outer");
+  assert.equal(current.queries.suspendedParametersFor(owner) === undefined, true,
+    "unfinished checked uses cannot publish an empty native capture inventory");
+  assert.equal(current.queries.environmentFor(owner).kind, "unresolved",
+    "an unfinished input prevents retained environment publication");
+  complete = true;
+  const parameters = current.source.ast.parameters(owner);
+  const retained = current.queries.suspendedParametersFor(owner);
+  assert.equal(retained?.length, 1, "the same declaration consumes the now-complete checked use inventory");
+  assert.equal(retained[0] === parameters[0], true, "only the actually captured callback is retained");
+  assert.equal(current.queries.environmentFor(owner).kind, "selected",
+    "a prior unresolved query cannot poison the final native environment");
+});
+
 test("suspended retention uses checked nested-function capture evidence and excludes unused parameters", () => {
   const { source, queries, declarations } = fixture(suspended);
   const owner = declarations.get("outer");
