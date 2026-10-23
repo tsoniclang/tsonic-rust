@@ -14,7 +14,8 @@ test("native task roles publish through one required single-writer family", () =
     [{}, Object.freeze({ kind: "entry", scope })],
     [{}, Object.freeze({ kind: "owner", scope, binding: "borrowed-parameter" })],
     [{}, Object.freeze({ kind: "call", scope, passing: "borrow" })],
-    [{}, Object.freeze({ kind: "spawn", scope, operand: {}, outputCarrier: rustUnitTargetType() })],
+    [{}, Object.freeze({ kind: "spawn", scope, operand: {}, completion: Object.freeze({ kind: "leaf",
+      value: Object.freeze({ carrier: rustUnitTargetType(), completion: Object.freeze({ kind: "discard" }) }) }) })],
   ];
   for (const [subject, value] of entries) {
     builder.nativeTaskPlans.use(subject, value);

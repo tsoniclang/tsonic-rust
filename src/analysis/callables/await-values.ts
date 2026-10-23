@@ -50,6 +50,23 @@ export function finalizeRustAwaitValueFact(
     ? undefined : snapshotClosedMetadata(fact);
 }
 
+export function finalizeRustDiscardedAwaitSelection(
+  operandCarrier: TargetTypeRef,
+  futureFor: (carrier: TargetTypeRef) => RustFutureValueFact | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustAwaitSelection<RustAwaitValueLeafFact> | undefined {
+  const topology = rustAwaitSelection(operandCarrier, definitions);
+  if (topology === undefined) return undefined;
+  const selection = mapRustAwaitSelection(topology, leaf => {
+    const future = leaf.future === undefined ? undefined : futureFor(leaf.carrier);
+    if (leaf.future !== undefined && (future === undefined ||
+      !rustFutureValueMatchesCarrier(future, leaf.carrier, definitions))) return undefined;
+    return { carrier: leaf.carrier, ...(future === undefined ? {} : { future }),
+      completion: { kind: "discard" as const } };
+  });
+  return selection === undefined ? undefined : snapshotClosedMetadata(selection);
+}
+
 export function rustAwaitValueMatchesCarrier(
   fact: RustAwaitValueFact,
   operandCarrier: TargetTypeRef | undefined,
