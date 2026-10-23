@@ -9,6 +9,43 @@ import {
   compileRust,
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { rustCallableProtocol } from "../../../../dist/target-model/types/carriers/callables.js";
+import { rustInfallibleTargetId } from "../../../../dist/target-model/types/carriers/source-types.js";
+
+test("nested callable projections publish physical tuple and object carriers once", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `
+function increment(value: number): number { return value + 1; }
+function callbacks(): [(value: number) => number, { current: (value: number) => number }] {
+  return [increment, { current: increment }];
+}
+function run(): void {
+  const [first, { current }] = callbacks();
+  if (first(2) !== 3 || current(3) !== 4) throw new Error("nested callable projection");
+}
+run();
+`,
+  } });
+  assert.equal(result.diagnostics.length, 0, "nested native callable projections are admitted");
+  assert.equal(result.program !== undefined && result.plan !== undefined, true, "all physical projections seal and plan");
+  const program = result.program;
+  const checked = new Set();
+  const visit = node => {
+    const name = program.names.nameForDeclaration(node);
+    if (program.source.ast.is.IsBindingElement(node) && ["first", "current"].includes(name)) {
+      const selected = program.records.bindingProjectionEmission.get(node);
+      assert.equal(selected !== undefined, true, `${name} has one sealed physical projection`);
+      assert.equal(rustCallableProtocol(selected.fact.bindingCarrier)?.error?.id, rustInfallibleTargetId,
+        `${name} retains the exact physical implementation error`);
+      checked.add(name);
+    }
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(checked.size, 2, "both nested callable slots are checked");
+  assert.equal(validateGeneratedProject("nested-callable-physical-projections", result.artifacts, { run: true }).status,
+    0, "the published carriers compile and preserve both callback results");
+});
 
 test("neutral function pointers remain native Rust function pointers", { timeout: 300_000 }, () => {
   const { result } = compileRust({

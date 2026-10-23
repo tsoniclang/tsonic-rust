@@ -118,6 +118,10 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     program.projectTypes.objectLayoutForDefinition(definition) === undefined;
   const pending = [...program.projectTypes.definitions.filter(definition => members.has(definition) && !layoutless(definition))
     .map(definition => program.projectTypes.openCarrier(definition))];
+  for (const context of program.physicalEmissionContexts.contexts) pending.push(...context.operands,
+    ...(context.returnDestination.kind === "value" ? [context.returnDestination.carrier] : []));
+  for (const operand of program.physicalEmissionContexts.operands) pending.push(operand.carrier,
+    ...(operand.destination === undefined ? [] : [operand.destination]));
   for (const node of nodes) {
     if (ast.is.IsInterfaceDeclaration(node) && layoutless(program.projectTypes.definitionForDeclaration(node))) continue;
     const carrier = program.records.runtimeCarrier.get(node)?.carrier;

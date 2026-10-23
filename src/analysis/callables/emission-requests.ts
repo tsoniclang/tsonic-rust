@@ -2,7 +2,7 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, VariableDeclarationList_Declarations, VariableStatement_DeclarationList, sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
+import { IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage, sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
 import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -361,6 +361,11 @@ export function prepareRustPhysicalCallableEmissionRequests(
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "parameter-value", abi?.valueCarrier);
         type(node, parameter, "parameter-abi", abi?.parameterCarrier);
+        const name = ast.name(parameter);
+        if (name !== undefined && (ast.is.IsArrayBindingPattern(name) || ast.is.IsObjectBindingPattern(name))) {
+          request(node, parameter, "binding", { kind: "value" }, parameter);
+          visitConstruct(name, node);
+        }
         for (const child of sourceConstructValueInputs(ast, parameter)) visitUse(child.expression, node, inputRole(child), child.owner);
       }
       const lexical = input.lexicalFunctions.forDeclaration(node);
@@ -407,18 +412,14 @@ export function prepareRustPhysicalCallableEmissionRequests(
       return;
     }
     if (IsTypeSyntaxNode(ast, node) || ast.is.IsTypeLiteralNode(node)) return;
-    const declarationList = VariableStatement_DeclarationList(ast, node) ?? ForStatement_Initializer(ast, node);
-    for (const declaration of VariableDeclarationList_Declarations(ast, declarationList) ?? []) {
-      if (declaration === undefined || records.compileTimeSource.get(declaration) === true ||
-        records.nativeUnreachable.get(declaration) === true) continue;
-      const initializer = Node_Initializer(ast, declaration);
-      const name = ast.name(declaration);
-      // A module callable declaration is planned as a native function (and, when stored, from its sealed hoisted
-      // carrier), never as a value binding.
-      if (name !== undefined && ast.is.IsIdentifier(name) && records.moduleBinding.get(declaration)?.storage !== "native-callable" &&
+    if (ast.is.IsVariableDeclaration(node)) {
+      const initializer = Node_Initializer(ast, node);
+      if (records.moduleBinding.get(node)?.storage !== "native-callable" &&
         (initializer === undefined || input.lexicalFunctions.forDeclaration(initializer) === undefined))
-        request(owner, declaration, "binding", { kind: "value" }, declaration);
+        request(owner, node, "binding", { kind: "value" }, node);
     }
+    if (ast.is.IsBindingElement(node) && "bindingCarrier" in (records.bindingProjection.get(node) ?? {}))
+      request(owner, node, "binding", { kind: "value" }, node);
     const operation = records.targetOperation.get(node);
     if (operation?.kind === "iteration") {
       type(owner, node, "iteration-element", operation.elementCarrier);

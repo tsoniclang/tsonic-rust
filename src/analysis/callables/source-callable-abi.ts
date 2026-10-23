@@ -203,7 +203,7 @@ export function createRustSourceCallableAbiResolver(input: {
         rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier) ? finalized : undefined;
       const owner = context.ast.parent(parameter);
       if (owner === undefined || sourceCallableValueParameters(context.ast, owner,
-        context.semanticsFor(owner))?.includes(parameter) !== true) return undefined;
+        context.currentSemantics, { kind: "declaration" })?.includes(parameter) !== true) return undefined;
       const cached = contextualValueCarrier === undefined ? cache.get(parameter) : undefined;
       if (cached !== undefined) {
         return cached;

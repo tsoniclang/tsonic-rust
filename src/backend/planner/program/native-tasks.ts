@@ -67,7 +67,7 @@ export function planRustNativeTaskSpawn(
   const initialization = context.input.program.records.programEmission.get()?.initialization;
   if (initialization === undefined) failRustPlannerInvariant("An admitted native task requires its sealed initialization and lifecycle plan.", node);
   const lifecycle = initialization.binary.lifecycle;
-  const region = planRustSelectedErrorRegion(lifecycle.region, context);
+  const region = planRustSelectedErrorRegion(lifecycle.region, context, node);
   const errorType = rustTypeFromCarrierInContext(selected.scope.errorCarrier, context);
   if (region === undefined || errorType === undefined)
     failRustPlannerInvariant("An admitted native task requires its completed lifecycle error transport.", node);
