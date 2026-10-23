@@ -18,6 +18,8 @@ import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake
 import { jsValueProjectionsAreValid } from "../../../dist/policy/operations/source-profiles/js/model.js";
 import { materializeJsValueProjections } from "../../../dist/policy/operations/source-profiles/js/materialization.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/index.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
 
 test("explicit property projection reads checked fields without selecting JSON behavior", () => {
   const result = rustStructuralObjectTargetType("/src/index.ts", [
@@ -106,6 +108,54 @@ test("shared native structural objects retain their owner while explicit JSON se
     const selected = selectRustSourceValueConversion(optional, target);
     assert.equal(selected.kind, "closed-value-from-option");
     assert.deepEqual(selected.elementConversion, conversion);
+  }
+});
+
+test("nested required and optional JSON fields consume their own sealed literal origins", () => {
+  const integer = rustSourcePrimitiveTargetType("uint64");
+  const field = (sourceName, type, presence = "required") => ({ sourceName, type, presence, readonly: false });
+  const child = rustStructuralObjectTargetType("/src/index.ts", [field("a", integer), field("b", integer)], "value");
+  for (const presence of ["required", "optional"]) {
+    const parent = rustStructuralObjectTargetType("/src/index.ts", [field("a", integer),
+      field("b", presence === "optional" ? rustOptionTargetType(child) : child, presence)], "value");
+    const parentNode = fakeStatement({ kindName: "ObjectLiteralExpression", pos: 0, end: 20 });
+    const childNode = fakeStatement({ kindName: "ObjectLiteralExpression", pos: 5, end: 15 });
+    const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "parent", statements: [parentNode, childNode] });
+    const ast = fakeAstReader([sourceFile]);
+    const shape = carrier => ({ carrier, fields: carrier.value.fields.map(selected => ({
+      sourceName: selected.sourceName, targetName: selected.sourceName, carrier: selected.type,
+      presence: selected.presence, readonly: false, storage: "stored",
+    })) });
+    const shapes = new Map([[parent, shape(parent)], [child, shape(child)]]);
+    const literals = new Map([
+      [parentNode, { kind: "structural", node: parentNode, selection: { carrier: parent },
+        sourceFields: [{ storageIndex: 1, value: childNode }, { storageIndex: 0, value: undefined }] }],
+      [childNode, { kind: "structural", node: childNode, selection: { carrier: child },
+        sourceFields: [{ storageIndex: 0, value: undefined }, { storageIndex: 1, value: undefined }] }],
+    ]);
+    const records = createRustRecordFixture({
+      structuralShape: { get: carrier => shapes.get(carrier) },
+      structuralFieldStorage: { get: (carrier, index) => ({ field: shapes.get(carrier)?.fields[index] }) },
+      structuralObjectStorage: { get: carrier => shapes.has(carrier) ? { value: true } : undefined },
+      carrierRead: { get: () => ({ copy: true, clone: true }) },
+      objectLiteralEmission: { get: node => literals.get(node) },
+    });
+    const context = { input: { program: { source: { ast }, records } }, sourceFile,
+      syntheticNames: createRustSyntheticNameState(ast, parentNode, []), usedAliases: new Set(), diagnostics: [] };
+    const contract = rustValueConversionContract(selectRustProjectedValueConversion(parent, "json"));
+    assert.equal(contract?.lowering, "js-value-from-structural-object", presence + ": checked projection is admitted");
+    const source = { kind: "call", path: "produce_once", args: [] };
+    const projected = lowerRustValueConversion(contract, source, context, parentNode);
+    assert.equal(projected?.kind, "block", presence + ": one native source binding");
+    assert.equal(projected.body.statements[0].init === source, true, presence + ": source evaluated once");
+    const entries = projected.body.statements.at(-1).expr.args[0].elements;
+    const tuple = entry => entry.kind === "method-call" ? entry.args[0].body : entry.args[0];
+    assert.deepEqual(entries.map(entry => tuple(entry).elements[0].value), ["b", "a"], presence + ": parent insertion order");
+    const nested = tuple(entries[0]).elements[1];
+    assert.equal(nested.kind, "block", presence + ": the selected child projection is retained");
+    assert.deepEqual(nested.body.statements.at(-1).expr.args[0].elements.map(entry => tuple(entry).elements[0].value),
+      ["a", "b"], presence + ": child uses its own origin, never the parent");
+    assertNoTargetDiagnostics(context.diagnostics);
   }
 });
 

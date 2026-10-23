@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
+import type { RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
@@ -17,15 +18,16 @@ import { planRustJsRejectionPropagation } from "./js-rejection.js";
 export function planRustAwaitBranches(
   node: Node,
   expression: RustExpr,
-  fact: RustAwaitValueFact,
+  selection: RustAwaitSelection<RustAwaitValueLeafFact>,
+  resultCarrier: TargetTypeRef | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
   const names = context.syntheticNames;
   if (names === undefined) failRustPlannerInvariant("An admitted await requires its native name scope.", node);
-  const result = context.input.program.records.typeEmission.get(fact.resultCarrier);
-  if (result === undefined) failRustPlannerInvariant("An admitted await requires its native result completion.", node);
-  const absent = (): RustExpr => result.completion === "unit"
-    ? { kind: "tuple-literal", elements: [] } : planRustAbsentValue(fact.resultCarrier, context);
+  const result = resultCarrier === undefined ? undefined : context.input.program.records.typeEmission.get(resultCarrier);
+  if (resultCarrier !== undefined && result === undefined) failRustPlannerInvariant("An admitted await requires its native result completion.", node);
+  const absent = (): RustExpr => resultCarrier === undefined || result?.completion === "unit"
+    ? { kind: "tuple-literal", elements: [] } : planRustAbsentValue(resultCarrier, context);
   const leaf = (selected: RustAwaitValueLeafFact, value: RustExpr): RustExpr | undefined => {
     const future = selected.future;
     let output = value;
@@ -66,6 +68,11 @@ export function planRustAwaitBranches(
           : rustBottomExpression(converted)
         : converted;
     }
+    if (selected.completion.kind === "discard") {
+      if (resultCarrier !== undefined) failRustPlannerInvariant("A discarded await cannot publish a valued completion.", node);
+      return { kind: "evaluate-then", effect: output, discard: "value", value: absent() };
+    }
+    if (resultCarrier === undefined) failRustPlannerInvariant("A discarded await requires a sealed discard completion.", node);
     return selected.completion.kind === "absence"
       ? { kind: "evaluate-then", effect: output, discard: "unit", value: absent() }
       : applyFinalizedValueConversion(context, output, selected.completion.conversion, node);
@@ -98,5 +105,5 @@ export function planRustAwaitBranches(
     }
     return { kind: "match", expression: value, arms };
   };
-  return plan(fact.selection, expression);
+  return plan(selection, expression);
 }

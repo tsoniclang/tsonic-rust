@@ -12,5 +12,5 @@ export function planRustAwaitExpression(node: Node, context: RustPlanContext,
   if (operand === undefined || fact === undefined) failRustPlannerInvariant("An admitted await requires its native operand and completion selection.", node);
   const planned = planExpression(operand, context)
     ?? failRustPlannerInvariant("An admitted await requires its native operand plan.", operand);
-  return planRustAwaitBranches(node, planned, fact, context);
+  return planRustAwaitBranches(node, planned, fact.selection, fact.resultCarrier, context);
 }
