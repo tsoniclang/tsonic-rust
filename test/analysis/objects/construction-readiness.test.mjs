@@ -65,8 +65,8 @@ for (const [name, statements, mutable] of [
   assert.equal(result.issues.length, 0, result.issues.map(row => row.reason).join("\n"));
   const fields = [...new Set(result.expressions.filter(entry => entry.kind === "field").map(entry => entry.declaration))];
   assert.equal(fields.length, 1);
-  assert.equal(result.mutatesUnpublishedField(fields[0]), mutable);
-  assert.equal(result.mutatesUnpublishedField({}), false, "foreign field identities cannot acquire local writes");
+  assert.equal(result.mutatesUnpublishedField(fields[0], undefined), mutable);
+  assert.equal(result.mutatesUnpublishedField({}, undefined), false, "foreign field identities cannot acquire local writes");
 });
 
 for (const [name, statements] of [
@@ -124,9 +124,9 @@ export class Value {
   assert.equal(construction !== undefined, true, `${name}: construction is admitted before sealing`);
   const fields = construction.fields.filter(field => ast.text(ast.name(field.declaration)) === "value");
   assert.equal(fields.length, 1, `${name}: one exact checked field identity`);
-  assert.equal(construction.mutableFieldLocals.has(fields[0].declaration), mutable,
+  assert.equal(construction.mutableFieldLocals.get(undefined).has(fields[0].declaration), mutable,
     `${name}: only native writes to the unpublished physical local demand mutability`);
-  assert.equal(construction.mutableFieldLocals.has({}), false, `${name}: no foreign declaration acquires mutability`);
+  assert.equal(construction.mutableFieldLocals.get(undefined).has({}), false, `${name}: no foreign declaration acquires mutability`);
   assert.equal(Object.hasOwn(construction, "unpublishedMutations"), false, `${name}: the superseded raw mutation set is absent`);
   assert.equal(Object.hasOwn(construction, "unpublishedAccesses"), false, `${name}: the superseded raw access set is absent`);
 });
@@ -153,6 +153,52 @@ export class Value {
   assert.equal(declaration !== undefined, true, `${label}: one exact authored captured field`);
   assert.equal(program.records.capturedFieldStorage.get(declaration)?.storage.kind, kind,
     `${label}: native capture representation is selected independently of local syntax`);
-  assert.equal(construction.mutableFieldLocals.has(declaration), false,
+  assert.equal(construction.mutableFieldLocals.get(undefined).has(declaration), false,
     `${label}: unchanged native bindings and interior mutation need no mutable owner binding`);
+});
+
+for (const [label, base, middle, leaf, expected] of [
+  ["base write ends before two rebindings", "this.value = 2;", "", "", [true, false, false, false]],
+  ["middle write belongs only to the middle binding", "", "this.value = 3;", "", [false, true, false, false]],
+  ["leaf write belongs only to the last binding", "", "", "this.value = 4;", [false, false, true, false]],
+]) test(`constructor field mutability follows actual native binding intervals: ${label}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export class Base { value = 1; constructor() { ${base} } }
+export class Middle extends Base { constructor() { super(); ${middle} } }
+export class Leaf extends Middle { constructor() { super(); ${leaf} } }
+` } });
+  const ast = program.source.ast;
+  const definitions = ["Base", "Middle", "Leaf"].map(name => program.projectTypes.definitions.find(
+    definition => ast.text(ast.name(definition.declaration)) === name));
+  assert.equal(definitions.every(definition => definition !== undefined), true, "all actual checked construction layers exist");
+  const construction = program.records.classConstruction.get(definitions[2].declaration);
+  assert.equal(construction !== undefined, true, "the complete derived construction is admitted before publication");
+  const field = construction.fields.find(field => ast.text(ast.name(field.declaration)) === "value");
+  assert.equal(field !== undefined, true, "one canonical physical field is retained across the entire lineage");
+  assert.equal(construction.localFieldDeclarations.has(field.declaration), true,
+    "the native owner selects declaration at initialization and the actual subsequent rebindings");
+  for (const [index, start] of [undefined, ...definitions].entries()) {
+    const mutable = construction.mutableFieldLocals.get(start);
+    assert.equal(mutable !== undefined, true, `binding ${index}: the canonical shape requires an explicit interval disposition`);
+    assert.equal(mutable.has(field.declaration), expected[index],
+      `binding ${index}: neither a previous nor a later native binding contributes writes to this local`);
+  }
+});
+
+test("an early-return constructor keeps one outer binding mutable across its actual layer interval", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export class Base { value = 1; constructor(flag: boolean) { if (flag) return; this.value = 2; } }
+export class Child extends Base { constructor(flag: boolean) { super(flag); this.value = 3; } }
+` } });
+  const ast = program.source.ast;
+  const definition = program.projectTypes.definitions.find(definition => ast.text(ast.name(definition.declaration)) === "Child");
+  assert.equal(definition !== undefined, true, "the checked derived owner exists");
+  const construction = program.records.classConstruction.get(definition.declaration);
+  assert.equal(construction !== undefined, true, "the early-completion lineage is admitted");
+  const field = construction.fields.find(field => ast.text(ast.name(field.declaration)) === "value");
+  assert.equal(field !== undefined, true, "the exact shared field identity is retained");
+  assert.equal(construction.localFieldDeclarations.has(field.declaration), false,
+    "early layer completion requires the existing outer declaration, not a fictitious rebind");
+  assert.equal(construction.mutableFieldLocals.get(undefined).has(field.declaration), true,
+    "all real writes to the one outer binding still require native mutability");
 });

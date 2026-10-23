@@ -76,7 +76,7 @@ export function planRustConstructionLayers(
       const body = planLayer(index - 1, baseParameters);
       if (body === undefined) failRustPlannerInvariant("An admitted constructor layer requires its exact native body and initialization plan.", layer.definition.declaration);
       statements.push(...argumentsPlan.statements, ...temporaries, ...construction.exportInitialized(
-        plan.layers.slice(0, index).flatMap(layer => layer.fields.map(field => field.declaration)), [...bindings, ...body]));
+        base.definition, plan.layers.slice(0, index).flatMap(layer => layer.fields.map(field => field.declaration)), [...bindings, ...body]));
       if (!plan.completingLayers.has(base.definition)) return statements;
     } else {
       const external = context.input.program.records.externalProjectBase.get(layer.definition);

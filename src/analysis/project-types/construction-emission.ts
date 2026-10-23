@@ -4,7 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustConstructionProducer } from "../program/records/construction.js";
 import type { RustConstructionPreparationSelection, RustConstructionProjection } from "../../target-model/records/construction.js";
-import type { RustProjectConstructorSignature } from "../../target-model/types/project-types.js";
+import type { RustProjectConstructorSignature, RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetIdentifier, isValidRustIdentifier } from "../../target-model/names/identifiers.js";
@@ -107,17 +107,33 @@ export function analyzeRustConstructionEmission(input: {
       preparations.set(point.node, Object.freeze({ ...selected, projections: Object.freeze(projections) }));
     }
     const declarations = [...new Set(plan.layers.flatMap(layer => layer.fields.map(field => field.declaration)))];
-    const mutableFieldLocals = new Set(declarations.filter(declaration => {
+    const localFieldDeclarations = new Set(plan.fields.filter(field => {
+      const binding = program.records.frameBindingDeclaration.get(field.declaration);
+      const deferred = binding !== undefined ? binding.initialization === "deferred"
+        : program.records.capturedFieldStorage.get(field.declaration)?.storage.initialization === "deferred";
+      return !deferred && !plan.layerHasEarlyReturn(field.owner) &&
+        (field.initializer !== undefined || field.externallyInitialized);
+    }).map(field => field.declaration));
+    const mutableInLayer = (declaration: Node, layer: RustProjectTypeDefinition | undefined): boolean => {
       const binding = program.records.frameBindingDeclaration.get(declaration);
-      if (binding !== undefined) return binding.storage === "value" && plan.mutatesUnpublishedField(declaration);
+      if (binding !== undefined) return binding.storage === "value" && plan.mutatesUnpublishedField(declaration, layer);
       if (program.records.capturedFieldStorage.get(declaration) !== undefined) return false;
-      if (plan.mutatesUnpublishedField(declaration)) return true;
-      if (!plan.accessesUnpublishedField(declaration)) return false;
+      if (plan.mutatesUnpublishedField(declaration, layer)) return true;
+      if (!plan.accessesUnpublishedField(declaration, layer)) return false;
       const dispatch = program.records.projectFieldDispatch.get(declaration);
       if (dispatch === undefined) failTargetAnalysisInvariant("tsonic-rust",
         "An accessed construction field requires its exact native content-mutation disposition.", declaration);
       return dispatch.mutableContent;
-    }));
+    };
+    const mutableFieldLocals = new Map<RustProjectTypeDefinition | undefined, ReadonlySet<Node>>();
+    mutableFieldLocals.set(undefined, new Set(plan.fields.filter(field => mutableInLayer(field.declaration,
+      localFieldDeclarations.has(field.declaration) ? field.owner : undefined)).map(field => field.declaration)));
+    for (const [index, layer] of plan.layers.entries()) {
+      const next = plan.layers[index + 1];
+      mutableFieldLocals.set(layer.definition, new Set(next === undefined ? [] : plan.fields
+        .filter(field => localFieldDeclarations.has(field.declaration) && mutableInLayer(field.declaration, next.definition))
+        .map(field => field.declaration)));
+    }
     input.producer.classDeclaration(definition.declaration, { definition, layers: plan.layers, fields: plan.fields, expressions: plan.expressions,
       points: new Map(plan.points.map(point => [point.node, point])),
       returns: new Map(plan.points.flatMap(point => {
@@ -126,7 +142,7 @@ export function analyzeRustConstructionEmission(input: {
       })),
       earlyReturnLayers: new Set(plan.layers.filter(layer => plan.layerHasEarlyReturn(layer.definition)).map(layer => layer.definition)),
       completingLayers: new Set(plan.layers.filter(layer => plan.layerCompletes(layer.definition)).map(layer => layer.definition)),
-      mutableFieldLocals,
+      localFieldDeclarations, mutableFieldLocals,
       unobservedInitializers: new Set(plan.fields.filter(field => (field.initializer !== undefined || field.externallyInitialized) &&
         !plan.observesInitialValue(field.declaration)).map(field => field.declaration)),
       physicalDeclarations: new Map(declarations.map(declaration => [declaration, program.objectRepresentations.receiverCaptures.storageDeclaration(declaration)])),

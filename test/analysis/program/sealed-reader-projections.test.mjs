@@ -72,7 +72,7 @@ export function value(limit: number): number {
       reader("RustConstructionPointQueries.expressionsWithin", nodes, node => constructors().expressionsWithin(node), () => constructors().expressionsWithin(foreign), "empty"),
       reader("RustConstructionPointQueries.layerCompletes", definitions, definition => constructors().layerCompletes(definition), () => constructors().layerCompletes(foreign), "false"),
       reader("RustConstructionPointQueries.layerHasEarlyReturn", definitions, definition => constructors().layerHasEarlyReturn(definition), () => constructors().layerHasEarlyReturn(foreign), "false"),
-      reader("RustConstructionPointQueries.mutatesUnpublishedField", nodes, node => constructors().mutatesUnpublishedField(node), () => constructors().mutatesUnpublishedField(foreign), "false"),
+      reader("RustConstructionPointQueries.mutatesUnpublishedField", nodes, node => constructors().mutatesUnpublishedField(node, undefined), () => constructors().mutatesUnpublishedField(foreign, undefined), "false"),
       reader("RustConstructionPointQueries.pointFor", nodes, node => constructors().pointFor(node), () => constructors().pointFor(foreign)),
       reader("RustProjectFieldDispatchQueries.implementationFor", nodes, node => program.projectFieldDispatch.implementationFor(item, node), () => program.projectFieldDispatch.implementationFor(foreign, foreign)),
       reader("RustProjectFieldDispatchQueries.planFor", nodes, node => program.projectFieldDispatch.planFor(node), () => program.projectFieldDispatch.planFor(foreign)),

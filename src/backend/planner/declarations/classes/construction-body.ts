@@ -1,6 +1,7 @@
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAdmittedConstruction } from "../../../../target-model/records/construction.js";
+import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
@@ -31,7 +32,7 @@ export interface RustConstructionBody {
   readonly root: RustExpr;
   initialize(declaration: Node, value: RustExpr): readonly RustStmt[] | undefined;
   input(declaration: Node, node: Node, context: RustPlanContext, planValue: () => RustExpr | undefined): RustExpr | undefined;
-  exportInitialized(declarations: readonly Node[], statements: readonly RustStmt[]): readonly RustStmt[];
+  exportInitialized(layer: RustProjectTypeDefinition, declarations: readonly Node[], statements: readonly RustStmt[]): readonly RustStmt[];
   prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
   contextForLayer(context: RustPlanContext, returnLabel?: { readonly id: number; readonly label: string }): RustPlanContext;
   finish(): readonly RustStmt[];
@@ -62,7 +63,7 @@ export function planRustConstructionBody(
   if (identity?.kind === "path") declarations.push({ kind: "let", name: identity.path, mutable: false,
     init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] } });
   const values = new Map<Node, RustExpr>();
-  const declarationAtInitialization = new Set<Node>();
+  const declarationAtInitialization = plan.localFieldDeclarations;
   for (const planned of plan.fields) {
     const field = physicalFields.get(planned.declaration);
     if (field === undefined) failRustPlannerInvariant("Construction field syntax requires its canonical admitted physical field.", planned.declaration);
@@ -70,10 +71,7 @@ export function planRustConstructionBody(
     const expression: Extract<RustExpr, { readonly kind: "path" }> = { kind: "path", path: name };
     const absence = planned.absenceDefault;
     const storage = rustConstructionFieldStorage(field.declaration, field.carrier, context, plan);
-    if (!storage.deferred && !plan.earlyReturnLayers.has(planned.owner) &&
-      (planned.initializer !== undefined || planned.externallyInitialized))
-      declarationAtInitialization.add(field.declaration);
-    else declarations.push({ kind: "let", name, mutable: storage.mutable, type: field.storageType,
+    if (!declarationAtInitialization.has(field.declaration)) declarations.push({ kind: "let", name, mutable: storage.mutable, type: field.storageType,
       ...(absence ? { init: storage.create(planRustAbsentValue(field.carrier, context)) }
         : storage.deferred ? { init: storage.createDeferred() } : {}) });
     slots.push({ ...field, expression });
@@ -230,14 +228,16 @@ export function planRustConstructionBody(
         : storage.deferred ? [{ kind: "expr", expr: storage.initialize(slot.expression, value) }]
         : [{ kind: "assign", target: slot.expression, operator: "=", value: storage.create(value) }];
     },
-    exportInitialized(declarations, statements) {
+    exportInitialized(layer, declarations, statements) {
       const exported = slots.filter(slot => declarations.includes(slot.declaration) && declarationAtInitialization.has(slot.declaration));
       if (exported.length === 0) return [{ kind: "scope", body: { statements } }];
+      const mutable = plan.mutableFieldLocals.get(layer)
+        ?? failRustPlannerInvariant("An admitted construction export requires its exact rebound native binding mutability.", layer.declaration);
       const name = allocateRustSyntheticName(context.syntheticNames!, "initialized_fields");
       return [{ kind: "let", name, mutable: false, init: { kind: "block", body: { statements: [
         ...statements, { kind: "tail", expr: { kind: "tuple-literal", elements: exported.map(slot => slot.expression) } },
       ] } } }, ...exported.map((slot, index): RustStmt => ({ kind: "let", name: slot.expression.path,
-        mutable: rustConstructionFieldStorage(slot.declaration, slot.carrier, context, plan).mutable, type: slot.storageType,
+        mutable: mutable.has(slot.declaration), type: slot.storageType,
         init: { kind: "field", receiver: { kind: "path", path: name }, name: String(index) },
       }))];
     },

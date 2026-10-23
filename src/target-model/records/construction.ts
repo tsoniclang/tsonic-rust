@@ -79,7 +79,8 @@ export interface RustAdmittedConstruction {
   readonly returns: ReadonlyMap<Node, RustProjectTypeDefinition>;
   readonly earlyReturnLayers: ReadonlySet<RustProjectTypeDefinition>;
   readonly completingLayers: ReadonlySet<RustProjectTypeDefinition>;
-  readonly mutableFieldLocals: ReadonlySet<Node>;
+  readonly localFieldDeclarations: ReadonlySet<Node>;
+  readonly mutableFieldLocals: ReadonlyMap<RustProjectTypeDefinition | undefined, ReadonlySet<Node>>;
   /** Fields whose initializer value is always overwritten before it can be observed (evaluated for its effects). */
   readonly unobservedInitializers: ReadonlySet<Node>;
   readonly physicalDeclarations: ReadonlyMap<Node, Node>;
