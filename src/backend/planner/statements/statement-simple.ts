@@ -7,7 +7,7 @@ import { planExpression } from "../expressions/entry.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import { planRuntimeSetStatement } from "./statement-loops.js";
 import { planRustAssignmentWrite } from "./assignment-writes.js";
-import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
+import { rustWriteLivenessAttributes } from "../bindings/liveness.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -46,8 +46,8 @@ export function planExpressionAsStatement(expression: Node, context: RustPlanCon
     if (completion === undefined) failRustPlannerInvariant("An admitted assignment requires its sealed write completion.", expression);
     const statements = planRustAssignmentWrite(expression, completion.target, completion.value, assignment, context);
     if (statements === undefined) failRustPlannerInvariant("An admitted assignment requires its native write plan.", expression);
-    return records.unobservedWrite.get(completion.target) === true
-      ? [{ kind: "scope", body: { innerAttrs: [rustLintAttributes.unusedAssignmentsInner], statements } }] : statements;
+    const attributes = rustWriteLivenessAttributes(completion.target, context);
+    return attributes.length === 0 ? statements : [{ kind: "scope", body: { innerAttrs: attributes, statements } }];
   }
   const { ast } = context.input.program.source;
   if (operation?.kind === "nullish-assignment" || ast.is.IsPrefixUnaryExpression(expression) || ast.is.IsPostfixUnaryExpression(expression)) {

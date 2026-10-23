@@ -66,6 +66,138 @@ export function inspect(marker: number, ready: boolean): number { use(marker); $
   assert.equal(nodes.filter(node => node === call).length, 1, "the effect is never duplicated");
 }
 
+for (const [name, initial, body, operator, dead] of [
+  ["nullish value survives its overwritten storage", "let marker: number | undefined = undefined;",
+    "const selected = marker ??= step(); marker = 11; return selected + marker;", "KindQuestionQuestionEqualsToken", true],
+  ["nullish branch reads retain the stored payload", "let marker: number | undefined = undefined;",
+    "if ((marker ??= step()) > 0) return marker; return 0;", "KindQuestionQuestionEqualsToken", false],
+  ["compound value survives its overwritten storage", "let marker = 1;",
+    "const selected = marker += step(); marker = 11; return selected + marker;", "KindPlusEqualsToken", true],
+  ["compound later reads observe the store", "let marker = 1;",
+    "const selected = marker += step(); return selected + marker;", "KindPlusEqualsToken", false],
+]) test(`valued write observation: ${name}`, () => {
+  const { result } = compileRust({ files: { "index.ts": `
+function step(): number { return 7; }
+export function inspect(): number { ${initial} ${body} }
+` } });
+  assert.equal(result.diagnostics.length, 0, `${name}: the real checked source is admitted`);
+  assert.equal(result.program !== undefined, true, `${name}: all selected write records are published`);
+  const program = result.program;
+  const ast = program.source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const write = nodes.find(node => ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === operator);
+  assert.equal(write !== undefined, true, `${name}: preserve the exact original valued assignment`);
+  const target = ast.as.AsBinaryExpression(write).Left;
+  assert.equal(program.records.unobservedWrite.get(target), dead, `${name}: the existing flow producer decides storage observation`);
+  const effect = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "step");
+  assert.equal(effect !== undefined && ast.as.AsBinaryExpression(write).Right === effect, true,
+    `${name}: the effect remains the exact one source RHS`);
+  const output = rustSourceText(result.artifacts);
+  assert.equal((output.match(/step\(\)/gu) ?? []).length, 2, `${name}: one function declaration and one actual evaluation`);
+  assert.equal(output.includes('expect(unused_assignments, reason = "checked source evaluation order")'), dead,
+    `${name}: only the selected dead store has the existing checked warning disposition`);
+});
+
+for (const [name, update, after, dead] of [
+  ["prefix result with overwritten storage", "++marker", "marker = 11; return selected;", true],
+  ["prefix result with observed storage", "++marker", "return selected + marker;", false],
+  ["postfix old result with overwritten new storage", "marker++", "marker = 11; return selected;", true],
+  ["postfix result with observed new storage", "marker++", "return selected + marker;", false],
+]) test(`update write observation: ${name}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function inspect(): number { let marker = 1; const selected = ${update}; ${after} }
+` } });
+  const ast = program.source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const selected = nodes.find(node => ast.is.IsPrefixUnaryExpression(node) || ast.is.IsPostfixUnaryExpression(node));
+  assert.equal(selected !== undefined, true, `${name}: the original native update is retained`);
+  const target = ast.is.IsPrefixUnaryExpression(selected) ? ast.as.AsPrefixUnaryExpression(selected).Operand
+    : ast.as.AsPostfixUnaryExpression(selected).Operand;
+  assert.equal(target !== undefined, true, `${name}: the update retains its exact source target`);
+  assert.equal(program.records.unobservedWrite.get(target), dead,
+    `${name}: result use never falsely makes the overwritten storage value live`);
+});
+
+for (const [name, after, expected] of [
+  ["a first body store is overwritten before materialization", 'this.value = "done";', true],
+  ["an actual field read observes the first body store", 'observe(this.value); this.value = "done";', false],
+  ["every native branch overwrites before materialization", 'if (flag) this.value = "yes"; else this.value = "no";', true],
+  ["one native branch retains the first body store", 'if (flag) this.value = "yes";', false],
+  ["receiver publication observes the first body store", 'this.publish(); this.value = "done";', false],
+  ["an early native layer return observes the first body store", 'if (flag) return; this.value = "done";', false],
+  ["finally observes the first body store on an exceptional path", 'try { if (flag) throw new Error("stop"); this.value = "done"; } finally { observe(this.value); }', false],
+]) test(`constructor body write observation: ${name}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+function observe(value: string): void { void value; }
+class Value {
+  value: string;
+  constructor(flag: boolean) { this.value = "kept"; ${after} }
+  publish(): void { observe(this.value); }
+  read(): string { return this.value; }
+}
+export function inspect(flag: boolean): string { return new Value(flag).read(); }
+` } });
+  const ast = program.source.ast;
+  const definition = program.projectTypes.definitions.find(selected => ast.text(ast.name(selected.declaration)) === "Value");
+  assert.equal(definition !== undefined, true, `${name}: the checked source has its actual native definition`);
+  const plan = program.records.classConstruction.get(definition.declaration);
+  assert.equal(plan !== undefined, true, `${name}: the complete physical construction is already admitted`);
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const first = nodes.find(node => ast.is.IsBinaryExpression(node) && ast.text(ast.as.AsBinaryExpression(node).Right) === '"kept"');
+  assert.equal(first !== undefined, true, `${name}: the original first store and its RHS remain`);
+  const target = ast.as.AsBinaryExpression(first).Left;
+  assert.equal(program.records.unobservedWrite.get(target), expected,
+    `${name}: explicit and implicit native observations are counted before publication`);
+  const projection = plan.emission.preparations.get(target)?.projections.find(selected => selected.expression.node === target);
+  assert.equal(projection?.kind === "local" && projection.storage === "value", true,
+    `${name}: only the actual plain field-local write is eligible for a native assignment warning`);
+  assert.equal(nodes.filter(node => node === first).length, 1, `${name}: no store or evaluation is removed or duplicated`);
+});
+
+for (const [name, abstractBase, initializer, expected, exported] of [
+  ["a real base export observes the first body store", false, ' = "initial"', false, true],
+  ["a shared AST cannot expect a warning in its observing standalone context", false, "", false, false],
+  ["an abstract base has only its actual non-exporting derived context", true, "", true, false],
+]) test(`constructor replay write observation: ${name}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+${abstractBase ? "abstract " : ""}class Base {
+  value: string${initializer};
+  constructor() { this.value = "kept"; }
+}
+class Derived extends Base {
+  constructor() { super(); this.value = "done"; }
+}
+export function inspect(): string { return ${abstractBase ? "" : "new Base().value + "}new Derived().value; }
+` } });
+  const ast = program.source.ast;
+  const base = program.projectTypes.definitions.find(selected => ast.text(ast.name(selected.declaration)) === "Base");
+  const derived = program.projectTypes.definitions.find(selected => ast.text(ast.name(selected.declaration)) === "Derived");
+  assert.equal(base !== undefined && derived !== undefined, true, `${name}: retain both actual checked definitions`);
+  const derivedPlan = program.records.classConstruction.get(derived.declaration);
+  assert.equal(derivedPlan !== undefined, true, `${name}: the real derived physical context is published`);
+  assert.equal(program.records.classConstruction.get(base.declaration) !== undefined, !abstractBase,
+    `${name}: abstract constructors are never invented as standalone emitting contexts`);
+  const field = derivedPlan.fields.find(selected => ast.text(ast.name(selected.declaration)) === "value");
+  assert.equal(field !== undefined, true, `${name}: retain the exact inherited physical field`);
+  assert.equal(derivedPlan.localFieldDeclarations.has(field.declaration), exported,
+    `${name}: native tuple observations come from the existing final binding-declaration plan`);
+  const constructor = derivedPlan.layers.find(layer => layer.definition === base)?.constructor;
+  assert.equal(constructor !== undefined, true, `${name}: replay the identical checked base constructor AST`);
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  visit(constructor);
+  const first = nodes.find(node => ast.is.IsBinaryExpression(node) && ast.text(ast.as.AsBinaryExpression(node).Right) === '"kept"');
+  assert.equal(first !== undefined, true, `${name}: the first base store is preserved`);
+  assert.equal(program.records.unobservedWrite.get(ast.as.AsBinaryExpression(first).Left), expected,
+    `${name}: only conjunction over actual native contexts can publish a global warning expectation`);
+});
+
 for (const [label, declaration, body, after, expectedUnused, expectedCounted] of [
   ["native unused counter", "let index: int32 = 0", "total += 1;", "", true, true],
   ["number unused counter", "let index: number = 0", "total += 1;", "", true, true],

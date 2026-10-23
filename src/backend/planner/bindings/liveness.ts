@@ -8,3 +8,7 @@ export function rustBindingLivenessAttributes(node: Node, mutable: boolean, cont
   return [...selected?.unused === true ? [rustLintAttributes.unusedVariables] : [],
     ...mutable && selected?.unusedInitializer === true ? [rustLintAttributes.unusedAssignments] : []];
 }
+
+export function rustWriteLivenessAttributes(node: Node, context: RustPlanContext): readonly RustAttribute[] {
+  return context.input.program.records.unobservedWrite.get(node) === true ? [rustLintAttributes.unusedAssignmentsInner] : [];
+}
