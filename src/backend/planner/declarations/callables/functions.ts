@@ -50,7 +50,7 @@ function planRustFunctionParameters(
   if (environment === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const declaration = inputContext.input.program.records.callableDeclaration.get(node);
   if (declaration === undefined) failRustPlannerInvariant("An admitted callable requires its sealed checked value parameters.", node);
-  const parameterPlan = planRustCallableParameters(declaration.parameters, environment.context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(declaration.contract, environment.context, syntheticNames);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
   const leading = planRustCallableLeadingParameters(node, environment.context);
   if (leading === undefined) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);

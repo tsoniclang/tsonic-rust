@@ -43,7 +43,7 @@ export function planProjectClassConstructor(
   }
   const parameterPlan = constructor === undefined
     ? planRustImplicitConstructorParameters(selected.signature, native.carrier, context)
-    : planRustCallableParameters(native.constructorParameters, context, syntheticNames);
+    : planRustCallableParameters(native.constructorContract, context, syntheticNames);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted native constructor requires its sealed parameters, environment and body.", definition.declaration);
   const environment = native.constructorEnvironment;
   const environmentParameter = environment === undefined ? undefined

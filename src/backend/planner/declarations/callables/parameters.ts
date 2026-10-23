@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustInlineBindingStoragePath } from "../../expressions/binding-storage.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { SourceCallableContract } from "../../../../target-model/records/source-callable-contract.js";
 import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustBindingPattern, type RustBindingExpressionPlanner } from "../../bindings/binding-patterns.js";
@@ -23,7 +24,15 @@ export interface RustCallableParameterPlan {
   readonly prelude: readonly RustParameterPrelude[];
 }
 
-export function planRustCallableParameters(parameters: readonly Node[], context: RustPlanContext, syntheticNames: RustSyntheticNameState): RustCallableParameterPlan {
+export function planRustCallableParameters(contract: SourceCallableContract, context: RustPlanContext, syntheticNames: RustSyntheticNameState): RustCallableParameterPlan {
+  if (contract.kind === "native") {
+    return { params: contract.nativeParameters.map(({ targetParameter }) => {
+      const type = rustParameterTypeFromCarrierInContext(targetParameter.type, context);
+      if (type === undefined) failRustPlannerInvariant("An admitted native constructor parameter requires its exact selected physical type.", contract.sourceDeclaration);
+      return { name: targetParameter.name, type, mutable: false };
+    }), prelude: [] };
+  }
+  const parameters = contract.parameters;
   const params: RustFunctionParam[] = [];
   const prelude: RustParameterPrelude[] = [];
   for (const parameter of parameters) {

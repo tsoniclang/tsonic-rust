@@ -8,7 +8,6 @@ import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planExpression } from "../../expressions/index.js";
 import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
-import type { RustCallableParameterPlan } from "../callables/parameters.js";
 import { planStatementSequence } from "../../statements/index.js";
 import { planRustConstructionBody } from "./construction-body.js";
 import { projectOwnMethodProperties } from "../../objects/polymorphism/model.js";
@@ -261,9 +260,7 @@ function planConstructor(
     member ?? classDeclaration,
     [],
   );
-  const parameterPlan = member === undefined
-    ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
-    : planRustCallableParameters(selected.constructorParameters, context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(selected.constructorContract, context, syntheticNames);
   if (parameterPlan === undefined) {
     failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }

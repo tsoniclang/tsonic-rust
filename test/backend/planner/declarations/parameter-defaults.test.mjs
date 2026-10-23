@@ -37,7 +37,7 @@ runtimeCarrier: { get: (subject) => subject === parameter
       moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
       externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map() };
-    return { selected: planRustCallableParameters(program.records.callableDeclaration.get(callable).parameters, context, names), diagnostics: context.diagnostics };
+    return { selected: planRustCallableParameters(program.records.callableDeclaration.get(callable).contract, context, names), diagnostics: context.diagnostics };
   };
   const valid = plan(abi);
   assert.equal(valid.selected !== undefined, true, "initialized tuple accepts optional transport");
@@ -120,10 +120,11 @@ test("one formal renderer consumes checked value vectors for functions, methods,
   program.sourceFiles.forEach(visit);
   assert.equal(callables.length, 5, "all actual authored formal-owner kinds are represented");
   for (const callable of callables) {
-    const parameters = callable === selectedClass.constructor ? selectedClass.constructorParameters
-      : program.records.callableDeclaration.get(callable).parameters;
+    const contract = callable === selectedClass.constructor ? selectedClass.constructorContract
+      : program.records.callableDeclaration.get(callable).contract;
+    const parameters = contract.parameters;
     const context = rustSourceFilePlanContext(program, callable);
-    const plan = planRustCallableParameters(parameters, context, context.syntheticNames);
+    const plan = planRustCallableParameters(contract, context, context.syntheticNames);
     assert.equal(plan.params.length, parameters.length, "only selected value formals enter the common renderer");
     assert.equal(plan.params.every(parameter => parameter.name !== "this"), true, "the checked this annotation is not a runtime argument");
     assert.equal(plan.params.every(parameter => parameter.type !== undefined), true, "each actual native parameter has sealed storage syntax");
@@ -134,14 +135,15 @@ test("the removed raw callable parameter API and missing selected native formals
   const { program } = analyzeRust({ files: { "index.ts": "export function read(value: number): number { return value; }" } });
   const ast = program.source.ast;
   const callable = ast.statements(program.sourceFiles[0]).find(ast.is.IsFunctionDeclaration);
-  const parameters = program.records.callableDeclaration.get(callable).parameters;
+  const contract = program.records.callableDeclaration.get(callable).contract;
+  const parameters = contract.parameters;
   assert.equal(parameters.length, 1, "the refusal control starts from a real selected formal");
   const context = rustSourceFilePlanContext(program, callable);
   assert.throws(() => planRustCallableParameters(callable, context, context.syntheticNames), TypeError,
     "a raw callable is not accepted through a compatibility overload");
   const records = createRustRecordFixture({ callableParameter: { get: () => undefined } }, program.records);
   const invalid = rustSourceFilePlanContext({ ...program, records }, callable);
-  assert.throws(() => planRustCallableParameters(parameters, invalid, invalid.syntheticNames),
+  assert.throws(() => planRustCallableParameters(contract, invalid, invalid.syntheticNames),
     error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
       error.message === "An admitted callable parameter requires its sealed native emission record.",
     "the renderer never reconstructs missing parameter storage from the AST");
