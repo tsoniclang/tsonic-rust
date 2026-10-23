@@ -94,6 +94,15 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  for (const [method, token] of [
+    ["acosh", "1.0"], ["asinh", "0.0"], ["atanh", "0.0"], ["cbrt", "27.0"],
+    ["cosh", "0.0"], ["exp_m1", "0.0"], ["ln_1p", "0.0"], ["log10", "100.0"],
+    ["log2", "8.0"], ["sinh", "0.0"], ["tanh", "0.0"],
+  ]) {
+    assert.equal(text.includes(`${token}_f64.${method}()`), true,
+      `${method}: an inherent native receiver has its exact selected f64 type before method resolution`);
+  }
   const run = validateGeneratedProject("math-complete-proof", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
