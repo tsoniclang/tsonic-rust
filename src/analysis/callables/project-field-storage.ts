@@ -11,6 +11,10 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustLifetimeKey, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { RustProjectTypePolicy } from "../project-types/index.js";
+import { rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
+
+const containsCallableStorage = (carrier: TargetTypeRef): boolean => rustCallableProtocol(carrier) !== undefined ||
+  rustOwnedStorageChildren(carrier).some(containsCallableStorage);
 
 const ownedLifetimes = (carrier: TargetTypeRef): TargetTypeRef => {
   const references = rustTargetGenericReferences(carrier);
@@ -51,7 +55,7 @@ export function prepareRustProjectCallableFieldStorage(input: {
     const field = fields.get(declaration);
     const declared = field === undefined ? undefined : input.records.runtimeCarrier.get(declaration)?.carrier ??
       input.records.runtimeCarrier.get(Node_Type(input.ast, declaration))?.carrier;
-    if (field === undefined || declared === undefined || rustCallableProtocol(declared) === undefined) return undefined;
+    if (field === undefined || declared === undefined || !containsCallableStorage(declared)) return undefined;
     const subject = input.storage.subject(declaration, "member");
     if (subject.kind === "unresolved") { failures.set(declaration, subject.reason); return undefined; }
     const selection = subjectFor(subject.subject, declared);
@@ -68,7 +72,7 @@ export function prepareRustProjectCallableFieldStorage(input: {
       for (const declaration of fields.keys()) {
         const declared = input.records.runtimeCarrier.get(declaration)?.carrier ??
           input.records.runtimeCarrier.get(Node_Type(input.ast, declaration))?.carrier;
-        if (declared === undefined || rustCallableProtocol(declared) === undefined || select(declaration) !== undefined) continue;
+        if (declared === undefined || !containsCallableStorage(declared) || select(declaration) !== undefined) continue;
         const storageFailure = input.storage.failureReason();
         issues.push({ code: storageFailure === undefined ? "RUST_CALLABLE_VALUE_NOT_CLOSED" : "RUST_SOURCE_STORAGE_NOT_PROVEN",
           category: "error", source: "tsonic-rust", sourceNode: declaration,

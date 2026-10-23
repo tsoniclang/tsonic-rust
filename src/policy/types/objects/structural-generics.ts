@@ -19,11 +19,11 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
   const used = new Set(references.typeParameters.map(parameter => parameter.name));
   const lifetimeNames = new Set(references.lifetimes.map(parameter => parameter.name));
   let lifetimeCount = 0;
-  const storageLifetime = () => {
+  const storageLifetime = (names: Set<string>) => {
     let index = lifetimeCount++;
-    while (lifetimeNames.has(`storage${index}`)) index += 1;
+    while (names.has(`storage${index}`)) index += 1;
     const name = `storage${index}`;
-    lifetimeNames.add(name);
+    names.add(name);
     return { kind: "parameter" as const, identity: `structural-storage-lifetime:${index}`, name };
   };
   const parameters = new Map<string, TargetTypeRef>();
@@ -31,7 +31,7 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
   const selected = mapRustTargetTypes(carrier, (type, source) => {
     const callable = rustCallableProtocol(type);
     if (callable?.lifetime?.kind === "placeholder") {
-      type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime(), callable.error);
+      type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime(lifetimeNames), callable.error);
     }
     if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
       nestedCarriers.push(Object.freeze({ source, carrier: type }));

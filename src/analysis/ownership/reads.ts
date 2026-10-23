@@ -31,6 +31,7 @@ export function analyzeRustReadOwnership(input: {
   readonly genericCallables: RustGenericCallablePlan;
   readonly capturesFor: (owner: Node) => RustClosureCaptureFact | undefined;
   readonly invocationTransfersCapture: (owner: Node) => boolean;
+  readonly ownsExternalArgument: (argument: Node) => boolean;
   readonly limits?: Partial<SourceStorageLimits>;
 }): { readonly kind: "resolved"; readonly ownership: RustOwnershipRecords }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
@@ -61,7 +62,7 @@ export function analyzeRustReadOwnership(input: {
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
-  const uses = analyzeRustReadUses(ast, input.nativeNodes, records, input.definitions);
+  const uses = analyzeRustReadUses(ast, input.nativeNodes, records, input.definitions, input.ownsExternalArgument);
   const reads = new Map<Node, RustReadOwnershipFact>();
   const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();

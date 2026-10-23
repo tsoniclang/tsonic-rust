@@ -15,7 +15,7 @@ import { rustProducerErrorReference } from "../../../dist/target-model/types/car
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 
-import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustOptionElementCarrier, rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -146,6 +146,48 @@ test("unresolved callable member storage is rejected by its producer before publ
   assert.equal(selected.diagnostics[0].message,
     "The complete native field storage has incompatible actual producer contracts.", "the owning selection's reason is preserved exactly");
 });
+
+for (const [name, wrap, unwrap] of [
+  ["optional", rustOptionTargetType, rustOptionElementCarrier],
+  ["tuple", carrier => ({ kind: "tuple", elements: [carrier] }), carrier => carrier.elements[0]],
+]) {
+  test(`nested ${name} callable member storage is materialized and sealed through its actual field domain`, () => {
+    for (const ownsStorage of [true, false]) {
+      const declaration = {};
+      const definition = { genericParameters: ownsStorage ? [] : [{ kind: "lifetime" }] };
+      const integer = rustSourcePrimitiveTargetType("int32");
+      const lifetime = { kind: "parameter", identity: "nested-field:environment", name: "environment" };
+      const declared = wrap(rustCallableTargetType([integer], integer, lifetime));
+      let open = true;
+      let calls = 0;
+      const fields = prepareRustProjectCallableFieldStorage({ ast: {},
+        records: { runtimeCarrier: { get: node => {
+          assert.equal(open, true, "sealed readers never query the nested source field again");
+          return node === declaration ? { carrier: declared } : undefined;
+        } } },
+        storage: { subject(node, kind) {
+          assert.equal(node === declaration && kind === "member", true,
+            "the complete field, not a guessed initializer or optional payload, owns the native selection");
+          return { kind: "resolved", subject: { node, kind, projection: [] } };
+        } },
+        projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+      }, (_subject, carrier) => {
+        calls += 1;
+        assert.equal(carrier === declared, true, "the native storage selector receives the complete nested declared carrier");
+        return { kind: "identity", carrier };
+      });
+      const selected = fields.seal();
+      assert.equal(selected.kind, "resolved", "every unrequested nested callable field closes before publication");
+      open = false;
+      const carrier = selected.value.get(declaration);
+      assert.equal(carrier !== undefined, true, "nested callable storage is not skipped by a direct-callable-only guard");
+      assert.equal(rustCallableProtocol(unwrap(carrier))?.lifetime.kind, ownsStorage ? "static" : "parameter",
+        "the enclosing native field owns storage or retains its actual authored lifetime");
+      assert.equal(calls, 1, "one native field selection covers the entire nested shape");
+      assert.equal(selected.value.get(declaration) === carrier, true, "the published nested result is an identical stored record");
+    }
+  });
+}
 
 test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
   const current = fixture("export function read(value: number): number { return value; }");

@@ -7,6 +7,7 @@ import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 async function fixture() {
   const source = createTargetSourceProgram(await checkedSource("ownership-read-inventory", {
@@ -30,6 +31,7 @@ async function fixture() {
     genericCallables: { definitionFor: () => undefined },
     capturesFor: () => undefined,
     invocationTransfersCapture: () => false,
+    ownsExternalArgument: () => false,
   };
   return { input, selected };
 }
@@ -110,7 +112,7 @@ for (const projection of [false, true]) {
         definitions: emptyRustTypeDefinitions,
         genericRequirements: { supportsClone: () => true },
         genericCallables: { definitionFor: () => undefined },
-        capturesFor: () => undefined, invocationTransfersCapture: () => false,
+        capturesFor: () => undefined, invocationTransfersCapture: () => false, ownsExternalArgument: () => false,
       });
       assert.equal(selected.kind, "resolved", "the complete checked inventory admits the reads");
       const owned = selected.ownership.reads.get(temporary);
@@ -121,6 +123,44 @@ for (const projection of [false, true]) {
       assert.equal(shared?.readsStorage, true, "the input is a genuine native storage read");
       assert.equal(shared?.value.kind, "borrow", "an existing shared use keeps the input's native borrow");
       assert.equal(shared?.source.kind, "borrow", "a stored narrowed payload retains its container borrow");
+    }
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`an owned external base argument follows native stored-read liveness on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      export class RetainedFailure extends Error {
+        saved: string;
+        constructor(message: string) { super(message); this.saved = message; }
+      }
+      export class TerminalFailure extends Error {
+        constructor(message: string) { super(message); }
+      }
+    ` } });
+    const { ast } = program.source;
+    const constructors = new Map();
+    const visit = node => {
+      if (ast.is.IsConstructorDeclaration(node)) constructors.set(ast.text(ast.name(ast.parent(node))), node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    for (const [name, firstKind] of [["RetainedFailure", "clone"], ["TerminalFailure", "move"]]) {
+      const owner = constructors.get(name);
+      assert.equal(owner !== undefined, true, name + ": the actual native constructor is checked");
+      const statements = ast.statements(ast.body(owner));
+      const call = ast.as.AsExpressionStatement(statements[0]).Expression;
+      const argument = ast.arguments(call)[0];
+      const first = program.ownership.reads.get(argument);
+      assert.equal(first?.readsStorage, true, name + ": the original message is a stored native input");
+      assert.equal(first?.source.kind, firstKind, name + ": the owned field consumes one correctly selected native read");
+      assert.equal(first?.value.kind, firstKind, name + ": the old provider borrow cannot override actual field ownership");
+      if (name === "RetainedFailure") {
+        const assignment = ast.as.AsBinaryExpression(ast.as.AsExpressionStatement(statements[1]).Expression);
+        const last = program.ownership.reads.get(assignment.Right);
+        assert.equal(last?.source.kind, "move", "the final saved field consumes the original after the one required clone");
+        assert.equal(last?.value.kind, "move", "the final stored read never adds a second copy");
+      }
     }
   });
 }
