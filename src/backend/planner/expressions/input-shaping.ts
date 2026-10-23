@@ -5,7 +5,7 @@ import type { RustArgumentMode } from "../../../target-model/operations/model.js
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planExpression } from "./entry.js";
+import { planExpression, rustValueProjectionFor } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustErrorFieldSharedView, rustErrorFieldComparisonView } from "./error-field-borrows.js";
 import { planArrayLiteral } from "./array-literals/planning.js";
@@ -35,6 +35,7 @@ export function applyRustArgumentMode(
   mode: RustArgumentMode,
   node: Node | undefined,
 ): RustExpr {
+  node = rustArgumentSourceView(node, context);
   if (mode === "ref") {
     return createRustSharedReferenceArgument(context, argument, node);
   }
@@ -50,6 +51,7 @@ export function applyRustArgumentMode(
 }
 
 export function createRustMutableReferenceArgument(context: RustPlanContext, argument: RustExpr, node: Node | undefined): RustExpr {
+  node = rustArgumentSourceView(node, context);
   return {
     kind: "reference",
     expr: node !== undefined && context.expressionOverrides?.has(node) !== true && context.input.program.records.argumentView.get(node)?.slice === true
@@ -72,10 +74,8 @@ export function applyFinalizedRustArgumentMode(
   }
   const passThrough = context.input.program.records.providerReference.get(sourceNode, input)
     ?? failRustPlannerInvariant("An admitted provider reference requires its exact source parameter and reborrow contract.", sourceNode);
-  if (passThrough) return expression;
-  // A value stabilized by the provider evaluation scope is borrowed as bound; the source node's own slice and
-  // storage views would re-read the original place and leave the stabilized binding unused.
-  const viewNode = stabilized ? undefined : sourceNode;
+  if (passThrough && !stabilized) return expression;
+  const viewNode = stabilized || input.conversion.kind !== "identity" ? undefined : sourceNode;
   if (sourceIsSharedReference && input.mode === "ref") {
     return createRustSharedReferenceArgument(context, expression, viewNode);
   }
@@ -89,6 +89,7 @@ export function createRustSharedReferenceArgument(
   argument: RustExpr,
   node: Node | undefined,
 ): RustExpr {
+  node = rustArgumentSourceView(node, context);
   if (node !== undefined && context.input.program.records.readOwnership.get(node)?.sharedReference === true) return argument;
   const errorField = node === undefined ? undefined : rustErrorFieldSharedView(node, argument, context);
   if (errorField !== undefined) return errorField;
@@ -113,6 +114,16 @@ export function createRustSharedReferenceArgument(
   }
   if (node !== undefined && rustReadsReferenceParameter(node, context)) return argument;
   return node === undefined ? { kind: "reference", expr: argument } : planRustSharedReceiver(node, argument, context);
+}
+
+function rustArgumentSourceView(node: Node | undefined, context: RustPlanContext): Node | undefined {
+  if (node === undefined) return undefined;
+  const projection = rustValueProjectionFor(node, context.expressionOverrides?.get(node)?.carrier, context)
+    ?? failRustPlannerInvariant("An admitted reference argument requires its sealed projection composition.", node);
+  return projection.exits || projection.flow !== undefined || projection.upcast !== undefined ||
+    projection.downcast !== undefined || projection.object !== undefined || projection.option !== undefined ||
+    projection.contextual !== undefined && !projection.contextualIdentity ||
+    context.input.program.records.callableJoinWrite.get(node) !== undefined ? undefined : node;
 }
 
 // The read carries its parameter's ABI; when its carrier was selected before the parameter reference was resolved, the

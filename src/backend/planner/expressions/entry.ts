@@ -111,7 +111,7 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
 
 // An override may carry the node's own carrier specialized by the planning context (a dispatch specialization or a
 // generic instantiation); it then composes the projections sealed for the node's own carrier.
-function rustValueProjectionFor(node: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext) {
+export function rustValueProjectionFor(node: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext) {
   const records = context.input.program.records;
   const exact = records.valueProjection.get(node, carrier);
   if (exact !== undefined || carrier === undefined) return exact;
