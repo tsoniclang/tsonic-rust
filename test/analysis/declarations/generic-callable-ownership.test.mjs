@@ -122,7 +122,23 @@ closureCapture: { get: (node) => {
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
   const source = fakeCompileInput({ sourceFiles: files }).source;
-  const currentSource = { ...source, ast, navigation: { ...source.navigation, ...navigation } };
+  const signatures = new Map(closures.map(declaration => [declaration, Object.freeze({ declaration })]));
+  const semanticsForFile = file => ({ ...source.semantics.forFile(file), declarations: {
+    declarationSignature(declaration) {
+      assert.equal(signatures.has(declaration), true, "the logical fixture has only its two exact callable scopes");
+      return signatures.get(declaration);
+    },
+    signatureParameters(signature) {
+      assert.equal(signatures.get(signature.declaration) === signature, true,
+        "a logical fixture scope uses its original signature identity");
+      assert.equal(ast.parameters(signature.declaration).length, 0,
+        "the logical family fixture supplies no native value formals");
+      return [];
+    },
+  } });
+  const currentSource = { ...source, ast, navigation: { ...source.navigation, ...navigation },
+    semantics: { ...source.semantics, forFile: semanticsForFile,
+      forNode: node => semanticsForFile(ast.getSourceFile(node)) } };
   const planInput = { ast, sourceFiles: files, sourcePackages: fakeSourcePackageGraph(
     files.map(file => ({ fileName: file.name })),
   ), records, names, navigation: currentSource.navigation, lifetimes: emptyRustLifetimeIndex,
@@ -140,7 +156,7 @@ closureCapture: { get: (node) => {
     const runtimeValueUses = createRustRuntimeValueUsePlan({ ast, navigation: currentSource.navigation,
       safetyApplications: { isCompileTimeApplicationReference: () => false } });
     const lexicalFunctions = createRustLexicalFunctionEnvironmentPlan(currentSource, participation.nodes, records,
-      runtimeValueUses, createRustSourceCallableQueries(sourceStorage, new Set()));
+      runtimeValueUses, createRustSourceCallableQueries(sourceStorage, new Set(), () => undefined));
     const typeDefinitions = createRustTypeDefinitionRegistry();
     const sourceTypes = createRustSourceTypeRegistry(undefined, typeDefinitions);
     const projectTypes = createRustProjectTypePolicy({ ast, names, navigation: currentSource.navigation,
