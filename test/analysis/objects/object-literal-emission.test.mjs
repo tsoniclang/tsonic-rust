@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustObjectLiteralEmission } from "../../../dist/analysis/objects/object-literal-emission.js";
 
 test("object literal admission never requests property syntax from a non-object source node", () => {
@@ -7,8 +8,9 @@ test("object literal admission never requests property syntax from a non-object 
   const parameter = {};
   let propertyReads = 0;
   const program = {
-    source: { ast: { is: { IsObjectLiteralExpression: () => false }, properties() { propertyReads++; throw new Error("non-object property read"); } } },
-    records: { targetOperation: { get: () => undefined } },
+    source: { ast: { parent: () => undefined, is: { IsObjectLiteralExpression: () => false }, properties() { propertyReads++; throw new Error("non-object property read"); } } },
+    records: createRustRecordFixture(),
+    safetyApplications: { operationForExpression: () => undefined },
     sourceFiles: [],
   };
   const issues = analyzeRustObjectLiteralEmission(program, [file, parameter], {}, () => undefined, () => undefined, program.source);

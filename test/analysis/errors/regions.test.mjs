@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { sealRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { planRustSelectedErrorRegion } from "../../../dist/backend/planner/program/error-regions.js";
 import { rustProducerErrorReference, rustProducerErrorTargetType } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 function fixture() {
-  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+  const analyzed = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 export async function pure(): Promise<string> { return "value"; }
 export async function failed(): Promise<string> { throw "failure"; }
 export function invoke(callback: () => string): string { return callback(); }
 ` } });
+  const program = sealRustAnalysisProgram(analyzed.program);
   const ast = program.source.ast;
   const file = program.records.sourceArtifacts.get().find(artifact => ast.getFileName(artifact.sourceFile) === "/src/index.ts").sourceFile;
   const declaration = name => ast.statements(file).find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
