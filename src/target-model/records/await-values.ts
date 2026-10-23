@@ -6,7 +6,7 @@ import type { RustFutureValueFact } from "./object-methods.js";
 export interface RustAwaitValueLeafFact {
   readonly carrier: TargetTypeRef;
   readonly future?: RustFutureValueFact;
-  readonly completion: { readonly kind: "absence" } |
+  readonly completion: { readonly kind: "absence" } | { readonly kind: "discard" } |
     { readonly kind: "value"; readonly conversion: RustFinalizedValueConversion };
 }
 
