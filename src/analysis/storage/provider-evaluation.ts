@@ -66,9 +66,18 @@ export function analyzeRustProviderEvaluation(program: Omit<RustAnalysisProgram,
           refuse(slot.node, "rust.backend.provider-input-owner-carrier", "Borrowed provider input has no exact source owner and contextual target carrier relationship.");
         else ownerCarrier = carrier;
       }
-      slots.push(Object.freeze({ slot, inputs: Object.freeze(inputs), sequence: sequences[0],
-        snapshot: inputs.length !== 0 && guarded && needsSnapshot(slot.node, [...source.slots.slice(index + 1).map(later => later.node), source.node]),
-        borrowedEvaluation: ownership?.readsStorage === true || ownership?.sharedReference === true,
+      const snapshot = inputs.length !== 0 && guarded &&
+        needsSnapshot(slot.node, [...source.slots.slice(index + 1).map(later => later.node), source.node]);
+      const firstInput = inputs[0];
+      const sharedInputs = firstInput !== undefined && !snapshot && ownership?.value.kind === "borrow" && !ownership.value.mutable &&
+        inputs.every(input => input.mode === "ref" && input.conversion.kind === "identity" &&
+          rustTargetTypeRefEquals(input.sourceCarrier, firstInput.sourceCarrier) &&
+          input.parameterCarrier.kind === "reference" && !input.parameterCarrier.mutable &&
+          rustTargetTypeRefEquals(input.sourceCarrier, input.parameterCarrier.referent) &&
+          rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.sourceCarrier) &&
+          rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.targetCarrier));
+      slots.push(Object.freeze({ slot, inputs: Object.freeze(inputs), sequence: sequences[0], snapshot,
+        borrowedEvaluation: slot.evaluationOnly === undefined ? sharedInputs : ownership?.readsStorage === true || ownership?.sharedReference === true,
         borrowAcross, mutableAcross, ownerCarrier }));
     }
     const orderConflicts: (readonly string[])[] = [];

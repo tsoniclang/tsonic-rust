@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
+import type { RustConstArgument, RustGenericArgument, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
 
 export function collectAliasesFromRustType(
   type: RustType | undefined,
@@ -7,49 +7,52 @@ export function collectAliasesFromRustType(
   if (type === undefined) {
     return;
   }
-  if (type.kind === "named") {
-    register(type.path);
-    collectAliasesFromRustGenericArguments(type.genericArguments, register);
-    return;
-  }
-  if (type.kind === "qualified") {
-    collectAliasesFromRustType(type.owner, register);
-    collectAliasesFromRustType(type.trait, register);
-    collectAliasesFromRustGenericArguments(type.genericArguments, register);
-    return;
-  }
-  if (type.kind === "trait-object") {
-    collectAliasesFromRustType(type.principal.trait, register);
-    for (const trait of type.autoTraits) collectAliasesFromRustType(trait.trait, register);
-    return;
-  }
-  if (type.kind === "impl-trait") {
-    for (const bound of type.bounds) collectAliasesFromRustTypeBound(bound, register);
-    return;
-  }
-  if (type.kind === "slice") {
-    collectAliasesFromRustType(type.element, register);
-    return;
-  }
-  if (type.kind === "reference") {
-    collectAliasesFromRustType(type.referent, register);
-    return;
-  }
-  if (type.kind === "function-pointer" || type.kind === "callable-trait") {
-    for (const parameter of type.parameters) {
-      collectAliasesFromRustType(parameter, register);
-    }
-    collectAliasesFromRustType(type.result, register);
-    return;
-  }
-  if (type.kind === "fixed-array") {
-    collectAliasesFromRustType(type.element, register);
-    return;
-  }
-  if (type.kind === "tuple") {
-    for (const element of type.elements) {
-      collectAliasesFromRustType(element, register);
-    }
+  switch (type.kind) {
+    case "named":
+      register(type.path);
+      collectAliasesFromRustGenericArguments(type.genericArguments, register);
+      return;
+    case "qualified":
+      collectAliasesFromRustType(type.owner, register);
+      collectAliasesFromRustType(type.trait, register);
+      collectAliasesFromRustGenericArguments(type.genericArguments, register);
+      return;
+    case "trait-object":
+      collectAliasesFromRustType(type.principal.trait, register);
+      for (const trait of type.autoTraits) collectAliasesFromRustType(trait.trait, register);
+      return;
+    case "impl-trait":
+      for (const bound of type.bounds) collectAliasesFromRustTypeBound(bound, register);
+      collectAliasesFromRustGenericArguments(type.captures, register);
+      return;
+    case "reference":
+      collectAliasesFromRustType(type.referent, register);
+      return;
+    case "raw-pointer":
+      collectAliasesFromRustType(type.pointee, register);
+      return;
+    case "function-pointer":
+    case "callable-trait":
+      for (const parameter of type.parameters) collectAliasesFromRustType(parameter, register);
+      collectAliasesFromRustType(type.result, register);
+      return;
+    case "fixed-array":
+      collectAliasesFromRustType(type.element, register);
+      collectAliasesFromRustConstArgument(type.length, register);
+      return;
+    case "slice":
+      collectAliasesFromRustType(type.element, register);
+      return;
+    case "tuple":
+      for (const element of type.elements) collectAliasesFromRustType(element, register);
+      return;
+    case "infer":
+    case "primitive":
+    case "string":
+    case "str":
+    case "unit":
+    case "never":
+      return;
   }
 }
 
@@ -72,11 +75,20 @@ function collectAliasesFromRustGenericArguments(
           collectAliasesFromRustTypeBound(bound, register);
         }
         break;
-      case "lifetime":
       case "const":
+        collectAliasesFromRustConstArgument(argument.value, register);
+        break;
+      case "lifetime":
         break;
     }
   }
+}
+
+function collectAliasesFromRustConstArgument(
+  argument: RustConstArgument,
+  register: (path: string) => void,
+): void {
+  if (argument.kind === "path") register(argument.path);
 }
 
 function collectAliasesFromRustTypeBound(

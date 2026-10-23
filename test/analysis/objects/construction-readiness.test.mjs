@@ -8,6 +8,7 @@ import { analyzeRustConstructionReadiness } from "../../../dist/analysis/project
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 async function readiness(name, statements) {
   const checked = await checkedSource(name, { "globals.d.ts": minimalSourceGlobals, "src/index.ts": `
@@ -99,4 +100,59 @@ outside: for (;;) { switch (flag) { case true: continue outside; default: contin
 `);
   assert.equal(result.completesNormally, false);
   assert.equal(result.issues.length, 0);
+});
+
+for (const [name, statements, mutable] of [
+  ["first-store", "this.value = 3;", false],
+  ["repeated-store", "this.value = 3; this.value = 4;", true],
+  ["branch-store", "if (flag) this.value = 3; else this.value = 4;", false],
+  ["branch-rewrite", "if (flag) this.value = 3; else this.value = 4; this.value = 5;", true],
+  ["local-increment", "this.value = 3; this.value++;", true],
+  ["published-store", "this.value = 3; this.read(); this.value = 4;", false],
+]) test(`construction emission seals the final native field-local mutability: ${name}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export class Value {
+  value!: number;
+  constructor(flag: boolean) { ${statements} }
+  read(): number { return this.value; }
+}
+` } });
+  const ast = program.source.ast;
+  const definition = program.projectTypes.definitions.find(entry => ast.text(ast.name(entry.declaration)) === "Value");
+  assert.equal(definition !== undefined, true, `${name}: one checked class owner`);
+  const construction = program.records.classConstruction.get(definition.declaration);
+  assert.equal(construction !== undefined, true, `${name}: construction is admitted before sealing`);
+  const fields = construction.fields.filter(field => ast.text(ast.name(field.declaration)) === "value");
+  assert.equal(fields.length, 1, `${name}: one exact checked field identity`);
+  assert.equal(construction.mutableFieldLocals.has(fields[0].declaration), mutable,
+    `${name}: only native writes to the unpublished physical local demand mutability`);
+  assert.equal(construction.mutableFieldLocals.has({}), false, `${name}: no foreign declaration acquires mutability`);
+  assert.equal(Object.hasOwn(construction, "unpublishedMutations"), false, `${name}: the superseded raw mutation set is absent`);
+  assert.equal(Object.hasOwn(construction, "unpublishedAccesses"), false, `${name}: the superseded raw access set is absent`);
+});
+
+for (const [label, field, rewrite, kind] of [
+  ["immutable Copy capture", "readonly value = 1;", "", "copy"],
+  ["immutable shared capture", 'readonly value = "initial";', "", "shared"],
+  ["mutable Copy capture", "value = 1;", "this.value = 2;", "cell"],
+  ["mutable non-Copy capture", 'value = "initial";', 'this.value = "updated";', "borrow-cell"],
+]) test(`construction locals preserve their admitted captured storage: ${label}`, () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export class Value {
+  ${field}
+  readonly reader = () => this.value;
+  constructor() { ${rewrite} }
+}
+` } });
+  const ast = program.source.ast;
+  const definition = program.projectTypes.definitions.find(entry => ast.text(ast.name(entry.declaration)) === "Value");
+  assert.equal(definition !== undefined, true, `${label}: the checked owner is retained`);
+  const construction = program.records.classConstruction.get(definition.declaration);
+  assert.equal(construction !== undefined, true, `${label}: construction is admitted`);
+  const declaration = construction.fields.find(entry => ast.text(ast.name(entry.declaration)) === "value")?.declaration;
+  assert.equal(declaration !== undefined, true, `${label}: one exact authored captured field`);
+  assert.equal(program.records.capturedFieldStorage.get(declaration)?.storage.kind, kind,
+    `${label}: native capture representation is selected independently of local syntax`);
+  assert.equal(construction.mutableFieldLocals.has(declaration), false,
+    `${label}: unchanged native bindings and interior mutation need no mutable owner binding`);
 });

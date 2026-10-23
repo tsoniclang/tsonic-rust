@@ -412,6 +412,7 @@ export function acceptSelectedCall(
     provenance: {
       sourceExpression: request.source.call,
       sourceCallee: request.source.sourceCallee.expression,
+      ...(sourceReceiver === undefined ? {} : { sourceReceiver: sourceReceiver.expression }),
       sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration,
       sourceSelectedSymbol: selectedCallCalleeSymbol(request),

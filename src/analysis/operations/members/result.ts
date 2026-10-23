@@ -29,27 +29,40 @@ import type { RustOperationsProviderOptions } from "./model.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
+function memberReceiverSourceCarrier(
+  request: RustCheckedPropertySelectionInput,
+  receiver: Node,
+  context: RustOperationAnalysisContext,
+  options: RustOperationsProviderOptions,
+): { readonly carrier: TargetTypeRef | undefined; readonly physical: boolean } {
+  const selected = context.records.targetOperation.get(receiver);
+  if (selected !== undefined) {
+    return { carrier: rustTargetOperationResultCarrier(selected), physical: true };
+  }
+  const prepared = context.records.preparedOperationResult.get(receiver);
+  if (prepared !== undefined) {
+    return { carrier: prepared.resultCarrier, physical: true };
+  }
+  return { carrier: resolveRustTargetTypeRef(request.receiver, context, options), physical: false };
+}
+
 export function selectedMemberReceiverCarrier(
   request: RustCheckedPropertySelectionInput,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const receiver = asNode(request.receiver, context);
-  const resolvedSourceCarrier = resolveRustTargetTypeRef(
-    request.receiver,
-    context,
-    options,
-  );
   if (receiver === undefined) {
     return undefined;
   }
+  const source = memberReceiverSourceCarrier(request, receiver, context, options);
   const receiverKind = context.ast.kindName(receiver);
   const containingThisDefinition = receiverKind === "KindThisExpression" ||
       receiverKind === "KindThisKeyword"
     ? options.projectTypes.definitionContainingDeclaration(receiver)
     : undefined;
   const sourceCarrier = containingThisDefinition === undefined
-    ? resolvedSourceCarrier
+    ? source.carrier
     : options.projectTypes.openCarrier(containingThisDefinition);
   if (request.sourceReceiverType === undefined) {
     return undefined;
@@ -194,13 +207,8 @@ export function selectedMemberReceiverCarrier(
       ? selectedCarrier
       : undefined;
   }
-  const selectedOperation = context.records.targetOperation.get(receiver);
-  const preparedOperation = context.records.preparedOperationResult.get(receiver);
-  const selectedOperationResult = selectedOperation === undefined
-    ? preparedOperation?.resultCarrier
-    : rustTargetOperationResultCarrier(selectedOperation);
-  if (request.optionalChain !== true && selectedOperationResult !== undefined &&
-    rustTargetTypeRefEquals(sourceCarrier, selectedOperationResult)) {
+  if (request.optionalChain !== true && source.physical && source.carrier !== undefined &&
+    rustTargetTypeRefEquals(sourceCarrier, source.carrier)) {
     return sourceCarrier;
   }
   const declaredCarrier = optionElement ?? sourceCarrier;
@@ -235,11 +243,9 @@ export function acceptRustMemberOperation(
   provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   innerResultCarrier: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const sourceReceiverCarrier = resolveRustTargetTypeRef(
-    request.receiver,
-    context,
-    options,
-  );
+  const receiver = asNode(request.receiver, context);
+  const sourceReceiverCarrier = receiver === undefined ? undefined
+    : memberReceiverSourceCarrier(request, receiver, context, options).carrier;
   const selectedReceiverCarrier = fact.kind === "provider-operation" &&
       fact.abi.sourceReceiver.kind === "receiver"
     ? fact.abi.sourceReceiver.carrier
@@ -267,11 +273,7 @@ export function acceptRustMemberOperation(
   if (request.optionalChain !== true) {
     return acceptRustOperation(fact, provenance, innerResultCarrier);
   }
-  const sourceGuardCarrier = resolveRustTargetTypeRef(
-    request.receiver,
-    context,
-    options,
-  );
+  const sourceGuardCarrier = sourceReceiverCarrier;
   const selectedGuardCarrier = operationReceiverCarrier;
   const selection = selectRustOptionalChain({
     expression: request.expression,

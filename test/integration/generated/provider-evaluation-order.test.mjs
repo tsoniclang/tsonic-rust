@@ -14,6 +14,12 @@ import { planRustProviderEvaluationScope } from "../../../dist/backend/planner/p
 import { selectRustProviderSourceOccurrence } from "../../../dist/analysis/operations/provider-source-inputs.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
+import { analyzeRustProviderEvaluation } from "../../../dist/analysis/storage/provider-evaluation.js";
+import { createRustProviderEvaluationProducer } from "../../../dist/analysis/program/records/provider-evaluation.js";
+import { analyzeRustProviderForms } from "../../../dist/analysis/operations/provider-forms.js";
+import { createRustProviderFormProducer } from "../../../dist/analysis/program/records/provider-forms.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { analyzeRustProviderMutableEmission } from "../../../dist/analysis/storage/provider-mutable-emission.js";
 
 function receiverEvaluationPackage() {
   const flag = { kind: "target-named", id: "r14.Flag" };
@@ -312,13 +318,26 @@ export function borrowingUnwind(): number {
   const fact = { kind: "provider-operation", operationId: "r14-drop-owner-contract", resultCarrier: number, abi };
   const occurrence = selectRustProviderSourceOccurrence(omitted, fact, undefined, argumentsList);
   assert.equal(occurrence !== undefined, true, "the admitted native operation has its exact original evaluation-only source slots");
-  const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts,
-    sourceFor: (node, operation) => node === omitted && operation === fact ? occurrence : program.physicalEmissionContexts.sourceFor(node, operation) });
-  const context = { input: { program: { ...program, physicalEmissionContexts } }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
+  const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts, sourceOccurrences: [occurrence] });
+  const evaluations = createRustProviderEvaluationProducer(() => undefined);
+  const mutableIssues = analyzeRustProviderMutableEmission({ ...program, physicalEmissionContexts }, [], evaluations);
+  assert.equal(mutableIssues.length, 0, "the actual native storage owner admits the unchanged value-only input ABI");
+  const evaluationIssues = analyzeRustProviderEvaluation({ ...program, physicalEmissionContexts }, evaluations);
+  assert.equal(evaluationIssues.length, 0, "the actual pre-seal owner admits the omitted operand's drop schedule");
+  const forms = createRustProviderFormProducer(() => undefined);
+  const formIssues = analyzeRustProviderForms({ ...program, physicalEmissionContexts }, [], forms);
+  assert.equal(formIssues.length, 0, "the existing native form owner admits the new exact ABI identity");
+  const records = createRustRecordFixture({ ...evaluations.records, ...forms.records }, program.records);
+  const context = { input: { program: { ...program, records } }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
     expressionOverrides: new Map(argumentsList.map((node, index) => [node, {
       expression: { kind: "call", path: `crate::index::drop_probe::${index === 0 ? "receiver" : "value"}`, args: [] },
       carrier: index === 0 ? token : number, valueForm: "value",
     }])) };
+  assert.throws(() => planRustProviderEvaluationScope({ ...context, input: { program } }, fact, omitted, undefined,
+    argumentsList, planExpression, planProviderOperationExpression),
+  error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+    error.message === "An admitted provider operation requires its exact source evaluation plan.",
+  "a changed operation cannot reconstruct its missing drop schedule from the original source service");
   const scope = planRustProviderEvaluationScope(context, fact, omitted, undefined, argumentsList,
     planExpression, planProviderOperationExpression);
   assert.equal(scope.kind, "selected", "the actual owner schedules the omitted operand before the consumed argument");

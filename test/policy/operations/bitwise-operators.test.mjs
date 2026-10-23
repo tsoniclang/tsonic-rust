@@ -3,10 +3,48 @@ import { test } from "node:test";
 
 import {
   acmeTestingPackage,
+  analyzeRust,
   artifactText,
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
+
+test("signed all-ones identities preserve the retained native operand conversion and its effects", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+import type { int32, uint8 } from "@tsonic/core/types.js";
+export function rightMask(value: uint8): int32 { return value & -1; }
+export function leftMask(value: uint8): int32 { return -1 & value; }
+function next(value: uint8): uint8 { return value; }
+export function effect(value: uint8): int32 { return next(value) & -1; }
+export function ordinary(value: int32, mask: int32): int32 { return value & mask; }
+` } });
+  const ast = program.source.ast;
+  const binaries = [];
+  const visit = node => {
+    if (ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === "KindAmpersandToken") binaries.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(binaries.length, 4, "both mask orders, the effectful retained value and the unknown-mask inverse survive source checking");
+  for (const [index, node] of binaries.entries()) {
+    const selected = program.records.nativeComparison.get(node);
+    if (index === 3) {
+      assert.equal(selected?.kind, "ordinary", "an unknown mask is never erased");
+      continue;
+    }
+    const operand = index === 1 ? "right" : "left";
+    assert.equal(selected?.kind, "integer-identity", `${index}: native signed all-ones identity is proven`);
+    assert.equal(selected.operand, operand, `${index}: preserve exactly the non-mask operand`);
+    const operation = program.records.targetOperation.get(node);
+    assert.equal(operation?.kind, "operator-token", `${index}: the existing native operation contract remains canonical`);
+    assert.equal(operation[`${operand}Conversion`] !== undefined, true, `${index}: the uint8-to-int32 conversion is not lost`);
+    assert.equal(operation[index === 1 ? "leftConversion" : "rightConversion"] === undefined, true,
+      `${index}: only the exact unconverted pure mask may be discarded`);
+    const source = operand === "left" ? BinaryExpression_Left(ast, node) : BinaryExpression_Right(ast, node);
+    if (index === 2) assert.equal(ast.is.IsCallExpression(source), true, "the retained source effect is not replaced by a constant");
+  }
+});
 
 for (const surfaces of [[], ["js"]]) {
   test(`small integer complement retains the native operand width (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
@@ -129,6 +167,9 @@ test("native integral bitwise operations preserve widths and native shifts", { t
 import { check } from "@acme/testing";
 import type { int32, uint8 } from "@tsonic/core/types.js";
 
+let identityReads: int32 = 0;
+function nativeValue(): uint8 { identityReads += 1; return 128; }
+
 export function main(): void {
   const left: int32 = 5;
   const right: int32 = 3;
@@ -149,6 +190,9 @@ export function main(): void {
   check((0x3fff & highByte) === 128);
   check((highByte | 0x100) === 384);
   check((highByte & -1) === 128);
+  check((-1 & highByte) === 128);
+  check((nativeValue() & -1) === 128);
+  check(identityReads === 1);
   check((highByte | -256) === -128);
 }
 main();

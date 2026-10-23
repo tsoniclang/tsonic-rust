@@ -65,16 +65,19 @@ function planCountedForStatement(
   node: Node, counted: RustCountedLoopRepresentation, context: RustPlanContext,
 ): readonly RustStmt[] {
   const binding = context.input.program.records.sourceName.get(counted.counterDeclaration);
+  const liveness = context.input.program.records.bindingLiveness.get(counted.counterDeclaration);
   const start = counted.kind === "native-counter" ? planExpression(counted.start, context)
     : planNumericLiteralWithCarrier(counted.start, counted.rangeCarrier, context);
   const bound = counted.kind === "native-counter" ? planExpression(counted.bound, context)
     : planExpressionBeforeValueProjections(counted.bound, context, "value");
-  if (binding === undefined || start === undefined || bound === undefined || context.syntheticNames === undefined)
+  if (binding === undefined || liveness === undefined || start === undefined || bound === undefined || context.syntheticNames === undefined)
     failRustPlannerInvariant("An admitted counted for statement requires its sealed binding, bounds and name scope.", node);
   const target = createRustLoopTarget(context, node, []);
   const body = planEmbeddedBlock(counted.body, withRustControlTarget(context, target));
   if (counted.kind === "native-counter") return [{ kind: "for", ...(target.used.value ? { label: target.label } : {}),
-    binding, iterable: { kind: "range", start, end: bound }, body }];
+    binding: liveness.unused ? "_" : binding, iterable: { kind: "range", start, end: bound }, body }];
+  if (liveness.unused) return [{ kind: "for", ...(target.used.value ? { label: target.label } : {}), binding: "_",
+    iterable: { kind: "range", start, end: bound }, body }];
   const rangeBinding = allocateRustSyntheticName(context.syntheticNames, `${binding}_range`);
   return [{ kind: "for", ...(target.used.value ? { label: target.label } : {}), binding: rangeBinding,
     iterable: { kind: "range", start, end: bound }, body: { ...body, statements: [{

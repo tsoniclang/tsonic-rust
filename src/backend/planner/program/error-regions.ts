@@ -11,7 +11,8 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustJsRejectionRegion } from "./js-rejection-regions.js";
-import { qualifyRustCratePath, qualifyRustCrateType } from "../../target-ast/syntax/type-paths.js";
+import { qualifyRustReferencePath, qualifyRustReferenceType } from "../../target-ast/syntax/type-paths.js";
+import { rustSourcePackageReferenceScope } from "./source-package-components.js";
 
 export function planRustErrorJoinDeclarations(sourceFile: import("@tsonic/tsts").SourceFile,
   input: import("../context.js").RustPlanningContext): readonly RustItem[] {
@@ -47,10 +48,11 @@ export function planRustSelectedErrorRegion(
   render: (carrier: TargetTypeRef) => RustType | undefined = carrier => rustTypeFromCarrierInContext(carrier, context),
   referenceCrate?: string,
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
+  const references = referenceCrate === undefined ? undefined : rustSourcePackageReferenceScope(context, referenceCrate);
   const physicalOwner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
     : resolveRustPhysicalProgramErrorBoundary(context.input.program.records, context.sourcePackageComponentId, selected.localOwner);
-  const owner = physicalOwner === undefined || referenceCrate === undefined ? physicalOwner : {
-    ...physicalOwner, errorTypePath: qualifyRustCratePath(physicalOwner.errorTypePath, referenceCrate),
+  const owner = physicalOwner === undefined || references === undefined ? physicalOwner : {
+    ...physicalOwner, errorTypePath: qualifyRustReferencePath(physicalOwner.errorTypePath, references),
   };
   if (selected.localOwner !== undefined && owner === undefined) failRustPlannerInvariant("An admitted native error region requires its exact physical package boundary.");
   if (owner !== undefined) registerAliasFromPath(context, owner.errorTypePath);
@@ -62,11 +64,11 @@ export function planRustSelectedErrorRegion(
   if (name === undefined || moduleName === undefined) failRustPlannerInvariant("An admitted native error region requires its sealed join name and source module.");
   const external = context.externalCrateNameByFileName.get(selected.fileName);
   const selectedPath = `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`;
-  const referencePath = referenceCrate === undefined ? selectedPath : qualifyRustCratePath(selectedPath, referenceCrate);
+  const referencePath = references === undefined ? selectedPath : qualifyRustReferencePath(selectedPath, references);
   const nativeSources = selected.sources.map(source => {
     const errorType = render(source.errorType);
     if (errorType === undefined) failRustPlannerInvariant("An admitted native error source requires its renderable finalized carrier.");
-    return { ...source, errorType: referenceCrate === undefined ? errorType : qualifyRustCrateType(errorType, referenceCrate) };
+    return { ...source, errorType: references === undefined ? errorType : qualifyRustReferenceType(errorType, references) };
   });
   const local = owner === undefined ? undefined : { identity: `package:${owner.errorTypeIdentity}`,
     variant: "Error0", errorType: rustErrorType(owner) };

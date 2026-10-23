@@ -54,7 +54,8 @@ export function mapRustExpressionChildren(
     case "try": return { ...expression, expr: mapExpression(expression.expr) };
     case "vec-literal":
     case "slice-literal":
-    case "tuple-literal": return { ...expression, elements: expression.elements.map(mapExpression) };
+    case "tuple-literal": return expression.elements.length === 0
+      ? expression : { ...expression, elements: expression.elements.map(mapExpression) };
     case "array-repeat": {
       const element = mapExpression(expression.element);
       if (expression.length.kind !== "path") return { ...expression, element };

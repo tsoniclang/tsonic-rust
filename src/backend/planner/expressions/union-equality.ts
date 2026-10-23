@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustUnionEqualityOperand } from "../../../target-model/records/union-equality.js";
@@ -16,15 +15,19 @@ export function planRustUnionEquality(node: Node,
   _fact: Extract<RustTargetOperationFact, { readonly kind: "union-equality" }>, context: RustPlanContext): RustExpr {
   const selected = context.input.program.records.unionEquality.get(node)
     ?? failRustPlannerInvariant("An admitted union equality requires its native emission plan.", node);
+  const emission = context.input.program.records.binaryEmission.get(node)
+    ?? failRustPlannerInvariant("An admitted union equality requires its selected native operand reads.", node);
   const fact = selected.fact;
-  const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-  const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
-  if (leftNode === undefined || rightNode === undefined || context.syntheticNames === undefined)
+  const { left: leftNode, right: rightNode } = emission;
+  if (context.syntheticNames === undefined)
     failRustPlannerInvariant("An admitted union equality requires its source operands and native binding scope.", node);
-  const left = planExpression(leftNode, context, "value", "shared-reference")
-    ?? failRustPlannerInvariant("An admitted union equality requires its left operand.", leftNode);
-  const right = planExpression(rightNode, context, "value", "shared-reference")
-    ?? failRustPlannerInvariant("An admitted union equality requires its right operand.", rightNode);
+  const operand = (subject: Node, shared: boolean): RustExpr => {
+    const value = planExpression(subject, context, "value", shared ? "shared-reference" : "value")
+      ?? failRustPlannerInvariant("An admitted union equality requires its native operand.", subject);
+    return shared ? value : { kind: "reference", expr: value };
+  };
+  const left = operand(leftNode, emission.leftShared);
+  const right = operand(rightNode, emission.rightShared);
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];
   for (const arm of selected.arms) {
     const leftName = allocateRustSyntheticName(context.syntheticNames, "left");

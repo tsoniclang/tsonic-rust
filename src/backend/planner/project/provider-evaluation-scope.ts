@@ -185,12 +185,15 @@ export function planRustProviderEvaluationScope(
     if (!stabilizationKeys.has(slot.key)) {
       continue;
     }
-    const carrier = selected.slots[index]!.ownerCarrier;
+    const row = selected.slots[index]!;
+    const carrier = row.ownerCarrier;
     // An operand the enclosing expression already bound to a local (a compound assignment receiver or index) is
     // stable; binding it into a second local would move it before its later read or write.
     const bound = context.expressionOverrides?.get(slot.node);
     if (carrier === undefined && bound !== undefined && bound.expression.kind === "path") {
-      sourceValues.set(slot.node, bound.expression);
+      if (row.borrowedEvaluation && bound.valueForm === "shared-reference") {
+        for (const input of row.inputs) inputOverrides.set(input, bound.expression);
+      } else sourceValues.set(slot.node, bound.expression);
       continue;
     }
     let valueContext = context;
@@ -203,7 +206,7 @@ export function planRustProviderEvaluationScope(
       expressionOverrides.set(slot.node, { expression: { kind: "path", path: ownerName }, carrier, valueForm: "value" });
       valueContext = { ...context, expressionOverrides };
     }
-    const value = planExpression(slot.node, valueContext);
+    const value = planExpression(slot.node, valueContext, "value", row.borrowedEvaluation ? "shared-reference" : "value");
     if (value === undefined) {
       return { kind: "failed" };
     }
@@ -214,7 +217,10 @@ export function planRustProviderEvaluationScope(
       value,
       ...(mutable?.kind === "owned" ? { mutable: true } : {}),
     });
-    sourceValues.set(slot.node, { kind: "path", path: name });
+    const boundValue: RustExpr = { kind: "path", path: name };
+    if (row.borrowedEvaluation) {
+      for (const input of row.inputs) inputOverrides.set(input, boundValue);
+    } else sourceValues.set(slot.node, boundValue);
   }
   return {
     kind: "selected",

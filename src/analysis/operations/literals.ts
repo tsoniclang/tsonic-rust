@@ -6,6 +6,7 @@ import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLiteralEmissionProducer } from "../program/records/literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustIntegerCarrier, isRustBigIntCarrier, rustPrimitiveTypeName } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLiteralEmissionProducer, source: TargetSourceProgram): readonly TargetDiagnostic[] {
@@ -15,22 +16,42 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: ["target.capability=rust.backend.literal-carrier"] });
   };
-  // A float literal prints without suffix where its generated position already fixes the float type: a provider
-  // operation argument, the other side of a binary operation with a non-literal operand, an annotated initializer,
-  // a return value or a source-call argument. Any other position keeps the suffix.
-  const providerArguments = new Set<Node>();
-  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences)
-    for (const { input, slot } of occurrence.inputs) if (input.source.kind === "argument") providerArguments.add(slot.node);
+  const providerArguments = new Map<Node, TargetTypeRef[]>();
+  const untypedProviderInputs = new Set<Node>();
+  const nativeReceivers = new Set<Node>();
+  for (const occurrence of program.physicalEmissionContexts.sourceOccurrences) {
+    for (const { input, slot } of occurrence.inputs) {
+      const receiver = occurrence.operation.abi.targetReceiver;
+      const form = occurrence.operation.abi.target.form;
+      const methodReceiver = receiver.kind === "input" && receiver.input === input &&
+        (form === "arg-method" || form === "method" || form === "arg-receiver-method" || form === "receiver-method" ||
+          form === "receiver-value-array" || form === "receiver-tagged-array" || form === "arg-structural-method");
+      if (methodReceiver) nativeReceivers.add(slot.node);
+      if (methodReceiver || input.conversion.kind !== "identity") {
+        untypedProviderInputs.add(slot.node);
+      } else {
+        const carriers = providerArguments.get(slot.node) ?? [];
+        carriers.push(input.sourceCarrier);
+        providerArguments.set(slot.node, carriers);
+      }
+    }
+  }
   const numericLiteral = (node: Node | undefined): boolean => node !== undefined && (ast.is.IsNumericLiteral(node) ||
     ast.is.IsBigIntLiteral(node) || ast.is.IsPrefixUnaryExpression(node) && numericLiteral(Node_Operand(ast, node)));
-  const typedPosition = (node: Node): boolean => {
+  const position = (node: Node): { readonly current: Node; readonly parent: Node | undefined } => {
     let current = node;
     let parent = ast.parent(node);
     while (parent !== undefined && (ast.is.IsParenthesizedExpression(parent) || ast.is.IsPrefixUnaryExpression(parent))) {
       current = parent;
       parent = ast.parent(parent);
     }
-    if (providerArguments.has(current)) return true;
+    return { current, parent };
+  };
+  const typedPosition = (node: Node, carrier: TargetTypeRef): boolean => {
+    const { current, parent } = position(node);
+    if (untypedProviderInputs.has(current)) return false;
+    const parameters = providerArguments.get(current);
+    if (parameters !== undefined) return parameters.every(parameter => rustTargetTypeRefEquals(parameter, carrier));
     if (parent === undefined) return false;
     if (ast.is.IsBinaryExpression(parent)) {
       const left = BinaryExpression_Left(ast, parent);
@@ -60,7 +81,7 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
         const text = numeric.token.coefficient === 0n ? "0.0" : numeric.token.decimalText;
         const digits = text.includes(".") || text.includes("e") ? text : `${text}.0`;
         producer.publish(node, carrier, { kind: "float",
-          text: typedPosition(node) ? digits : `${digits}_${carrier.name === "float32" ? "f32" : "f64"}`,
+          text: typedPosition(node, carrier) ? digits : `${digits}_${carrier.name === "float32" ? "f32" : "f64"}`,
           negative: numeric.token.negative, cast: undefined });
       } else {
         if (!Number.isFinite(numeric.value)) { refuse(node, "Numeric literal emission requires finite checked floating-point evidence.", true); return; }
@@ -76,8 +97,8 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
       if (integer === undefined) { refuse(node, "Numeric literal cannot lower to integer carrier without exact sealed integer evidence.", true); return; }
       const type = carrier.kind === "source-primitive" ? rustPrimitiveTypeName(carrier.name) : undefined;
       if (type === undefined) { refuse(node, "Numeric literal carrier is not a supported Rust numeric carrier."); return; }
-      // i32 is Rust's integer literal default, so its literal stays unsuffixed as before the rewrite.
-      producer.publish(node, carrier, { kind: "integer", text: type === "i32" ? integer.toString(10) : `${integer.toString(10)}_${type}` });
+      producer.publish(node, carrier, { kind: "integer", text: type === "i32" && !nativeReceivers.has(position(node).current)
+        ? integer.toString(10) : `${integer.toString(10)}_${type}` });
       return;
     }
     if (ast.is.IsBigIntLiteral(node) && isRustBigIntCarrier(carrier) && integer !== undefined) {

@@ -75,8 +75,8 @@ test("native Error construction and calls contribute exact fresh allocation with
     assert.equal(effect !== undefined, true, name);
     assert.equal(effect.resultAllocation === invocation, true, name);
     assert.equal(effect.resultAlias === undefined, true, name);
-    assert.equal(effect.preservedInputs.length, 0, name);
-    assert.equal(Object.isFrozen(effect) && Object.isFrozen(effect.preservedInputs), true);
+    assert.equal(Object.hasOwn(effect, "preservedInputs"), false, `${name}: allocation proves no whole-input preservation`);
+    assert.equal(Object.isFrozen(effect), true, `${name}: the allocation summary remains immutable`);
     const subject = storage.subjectFor(invocation);
     assert.equal(subject.kind, "resolved", name);
     const origins = storage.originsFor(subject.subject);
@@ -185,19 +185,35 @@ test("freeze retains the exact selected argument and publishes immutable source-
   const effect = current.effects.call(invocation, call);
   assert.equal(effect !== undefined, true);
   assert.equal(effect.resultAlias === call.sourceArguments[0].expression, true);
-  assert.equal(effect.preservedInputs.length, 1);
-  assert.equal(effect.preservedInputs[0] === effect.resultAlias, true);
-  assert.equal(Object.isFrozen(current.effects) && Object.isFrozen(effect) && Object.isFrozen(effect.preservedInputs), true);
+  assert.equal(Object.hasOwn(effect, "preservedInputs"), false, "result identity does not prove whole-input preservation");
+  assert.equal(Object.isFrozen(current.effects) && Object.isFrozen(effect), true, "the exact alias summary remains immutable");
 });
 
-test("isFrozen preserves its input without manufacturing a result alias", () => {
+test("isFrozen publishes neither a result alias nor an unproved whole-input preservation claim", () => {
   const current = fixture();
   const { invocation, call } = current.selected("observed");
   const effect = current.effects.call(invocation, call);
-  assert.equal(effect !== undefined, true);
-  assert.equal(effect.resultAlias === undefined, true);
-  assert.equal(effect.preservedInputs.length, 1);
-  assert.equal(effect.preservedInputs[0] === call.sourceArguments[0].expression, true);
+  assert.equal(effect === undefined, true, "an observation without allocation or result alias has no storage transport summary");
+});
+
+test("a result alias does not silently close member storage across an opaque native call", () => {
+  const current = fixture(`
+    const holder: { value: object } = { value: {} };
+    const frozen = Object.freeze(holder);
+    const exposed = holder.value;
+  `);
+  const { invocation, call } = current.selected("frozen");
+  const effect = current.effects.call(invocation, call);
+  assert.equal(effect?.resultAlias === call.sourceArguments[0].expression, true, "the exact result alias stays approved");
+  assert.equal(Object.hasOwn(effect, "preservedInputs"), false, "no removed preservation field is emitted");
+  const storage = createSourceStorageQuery(current.source, [current.file], undefined, current.effects);
+  assert.equal(storage.failureReason(), undefined, "the source graph remains finite and admitted");
+  const subject = storage.subjectFor(current.variables.get("exposed"));
+  assert.equal(subject.kind, "resolved", "the actual member observation has a checked source subject");
+  const domain = storage.closedOriginsFor(subject.subject);
+  assert.equal(domain.kind, "open", "result identity alone cannot close the exposed member domain");
+  assert.equal(domain.boundaries.some(boundary => boundary.kind === "opaque-write"), true,
+    "the exact call's unproved member effects remain an opaque-write witness");
 });
 
 test("selected immutable callable aliases retain declaration identity rather than callee spelling", () => {

@@ -3,7 +3,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTelemetryCapability, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { acmeTelemetryCapability, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 import { finalizeRustProviderOperationAbi } from "../../../dist/policy/operations/members/abi/finalize.js";
@@ -15,6 +15,9 @@ import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/carrier
 import { requireProviderArgumentPassingFacts } from "../../../dist/backend/planner/expressions/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/analysis/callables/source-call-evidence.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { analyzeRustSourceCallArguments } from "../../../dist/analysis/callables/source-call-arguments.js";
+import { createRustSourceCallArgumentProducer } from "../../../dist/analysis/program/records/source-call-arguments.js";
+import { selectRustProviderSourceOccurrence } from "../../../dist/analysis/operations/provider-source-inputs.js";
 import {
   isRustNamedTypeTraitContract,
   rustNamedTypeCarrierValue,
@@ -346,34 +349,44 @@ test("evaluation-only provider arguments do not require native parameter-passing
     errorCarrier: { kind: "target-named", id: "rust.test.ProviderError" },
   });
   assert.ok(abi);
-  const runtimeArgument = {};
-  const omittedNull = {};
-  const omittedIndent = {};
-  const context = {
-    diagnostics: [],
-    input: {
-      program: {
-        records: createRustRecordFixture({argumentPassing: { get: (node) => {
-    assert.equal(node, runtimeArgument);
-    return { mode: "borrow-shared" };
-} },
-runtimeCarrier: { get: (node) => {
-    assert.equal(node, runtimeArgument);
-    return { carrier: jsValue };
-} },
-conversion: { get: (node) => {
-    assert.equal(node, runtimeArgument);
-    return undefined;
-} }}),
-      },
-    },
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function observed(value: unknown, indent: number): string {
+  return JSON.stringify(value, undefined, indent);
+}
+` } });
+  const ast = program.source.ast;
+  let call;
+  const visit = node => {
+    if (ast.is.IsCallExpression(node) && ast.arguments(node).length === 3) call = node;
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
+  program.sourceFiles.forEach(visit);
+  assert.equal(call !== undefined, true, "the fixture uses the actual checked three-argument operation");
+  const [runtimeArgument, omittedNull, omittedIndent] = ast.arguments(call);
   const fact = {
     kind: "provider-operation",
     operationId: "tsonic.rust.js.JSON.stringify.indent",
     resultCarrier: string,
     abi,
   };
+  const occurrence = selectRustProviderSourceOccurrence(call, fact, undefined, [runtimeArgument, omittedNull, omittedIndent]);
+  assert.equal(occurrence !== undefined, true, "every runtime and evaluation-only source slot has an exact checked identity");
+  const reads = [];
+  const records = createRustRecordFixture({ argumentPassing: { get: node => {
+    reads.push(node);
+    assert.equal(node === runtimeArgument, true, "only the runtime input requires a native parameter-passing fact");
+    return program.records.argumentPassing.get(node);
+  } } }, program.records);
+  const admission = { ...program, records, physicalEmissionContexts: {
+    ...program.physicalEmissionContexts, sourceOccurrences: [occurrence],
+  } };
+  const producer = createRustSourceCallArgumentProducer(() => undefined);
+  const issues = analyzeRustSourceCallArguments(admission, [], producer, program.source);
+  assert.equal(issues.length, 0, "the actual pre-seal passing owner admits all three original source arguments");
+  assert.equal(reads.length, 1, "neither evaluation-only operand is queried for native passing");
+  const context = { diagnostics: [], input: { program: { ...program,
+    records: createRustRecordFixture({ ...producer.records }, records),
+  } } };
 
   assert.equal(requireProviderArgumentPassingFacts(
     context,
@@ -381,6 +394,21 @@ conversion: { get: (node) => {
     [runtimeArgument, omittedNull, omittedIndent],
   ), true);
   assertNoTargetDiagnostics(context.diagnostics);
+  assert.throws(() => requireProviderArgumentPassingFacts({ ...context, input: { program } }, fact,
+    [runtimeArgument, omittedNull, omittedIndent]),
+  error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT",
+  "a newly constructed ABI cannot borrow another operation's passing admission");
+  for (const passing of [undefined, { mode: "value" }]) {
+    const rejected = analyzeRustSourceCallArguments({ ...admission, records: createRustRecordFixture({
+      argumentPassing: { get: node => {
+        assert.equal(node === runtimeArgument, true, "negative controls still never query omitted parameter facts");
+        return passing;
+      } },
+    }, program.records) }, [], createRustSourceCallArgumentProducer(() => undefined), program.source);
+    assert.equal(rejected.length, 1, "a missing or conflicting runtime passing fact is rejected before sealing");
+    assert.equal(rejected[0].code, passing === undefined ? "RUST_MISSING_TARGET_FACT" : "RUST_UNSUPPORTED_AST",
+      "the exact runtime admission failure is not replaced by an evaluation-only refusal");
+  }
 });
 
 test("runtime module bindings publish one explicit Rust crate startup contract", () => {
