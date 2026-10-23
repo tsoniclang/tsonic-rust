@@ -38,30 +38,78 @@ export function observed(source: string, fail: boolean): boolean {
   const receiver = Node_Expression(ast, Node_Expression(ast, node));
   const selected = program.records.sourceParameterAbi.get(receiver);
   assert.equal(selected.mode, "ref");
+  const sealed = program.records.providerEvaluation.get(node, fact);
+  assert.equal(sealed !== undefined, true, "the actual immutable source schedule is computed before publication");
   const plan = parameter => {
+    let reads = 0;
     const records = createRustRecordFixture({
 sourceParameterAbi: { get: (subject) => {
+    reads++;
     return subject === receiver ? parameter : program.records.sourceParameterAbi.get(subject);
 } }}, program.records);
-    return planRustProviderEvaluationScope({ input: { program: { ...program, records } },
+    const result = planRustProviderEvaluationScope({ input: { program: { ...program, records } },
       sourceFile: ast.getSourceFile(node), diagnostics: [] }, fact, node, receiver, ast.arguments(node),
     () => ({ kind: "path", path: "snapshot" }), () => undefined);
+    assert.equal(reads, 0, "a sealed evaluation schedule never recomputes ownership from a later source service");
+    assert.equal(records.providerEvaluation.get(node, fact) === sealed, true, "the exact pre-seal record is unchanged");
+    return result;
   };
   assert.equal(plan(selected).kind, "none");
   const other = rustSourcePrimitiveTargetType("bool");
-  for (const changed of [
-    undefined,
-    { ...selected, mode: "mut-ref" },
-    { ...selected, valueCarrier: other },
-    { ...selected, parameterCarrier: { ...selected.parameterCarrier, referent: other } },
-    { ...selected, parameterCarrier: { ...selected.parameterCarrier, mutable: true } },
-    { ...selected, entryConversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" } },
+  for (const [label, changed] of [
+    ["missing source service", undefined],
+    ["exclusive parameter mode", { ...selected, mode: "mut-ref" }],
+    ["conflicting logical value", { ...selected, valueCarrier: other }],
+    ["conflicting native referent", { ...selected, parameterCarrier: { ...selected.parameterCarrier, referent: other } }],
+    ["mutable native reference", { ...selected, parameterCarrier: { ...selected.parameterCarrier, mutable: true } }],
+    ["new entry conversion", { ...selected, entryConversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" } }],
   ]) {
     const scope = plan(changed);
-    assert.equal(scope.kind, "selected", "unproved current storage still requires its snapshot");
-    assert.equal(scope.steps.length, 1);
-    assert.equal(scope.overrides.sourceValues.has(receiver), true);
+    assert.equal(scope.kind, "none", `${label}: post-seal metadata cannot revoke the actual immutable-place proof or demand a copy`);
   }
+});
+
+test("pre-seal provider evaluation snapshots a real captured string before its same-owner RHS mutation", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function make(seed: string): (next: string) => boolean {
+  return (next: string): boolean => seed.includes(seed = next);
+}
+` } });
+  const ast = program.source.ast;
+  let node;
+  const visit = current => {
+    const operation = program.records.targetOperation.get(current);
+    if (ast.is.IsCallExpression(current) && operation?.kind === "provider-operation" &&
+      ast.arguments(current).some(argument => ast.is.IsBinaryExpression(argument))) node = current;
+    ast.forEachChild(current, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(node !== undefined, true, "the complete checked source retains the effectful native string operation");
+  const fact = program.records.targetOperation.get(node);
+  const receiver = Node_Expression(ast, Node_Expression(ast, node));
+  const argument = ast.arguments(node)[0];
+  const read = program.ownership.reads.get(receiver);
+  assert.equal(read !== undefined, true, "ownership is computed by the actual source-flow producer");
+  assert.equal(read.stablePlace, false, "the genuine captured mutable source is not an immutable native parameter");
+  assert.equal(read.borrowedAcross.has(argument), false, "the same-owner source write invalidates a live borrow");
+  assert.equal(read.value.kind, "clone", "the exact source observation requires an owned snapshot before the write");
+  const occurrence = program.physicalEmissionContexts.sourceFor(node, fact);
+  assert.equal(occurrence !== undefined, true, "the complete native input correspondence is already prepared");
+  const producer = createRustProviderEvaluationProducer(() => undefined);
+  const admission = { ...program, physicalEmissionContexts: { ...program.physicalEmissionContexts, sourceOccurrences: [occurrence] } };
+  const mutableIssues = analyzeRustProviderMutableEmission(admission, [], producer);
+  const issues = analyzeRustProviderEvaluation(admission, producer);
+  assert.equal(mutableIssues.length, 0, "the existing native storage owner admits the actual input modes");
+  assert.equal(issues.length, 0, "the exact full source program admits the pre-seal snapshot schedule");
+  const selected = producer.records.providerEvaluation.get(node, fact);
+  assert.equal(selected !== undefined, true, "one complete evaluation record is published by its actual owner");
+  const records = createRustRecordFixture({ ...producer.records }, program.records);
+  const scope = planRustProviderEvaluationScope({ input: { program: { ...program, records } },
+    sourceFile: ast.getSourceFile(node), diagnostics: [] }, fact, node, receiver, ast.arguments(node),
+  () => ({ kind: "path", path: "snapshot" }), () => undefined);
+  assert.equal(scope.kind, "selected", "the real source mutation still requires its native snapshot scope");
+  assert.equal(scope.steps.length, 1, "the receiver snapshot is prepared exactly once before the effectful RHS");
+  assert.equal(scope.overrides.sourceValues.has(receiver), true, "the later native call consumes the stable owned observation");
 });
 
 test("evaluation-only unit, absence and native-future operands retain canonical immediate effect handling", () => {
