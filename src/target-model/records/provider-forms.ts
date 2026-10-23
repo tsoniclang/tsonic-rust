@@ -1,9 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedOperationAbi } from "./finalized-operation.js";
+import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
 
 export interface RustProviderFormEmission {
   readonly read: "copy" | "clone" | "storage";
   readonly worker: { readonly fileName: string; readonly argumentIndex: number; readonly mode: "ref" | "value" } | undefined;
+  readonly nativeResult: RustSourceErrorEffectEdge | undefined;
 }
 
 export interface RustProviderFormRecords {

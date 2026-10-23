@@ -12,6 +12,7 @@ import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../tar
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
@@ -72,8 +73,12 @@ export function createRustNativeCallableProducerPlan(input: {
       ...(asynchronous === undefined ? [] : [asynchronous.futureCarrier]),
     ];
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
+    const retained = input.records.retainedEnvironment.get(declaration);
+    const lifetimes = [...references.lifetimes];
+    if (retained !== undefined && !lifetimes.some(lifetime => rustLifetimesEqual(lifetime, retained.lifetime)))
+      lifetimes.push(retained.lifetime);
     const environment: readonly RustTargetGenericArgument[] = Object.freeze([
-      ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
+      ...lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
       ...references.typeParameters.map(type => ({ kind: "type" as const, type })),
       ...references.constParameters.map(value => ({ kind: "const" as const, value })),
     ]);

@@ -140,7 +140,7 @@ test("structural methods require their actual selected storage rather than their
   const carrier = rustStructuralObjectTargetType("/source.ts", [{ sourceName: "read", type: { kind: "closure", args: [], result: number },
     presence: "required", readonly: true, method: true }]);
   assert.equal(selected(carrier).kind, "unresolved", "no selected method storage");
-  const shapes = methodStorageCarrier => ({ field: () => ({ methodStorageCarrier }) });
+  const shapes = methodStorageCarrier => ({ instances: [{ carrier, fields: [{ methodStorageCarrier }] }] });
   const infallible = { kind: "target-named", id: rustInfallibleTargetId };
   assert.equal(selected(carrier, { evidence: evidence({ structuralShapes: shapes(rustCallableTargetType([], number, staticLifetime, infallible)) }) }).kind,
     "supported", "the admitted physical method storage is owned");
@@ -150,7 +150,7 @@ test("structural methods require their actual selected storage rather than their
 
 test("actual source instance fields are read once and cannot be replaced by empty generic arguments", () => {
   const declaration = {};
-  const definition = { declaration, kind: "class" };
+  const definition = { declaration, kind: "class", genericParameters: [] };
   const carrier = rustSourceTypeCarrier("/source.ts", "Owner", "object", []);
   const field = {};
   const context = stored => evidence({ projectTypes: { definitionForCarrier: () => definition,
@@ -265,7 +265,7 @@ test("every admitted frame entry alternative contributes its actual stored paylo
 
 test("class factories and instances inspect the actual sealed capture and static-field environment", () => {
   const declaration = {};
-  const definition = { declaration, kind: "class" };
+  const definition = { declaration, kind: "class", genericParameters: [] };
   const instance = rustSourceTypeCarrier("/source.ts", "Factory", "object", []);
   const constructor = rustClassConstructorTargetType(instance);
   const run = (carrier, stored, instancesUseEnvironment, staticField) => selected(carrier, { evidence: evidence({
