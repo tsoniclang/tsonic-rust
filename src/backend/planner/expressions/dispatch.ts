@@ -148,7 +148,8 @@ export function planExpressionInner(node: Node, context: RustPlanContext, result
       if (typeof fact.result !== "string") {
         const value = planExpressionBeforeValueProjections(operand, context, "value", "shared-reference");
         if (value === undefined) failRustPlannerInvariant("An admitted runtime category requires its native operand.", node);
-        return planRustRuntimeCategory(createRustSharedReferenceArgument(context, value, operand), fact.result, context, true);
+        return planRustRuntimeCategory(createRustSharedReferenceArgument(context,
+          { stage: "source", expression: value, node: operand }), fact.result, context, true);
       }
       const discarded = planRustDiscardedValue(operand, context)
         ?? failRustPlannerInvariant("An admitted static category requires its operand effects.", node);

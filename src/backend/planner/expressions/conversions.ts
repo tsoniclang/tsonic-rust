@@ -101,7 +101,7 @@ export function finishProviderOperationExpression(context: RustPlanContext, fact
     raw = result;
   }
   if (fact.abi.result.kind === "async") return raw;
-  const converted = applyFinalizedValueConversion(context, raw, fact.abi.result.conversion, node);
+  const converted = applyFinalizedValueConversion(context, { stage: "finalized", expression: raw }, fact.abi.result.conversion, node);
   return converted === undefined || rustTypeEmissionInContext(fact.abi.result.carrier, context).completion !== "never"
     ? converted : rustBottomExpression(converted);
 }
@@ -196,7 +196,9 @@ export function planFinalizedSourceInput(context: RustPlanContext, input: RustFi
   const direct = sourceValue === undefined && override?.valueForm === "storage" && input.conversion.kind === "identity" &&
     (position === "target-receiver" || input.mode !== "value") ? override.expression : expression;
   if (shared && input.conversion.kind === "identity") return direct;
-  const value = applyFinalizedValueConversion(context, direct, input.conversion, source, shared);
+  const value = applyFinalizedValueConversion(context, sourceValue === undefined
+    ? { stage: "source", expression: direct, node: source }
+    : { stage: "finalized", expression: direct }, input.conversion, source, shared);
   return value === undefined || position === "target-receiver" ? value
     : applyFinalizedRustArgumentMode(context, source, value, input, override?.valueForm === "shared-reference", sourceValue !== undefined);
 }

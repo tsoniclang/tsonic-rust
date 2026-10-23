@@ -106,7 +106,7 @@ function planProjectedExpression(node: Node, context: RustPlanContext, resultUse
   const sharedResult = selected.option === undefined && selected.contextual?.targetCarrier.kind === "reference" &&
     selected.contextual.targetCarrier.mutable !== true;
   return access !== "shared-reference" || borrowFlow || selected.option === undefined && selected.referenceReborrow || sharedResult
-    ? value : createRustSharedReferenceArgument(context, value, node);
+    ? value : createRustSharedReferenceArgument(context, { stage: "source", expression: value, node });
 }
 
 // An override may carry the node's own carrier specialized by the planning context (a dispatch specialization or a
@@ -154,7 +154,7 @@ function applyRustContextualValueConversion(node: Node, expression: RustExpr, fa
     case "integer-truncation": return planRustIntegerTruncation(expression, context, node);
     case "provider-record-copy": return planProviderRecordCopy(conversion, expression, node, context);
     case "empty-record": return planRustEmptyRecordConversion(conversion, expression, node, context);
-    default: return applyRustValueConversion(context, expression, conversion, node, shared);
+    default: return applyRustValueConversion(context, { stage: "source", expression, node }, conversion, node, shared);
   }
 }
 

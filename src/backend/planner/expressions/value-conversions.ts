@@ -7,7 +7,7 @@ import { applyRustLocalErrorBoundary, rustTargetRuntimeErrorType } from "../type
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { registerAliasFromPath, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { applyRustArgumentMode } from "./input-shaping.js";
+import { applyRustArgumentMode, type RustArgumentValue } from "./input-shaping.js";
 import {
   invokeRustStructuralObjectMethod,
   readRustStoredObjectField,
@@ -36,26 +36,27 @@ import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
-  expression: RustExpr,
+  argument: RustArgumentValue,
   conversion: RustValueConversion | undefined,
   node: Node | undefined,
   sourceIsSharedReference = false,
 ): RustExpr | undefined {
+  const expression = argument.expression;
   if (conversion === undefined) {
     return expression;
   }
   const contract = context.input.program.records.conversionContract.get(conversion)
     ?? failRustPlannerInvariant("An admitted native value conversion requires its sealed physical contract.", node ?? context.sourceFile);
   // A source string literal borrowed as str is the literal itself ("A"), not as_ref(&String::from("A")).
-  const literal = node === undefined ? undefined : context.input.program.records.literalValue.get(node);
+  const literal = argument.stage === "source" ? context.input.program.records.literalValue.get(argument.node) : undefined;
   if (contract.lowering === "borrowed-str-from-owned-string" && (literal?.form === "string" || literal?.form === "template"))
     return { kind: "str-literal", value: literal.text };
   const producer = conversion.kind === "callable-input"
-    ? planRustCallableInputProducer(expression, contract.source, context, node) : expression;
+    ? planRustCallableInputProducer(argument, contract.source, context, node) : argument;
   if (producer === undefined) return undefined;
   const source = contract.sourceMode === "ref" && !sourceIsSharedReference
-    ? applyRustArgumentMode(context, producer, "ref", node)
-    : producer;
+    ? applyRustArgumentMode(context, producer, "ref")
+    : producer.expression;
   const converted = lowerRustValueConversion(contract, source, context, node);
   if (converted === undefined) {
     return undefined;
@@ -499,25 +500,25 @@ function allocateConversionName(
 
 export function applyFinalizedValueConversion(
   context: RustPlanContext,
-  expression: RustExpr,
+  argument: RustArgumentValue,
   conversion: RustFinalizedValueConversion,
   node: Node,
   sourceIsSharedReference = false,
 ): RustExpr | undefined {
   if (conversion.kind === "sequence") {
-    let result: RustExpr | undefined = expression;
+    let result: RustExpr | undefined = argument.expression;
     for (let index = 0; index < conversion.steps.length; index += 1) {
-      result = applyFinalizedValueConversion(context, result, conversion.steps[index]!, node,
+      result = applyFinalizedValueConversion(context, index === 0 ? argument : { stage: "finalized", expression: result }, conversion.steps[index]!, node,
         sourceIsSharedReference && index === 0);
       if (result === undefined) return undefined;
     }
     return result;
   }
   return conversion.kind === "identity"
-    ? expression
+    ? argument.expression
     : applyRustValueConversion(
         context,
-        expression,
+        argument,
         conversion.conversion,
         node,
         sourceIsSharedReference,

@@ -6,7 +6,7 @@ import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { createRustMutableReferenceArgument, createRustSharedReferenceArgument } from "../input-shaping.js";
+import { applyRustArgumentMode } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
 import { planRustRestAssembly } from "./rest-assembly.js";
 import { planRustSourceCallArgumentValue } from "./singleton-slices.js";
@@ -61,8 +61,9 @@ function shapeSourceInput(plan: RustSourceArgumentEvaluation, input: RustSourceC
     if (projection.clone) value = { kind: "method-call", receiver: value, method: "clone", args: [] };
   }
   if (input.passing === "value" || input.passing === "identity" || plan.borrowedInputs.get(node) === value) return value;
-  return input.passing === "mut-ref" ? createRustMutableReferenceArgument(context, value, node)
-    : createRustSharedReferenceArgument(context, value, node);
+  return applyRustArgumentMode(context, projection !== undefined || plan.bindings.length !== 0
+    ? { stage: "finalized", expression: value }
+    : { stage: "source", expression: value, node }, input.passing);
 }
 
 export function planRustSourceCallArgumentEvaluation(call: Node, context: RustPlanContext): RustSourceArgumentEvaluation {

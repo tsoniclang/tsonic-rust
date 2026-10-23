@@ -24,7 +24,7 @@ export function rustNativeCallableInvocationArguments(
   }
   const pattern: TargetTypeRef = { kind: "tuple", elements: [...protocol.method.parameters, protocol.method.result]
     .map(carrier => substituteRustTargetGenerics(carrier, substitutions, new Map())) };
-  const actual: TargetTypeRef = { kind: "tuple", elements: [...operation.parameters.map(parameter => parameter.valueCarrier),
+  const actual: TargetTypeRef = { kind: "tuple", elements: [...operation.parameters.map(parameter => parameter.parameterCarrier),
     operation.resultCarrier] };
   const bindings = inferRustTargetGenericBindings(pattern, actual, {
     typeIdentities: new Set(), constIdentities: new Set(),

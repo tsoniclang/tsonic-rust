@@ -117,7 +117,8 @@ function planObjectShapeProjectionCall(node: Node,
     case "entries": {
       const values = fact.fields.map((field): RustExpr => {
         const read = readRustStoredObjectField(fact.storage, fact.sourceValueCarrier, receiver, field.storageIndex, field.valueCarrier, context);
-        const value = read === undefined ? undefined : applyRustValueConversion(context, read, field.conversion, undefined);
+        const value = read === undefined ? undefined : applyRustValueConversion(context,
+          { stage: "finalized", expression: read }, field.conversion, undefined);
         if (value === undefined) failRustPlannerInvariant("An admitted object projection requires its native stored-field conversion.", node);
         return fact.projection === "values" ? value : { kind: "tuple-literal", elements: [{ kind: "string-literal", value: field.sourceName }, value] };
       });
@@ -136,7 +137,8 @@ function planObjectShapeProjectionCall(node: Node,
         failRustPlannerInvariant("An admitted object assignment requires its exact native source and field correspondence.", node);
       const effects = fact.assignmentFields.map(field => {
         const read = readRustStoredObjectField(fact.storage, fact.assignmentSourceCarrier!, assignment!, field.sourceStorageIndex, field.sourceCarrier, context);
-        const value = read === undefined ? undefined : applyRustValueConversion(context, read, field.conversion, undefined);
+        const value = read === undefined ? undefined : applyRustValueConversion(context,
+          { stage: "finalized", expression: read }, field.conversion, undefined);
         const write = value === undefined ? undefined : writeRustStoredObjectField(fact.storage, fact.sourceValueCarrier, receiver, field.targetStorageIndex, "=", value, context);
         return write ?? failRustPlannerInvariant("An admitted object assignment requires its native field write.", node);
       });

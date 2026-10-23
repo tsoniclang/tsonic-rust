@@ -21,7 +21,8 @@ export function planRustNativeInputInvocation(
 ): RustExpr | undefined {
   const selected = context.input.program.records.nativeInputInvocation.get(call.node)
     ?? failRustPlannerInvariant("An admitted native input call requires its exact receiver and error plan.", call.node);
-  const receiver = selected.reference ? callable : createRustSharedReferenceArgument(context, callable, selected.callee);
+  const receiver = selected.reference ? callable : createRustSharedReferenceArgument(context,
+    { stage: "source", expression: callable, node: selected.callee });
   const erased = args.map((value, index) => {
     const argument = context.input.program.records.erasedInputArgument.get(call.node, index);
     return argument === undefined ? value : planRustErasedInputArgument(argument, value, call.node, context);

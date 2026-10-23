@@ -60,19 +60,23 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   if (fact.kind === "logical-value") {
     if (fact.branch === "left") {
       const value = planExpression(leftNode, context);
-      return value === undefined ? undefined : applyFinalizedValueConversion(context, value, fact.leftConversion!, leftNode);
+      return value === undefined ? undefined : applyFinalizedValueConversion(context,
+        { stage: "source", expression: value, node: leftNode }, fact.leftConversion!, leftNode);
     }
     if (fact.branch === "right") {
       const preceding = planRustDiscardedValue(leftNode, context);
       const value = planExpression(rightNode, context);
-      const converted = value === undefined ? undefined : applyFinalizedValueConversion(context, value, fact.rightConversion!, rightNode);
+      const converted = value === undefined ? undefined : applyFinalizedValueConversion(context,
+        { stage: "source", expression: value, node: rightNode }, fact.rightConversion!, rightNode);
       return preceding === undefined || converted === undefined ? undefined
         : { kind: "evaluate-then", effect: preceding.expression, discard: preceding.discard, value: converted };
     }
     const condition = planExpression(leftNode, context);
     const value = planExpression(rightNode, context);
-    const constant = applyFinalizedValueConversion(context, { kind: "bool-literal", value: fact.operator === "or" }, fact.leftConversion!, leftNode);
-    const converted = value === undefined ? undefined : applyFinalizedValueConversion(context, value, fact.rightConversion!, rightNode);
+    const constant = applyFinalizedValueConversion(context,
+      { stage: "finalized", expression: { kind: "bool-literal", value: fact.operator === "or" } }, fact.leftConversion!, leftNode);
+    const converted = value === undefined ? undefined : applyFinalizedValueConversion(context,
+      { stage: "source", expression: value, node: rightNode }, fact.rightConversion!, rightNode);
     return condition === undefined || constant === undefined || converted === undefined ? undefined
       : { kind: "conditional", condition, whenTrue: fact.operator === "and" ? converted : constant, whenFalse: fact.operator === "and" ? constant : converted };
   }
@@ -157,8 +161,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     { expression: left, form: "value", node: leftNode }, { expression: right, form: "value", node: rightNode }, node, context);
   if (fact.kind !== "operator-token") failRustPlannerInvariant("An admitted binary form requires its selected native operator.", node);
   const operator = selected.operator ?? failRustPlannerInvariant("An admitted binary form requires its native binary token.", node);
-  const first = applyRustValueConversion(context, left, fact.leftConversion, leftNode);
-  const second = applyRustValueConversion(context, right, fact.rightConversion, rightNode);
+  const first = applyRustValueConversion(context, { stage: "source", expression: left, node: leftNode }, fact.leftConversion, leftNode);
+  const second = applyRustValueConversion(context, { stage: "source", expression: right, node: rightNode }, fact.rightConversion, rightNode);
   if (first === undefined || second === undefined) return undefined;
   if (selected.int32Remainder) return { kind: "numeric-cast", target: "f64", expression: { kind: "binary", operator: "%",
     left: { kind: "numeric-cast", target: "i32", expression: first }, right: { kind: "numeric-cast", target: "i32", expression: second } } };
@@ -184,8 +188,13 @@ export function planRustOperatorCallExpression(fact: Extract<RustTargetOperation
       if (form === "shared-reference" && mode === "mut-ref") failRustPlannerInvariant("An admitted operator cannot mutably consume a shared native operand.", operandNode ?? node);
       if (form === "shared-reference" && mode === "ref" && conversion === undefined) return expression;
       const value: RustExpr = form === "shared-reference" ? { kind: "dereference", pointer: expression } : expression;
-      const converted = applyRustValueConversion(context, value, conversion, operandNode);
-      return converted === undefined ? undefined : applyRustArgumentMode(context, converted, mode, operandNode);
+      const converted = applyRustValueConversion(context, operandNode !== undefined && form === "value"
+        ? { stage: "source", expression: value, node: operandNode }
+        : { stage: "finalized", expression: value }, conversion, operandNode);
+      return converted === undefined ? undefined : applyRustArgumentMode(context,
+        conversion === undefined && operandNode !== undefined && form === "value"
+          ? { stage: "source", expression: converted, node: operandNode }
+          : { stage: "finalized", expression: converted }, mode);
     });
   if (operands.some(operand => operand === undefined)) return undefined;
   const call: RustExpr = { kind: "call", path: fact.path, args: operands as readonly RustExpr[] };
