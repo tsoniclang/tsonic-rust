@@ -1,6 +1,7 @@
 import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustYieldFact, RustResourceManagementFact, RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { RustRuntimeCarrierSelection, RustConversionSelection } from "./selections.js";
 import type { RustNativeParticipation } from "./native-demand.js";
+import type { RustNativeTaskUse } from "./native-tasks.js";
 import type { RustGenericEmissionRecords } from "./generic-emission.js";
 import type { RustLexicalFunctionEmission } from "./lexical-functions.js";
 import type { RustCallableDeclarationEmission } from "./callable-emission.js";
@@ -64,6 +65,7 @@ export interface RustRecordFamily<T> {
 
 export interface RustProgramRecords extends RustStatementExitRecords, RustStatementCompletionRecords, RustResourceScopeRecords,
   RustBorrowedElementRecords, RustFieldWriteRecords, RustDeclarationEmissionRecords, RustGenericEmissionRecords, RustMethodEmissionRecords, RustFrameEmissionRecords {
+  readonly nativeTaskUse: RustRecordFamily<RustNativeTaskUse>;
   readonly bindingLiveness: import("./binding-liveness.js").RustBindingLivenessRecords["bindingLiveness"];
   readonly sourceName: import("./names.js").RustSourceNameRecords["sourceName"];
   readonly unobservedWrite: import("./binding-liveness.js").RustBindingLivenessRecords["unobservedWrite"];

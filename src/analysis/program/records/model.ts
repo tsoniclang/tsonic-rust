@@ -109,6 +109,7 @@ import type { RustStatementExitProducer } from "./statement-exits.js";
 import type { RustStatementCompletionProducer } from "./statement-completion.js";
 
 export type RustProgramRecordWriter = RustAnalysisRecords & {
+  readonly nativeTaskPlans: import("./native-tasks.js").RustNativeTaskProducer;
   readonly bindingLivenessPlans: import("./binding-liveness.js").RustBindingLivenessProducer;
   readonly sourceNamePlans: import("./names.js").RustSourceNameProducer;
   readonly lambdaEmissionPlans: import("./lambda-emission.js").RustLambdaEmissionProducer;

@@ -1,4 +1,5 @@
 import { createRustBindingLivenessProducer } from "./binding-liveness.js";
+import { createRustNativeTaskProducer } from "./native-tasks.js";
 import { createRustSourceNameProducer } from "./names.js";
 import { createRustSourcePackageEmissionProducer } from "./source-packages.js";
 import { createRustSourceArtifactProducer } from "./artifacts.js";
@@ -189,9 +190,11 @@ export function createRustEmissionRecordProducers(assertOpen: () => void) {
   const nativeDeclarations = createRustNativeDeclarationProducer(assertOpen);
   const nativeLiveness = createRustNativeLivenessProducer(assertOpen);
   const nativeGenericPlans = createRustNativeGenericProducer(assertOpen);
+  const nativeTaskPlans = createRustNativeTaskProducer(assertOpen);
 
   return Object.freeze({
     readers: Object.freeze({
+    ...nativeTaskPlans.records,
 
     ...borrowedElements.records,
     ...fieldWrites.records,
@@ -400,6 +403,7 @@ export function createRustEmissionRecordProducers(assertOpen: () => void) {
     nativeDeclarations,
     nativeLiveness,
     nativeGenericPlans,
+    nativeTaskPlans,
     }),
   });
 }
