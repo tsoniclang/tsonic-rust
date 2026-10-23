@@ -8,7 +8,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 
-import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
+import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations, type RustGenericCallablePlan } from "./generic-values.js";
 import { createRustSuspendedCallablePlan } from "./suspended-values.js";
 import { type RustSuspendedCallablePlan } from "../../target-model/records/suspended-callables.js";
 
@@ -295,7 +295,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
   const genericRegistry = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation, input.isNativeNode,
-    flows, input.closedSourceFiles);
+    rustFixedStructuralMethodDeclarations(input.ast, input.structuralShapes), flows, input.closedSourceFiles);
   const generic = genericRegistry.plan;
   for (const definition of generic.definitions) {
     usedNames.add(definition.targetName);
@@ -334,6 +334,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let producerErrors: Pick<RustErrorRegionRecords, "producerError"> | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
+    capturesFor: declaration => captures.forDeclaration(declaration),
     carrierHost: input.carrierHost,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) => {
       if (physicalCarrierFor === undefined) failTargetAnalysisInvariant("tsonic-rust", "Generic callable physical storage requires its finalized declaration inputs.");
