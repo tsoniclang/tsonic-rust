@@ -1,7 +1,7 @@
 import { selectRustProjectSourceCallTarget } from "./source-call-targets.js";
 import { prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments } from "./source-call-arguments.js";
 import { rustTargetGenericTypeArguments, substituteRustTargetGenerics, isRustProgramErrorCarrier, rustJsArrayLikeElementTargetType } from "../../target-model/types/index.js";
-import { KindFunctionDeclaration, asSourceNode } from "@tsonic/target-api/source";
+import { KindFunctionDeclaration } from "@tsonic/target-api/source";
 
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -33,7 +33,6 @@ import { rustLifetimeKey, rustPlaceholderLifetime } from "../../target-model/lif
 
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
-import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js";
 
 export function applySelectedProjectSourceCall(
@@ -84,15 +83,7 @@ export function applySelectedProjectSourceCall(
     );
     return undefined;
   }
-  const declarationParameters = ast.is.IsClassDeclaration(selectedDeclaration) || ast.is.IsClassExpression(selectedDeclaration)
-    ? []
-    : sourceCallableValueParameters(ast, selectedDeclaration, walk.context.semanticsFor(selectedDeclaration));
-  if (declarationParameters === undefined) {
-    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_BINDINGS_MISSING",
-      "Selected project-source call has no exact checked value-parameter declarations.", expression,
-      ["target.capability=rust.source-call.argument-bindings"]);
-    return undefined;
-  }
+  const declarationParameters = selectedSignature.nativeParameterDeclarations;
   const storageContext = bindRustSelectedCallTypeArguments(
     selectedSignature.sourceSelectedMethodTypeArguments ?? [], targetGenericArguments,
     rustResolutionContext(walk, expression),
@@ -106,10 +97,7 @@ export function applySelectedProjectSourceCall(
   let parameters: import("../../target-model/operations/model.js").RustSourceCallParameterPlan[] = [];
   for (const [index, targetParameter] of selectedMember.parameters.entries()) {
     const selectedParameter = selectedParameters[index];
-    const parameterDeclaration = declarationParameters[index] ?? asSourceNode(
-      selectedParameter?.parameterDeclaration,
-      ast,
-    );
+    const parameterDeclaration = declarationParameters[index];
     let parameterAbi = parameterDeclaration === undefined
       ? undefined
       : resolveParameterAbi(walk, parameterDeclaration);

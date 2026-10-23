@@ -4,6 +4,7 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import { rustSelectedTargetSignatureEquals } from "../../../target-model/types/selected-call-equality.js";
 import type { RustTargetMember } from "../../../target-model/types/model.js";
 import type { RustSelectedTargetSignature } from "../../../target-model/records/member-selections.js";
+import type { Node } from "@tsonic/tsts";
 import { rustFoundationForSelectedCall } from "../../foundation/requirements.js";
 import { createRustRecordFamily } from "./family.js";
 
@@ -32,7 +33,9 @@ export function createRustSelectedCallProducer(
 
 type RustSelectedCallDetails = Omit<RustSelectedTargetSignature, "member" | "sourceSignature" |
   "sourceCalleeSymbol" | "sourceCalleeDeclaration" | "sourceReturnType" | "sourceArgumentBindings" |
-  "sourceSelectedSignatureParameters" | "sourceSelectedMethodTypeArguments">;
+  "sourceSelectedSignatureParameters" | "sourceSelectedMethodTypeArguments" | "nativeParameterDeclarations"> & {
+    readonly sourceImplementationParameters?: readonly Node[];
+  };
 
 export function selectedRustCallSignature(
   request: RustCheckedCallSelectionInput,
@@ -42,8 +45,18 @@ export function selectedRustCallSignature(
   const callee = request.source.sourceCallee;
   const symbol = callee.selectedSymbol ?? callee.symbol;
   const declaration = callee.selectedDeclaration ?? callee.declaration;
+  const { sourceImplementationParameters, ...selectionDetails } = details ?? {};
+  const nativeParameterDeclarations = Object.freeze(sourceImplementationParameters === undefined
+    ? member.parameters.map((_, index) => {
+        const sourceIndex = selectionDetails.sourceCallableParameterIndexes === undefined
+          ? index : selectionDetails.sourceCallableParameterIndexes[index];
+        return sourceIndex === undefined ? undefined
+          : request.source.sourceSelectedSignatureParameters[sourceIndex]?.parameterDeclaration;
+      })
+    : [...sourceImplementationParameters]);
   return {
     member,
+    nativeParameterDeclarations,
     ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
     ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
     ...(symbol === undefined ? {} : { sourceCalleeSymbol: symbol }),
@@ -54,6 +67,6 @@ export function selectedRustCallSignature(
     ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {}
       : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
     ...(member.providerDeclaration === undefined ? {} : { providerDeclaration: member.providerDeclaration }),
-    ...details,
+    ...selectionDetails,
   };
 }
