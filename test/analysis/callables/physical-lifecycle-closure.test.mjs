@@ -16,6 +16,16 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
+function methodInvocationError(program, field) {
+  if (field.methodPlan?.kind === "fixed") {
+    const reference = rustProducerErrorReference(program.callableValues.nativeProducers.errorFor(field.methodPlan.declaration, "invoke"));
+    assert.equal(reference !== undefined, true, "a fixed body keeps its actual native invocation error owner");
+    return program.errorRegions.producerError(reference);
+  }
+  return rustCallableProtocol(field.presence === "optional"
+    ? rustOptionElementCarrier(field.methodPlan?.carrier) : field.methodPlan?.carrier)?.error;
+}
+
 const joinedSource = `
 type Identity = <Value>(value: Value) => Value;
 function make(callback: () => number): Identity {
@@ -249,8 +259,21 @@ for (const [name, source] of Object.entries(mixedErrorSources)) {
     assert.equal(program.errorRegions.producerError(reference)?.id === "rust.core.Infallible", true, `${name}: intrinsic channel is not widened`);
     let fields = 0;
     for (const definition of program.structuralShapes.definitions) for (const field of definition.fields) {
-      if (field.method !== true || field.nativeMethod === true) continue;
-      const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier);
+      if (field.method !== true || field.methodPlan?.kind === "native-dispatch") continue;
+      if (field.methodPlan.kind === "fixed") {
+        const declaration = field.methodPlan.declaration;
+        const index = methods.indexOf(declaration);
+        const effects = program.records.errorEffects.get(declaration);
+        assert.equal(index >= 0 && effects !== undefined, true, `${name}: the native body has its original checked method and source effects`);
+        const intrinsic = methodInvocationError(program, field);
+        assert.equal(intrinsic !== undefined, true, `${name}: the published native invocation error is complete`);
+        assert.equal(intrinsic.id === "rust.core.Infallible", effects.localErrors === false,
+          `${name}: a direct fixed body retains its own intrinsic channel rather than the stored family's widened channel`);
+        if (effects.localErrors !== false) assert.equal(rustTargetTypeRefEquals(intrinsic, signatures[index].error), true,
+          `${name}: the actual throwing body agrees with its independent completed native signature`);
+        continue;
+      }
+      const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan.carrier) : field.methodPlan.carrier);
       assert.equal(rustTargetTypeRefEquals(protocol?.error, signatures[0].error), true, `${name}: canonical retained field agrees`);
       fields += 1;
     }
@@ -274,18 +297,16 @@ for (const [name, source] of Object.entries(structuralSources)) {
     for (const definition of program.structuralShapes.definitions) {
       if (!actualShapes.has(`${definition.componentId}\0${definition.targetName}`)) continue;
       for (const [index, field] of definition.fields.entries()) {
-        const storage = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
+        const storage = field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan?.carrier) : field.methodPlan?.carrier;
         const protocol = rustCallableProtocol(storage);
-        if (field.method !== true || field.nativeMethod === true || protocol === undefined) continue;
-        assert.equal(protocol.error?.id === "rust.core.Infallible", true, `${name}: exact native invocation error`);
+        if (field.method !== true || field.methodPlan?.kind === "native-dispatch" || protocol === undefined) continue;
+        assert.equal(methodInvocationError(program, field)?.id === "rust.core.Infallible", true, `${name}: exact native invocation error`);
         const logical = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.carrier) : field.carrier);
         assert.equal(logical.error?.id === "rust.program.TsonicError", true, `${name}: source call contract is not overwritten`);
         for (const carrier of definition.sourceCarriers) {
           const selected = program.structuralShapes.field(carrier, index);
           assert.equal(selected === program.structuralShapes.field(carrier, index), true, `${name}: indexed field identity`);
-          const physical = rustCallableProtocol(selected.presence === "optional"
-            ? rustOptionElementCarrier(selected.methodStorageCarrier) : selected.methodStorageCarrier);
-          assert.equal(physical.error?.id === "rust.core.Infallible", true, `${name}: every source instance is completed`);
+          assert.equal(methodInvocationError(program, selected)?.id === "rust.core.Infallible", true, `${name}: every source instance is completed`);
         }
         checked += 1;
       }
@@ -295,9 +316,13 @@ for (const [name, source] of Object.entries(structuralSources)) {
       const operation = program.records.targetOperation.get(node);
       if (operation?.kind !== "source-call" || operation.target.form !== "structural-method") continue;
       const selected = program.callableValues.nativeStorage.invocationCallableFor(node);
-      assert.equal(selected.kind !== "unresolved", true, `${name}: final invocation storage is materialized at readiness`);
       const field = program.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex);
-      const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier);
+      if (field.methodPlan.kind === "fixed") {
+        assert.equal(selected.kind, "unresolved", `${name}: no retained callable storage is fabricated for a native fixed body`);
+        assert.equal(field.methodPlan.payload !== undefined && program.records.sourceCall.get(node) !== undefined, true,
+          `${name}: the actual native body, physical captures and invocation are admitted before publication`);
+      } else assert.equal(selected.kind !== "unresolved", true, `${name}: final invocation storage is materialized at readiness`);
+      const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan.carrier) : field.methodPlan.carrier);
       assert.equal(rustTargetTypeRefEquals(protocol.result, operation.resultCarrier), true, `${name}: checked result correspondence`);
     }
   });
@@ -336,7 +361,7 @@ test("generic structural physical returns and concrete receiver values retain on
     assert.equal(receiver.targetName === shape.targetName && receiver.componentId === shape.componentId, true,
       "each actual invocation instantiates the selected template, not a historical contract-only shape");
     const field = program.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex);
-    assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(field.methodStorageCarrier)?.result, operation.resultCarrier), true,
+    assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(field.methodPlan.carrier)?.result, operation.resultCarrier), true,
       "each forward application preserves the complete concrete Promise output");
     results.push(operation.resultCarrier);
   }
@@ -378,7 +403,7 @@ export function make<Region extends Life>(value: Ref<int32, Region>): { label: s
   for (const definition of program.structuralShapes.definitions) {
     for (const field of definition.fields) {
       if (field.method !== true) continue;
-      const stored = rustCallableProtocol(field.methodStorageCarrier);
+      const stored = rustCallableProtocol(field.methodPlan.carrier);
       assert.equal(stored?.lifetime?.kind === "parameter", true, "borrowed method layout is lifetime-parametric, never static");
       assert.equal(stored?.error?.id === "rust.core.Infallible", true, "borrowed async invocation remains infallible");
     }
@@ -490,8 +515,8 @@ export function read(): number { return make().value(); }
   for (const definition of program.structuralShapes.definitions) {
     for (const field of definition.fields) {
       if (field.method !== true) continue;
-      assert.equal(field.nativeMethod === true, true, "native dispatch retains its own field ABI owner");
-      assert.equal(rustCallableProtocol(field.methodStorageCarrier)?.error?.id === "rust.program.TsonicError", true,
+      assert.equal(field.methodPlan.kind === "native-dispatch", true, "native dispatch retains its own field ABI owner");
+      assert.equal(rustCallableProtocol(field.methodPlan.carrier)?.error?.id === "rust.program.TsonicError", true,
         "the declared native dispatch error contract is unchanged");
       checked += 1;
     }

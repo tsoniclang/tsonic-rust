@@ -163,7 +163,7 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
       const receiver = source === undefined ? undefined : planExpression(source, context);
       const override = callee === undefined ? undefined : context.expressionOverrides?.get(callee);
       if (receiver !== undefined) planned = invokeRustStructuralObjectMethod(fact.target.receiverCarrier, receiver, fact.target.storageIndex, shaped,
-        fact.resultCarrier, context, override === undefined ? undefined : { expression: override.expression, carrier: override.carrier }, typeArguments, callGenerics);
+        fact.resultCarrier, context, bodyName, override === undefined ? undefined : { expression: override.expression, carrier: override.carrier }, typeArguments, callGenerics);
       break;
     }
   }

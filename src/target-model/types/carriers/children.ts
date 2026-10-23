@@ -10,7 +10,8 @@ import { rustNativeErrorJoinReference } from "../native-error-joins.js";
 export type RustTargetTypeChildRole =
   | { readonly kind: "component" }
   | { readonly kind: "structural-field"; readonly index: number; readonly structural: RustStructuralObjectCarrierValue }
-  | { readonly kind: "structural-construction"; readonly structural: RustStructuralObjectCarrierValue };
+  | { readonly kind: "structural-construction"; readonly structural: RustStructuralObjectCarrierValue }
+  | { readonly kind: "structural-implementation"; readonly structural: RustStructuralObjectCarrierValue };
 
 export type RustTargetTypeChildSelector = (parent: TargetTypeRef, child: TargetTypeRef, role: RustTargetTypeChildRole) => boolean;
 
@@ -24,7 +25,8 @@ export function rustTargetTypeChildren(type: TargetTypeRef, shouldVisitChild?: R
     const fieldIndex = structural === undefined ? -1 : index - structural.bases.length;
     const role: RustTargetTypeChildRole = structural === undefined || fieldIndex < 0 ? rustTargetTypeComponentRole
       : fieldIndex < structural.fields.length ? { kind: "structural-field", index: fieldIndex, structural }
-      : { kind: "structural-construction", structural };
+      : structural.construction !== undefined && fieldIndex === structural.fields.length
+        ? { kind: "structural-construction", structural } : { kind: "structural-implementation", structural };
     return shouldVisitChild(type, child, role);
   });
 }
@@ -66,7 +68,8 @@ function targetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
       if (source !== undefined) return arguments_(source.genericArguments);
       const shape = rustStructuralObjectCarrierValue(type);
       if (shape !== undefined) return [...shape.bases, ...shape.fields.map(field => field.type),
-        ...(shape.construction === undefined ? [] : [shape.construction])];
+        ...(shape.construction === undefined ? [] : [shape.construction]),
+        ...(shape.implementation?.methods ?? []).flatMap(method => arguments_(method.genericArguments))];
       const union = rustSourceUnionCarrierValue(type);
       if (union !== undefined) return [...arguments_(union.genericArguments),
         ...(union.payloads.kind === "physical" ? union.payloads.types : [])];

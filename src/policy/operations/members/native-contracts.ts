@@ -24,7 +24,8 @@ export function rustSourceCallCallableStorageCarrier(
   if (target.form === "constructor-value") return target.callableCarrier;
   if (target.form !== "structural-method") return undefined;
   const field = storage.field(target.receiverCarrier, target.storageIndex);
-  return field?.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field?.methodStorageCarrier;
+  if (field?.methodPlan?.kind === "fixed") return undefined;
+  return field?.presence === "optional" ? rustOptionElementCarrier(field.methodPlan?.carrier) : field?.methodPlan?.carrier;
 }
 
 export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFact | undefined): boolean {
@@ -145,6 +146,8 @@ export function rustTargetOperationIsFallible(
   }
   if (fact.kind === "source-call" &&
     (fact.target.form === "callable" || fact.target.form === "structural-method" || fact.target.form === "constructor-value")) {
+    if (fact.target.form === "structural-method" &&
+      structuralStorage.field(fact.target.receiverCarrier, fact.target.storageIndex)?.methodPlan?.kind === "fixed") return false;
     return rustGenericCallableValue(rustSourceCallCallableStorageCarrier(fact, structuralStorage)) === undefined && (fact.target.form !== "callable" ||
       (fact.target.carrier.kind === "closure"
         ? fact.target.carrier.fallible === true

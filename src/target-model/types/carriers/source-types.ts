@@ -107,6 +107,14 @@ export interface RustStructuralObjectCarrierValue {
   readonly fields: readonly RustStructuralObjectFieldCarrierValue[];
   readonly bases: readonly TargetTypeRef[];
   readonly construction?: TargetTypeRef;
+  readonly implementation?: {
+    readonly kind: "source" | "physical";
+    readonly methods: readonly {
+      readonly sourceName: string;
+      readonly identity: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+    }[];
+  };
 }
 
 export interface RustSourceUnionVariantCarrierValue {
@@ -225,6 +233,7 @@ export function rustStructuralObjectTargetType(
   representation: "reference" | "value" = "reference",
   construction?: TargetTypeRef,
   bases: readonly TargetTypeRef[] = [],
+  implementation?: RustStructuralObjectCarrierValue["implementation"],
 ): TargetTypeRef {
   const canonicalFields = Object.freeze(
     [...fields].sort((left, right) => left.sourceName.localeCompare(right.sourceName)),
@@ -234,7 +243,9 @@ export function rustStructuralObjectTargetType(
     target: "rust",
     name: rustStructuralObjectCarrierName,
     value: { ownerFileName, representation, fields: canonicalFields, bases: Object.freeze([...bases]),
-      ...(construction === undefined ? {} : { construction }) },
+      ...(construction === undefined ? {} : { construction }),
+      ...(implementation === undefined ? {} : { implementation: Object.freeze({ kind: implementation.kind, methods: Object.freeze(implementation.methods
+        .map(method => Object.freeze({ ...method, genericArguments: Object.freeze([...method.genericArguments]) }))) }) }) },
   };
 }
 
@@ -248,7 +259,7 @@ export function rustStructuralObjectCarrierValue(
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
     !hasExactObjectKeys(value, ["fields", "bases", "ownerFileName", "representation",
-      ...("construction" in value ? ["construction"] : [])])) {
+      ...("construction" in value ? ["construction"] : []), ...("implementation" in value ? ["implementation"] : [])])) {
     return undefined;
   }
   const candidateValue = value as {
@@ -257,12 +268,29 @@ export function rustStructuralObjectCarrierValue(
     readonly ownerFileName?: unknown;
     readonly representation?: unknown;
     readonly construction?: unknown;
+    readonly implementation?: unknown;
   };
   const fields = candidateValue.fields;
   const bases = candidateValue.bases;
   if (!isDenseDataArray(bases) || bases.some(base => !isRustTargetTypeRef(base) || rustSourceTypeCarrierValue(base)?.shape !== "object") ||
     bases.length !== 0 && candidateValue.representation !== "reference") return undefined;
   const construction = candidateValue.construction;
+  const implementation = candidateValue.implementation;
+  if ("implementation" in value) {
+    if (typeof implementation !== "object" || implementation === null || !hasExactObjectKeys(implementation, ["kind", "methods"]) ||
+      !("kind" in implementation) || implementation.kind !== "source" && implementation.kind !== "physical" ||
+      !("methods" in implementation) || !isDenseDataArray(implementation.methods) || implementation.methods.length === 0) return undefined;
+    const members = new Set<string>();
+    for (const method of implementation.methods) {
+      if (typeof method !== "object" || method === null || !hasExactObjectKeys(method, ["sourceName", "identity", "genericArguments"]) ||
+        !("sourceName" in method) || typeof method.sourceName !== "string" || members.has(method.sourceName) ||
+        !("identity" in method) || typeof method.identity !== "string" || method.identity.length === 0 ||
+        !("genericArguments" in method) || !isDenseDataArray(method.genericArguments) ||
+        !method.genericArguments.every(isRustSourceTypeGenericArgument) ||
+        implementation.kind === "source" && method.genericArguments.length !== 0) return undefined;
+      members.add(method.sourceName);
+    }
+  }
   if ("construction" in value && (construction === undefined || !isRustTargetTypeRef(construction) ||
     construction.kind !== "target-named" || construction.id !== rustCallableTargetId ||
     construction.genericArguments?.length !== 4 || construction.genericArguments[0]?.kind !== "lifetime" ||
@@ -312,12 +340,15 @@ export function rustStructuralObjectCarrierValue(
     seenNames.add(candidate.sourceName);
     normalized.push(candidate as RustStructuralObjectFieldCarrierValue);
   }
+  if (implementation !== undefined && (implementation as NonNullable<RustStructuralObjectCarrierValue["implementation"]>).methods.some(method =>
+    !normalized.some(field => field.sourceName === method.sourceName && field.method === true))) return undefined;
   return {
     ownerFileName: candidateValue.ownerFileName,
     representation: candidateValue.representation,
     fields: Object.freeze(normalized),
     bases: Object.freeze(bases as TargetTypeRef[]),
     ...(candidateValue.construction === undefined ? {} : { construction: candidateValue.construction as TargetTypeRef }),
+    ...(implementation === undefined ? {} : { implementation: implementation as NonNullable<RustStructuralObjectCarrierValue["implementation"]> }),
   };
 }
 

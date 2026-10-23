@@ -23,7 +23,7 @@ test("generated storage liveness shares only the exact emitted declaration and f
   const external = shape(parameter("First"), "/external.ts");
   const readOnly = shape(parameter("First"), "/source.ts", true);
   const plan = createRustStructuralShapePlan([first, second, external, readOnly].map(carrier => ({ carrier })),
-    [], file => file === "/external.ts" ? "dependency" : "app", []);
+    [], file => file === "/external.ts" ? "dependency" : "app", [], new Map());
   const owner = rustStructuralUsageKey(first, plan);
   assert.equal(owner, rustStructuralUsageKey(second, plan));
   for (const carrier of [external, readOnly, { kind: "source-primitive", name: "int32" }]) {
@@ -90,7 +90,7 @@ test("sealed structural reads share only selected physical storage and never que
   const foreign = shape("First", "/foreign.ts");
   const readonly = shape("First", "/source.ts", true);
   const shapes = createRustStructuralShapePlan([first, second, foreign, readonly].map(carrier => ({ carrier })),
-    [], file => file === "/foreign.ts" ? "dependency" : "app", []);
+    [], file => file === "/foreign.ts" ? "dependency" : "app", [], new Map());
   let sealed = false;
   let calls = 0;
   const observedShapes = { ...shapes,

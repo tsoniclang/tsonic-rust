@@ -16,6 +16,7 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
   readonly location: RustTypedLocationPlan | undefined;
   readonly guard: Node | undefined;
   readonly callableMode: RustReadUse["mode"] | undefined;
+  readonly structuralReceiverMode: "value" | "shared";
 }): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
   const select = (subject: Node | undefined, mode: RustReadUse["mode"], later: readonly Node[] = [],
@@ -61,7 +62,8 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     else if (operation.target.form === "union-method") {
       const mutable = operation.target.variants.some(variant => variant.mutatesSelf);
       select(receiver, mutable ? "mutable" : "shared", argumentsList, 0, !mutable);
-    } else if (operation.target.form === "structural-method") select(receiver, "shared", argumentsList, 0, true);
+    } else if (operation.target.form === "structural-method")
+      select(receiver, input.structuralReceiverMode, argumentsList, 0, input.structuralReceiverMode === "shared");
     else if (operation.target.form === "callable" && input.callableMode !== undefined) {
       select(callee, input.callableMode, argumentsList, 0, input.callableMode === "shared");
     }

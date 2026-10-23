@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
+import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 
 
@@ -167,7 +167,7 @@ closureCapture: { get: (node) => {
       valueWrites: new Set(), hasPromotedStorage: () => false, hasMutableStorageUse: () => false });
     const structuralShapes = createRustStructuralShapePlanRegistry();
     structuralShapes.initialize(sourceTypes.structuralObjects(), sourceTypes.structuralFieldImplementations(),
-      () => "logical-callable-fixture", [], sourceTypes.structuralInstantiations());
+      () => "logical-callable-fixture", [], sourceTypes.structuralInstantiations(), new Map());
     const carrierHost = { sourceStorage, sourceTypes,
       projectFieldProjection() { assert.fail("logical carrier fixtures have no checked project-field projections"); },
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
@@ -177,13 +177,15 @@ closureCapture: { get: (node) => {
       sourceLifetimes: emptyRustLifetimeIndex, nativeTasks });
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
       isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
-      structuralShapes, carrierHost, retainedEnvironments, nativeTasks };
+      structuralShapes, carrierHost, retainedEnvironments, nativeTasks,
+      frozenDataWrites: { capturesFieldIdentity() { assert.fail("logical callable fixtures have no captured native class-field identities"); } } };
   };
   return { closures, planInput, materialize,
     create: (closed = new Set()) => {
       const current = materialize();
       return createRustGenericCallablePlan(ast, files, records, names,
-        currentSource.navigation, current.isNativeNode, [], closed).plan;
+        currentSource.navigation, current.isNativeNode,
+        rustFixedStructuralMethodDeclarations(ast, current.structuralShapes), [], closed).plan;
     } };
 }
 

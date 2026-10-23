@@ -191,13 +191,23 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
       return lowering.kind === "factory" ? { kind: "rejected", promiseStorage: true, reason: error } : { kind: "rejected", reason: error };
     }
     if (lowering.kind === "factory") {
-      if (lowering.storage.kind === "receiver") return { kind: "rejected", promiseStorage: true,
+      const fixed = input.structuralShapes.definitions.flatMap(definition => definition.fields.flatMap(field =>
+        field.methodPlan?.kind === "fixed" && field.methodPlan.declaration === declaration
+          ? [{ carrier: definition.carrier, method: field.methodPlan }] : []));
+      if (lowering.storage.kind === "receiver" && fixed.length !== 0 && fixed.some(selected => selected.method.factoryReceiver !== "value"))
+        return { kind: "rejected", promiseStorage: true,
         reason: "An owned Promise cannot retain an unowned method receiver." };
-      if (lowering.ownedReceiver !== undefined) {
+      for (const selected of fixed) if (selected.method.factoryReceiver === "value") {
+        const receiverError = addUse(declaration, selected.carrier, ["static"]);
+        if (receiverError !== undefined) return { kind: "rejected", promiseStorage: true, reason: receiverError };
+      }
+      if (fixed.length === 0 && lowering.ownedReceiver !== undefined) {
         const receiverError = addUse(declaration, lowering.ownedReceiver.carrier, ["static"]);
         if (receiverError !== undefined) return { kind: "rejected", promiseStorage: true, reason: receiverError };
       }
-      for (const carrier of lowering.capturedCarriers) {
+      if (fixed.length === 0 && lowering.storage.kind === "receiver" && lowering.ownedReceiver === undefined)
+        return { kind: "rejected", promiseStorage: true, reason: "An owned Promise cannot retain an unowned method receiver." };
+      for (const carrier of fixed.length === 0 ? lowering.capturedCarriers : []) {
         const captureError = addUse(declaration, carrier, ["static"]);
         if (captureError !== undefined) return { kind: "rejected", promiseStorage: true, reason: captureError };
       }

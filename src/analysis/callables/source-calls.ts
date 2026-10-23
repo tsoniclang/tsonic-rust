@@ -22,9 +22,11 @@ import { rustNativeCallableOperand } from "./native-conversions.js";
 import { rustNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { RustProjectMethodDispatchVariant } from "../../target-model/records/method-dispatch.js";
+import type { RustStructuralMethodPlan } from "../../target-model/records/structural-shapes.js";
 
 export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
-  effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall): boolean {
+  effects: RustSourceCallEffectsFact | undefined, definitions: RustTypeDefinitions, native?: RustNativeCallableCall,
+  method?: RustStructuralMethodPlan): boolean {
   if (effects === undefined || effects.invocation !== "infallible" && effects.invocation !== "fallible" ||
     effects.awaiting !== "not-applicable" && effects.awaiting !== "infallible" && effects.awaiting !== "fallible") return false;
   if (native !== undefined || effects.nativeInput !== undefined)
@@ -37,7 +39,7 @@ export function sourceCallEffectsMatch(fact: Extract<RustTargetOperationFact, { 
     return effects.invocation === (effects.unionBranches.some(branch => branch.invocation === "fallible") ? "fallible" : "infallible") &&
       effects.awaiting === (!async ? "not-applicable" : effects.unionBranches.some(branch => branch.awaiting === "fallible") ? "fallible" : "infallible");
   }
-  const callable = fact.target.form === "callable" ? fact.target.carrier
+  const callable = method?.kind === "fixed" ? undefined : fact.target.form === "callable" ? fact.target.carrier
     : fact.target.form === "structural-method" || fact.target.form === "constructor-value" ? fact.target.callableCarrier : undefined;
   return async ? effects.awaiting !== "not-applicable" && (callable === undefined || callable.kind === "function-pointer" ||
     rustGenericCallableValue(callable) !== undefined || effects.invocation === "fallible") : effects.awaiting === "not-applicable";
@@ -57,10 +59,12 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     if (rustNodeIsOutsideNativeCode(program.source.ast, program.records,
       expression => program.safetyApplications.operationForExpression(expression), node)) continue;
     const selected = program.records.selectedCall.get(node);
-    const declaration = selected?.sourceDeclaration;
+    const method = fact.target.form !== "structural-method" ? undefined
+      : program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex)?.methodPlan;
+    const declaration = method?.kind === "fixed" ? method.declaration : selected?.sourceDeclaration;
     const native = program.callableValues.native.callFor(node);
     const effects = program.records.sourceCallEffects.get(node);
-    if (!sourceCallEffectsMatch(fact, effects, program.typeDefinitions, native)) {
+    if (!sourceCallEffectsMatch(fact, effects, program.typeDefinitions, native, method)) {
       refuse(node, "rust.backend.source-call-effects", "Project-source call requires one structurally consistent finalized invocation/await effect fact."); continue;
     }
     if (selected === undefined || (selected.sourceSelectedMethodTypeArguments?.length ?? 0) !== (fact.targetGenericArguments?.length ?? 0)) {
@@ -131,14 +135,14 @@ export function analyzeRustSourceCalls(program: Omit<RustAnalysisProgram, "reach
     // producers selected (an infallible method stores Infallible), not the method's declared logical error.
     const slot = fact.target.form === "structural-method"
       ? program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex) : undefined;
-    const slotStorage = slot === undefined || slot.nativeMethod === true ? undefined
-      : slot.presence === "optional" ? rustOptionElementCarrier(slot.methodStorageCarrier) : slot.methodStorageCarrier;
+    const slotStorage = slot === undefined || slot.methodPlan?.kind === "native-dispatch" ? undefined
+      : slot.presence === "optional" ? rustOptionElementCarrier(slot.methodPlan?.carrier) : slot.methodPlan?.carrier;
     const slotError = slotStorage === undefined ? undefined : rustCallableProtocol(slotStorage)?.error;
     const error = slotError ?? (producerError === undefined ? declaredError : program.errorRegions.producerError(producerError));
-    const eliminateInfallible = error?.kind === "target-named" && error.id === rustInfallibleTargetId;
+    const eliminateInfallible = method?.kind !== "fixed" && error?.kind === "target-named" && error.id === rustInfallibleTargetId;
     const edges = program.records.sourceErrorEffects.get(node)?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === declaration);
     const directError = effects!.invocation === "fallible" && native === undefined && generic === undefined && declaration !== undefined &&
-      fact.target.form !== "callable" && fact.target.form !== "structural-method" && fact.target.form !== "constructor-value";
+      fact.target.form !== "callable" && (fact.target.form !== "structural-method" || method?.kind === "fixed") && fact.target.form !== "constructor-value";
     if (directError && edges?.length !== 1) {
       refuse(node, "rust.backend.source-call-error-correspondence", "The selected source call has no unique exact invocation error edge."); continue;
     }

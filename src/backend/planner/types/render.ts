@@ -89,7 +89,11 @@ export function rustTypeFromCarrierInContext(
     const path = rustStructuralTypePathInContext(shapeCarrier, context);
     if (arguments_ === undefined || path === undefined) failRustPlannerInvariant("An admitted structural native type requires its exact emitted path and arguments.");
     const state: RustType = { kind: "named", path, ...(arguments_.length === 0 ? {} : { genericArguments: arguments_ }) };
-    return shape.handle ? { kind: "named", path: "rt::ObjectHandle", genericArguments: typeGenericArguments([state]) } : state;
+    if (!shape.handle) return state;
+    if (shape.context === undefined) failRustPlannerInvariant("An admitted structural handle requires its completed native context type.");
+    const nativeContext = rustTypeFromCarrier(shape.context, sourceRendering, resolveStructuralShape);
+    if (nativeContext === undefined) failRustPlannerInvariant("An admitted structural handle requires its renderable completed native context.");
+    return { kind: "named", path: "rt::ObjectHandle", genericArguments: typeGenericArguments([state, nativeContext]) };
   };
   const sourceRendering: RustSourceTypeRendering = {
     typeParameterNames: context.typeParameterNames,

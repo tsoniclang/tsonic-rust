@@ -76,10 +76,10 @@ function planImplementation(
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
   const suspended = emission.suspended;
-  const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);
+  const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext, "named");
   const planned = implementation.creation === "declaration" ? undefined
     : planNativeModuleFunction(implementation.declaration, implementation.declaration,
-        implementation.functionName, true, bodyContext);
+        implementation.functionName, true, bodyContext, undefined);
   const helpers = planned === undefined ? [] : planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];
   const contract = emission.requirements;
   const generics = rustGenericCallableEnvironmentGenerics(arguments_, helperContext);

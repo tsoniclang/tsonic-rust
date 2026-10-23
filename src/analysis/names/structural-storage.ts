@@ -2,7 +2,7 @@ import type { RustStructuralShapeField } from "../../target-model/records/struct
 
 import { rustPascalCaseIdentifier } from "../../target-model/names/identifiers.js";
 
-export function preferredShapeName(fields: readonly RustStructuralShapeField[]): string {
+export function preferredShapeName(fields: readonly Pick<RustStructuralShapeField, "sourceName">[]): string {
   if (fields.length === 0) {
     return "EmptyObjectShape";
   }

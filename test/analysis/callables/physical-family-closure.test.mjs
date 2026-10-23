@@ -7,7 +7,7 @@ import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-c
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analysis/callables/generic-dispatch.js";
-import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
+import { createRustGenericCallablePlan, rustFixedStructuralMethodDeclarations } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
@@ -88,7 +88,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   const nativeNodes = participation.nodes;
   const nativeNodeSet = new Set(nativeNodes);
   const registry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records, program.names, source.navigation,
-    node => nativeNodeSet.has(node));
+    node => nativeNodeSet.has(node), rustFixedStructuralMethodDeclarations(source.ast, program.structuralShapes));
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
@@ -108,7 +108,8 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   producers.selectConstructionErrors(new Map());
-  const queries = createRustNativeStorageQueries({ ...input, native, producers });
+  const queries = createRustNativeStorageQueries({ ...input, native, producers,
+    capturesFor: declaration => captures.forDeclaration(declaration) });
   const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });

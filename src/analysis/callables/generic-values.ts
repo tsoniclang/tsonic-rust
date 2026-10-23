@@ -12,7 +12,7 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import type { RustNamePlan } from "../../target-model/names/model.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
-import { sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceDeclarationIsModuleScoped, sourceNodeIdentity, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
@@ -24,6 +24,36 @@ import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysical
 import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 
 import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
+import type { RustStructuralShapeLayoutPlan } from "../objects/shapes/structural-shape-plan.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+
+export function rustFixedStructuralMethodDeclarations(
+  ast: AstReader,
+  shapes: Pick<RustStructuralShapeLayoutPlan, "definitions">,
+): ReadonlySet<Node> {
+  const fixed = new Map<string, Node>();
+  const retained = new Set<string>();
+  for (const definition of shapes.definitions) for (const field of definition.fields) {
+    const selected = field.methodPlan;
+    if (selected === undefined) continue;
+    if (selected.kind === "fixed") {
+      const identity = sourceNodeIdentity(ast, selected.declaration);
+      if (identity === undefined) failTargetAnalysisInvariant("tsonic-rust", "A fixed method requires its original checked source identity.", selected.declaration);
+      fixed.set(identity, selected.declaration);
+      continue;
+    }
+    if (selected.kind === "native-dispatch" && selected.implementation === "fixed") {
+      const identity = sourceNodeIdentity(ast, selected.declaration);
+      if (identity === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native dispatch method requires its original checked source identity.", selected.declaration);
+      retained.add(identity);
+    }
+    for (const carrier of [definition.carrier, ...definition.sourceCarriers]) {
+      for (const method of rustStructuralObjectCarrierValue(carrier)?.implementation?.methods ?? [])
+        if (method.sourceName === field.sourceName) retained.add(method.identity);
+    }
+  }
+  return new Set([...fixed].filter(([identity]) => !retained.has(identity)).map(([, declaration]) => declaration));
+}
 
 export interface RustGenericCallablePlan {
   readonly definitions: readonly RustGenericCallableDefinition[];
@@ -43,6 +73,7 @@ export function createRustGenericCallablePlan(
   ast: AstReader, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
   navigation: SourceProgramNavigation,
   isNativeNode: (node: Node) => boolean,
+  fixedMethods: ReadonlySet<Node>,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
   closedSourceFiles: ReadonlySet<SourceFile> = new Set(),
 ): RustGenericCallableRegistry {
@@ -94,6 +125,8 @@ export function createRustGenericCallablePlan(
   };
   for (const sourceFile of sourceFiles) visit(sourceFile);
   const flow = createRustGenericCallableFlowIndex(flows);
+  const retainedFamilies = new Set(flows.flatMap(({ conversion }) =>
+    [flow.familyFor(conversion.source), flow.familyFor(conversion.target)].filter((identity): identity is string => identity !== undefined)));
   const identityFamilies = new Set<string>();
   const visitedCarriers = new Set<TargetTypeRef>();
   const retainIdentity = (carrier: TargetTypeRef): void => {
@@ -116,6 +149,7 @@ export function createRustGenericCallablePlan(
   for (const node of closures) {
     const carrier = closureCarrier(node);
     const value = rustGenericCallableValue(carrier);
+    if (fixedMethods.has(node) && (carrier === undefined || !retainedFamilies.has(flow.familyFor(carrier)!))) continue;
     if (carrier !== undefined && value !== undefined) {
       const capture = records.closureCapture.get(node);
       const signatureKey = rustGenericFamilySignatureKey(value.signature);

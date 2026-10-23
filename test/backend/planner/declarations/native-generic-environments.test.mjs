@@ -142,7 +142,7 @@ test("callable payload bindings retain exact selected physical carriers without 
   const physical = sealed.selected.inputs[0].implementation;
   const capture = { declaration: {}, reference: {}, carrier: logical, storageCarrier: physical, storage: "value" };
   const selected = rustCallablePayloadContext({ captures: [capture], receiverFields: [], receivers: [] },
-    { kind: "path", path: "environment" }, rustSourceFilePlanContext(sealed.program, current.declaration));
+    { kind: "path", path: "environment" }, rustSourceFilePlanContext(sealed.program, current.declaration), "named");
   assert.equal(selected.capturedBindings[0].valueCarrier === physical, true);
   assert.equal(selected.capturedBindings[0].storage, capture.storage);
   assert.equal(selected.capturedBindings[0].declaration === capture.declaration, true);

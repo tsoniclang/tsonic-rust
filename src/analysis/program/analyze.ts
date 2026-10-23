@@ -6,6 +6,7 @@ import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } fro
 import { resolveRustProjectField } from "../operations/members/project-fields.js";
 import { createRustModuleBindingAnalysis } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
+import { analyzeRustStructuralMethodExposures } from "../callables/structural-method-storage.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 
@@ -538,12 +539,16 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       return;
     }
   }
+  const structuralMethodExposures = analyzeRustStructuralMethodExposures({ source: context.source,
+    sourceStorage: context.sourceStorage, records: context.records, nativeNodes: context.nativeNodes,
+    shapes: structuralObjects, componentForFile: fileName => sourcePackageIdentities.componentIdForFile(fileName)! });
   context.structuralShapes.initialize(
     structuralObjects,
     sourceTypes.structuralFieldImplementations(),
     (fileName) => sourcePackageIdentities.componentIdForFile(fileName)!,
     nativeFields,
     sourceTypes.structuralInstantiations(),
+    structuralMethodExposures,
     walk.context.records.receiverIndependentMethods.finalize(walk, projectSourceFiles,
       fileName => sourcePackageIdentities.componentIdForFile(fileName)!),
   );
@@ -577,6 +582,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
+    frozenDataWrites: context.frozenDataWrites,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
     retainedEnvironments: context.retainedEnvironments, nativeTasks: context.nativeTaskGraph,
     normalizeTypeFamily: rustTypeFamilyNormalizer(context.typeFamilies),

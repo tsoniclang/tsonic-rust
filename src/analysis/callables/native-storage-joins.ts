@@ -104,11 +104,11 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
           return undefined;
         }
         if (sourceField.method === true) {
-          if (field.method !== true || field.methodStorageCarrier === undefined) {
+          if (field.method !== true || field.methodPlan?.carrier === undefined) {
             fail("Native aggregate method storage requires its canonical callable field layout owner.");
             return undefined;
           }
-        } else if (field.storage === "stored" && field.nativeMethod !== true) children.push(sourceField.type);
+        } else if (field.storage === "stored" && field.methodPlan?.kind !== "native-dispatch") children.push(sourceField.type);
       }
     } else children.push(...rustTargetTypeChildren(type));
     for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
