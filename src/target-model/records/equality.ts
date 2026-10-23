@@ -47,7 +47,7 @@ function rustJsPromiseLoweringEquals(left: RustJsPromiseLowering, right: RustJsP
 }
 
 export function rustGeneratorFactEquals(left: RustGeneratorFact, right: RustGeneratorFact): boolean {
-  return left.kind === right.kind && rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
+  return left.kind === right.kind && left.reentry === right.reentry && rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
     rustTargetTypeRefEquals(left.yieldType, right.yieldType) && rustTargetTypeRefEquals(left.returnType, right.returnType) &&
     rustTargetTypeRefEquals(left.nextType, right.nextType) &&
     left.capturedParameters.length === right.capturedParameters.length &&

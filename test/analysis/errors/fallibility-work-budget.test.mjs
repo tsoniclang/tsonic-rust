@@ -46,7 +46,7 @@ function fixture(text) {
     const context = { ...program, source, ast, records, diagnostics, requiredRecords: [] };
     const fallibility = recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),
       preparedCallbackCalls: new Map(), objectLiteralMethodExpressions: new Set(), objectLiteralMethodSpreadExpressions: new Set() },
-    program.sourceFiles, maximumWork);
+    program.sourceFiles, { spawns: [], owners: [], calls: [], entries: [] }, maximumWork);
     fallibility?.complete();
     return { records, diagnostics };
   };

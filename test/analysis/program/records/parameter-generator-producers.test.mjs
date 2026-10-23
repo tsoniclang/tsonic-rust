@@ -3,8 +3,7 @@ import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorresponde
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/program/records/source-parameter-abi.js";
-import { getRustGeneratorProtocol, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustGeneratorStorageTargetType } from "../../../../dist/policy/types/callables/generators.js";
+import { getRustGeneratorProtocol, rustGeneratorTargetType, rustAsyncGeneratorTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
@@ -20,7 +19,7 @@ const lifetime = { kind: "parameter", identity: "source::input", name: "input" }
 const parameter = {};
 const reference = {};
 const protocol = { kind: "sync", yieldType: integer, returnType: wide, nextType: integer };
-const retention = { capturedParameters: [parameter], storage: { kind: "static" } };
+const retention = { capturedParameters: [parameter], storage: { kind: "static" }, reentry: "excluded" };
 const abi = { form: "required", valueCarrier: integer, parameterCarrier: integer, mode: "value" };
 const construct = {
   generator: (builder, subject) => builder.generators.suspend(subject, protocol, retention),
@@ -95,8 +94,10 @@ for (const kind of ["sync", "async"]) for (const storage of [
     assert.equal(fact.kind, kind);
     assert.equal(fact.capturedParameters === selectedRetention.capturedParameters, true);
     assert.equal(fact.storage === storage && fact.ownedReceiver === ownedReceiver, true);
-    const selectedLifetime = storage.kind === "static" ? undefined : storage.kind === "receiver" ? { kind: "placeholder" } : lifetime;
-    assert.equal(rustTargetTypeRefEquals(fact.resultCarrier, rustGeneratorStorageTargetType(selected, selectedLifetime)), true);
+    const logical = kind === "sync" ? rustGeneratorTargetType(selected) : rustAsyncGeneratorTargetType(selected);
+    assert.equal(rustTargetTypeRefEquals(fact.resultCarrier, logical), true,
+      "the source signature retains only Y/R/N while the exact retention lifetime remains in its required storage fact");
+    assert.equal(fact.reentry, "excluded", "the source storage proof is published once, separately from physical E");
     const result = getRustGeneratorProtocol(fact.resultCarrier);
     assert.equal(result?.kind, kind);
     assert.equal(rustTargetTypeRefEquals(result?.nextType, integer), true);
@@ -120,6 +121,7 @@ test("generator equality rejects every changed protocol, captured identity, life
     [protocol, { ...originalRetention, ownedReceiver: { ...ownedReceiver, carrier: wide } }],
     [protocol, { ...originalRetention, ownedReceiver: { ...ownedReceiver, occurrences: [parameter, reference] } }],
     [protocol, { ...originalRetention, ownedReceiver: { ...ownedReceiver, occurrences: [{}] } }],
+    [protocol, { ...originalRetention, reentry: "possible" }],
   ];
   for (const [index, [selectedProtocol, selectedRetention]] of cases.entries()) {
     const parent = createRustProgramRecordBuilder();
@@ -132,6 +134,16 @@ test("generator equality rejects every changed protocol, captured identity, life
     const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     assert.throws(() => child.generators.suspend(subject, selectedProtocol, selectedRetention), /Conflicting Rust semantic plan 'tsonic\.rust\.generator'/u, String(index));
     assert.equal(child.generator.get(subject) === fact, true, String(index));
+  }
+});
+
+test("a generator cannot publish a missing or fabricated reentry proof", () => {
+  for (const reentry of [undefined, "never", true]) {
+    const builder = createRustProgramRecordBuilder();
+    const subject = {};
+    assert.throws(() => builder.generators.suspend(subject, protocol, { ...retention, reentry }),
+      /pre-seal source-storage reentry selection/u, "a required source fact is never defaulted to an infallible policy");
+    assert.equal(builder.generator.get(subject) === undefined, true, "invalid evidence publishes nothing");
   }
 });
 

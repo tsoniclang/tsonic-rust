@@ -82,6 +82,7 @@ export type RustJsPromiseLowering =
 
 export interface RustGeneratorFact {
   readonly kind: "sync" | "async";
+  readonly reentry: "excluded" | "possible";
   readonly resultCarrier: TargetTypeRef;
   readonly yieldType: TargetTypeRef;
   readonly returnType: TargetTypeRef;
