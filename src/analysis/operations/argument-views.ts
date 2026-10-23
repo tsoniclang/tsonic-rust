@@ -11,7 +11,8 @@ export function analyzeRustArgumentViews(program: Omit<RustAnalysisProgram, "rea
     const operation = program.records.targetOperation.get(node);
     const read = program.records.readOwnership.get(node);
     producer.publish(node, { slice: operation?.kind === "array-literal" && operation.lane === "native" &&
-      operation.contributions.every(contribution => contribution.kind === "value") && program.records.nativeArrayStorage.get(node) === undefined,
+      operation.contributions.every(contribution => contribution.kind === "value") && program.records.nativeArrayStorage.get(node) === undefined &&
+      rustBorrowValueIsUnprojected(node, program.records),
       borrowedStorage: read?.readsStorage === true && (read.source.kind === "clone" || read.source.kind === "borrow") &&
         rustBorrowValueIsUnprojected(node, program.records) });
   }

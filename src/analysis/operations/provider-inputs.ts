@@ -26,9 +26,16 @@ export function analyzeRustProviderInputs(program: Omit<RustAnalysisProgram, "re
       if (producer.records.providerReference.get(slot.node, input) === undefined) {
         const parameter = program.records.sourceParameterAbi.get(slot.node);
         const reborrow = program.records.valueRead.get(slot.node)?.referenceReborrow;
-        producer.reference(slot.node, input, parameter?.mode === input.mode && rustTargetTypeRefEquals(parameter.parameterCarrier, input.parameterCarrier) ||
+        const projection = program.records.valueProjection.get(slot.node);
+        const identity = input.conversion.kind === "identity" && projection !== undefined &&
+          projection.flow === undefined && projection.upcast === undefined && projection.downcast === undefined &&
+          projection.object === undefined && projection.option === undefined &&
+          (rustBorrowValueIsUnprojected(slot.node, program.records) || reborrow !== undefined &&
+            projection.contextual?.conversion === reborrow && program.records.conversion.get(slot.node) === undefined &&
+            program.records.callScopedLifetimeReconciliation.get(slot.node) === undefined);
+        producer.reference(slot.node, input, identity && (parameter?.mode === input.mode && rustTargetTypeRefEquals(parameter.parameterCarrier, input.parameterCarrier) ||
           reborrow !== undefined && rustTargetTypeRefEquals(reborrow.target, input.sourceCarrier) &&
-            (input.mode === "ref" || input.mode === "mut-ref" && reborrow.source.mutable));
+            (input.mode === "ref" || input.mode === "mut-ref" && reborrow.source.mutable)));
       }
       const contexts = program.physicalEmissionContexts.operands.filter(operand => operand.origin.kind === "call-input" &&
         operand.origin.operationNode === occurrence.node && operand.origin.input === input);
