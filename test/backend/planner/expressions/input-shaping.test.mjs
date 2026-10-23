@@ -33,7 +33,7 @@ const identityProjection = Object.freeze({
 
 function context(parameter, override, capture) {
   const declaration = {};
-  const ownership = override?.valueForm === "storage"
+  const ownership = capture !== undefined || override?.valueForm === "storage"
     ? { kind: "borrow", mutable: false } : { kind: "move" };
   return {
     capturedBindings: capture === undefined ? [] : [{ declaration, expression: { kind: "path", path: "capture" },
@@ -62,10 +62,11 @@ test("exact borrowed lexical captures pass once through the canonical shared-inp
   const expression = { kind: "path", path: "capture" };
   for (const borrowed of ["shared", "mutable"]) {
     const selected = context(undefined, undefined, borrowed);
+    const place = planRustIdentifierValue(sourceNode, "capture", selected, "shared-receiver");
     const expected = borrowed === "shared" ? expression
       : { kind: "reference", expr: { kind: "dereference", pointer: expression } };
-    assert.deepEqual(planRustSharedReceiver(sourceNode, expression, selected), expected);
-    assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, expression, input, false), expected);
+    assert.deepEqual(planRustSharedReceiver(sourceNode, place, selected), expected);
+    assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, place, input, false), expected);
   }
   const stored = context();
   assert.deepEqual(planRustSharedReceiver(sourceNode, expression, stored), { kind: "reference", expr: expression });

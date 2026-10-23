@@ -37,6 +37,9 @@ export function analyzeRustStringComparisonViews(program: Omit<RustAnalysisProgr
     const contextual = program.records.contextualValueConversion.get(node);
     if (contextual !== undefined && rustContextualRuntimeConversionContract(contextual.conversion, program.typeDefinitions)?.lowering === "owned-string-from-borrowed-str")
       selected = { kind: "contextual" };
+    if (selected.kind === "value" && operation?.kind === "operator-token" &&
+      (operation.operator === "==" || operation.operator === "!=") &&
+      isRustStringCarrier(program.records.valueRead.get(node)?.value)) selected = { kind: "owned-string" };
     if (parent !== undefined && operation?.kind === "operator-token" &&
       (BinaryExpression_Left(program.source.ast, parent) === node && operation.leftConversion !== undefined ||
         BinaryExpression_Right(program.source.ast, parent) === node && operation.rightConversion !== undefined)) selected = { kind: "value" };

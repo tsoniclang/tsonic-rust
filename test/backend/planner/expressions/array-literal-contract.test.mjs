@@ -7,6 +7,8 @@ import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { planArrayLiteral } from "../../../../dist/backend/planner/expressions/array-literals/planning.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { analyzeRustArrayLiterals } from "../../../../dist/analysis/operations/array-literals.js";
+import { createRustArrayLiteralProducer } from "../../../../dist/analysis/program/records/array-literals.js";
 
 test("array construction rejects stale contribution carriers, positions and destination storage", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
@@ -69,8 +71,15 @@ targetOperation: { get: (subject) => subject === node
   ];
   for (const [index, mutation] of mutations.entries()) {
     const selected = context(mutation);
-    assert.equal(planArrayLiteral(node, selected) === undefined, true, `mutation ${index}`);
-    assert.ok(selected.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+    let publications = 0;
+    const producer = createRustArrayLiteralProducer(() => { publications += 1; });
+    const issues = analyzeRustArrayLiterals(selected.input.program, [node], producer);
+    assert.equal(issues.length, 1, `mutation ${index}: one admission rejection`);
+    assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT", `mutation ${index}: exact diagnostic`);
+    assert.equal(issues[0].sourceNode === node, true, `mutation ${index}: original source identity`);
+    assert.equal(producer.records.borrowedSequenceEmission.get(input, fact.elementCarrier) === undefined, true,
+      `mutation ${index}: invalid array input never reaches native rendering`);
+    assert.equal(publications, 0, `mutation ${index}: no invalid or partial branch is published`);
   }
   assert.equal(accessorReads, 0);
 });

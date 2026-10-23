@@ -1,5 +1,4 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
-import { rustSourceFilePlanContext } from "../../helpers/plan-context.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -8,7 +7,8 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations.js";
 import { rustEffectiveValueCarrier } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { planBinaryExpression } from "../../../dist/backend/planner/expressions/binary.js";
+import { analyzeRustBinaryEmission } from "../../../dist/analysis/operations/binary-emission.js";
+import { createRustBinaryEmissionProducer } from "../../../dist/analysis/program/records/expression-binary.js";
 import { nativeExpressionSequencesSource } from "../../../../tsonic/test/fixtures/native-expression-sequences.mjs";
 
 test("checked value sequences seal independent operand carriers and the exact final completion", () => {
@@ -36,7 +36,7 @@ test("checked value sequences seal independent operand carriers and the exact fi
   assert.equal(sequences, 9);
 });
 
-test("value sequence planning rejects altered sealed operands, completion and selected identity", () => {
+test("value sequence admission rejects altered operands, completion and selected identity before sealing", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 function effect(): void {}
@@ -66,10 +66,12 @@ export function read(value: int32): int32 { return (effect(), value); }
 targetOperation: { get: (node) => node === subject
     ? operation : program.records.targetOperation.get(node) },
 selectedOperation: { get: (node) => node === subject ? selection : program.records.selectedOperation.get(node) }}, program.records);
-    // The planner context of the subject's source file, built as the planner builds it, over the altered records.
-    const context = rustSourceFilePlanContext({ ...program, records }, subject);
-    assert.equal(planBinaryExpression(subject, context) === undefined, true, label);
-    assert.ok(context.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"), label);
+    const producer = createRustBinaryEmissionProducer(() => {});
+    const issues = analyzeRustBinaryEmission({ ...program, records }, [subject], producer);
+    assert.equal(issues.length, 1, label + ": exact admission rejection");
+    assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT", label);
+    assert.equal(issues[0].sourceNode === subject, true, label + ": exact checked source identity");
+    assert.equal(producer.records.binaryEmission.get(subject) === undefined, true, label + ": invalid sequence never reaches the planner");
   }
 });
 

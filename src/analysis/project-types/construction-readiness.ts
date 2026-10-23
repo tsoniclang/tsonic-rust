@@ -21,9 +21,9 @@ export interface RustConstructionPointQueries {
   readonly completesNormally: boolean;
   layerCompletes(definition: RustProjectTypeDefinition): boolean;
   layerHasEarlyReturn(definition: RustProjectTypeDefinition): boolean;
-  mutatesUnpublishedField(declaration: Node): boolean;
+  mutatesUnpublishedField(declaration: Node, layer: RustProjectTypeDefinition | undefined): boolean;
   /** The constructor reads or writes the field through `this` before the receiver is published. */
-  accessesUnpublishedField(declaration: Node): boolean;
+  accessesUnpublishedField(declaration: Node, layer: RustProjectTypeDefinition | undefined): boolean;
   /** A field's initial value (initializer or absence default) can be read, captured, published or completed. */
   observesInitialValue(declaration: Node): boolean;
   pointFor(node: Node): RustConstructionPoint | undefined;
@@ -58,7 +58,6 @@ export interface RustConstructionReadinessInput {
 type RustConstructionReadiness = RustConstructionPointQueries & {
   readonly issues: readonly RustConstructionIssue[];
   readonly publishesReceiver: boolean;
-  readonly mutatesPublishedFields: boolean;
   readonly deferredCaptureFields: readonly Node[];
   readonly publishedFieldWrites: readonly Node[];
 };
@@ -94,8 +93,14 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
   };
   const deferredCaptureFields = new Set<Node>();
   const publishedFieldWrites = new Set<Node>();
-  const unpublishedFieldWrites = new Set<Node>();
-  const unpublishedFieldAccesses = new Set<Node>();
+  const unpublishedFieldWrites = new Map<RustProjectTypeDefinition | undefined, Set<Node>>([[undefined, new Set()]]);
+  const unpublishedFieldAccesses = new Map<RustProjectTypeDefinition | undefined, Set<Node>>([[undefined, new Set()]]);
+  const retainFieldUse = (uses: Map<RustProjectTypeDefinition | undefined, Set<Node>>, declaration: Node): void => {
+    let selected = uses.get(currentLayer);
+    if (selected === undefined) { selected = new Set(); uses.set(currentLayer, selected); }
+    selected.add(declaration);
+    uses.get(undefined)!.add(declaration);
+  };
   const points = new Map<Node, RustConstructionPoint>();
   const expressions = new Map<Node, readonly RustConstructionExpression[]>();
   const issues: RustConstructionIssue[] = [];
@@ -107,7 +112,6 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
   let earlyReturns = 0;
   let visited = 0;
   let publishesReceiver = false;
-  let mutatesPublishedFields = false;
   let exceptionalStates: ConstructionState[] | undefined;
   const issue = (node: Node, reason: string): void => {
     if (!issues.some(existing => existing.node === node && existing.reason === reason))
@@ -217,8 +221,8 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
           record(left, afterValue);
           if (afterValue.possiblyInitialized.has(declaration) && !afterValue.initialized.has(declaration))
             deferredCaptureFields.add(declaration);
-          if (afterValue.published) { mutatesPublishedFields = true; publishedFieldWrites.add(declaration); }
-          else if (afterValue.possiblyInitialized.has(declaration)) unpublishedFieldWrites.add(declaration);
+          if (afterValue.published) publishedFieldWrites.add(declaration);
+          else if (afterValue.possiblyInitialized.has(declaration)) retainFieldUse(unpublishedFieldWrites, declaration);
           return Object.freeze({ ...afterValue, initialized: new Set([...afterValue.initialized, declaration]),
             possiblyInitialized: new Set([...afterValue.possiblyInitialized, declaration]) });
         }
@@ -242,11 +246,11 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
         if (field !== undefined && field.accessMode !== "write" && !state.initialized.has(declaration))
           issue(node, "A native constructor field read has no dominating exact initialization.");
         if (field !== undefined && field.accessMode !== "read" && state.published) {
-          mutatesPublishedFields = true; publishedFieldWrites.add(declaration);
+          publishedFieldWrites.add(declaration);
         }
         if (field !== undefined && field.accessMode !== "read" && !state.published &&
-          state.possiblyInitialized.has(declaration)) unpublishedFieldWrites.add(declaration);
-        if (field !== undefined && !state.published) unpublishedFieldAccesses.add(declaration);
+          state.possiblyInitialized.has(declaration)) retainFieldUse(unpublishedFieldWrites, declaration);
+        if (field !== undefined && !state.published) retainFieldUse(unpublishedFieldAccesses, declaration);
         return state;
       }
     }
@@ -478,14 +482,14 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
   record(input.definition.declaration, state);
   const indexedExpressions = new Map<Node, RustConstructionExpression>();
   for (const entries of expressions.values()) for (const entry of entries) indexedExpressions.set(entry.node, entry);
-  return Object.freeze({ issues: Object.freeze(issues), publishesReceiver, mutatesPublishedFields, completesNormally,
+  return Object.freeze({ issues: Object.freeze(issues), publishesReceiver, completesNormally,
     points: Object.freeze([...points.values()]),
     deferredCaptureFields: Object.freeze([...deferredCaptureFields]),
     publishedFieldWrites: Object.freeze([...publishedFieldWrites]),
     layerCompletes: (definition: RustProjectTypeDefinition) => layerCompletion.get(definition) === true,
     layerHasEarlyReturn: (definition: RustProjectTypeDefinition) => layerEarlyReturn.has(definition),
-    mutatesUnpublishedField: (declaration: Node) => unpublishedFieldWrites.has(declaration),
-    accessesUnpublishedField: (declaration: Node) => unpublishedFieldAccesses.has(declaration),
+    mutatesUnpublishedField: (declaration: Node, layer: RustProjectTypeDefinition | undefined) => unpublishedFieldWrites.get(layer)?.has(declaration) === true,
+    accessesUnpublishedField: (declaration: Node, layer: RustProjectTypeDefinition | undefined) => unpublishedFieldAccesses.get(layer)?.has(declaration) === true,
     observesInitialValue: (declaration: Node) => observedInitialValues.has(declaration),
     expressions: Object.freeze([...indexedExpressions.values()]),
     pointFor: (node: Node) => points.get(node),

@@ -11,6 +11,17 @@ import { rustCallableTargetType } from "../../../../dist/target-model/types/carr
 import { planRustStructuralShapeModule } from "../../../../dist/backend/planner/objects/structural-shapes.js";
 import { planRustNativeMemoryCall } from "../../../../dist/backend/planner/expressions/native-memory.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
+import { analyzeRustNativeMemoryEmission } from "../../../../dist/analysis/operations/native-memory-emission.js";
+import { createRustNativeLayoutProducer } from "../../../../dist/analysis/program/records/native-layout-emission.js";
+import { analyzeRustTypeEmission } from "../../../../dist/analysis/source-evidence/types/emission.js";
+import { createRustTypeEmissionProducer } from "../../../../dist/analysis/program/records/type-emission.js";
+import { analyzeRustProjectEmission } from "../../../../dist/analysis/project-types/emission.js";
+import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
+import { analyzeRustStructuralEmission } from "../../../../dist/analysis/objects/structural-emission.js";
+import { createRustStructuralEmissionProducer } from "../../../../dist/analysis/program/records/structural-emission.js";
+import { analyzeRustStructuralLivenessEmission } from "../../../../dist/analysis/reachability/structural-emission.js";
+import { createRustNativeLivenessProducer } from "../../../../dist/analysis/program/records/native-liveness.js";
+import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 test("native runtime type applications preserve exact Rust value/error identities and native AST", () => {
   const value = { kind: "source-primitive", name: "int64" };
@@ -75,10 +86,17 @@ test("native runtime trait contracts match their existing Rust implementations w
 
 test("native memory free-function qualification emits the exact existing Rust call AST", () => {
   const layout = { kind: "scalar", pointeeCarrier: { kind: "source-primitive", name: "uint32" },
-    size: 4, alignment: 4, width: 64, littleEndian: true, fields: [] };
+    size: 4n, alignment: 4n, width: 64, littleEndian: true, fields: [] };
   const error = { kind: "source-primitive", name: "int64" };
   // The planner renders the pointee and error carriers from their sealed type emission records.
-  const context = rustProgramPlanContext(rustProgramWithTypeEmissions([layout.pointeeCarrier, error]), { usedAliases: new Set() });
+  const base = rustProgramWithTypeEmissions([layout.pointeeCarrier, error]);
+  const node = base.sourceFiles[0];
+  const input = { ...base, records: { ...base.records, nativeBacking: { get: subject => subject === node ? layout : undefined } } };
+  const layouts = createRustNativeLayoutProducer(() => {});
+  const carriers = analyzeRustNativeMemoryEmission(input, [node], layouts);
+  const types = createRustTypeEmissionProducer(() => {});
+  analyzeRustTypeEmission(input, [], types, [...carriers, error]);
+  const context = rustProgramPlanContext({ ...input, records: { ...input.records, ...layouts.records, ...types.records } }, { usedAliases: new Set() });
   const value = { kind: "path", path: "value" };
   for (const method of ["allocate_native_location", "location_to_raw", "reinterpret_raw_location"]) {
     assert.deepEqual(planRustNativeMemoryCall(method, value, layout, context, error), {
@@ -97,31 +115,47 @@ test("native memory free-function qualification emits the exact existing Rust ca
 test("structural storage renders combined native method and bound-field carriers once without changing the module AST", () => {
   const scalar = { kind: "source-primitive", name: "int64" };
   const callable = rustCallableTargetType([scalar], scalar);
-  const errorType = { kind: "named", path: "rt::TsonicError", identity: "runtime" };
+  const errorType = { kind: "named", path: "rt::TsonicError", identity: "tsonic-rust-runtime:TsonicError" };
   const valueType = { kind: "primitive", name: "i64" };
   const methodType = { kind: "function-pointer", parameters: [valueType], result: { kind: "named", path: "Result",
     genericArguments: [{ kind: "type", type: valueType }, { kind: "type", type: errorType }] } };
   const bound = type => ({ kind: "named", path: "rt::RecordField", genericArguments: [
     { kind: "type", type }, { kind: "type", type: errorType },
   ] });
-  const errors = { domainsByComponentId: new Map([["checked:component", {
-    componentId: "checked:component", errorDomain: "runtime", errorTypeIdentity: "runtime",
-  }]]) };
+  const base = rustProgramWithTypeEmissions([scalar, callable]);
+  const component = rustProgramPlanContext(base).sourcePackageComponentId;
+  const errors = base.records.sourcePackageErrors.get();
+  assert.equal(errors.domainsByComponentId.get(component).errorDomain, "runtime", "the actual native package owns the runtime error boundary");
   for (const [name, extra, type] of [
     ["bound scalar", { carrier: scalar, storage: "bound" }, bound(valueType)],
     ["native method", { carrier: callable, storage: "stored", method: true, nativeMethod: true, methodStorageCarrier: callable }, methodType],
     ["bound native method", { carrier: callable, storage: "bound", method: true, nativeMethod: true, methodStorageCarrier: callable }, bound(methodType)],
   ]) {
     const carrier = rustStructuralObjectTargetType("checked.ts", [], "reference");
-    const definition = { carrier, sourceCarriers: [carrier], targetName: "Checked", componentId: "checked:component",
+    const definition = { carrier, sourceCarriers: [carrier], targetName: "Checked", componentId: component,
+      ownerFileName: base.source.ast.getFileName(base.sourceFiles[0]),
       genericParameters: [], genericArguments: [], fields: [{ sourceName: "value", targetName: "value",
         presence: "required", readonly: false, ...extra }] };
-    const input = { program: { structuralShapes: { definitions: [definition], unionDefinitions: [] },
-      declarationGenericRequirements: { contractForCarrier: () => ({ typeParameters: [], associatedTypes: [] }) },
-      typeDefinitions: { sourceUnionArms: () => undefined } } };
+    const shapes = { ...base.structuralShapes, definitions: [definition], instances: [definition], unionDefinitions: [],
+      definitionForCarrier: selected => rustTargetTypeRefEquals(selected, carrier) ? definition : undefined,
+      field: (selected, index) => rustTargetTypeRefEquals(selected, carrier) ? definition.fields[index] : undefined };
+    const program = { ...base, structuralShapes: shapes,
+      declarationGenericRequirements: { ...base.declarationGenericRequirements,
+        contractForCarrier: () => ({ typeParameters: [], associatedTypes: [], optionalStorage: [], projectProjections: [] }) } };
+    const projects = createRustProjectEmissionProducer(() => {});
+    analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    const structural = createRustStructuralEmissionProducer(() => {});
+    const issues = analyzeRustStructuralEmission(program, structural);
+    assert.equal(issues.length, 0, name + ": the actual structural owner admits the complete native storage");
+    const admitted = { ...program, records: { ...program.records, ...projects.records, ...structural.records } };
+    const types = createRustTypeEmissionProducer(() => {});
+    analyzeRustTypeEmission(admitted, [], types, structural.records.structuralShapeEmission.get(definition).fields.map(field => field.carrier));
+    const liveness = createRustNativeLivenessProducer(() => {});
+    analyzeRustStructuralLivenessEmission(admitted, base.reachability, liveness);
+    const input = { program: { ...admitted, records: { ...admitted.records, ...types.records, ...liveness.emission } } };
     const diagnostics = [];
     const module = planRustStructuralShapeModule(input, new Map(), new Map(), new Map(), new Map(), undefined,
-      "shapes", "checked:component", errors, undefined, new Set(["Checked"]), diagnostics);
+      "shapes", component, errors, undefined, new Set(["Checked"]), diagnostics);
     assert.deepEqual(diagnostics, [], name);
     assert.deepEqual(module, { headerComment: "Generated by the Tsonic Rust target. Do not edit.", items: [
       { kind: "use", path: "tsonic_rust_runtime", alias: "rt" },

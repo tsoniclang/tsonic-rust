@@ -6,6 +6,11 @@ import { planRustSourcePackageComponents } from "../../dist/backend/planner/prog
 import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/source-package-errors.js";
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planBlockLike } from "../../dist/backend/planner/statements/index.js";
+import { analyzeRustProjectEmission } from "../../dist/analysis/project-types/emission.js";
+import { createRustProjectEmissionProducer } from "../../dist/analysis/program/records/project-emission.js";
+import { analyzeRustCarrierReads } from "../../dist/analysis/ownership/carrier-reads.js";
+import { createRustCarrierReadProducer } from "../../dist/analysis/program/records/carrier-reads.js";
+import { rustCallableInputAbsenceWitness } from "../../dist/target-model/types/carriers/callable-input-witness.js";
 
 // The sealed program's authored source files, in artifact order.
 export function rustProgramSourceFiles(program) {
@@ -53,11 +58,30 @@ export function rustSourceFilePlanContext(program, node, overrides = {}) {
 // A sealed analysis program compiled from `source`, whose type emission records also cover `carriers`: the
 // analysis owner (analyzeRustTypeEmission) selects every carrier the program uses plus these, as it does for the
 // carriers a real program renders. Planner and render tests use it instead of hand-made type emission records.
-export function rustProgramWithTypeEmissions(carriers, { source = "export function probe(): void {}\n", surfaces = [] } = {}) {
+export function rustProgramWithTypeEmissions(carriers, { source = "export function probe(): void {}\n", surfaces = [],
+  typeDefinitions, structuralShapes } = {}) {
   const { program } = analyzeRust({ surfaces, files: { "index.ts": source } });
+  const selectedCarriers = [...carriers, ...carriers.flatMap(carrier => {
+    const witness = rustCallableInputAbsenceWitness(carrier);
+    return witness === undefined ? [] : [witness];
+  })];
+  const context = program.physicalEmissionContexts.contexts[0];
+  if (context === undefined) throw new Error("The native type fixture requires one actual emitted source owner.");
+  const input = { ...program,
+    ...(typeDefinitions === undefined ? {} : { typeDefinitions }),
+    ...(structuralShapes === undefined ? {} : { structuralShapes }),
+    physicalEmissionContexts: { ...program.physicalEmissionContexts,
+      contexts: [{ ...context, operands: [...context.operands, ...selectedCarriers] },
+        ...program.physicalEmissionContexts.contexts.slice(1)] },
+  };
+  const projects = createRustProjectEmissionProducer(() => {});
+  analyzeRustProjectEmission({ program: input, nodes: [], producer: projects });
+  const admitted = { ...input, records: { ...program.records, ...projects.records } };
   const producer = createRustTypeEmissionProducer(() => {});
-  analyzeRustTypeEmission(program, [], producer, carriers);
-  return { ...program, records: { ...program.records, typeEmission: producer.records.typeEmission } };
+  analyzeRustTypeEmission(admitted, [], producer, selectedCarriers);
+  const reads = createRustCarrierReadProducer(() => {});
+  analyzeRustCarrierReads(admitted, [], reads);
+  return { ...admitted, records: { ...admitted.records, ...producer.records, ...reads.records } };
 }
 
 // The planner context of the program's first authored source file.

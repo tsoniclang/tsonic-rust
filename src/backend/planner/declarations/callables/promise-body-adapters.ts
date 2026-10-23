@@ -22,6 +22,8 @@ export function planRustPromiseBodyObjectAdapter(
 ): RustBlock {
   const asynchronous = context.input.program.records.asyncFunction.get(declaration);
   if (asynchronous?.kind !== "js-promise") failRustPlannerInvariant("An admitted Promise object adapter requires its native async function record.", declaration);
+  const nativeCompletion = context.input.program.records.callableReturn.get(declaration)?.outward;
+  if (nativeCompletion === undefined) failRustPlannerInvariant("An admitted Promise object adapter requires its sealed physical native completion.", declaration);
   let completion: RustExpr = asynchronous.lowering.kind === "factory" ? { kind: "await", expr: invocation } : invocation;
   if (nativeBoundary !== undefined) {
     const region = context.input.program.records.nativeErrorRegion.get(declaration);
@@ -41,7 +43,7 @@ export function planRustPromiseBodyObjectAdapter(
     }
   }
   return asynchronous.lowering.kind === "settled"
-    ? wrapRustJsPromiseCompletion(completion, nativeBoundary !== undefined)
+    ? wrapRustJsPromiseCompletion(completion, nativeBoundary !== undefined, nativeCompletion)
     : wrapRustJsPromiseBody({ statements: [{ kind: "tail", expr: completion }] },
-        nativeBoundary !== undefined, asynchronous.lowering);
+        nativeBoundary !== undefined, asynchronous.lowering, nativeCompletion);
 }
