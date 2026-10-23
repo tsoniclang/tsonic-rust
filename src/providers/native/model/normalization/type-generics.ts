@@ -1,6 +1,7 @@
 import { compareText, isRecord, requireArray, requireRecord, requireString } from "../rustdoc-schema.js";
 import { childNormalizationContext, contextWithParameters, resolveRustCompilerItem, rustCompilerDerivedIdentity } from "./context.js";
-import { normalizePathArguments, normalizeType } from "./types.js";
+import { normalizeType } from "./types.js";
+import { normalizePathArguments } from "./type-path-arguments.js";
 import { normalizeConstArgument, normalizeLifetime } from "./scalar-arguments.js";
 import { typeRequirementKey } from "./type-substitution.js";
 import type { RustCompilerGenericParameter, RustCompilerLifetime, RustCompilerLifetimeBinder, RustCompilerLifetimeParameter, RustCompilerTraitDispatch, RustCompilerType, RustCompilerTypeParameter, RustCompilerTypeRequirement } from "../model.js";
