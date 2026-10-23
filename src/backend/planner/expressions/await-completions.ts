@@ -40,9 +40,6 @@ export function planRustAwaitBranches(
         : value };
       if (future.awaiting === "fallible") {
         const region = context.fallibleBoundary;
-        if (region === undefined) {
-          failRustPlannerInvariant("An admitted fallible await requires its native error boundary.", node);
-        }
         if (future.errorBoundary === "none") {
           failRustPlannerInvariant("An admitted fallible future requires its selected error channel.", node);
         }
@@ -51,6 +48,8 @@ export function planRustAwaitBranches(
           ? context.input.program.records.awaitErrorEdge.get(node, selected.carrier) : undefined;
         const propagated = future.errorBoundary === "source-program"
           ? sourceEdge === undefined ? undefined : planRustSourceErrorPropagation(node, sourceEdge, output, context)
+          : region === undefined
+          ? failRustPlannerInvariant("An admitted fallible await requires its native error boundary.", node)
           : future.errorBoundary === "source-native"
           ? operandError === undefined || future.errorSource === undefined ? undefined
             : rustPropagateNativeError(region, { identity: future.errorSource, errorType: operandError }, output)
