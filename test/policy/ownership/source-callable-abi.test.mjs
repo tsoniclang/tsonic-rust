@@ -14,7 +14,7 @@ test("published native parameter ABI supersedes a pre-finalization missing cache
   const resolver = createRustSourceCallableAbiResolver({ isNativeCallableExpression: () => true,
     parameterAbiFor: selected => selected === parameter ? published : undefined });
   assert.equal(resolver.resolveParameterAbi(parameter, {
-    ast: { typeNode: () => undefined, as: { AsParameterDeclaration: () => undefined } },
+    ast: { parent: () => undefined, typeNode: () => undefined, as: { AsParameterDeclaration: () => undefined } },
   }, {}, carrier), undefined);
   published = abi;
   const sealedContext = { ast: new Proxy({}, { get() { throw new Error("Published ABI must not query syntax"); } }) };

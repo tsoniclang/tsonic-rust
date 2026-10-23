@@ -4,7 +4,7 @@ import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-ap
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
-import { closeRustRetainedParameter, rustRetainedEnvironment } from "../../../dist/analysis/callables/retained-values.js";
+import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/retained-values.js";
 import { rustHasOpenOwnedStorage } from "../../../dist/policy/ownership/retained-storage.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
@@ -12,6 +12,7 @@ import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 test("complete source capture carriers preserve the canonical generic and frame environment normalization", () => {
   const captured = { kind: "type-parameter", identity: "captured:value", name: "Captured" };
@@ -46,6 +47,26 @@ function fixture(text, configure = input => input, maximumSteps) {
     .map(node => [source.ast.text(source.ast.name(node)), node]));
   return { ...input, queries, declarations };
 }
+
+test("closed captured callable storage keeps its proven native lifetime through nested owned carriers", () => {
+  const current = fixture("export function make() { return () => 1; }");
+  const declaration = current.sourceStorage.nodes.find(node => current.source.ast.is.IsArrowFunction(node));
+  assert.equal(declaration !== undefined, true, "the checked source owns the captured callable occurrence");
+  const integer = { kind: "source-primitive", name: "int32" };
+  const stored = rustCallableTargetType([], integer, { kind: "static" });
+  const context = { source: current.source, ast: current.source.ast,
+    sourceLifetimes: current.sourceLifetimes, retainedEnvironments: current.queries,
+    records: createRustRecordFixture() };
+  for (const [name, captures] of [
+    ["direct", [stored]],
+    ["tuple", [{ kind: "tuple", elements: [integer, stored] }]],
+    ["array", [{ kind: "array", element: stored }]],
+    ["nested", [{ kind: "tuple", elements: [{ kind: "array", element: stored }] }]],
+  ]) {
+    const lifetime = rustRetainedValueLifetime(declaration, captures, { context });
+    assert.equal(lifetime?.kind === "static", true, `${name}: owned closed storage never invents an output elision`);
+  }
+});
 
 const suspended = `
 export async function outer(callback: () => number, unused: () => number): Promise<number> {
