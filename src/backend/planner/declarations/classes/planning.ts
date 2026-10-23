@@ -261,7 +261,7 @@ function planConstructor(
     member ?? classDeclaration,
     [],
   );
-  const parameterPlan = planRustCallableParameters(requireRustConstructorContract(selected), context, syntheticNames);
+  const parameterPlan = planRustCallableParameters(requireRustConstructorContract(selected), context, syntheticNames, "source-body");
   if (parameterPlan === undefined) {
     failRustPlannerInvariant("An admitted native class requires its complete syntax and native storage plan.", classDeclaration);
   }
@@ -328,7 +328,9 @@ function planConstructor(
   const returnLabel = !constructionPlan.earlyReturnLayers.has(definition) ? undefined
     : { id: constructorContext.controlFlow!.nextLoopId++,
       label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
-  const layerContext = construction.contextForLayer(constructorContext, returnLabel);
+  const rootLayer = constructionPlan.layers.find(layer => layer.definition === definition);
+  if (rootLayer === undefined) failRustPlannerInvariant("An admitted constructor requires its identical native root layer.", classDeclaration);
+  const layerContext = construction.contextForLayer(constructorContext, rootLayer, returnLabel);
   const statements: RustStmt[] = [...parameterStatements, ...construction.declarations];
   for (const field of constructionPlan.fields) {
     const slot = construction.values.get(field.declaration);

@@ -8,6 +8,7 @@ import { planRustValueFieldLocation } from "../objects/value-fields.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
 import { planRustAssignmentWrite } from "../statements/assignment-writes.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
+import { rustWriteLivenessAttributes } from "../bindings/liveness.js";
 import { planExpression } from "./entry.js";
 import { planRustDirectStorage } from "./update-target.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
@@ -62,5 +63,6 @@ export function planCompoundAssignmentExpression(node: Node, context: RustPlanCo
   const written = location?.write(stored, context);
   const writes = location === undefined ? planRustAssignmentWrite(node, left, right, { kind: "operator-token", operator: "=", resultCarrier: fact.resultCarrier,
     operandModes: ["mut-ref", "value"] }, scoped) : written === undefined ? undefined : [{ kind: "expr" as const, expr: written }];
-  return writes === undefined ? undefined : rustValueBlock(bindings, { kind: "block", body: { statements: [...writes, { kind: "tail", expr: result }] } });
+  return writes === undefined ? undefined : rustValueBlock(bindings, { kind: "block", body: {
+    innerAttrs: rustWriteLivenessAttributes(left, context), statements: [...writes, { kind: "tail", expr: result }] } });
 }

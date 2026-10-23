@@ -18,7 +18,6 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
-import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
 
 import { analyzeRustReadOwnership } from "../ownership/reads.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
@@ -57,7 +56,6 @@ import { analyzeRustStatementExits } from "../control-flow/statement-exits.js";
 import { eraseRustCompileTimeVariableStatements } from "../control-flow/compile-time-statements.js";
 import { analyzeRustResourceScopes } from "../control-flow/resource-scopes.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../policy/types/storage/referent-mutation.js";
-import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 
 /** Seals the analysis program into the data-only program the backend plans from. */
 export function analyzeRustTargetProgram(
@@ -400,8 +398,6 @@ export function analyzeRustAnalysisProgram(
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
-  const bindingLivenessIssues = analyzeRustBindingLiveness(context.source, ownershipFlow.flow, records, context.names, context.records.bindingLivenessPlans);
-  if (bindingLivenessIssues.length !== 0) return rejectedTargetStage(bindingLivenessIssues);
   const callableValues = context.callableValues.seal({
     nativeGenerics: context.records.nativeGenericPlans,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
@@ -416,12 +412,6 @@ export function analyzeRustAnalysisProgram(
     context.records.providerEvaluationPlans.occurrence(occurrence);
   const localStorageAliases = analyzeRustLocalStorageAliases({ ast: context.ast,
     navigation: context.source.navigation, nativeNodes: context.nativeNodes, records });
-  const localBindingIssues = analyzeRustLocalBindings({ ast: context.ast, nodes: context.nativeNodes, records,
-    navigation: context.source.navigation, names: context.names, aliases: localStorageAliases,
-    representations: objectRepresentations, projectTypes, nativeStorage: callableValues.value.nativeStorage,
-    lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
-    runtimeValueUses: context.runtimeValueUses });
-  if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const program: Omit<RustAnalysisProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
@@ -487,7 +477,7 @@ export function analyzeRustAnalysisProgram(
     borrowedElementReads,
     genericCallableErrors: genericCallableErrors.value,
   };
-  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value);
+  const emission = finalizeRustNativeEmission(program, context, genericCallableErrors.value, ownershipFlow.flow);
   if (emission.kind === "rejected") return emission;
   context.callableValues.publish();
   const finalFoundation = finalizeRustFoundation(program.foundation, context.records.minimumFoundation());

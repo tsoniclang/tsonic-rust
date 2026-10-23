@@ -15,7 +15,9 @@ test("checked value sequences seal independent operand carriers and the exact fi
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": nativeExpressionSequencesSource } });
   const { ast } = program.source;
   let sequences = 0;
+  const parameterByFunction = new Map();
   const visit = node => {
+    if (ast.is.IsFunctionDeclaration(node)) parameterByFunction.set(ast.text(ast.name(node)), ast.parameters(node)[0]);
     if (ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === "KindCommaToken") {
       const operation = program.records.targetOperation.get(node);
       assert.equal(operation?.kind, "sequence");
@@ -34,6 +36,12 @@ test("checked value sequences seal independent operand carriers and the exact fi
   };
   program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile).forEach(visit);
   assert.equal(sequences, 9);
+  for (const [name, expectedUnused] of [["direct", false], ["nested", false], ["stopped", true]]) {
+    const parameter = parameterByFunction.get(name);
+    assert.equal(parameter !== undefined, true, `${name}: retain the actual checked receiver parameter`);
+    assert.equal(program.records.bindingLiveness.get(parameter)?.unused, expectedUnused,
+      `${name}: only the right operand of a selected never-completing sequence is absent natively`);
+  }
 });
 
 test("value sequence admission rejects altered operands, completion and selected identity before sealing", () => {

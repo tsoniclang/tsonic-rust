@@ -63,6 +63,8 @@ test("exact borrowed lexical captures pass once through the canonical shared-inp
   for (const borrowed of ["shared", "mutable"]) {
     const selected = context(undefined, undefined, borrowed);
     const place = planRustIdentifierValue(sourceNode, "capture", selected, "shared-receiver");
+    assert.equal(place === selected.capturedBindings[0].expression, borrowed === "shared",
+      `${borrowed}: only the actual shared native capture ABI supplies a nonconsuming receiver directly`);
     const expected = borrowed === "shared" ? expression
       : { kind: "reference", expr: { kind: "dereference", pointer: expression } };
     assert.deepEqual(planRustSharedReceiver(sourceNode, place, selected), expected);

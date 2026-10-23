@@ -8,6 +8,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation } from "../objects/value-fields.js";
 import { planRustAssignmentWrite } from "../statements/assignment-writes.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
+import { rustWriteLivenessAttributes } from "../bindings/liveness.js";
 import { planExpression, planExpressionBeforeContextualConversion, planExpressionBeforeValueProjections } from "./entry.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
 import { planRustOptionBranch } from "./option-branch.js";
@@ -60,7 +61,8 @@ export function planNullishAssignment(node: Node, context: RustPlanContext, resu
     writes = written === undefined ? undefined : [{ kind: "expr", expr: written }];
   }
   if (writes === undefined) return undefined;
-  const assigned: RustExpr = { kind: "block", body: { statements: [...writes, { kind: "tail", expr: resultUse === "value" ? valuePath : unit }] } };
+  const assigned: RustExpr = { kind: "block", body: { innerAttrs: rustWriteLivenessAttributes(left, context),
+    statements: [...writes, { kind: "tail", expr: resultUse === "value" ? valuePath : unit }] } };
   const presentName = allocateRustSyntheticName(names, "present_value");
   const present: RustExpr = { kind: "path", path: presentName };
   return rustValueBlock(bindings, planRustOptionBranch({ kind: "path", path: currentName }, fact.readCarrier, resultUse === "discarded" ? "_" : presentName,

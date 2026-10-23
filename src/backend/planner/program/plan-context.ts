@@ -3,6 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
 import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
+import type { RustConstructionLayer } from "../../../target-model/records/construction.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
@@ -132,6 +133,7 @@ export interface RustPlanContext {
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
   readonly valueDestinations?: ReadonlyMap<Node, TargetTypeRef>;
   readonly construction?: {
+    readonly layer: RustConstructionLayer;
     prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
     returnFor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined;
   };
