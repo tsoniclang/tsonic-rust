@@ -47,3 +47,25 @@ export class Counter {
     assert.equal(emission.name, accessor.name, accessor.role + ": the renderer reads the already selected native slot");
   }
 });
+
+for (const [name, text, count] of [
+  ["explicit constructor", "export class Box { value: number; constructor(value: number) { this.value = value; } } console.log(new Box(7).value);", 1],
+  ["defaulted constructor", "export class Box { value: number; constructor(value: number = 7) { this.value = value; } } console.log(new Box().value);", 1],
+  ["rest constructor", "export class Box { value: number; constructor(...values: number[]) { this.value = values.length; } } console.log(new Box(7, 8).value);", 1],
+  ["parameter property constructor", "export class Box { constructor(public value: number) {} } console.log(new Box(7).value);", 1],
+  ["implicit constructor", "export class Box { value: number = 7; } console.log(new Box().value);", 0],
+]) {
+  test(`${name} publishes its source value vector without an ordinary function result`, () => {
+    const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+    const declaration = nodes(program).find(program.source.ast.is.IsClassDeclaration);
+    const selected = program.records.nativeClass.get(declaration);
+    assert.equal(selected.constructorParameters.length, count, "the exact authored value vector is complete");
+    assert.equal(Object.isFrozen(selected.constructorParameters), true, "constructor value parameters are sealed");
+    assert.equal(selected.constructorParameters.every(parameter => program.records.callableParameter.get(parameter) !== undefined), true,
+      "every selected source parameter retains the complete native formal ABI");
+    assert.equal(selected.constructorParameters.every(parameter => program.source.ast.parent(parameter) === selected.constructor), true,
+      "the vector retains the actual checked constructor declaration identities");
+    assert.equal(selected.constructor === undefined || program.records.callableDeclaration.get(selected.constructor) === undefined, true,
+      "constructors are not forced through ordinary function return admission");
+  });
+}

@@ -33,6 +33,7 @@ export interface RustNativeClassEmission {
   readonly explicitWrapperTraits: boolean;
   readonly fields: readonly RustNativeClassField[];
   readonly constructor: Node | undefined;
+  readonly constructorParameters: readonly Node[];
   readonly constructorDeadCode: RustDeadCodeDisposition | undefined;
   readonly constructorVisibility: "public" | "private";
   readonly methods: readonly Node[];
