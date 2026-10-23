@@ -127,9 +127,9 @@ export function analyzeRustReadOwnership(input: {
       const clone = rustCarrierSupportsClone(valueCarrier, input.definitions) || declaration !== undefined &&
         input.genericRequirements.supportsClone(declaration, valueCarrier);
       const use = uses.get(node);
-      const borrowed = use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
-        use.later.every((later, index) => index < use.laterStart || borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
       const storageRead = storageReads.get(node)!;
+      const borrowed = !storageRead ? undefined : use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
+        use.later.every((later, index) => index < use.laterStart || borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
       const value = selectRustValueReadOwnership({ copy, clone, borrowed,
         transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
       const sourceCopy = isRustCopyCarrier(carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
@@ -141,7 +141,7 @@ export function analyzeRustReadOwnership(input: {
       const projectBorrows = records.projectDowncast.get(node) !== undefined;
       const constructsContainer = records.optionProjection.get(node)?.kind === "some";
       const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-        transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
+        transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || storageRead && projection !== undefined && value?.kind !== "move"
           ? "shared" : constructsContainer ? undefined : borrowed });
       const operation = records.targetOperation.get(node);
       const binding = records.sourceBinding.get(node);

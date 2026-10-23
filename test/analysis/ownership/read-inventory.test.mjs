@@ -6,6 +6,7 @@ import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigatio
 import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 async function fixture() {
   const source = createTargetSourceProgram(await checkedSource("ownership-read-inventory", {
@@ -66,3 +67,60 @@ test("storage-read materialization respects finite node, work and row budgets be
     assert.equal("ownership" in result, false);
   }
 });
+
+for (const projection of [false, true]) {
+  test(`an owned temporary transfers while a stored shared use retains its borrow (projection=${projection})`, async () => {
+    for (const [sourceType, payload, ownedKind] of [
+      ["string", rustStringTargetType(), "move"],
+      ["number", rustSourcePrimitiveTargetType("float64"), "copy"],
+    ]) {
+      const source = createTargetSourceProgram(await checkedSource("ownership-owned-call-read", {
+        "src/index.ts": `
+          declare function get_text(): ${sourceType} | undefined;
+          export function inspect(stored: ${sourceType} | undefined): void {
+            void (get_text()!);
+            void (stored!);
+          }
+        `,
+      }));
+      const storage = createSourceStorageQuery(source, source.sourceFiles);
+      const { ast } = source;
+      const temporary = storage.nodes.find(node => ast.is.IsCallExpression(node));
+      const stored = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.text(node) === "stored" &&
+        ast.is.IsNonNullExpression(ast.parent(node)));
+      assert.equal(temporary !== undefined, true, "the checked fixture has its actual source invocation");
+      assert.equal(stored !== undefined, true, "the checked fixture has its actual stored input read");
+      const builder = createRustProgramRecordBuilder();
+      const carrier = rustOptionTargetType(payload);
+      for (const subject of [temporary, stored]) {
+        builder.runtimeCarriers.selected(subject, carrier);
+        if (projection) builder.flowReadProjections.project(subject, carrier, payload, { kind: "option-value" });
+      }
+      for (const node of storage.nodes) {
+        if (ast.is.IsVoidExpression(node)) builder.targetOperations.source(node, {
+          kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
+        });
+      }
+      const nativeNodes = new Set(storage.nodes);
+      const selected = analyzeRustReadOwnership({
+        storage, nativeNodes: storage.nodes, records: builder.seal([]),
+        flow: { movingReads: new Set(), captureTransfers: new Map() },
+        borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
+        borrowEffectsInput: { ast, isNativeNode: node => nativeNodes.has(node) },
+        definitions: emptyRustTypeDefinitions,
+        genericRequirements: { supportsClone: () => true },
+        genericCallables: { definitionFor: () => undefined },
+        capturesFor: () => undefined, invocationTransfersCapture: () => false,
+      });
+      assert.equal(selected.kind, "resolved", "the complete checked inventory admits the reads");
+      const owned = selected.ownership.reads.get(temporary);
+      const shared = selected.ownership.reads.get(stored);
+      assert.equal(owned?.readsStorage, false, "an invocation does not read a native source place");
+      assert.equal(owned?.value.kind, ownedKind, "the temporary payload is consumed without a borrowed adapter or hidden clone");
+      assert.equal(owned?.source.kind, ownedKind, "narrowing does not reborrow the owned temporary container");
+      assert.equal(shared?.readsStorage, true, "the input is a genuine native storage read");
+      assert.equal(shared?.value.kind, "borrow", "an existing shared use keeps the input's native borrow");
+      assert.equal(shared?.source.kind, "borrow", "a stored narrowed payload retains its container borrow");
+    }
+  });
+}
