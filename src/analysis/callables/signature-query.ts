@@ -8,9 +8,8 @@ import type { RustAsyncFunctionFact, RustGeneratorFact, RustSourceParameterAbiFa
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals, rustSourceCallableReturnFactEquals } from "../../target-model/records/equality.js";
+import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals } from "../../target-model/records/equality.js";
 import { rustCallableTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
 import { recordCallableParameterInputFacts, recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { recordRustParameterAbiSelection } from "./parameter-facts.js";
@@ -18,7 +17,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
 import { selectRustCallableSuspension } from "./suspension.js";
 import type { RustCallableSuspensionSelection } from "./suspension.js";
-import { selectRustCallableLogicalReturn } from "./signatures.js";
+import { recordRustSourceCallableReturn, selectRustCallableLogicalReturn } from "./source-callable-abi.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import { rustClassCallableMemberOwner, rustClassReceiverCarriers } from "../declarations/classes/receivers.js";
 
@@ -120,17 +119,7 @@ export function finalizeRustCallableSignature(
     }
     const logical = selectRustCallableLogicalReturn(walk, declaration, suspendedReturn ?? request?.selectedReturn);
     if (logical.kind === "pending") return undefined;
-    if (ast.is.IsSetAccessorDeclaration(declaration)) {
-      requireRustRecord(walk.context.requiredRecords, "sourceCallableReturn", declaration,
-        "setter", "finalizeRustCallableSignature");
-      const existing = records.sourceCallableReturn.get(declaration);
-      if (existing === undefined) records.sourceCallableReturns.setter(declaration);
-      else if (!rustSourceCallableReturnFactEquals(existing, { returnCarrier: rustUnitTargetType() })) {
-        failTargetAnalysisInvariant("tsonic-rust",
-          "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact source subject.", declaration);
-      }
-    }
-    else if (!records.sourceCallableReturns.resolve(walk, declaration, logical.carrier)) return undefined;
+    if (!recordRustSourceCallableReturn(walk, declaration, logical.carrier)) return undefined;
     const result = records.sourceCallableReturn.get(declaration);
     if (result === undefined) return undefined;
     const invocation = rustCallableInvocationResult(records, declaration);

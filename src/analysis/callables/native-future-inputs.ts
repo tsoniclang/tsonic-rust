@@ -43,7 +43,9 @@ export function createRustNativeFutureInputPlan(input: {
     const file = input.ast.getSourceFile(subject.node);
     if (nodeIdentity === undefined || file === undefined) return undefined;
     const projection = subject.projection.map(component => component.kind === "array-element" ? "array"
-      : component.kind === "tuple-element" ? `tuple:${component.index}` : sourceNodeIdentity(input.ast, component.declaration));
+      : component.kind === "tuple-element" ? `tuple:${component.index}`
+      : component.kind === "type-argument-slot" ? `type-argument:${component.index}`
+      : sourceNodeIdentity(input.ast, component.declaration));
     if (projection.some(component => component === undefined)) return undefined;
     const declarations = owners.get(owner) ?? [];
     const value: RustNativeFutureInput = Object.freeze({ owner, subject, carrier,

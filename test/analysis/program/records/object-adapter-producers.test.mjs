@@ -53,7 +53,7 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
   const walk = { context: { requiredRecords: [], records, diagnostics: [], isNativeNode: () => true, ast: {
     forEachChild(node, visit) { for (const child of node.children ?? []) visit(child); },
     kindName: node => node.kind ?? "KindIdentifier",
-  } }, rejectedExpressions: new WeakSet(), resolving: new Set() };
+  } }, sourceTypes: { structuralInstantiations: () => [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   return { walk, method, files: [root], finalize: () => builder.receiverIndependentMethods.finalize(walk, [root], () => "source") };
 }
 

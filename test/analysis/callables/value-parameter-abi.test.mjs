@@ -24,11 +24,11 @@ for (const surfaces of [[], ["js"]]) {
       const checked = createTargetSourceProgram(source).semantics.forNode(declaration).types.declarationSignatureInfo(declaration);
       const pseudo = checked.thisParameter?.declaration;
       const emission = program.records.callableDeclaration.get(declaration);
-      assert.equal(emission.parameters.length, expected, "the native value vector has no phantom receiver slot");
-      assert.equal(emission.parameters.every(parameter => parameter !== pseudo), true, "the checked pseudo identity is absent");
-      assert.equal(emission.parameters.every(parameter => program.records.sourceParameterAbi.get(parameter) !== undefined), true, "every actual value input retains its ABI");
+      assert.equal(emission.contract.parameters.length, expected, "the native value vector has no phantom receiver slot");
+      assert.equal(emission.contract.parameters.every(parameter => parameter !== pseudo), true, "the checked pseudo identity is absent");
+      assert.equal(emission.contract.parameters.every(parameter => program.records.sourceParameterAbi.get(parameter) !== undefined), true, "every actual value input retains its ABI");
       assert.equal(pseudo === undefined || program.records.sourceParameterAbi.get(pseudo) === undefined, true, "the pseudo parameter has no runtime ABI");
-      assert.equal(Object.isFrozen(emission.parameters), true, "the required vector is sealed");
+      assert.equal(Object.isFrozen(emission.contract.parameters), true, "the required vector is sealed");
     });
   }
 }

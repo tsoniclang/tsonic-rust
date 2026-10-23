@@ -54,7 +54,7 @@ import type { RustAwaitSourceErrorBranch } from "../../target-model/records/awai
 import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
-import type { RustNativeTaskGraph } from "../callables/native-tasks.js";
+import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 
 export interface RustSourceFallibilityConstruction {
   readonly sourceErrors: RustSourceErrorEffectSelection;
@@ -65,7 +65,7 @@ export interface RustSourceFallibilityConstruction {
 export function recordFallibilityFacts(
   walk: RustFactWalk,
   projectSourceFiles: readonly SourceFile[],
-  nativeTasks: RustNativeTaskGraph,
+  nativeTasks: SourceNativeTaskGraph,
   maximumWork = defaultRustEffectsWorkLimit,
 ): RustSourceFallibilityConstruction | undefined {
   walk.context.records.assertOpen();
@@ -80,7 +80,7 @@ export function recordFallibilityFacts(
 function collectFallibilityFacts(
   walk: RustFactWalk,
   projectSourceFiles: readonly SourceFile[],
-  nativeTasks: RustNativeTaskGraph,
+  nativeTasks: SourceNativeTaskGraph,
   budget: RustEffectsWorkBudget,
 ): RustSourceFallibilityConstruction | undefined {
   budget.step();

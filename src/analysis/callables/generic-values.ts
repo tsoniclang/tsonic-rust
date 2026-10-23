@@ -149,14 +149,15 @@ export function createRustGenericCallablePlan(
           issues.push({ subject: node, message: "A declaration-owned generic callable has no exact native implementation name." });
           continue;
         }
+        const storage = selectRustGenericCallableStorage(Object.freeze({ identityObserved: identityFamilies.has(identity),
+          creation, asynchronous: records.asyncFunction.get(node) !== undefined, generator: records.generator.get(node) !== undefined,
+          result: value.signature.result, captures, receiverFields, receivers }));
         const implementation = Object.freeze({ declaration: node, carrier, sourceFileName,
           variantName: allocateRustGeneratedName(usedNames, `Implementation${implementationIdentity.slice(0, 12)}`),
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName,
           creation,
-          storage: selectRustGenericCallableStorage(Object.freeze({ identityObserved: identityFamilies.has(identity),
-            creation, asynchronous: records.asyncFunction.get(node) !== undefined, generator: records.generator.get(node) !== undefined,
-            result: value.signature.result, captures, receiverFields, receivers })),
+          storage,
           captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), receivers: Object.freeze(receivers), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);

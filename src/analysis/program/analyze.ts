@@ -1,5 +1,4 @@
 import { recordRustProgramClassEnvironments } from "../objects/class-environment-admission.js";
-import { collectRustSourcePackageBoundaries } from "../source-modules/boundaries.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "./records/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
@@ -60,15 +59,14 @@ import type { RustSourceCallableSpecializationIssue } from "../../target-model/r
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
-import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import { analyzeRustNativeTaskGraph, completeRustNativeTaskValues,
-  type RustNativeTaskGraph, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
+import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
 
 interface RustSourceStageOutput {
-  readonly nativeTasks: RustNativeTaskGraph;
+  readonly nativeTasks: SourceNativeTaskGraph;
   readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
@@ -98,11 +96,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       return;
     }
   }
-  const { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations } = collectRustSourcePackageBoundaries(
-    context,
-    projectSourceFiles,
-    sourcePackageIdentities.rootComponentId,
-  );
+  const { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations } = context.sourceBoundaries;
   for (const declaration of publishedDeclarations) context.promiseBodies.expose(declaration, declaration);
   const promotedStorageDeclarations = new Set<Node>();
   const moduleBindings = createRustModuleBindingAnalysis(context, promotedStorageDeclarations);
@@ -584,7 +578,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
-    retainedEnvironments: context.retainedEnvironments, normalizeTypeFamily: rustTypeFamilyNormalizer(context.typeFamilies),
+    retainedEnvironments: context.retainedEnvironments, nativeTasks: context.nativeTaskGraph,
+    normalizeTypeFamily: rustTypeFamilyNormalizer(context.typeFamilies),
     carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: context.semantics,
       types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier } } });
@@ -595,16 +590,12 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const selectedIssuePosition = context.diagnostics.length;
   context.promiseBodies.seal(context);
   if (context.diagnostics.length !== selectedIssuePosition) return undefined;
-  const nativeTasks = analyzeRustNativeTaskGraph({ context, lexicalFunctions: lexical, publishedDeclarations });
-  if (nativeTasks.kind === "rejected") {
-    context.diagnostics.push(...nativeTasks.diagnostics);
-    return;
-  }
-  const fallibility = recordFallibilityFacts(walk, projectSourceFiles, nativeTasks.value);
+  const nativeTasks = context.nativeTaskGraph;
+  const fallibility = recordFallibilityFacts(walk, projectSourceFiles, nativeTasks);
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
   recordFutureValueFacts(walk, fallibility.sourceErrors);
-  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks.value, fallibility.sourceErrors);
+  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks, fallibility.sourceErrors);
   if (nativeTaskCompletions.kind === "rejected") {
     context.diagnostics.push(...nativeTaskCompletions.diagnostics);
     return;
@@ -638,7 +629,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
-  return Object.freeze({ lexicalFunctions, nativeTasks: nativeTasks.value, nativeTaskCompletions: nativeTaskCompletions.value,
+  return Object.freeze({ lexicalFunctions, nativeTasks, nativeTaskCompletions: nativeTaskCompletions.value,
     sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }

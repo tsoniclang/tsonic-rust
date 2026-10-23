@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustPromiseBodyDeclaration } from "./callables-and-resources.js";
 import type { RustDeadCodeDisposition } from "./native-liveness.js";
+import type { SourceCallableSourceContract } from "./source-callable-contract.js";
 
 export interface RustSourceCallableSpecializationVariant {
   readonly declaration: Node;
@@ -22,7 +23,7 @@ export interface RustCallableDeclarationEmission {
   readonly requiresSpecialization: boolean;
   readonly specializations: readonly RustSourceCallableSpecializationVariant[];
   readonly canFallThrough: boolean;
-  readonly parameters: readonly Node[];
+  readonly contract: SourceCallableSourceContract;
   readonly parameterCarriers: readonly TargetTypeRef[];
   readonly resultCarrier: TargetTypeRef;
   readonly nativeAsync: boolean;

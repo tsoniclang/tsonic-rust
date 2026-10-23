@@ -20,8 +20,8 @@ declare const storage: RustSuspendedCallableStorage;
 declare const receiver: RustSuspendedOwnedReceiver;
 declare const selectedAbi: RustSourceParameterAbiFact;
 declare const arbitraryFact: RustSourceParameterAbiFact;
-const retention: Pick<RustGeneratorFact, "capturedParameters" | "storage" | "reentry"> = {
-  capturedParameters: [parameter], storage, reentry: "excluded" };
+const retention: Pick<RustGeneratorFact, "capturedParameters" | "storage"> = {
+  capturedParameters: [parameter], storage };
 `;
 
 function check(directory, body) {
@@ -69,9 +69,9 @@ builder.sourceBinding.get(subject);
     ["generator missing next type", "builder.generators.suspend(subject, { kind: 'sync', yieldType: protocol.yieldType, returnType: protocol.returnType }, retention);", /nextType/u],
     ["generator foreign yield carrier", "builder.generators.suspend(subject, { ...protocol, yieldType: { kind: 'invalid' } }, retention);", /not assignable/u],
     ["generator caller-defined result carrier", "builder.generators.suspend(subject, { ...protocol, resultCarrier: protocol.returnType }, retention);", /resultCarrier.*does not exist/u],
-    ["generator missing captured parameters", "builder.generators.suspend(subject, protocol, { storage, reentry: 'excluded' });", /capturedParameters.*missing/u],
-    ["generator missing reentry", "builder.generators.suspend(subject, protocol, { capturedParameters: [], storage });", /reentry.*missing/u],
-    ["generator invalid reentry", "builder.generators.suspend(subject, protocol, { ...retention, reentry: 'never' });", /not assignable/u],
+    ["generator missing captured parameters", "builder.generators.suspend(subject, protocol, { storage });", /capturedParameters.*missing/u],
+    ["generator retired excluded reentry", "builder.generators.suspend(subject, protocol, { ...retention, reentry: 'excluded' });", /reentry.*does not exist/u],
+    ["generator retired possible reentry", "builder.generators.suspend(subject, protocol, { ...retention, reentry: 'possible' });", /reentry.*does not exist/u],
     ["generator foreign capture", "builder.generators.suspend(subject, protocol, { ...retention, capturedParameters: [{}] });", /missing.*properties.*Node/u],
     ["generator unproved lifetime", "builder.generators.suspend(subject, protocol, { ...retention, storage: { kind: 'lifetime' } });", /lifetime.*missing/u],
     ["generator foreign owned receiver", "builder.generators.suspend(subject, protocol, { ...retention, ownedReceiver: {} });", /missing.*properties.*RustSuspendedOwnedReceiver/u],

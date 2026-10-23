@@ -65,6 +65,8 @@ export function rustSourceStorageProjectedCarrier(
         : rustFixedArrayCarrierValue(carrier)?.element ?? rustJsArrayLikeElementTargetType(carrier)
       : component.kind === "tuple-element"
         ? carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined
+        : component.kind === "type-argument-slot"
+          ? undefined
         : carrier === undefined ? undefined
           : projectedMemberCarrier(host, storage, subject, index, component.declaration, carrier);
   }

@@ -8,6 +8,7 @@ export interface RustRuntimeValueUsePlan {
   isRuntimeReference(declaration: Node, reference: Node): boolean;
   /** A first-class runtime use other than the initializer of one of the declaration's Promise call aliases. */
   hasFirstClassUse(declaration: Node): boolean;
+  firstClassReferencesFor(declaration: Node): readonly Node[];
   hasSameFileRuntimeUseBeforeDeclaration(declaration: Node): boolean;
   /**
    * A `const` binding initialized with a direct reference to a function declaration, never written and only ever called
@@ -27,7 +28,7 @@ export function createRustRuntimeValueUsePlan(input: {
   readonly safetyApplications: RustSafetyApplicationFactIndex;
 }): RustRuntimeValueUsePlan {
   const { ast, navigation } = input;
-  const firstClassUseByDeclaration = new WeakMap<Node, boolean>();
+  const firstClassReferences = new WeakMap<Node, readonly Node[]>();
   const earlyRuntimeUseByDeclaration = new WeakMap<Node, boolean>();
   const isRuntimeReference = (declaration: Node, reference: Node): boolean =>
     !input.safetyApplications.isCompileTimeApplicationReference(declaration, reference);
@@ -61,24 +62,24 @@ export function createRustRuntimeValueUsePlan(input: {
       return awaited !== undefined && rustUnparenthesizedExpression(ast, awaited) === call;
     }) ? target : undefined;
   };
+  const firstClassReferencesFor = (declaration: Node): readonly Node[] => {
+    const existing = firstClassReferences.get(declaration);
+    if (existing !== undefined) return existing;
+    const selected = Object.freeze(navigation.declarationUses(declaration).filter(use => {
+      if (use.kind !== "first-class" || !isRuntimeReference(declaration, use.reference)) return false;
+      const value = outermost(use.reference);
+      const binding = ast.parent(value);
+      return binding === undefined || Node_Initializer(ast, binding) !== value || promiseCallAliasTarget(binding) !== declaration;
+    }).map(use => use.reference));
+    firstClassReferences.set(declaration, selected);
+    return selected;
+  };
   return Object.freeze({
     isRuntimeReference,
     callAliasTarget,
     promiseCallAliasTarget,
-    hasFirstClassUse(declaration: Node) {
-      const existing = firstClassUseByDeclaration.get(declaration);
-      if (existing !== undefined) {
-        return existing;
-      }
-      const observed = navigation.declarationUses(declaration).some(use => {
-        if (use.kind !== "first-class" || !isRuntimeReference(declaration, use.reference)) return false;
-        const value = outermost(use.reference);
-        const binding = ast.parent(value);
-        return binding === undefined || Node_Initializer(ast, binding) !== value || promiseCallAliasTarget(binding) !== declaration;
-      });
-      firstClassUseByDeclaration.set(declaration, observed);
-      return observed;
-    },
+    firstClassReferencesFor,
+    hasFirstClassUse: (declaration: Node) => firstClassReferencesFor(declaration).length !== 0,
     hasSameFileRuntimeUseBeforeDeclaration(declaration: Node) {
       const existing = earlyRuntimeUseByDeclaration.get(declaration);
       if (existing !== undefined) {

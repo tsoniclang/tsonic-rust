@@ -30,6 +30,7 @@ import { createRustNativeStorageQueries, type RustNativeStorageConstruction, typ
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests } from "./native-generic-producers.js";
 import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import { createRustNativeCapturePlan } from "./native-captures.js";
@@ -66,6 +67,7 @@ import type { RustGenericCallableErrorIndex } from "../../target-model/records/g
 import { prepareRustProviderSourceOccurrences } from "../operations/provider-source-inputs.js";
 import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
+import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 
 import { analyzeRustNativeCallableGenerics } from "./native-inputs.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
@@ -127,6 +129,7 @@ export interface RustCallableValuePlanInput {
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly carrierHost: RustValueDomainCarrierHost;
   readonly retainedEnvironments: RustRetainedEnvironmentQueries;
+  readonly nativeTasks: SourceNativeTaskGraph;
   readonly normalizeTypeFamily: (carrier: TargetTypeRef) => TargetTypeRef;
 }
 
@@ -303,6 +306,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   }
   const genericImplementations = new Set(generic.definitions.flatMap(definition =>
     definition.implementations.map(implementation => implementation.declaration)));
+  const retentionIssues: RustSourceCallableSpecializationIssue[] = [];
   const native = createRustNativeCallableInputPlan({ ast: input.ast, records: input.records, sourcePackages: input.sourcePackages,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, usedNames,
     declaresGenericInputs: owner => input.ast.is.IsFunctionDeclaration(owner) || input.ast.is.IsMethodDeclaration(owner) ||
@@ -311,8 +315,13 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       input.lexicalFunctions.forDeclaration(owner)?.kind === "resolved", genericImplementations,
     ownedRetainedParameter: parameter => {
       const declaration = input.ast.parent(parameter);
-      return declaration !== undefined && !input.ast.hasModifierKind(declaration, "async") &&
-        input.retainedEnvironments.ownsRetainedInputs(declaration) &&
+      if (declaration === undefined || input.ast.hasModifierKind(declaration, "async")) return false;
+      const selected = input.retainedEnvironments.inputsFor(declaration);
+      if (selected.kind === "unresolved") {
+        retentionIssues.push({ subject: declaration, message: selected.reason });
+        return false;
+      }
+      return selected.ownership === "owned" &&
         input.retainedEnvironments.suspendedParametersFor(declaration)?.includes(parameter) === true;
     } });
   const nativeProducers = createRustNativeCallableProducerPlan({ source: input.sourceStorage.source, ast: input.ast, records: input.records,
@@ -347,7 +356,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     },
   });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
-  const issues = Object.freeze([...generic.issues, ...nativeStorage.issues]);
+  const issues = Object.freeze([...generic.issues, ...nativeStorage.issues, ...retentionIssues]);
   const construction: RustCallableValueConstruction = Object.freeze({ generic, native, nativeStorage, nativeProducers, issues });
   let physicalLifecycle: RustPhysicalCallableLifecycle | undefined;
   let emissionRequests: readonly RustPhysicalCallableEmissionRequest[] | undefined;
@@ -371,9 +380,10 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
           const node = asSourceNode(subject, input.ast);
           return node === undefined ? undefined : effectsFor(node);
         } } } };
-      const storageIssues = structuralMethodStorage.complete({ producerError(reference) {
+      producerErrors = Object.freeze({ producerError(reference: RustProducerErrorReference) {
         return normalizeRustErrorType({ kind: "target-specific", target: "rust", name: "producer-error", value: reference }, context);
       } });
+      const storageIssues = structuralMethodStorage.complete(producerErrors);
       if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
         nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);
@@ -432,7 +442,6 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">) {
       if (structuralMethodStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical storage requires selected callable families.");
       structuralMethodStorage.validateErrors(errors);
-      producerErrors = errors;
     },
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,

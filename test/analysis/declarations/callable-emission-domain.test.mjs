@@ -59,13 +59,48 @@ for (const [name, text, count] of [
     const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
     const declaration = nodes(program).find(program.source.ast.is.IsClassDeclaration);
     const selected = program.records.nativeClass.get(declaration);
-    assert.equal(selected.constructorParameters.length, count, "the exact authored value vector is complete");
-    assert.equal(Object.isFrozen(selected.constructorParameters), true, "constructor value parameters are sealed");
-    assert.equal(selected.constructorParameters.every(parameter => program.records.callableParameter.get(parameter) !== undefined), true,
+    const contract = selected.constructorContract;
+    assert.equal(contract.kind === "source" ? contract.parameters.length : contract.nativeParameters.length, count,
+      "the exact authored or native value vector is complete");
+    assert.equal(Object.isFrozen(contract) && Object.isFrozen(contract.nativeParameters) &&
+      (contract.kind !== "source" || Object.isFrozen(contract.parameters)), true, "constructor value parameters are sealed");
+    assert.equal(contract.kind === "source" ? contract.parameters.every(parameter => program.records.callableParameter.get(parameter) !== undefined)
+      : contract.nativeParameters.every(parameter => parameter.targetParameter.type !== undefined), true,
       "every selected source parameter retains the complete native formal ABI");
-    assert.equal(selected.constructorParameters.every(parameter => program.source.ast.parent(parameter) === selected.constructor), true,
+    assert.equal(contract.kind === "source" ? contract.parameters.every(parameter => program.source.ast.parent(parameter) === selected.constructor)
+      : "parameters" in contract === false, true,
       "the vector retains the actual checked constructor declaration identities");
     assert.equal(selected.constructor === undefined || program.records.callableDeclaration.get(selected.constructor) === undefined, true,
       "constructors are not forced through ordinary function return admission");
+  });
+}
+
+for (const [name, text] of [
+  ["abstract method", `abstract class Base { abstract read(value: number): number; }
+class Derived extends Base { read(value: number): number { return value + 1; } }
+function run(value: Base): number { return value.read(2); }
+console.log(run(new Derived()));`],
+  ["interface method with receiver annotation", `interface Reader { read(this: void, value: number): number; }
+class Derived implements Reader { read(this: void, value: number): number { return value + 1; } }
+function run(value: Reader): number { return value.read(2); }
+console.log(run(new Derived()));`],
+]) {
+  test(`${name} publishes value parameters on its contract signature without requiring a body`, () => {
+    const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+    const ast = program.source.ast;
+    const contracts = nodes(program).filter(node => ast.body(node) === undefined &&
+      (ast.is.IsMethodDeclaration(node) || ast.kindName(node) === "KindMethodSignature"));
+    assert.equal(contracts.length, 1, "one authored bodyless contract is covered");
+    const contract = contracts[0];
+    const selected = program.records.projectCallableSignature.get(contract);
+    assert.equal(selected !== undefined, true, "the existing contract owner publishes the selected signature");
+    assert.equal(selected.contract.parameters.length, 1, "only the actual source value parameter enters the native ABI");
+    assert.equal(Object.isFrozen(selected.contract.parameters), true, "the contract value vector is immutable");
+    assert.equal(selected.contract.parameters.every(parameter => ast.parent(parameter) === contract), true,
+      "the vector retains its original checked contract declaration identities");
+    assert.equal(selected.contract.parameters.every(parameter => program.records.callableParameter.get(parameter) !== undefined), true,
+      "every contract parameter has the complete native formal ABI");
+    assert.equal(program.records.callableDeclaration.get(contract) === undefined, true,
+      "signature-only contracts never require an ordinary body or return record");
   });
 }

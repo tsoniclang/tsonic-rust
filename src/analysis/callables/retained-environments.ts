@@ -47,6 +47,7 @@ export function rustRetainedCallLifetimes(
   const knownCaller = caller === undefined ? undefined : records.retainedEnvironment.get(caller);
   const retainedCaller = knownCaller ?? (callerEnvironment.kind === "selected" ? callerEnvironment.environment : undefined);
   const carriers: TargetTypeRef[] = [];
+  const scopeLifetimes: RustLifetimeRef[] = [];
   const projected = new Map<SourceStorageSubject, TargetTypeRef | undefined>();
   const lexicalVisits = new Set<Node>();
   const carrierFor =(subject: SourceStorageSubject): TargetTypeRef | undefined => {
@@ -117,9 +118,14 @@ export function rustRetainedCallLifetimes(
   };
   for (const retained of environment.inputs) {
     if (retained.kind === "native-task-scope") {
-      const selected = caller === undefined ? undefined : records.nativeTaskUse.get(caller);
-      if (selected?.kind !== "owner") return undefined;
-      carriers.push(selected.inputCarrier);
+      if (callerEnvironment.kind === "selected" &&
+        callerEnvironment.environment.inputs.some(input => input.kind === "native-task-scope"))
+        scopeLifetimes.push(callerEnvironment.environment.lifetime);
+      else {
+        const identity = sourceNodeIdentity(ast, invocation);
+        if (identity === undefined) return undefined;
+        scopeLifetimes.push(rustCallScopedElisionLifetime(identity, environment.lifetime.identity));
+      }
       continue;
     }
     const parameter = retained.declaration;
@@ -155,9 +161,8 @@ export function rustRetainedCallLifetimes(
   }
   const contract = rustEnclosingStorageContract(invocation, ast, walk.context.sourceLifetimes);
   const retainedLifetimes = new Set((retainedCaller?.inputs ?? []).flatMap(input => {
-    const task = caller === undefined ? undefined : records.nativeTaskUse.get(caller);
-    const carrier = input.kind === "parameter" ? records.sourceParameterAbi.get(input.declaration)?.parameterCarrier
-      : task?.kind === "owner" ? task.inputCarrier : undefined;
+    if (input.kind === "native-task-scope") return retainedCaller === undefined ? [] : [rustLifetimeKey(retainedCaller.lifetime)];
+    const carrier = records.sourceParameterAbi.get(input.declaration)?.parameterCarrier;
     return carrier === undefined || rustHasOpenOwnedStorage(carrier) ? [] : rustTargetGenericReferences(carrier).lifetimeIdentities;
   }));
   const effective = retainedCaller === undefined ? contract : { ...contract, parameters: [
@@ -166,9 +171,11 @@ export function rustRetainedCallLifetimes(
     { kind: "lifetime" as const, declaration: caller!, sourceName: retainedCaller.lifetime.name,
       lifetime: retainedCaller.lifetime, outlives: [] },
   ] };
-  const lifetime = selectRustSuspendedStorageLifetime(carriers, effective);
+  const lifetime = selectRustSuspendedStorageLifetime({ carriers, lifetimes: scopeLifetimes }, effective);
   if (lifetime === undefined) {
-    const elisions = carriers.flatMap(carrier => rustTargetGenericReferences(carrier).callScopedElisions);
+    if (scopeLifetimes.some(lifetime => lifetime.kind !== "call-scoped-elision")) return undefined;
+    const elisions = [...carriers.flatMap(carrier => rustTargetGenericReferences(carrier).callScopedElisions),
+      ...scopeLifetimes.filter(lifetime => lifetime.kind === "call-scoped-elision")];
     if (elisions.length === 0 || !elisions.every(lifetime => rustLifetimeKey(lifetime) === rustLifetimeKey(elisions[0]!)) ||
       carriers.some(carrier => rustTargetGenericReferences(carrier).lifetimes.length !== 0)) return undefined;
     return new Map([[rustLifetimeKey(environment.lifetime), elisions[0]!]]);

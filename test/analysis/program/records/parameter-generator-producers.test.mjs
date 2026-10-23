@@ -19,7 +19,7 @@ const lifetime = { kind: "parameter", identity: "source::input", name: "input" }
 const parameter = {};
 const reference = {};
 const protocol = { kind: "sync", yieldType: integer, returnType: wide, nextType: integer };
-const retention = { capturedParameters: [parameter], storage: { kind: "static" }, reentry: "excluded" };
+const retention = { capturedParameters: [parameter], storage: { kind: "static" } };
 const abi = { form: "required", valueCarrier: integer, parameterCarrier: integer, mode: "value" };
 const construct = {
   generator: (builder, subject) => builder.generators.suspend(subject, protocol, retention),
@@ -97,7 +97,7 @@ for (const kind of ["sync", "async"]) for (const storage of [
     const logical = kind === "sync" ? rustGeneratorTargetType(selected) : rustAsyncGeneratorTargetType(selected);
     assert.equal(rustTargetTypeRefEquals(fact.resultCarrier, logical), true,
       "the source signature retains only Y/R/N while the exact retention lifetime remains in its required storage fact");
-    assert.equal(fact.reentry, "excluded", "the source storage proof is published once, separately from physical E");
+    assert.equal("reentry" in fact, false, "the generator record does not encode a runtime reentry policy");
     const result = getRustGeneratorProtocol(fact.resultCarrier);
     assert.equal(result?.kind, kind);
     assert.equal(rustTargetTypeRefEquals(result?.nextType, integer), true);
@@ -121,7 +121,7 @@ test("generator equality rejects every changed protocol, captured identity, life
     [protocol, { ...originalRetention, ownedReceiver: { ...ownedReceiver, carrier: wide } }],
     [protocol, { ...originalRetention, ownedReceiver: { ...ownedReceiver, occurrences: [parameter, reference] } }],
     [protocol, { ...originalRetention, ownedReceiver: { ...ownedReceiver, occurrences: [{}] } }],
-    [protocol, { ...originalRetention, reentry: "possible" }],
+    [protocol, { ...originalRetention, capturedParameters: [parameter, parameter] }],
   ];
   for (const [index, [selectedProtocol, selectedRetention]] of cases.entries()) {
     const parent = createRustProgramRecordBuilder();
@@ -137,13 +137,14 @@ test("generator equality rejects every changed protocol, captured identity, life
   }
 });
 
-test("a generator cannot publish a missing or fabricated reentry proof", () => {
-  for (const reentry of [undefined, "never", true]) {
+test("a generator preserves every supported captured-parameter count without a reentry policy", () => {
+  for (const capturedParameters of [[], [parameter], [parameter, reference]]) {
     const builder = createRustProgramRecordBuilder();
     const subject = {};
-    assert.throws(() => builder.generators.suspend(subject, protocol, { ...retention, reentry }),
-      /pre-seal source-storage reentry selection/u, "a required source fact is never defaulted to an infallible policy");
-    assert.equal(builder.generator.get(subject) === undefined, true, "invalid evidence publishes nothing");
+    builder.generators.suspend(subject, protocol, { ...retention, capturedParameters });
+    assert.equal(builder.generator.get(subject)?.capturedParameters === capturedParameters, true,
+      "the exact source capture inventory is preserved");
+    assert.equal("reentry" in builder.generator.get(subject), false, "native reentry is not a source fact");
   }
 });
 

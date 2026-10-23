@@ -43,7 +43,7 @@ outer();`);
   assert.equal(names.join(","), "outer,schedule", "only the transitive scheduling callers need a scope");
   assert.equal(graph.spawns.length, 1, "the explicit void has one task owner");
   assert.equal(graph.calls.length, 2, "both source invocation edges receive one hidden argument");
-  assert.equal(graph.capturedOwners.size, 0, "ordinary direct callers do not invent a stored scope capture");
+  assert.equal("capturedOwners" in graph, false, "the supported direct-call graph has no scope-capture representation");
   assert.equal(graph.calls.every(call => call.targets.length === 1), true, "every hidden call edge has one exact checked target");
   assert.equal(graph.entries.length, 1, "the entry module owns the executor lifetime");
 });
@@ -81,4 +81,17 @@ export function schedule(): void { void body(); }
 schedule();`);
   const { names } = admitted(current);
   assert.equal(names.join(","), "schedule", "the executable's ordinary helper retains its native scope ABI");
+});
+
+for (const [name, declaration, use, code] of [
+  ["generator", "function* values(): Generator<number, void, unknown> { void body(); yield 1; }", "values().next();", "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED"],
+  ["stored closure", "function make(): () => void { return (): void => { void body(); }; }", "const schedule = make(); schedule();", "RUST_NATIVE_TASK_SCOPE_OWNER_NOT_CLOSED"],
+  ["class initializer", "class Value { readonly started = void body(); }", "new Value();", "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED"],
+  ["entry initializer", "const started = void body();", "void started;", "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED"],
+]) test(`native spawning refuses the ${name} context before physical publication`, () => {
+  const current = analyze(`async function body(): Promise<void> { return; } ${declaration} ${use}`);
+  assert.equal(current.result.diagnostics.some(diagnostic => diagnostic.code === code), true,
+    `${name}: the actual source context is refused precisely`);
+  assert.equal(current.stage === undefined, true, `${name}: unsupported scope storage never reaches physical analysis`);
+  assert.equal(current.result.artifacts.length, 0, `${name}: a rejected source capability emits nothing`);
 });

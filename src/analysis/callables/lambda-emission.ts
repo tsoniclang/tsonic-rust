@@ -17,6 +17,7 @@ import { rustProducerErrorReference } from "../../target-model/types/carriers/pr
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
+import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "reachability">,
@@ -163,7 +164,14 @@ function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">
     const index = ast.arguments(owner).indexOf(value);
     slot = index < 0 ? undefined
       : operation.abi.sourceArguments.find(argument => argument.sourceIndex === index && argument.form === "value")?.carrier;
-  } else if (operation?.kind === "array-literal" && ast.is.IsArrayLiteralExpression(owner)) slot = operation.elementCarrier;
+  } else if (operation?.kind === "array-literal" && ast.is.IsArrayLiteralExpression(owner)) {
+    const selected = program.callableValues.nativeStorage.valueFor(owner);
+    if (selected.kind === "unresolved")
+      failTargetAnalysisInvariant("tsonic-rust", "A callable array element requires its selected physical aggregate storage.", owner);
+    const element = selected.carrier.kind === "array" || selected.carrier.kind === "slice" ? selected.carrier.element
+      : rustJsArrayLikeElementTargetType(selected.carrier);
+    return element === undefined ? undefined : rustCallablePhysicalSignature(rustOptionElementCarrier(element) ?? element)?.error;
+  }
   else if (ast.is.IsBinaryExpression(owner) && BinaryExpression_Right(ast, owner) === value) {
     // A closure assigned to a writable method property is stored in the method's override slot.
     const left = BinaryExpression_Left(ast, owner);

@@ -1,14 +1,17 @@
 import type { Node } from "@tsonic/tsts";
-import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { Node_Expression, Node_Initializer, sourceExpressionResultDisposition, sourceLexicalEnvironment,
+import { defaultSourceStorageLimits, createSourceStorageBudget, createSourceCallableRetentionQuery,
+  type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject,
+  type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
+import { Node_Initializer, sourceLexicalEnvironment,
   sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import { rustAwaitedPromiseLocal } from "./promise-locals.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { RustRetainedEnvironmentSelection } from "../../target-model/records/retained-environments.js";
 
-type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes">;
+type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
+  readonly nativeTasks: SourceNativeTaskGraph;
+};
 import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../target-model/records/retained-environments.js";
 
 export function createRustRetainedEnvironmentQueries(
@@ -19,6 +22,9 @@ export function createRustRetainedEnvironmentQueries(
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
   const suspended = new Map<Node, readonly Node[] | undefined>();
   const lexical = new Map<Node, RustRetainedLexicalSelection>();
+  const taskOwners = new Set(input.nativeTasks.owners);
+  const callableRetention = createSourceCallableRetentionQuery({ source: input.source, storage,
+    budget: createSourceStorageBudget({ ...defaultSourceStorageLimits, maximumSteps }) });
   let opaqueInvocations: ReadonlySet<Node> | undefined;
   let remaining = Number.isSafeInteger(maximumSteps) && maximumSteps > 0 ? maximumSteps : 0;
   const step = (): boolean => remaining > 0 && --remaining >= 0;
@@ -59,25 +65,7 @@ export function createRustRetainedEnvironmentQueries(
     lexical.set(declaration, selected);
     return selected;
   };
-  // An async function's Promise stays within its callers' activations when every use is a direct call whose result
-  // is awaited there, directly or through a local awaited as the next evaluation (rustAwaitedPromiseLocal). Otherwise
-  // the Promise escapes and its retained inputs must be owned.
-  const resultEscapes = (declaration: Node): boolean => {
-    if (!ast.is.IsFunctionDeclaration(declaration)) return false;
-    const summary = navigation.declarationUseSummary(declaration);
-    if (summary.exported || summary.bindingWritten) return true;
-    for (const use of navigation.declarationUses(declaration)) {
-      if (!step()) return true;
-      if (use.kind === "type-only") continue;
-      const call = ast.parent(use.reference);
-      if (use.kind !== "direct-call" || call === undefined || !ast.is.IsCallExpression(call) ||
-        Node_Expression(ast, call) !== use.reference) return true;
-      if (sourceExpressionResultDisposition(ast, call).kind !== "awaited-in-scope" &&
-        !rustAwaitedPromiseLocal(ast, navigation, call)) return true;
-    }
-    return false;
-  };
-  const owned = new Map<Node, boolean>();
+  const ownership = new Map<Node, ReturnType<RustRetainedEnvironmentQueries["inputsFor"]>>();
   // A declared class or interface result is a nominal native record without lifetime parameters: storage it retains
   // from the inputs is owned by the record, so those inputs are 'static rather than an environment lifetime.
   const returnsNominalRecord = (declaration: Node): boolean => {
@@ -89,11 +77,15 @@ export function createRustRetainedEnvironmentQueries(
     return declarations.length !== 0 && declarations.every((node: Node) =>
       ast.is.IsInterfaceDeclaration(node) || ast.is.IsClassDeclaration(node));
   };
-  const ownsRetainedInputs = (declaration: Node): boolean => {
-    const cached = owned.get(declaration);
+  const inputsFor = (declaration: Node): ReturnType<RustRetainedEnvironmentQueries["inputsFor"]> => {
+    const cached = ownership.get(declaration);
     if (cached !== undefined) return cached;
-    const selected = ast.hasModifierKind(declaration, "async") ? resultEscapes(declaration) : returnsNominalRecord(declaration);
-    owned.set(declaration, selected);
+    const retention = isSuspended(declaration) ? callableRetention.forDeclaration(declaration) : undefined;
+    const selected = retention?.kind === "unresolved" ? unresolved(retention.reason)
+      : Object.freeze({ kind: "resolved" as const,
+        ownership: (retention === undefined ? returnsNominalRecord(declaration)
+          : retention.retention === "retained") ? "owned" as const : "borrowed" as const });
+    ownership.set(declaration, selected);
     return selected;
   };
   const isSuspended = (declaration: Node): boolean => ast.hasModifierKind(declaration, "async") ||
@@ -244,7 +236,15 @@ export function createRustRetainedEnvironmentQueries(
       }
     }
     const selected = parameters.filter((parameter): parameter is Node => parameter !== undefined && retained.has(parameter));
-    if (selected.length === 0 || ownsRetainedInputs(declaration)) return none;
+    const scopeDemand = taskOwners.has(declaration) && input.nativeTasks.parameterOwners.has(declaration) && isSuspended(declaration);
+    const retention = scopeDemand ? callableRetention.forDeclaration(declaration) : undefined;
+    if (retention?.kind === "unresolved") return unresolved(retention.reason);
+    const retainsScope = retention?.kind === "resolved" && retention.retention === "scoped";
+    if (selected.length === 0 && !retainsScope) return none;
+    const inputs = selected.length === 0 ? undefined : inputsFor(declaration);
+    if (inputs?.kind === "unresolved") return inputs;
+    const borrowed = inputs?.ownership === "owned" ? [] : selected;
+    if (borrowed.length === 0 && !retainsScope) return none;
     const identity = sourceNodeIdentity(ast, declaration);
     if (identity === undefined) return unresolved();
     const names = new Set<string>();
@@ -255,15 +255,17 @@ export function createRustRetainedEnvironmentQueries(
     }
     const environment: RustRetainedEnvironment = Object.freeze({
       lifetime: Object.freeze({ kind: "parameter", identity: `retained-environment\0${identity}`,
-        name: allocateRustGeneratedName(names, "environment") }), inputs: Object.freeze(selected.map(declaration =>
-          Object.freeze({ kind: "parameter" as const, declaration }))) });
+        name: allocateRustGeneratedName(names, "environment") }), inputs: Object.freeze([
+          ...borrowed.map(declaration => Object.freeze({ kind: "parameter" as const, declaration })),
+          ...retainsScope ? [Object.freeze({ kind: "native-task-scope" as const })] : [],
+        ]) });
     return Object.freeze({ kind: "selected", environment });
   };
   // Selected on demand by the analysis passes that need them, after the source storage facts they read exist
   // (the checkpoint behaviour). Selecting every declaration while the analysis context is still being created ran
   // source storage queries too early, and the first unresolved collector failed the shared storage budget for the
   // whole program.
-  return Object.freeze({ suspendedParametersFor, lexicalFor, ownsRetainedInputs, environmentFor(declaration: Node) {
+  return Object.freeze({ suspendedParametersFor, lexicalFor, inputsFor, environmentFor(declaration: Node) {
     const cached = environments.get(declaration);
     if (cached !== undefined) return cached;
     const selected = select(declaration);

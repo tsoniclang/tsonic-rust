@@ -2,8 +2,8 @@ import { rustParameterModeForCarriers, selectRustSourceParameterAbi } from "../.
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
-import type { Node } from "@tsonic/tsts";
-import { isRustVecCarrier, isRustStringCarrier, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol } from "../../target-model/types/index.js";
+import type { Node, Type } from "@tsonic/tsts";
+import { isRustVecCarrier, isRustStringCarrier, isRustUnitCarrier, isRustNeverCarrier, rustUnitTargetType, rustOptionElementCarrier, rustSourceOptionalTargetType, isRustJsValueCarrier, rustProgramErrorTargetType, rustTsValueTargetType, rustEmptyObjectTargetType, rustObjectIdentityTargetType, rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { rustTargetTypeRefEquals, rustTargetTypeRefEqualsWithinLifetimeBinders } from "../../target-model/types/equality.js";
 
@@ -26,6 +26,152 @@ import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { closeRustRetainedParameter } from "./retained-values.js";
 import { retainRustStructuralInstantiation } from "../source-evidence/types/resolution/structural-instantiations.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustResolutionContext, type RustFactWalk } from "../program/walk.js";
+import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
+import { selectRustPointerReturnContract } from "./pointer-return.js";
+import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
+import { resolveRustRetainedResult } from "../source-evidence/types/resolution/retained-results.js";
+import { selectRustInferredReturn, selectRustRetainedReturn, type RustInferredReturnSelection } from "./inferred-return.js";
+import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
+import { rustUnionPayloadAdmission } from "../../policy/conversions/union-injection.js";
+import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
+import { requireRustRecord } from "../program/records/required-records.js";
+import { rustSourceCallableReturnFactEquals } from "../../target-model/records/equality.js";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { SourceCallableNativeContract, SourceCallableSourceContract } from "../../target-model/records/source-callable-contract.js";
+import type { RustImplicitConstructorParameter } from "../../target-model/records/construction.js";
+
+export function createRustSourceCallableContract(input: {
+  readonly source: TargetSourceProgram;
+  readonly records: RustProgramRecords;
+  readonly sourceLifetimes: RustLifetimeIndex;
+}, declaration: Node, returnType: TargetTypeRef): SourceCallableSourceContract | undefined {
+  const parameters = sourceCallableValueParameters(input.source.ast, declaration, input.source.semantics.forNode(declaration));
+  if (parameters === undefined) return undefined;
+  const nativeParameters: SourceCallableSourceContract["nativeParameters"][number][] = [];
+  for (const parameter of parameters) {
+    const selected = input.records.sourceParameterAbi.get(parameter);
+    const formal = input.records.callableParameter.get(parameter);
+    if (selected === undefined || formal === undefined) return undefined;
+    nativeParameters.push(Object.freeze({ sourceParameter: parameter,
+      targetParameter: Object.freeze({ ...selected, parameterCarrier: formal.carrier }) }));
+  }
+  const sourceReturn = input.records.sourceCallableReturn.get(declaration);
+  if (sourceReturn === undefined && !input.source.ast.is.IsConstructorDeclaration(declaration)) return undefined;
+  return Object.freeze({ kind: "source", sourceDeclaration: declaration,
+    parameters: Object.freeze([...parameters]), nativeParameters: Object.freeze(nativeParameters), returnType,
+    nativeSignature: Object.freeze({ genericParameters: Object.freeze([
+      ...(input.sourceLifetimes.contractFor(declaration)?.parameters ?? []),
+      ...(input.records.nativeGenerics.get(declaration)?.implicitLifetimes ?? []),
+    ]), sourceReturn }) });
+}
+
+export function createRustNativeConstructorContract(input: {
+  readonly parameters: readonly RustImplicitConstructorParameter[];
+  readonly sourceDeclaration: Node | undefined;
+  readonly returnType: TargetTypeRef;
+}): SourceCallableNativeContract {
+  return Object.freeze({ kind: "native", ...(input.sourceDeclaration === undefined ? {} : { sourceDeclaration: input.sourceDeclaration }),
+    nativeParameters: Object.freeze(input.parameters.map(parameter => Object.freeze({ sourceParameter: parameter.declaration,
+      targetParameter: Object.freeze({ name: parameter.name, type: parameter.carrier, passingMode: "by-value" as const }) }))),
+    returnType: input.returnType, nativeSignature: Object.freeze({ genericParameters: Object.freeze([]) }) });
+}
+
+export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node): Type | undefined {
+  const semantics = walk.context.semanticsFor(declaration);
+  const signature = semantics.types.declarationSignatureInfo(declaration);
+  return signature !== undefined && semantics.declarations.signatureDeclaration(signature.signature) === declaration
+    ? signature.returnType : undefined;
+}
+
+export interface RustSourceCallableReturnSelection {
+  readonly fact: RustSourceCallableReturnFact;
+  readonly retainedEnvironment?: RustRetainedEnvironment;
+}
+
+export function selectRustCallableLogicalReturn(
+  walk: RustFactWalk, declaration: Node, selectedCarrier?: TargetTypeRef,
+): RustInferredReturnSelection {
+  const generator = walk.context.records.generator.get(declaration);
+  const asynchronous = walk.context.records.asyncFunction.get(declaration);
+  const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ?? resolveRustTargetTypeRef(
+    Node_Type(walk.context.ast, declaration) ?? selectedSourceCallableReturn(walk, declaration),
+    rustResolutionContext(walk, declaration), walk.operationOptions);
+  return selectedCarrier !== undefined || generator !== undefined || asynchronous !== undefined
+    ? baseline === undefined ? { kind: "pending" as const } : { kind: "complete" as const, carrier: baseline }
+    : selectRustInferredReturn(walk, declaration, baseline);
+}
+
+export function selectRustSourceCallableReturn(
+  walk: RustFactWalk,
+  declaration: Node,
+  selectedCarrier?: TargetTypeRef,
+): RustSourceCallableReturnSelection | undefined {
+  const generator = walk.context.records.generator.get(declaration);
+  const asynchronous = walk.context.records.asyncFunction.get(declaration);
+  if (walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined
+    ? generator === undefined
+    : asynchronous === undefined && walk.context.ast.hasModifierKind(declaration, "async")) return undefined;
+  const sourceReturn = selectedSourceCallableReturn(walk, declaration);
+  const inference = selectRustCallableLogicalReturn(walk, declaration, selectedCarrier);
+  if (inference.kind === "pending") return undefined;
+  const selected = inference.carrier;
+  const pointer = selectRustPointerReturnContract(declaration, rustResolutionContext(walk, declaration), walk.operationOptions);
+  if (selectedCarrier !== undefined && pointer !== undefined &&
+    !rustTargetTypeRefEquals(selectedCarrier, pointer.returnCarrier)) return undefined;
+  const rawCarrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
+  const parameters = sourceCallableValueParameters(walk.context.ast, declaration, walk.context.semanticsFor(declaration));
+  if (parameters === undefined) return undefined;
+  const parameterCarriers = parameters.map(parameter =>
+    parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
+  if (parameterCarriers.some(parameter => parameter === undefined)) return undefined;
+  const nativeReturn = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
+    : selectRustRetainedReturn(walk, declaration, rawCarrier);
+  if (nativeReturn?.kind === "pending") return undefined;
+  const retained = nativeReturn?.kind !== "complete" ? undefined
+    : resolveRustRetainedResult(declaration, sourceReturn, nativeReturn.carrier, parameterCarriers,
+        rustResolutionContext(walk, declaration), walk.operationOptions);
+  const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
+  if (carrier === undefined) return undefined;
+  const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
+  const borrowedAbi = borrowedParameter === undefined ? undefined
+    : walk.context.records.sourceParameterAbi.get(borrowedParameter);
+  const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
+  const absence = rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined ||
+    rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, walk.context.typeDefinitions) !== undefined;
+  const implementationResult = asynchronous !== undefined || generator !== undefined || sourceReturn === undefined
+    ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
+  return {
+    fact: {
+      returnCarrier: carrier,
+      ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
+        rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),
+      ...(isRustUnitCarrier(implementationResult) ? { implementationCompletion: "absence" as const }
+        : isRustNeverCarrier(implementationResult) ? { implementationCompletion: "diverging" as const } : {}),
+      ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
+      ...(absence || pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
+      ...(absence && completion?.canFallThrough || pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
+    },
+    ...(retained?.environment === undefined ? {} : { retainedEnvironment: retained.environment }),
+  };
+}
+
+export function recordRustSourceCallableReturn(walk: RustFactWalk, declaration: Node, logical: TargetTypeRef): boolean {
+  const { records, ast } = walk.context;
+  if (!ast.is.IsSetAccessorDeclaration(declaration)) return records.sourceCallableReturns.resolve(walk, declaration, logical);
+  requireRustRecord(walk.context.requiredRecords, "sourceCallableReturn", declaration,
+    "setter", "finalizeRustCallableSignature");
+  const existing = records.sourceCallableReturn.get(declaration);
+  if (existing === undefined) records.sourceCallableReturns.setter(declaration);
+  else if (!rustSourceCallableReturnFactEquals(existing, { returnCarrier: rustUnitTargetType() }))
+    failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact source subject.", declaration);
+  return true;
+}
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(

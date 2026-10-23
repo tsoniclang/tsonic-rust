@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { getRustGeneratorProtocol } from "../../../../dist/target-model/types/index.js";
-import { rustGeneratorStorageTargetType } from "../../../../dist/policy/types/callables/generators.js";
+import { getRustGeneratorProtocol, rustGeneratorTargetType, rustAsyncGeneratorTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 const integer = 'import type { int32 } from "@tsonic/core/types.js";';
@@ -46,8 +45,10 @@ for (const surfaces of [[], ["js"]]) {
         assert.equal(fact[field].kind, "source-primitive", name + ":" + field);
         assert.equal(fact[field].name, "int32", name + ":" + field);
       }
-      const lifetime = fact.storage.kind === "static" ? undefined : fact.storage.kind === "receiver" ? { kind: "placeholder" } : fact.storage.lifetime;
-      assert.equal(rustTargetTypeRefEquals(fact.resultCarrier, rustGeneratorStorageTargetType(fact, lifetime)), true, name);
+      assert.equal(["static", "receiver", "lifetime"].includes(fact.storage.kind), true, name + ":storage");
+      if (fact.storage.kind === "lifetime") assert.equal(fact.storage.lifetime !== undefined, true, name + ":lifetime");
+      const logical = fact.kind === "sync" ? rustGeneratorTargetType(fact) : rustAsyncGeneratorTargetType(fact);
+      assert.equal(rustTargetTypeRefEquals(fact.resultCarrier, logical), true, name + ":logical-source-protocol");
       assert.equal(getRustGeneratorProtocol(fact.resultCarrier)?.kind, fact.kind, name);
     }
     assert.equal(count, 3);

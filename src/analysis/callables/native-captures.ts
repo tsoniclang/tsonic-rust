@@ -67,10 +67,12 @@ export function createRustNativeCapturePlan(input: {
     const captures = carriers(fact.captures);
     const receiverFields = captures === undefined ? undefined : carriers(fact.receiverFields);
     const receivers = receiverFields === undefined ? undefined : carriers(fact.receivers);
-    return captures === undefined || receiverFields === undefined || receivers === undefined
-      ? unresolved(failure ?? "A native capture lacks exact physical storage evidence.")
-      : Object.freeze({ kind: "resolved", captures, receiverFields, receivers, inputs: Object.freeze([...inputs]),
-        environment: rustTargetGenericReferences({ kind: "tuple", elements: [...captures, ...receiverFields, ...receivers] }) });
+    if (captures === undefined || receiverFields === undefined || receivers === undefined)
+      return unresolved(failure ?? "A native capture lacks exact physical storage evidence.");
+    const references = rustTargetGenericReferences({ kind: "tuple", elements: [...captures, ...receiverFields, ...receivers,
+      ...[...inputs].map(input => input.trait)] });
+    return Object.freeze({ kind: "resolved", captures, receiverFields, receivers,
+      inputs: Object.freeze([...inputs]), environment: references });
   };
   const construct = (declaration: Node, required: boolean): RustNativeCaptureSelection => {
     if (published !== undefined) return published.forDeclaration(declaration);

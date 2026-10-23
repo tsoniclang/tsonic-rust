@@ -844,8 +844,9 @@ function captureFixture(subjectFor) {
   const fact = Object.freeze({ captures: [{ reference, carrier }], receiverFields: [], receivers: [] });
   const facts = new Map([[declaration, fact], [required, fact], [unrequired, fact]]);
   const state = { selections: 0, plan: undefined };
+  const records = createRustRecordFixture({ closureCapture: { get: node => facts.get(node) } });
   state.plan = createRustNativeCapturePlan({
-    records: createRustRecordFixture({ closureCapture: { get: node => facts.get(node) } }),
+    records,
     storage: { nodes: [declaration, required, unrequired, reference],
       subjectFor: node => ({ kind: "resolved", subject: { node, kind: "value", projection: [] } }) },
     nativeStorage: { subjectFor(subject, selected, owner) {

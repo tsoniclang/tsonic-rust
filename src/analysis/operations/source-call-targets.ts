@@ -48,27 +48,9 @@ export function selectRustProjectSourceCallTarget(input: {
   const selectedMember = selectedSignature.member;
   let target: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>["target"] | undefined;
   let operationKind: "method" | "constructor" = "method";
-  const calleeReferenceDeclaration = walk.context.source.navigation.sourceReferenceFor(callee)?.declaration;
-  const calleeImplementation = calleeReferenceDeclaration === undefined
-    ? undefined
-    : walk.context.source.navigation.callableImplementation(
-        calleeReferenceDeclaration,
-      );
-  const calleeModuleBinding = calleeReferenceDeclaration === undefined
-    ? undefined
-    : walk.context.records.moduleBinding.get(calleeReferenceDeclaration);
-  const directModuleFunction = calleeModuleBinding?.storage === "native-callable" &&
-    calleeModuleBinding.callableDeclaration === selectedDeclaration;
-  const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
-    (calleeImplementation?.kind === "resolved" &&
-      calleeImplementation.implementation.declaration === selectedDeclaration);
-  const lexicalBinding = walk.context.sourceCallables.directLexicalBinding(selectedDeclaration);
-  const directLexical = lexicalBinding !== undefined && lexicalBinding === calleeReferenceDeclaration;
-  // A Promise call alias holds no value: its calls invoke the aliased function declaration itself.
-  const promiseAlias = calleeReferenceDeclaration !== undefined &&
-    walk.context.sourceCallables.promiseCallAliasTarget(calleeReferenceDeclaration) === selectedDeclaration;
-  const callableCalleeCarrier = expressionKind === KindNewExpression || directModuleFunction || directLexical || promiseAlias ||
-    declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration
+  const reference = walk.context.callableInvocationReferences.forTarget(callee, selectedDeclaration);
+  const calleeReferenceDeclaration = reference.referenceDeclaration;
+  const callableCalleeCarrier = expressionKind === KindNewExpression || reference.nativeFunction
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);
   const optionalCall = walk.context.records.optionalChain.get(expression);
@@ -80,10 +62,10 @@ export function selectRustProjectSourceCallTarget(input: {
   const indirectCallable = selectedCallableCarrier !== undefined &&
     (selectedNativeCallable !== undefined || selectedGenericCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&
-    (!directCallableDeclaration ||
+    (!reference.directDeclaration ||
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
-  if (directModuleFunction) {
-    const name = calleeModuleBinding.name;
+  if (reference.directModule) {
+    const name = calleeReferenceDeclaration === undefined ? undefined : walk.context.moduleCallables.nativeCallable(calleeReferenceDeclaration)?.name;
     const fileName = ast.getFileName(ast.getSourceFile(calleeReferenceDeclaration!));
     if (name === undefined || fileName.length === 0) {
       return undefined;
@@ -242,8 +224,8 @@ export function selectRustProjectSourceCallTarget(input: {
         recordBindingWrite(walk, receiver, "referent");
       }
     }
-  } else if (declarationKind === KindFunctionDeclaration || directLexical) {
-    const name = directLexical ? walk.context.names.nameForDeclaration(lexicalBinding)
+  } else if (declarationKind === KindFunctionDeclaration || reference.directLexical) {
+    const name = reference.directLexical ? walk.context.names.nameForDeclaration(calleeReferenceDeclaration)
       : walk.context.names.functionNameForDeclaration(selectedDeclaration);
     const fileName = ast.getFileName(ast.getSourceFile(selectedDeclaration));
     if (name === undefined || fileName.length === 0) {
@@ -272,5 +254,5 @@ export function selectRustProjectSourceCallTarget(input: {
   }
   const callable = target.form !== "callable" ? undefined
     : selectedGenericCallable ?? selectedNativeCallable ?? rustCallableProtocol(target.carrier);
-  return Object.freeze({ target, operationKind, directLexical, optionalCall, callable });
+  return Object.freeze({ target, operationKind, directLexical: reference.directLexical, optionalCall, callable });
 }

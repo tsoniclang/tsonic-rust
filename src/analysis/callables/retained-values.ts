@@ -14,7 +14,9 @@ export function rustRetainedValueLifetime(
   walk: { readonly context: Pick<RustSourcePolicyContext, "ast" | "source" | "sourceLifetimes" | "records" | "retainedEnvironments"> },
 ): RustLifetimeRef | undefined {
   const { context } = walk;
-  if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime(captures,
+  const retainedScope = context.records.retainedEnvironment.get(declaration);
+  const scopeLifetimes = retainedScope?.inputs.some(input => input.kind === "native-task-scope") ? [retainedScope.lifetime] : [];
+  if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime({ carriers: captures, lifetimes: scopeLifetimes },
     rustEnclosingStorageContract(declaration, context.ast, context.sourceLifetimes));
   const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
   const parameters = owner === undefined ? []
@@ -63,7 +65,9 @@ export function closeRustRetainedParameter(
   const selected = context.retainedEnvironments.environmentFor(declaration);
   if (selected.kind === "unresolved") return undefined;
   if (selected.kind === "none") {
-    const retained = context.retainedEnvironments.ownsRetainedInputs(declaration)
+    const inputs = context.retainedEnvironments.inputsFor(declaration);
+    if (inputs.kind === "unresolved") return undefined;
+    const retained = inputs.ownership === "owned"
       ? context.retainedEnvironments.suspendedParametersFor(declaration) : undefined;
     return retained?.includes(parameter) === true ? closeRustRetainedCallableCarrier(carrier, { kind: "static" }) : carrier;
   }

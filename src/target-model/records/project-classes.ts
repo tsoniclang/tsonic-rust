@@ -8,6 +8,7 @@ import type { RustProjectFieldImplementation, RustProjectFieldDispatchPlan } fro
 import type { RustDeadCodeDisposition } from "./native-liveness.js";
 import type { RustObjectRepresentation } from "./object-representation.js";
 import type { RustNamedClassEnvironment } from "./class-values.js";
+import type { SourceCallableSourceContract } from "./source-callable-contract.js";
 
 export type RustProjectCallableAdapterIndex = ReadonlyMap<Node, ReadonlyMap<Node, ReadonlyMap<string, RustProjectCallableAdapter>>>;
 
@@ -38,6 +39,7 @@ export interface RustProjectClassStateEmission {
 }
 
 export interface RustProjectCallableSignature {
+  readonly contract: SourceCallableSourceContract;
   readonly typeParameters: readonly string[];
   readonly returnCarrier: TargetTypeRef;
   readonly omitReturn: boolean;

@@ -20,12 +20,12 @@ const promise = (lifetime, payload = rustUnitTargetType()) => rustCallableTarget
 
 test("suspended input elision follows native signature scopes, never field or ambiguous inference", () => {
   const input = promise(inferred);
-  assert.deepEqual(selectRustCallableStorageLifetime([input], [input]), inferred);
-  assert.equal(selectRustSuspendedStorageLifetime([input]), undefined);
-  assert.equal(selectRustCallableStorageLifetime([input, input], [input]), undefined);
-  assert.equal(selectRustCallableStorageLifetime([input, promise(owned)], [input]), undefined);
-  assert.equal(selectRustCallableStorageLifetime([input, promise(borrowed)], [input]), undefined);
-  assert.equal(selectRustCallableStorageLifetime([input], [input, promise(borrowed)]), undefined);
+  assert.deepEqual(selectRustCallableStorageLifetime([input], { carriers: [input], lifetimes: [] }), inferred);
+  assert.equal(selectRustSuspendedStorageLifetime({ carriers: [input], lifetimes: [] }), undefined);
+  assert.equal(selectRustCallableStorageLifetime([input, input], { carriers: [input], lifetimes: [] }), undefined);
+  assert.equal(selectRustCallableStorageLifetime([input, promise(owned)], { carriers: [input], lifetimes: [] }), undefined);
+  assert.equal(selectRustCallableStorageLifetime([input, promise(borrowed)], { carriers: [input], lifetimes: [] }), undefined);
+  assert.equal(selectRustCallableStorageLifetime([input], { carriers: [input, promise(borrowed)], lifetimes: [] }), undefined);
   const callback = { kind: "function-pointer", args: [{ kind: "reference", referent: rustUnitTargetType(), mutable: false }],
     result: rustUnitTargetType() };
   assert.deepEqual(rustTargetGenericReferences(callback).elisionInputs, []);
@@ -33,6 +33,24 @@ test("suspended input elision follows native signature scopes, never field or am
   assert.equal(rustSingleElidedInput([callback, input]), 1);
   const explicitlyBorrowed = { ...callback, args: [{ ...callback.args[0], lifetime: borrowed }] };
   assert.equal(rustSingleElidedInput([explicitlyBorrowed, input]), undefined);
+});
+
+test("selected compiler scope lifetimes constrain the existing native storage owner without a carrier witness", () => {
+  const declaration = {};
+  const contract = { declaration, parameters: [{ kind: "lifetime", declaration,
+    sourceName: "borrow", lifetime: borrowed, outlives: [] }] };
+  assert.equal(selectRustSuspendedStorageLifetime({ carriers: [], lifetimes: [borrowed] }, contract) === borrowed, true,
+    "a scope-only capture retains its actual selected borrowed lifetime");
+  assert.equal(selectRustSuspendedStorageLifetime({ carriers: [promise(borrowed)], lifetimes: [borrowed] }, contract) === borrowed, true,
+    "ordinary captures and the scope share the same existing outlives selection");
+  const unrelated = { kind: "parameter", identity: "scope::unrelated", name: "unrelated" };
+  assert.equal(selectRustSuspendedStorageLifetime({ carriers: [promise(borrowed)], lifetimes: [unrelated] }, contract) === undefined, true,
+    "unproved lifetime correspondence never becomes static storage");
+  assert.equal(selectRustCallableStorageLifetime([promise(inferred)],
+    { carriers: [], lifetimes: [unrelated] }, undefined) === undefined, true,
+    "callable input elision cannot discard an explicit borrowed scope constraint");
+  assert.equal(selectRustSuspendedStorageLifetime({ carriers: [], lifetimes: [inferred] }, contract) === undefined, true,
+    "an unselected lifetime is not an actual physical scope loan");
 });
 
 test("owning storage constrains native inference without granting a borrowed-to-static conversion", () => {

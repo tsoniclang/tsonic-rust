@@ -1,5 +1,6 @@
 import { selectRustModuleValueStorage } from "../../policy/types/storage/module-bindings.js";
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { flowStateFactKey } from "@tsonic/tsts";
 
 import { KindFalseKeyword, KindArrayBindingPattern, KindFunctionExpression, KindNonNullExpression, KindNumericLiteral, KindObjectBindingPattern, KindParenthesizedExpression, KindSatisfiesExpression, KindTrueKeyword, KindVariableDeclaration, KindVariableStatement, Node_Expression, Node_Initializer, Node_Name, VariableDeclarationList_Declarations, VariableStatement_DeclarationList } from "@tsonic/target-api/source";
@@ -25,44 +26,51 @@ export interface RustNativeModuleCallable {
   readonly valueObserved: boolean;
 }
 
-export function createRustModuleBindingAnalysis(
-  context: RustAnalysisContext,
-  addressTakenDeclarations: ReadonlySet<Node>,
-): RustModuleBindingAnalysis {
+export interface RustNativeModuleCallables {
+  readonly cyclicSourceFiles: ReadonlySet<SourceFile>;
+  nativeCallable(declaration: Node): RustNativeModuleCallable | undefined;
+  isNativeCallableExpression(expression: Node): boolean;
+}
+
+type RustNativeModuleCallableHost = Pick<RustAnalysisContext, "ast" | "source" | "sourceFiles" | "names" | "runtimeValueUses">;
+
+export function selectRustNativeModuleCallables(context: RustNativeModuleCallableHost): TargetStageResult<RustNativeModuleCallables> {
   const callableByDeclaration = collectNativeCallableCandidates(context);
   const cyclic = cyclicSourceFiles(context.source.navigation, context.sourceFiles);
-  if (cyclic.kind === "unresolved") context.diagnostics.push({
+  if (cyclic.kind === "unresolved") return rejectedTargetStage([{
     code: "RUST_SOURCE_MODULE_GRAPH_NOT_PROVEN", category: "error", source: "tsonic-rust", message: cyclic.reason,
-  });
+  }]);
   const nativeCallables = new Map<Node, RustNativeModuleCallable>();
   const nativeExpressions = new WeakSet<Node>();
   for (const [declaration, callableDeclaration] of callableByDeclaration) {
     const sourceFile = context.ast.getSourceFile(declaration);
     const name = context.names.functionNameForDeclaration(declaration);
-    if (cyclic.kind === "resolved" && sourceFile !== undefined && name !== undefined && !cyclic.sourceFiles.has(sourceFile) &&
+    if (sourceFile !== undefined && name !== undefined && !cyclic.sourceFiles.has(sourceFile) &&
       !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration)) {
-      const valueObserved = context.runtimeValueUses.hasFirstClassUse(declaration);
-      nativeCallables.set(declaration, Object.freeze({
-        callableDeclaration,
-        name,
-        valueObserved,
-      }));
+      nativeCallables.set(declaration, Object.freeze({ callableDeclaration, name,
+        valueObserved: context.runtimeValueUses.hasFirstClassUse(declaration) }));
       nativeExpressions.add(callableDeclaration);
     }
   }
+  return resolvedTargetStage(Object.freeze({ cyclicSourceFiles: cyclic.sourceFiles,
+    nativeCallable: (declaration: Node) => nativeCallables.get(declaration),
+    isNativeCallableExpression: (expression: Node) => nativeExpressions.has(expression),
+  }));
+}
+
+export function createRustModuleBindingAnalysis(
+  context: RustAnalysisContext,
+  addressTakenDeclarations: ReadonlySet<Node>,
+): RustModuleBindingAnalysis {
+  const selected = context.moduleCallables;
   return Object.freeze({
-    nativeCallable(declaration: Node) {
-      return nativeCallables.get(declaration);
-    },
-    isNativeCallableExpression(expression: Node) {
-      return nativeExpressions.has(expression);
-    },
+    nativeCallable: selected.nativeCallable,
+    isNativeCallableExpression: selected.isNativeCallableExpression,
     classifyValue(
       declaration: Node,
       declarationKind: "const" | "let" | "var",
       valueCarrier: TargetTypeRef,
     ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }> | undefined {
-      if (cyclic.kind === "unresolved") return undefined;
       const name = Node_Name(context.ast, declaration);
       const nameKind = name === undefined ? undefined : context.ast.kindName(name);
       if (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) {
@@ -77,7 +85,7 @@ export function createRustModuleBindingAnalysis(
         scalarLiteral: initializerKind === KindNumericLiteral || initializerKind === KindTrueKeyword || initializerKind === KindFalseKeyword,
         stringLiteral: initializerKind === "KindStringLiteral" || initializerKind === "KindNoSubstitutionTemplateLiteral",
         stringStable: moduleStringCanUseStaticStorage(declaration, context) &&
-          !cyclic.sourceFiles.has(context.ast.getSourceFile(declaration)!) &&
+          !selected.cyclicSourceFiles.has(context.ast.getSourceFile(declaration)!) &&
           !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration),
         initialized: initializer !== undefined,
       });
@@ -93,7 +101,7 @@ function moduleStringCanUseStaticStorage(declaration: Node, context: RustAnalysi
 }
 
 function collectNativeCallableCandidates(
-  context: RustAnalysisContext,
+  context: Pick<RustAnalysisContext, "ast" | "sourceFiles">,
 ): ReadonlyMap<Node, Node> {
   const candidates = new Map<Node, Node>();
   for (const sourceFile of context.sourceFiles) {
@@ -125,7 +133,7 @@ function collectNativeCallableCandidates(
 
 function exactNativeCallableInitializer(
   declaration: Node,
-  context: RustAnalysisContext,
+  context: Pick<RustAnalysisContext, "ast">,
 ): Node | undefined {
   const initializer = transparentExpression(
     Node_Initializer(context.ast, declaration),
