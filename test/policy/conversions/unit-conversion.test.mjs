@@ -145,6 +145,16 @@ test("optional payload lowering preserves borrowing and propagates native conver
   const borrowedElement = { kind: "reference", referent: rustStrTargetType(), mutable: false };
   assert.equal(selectRustSourceValueConversion(rustStringTargetType(), rustOptionTargetType(borrowedElement)), undefined,
     "implicit optional borrowing cannot invent an escaping lifetime");
+  assert.equal(selectRustSourceValueConversion(rustOptionTargetType(rustStringTargetType()), rustOptionTargetType(borrowedElement)), undefined,
+    "implicit optional mapping cannot borrow a payload from consumed owned storage");
+  const existingReference = selectRustSourceValueConversion(borrowedElement, rustOptionTargetType(borrowedElement));
+  assert.equal(existingReference?.kind, "option-some", "an existing native reference keeps its proven input lifetime");
+  assert.equal(existingReference.elementConversion, null, "reference injection needs no new borrow or conversion");
+  assert.equal(existingReference.source === borrowedElement, true, "reference injection retains exact source correspondence");
+  const ownedPayload = selectRustSourceValueConversion(borrowedElement, rustOptionTargetType(rustStringTargetType()));
+  assert.equal(ownedPayload?.kind, "option-some", "an owned destination remains representable from an existing native reference");
+  assert.equal(ownedPayload.elementConversion.id, "owned-string-from-borrowed-str",
+    "the actual native owned conversion is retained, not replaced by a borrow restriction");
   const borrowed = { kind: "option-some", source: rustStringTargetType(), element: borrowedElement,
     elementConversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" } };
   const borrowedContract = rustValueConversionContract(borrowed);
