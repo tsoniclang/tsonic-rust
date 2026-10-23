@@ -443,7 +443,7 @@ function structuralMethodStorage(shapes: RustStructuralShapePlan | undefined, ca
   const selected = new Map<string, TargetTypeRef>();
   for (const instance of shapes.instances) {
     if (logical(instance.carrier) !== key) continue;
-    const storage = instance.fields[index]?.methodStorageCarrier;
+    const storage = instance.fields[index]?.methodPlan?.carrier;
     if (storage === undefined) return undefined;
     selected.set(closedMetadataKey(storage), storage);
   }

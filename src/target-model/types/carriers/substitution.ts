@@ -444,7 +444,10 @@ function substituteCarrierParts(
         })), structuralObject.representation, structuralObject.construction === undefined ? undefined :
           substituteChild(structuralObject.construction, substitutions, lifetimeSubstitutions, constSubstitutions, normalize,
             { kind: "structural-construction", structural: structuralObject }),
-          structuralObject.bases.map(base => substituteChild(base, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)));
+          structuralObject.bases.map(base => substituteChild(base, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
+          structuralObject.implementation === undefined ? undefined : { kind: structuralObject.implementation.kind, methods: structuralObject.implementation.methods.map(method => ({ ...method,
+            genericArguments: substituteGenericArguments(method.genericArguments, substitutions,
+              lifetimeSubstitutions, constSubstitutions, normalize, substituteChild) })) });
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {

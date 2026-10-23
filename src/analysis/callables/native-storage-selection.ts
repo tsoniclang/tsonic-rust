@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
@@ -18,7 +18,7 @@ import { rustSourceOptionalTargetType } from "../../target-model/types/projectio
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier, rustFutureOutputCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -62,10 +62,11 @@ export function createRustNativeStorageSelection(
     readonly joinWrites: Map<Node, RustCallableJoinWrite>;
     readonly ownerFor: (node: Node) => Node | undefined;
     readonly valueOwnerFor: (node: Node) => Node | undefined;
+    readonly logicalCarrierFor: (subject: SourceStorageSubject, bindings: SourceStorageBindings) => TargetTypeRef | undefined;
   },
 ): (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings | undefined,
   position?: "value" | "input") => RustNativeStorageSelection {
-  const { inputs, futures, recordMembers, genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor } = prepared;
+  const { inputs, futures, recordMembers, genericInvocationBindingsFor, joinWrites, ownerFor, valueOwnerFor, logicalCarrierFor } = prepared;
   const { boundaries, adaptedReferences, failure: boundaryFailure } = prepared.conversions;
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
@@ -141,7 +142,7 @@ export function createRustNativeStorageSelection(
           source.erased === true)?.carrier;
       return physical ?? fail("Native callable conversion storage has no exact physical adaptation contract.");
     };
-    const producerFuture = (origin: SourceStorageSubject, bindings: SourceStorageBindings,
+    const producerResult = (origin: SourceStorageSubject, bindings: SourceStorageBindings,
       current: TargetTypeRef, depth: number): TargetTypeRef | undefined => {
       if (origin.kind !== "value" || origin.projection.length !== 0) return undefined;
       const operation = input.records.targetOperation.get(origin.node);
@@ -235,7 +236,7 @@ export function createRustNativeStorageSelection(
           const matching = generics === undefined ? [] : candidates.filter(candidate => rustTargetTypeRefEquals(current,
             substituteRustTargetGenerics(candidate.carrier, generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts)));
           const candidate = matching.length === 1 ? matching[0]!.implementation
-            : candidates.length === 0 ? producerFuture(origin.subject, origin.bindings, current, depth + 1) : undefined;
+            : candidates.length === 0 ? producerResult(origin.subject, origin.bindings, current, depth + 1) : undefined;
           if (candidate === undefined)
             return fail("Native Future storage requires its exact physical input or producer contract.");
           if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidate))
@@ -492,6 +493,105 @@ export function createRustNativeStorageSelection(
         }
         return elements.every((element, index) => element === current.elements[index]) ? current
           : Object.freeze({ ...current, elements: Object.freeze(elements) });
+      }
+      const structural = rustStructuralObjectCarrierValue(current);
+      if (structural !== undefined) {
+        const completed = input.structuralShapes.definitionForCarrier(current);
+        if (completed === undefined) return fail("A structural value requires its actual checked physical layout owner.");
+        if (structural.implementation?.kind === "physical") {
+          if (!rustTargetTypeRefEquals(current, completed.carrier))
+            return fail("A physical structural carrier requires its exact admitted canonical definition.");
+          return completed.carrier;
+        }
+        const operation = selectedSubject.kind === "value" && selectedSubject.projection.length === 0
+          ? input.records.targetOperation.get(selectedSubject.node) : undefined;
+        if (operation?.kind === "source-call") {
+          const produced = producerResult(selectedSubject, bindings, current, depth + 1);
+          if (produced === undefined) return fail("A structural call result requires its actual native producer and bound physical environment.");
+          return produced;
+        }
+        if (structural.implementation === undefined && structural.fields.some((field, index) =>
+          field.method === true && input.structuralShapes.field(current, index)?.methodPlan?.kind === "fixed")) {
+          const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
+          if (origins.kind === "unresolved") return fail(origins.reason);
+          let physical: TargetTypeRef | undefined;
+          for (const origin of origins.frontier) {
+            if (!step(depth)) return undefined;
+            const source = logicalCarrierFor(origin.subject, origin.bindings);
+            const operation = origin.subject.kind === "value" && origin.subject.projection.length === 0
+              ? input.records.targetOperation.get(origin.subject.node) : undefined;
+            if (source === undefined || origin.subject === selectedSubject && origin.bindings === bindings ||
+              rustStructuralObjectCarrierValue(source)?.implementation === undefined && operation?.kind !== "source-call")
+              return fail("A fixed structural contract requires its actual checked native body and complete state producer.");
+            const candidate = visit(source, origin.subject, origin.bindings, depth + 1, false, position);
+            if (candidate === undefined) return undefined;
+            if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidate))
+              return fail("A fixed structural contract requires one exact native state and capture environment.");
+            physical = candidate;
+          }
+          return physical ?? fail("A fixed structural contract has no actual native state producer.");
+        }
+        const methods: NonNullable<typeof structural.implementation>["methods"][number][] = [];
+        for (const [index, field] of structural.fields.entries()) {
+          if (field.method !== true) continue;
+          const selected = input.structuralShapes.field(current, index)?.methodPlan;
+          if (selected === undefined) return fail("A structural method requires its exact checked physical layout owner.");
+          if (selected?.kind !== "fixed") {
+            const body = structural.implementation?.methods.find(method => method.sourceName === field.sourceName);
+            if (body !== undefined) methods.push(Object.freeze({ sourceName: field.sourceName, identity: body.identity,
+              genericArguments: Object.freeze([]) }));
+            continue;
+          }
+          const identity = sourceNodeIdentity(input.ast, selected.declaration);
+          const captures = input.capturesFor(selected.declaration);
+          if (identity === undefined || captures.kind === "unresolved")
+            return fail(captures.kind === "unresolved" ? captures.reason : "A fixed structural method requires its exact checked implementation identity.");
+          const generic = genericsFor(sourceEnclosingCallable(input.ast.parent(selected.declaration), input.ast), bindings, depth + 1);
+          if (generic.kind === "unresolved") return fail(generic.reason);
+          const types = new Map(generic.bindings.types);
+          for (const formal of captures.inputs) {
+            const logical = substituteRustTargetGenerics(formal.carrier, types, generic.bindings.lifetimes, generic.bindings.consts);
+            const physical = visit(logical, formal.subject, bindings, depth + 1, false, "input");
+            const leaf = callableValueCarrier(logical);
+            const actual = physical === undefined || leaf === undefined ? undefined
+              : rustPhysicalPayloadFor(logical, physical, leaf, input.definitions);
+            if (actual === undefined) return fail("A fixed structural context requires its actual bound native capture input.");
+            types.set(formal.implementation.identity, actual);
+          }
+          for (const selectedInput of captures.inputs) selectedInputs.add(selectedInput);
+          methods.push(Object.freeze({ sourceName: field.sourceName, identity,
+            genericArguments: Object.freeze(rustTypeGenericArguments([...captures.captures, ...captures.receiverFields, ...captures.receivers]
+              .map(carrier => substituteRustTargetGenerics(carrier, types, generic.bindings.lifetimes, generic.bindings.consts)))) }));
+        }
+        const selectedType = input.storage.typeFor(selectedSubject);
+        if (selectedType.kind === "unresolved") return fail(selectedType.reason);
+        const fieldSemantics = input.storage.source.semantics.forFile(selectedType.sourceFile);
+        const checkedProperties = fieldSemantics.types.propertyInfos(selectedType.type);
+        const fields = structural.fields.map(field => {
+          if (field.method === true || field.accessor !== undefined) return field;
+          const property = checkedProperties.find(property => property.name === field.sourceName);
+          const declarations = property === undefined ? [] : [...new Set([property.symbol, ...property.rootSymbols]
+            .flatMap(symbol => fieldSemantics.declarations.symbolDeclarations(symbol)))];
+          let physical: TargetTypeRef | undefined;
+          for (const declaration of declarations) {
+            const component = project(selectedSubject, { kind: "member", declaration });
+            const type = component === undefined ? undefined : visit(field.type, component, bindings, depth + 1, false, position);
+            if (type === undefined) return undefined;
+            if (physical !== undefined && !rustTargetTypeRefEquals(physical, type)) {
+              fail("A structural field requires one exact physical storage across its checked declarations.");
+              return undefined;
+            }
+            physical = type;
+          }
+          return physical === undefined ? undefined : Object.freeze({ ...field, type: physical });
+        });
+        if (fields.some(field => field === undefined)) return undefined;
+        const physical = rustStructuralObjectTargetType(structural.ownerFileName, fields as typeof structural.fields,
+          structural.representation, structural.construction, structural.bases,
+          methods.length === 0 ? undefined : { kind: "physical", methods: Object.freeze(methods) });
+        if (rustTargetTypeRefEquals(current, physical)) return current;
+        const existing = input.structuralShapes.definitionForCarrier(physical);
+        return existing === undefined ? input.structuralShapes.completePhysicalCarrier(current, physical) : existing.carrier;
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {

@@ -33,6 +33,8 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 import { planRustClosedRecordLiteral } from "./closed-records.js";
+import { planRustCapturedEnvironment } from "./capture-environments.js";
+import { planRustReceiverFieldOwners, planRustReceiverOwners } from "./receiver-captures.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -119,7 +121,30 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       continue;
     }
     if (contribution.kind === "structural-method") {
-      const planned = planExpression(contribution.expression, context);
+      const selected = context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[contribution.targetStorageIndex]?.methodPlan;
+      let planned: RustExpr | undefined;
+      if (selected?.kind === "fixed") {
+        if (selected.declaration !== contribution.expression || selected.payload === undefined)
+          failRustPlannerInvariant("A fixed method requires its exact checked native body and captured environment.", contribution.expression);
+        const payload = selected.payload;
+        const captures = planRustCapturedEnvironment(contribution.expression, payload.captures, context,
+          { staticStorage: false, mutableValueCapture: false });
+        const fields = planRustReceiverFieldOwners(payload.receiverFields, context, context,
+          { staticStorage: false, offset: payload.captures.length }, contribution.expression);
+        const receivers = planRustReceiverOwners(contribution.expression, payload.receivers, context, context,
+          { staticStorage: false, offset: payload.captures.length + payload.receiverFields.length });
+        if (captures === undefined || fields === undefined || receivers === undefined)
+          failRustPlannerInvariant("A fixed method requires its selected native capture operations.", contribution.expression);
+        const nativeBindings = [...captures.bindings, ...fields.bindings, ...receivers.bindings];
+        bindings.push(...nativeBindings);
+        const retainedReceivers = payload.receivers.map(capture => {
+          const selected = receivers.context.expressionOverrides?.get(capture.reference);
+          if (selected === undefined) failRustPlannerInvariant("A fixed method requires its exact captured native receiver.", capture.reference);
+          return selected.expression;
+        });
+        planned = { kind: "tuple-literal", elements: [...[...captures.bindings, ...fields.bindings]
+          .map(binding => ({ kind: "path" as const, path: binding.name })), ...retainedReceivers] };
+      } else planned = planExpression(contribution.expression, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
       if (planned === undefined ||
@@ -272,7 +297,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     let value = valuesByStorageIndex.get(field.storageIndex);
     if (value === undefined) {
       const storageCarrier = field.method === true
-        ? context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[field.storageIndex]?.methodStorageCarrier : field.carrier;
+        ? context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[field.storageIndex]?.methodPlan?.carrier : field.carrier;
       if (field.presence !== "optional" || storageCarrier === undefined)
         failRustPlannerInvariant("An admitted absent field requires its exact selected optional storage.", node);
       value = planRustAbsentValue(storageCarrier, context);
@@ -302,7 +327,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   }
   let constructed: RustExpr | undefined;
   if (implementationPlan?.kind === "structural") {
-    constructed = constructRustStructuralLiteral(implementationPlan, structuralInitializers);
+    constructed = constructRustStructuralLiteral(implementationPlan, structuralInitializers, context);
   } else if (objectLiteralImplementation !== undefined) {
     if (objectLiteralImplementation.wrapperType.kind !== "named" ||
       objectLiteralImplementation.stateFields.length +

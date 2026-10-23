@@ -54,7 +54,7 @@ export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reac
     pending.push(shape.carrier, ...shape.fields.map(field => field.carrier));
     for (const field of shape.fields) if (field.nativeLayout !== undefined) pending.push(rustLocationTargetType(field.carrier));
     for (const field of shape.fields) {
-      if (field.methodStorageCarrier !== undefined) pending.push(field.methodStorageCarrier);
+      if (field.methodPlan?.carrier !== undefined) pending.push(field.methodPlan?.carrier);
       if (field.property === undefined) continue;
       const value = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
       const getter = rustStructuralPropertyGetterStorageCarrier(shape.carrier, field.carrier, field.presence);

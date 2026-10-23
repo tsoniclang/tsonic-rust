@@ -2,7 +2,7 @@ import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { createRustSourceFile, emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
-import type { RustItem, RustGenericArgument, RustGenerics, RustSourceFileModel, RustStructField, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
+import type { RustItem, RustGenericArgument, RustGenerics, RustImplFunction, RustSourceFileModel, RustStructField, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import { rustRuntimeAliasImports } from "../program/plan-context.js";
 import { rustStructuralFieldDeadCodeDisposition, rustStructuralShapeDeadCodeDisposition, rustGeneratedUnionVariantDeadCodeDisposition } from "../program/reachability-directives.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -15,6 +15,8 @@ import { planRustConstructorShape } from "./constructor-shapes.js";
 import type { RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustInvariantTypeMarker } from "../types/invariant-marker.js";
+import { rustTargetGenericArgumentToAstInContext } from "../types/render.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -59,8 +61,8 @@ export function planRustStructuralShapeModule(
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName) ? "public" : "crate";
     const shapeDeadCode = rustStructuralShapeDeadCodeDisposition(context, definition.sourceCarriers, visibility === "public");
     const scope = rustStructuralShapeContext(definition, context);
-    const generics = rustStructuralShapeGenerics(definition, scope);
-    const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map(parameter =>
+    const generics = rustStructuralShapeGenerics(definition, scope, "state");
+    const aliasGenericArguments: readonly RustGenericArgument[] = definition.stateGenericParameters.map(parameter =>
       parameter.kind === "lifetime" ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }
         : { kind: "type", type: { kind: "named", path: scope.typeParameterNames.get(parameter.identity) ?? parameter.name } });
     const definitionContext = { ...scope, lifetimeSubstitutions: new Map(definition.genericParameters.flatMap(parameter =>
@@ -85,8 +87,9 @@ export function planRustStructuralShapeModule(
       continue;
     }
     const fields: RustStructField[] = [];
-    for (const [storageIndex, emitted] of selected.fields.entries()) {
+    for (const emitted of selected.fields) {
       const { field } = emitted;
+      const storageIndex = definition.fields.indexOf(field);
       const renderedStorageType = rustTypeFromCarrierInContext(emitted.carrier, definitionContext);
       if (renderedStorageType === undefined) failRustPlannerInvariant("An admitted structural field requires its exact native storage type.");
       if (emitted.property === undefined) {
@@ -116,8 +119,40 @@ export function planRustStructuralShapeModule(
         fields.push({ name: property.setterTargetName, type: setterAlias, visibility: "public", ...(setterDeadCode === undefined ? {} : { deadCode: setterDeadCode }) });
       }
     }
+    const marker = definition.contextMarker;
+    if (marker !== undefined) {
+      const arguments_ = marker.arguments.map(argument => rustTargetGenericArgumentToAstInContext(argument, definitionContext));
+      if (arguments_.some(argument => argument === undefined || argument.kind === "const"))
+        failRustPlannerInvariant("A native structural context marker requires its exact selected generic arguments.");
+      fields.push({ name: marker.name, type: rustInvariantTypeMarker(arguments_.map(argument => argument!.kind === "type"
+        ? argument!.type : { kind: "reference", mutable: false, referent: { kind: "unit" },
+          lifetime: (argument as Extract<NonNullable<typeof argument>, { kind: "lifetime" }>).lifetime })), visibility: "public" });
+    }
     structs.push(...callableAliases, { kind: "struct", name: definition.targetName, visibility,
       ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }), attrs: rustDeriveAttributes(selected.derives), generics, fields });
+    const constructor = definition.contextConstructor;
+    if (constructor !== undefined) {
+      const wrapper = rustTypeFromCarrierInContext(definition.carrier, definitionContext);
+      const contextType = wrapper?.kind !== "named" || wrapper.genericArguments?.[1]?.kind !== "type" ? undefined : wrapper.genericArguments[1].type;
+      if (contextType === undefined || wrapper === undefined)
+        failRustPlannerInvariant("A native structural constructor requires its completed state and immutable context types.");
+      const inputs = fields.filter(field => field.name !== marker?.name);
+      const state: RustType = { kind: "named", path: definition.targetName, genericArguments: aliasGenericArguments };
+      structs.push({ kind: "impl", target: state, generics, members: [false, true].map((identity): RustImplFunction => ({ kind: "function", name: identity ? constructor.identityName : constructor.name,
+        visibility: "public", generics: emptyRustGenerics,
+        params: [{ name: constructor.contextParameter, type: contextType },
+          ...(identity ? [{ name: constructor.identityParameter, type: { kind: "named" as const, path: "rt::ObjectIdentity" } }] : []),
+          ...inputs.map(field => ({ name: field.name, type: field.type }))],
+        returnType: wrapper, body: { statements: [{ kind: "tail", expr: { kind: "call",
+          path: identity ? "rt::ObjectHandle::with_context_and_identity" : "rt::ObjectHandle::with_context", args: [
+          { kind: "struct-literal", path: "Self", fields: [...inputs.map(field => ({ name: field.name,
+            value: { kind: "path" as const, path: field.name } })), ...(marker === undefined ? [] : [{ name: marker.name,
+            value: { kind: "path" as const, path: "core::marker::PhantomData" } }])] },
+          { kind: "path", path: constructor.contextParameter },
+          ...(identity ? [{ kind: "path" as const, path: constructor.identityParameter }] : []),
+        ] } }] } })) });
+      usedAliases.add("rt");
+    }
   }
   const uses: RustItem[] = [...usedAliases].sort((left, right) => left.localeCompare(right, "en")).flatMap(alias => {
     const entry = alias === "rt" && programModuleName !== undefined ? { path: `crate::${programModuleName}`, alias } : rustRuntimeAliasImports.get(alias);

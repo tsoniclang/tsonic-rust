@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef, RustTargetGenericArgument } from "../types/model.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 import type { RustLifetimeRef } from "../lifetimes/model.js";
+import type { RustClosureCaptureFact } from "./operation-selections.js";
 
 export interface RustStructuralShapeField {
   readonly nativeLayout?: RustNativeMemoryLayout;
@@ -18,10 +19,28 @@ export interface RustStructuralShapeField {
     readonly selfMode: "ref" | "rc";
   };
   readonly method?: true;
-  readonly methodStorageCarrier?: TargetTypeRef;
-  readonly methodConstructions?: readonly RustStructuralMethodConstruction[];
-  readonly receiverIndependent?: true;
-  readonly nativeMethod?: true;
+  readonly methodPlan?: RustStructuralMethodPlan;
+}
+
+export type RustStructuralMethodExposure =
+  | { readonly kind: "fixed"; readonly declaration: Node }
+  | { readonly kind: "stored" };
+
+export type RustStructuralMethodPlan = {
+  readonly carrier: TargetTypeRef;
+  readonly constructions: readonly RustStructuralMethodConstruction[];
+  readonly receiver: "included" | "independent";
+} & (
+  | { readonly kind: "fixed"; readonly declaration: Node; readonly payload?: RustStructuralMethodPayload }
+  | { readonly kind: "stored" }
+  | { readonly kind: "native-dispatch"; readonly implementation: "fixed"; readonly declaration: Node }
+  | { readonly kind: "native-dispatch"; readonly implementation: "stored" }
+);
+
+export interface RustStructuralMethodPayload {
+  readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
+  readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
+  readonly receivers: readonly (RustClosureCaptureFact["receivers"][number] & { readonly storageCarrier: TargetTypeRef })[];
 }
 
 export interface RustStructuralMethodConstruction {
@@ -31,11 +50,13 @@ export interface RustStructuralMethodConstruction {
   readonly storageIndex: number;
   readonly physicalCarrier: TargetTypeRef;
   readonly destinationCarrier: TargetTypeRef;
+  readonly payload: RustStructuralMethodPayload;
 }
 
 export interface RustStructuralMethodStorageSelection {
   readonly carrier: TargetTypeRef;
   readonly constructions: readonly RustStructuralMethodConstruction[];
+  readonly nativeBody: { readonly declaration: Node; readonly payload: RustStructuralMethodPayload } | undefined;
 }
 
 export interface RustStructuralShapeDefinition {
@@ -47,6 +68,11 @@ export interface RustStructuralShapeDefinition {
   readonly genericParameters: readonly RustStructuralShapeGenericParameter[];
   readonly dispatchName?: string;
   readonly genericArguments: readonly RustTargetGenericArgument[];
+  readonly stateGenericParameters: readonly RustStructuralShapeGenericParameter[];
+  readonly stateGenericArguments: readonly RustTargetGenericArgument[];
+  readonly contextMarker: { readonly name: string; readonly arguments: readonly RustTargetGenericArgument[] } | undefined;
+  readonly contextConstructor: { readonly name: string; readonly contextParameter: string;
+    readonly identityName: string; readonly identityParameter: string } | undefined;
   readonly fields: readonly RustStructuralShapeField[];
   readonly construction?: { readonly targetName: string; readonly carrier: TargetTypeRef };
 }

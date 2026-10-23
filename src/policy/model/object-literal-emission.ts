@@ -2,6 +2,6 @@ import type { RustRecordLiteralFact } from "../../target-model/records/object-li
 
 export interface RustObjectLiteralEmissionPolicyInput {
   readonly fact: RustRecordLiteralFact;
-  readonly structuralDispatch: boolean;
+  readonly structuralImplementation: boolean;
   readonly polymorphicProject: boolean;
 }

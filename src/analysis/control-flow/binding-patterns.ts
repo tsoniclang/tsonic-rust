@@ -147,6 +147,7 @@ function selectObjectProjection(
     const bindingCarrier = resolveObjectRestBindingCarrier(
       name,
       remaining,
+      sourceCarrier,
       context,
     );
     const targetShape = bindingCarrier === undefined
@@ -299,6 +300,7 @@ function resolveObjectRestBindingCarrier(
     readonly readonly: boolean;
     readonly method?: true;
   }[],
+  sourceCarrier: TargetTypeRef,
   context: RustBindingPatternFactContext,
 ): TargetTypeRef | undefined {
   const semantics = context.semanticsFor(binding);
@@ -313,13 +315,16 @@ function resolveObjectRestBindingCarrier(
     return undefined;
   }
   const ownerFileName = context.ast.getFileName(context.ast.getSourceFile(binding));
+  const source = rustStructuralObjectCarrierValue(sourceCarrier);
+  const implementation = source?.implementation === undefined ? undefined : { ...source.implementation,
+    methods: source.implementation.methods.filter(method => fields.some(field => field.method && field.sourceName === method.sourceName)) };
   const carrier = rustStructuralObjectTargetType(ownerFileName, fields.map((field) => ({
     sourceName: field.sourceName,
     type: field.carrier,
     presence: field.presence,
     readonly: field.readonly,
     ...(field.method === true ? { method: true as const } : {}),
-  })));
+  })), source?.representation, undefined, [], implementation?.methods.length === 0 ? undefined : implementation);
   const canonical = rustStructuralObjectCarrierValue(carrier);
   if (canonical === undefined) {
     return undefined;

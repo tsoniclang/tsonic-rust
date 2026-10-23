@@ -331,11 +331,12 @@ function lowerStructuralToJsonValueConversion(
     contract.passesPropertyKey ? [{ kind: "path", path: keyName }] : [],
     contract.resultCarrier,
     context,
+    undefined,
   );
   if (invocation === undefined) {
     return failRustPlannerInvariant("An admitted toJSON projection requires its exact native invocation.", node ?? context.sourceFile);
   }
-  const invocationErrorType = plannedField.nativeMethod === true
+  const invocationErrorType = plannedField.methodPlan?.kind === "native-dispatch"
     ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context)
     : rustTargetRuntimeErrorType;
   if (invocationErrorType === undefined) {
@@ -396,8 +397,8 @@ function lowerStructuralObjectJsValueConversion(
   context: RustPlanContext,
   node: Node | undefined,
 ): RustExpr | undefined {
-  const definition = context.input.program.records.structuralShape.get(contract.source)
-    ?? failRustPlannerInvariant("An admitted closed value projection requires its native structural shape.", node ?? context.sourceFile);
+  if (context.input.program.records.structuralShape.get(contract.source) === undefined)
+    failRustPlannerInvariant("An admitted closed value projection requires its native structural shape.", node ?? context.sourceFile);
   const sourceName = allocateConversionName(context, node, "js_object_source");
   const sourcePath = { kind: "path" as const, path: sourceName };
   const entries: RustExpr[] = [];
@@ -409,7 +410,7 @@ function lowerStructuralObjectJsValueConversion(
   const fields = sourceFields === undefined ? contract.fields : [...contract.fields]
     .sort((left, right) => (positions.get(left.storageIndex) ?? positions.size) - (positions.get(right.storageIndex) ?? positions.size));
   for (const field of fields) {
-    const plannedField = definition.fields[field.storageIndex];
+    const plannedField = context.input.program.records.structuralFieldStorage.get(contract.source, field.storageIndex)?.field;
     if (plannedField === undefined) failRustPlannerInvariant("An admitted closed value field requires its exact native storage.", node ?? context.sourceFile);
     const storedCarrier = plannedField.carrier;
     const stored = readRustStoredObjectField(

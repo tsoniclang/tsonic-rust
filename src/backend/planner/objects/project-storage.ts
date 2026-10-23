@@ -61,12 +61,13 @@ export function createRustStructuralObjectFromCarrier(
   const fields = definition.fields.flatMap((field, index) => {
     const initializer = initializers[index];
     if (initializer === undefined ||
-      (field.method === true && field.receiverIndependent !== true) !== (initializer.kind === "method" && field.receiverIndependent !== true) ||
+      (field.method === true && field.methodPlan?.receiver !== "independent") !== (initializer.kind === "method" && field.methodPlan?.receiver !== "independent") ||
       (field.storage === "stored" && initializer.kind === "accessor") ||
       (field.storage !== "bound" && initializer.kind === "bound") ||
-      (field.storage === "property" && initializer.kind === "method" && field.receiverIndependent !== true)) {
+      (field.storage === "property" && initializer.kind === "method" && field.methodPlan?.receiver !== "independent")) {
       return [undefined];
     }
+    if (field.methodPlan?.kind === "fixed") return [];
     if (field.storage === "bound") {
       if (initializer.kind !== "bound" && initializer.kind !== "stored") return [undefined];
       context.usedAliases?.add("rt");
@@ -81,7 +82,7 @@ export function createRustStructuralObjectFromCarrier(
         : planRustNativeMemoryCall("allocate_native_location", initializer.value, field.nativeLayout, context);
       return value === undefined ? [undefined] : [{ name: field.targetName, value }];
     }
-    if (field.property === undefined || initializer.kind === "method" && field.receiverIndependent !== true) {
+    if (field.property === undefined || initializer.kind === "method" && field.methodPlan?.receiver !== "independent") {
       return [undefined];
     }
     const stored = initializer.kind === "accessor"
@@ -123,6 +124,18 @@ export function createRustStructuralObjectFromCarrier(
     };
   }
   context.usedAliases?.add("rt");
+  const nativeConstructor = definition.contextConstructor;
+  if (nativeConstructor !== undefined) {
+    const payload: RustExpr = { kind: "tuple-literal", elements: definition.fields.map((field, index) => {
+      if (field.methodPlan?.kind !== "fixed") return { kind: "tuple-literal", elements: [] };
+      const initializer = initializers[index];
+      if (initializer?.kind !== "method") failRustPlannerInvariant("A fixed structural method requires its exact native immutable context initializer.", context.sourceFile);
+      return initializer.value;
+    }) };
+    return { kind: "call", path: `crate::${context.structuralShapesModuleName}::${definition.targetName}::${
+      identity === undefined ? nativeConstructor.name : nativeConstructor.identityName}`,
+      args: [payload, ...(identity === undefined ? [] : [identity]), ...fields.map(field => field!.value)] };
+  }
   return createRustStructuralObject(
     `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
     fields as readonly { readonly name: string; readonly value: RustExpr }[],
@@ -166,7 +179,7 @@ export function readRustStoredObjectField(
       });
       return selected === undefined ? failRustPlannerInvariant("An admitted field read requires its exact native error propagation.", context.sourceFile) : rustValueBlock([{ name, value: { kind: "reference", expr: receiver } }], selected);
     }
-    if (field.method === true && field.receiverIndependent !== true) {
+    if (field.method === true && field.methodPlan?.receiver !== "independent") {
       failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
@@ -229,12 +242,12 @@ export function readRustStructuralObjectMethodStorage(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const field = context.input.program.records.structuralFieldStorage.get(receiverCarrier, storageIndex)?.field;
-  if (field?.nativeMethod === true) return undefined;
-  const storageCarrier = field?.methodStorageCarrier;
+  if (field?.methodPlan?.kind !== "stored") return undefined;
+  const storageCarrier = field?.methodPlan?.carrier;
   if (field === undefined || storageCarrier === undefined) {
     failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
   }
-  return field.receiverIndependent === true
+  return field.methodPlan?.receiver === "independent"
     ? readRustStoredObjectField("structural-object", receiverCarrier, receiver, storageIndex, storageCarrier, context)
     : readRustStructuralObjectField(receiver, field.targetName, storageCarrier, context);
 }
@@ -251,6 +264,7 @@ export function invokeRustStructuralObjectMethod(
   arguments_: readonly RustExpr[],
   resultCarrier: TargetTypeRef,
   context: RustPlanContext,
+  nativeBodyName: string | undefined,
   storageOverride?: RustStructuralMethodStorageOverride,
   typeArguments: readonly TargetTypeRef[] = [],
   genericArguments: readonly RustCallGenericArgument[] = [],
@@ -261,7 +275,15 @@ export function invokeRustStructuralObjectMethod(
     !rustTargetTypeRefEquals(selected.result, resultCarrier) || (field.presence === "required") !== (storageOverride === undefined) ||
     storageOverride !== undefined && !rustTargetTypeRefEquals(storageOverride.carrier, selected.rawStorage) || context.syntheticNames === undefined)
     failRustPlannerInvariant("An admitted structural method invocation requires its exact sealed signature, storage and name scope.");
-  if (selected.native) {
+  if (selected.kind === "fixed") {
+    const owner = rustTypeFromCarrierInContext(selected.owner, context);
+    const state = owner?.kind !== "named" || owner.genericArguments?.[0]?.kind !== "type" ? undefined : owner.genericArguments[0].type;
+    if (state?.kind !== "named" || storageOverride !== undefined)
+      failRustPlannerInvariant("A fixed structural method requires its selected concrete native owner.");
+    return { kind: "associated-call", owner: { kind: "named", path: state.path }, method: nativeBodyName ?? field.targetName,
+      args: [{ kind: "reference", expr: receiver }, ...arguments_], ...(genericArguments.length === 0 ? {} : { genericArguments }) };
+  }
+  if (selected.kind === "native-dispatch") {
     if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored")
       failRustPlannerInvariant("A native structural method requires its admitted direct storage.");
     const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
@@ -279,7 +301,7 @@ export function invokeRustStructuralObjectMethod(
   const receiverPath: RustExpr = { kind: "path", path: receiverName };
   const method = storageOverride?.expression ?? readRustStructuralObjectMethodStorage(receiverCarrier, receiverPath, storageIndex, context);
   if (method === undefined) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
-  const inputs: readonly RustExpr[] = [...(field.receiverIndependent === true ? [] : [
+  const inputs: readonly RustExpr[] = [...(selected.receiver === "independent" ? [] : [
     cloneExpression(receiverPath),
   ]), ...arguments_];
   // The receiver is only read (its stored method) and cloned as the method's first argument, so a place is bound by
@@ -355,7 +377,7 @@ function writeRustStoredObjectFieldStorage(
         : cloneExpression(dispatch),
         method: field.property.setterTargetName, args: [value] });
     }
-    if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
+    if (field.method === true && field.methodPlan?.receiver !== "independent" || field.readonly && projection.length === 0) {
       failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) failRustPlannerInvariant("An admitted stored field requires its exact sealed storage, access role and native emission context.", context.sourceFile);

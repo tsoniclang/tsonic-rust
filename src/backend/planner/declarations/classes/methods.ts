@@ -32,6 +32,7 @@ import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
 import type { RustSourceCallableSpecializationVariant } from "../../../../target-model/records/callable-emission.js";
 import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 
 export function planProjectMethod(
   member: Node,
@@ -75,6 +76,7 @@ export function planProjectMethod(
   const genericPlan = planRustCallableGenerics(
     member,
     context,
+    new Set(emission.owner.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : [])),
     options?.typeArgumentSubstitutions,
   );
   if (genericPlan === undefined) {
@@ -268,8 +270,9 @@ function planProjectPromiseObjectMethod(
   const nativeName = options?.specialization === undefined ? body.name : options.specialization.nativeBodyName;
   if (nativeName === undefined) failRustPlannerInvariant(
     "A specialized Promise method adapter requires its exact native-body name.", member);
-  const genericPlan = planRustCallableGenerics(member, outerContext, options?.typeArgumentSubstitutions);
-  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.typeArgumentSubstitutions);
+  const ownerLifetimes = new Set(emission.owner.genericParameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
+  const genericPlan = planRustCallableGenerics(member, outerContext, ownerLifetimes, options?.typeArgumentSubstitutions);
+  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, ownerLifetimes, options?.typeArgumentSubstitutions);
   if (genericPlan === undefined || nativeGenerics === undefined) failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const nativeTasks = planRustNativeTaskOwner(member, { ...genericPlan.context, syntheticNames });

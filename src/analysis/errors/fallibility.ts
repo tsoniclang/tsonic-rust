@@ -200,6 +200,10 @@ function collectFallibilityFacts(
   }
   const selectedProjectDeclaration = (node: Node): Node | undefined => {
     const operation = walk.context.records.targetOperation.get(node);
+    if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
+      const method = walk.context.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan;
+      if (method?.kind === "fixed") return method.declaration;
+    }
     if (operation?.kind === "source-call" && operation.target.form === "callable" &&
       rustCallableProtocol(operation.target.carrier)?.error !== undefined) return undefined;
     const selected = walk.context.records.selectedCall.get(node);
@@ -452,12 +456,14 @@ function collectFallibilityFacts(
         const operation = walk.context.records.targetOperation.get(node);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
+          const fixedMethod = operation.target.form === "structural-method" &&
+            walk.context.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan?.kind === "fixed";
           const nativeCallable = operation.target.form === "callable" &&
             (operation.target.carrier.kind === "closure" || operation.target.carrier.kind === "function-pointer");
           const runtimeCallable = (operation.target.form === "callable" &&
               (rustCallableProtocol(operation.target.carrier) !== undefined ||
                 operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
-            (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
+            (!fixedMethod && operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           const nativeInput = walk.context.callableValues.native.callFor(node);
           const generic = nativeInput === undefined &&

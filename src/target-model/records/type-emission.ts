@@ -46,7 +46,7 @@ export interface RustTypeEmission {
   readonly unionArguments: readonly RustTargetGenericArgument[] | undefined;
   readonly generic: { readonly fileName: string; readonly name: string; readonly arguments: readonly RustTargetGenericArgument[] } | undefined;
   readonly structural: { readonly ownerFileName: string; readonly targetName: string; readonly arguments: readonly RustTargetGenericArgument[];
-    readonly handle: boolean } | undefined;
+    readonly handle: boolean; readonly context: TargetTypeRef | undefined } | undefined;
 }
 
 export interface RustTypeEmissionRecords {

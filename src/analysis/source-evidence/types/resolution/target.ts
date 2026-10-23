@@ -11,7 +11,7 @@ import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } fro
 import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
 import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { sourcePropertyTypeEvidenceNodes, sourceTransformedTypeFactEvidenceNodes, ObjectLiteralProperty_Value, sourceTypeIsAuthoredEmptyObject } from "@tsonic/target-api/source";
+import { sourcePropertyTypeEvidenceNodes, sourceTransformedTypeFactEvidenceNodes, ObjectLiteralProperty_Value, sourceTypeIsAuthoredEmptyObject, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { structFactKey } from "@tsonic/tsts";
 import type { Node, StructFact, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
@@ -458,6 +458,13 @@ export function resolveStructuralObjectType(
     return undefined;
   }
   const ownerFileName = [...ownerFileNames][0]!;
+  const methodImplementations = fields.flatMap(field => {
+    if (field.method !== true) return [];
+    const declarations = field.declarations.filter(declaration => context.ast.body(declaration) !== undefined);
+    if (declarations.length !== 1) return [];
+    const identity = sourceNodeIdentity(context.ast, declarations[0]);
+    return identity === undefined ? [] : [{ sourceName: field.sourceName, identity, genericArguments: Object.freeze([]) }];
+  });
   const carrier = rustStructuralObjectTargetType(ownerFileName, fields.map((field) => ({
     sourceName: field.sourceName,
     type: field.resultCarrier,
@@ -466,7 +473,8 @@ export function resolveStructuralObjectType(
     ...(field.bound === true ? { bound: true as const } : {}),
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
-  })), representation, construction?.carrier, bases);
+  })), representation, construction?.carrier, bases, methodImplementations.length === 0 ? undefined
+    : { kind: "source", methods: methodImplementations });
   return options.sourceTypes.registerStructuralObject({
     sourceType: type,
     ...(aliasDeclaration === undefined ? {} : { sourceAlias: aliasDeclaration }),

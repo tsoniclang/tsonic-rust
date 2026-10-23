@@ -105,7 +105,7 @@ export function analyzeRustPromiseResults(input: {
       : "Native structural retention requires its complete same-activation method producer domain.");
     if (selected.producers.length === 0) return unresolved(subject.node,
       "Native structural retention requires its nonempty actual method construction evidence.");
-    const destination = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
+    const destination = field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan?.carrier) : field.methodPlan?.carrier;
     if (destination === undefined) return unresolved(subject.node, "A retained native method requires its completed physical destination.");
     const captures: TargetTypeRef[] = [];
     for (const producer of selected.producers) {
@@ -113,7 +113,7 @@ export function analyzeRustPromiseResults(input: {
       const expression = producer.subject.node;
       if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 || input.ast.body(expression) === undefined)
         return unresolved(subject.node, "A retained native method requires its original checked implementation and creation bindings.");
-      const constructions = field.methodConstructions?.filter(construction => construction.expression === expression &&
+      const constructions = field.methodPlan?.constructions?.filter(construction => construction.expression === expression &&
         construction.storageIndex === storageIndex && rustTargetTypeRefEquals(construction.destinationCarrier, destination));
       if (constructions === undefined || constructions.length === 0) return unresolved(subject.node,
         "A retained native method has no identical frozen physical field-construction witness.");
@@ -158,7 +158,7 @@ export function analyzeRustPromiseResults(input: {
     if (structural !== undefined) for (const [index, field] of structural.fields.entries()) {
       const physical = input.evidence.structuralShapes?.field(carrier, index);
       if (physical === undefined) return unresolved(at, "Native retention requires its complete structural field layout.");
-      if (field.method === true && physical.nativeMethod !== true) return true;
+      if (field.method === true && physical.methodPlan?.kind !== "native-dispatch") return true;
     }
     for (const child of [...rustTargetTypeChildren(carrier, (_parent, _child, role) =>
       role.kind !== "structural-construction" && (role.kind !== "structural-field" || role.structural.fields[role.index]?.method !== true)),
@@ -263,7 +263,7 @@ export function analyzeRustPromiseResults(input: {
           indexes.add(index);
           for (const declaration of sourceField.declarations) {
             const component: SourceStorageProjection = { kind: sourceField.method === true ? "method-value" : "member", declaration };
-            if (sourceField.method === true && physical.nativeMethod !== true) {
+            if (sourceField.method === true && physical.methodPlan?.kind !== "native-dispatch") {
               const selected = input.storage.subject(producer.subject.node, producer.subject.kind,
                 [...producer.subject.projection, component]);
               if (selected.kind === "unresolved") return unresolved(subject.node, selected.reason);

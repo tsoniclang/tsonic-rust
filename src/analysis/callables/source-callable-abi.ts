@@ -428,8 +428,7 @@ function parameterCanUseSharedBorrow(
       ast.body(enclosingCallable(ast.parent(current), context)) === undefined ||
       parameterUsesFlowState(current, "moved", context) || parameterRetainsWholeValue(current, context)) return false;
     const summary = context.source.navigation.parameterUseSummary(current);
-    if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
-      summary.exported) return false;
+    if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured) return false;
     for (const { reference, role, throughMember } of summary.uses) {
       const flow = context.source.sourceFacts.getFact(reference, flowStateFactKey);
       if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" ||

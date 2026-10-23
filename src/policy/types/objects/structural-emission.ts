@@ -5,6 +5,43 @@ import { rustCallableProtocol, rustLocationTargetType, rustOptionTargetType, rus
 import { rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "./member-storage.js";
 import { rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
+import type { RustStructuralMethodPayload } from "../../../target-model/records/structural-shapes.js";
+import { rustNamedTargetType } from "../../../target-model/types/carriers/native.js";
+import { rustTypeGenericArguments } from "../../../target-model/types/generic-arguments.js";
+
+export function selectRustStructuralMethodContextCarrier(
+  payload: RustStructuralMethodPayload, receiverFieldIdentities: readonly boolean[],
+): TargetTypeRef {
+  const named = (path: string, carrier: TargetTypeRef): TargetTypeRef => rustNamedTargetType(path, path, rustTypeGenericArguments([carrier]));
+  return Object.freeze({ kind: "tuple", elements: Object.freeze([
+    ...payload.captures.map(capture => capture.storage === "value" ? capture.storageCarrier
+      : capture.storage === "location" ? rustLocationTargetType(capture.storageCarrier)
+        : named(capture.storage === "cell" ? "core::cell::Cell" : "core::cell::RefCell", capture.storageCarrier)),
+    ...payload.receiverFields.map((capture, index) => {
+      const storage = capture.storage;
+      let carrier = capture.storageCarrier;
+      if (storage !== undefined && storage.kind !== "copy") {
+        if (storage.kind !== "shared") carrier = named(storage.kind === "cell" ? "core::cell::Cell" : "core::cell::RefCell", carrier);
+        if (storage.initialization === "deferred") carrier = named("core::cell::OnceCell", carrier);
+        carrier = named("alloc::rc::Rc", carrier);
+      }
+      return !receiverFieldIdentities[index] ? carrier : Object.freeze({ kind: "tuple" as const,
+        elements: Object.freeze([rustNamedTargetType("rust.runtime.ObjectIdentity", "rt::ObjectIdentity"), carrier]) });
+    }),
+    ...payload.receivers.map(capture => capture.storageCarrier),
+  ]) });
+}
+
+export function selectRustStructuralMethodExposure(input: {
+  readonly writes: "none" | "present" | "unresolved";
+  readonly boundary: "none" | "export-only" | "opaque";
+  readonly extracted: boolean;
+  readonly implementations: number;
+  readonly presence: "required" | "optional";
+}): "fixed" | "stored" {
+  return input.presence === "required" && input.writes === "none" && input.boundary !== "opaque" && !input.extracted && input.implementations === 1
+    ? "fixed" : "stored";
+}
 
 export type RustStructuralEmissionSelection = { readonly kind: "selected"; readonly value: RustStructuralShapeEmission } |
   { readonly kind: "unsupported"; readonly code: string; readonly message: string; readonly capability: string };
@@ -42,13 +79,18 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   }
   const fields: RustStructuralFieldEmission[] = [];
   for (const field of definition.fields) {
-    const storage = field.method === true ? field.methodStorageCarrier : field.nativeLayout === undefined ? field.carrier : rustLocationTargetType(field.carrier);
+    if (field.methodPlan?.kind === "fixed") {
+      if (field.methodPlan.payload === undefined) return reject("RUST_STRUCTURAL_METHOD_ENVIRONMENT_MISSING",
+        `Structural shape '${definition.targetName}' has a fixed method without its completed native capture environment.`, "rust.backend.structural-shapes.methods");
+      continue;
+    }
+    const storage = field.method === true ? field.methodPlan?.carrier : field.nativeLayout === undefined ? field.carrier : rustLocationTargetType(field.carrier);
     if (storage === undefined) return reject("RUST_STRUCTURAL_SHAPE_METHOD_TYPE_MISSING",
       `Structural shape '${definition.targetName}' has a method without one exact runtime-callable storage carrier.`, "rust.backend.structural-shapes.methods");
-    const protocol = field.nativeMethod === true ? rustCallableProtocol(field.carrier) : undefined;
-    const callable = field.nativeMethod === true ? protocol === undefined ? undefined
+    const protocol = field.methodPlan?.kind === "native-dispatch" ? rustCallableProtocol(field.carrier) : undefined;
+    const callable = field.methodPlan?.kind === "native-dispatch" ? protocol === undefined ? undefined
       : rustRuntimeNativeMethodTargetType(protocol.parameters, protocol.result, rustProgramErrorTargetType()) : storage;
-    const directMethod = field.method === true && field.nativeMethod !== true;
+    const directMethod = field.method === true && field.methodPlan?.kind !== "native-dispatch";
     const carrier = callable === undefined ? undefined : field.storage === "bound" && !directMethod
       ? rustRuntimeRecordFieldTargetType(callable, rustProgramErrorTargetType()) : callable;
     if (carrier === undefined) return reject("RUST_STRUCTURAL_SHAPE_FIELD_TYPE_MISSING",
@@ -57,7 +99,7 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
       fields.push(Object.freeze({ field, carrier, methodAlias: directMethod ? `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Method` : undefined, property: undefined }));
       continue;
     }
-    if (field.method === true && field.receiverIndependent !== true || field.property === undefined) return reject("RUST_STRUCTURAL_SHAPE_PROPERTY_STORAGE_INVALID",
+    if (field.method === true && field.methodPlan?.receiver !== "independent" || field.property === undefined) return reject("RUST_STRUCTURAL_SHAPE_PROPERTY_STORAGE_INVALID",
       `Structural shape '${definition.targetName}' has contradictory property storage metadata.`, "rust.backend.structural-shapes.properties");
     const value = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
     const getter = rustStructuralPropertyGetterStorageCarrier(definition.carrier, field.carrier, field.presence);

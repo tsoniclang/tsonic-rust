@@ -29,6 +29,7 @@ import { bindRustStructuralInterfaceParameters, bindRustStructuralReceiverParame
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
 import { rustPhysicalPayloadFor } from "../../policy/conversions/physical-payloads.js";
+import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
 interface SourceCallRequirements {
   readonly node: Node;
@@ -58,6 +59,9 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
       }
     }
     const selected = records.selectedCall.get(node);
+    const selectedMethod = operation.target.form === "structural-method"
+      ? input.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan : undefined;
+    const fixed = selectedMethod?.kind === "fixed" ? selectedMethod : undefined;
     const callableCarrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
     const genericCallable = rustGenericCallableValue(callableCarrier);
     const nativeCall = input.nativeCallables.callFor(node);
@@ -81,14 +85,17 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
       const error = collectType(callableCarrier);
       if (error !== undefined) return error;
     }
+    const sourceDeclaration = selected?.sourceDeclaration === undefined ? undefined : input.implementationDeclaration(selected.sourceDeclaration);
     const callees = frameEntry?.implementations ?? (genericPhysicalDefinition === undefined
-      ? physical !== undefined || selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
+      ? fixed !== undefined ? [{ declaration: fixed.declaration },
+        ...(sourceDeclaration === undefined || sourceDeclaration === fixed.declaration ? [] : [{ declaration: sourceDeclaration }])]
+        : physical !== undefined || sourceDeclaration === undefined ? [] : [{ declaration: sourceDeclaration }]
       : genericPhysicalDefinition.members);
     for (const selectedCallee of callees) {
       const implementation = "implementation" in selectedCallee ? selectedCallee.implementation : selectedCallee;
       const selectedDeclaration = implementation.declaration;
       const calleeId = (operation.asyncBody === undefined ? input.idByDeclaration : input.bodyIdByDeclaration).get(selectedDeclaration);
-      if ((genericDefinition !== undefined || frameEntry !== undefined) && calleeId === undefined) {
+      if ((genericDefinition !== undefined || frameEntry !== undefined || selectedDeclaration === fixed?.declaration) && calleeId === undefined) {
         return "A sealed callable implementation has no exact source generic-contract owner.";
       }
       const selectedClass = operation.target.form === "constructor"
@@ -123,7 +130,25 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
             return "A quantified invocation lost its exact physical member capture bindings.";
           }
           const capturedInputs = input.nativeCallables.capturesFor(selectedDeclaration);
+          const fixedBody = fixed !== undefined && fixed.declaration === selectedDeclaration;
+          const sourceReceiver = fixedBody ? rustMemberAccessReceiver(ast, Node_Expression(ast, node)) : undefined;
+          const receiverStorage = !fixedBody || sourceReceiver === undefined ? undefined : input.nativeStorage.operandFor(sourceReceiver);
+          const physicalReceiver = receiverStorage === undefined || receiverStorage.kind === "unresolved" ? undefined : receiverStorage.carrier;
+          const physicalTemplate = physicalReceiver === undefined ? undefined : input.structuralShapes.templateForCarrier(physicalReceiver);
+          const physicalBindings = !fixedBody || physicalTemplate === undefined || physicalReceiver === undefined ? undefined
+            : bindRustStructuralReceiverParameters(physicalTemplate.carrier, physicalReceiver,
+              new Set([...callee.capturedTypeParameters.map(parameter => parameter.identity),
+                ...capturedInputs.map(parameter => parameter.implementation.identity)]));
+          if (fixedBody && physicalBindings === undefined)
+            return "A fixed structural call requires its exact admitted physical receiver and captured native bindings.";
+          for (const [identity, carrier] of physicalBindings ?? []) substitutions.set(identity, carrier);
           for (const parameter of [...input.nativeCallables.inputsFor(selectedDeclaration), ...capturedInputs]) {
+            if (fixedBody && capturedInputs.includes(parameter)) {
+              const payload = physicalBindings?.get(parameter.implementation.identity);
+              if (payload === undefined) return "A fixed structural invocation lost its actual physical native capture binding.";
+              substitutions.set(parameter.implementation.identity, payload);
+              continue;
+            }
             if (memberBindings !== undefined && capturedInputs.includes(parameter)) {
               const payload = memberBindings.types.get(parameter.implementation.identity);
               if (payload === undefined) return "A quantified invocation lost a required physical native capture binding.";
@@ -152,7 +177,7 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
             }
           }
           const frame = rustFrameCallableValue(callableCarrier);
-          const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
+          const receiver = fixedBody ? physicalReceiver : operation.target.form === "constructor" ? operation.target.typeCarrier
             : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier ??
               (frame?.owner.kind === "class" ? frame.owner.instance : undefined);
           const receiverDeclaration = ast.parent(selectedDeclaration);
@@ -180,7 +205,7 @@ export function collectRustSourceCallRequirements(input: RustCallableRequirement
               substitutions.set(identity, carrier);
             }
           }
-          if (operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
+          if (!fixedBody && operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
             receiverDeclaration !== undefined && ast.is.IsObjectLiteralExpression(receiverDeclaration)) {
             const template = records.runtimeCarrier.get(receiverDeclaration)?.carrier;
             const bindings = template === undefined || receiver === undefined ? undefined

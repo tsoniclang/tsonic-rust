@@ -66,6 +66,7 @@ export function planTopLevelVariableStatement(
         binding.name,
         binding.value === undefined && visibility === "public",
         context,
+        undefined,
       );
       items.push(callablePlan.item);
       if (callablePlan.helper !== undefined) items.push(callablePlan.helper);

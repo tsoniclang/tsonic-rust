@@ -38,15 +38,15 @@ export interface RustStructuralFieldStorage {
   readonly property: RustStructuralPropertyStorage | undefined;
 }
 
-export interface RustStructuralMethodInvocation {
+export type RustStructuralMethodInvocation = {
   readonly result: TargetTypeRef;
   readonly parameterCount: number;
   readonly rawStorage: TargetTypeRef;
-  readonly generic: boolean;
-  readonly native: boolean;
-  readonly cloneDispatch: boolean;
-  readonly receiverIndependent: boolean;
-}
+} & (
+  | { readonly kind: "fixed"; readonly owner: TargetTypeRef }
+  | { readonly kind: "native-dispatch"; readonly cloneDispatch: boolean }
+  | { readonly kind: "stored"; readonly generic: boolean; readonly receiver: "included" | "independent" }
+);
 
 export interface RustStoredFieldRecords {
   readonly admittedField: { readonly get: (node: Node) => Extract<RustTargetOperationFact, { readonly kind: "source-field" }> | undefined };

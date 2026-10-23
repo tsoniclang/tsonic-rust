@@ -194,7 +194,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         const storage = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
         if (!storageReady && rustGenericCallableValue(storage) === undefined) return unpreparedStorage;
         const selection = operation?.kind === "source-call" && operation.target.form === "structural-method" &&
-          input.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.nativeMethod !== true &&
+          input.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.methodPlan?.kind !== "native-dispatch" &&
           rustCallableProtocol(storage) !== undefined && storage !== undefined
           ? Object.freeze({ kind: "identity" as const, carrier: storage, sources: Object.freeze([]) })
           : queries.invocationCallableFor(request.subject);

@@ -79,6 +79,6 @@ export function planRustObjectReferenceView(
   const identity = clone({kind: "call", path: "rt::ObjectIdentityCarrier::object_identity", args: [{kind: "reference", expr: owner}]});
   const implementation = context.objectLiteralImplementations?.forReferenceView(node);
   const constructed = !selected.dispatch ? createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity)
-    : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, identity) : undefined;
+    : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, context, identity) : undefined;
   return constructed === undefined ? undefined : rustValueBlock(bindings, constructed);
 }

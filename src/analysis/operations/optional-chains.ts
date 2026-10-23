@@ -42,7 +42,7 @@ export function analyzeRustOptionalChainEmission(program: Omit<RustAnalysisProgr
       const field = program.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex);
       if (callee === fact.guard && field?.method === true && field.presence === "optional") {
         const receiverNode = callee !== undefined && ast.is.IsPropertyAccessExpression(callee) ? Node_Expression(ast, callee) : undefined;
-        const storage = field.methodStorageCarrier;
+        const storage = field.methodPlan?.carrier;
         const selectedStorageCarrier = rustOptionElementCarrier(storage);
         if (receiverNode === undefined || storage === undefined || selectedStorageCarrier === undefined ||
           !rustTargetTypeRefEquals(fact.sourceGuardCarrier, field.carrier) ||

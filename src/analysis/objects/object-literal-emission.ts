@@ -12,7 +12,7 @@ import { selectRustObjectLiteralDispatch } from "../../policy/types/objects/obje
 import { analyzeRustProjectLiteralEmission } from "./project-literal-emission.js";
 import { rustJsValueTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
@@ -60,8 +60,8 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       if (part.kind !== "structural-method") continue;
       const field = fact.fields.find(field => field.storageIndex === part.targetStorageIndex);
       const physical = program.structuralShapes.field(fact.resultCarrier, part.targetStorageIndex);
-      const raw = field?.presence === "optional" ? rustOptionElementCarrier(physical?.methodStorageCarrier) : physical?.methodStorageCarrier;
-      const construction = physical?.methodConstructions?.find(selected => selected.object === node && selected.property === part.property &&
+      const raw = field?.presence === "optional" ? rustOptionElementCarrier(physical?.methodPlan?.carrier) : physical?.methodPlan?.carrier;
+      const construction = physical?.methodPlan?.constructions?.find(selected => selected.object === node && selected.property === part.property &&
         selected.expression === part.expression && selected.storageIndex === part.targetStorageIndex);
       // A generic method is stored as its generic callable family value, which its sealed implementation constructs.
       const generic = raw !== undefined && rustGenericCallableValue(raw) !== undefined;
@@ -99,23 +99,28 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
   const modules = new Map<SourceFile, RustObjectLiteralEmissionRequest[]>();
   const structural = (node: Node, carrier: TargetTypeRef, accessorFields: ReadonlySet<number>): RustStructuralLiteralEmission => {
     const shape = program.structuralShapes.templateForCarrier(carrier);
-    if (shape?.dispatchName === undefined || shape.construction !== undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its exact native dispatch template.", node);
+    if (shape === undefined || shape.construction !== undefined || shape.dispatchName === undefined &&
+      !shape.fields.some(field => field.methodPlan?.kind === "fixed"))
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its exact selected native implementation template.", node);
     const fields = shape.fields.map((field, storageIndex) => {
       if (field.nativeLayout !== undefined || field.storage === "bound")
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal requires its selected native value or callable storage.", node);
-      const protocol = field.method ? rustCallableProtocol(field.carrier) : undefined;
-      const storage = field.methodStorageCarrier;
+      const protocol = field.method ? rustGenericCallableProtocol(field.carrier) ?? rustCallableProtocol(field.carrier) : undefined;
+      const storage = field.methodPlan?.carrier;
       if (field.method && (protocol === undefined || storage === undefined))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal method requires its exact native callable storage.", node);
       const accessor = accessorFields.has(storageIndex);
       const value = accessor ? rustStructuralPropertyValueCarrier(field.carrier, field.presence) : undefined;
-      if (!field.method && (field.property === undefined || accessor && (value === undefined || field.property.selfMode !== "rc" ||
+      if (!field.method && (shape.dispatchName !== undefined && field.property === undefined || accessor && (value === undefined || field.property?.selfMode !== "rc" ||
         field.property.setterTargetName !== undefined && field.presence !== "required")))
         failTargetAnalysisInvariant("tsonic-rust", "An admitted structural literal property requires its exact native accessor ABI.", node);
       return Object.freeze({ field, copy: isRustCopyCarrier(field.carrier),
         frozen: program.frozenDataWrites.receiverFor("structural-object", carrier, storageIndex) !== undefined,
-        method: protocol === undefined || storage === undefined ? undefined : Object.freeze({ parameters: protocol.parameters, result: protocol.result, storage }),
+        method: protocol === undefined || storage === undefined ? undefined : field.methodPlan?.kind === "fixed"
+          ? field.methodPlan.payload === undefined ? failTargetAnalysisInvariant("tsonic-rust", "A fixed literal method requires its completed physical capture environment.", node)
+            : Object.freeze({ kind: "fixed", declaration: field.methodPlan.declaration, payload: field.methodPlan.payload,
+              parameters: protocol.parameters, result: protocol.result, storage })
+          : Object.freeze({ kind: "stored", parameters: protocol.parameters, result: protocol.result, storage }),
         accessor: !accessor || value === undefined ? undefined : Object.freeze({ getter: rustCallableTargetType([shape.carrier], value),
           setter: field.property?.setterTargetName === undefined ? undefined : rustCallableTargetType([shape.carrier, value], rustUnitTargetType()) }) });
     });
@@ -168,7 +173,9 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
     if (existing !== undefined) return existing;
     if (!native.has(node)) return undefined;
     const project = program.projectTypes.definitionForCarrier(fact.resultCarrier);
-    const form = selectRustObjectLiteralDispatch({ fact, structuralDispatch: program.structuralShapes.definitionForCarrier(fact.resultCarrier)?.dispatchName !== undefined,
+    const shape = program.structuralShapes.definitionForCarrier(fact.resultCarrier);
+    const form = selectRustObjectLiteralDispatch({ fact, structuralImplementation: shape?.dispatchName !== undefined ||
+      shape?.fields.some(field => field.methodPlan?.kind === "fixed") === true,
       polymorphicProject: project !== undefined && program.projectTypes.isPolymorphic(project) });
     if (form === undefined) return undefined;
     const sourceFields = sourceFieldsFor(node, fact);

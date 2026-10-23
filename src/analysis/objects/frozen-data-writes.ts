@@ -82,7 +82,7 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
         for (let index = 0; index < value.fields.length; index += 1) {
           const field = input.structuralShapes.field(carrier, index);
           if (field !== undefined && field.storage !== "bound" &&
-            (field.method !== true || field.receiverIndependent === true) && field.nativeLayout === undefined) writable.add(index);
+            (field.method !== true || field.methodPlan?.receiver === "independent") && field.nativeLayout === undefined) writable.add(index);
         }
         structuralFields.set(closedMetadataKey(carrier), writable);
       }

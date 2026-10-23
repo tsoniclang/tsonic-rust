@@ -36,6 +36,7 @@ import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints
 import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -84,7 +85,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     }
   }
   for (const shape of program.structuralShapes.instances) pending.push(shape.carrier, ...shape.fields.flatMap(field =>
-    [field.carrier, ...(field.methodStorageCarrier === undefined ? [] : [field.methodStorageCarrier])]));
+    [field.carrier, ...(field.methodPlan?.carrier === undefined ? [] : [field.methodPlan?.carrier])]));
   for (const definition of program.callableValues.generic.physical.definitions()) pending.push(definition.carrier,
     ...definition.signature.parameters, definition.signature.result, ...definition.members.flatMap(member => member.arguments.flatMap(argument => argument.kind === "type" ? [argument.type] : [])));
   // A generic implementation renders its retained outlives bounds over the family environment it is emitted in.
@@ -212,13 +213,23 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       generic: generic === undefined || physical === undefined ? undefined : Object.freeze({ fileName: physical.definition.ownerFileName,
         name: physical.definition.targetName, arguments: rustGenericCallableStorageArguments(generic.environment, physical.arguments) }),
       structural: unionDefinition !== undefined ? Object.freeze({ ownerFileName: unionDefinition.ownerFileName,
-        targetName: unionDefinition.targetName, arguments: unionArguments!, handle: false })
+        targetName: unionDefinition.targetName, arguments: unionArguments!, handle: false, context: undefined })
         : shape === undefined ? undefined : Object.freeze({ ownerFileName: shape.ownerFileName, targetName: shape.targetName,
-          arguments: shape.genericArguments, handle: rustStructuralObjectCarrierValue(carrier)?.representation !== "value" && shape.dispatchName === undefined }) });
+          arguments: shape.stateGenericArguments, handle: rustStructuralObjectCarrierValue(carrier)?.representation !== "value" && shape.dispatchName === undefined,
+          context: rustStructuralObjectCarrierValue(carrier)?.representation === "value" || shape.dispatchName !== undefined ? undefined
+            : shape.fields.some(field => field.methodPlan?.kind === "fixed") ? Object.freeze({ kind: "tuple" as const,
+              elements: Object.freeze(shape.fields.map(field => {
+                if (field.methodPlan?.kind !== "fixed") return rustUnitTargetType();
+                const payload = field.methodPlan.payload;
+                if (payload === undefined) failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed native context before type publication.", field.methodPlan.declaration);
+                return selectRustStructuralMethodContextCarrier(payload, payload.receiverFields.map(capture =>
+                  program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference)));
+              })) }) : rustUnitTargetType() }) });
     const frame = program.records.frameType.get(carrier);
     const children = [...rustTargetTypeChildren(carrier), ...(producerError === undefined ? [] : [producerError]),
       ...(unionArguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       ...(value.generic?.arguments ?? []).flatMap(argument => argument.kind === "type" ? [argument.type] : []),
+      ...(value.structural?.context === undefined ? [] : [value.structural.context]),
       ...(frame?.environment ?? []), ...(frame?.independentCarrier === undefined ? [] : [frame.independentCarrier]),
       ...(program.records.optionalStorageTypeArguments.get(carrier) ?? [])];
     selections.set(key, { carrier, value, children });
@@ -249,7 +260,8 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     let boundPositions = { parameter: true, return: true };
     if (selected.value.producerError !== undefined) children = [selected.value.producerError];
     else if (selected.value.generic !== undefined) children = argumentTypes(selected.value.generic.arguments);
-    else if (selected.value.structural !== undefined) children = argumentTypes(selected.value.structural.arguments);
+    else if (selected.value.structural !== undefined) children = [...argumentTypes(selected.value.structural.arguments),
+      ...(selected.value.structural.context === undefined ? [] : [selected.value.structural.context])];
     else if (rustFrameCallableValue(carrier) !== undefined) children = program.records.frameType.get(carrier)?.environment ?? [];
     else if (rustClassConstructorInstance(carrier) !== undefined) children = rustTargetTypeChildren(rustClassConstructorInstance(carrier)!);
     else if (unionSource(carrier) !== undefined) children = [...argumentTypes(selected.value.unionArguments ?? rustSourceTypeCarrierValue(carrier)?.genericArguments),

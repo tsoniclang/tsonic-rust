@@ -109,8 +109,10 @@ test("structural storage renders combined native method and bound-field carriers
   }]]) };
   for (const [name, extra, type] of [
     ["bound scalar", { carrier: scalar, storage: "bound" }, bound(valueType)],
-    ["native method", { carrier: callable, storage: "stored", method: true, nativeMethod: true, methodStorageCarrier: callable }, methodType],
-    ["bound native method", { carrier: callable, storage: "bound", method: true, nativeMethod: true, methodStorageCarrier: callable }, bound(methodType)],
+    ["native method", { carrier: callable, storage: "stored", method: true,
+      methodPlan: { kind: "native-dispatch", implementation: "stored", receiver: "included", carrier: callable, constructions: [] } }, methodType],
+    ["bound native method", { carrier: callable, storage: "bound", method: true,
+      methodPlan: { kind: "native-dispatch", implementation: "stored", receiver: "included", carrier: callable, constructions: [] } }, bound(methodType)],
   ]) {
     const carrier = rustStructuralObjectTargetType("checked.ts", [], "reference");
     const definition = { carrier, sourceCarriers: [carrier], targetName: "Checked", componentId: "checked:component",
