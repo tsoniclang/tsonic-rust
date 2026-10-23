@@ -304,7 +304,11 @@ main();
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /property_getter/u);
   assert.match(source, /property_setter/u);
-  assert.match(source, /TsonicResult/u);
+  assert.match(source, /fn read_counter_current\(self: alloc::rc::Rc<Self>\) -> Result<i32, rt::TsonicError>/u,
+    "the getter dispatch retains its exact native value and rejection carriers");
+  assert.match(source, /fn write_counter_current\(self: alloc::rc::Rc<Self>, value: i32\) -> Result<\(\), rt::TsonicError>/u,
+    "the setter dispatch retains its exact native unit and rejection carriers");
+  assert.doesNotMatch(source, /\bTsonicResult\b/u, "the superseded result alias is absent");
   assert.equal(
     validateGeneratedProject("nominal-accessor-parity", result.artifacts, { run: true }).status,
     0,

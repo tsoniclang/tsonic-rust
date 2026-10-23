@@ -40,8 +40,14 @@ for (const surfaces of [[], ["js"]]) {
         program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
       };
       for (const file of program.sourceFiles) visit(file);
-      const read = nodes.find(node => program.source.ast.is.IsPropertyAccessExpression(node) &&
-        program.source.ast.text(node) === "view.callback");
+      const ast = program.source.ast;
+      const read = nodes.find(node => {
+        if (!ast.is.IsPropertyAccessExpression(node)) return false;
+        const access = ast.as.AsPropertyAccessExpression(node);
+        return ast.is.IsIdentifier(access.Expression) && ast.is.IsIdentifier(access.Name) &&
+          ast.text(access.Expression) === "view" && ast.text(access.Name) === "callback";
+      });
+      assert.equal(read !== undefined, true, "the exact authored view.callback read is selected");
       const operation = program.records.targetOperation.get(read);
       assert.equal(operation?.kind === "source-field" && operation.storage === "structural-object", true,
         "the read uses its exact selected structural field");
