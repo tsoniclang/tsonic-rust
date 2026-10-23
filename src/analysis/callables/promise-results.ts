@@ -483,6 +483,10 @@ export function analyzeRustPromiseResults(input: {
       failTargetAnalysisInvariant("tsonic-rust", "An indexed async producer requires its original source result-use selection.", node);
     const native = leaves.some(leaf => leaf.future !== undefined &&
       rustJsPromiseOutputTargetType(leaf.future.futureCarrier) === undefined);
+    if (disposition.kind === "discarded" && input.records.nativeTaskUse.get(disposition.use)?.kind === "spawn") {
+      results.set(node, Object.freeze({ disposition }));
+      continue;
+    }
     // A spawned discarded future owns a clone of its receiver and Copy arguments, so it holds no source lease and
     // needs no ownership decision; any other discarded native future goes through the must-observe rule.
     const spawn = disposition.kind === "discarded" && native && input.jsEnabled && selection.kind === "leaf"

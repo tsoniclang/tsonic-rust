@@ -44,9 +44,14 @@ export function publishRustNativeTaskUses(input: {
   const borrow = (lifetime: RustLifetimeRef = rustPlaceholderLifetime): TargetTypeRef => Object.freeze({ kind: "reference", mutable: false, referent: carrier, lifetime });
   const owners = new Map<Node, Extract<RustNativeTaskUse, { readonly kind: "owner" }>>();
   for (const declaration of graph.owners) {
-    if (!graph.parameterOwners.has(declaration) || context.records.generator.get(declaration) !== undefined)
+    const definition = context.projectTypes.definitionContainingDeclaration(declaration);
+    const virtual = context.ast.is.IsMethodDeclaration(declaration) && !context.ast.hasModifierKind(declaration, "static") &&
+      definition !== undefined && context.projectTypes.isPolymorphic(definition);
+    if (!graph.parameterOwners.has(declaration) || context.records.generator.get(declaration) !== undefined || virtual ||
+      context.ast.is.IsConstructorDeclaration(declaration) || context.ast.is.IsGetAccessorDeclaration(declaration) ||
+      context.ast.is.IsSetAccessorDeclaration(declaration))
       return rejectedTargetStage([{ code: "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED", category: "error", source: "tsonic-rust",
-        sourceNode: declaration, message: "Native task spawning requires a direct ordinary function; generator and captured contexts are unsupported.",
+        sourceNode: declaration, message: "Native task spawning requires a direct ordinary function or non-virtual concrete method; constructor, virtual, accessor, generator and captured contexts are unsupported.",
         evidence: ["target.capability=rust.native-tasks"] }]);
     const retained = context.retainedEnvironments.environmentFor(declaration);
     if (retained.kind === "unresolved") return rejectedTargetStage([{
@@ -68,6 +73,12 @@ export function publishRustNativeTaskUses(input: {
   const initializer = graph.entries.includes(entry) ? Object.freeze({ inputCarrier: borrow(), passing: "borrow" as const }) : undefined;
   context.records.nativeTaskPlans.use(entry, Object.freeze({ kind: "entry", scope, inputCarrier: carrier, initializer }));
   for (const call of graph.calls) {
+    const operation = context.records.targetOperation.get(call.node);
+    if (operation?.kind !== "source-call" || operation.target.form !== "function" && operation.target.form !== "static-method" &&
+      (operation.target.form !== "method" || operation.target.dispatch !== undefined))
+      return rejectedTargetStage([{ code: "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED", category: "error", source: "tsonic-rust",
+        sourceNode: call.node, message: "Native task scope arguments require a direct ordinary function or non-virtual concrete method call.",
+        evidence: ["target.capability=rust.native-tasks"] }]);
     const targets = call.targets.map(target => owners.get(target));
     if (targets.some(target => target === undefined) || targets.length === 0)
       failTargetAnalysisInvariant("tsonic-rust", "A native task call requires its complete selected target scope ABI.", call.node);
