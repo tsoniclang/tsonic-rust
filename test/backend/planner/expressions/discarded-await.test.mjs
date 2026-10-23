@@ -57,3 +57,40 @@ test("discard and valued await modes cannot silently substitute for each other",
   assert.throws(() => planRustAwaitBranches(node, operand, valued, undefined, context),
     /discarded await requires a sealed discard completion/u, "a discarded await cannot invent a success conversion");
 });
+
+test("a native Result with an uninhabited source error unwraps without inventing an active error channel", () => {
+  const { node, context, selection } = discardedFixture();
+  const original = selection.alternatives[0].selection.value;
+  const leaf = { kind: "leaf", value: { ...original, future: {
+    ...original.future, awaiting: "fallible", errorBoundary: "source-program",
+  } } };
+  const edge = { declaration: node, kind: "await", effects: { localErrors: false, nativeErrors: [] }, nativeErrors: [] };
+  const operand = { kind: "call", path: "closed_generator_body", args: [] };
+  const records = createRustRecordFixture({
+    typeEmission: { get: () => ({ completion: "value", promiseObject: false }) },
+    awaitErrorEdge: { get: (subject, carrier) => subject === node && carrier === original.carrier ? edge : undefined },
+    sourceErrorRegion: { get: selected => selected === edge ? {
+      operand: { kind: "infallible", fileName: "/src/index.ts", localOwner: undefined, sources: [] },
+      local: undefined, channels: new Map(),
+    } : undefined },
+  });
+  const selectedContext = { ...context, input: { program: { ...context.input.program, records } } };
+  assert.equal(selectedContext.fallibleBoundary === undefined, true, "the source body has no possible error");
+  const planned = planRustAwaitBranches(node, operand, leaf, undefined, selectedContext);
+  assert.equal(planned.kind, "evaluate-then", "only the successful native output is discarded");
+  const result = planned.effect;
+  assert.equal(result.kind, "match", "the physical Result is unwrapped rather than leaked as the logical value");
+  assert.equal(result.expression.kind, "await", "the real source future is awaited exactly once");
+  assert.equal(result.expression.expr === operand, true, "there is no duplicate operand evaluation");
+  assert.equal(result.arms[0].pattern.path, "Ok", "success preserves the exact native payload");
+  assert.equal(result.arms[1].pattern.path, "Err", "the native protocol still has its uninhabited error arm");
+  assert.equal(result.arms[1].expression.kind, "match", "the impossible error is eliminated natively");
+  assert.equal(result.arms[1].expression.arms.length, 0, "no panic, conversion, runtime channel or boxed error is manufactured");
+  assert.equal(selectedContext.diagnostics.length, 0, "no source rejection is added to infallible code");
+  const missing = { ...selectedContext, input: { program: { ...selectedContext.input.program,
+    records: createRustRecordFixture({ typeEmission: records.typeEmission,
+      awaitErrorEdge: { get: () => undefined } }),
+  } } };
+  assert.throws(() => planRustAwaitBranches(node, operand, leaf, undefined, missing),
+    /selected native error propagation/u, "missing body correspondence cannot masquerade as an uninhabited proof");
+});

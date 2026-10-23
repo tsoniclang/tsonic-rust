@@ -1,14 +1,13 @@
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustActiveErrorType } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 
 export function planGeneratorResumeExpression(resume: RustExpr, context: RustPlanContext): RustExpr {
-  const activeErrorType = rustActiveErrorType(context);
+  const activeErrorType = context.returnResult?.errorType;
   if (context.syntheticNames === undefined || activeErrorType === undefined)
-    failRustPlannerInvariant("An admitted generator resume requires its native name scope and error boundary.", context.callableDeclaration ?? context.sourceFile);
+    failRustPlannerInvariant("An admitted generator resume requires its native name scope and body error carrier.", context.callableDeclaration ?? context.sourceFile);
   const next = allocateRustSyntheticName(context.syntheticNames, "generator_next");
   const returned = allocateRustSyntheticName(context.syntheticNames, "generator_return");
   const error = allocateRustSyntheticName(context.syntheticNames, "generator_error");

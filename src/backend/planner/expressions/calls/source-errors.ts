@@ -10,6 +10,7 @@ import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustE
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planRustJsRejectionValue } from "../js-rejection.js";
+import { rustEliminateInfallibleResult } from "../../types/fallible-shape.js";
 
 export function planRustSourceErrorPropagation(
   node: Node,
@@ -23,7 +24,12 @@ export function planRustSourceErrorPropagation(
   const planned = planRustSelectedErrorRegion(selection.operand, context);
   if (planned === undefined) return reject(node, context);
   const operand = planned.boundary;
-  if (operand === undefined) return expression;
+  if (operand === undefined) {
+    if (context.syntheticNames === undefined) return reject(node, context);
+    return rustEliminateInfallibleResult(expression,
+      allocateRustSyntheticName(context.syntheticNames, "source_value"),
+      allocateRustSyntheticName(context.syntheticNames, "source_error"));
+  }
   const active = context.fallibleBoundary;
   if (active === undefined) return reject(node, context);
   if (operand.kind === "source-package") return rustPropagateLocalError(active, operand.errorType, expression) ?? reject(node, context);

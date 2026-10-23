@@ -1,13 +1,12 @@
 import type { RustGeneratorFact } from "../../../../target-model/records/callables-and-resources.js";
 import { isRustUnitCarrier } from "../../../../target-model/types/index.js";
-import type { RustBlock, RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
+import type { RustBlock, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { applyRustTailShape } from "../../../target-ast/normalization/block-flow.js";
 
 export function planRustGeneratorBody(
   body: RustBlock,
   fact: RustGeneratorFact,
   controllerName: string,
-  _errorType: RustType,
 ): RustExpr {
   const staticStorage = fact.storage.kind === "static";
   const path = fact.kind === "sync"

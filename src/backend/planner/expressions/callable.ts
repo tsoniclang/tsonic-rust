@@ -1,12 +1,11 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { RustAttribute } from "../../target-ast/syntax/attributes.js";
 import { rustBindingLivenessAttributes } from "../bindings/liveness.js";
-import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import {
   applyFallibleShape,
 } from "../types/fallible-shape.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
-import { rustActiveErrorType, rustErrorBoundaryForDeclaration } from "../program/plan-context.js";
+import { rustActiveErrorType } from "../program/plan-context.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
@@ -38,6 +37,7 @@ import { planRustCallableLeadingParameters } from "../declarations/callables/lea
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext } from "./receiver-captures.js";
 import { planRustErrorRegion } from "../program/error-regions.js";
+import { resolveRustGeneratorBodyErrorType } from "../declarations/callables/return-types.js";
 
 function rustCallableCreationIsErased(node: Node, context: RustPlanContext): boolean {
   const participation = context.input.program.records.nativeParticipation.get(node);
@@ -160,15 +160,14 @@ export function planRustCallableExpressionBody(
   const bodyResultCarrier = emission.bodyCarrier;
   const resultIsFallible = emission.resultFallible;
   const bodyIsFallible = emission.bodyFallible;
-  const generatorErrorOwner = generator === undefined ? undefined : rustErrorBoundaryForDeclaration(node, context);
-  const callableErrorBoundary = generator === undefined ? errorRegion.boundary
-    : generatorErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(generatorErrorOwner);
+  const callableErrorBoundary = errorRegion.boundary;
+  const generatorErrorType = generator === undefined ? undefined : resolveRustGeneratorBodyErrorType(node, context);
   const producerContext = { ...context, callableDeclaration: node, fallibleBoundary: callableErrorBoundary };
   const physicalCarrier = emission.physicalCarrier;
   const invocationErrorCarrier = emission.invocationError;
   const invocationErrorType = invocationErrorCarrier === undefined ? undefined
     : rustTypeFromCarrierInContext(invocationErrorCarrier, producerContext);
-  if (resultIsFallible && invocationErrorType === undefined || generator !== undefined && callableErrorBoundary === undefined) {
+  if (resultIsFallible && invocationErrorType === undefined) {
     failRustPlannerInvariant("Callable expression has no exact producer-owned invocation or suspension error channel.", node);
   }
   if (resultIsFallible) {
@@ -375,7 +374,7 @@ export function planRustCallableExpressionBody(
   const bodyContext: RustPlanContext = {
     ...callableClosureContext,
     functionReturnType: resultType,
-    returnResult: generator === undefined ? undefined : { errorType: callableErrorBoundary!.errorType },
+    returnResult: generatorErrorType === undefined ? undefined : { errorType: generatorErrorType },
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? bodyResultCarrier : undefined,
   };
   const plannedBody = ast.kindName(bodyNode) === "KindBlock"
@@ -413,7 +412,7 @@ export function planRustCallableExpressionBody(
   if (generator !== undefined) {
     context.usedAliases?.add("rt");
     finalizedBlock = { statements: [...bindingStatements, {
-      kind: "tail", expr: planRustGeneratorBody(loweredBody, generator, controllerName!, callableErrorBoundary!.errorType),
+      kind: "tail", expr: planRustGeneratorBody(loweredBody, generator, controllerName!),
     }] };
   } else if (asynchronous?.kind === "js-promise") {
     context.usedAliases?.add("js_abi");

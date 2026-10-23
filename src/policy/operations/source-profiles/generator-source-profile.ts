@@ -55,7 +55,7 @@ export function selectRustGeneratorSourceCall(
       target: {
         form: "receiver-method",
         name: request.selectedParameterCount === 0 ? "resume" : "resume_with",
-        mutatesReceiver: protocol.kind === "sync",
+        mutatesReceiver: false,
       },
       resultCarrier,
       parameterCarriers,
@@ -72,7 +72,7 @@ export function selectRustGeneratorSourceCall(
       target: {
         form: "receiver-method",
         name: "return_value",
-        mutatesReceiver: protocol.kind === "sync",
+        mutatesReceiver: false,
       },
       resultCarrier,
       parameterCarriers: [protocol.returnType],
@@ -94,7 +94,7 @@ export function selectRustGeneratorSourceCall(
       target: {
         form: "receiver-method",
         name: "throw_value",
-        mutatesReceiver: protocol.kind === "sync",
+        mutatesReceiver: false,
       },
       resultCarrier,
       parameterCarriers: [errorCarrier],

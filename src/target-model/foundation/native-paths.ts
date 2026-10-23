@@ -6,7 +6,8 @@ export const rustNativeRootFoundations: Readonly<Record<string, RustFoundation>>
 });
 
 export const rustRuntimeExportFoundations: Readonly<Record<string, RustFoundation>> = Object.freeze({
-  async_runtime: "std", block_on: "std", capture_error_stack: "std", record: "std", Record: "std", timer_queue: "std",
+  async_runtime: "std", block_on: "std", run_tasks: "std", spawn: "std", TaskScope: "std",
+  capture_error_stack: "std", record: "std", Record: "std", timer_queue: "std",
   control_flow: "core", dispatch: "core", field: "core", iteration: "core", operators: "core", optional_storage: "core", reachability: "core",
   finish_finally: "core", Completion: "core", Field: "core", FieldKey: "core", ReadField: "core", ReadFieldOf: "core",
   WriteField: "core", WriteFieldOf: "core", iter_cloned: "core", iter_copied: "core", native_shift_left: "core",
@@ -22,6 +23,7 @@ export const rustRuntimeExportFoundations: Readonly<Record<string, RustFoundatio
   FrameCallable: "alloc", FrameCallableEntry: "alloc", FrameEntryCounter: "alloc", FrameCallableFamily: "alloc", FrameCallableFamilyEntry: "alloc",
   AsyncGenerator: "alloc", BorrowedAsyncGenerator: "alloc", BorrowedGenerator: "alloc", Generator: "alloc",
   GeneratorController: "alloc", GeneratorResume: "alloc", IteratorResult: "alloc", IteratorValue: "alloc", YieldPoint: "alloc",
+  GeneratorNoReentry: "alloc", GeneratorMayReenter: "alloc",
   Location: "alloc", ModuleCell: "alloc", EmptyObjectState: "alloc", ObjectHandle: "alloc", ObjectHandleState: "alloc", ObjectState: "alloc",
   freeze_object: "alloc", object_is_frozen: "alloc", ObjectIdentity: "alloc", ObjectIdentityCarrier: "alloc", WeakObjectIdentity: "alloc",
   ObjectRef: "alloc", ObjectRefState: "alloc", RecordField: "alloc", RetainedError: "alloc", RetainedErrorObject: "alloc",
