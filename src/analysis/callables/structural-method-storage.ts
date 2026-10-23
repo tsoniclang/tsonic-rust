@@ -408,7 +408,7 @@ export function createRustStructuralMethodStorage(input: {
           const captureCarriers = sourceCaptureCarriers.map(carrier => substituteRustTargetGenerics(carrier,
             bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
           const sourceRetained = rustRetainedValueLifetime(subject.node, sourceCaptureCarriers, { context: {
-            ast, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
+            ast, source: input.sourceStorage.source, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
           } });
           const retained = sourceRetained === undefined ? undefined
             : bound.bindings.lifetimes.get(rustLifetimeKey(sourceRetained)) ?? sourceRetained;

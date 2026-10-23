@@ -90,12 +90,18 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   const registry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records, program.names, source.navigation,
     node => nativeNodeSet.has(node));
   let physical;
-  const input = { ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
+  const input = { source, ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
-  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
+  const genericImplementations = new Set(registry.plan.definitions.flatMap(definition => definition.implementations.map(implementation => implementation.declaration)));
+  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set(),
+    genericImplementations, ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
+    declaresGenericInputs: owner => source.ast.is.IsFunctionDeclaration(owner) || source.ast.is.IsMethodDeclaration(owner) ||
+      source.ast.is.IsConstructorDeclaration(owner) || source.ast.is.IsGetAccessorDeclaration(owner) ||
+      source.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
+      program.lexicalFunctions.forDeclaration(owner)?.kind === "resolved" });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
       const selected = queries.prepareReturn(declaration);

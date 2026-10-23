@@ -7,7 +7,9 @@ import { createRustObjectLiteralEmissionProducer } from "../../../dist/analysis/
 
 function analyze(body) {
   let program;
+  let source;
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": body }, compileTarget(request) {
+    source = request.input.source;
     const analyzed = analyzeRustAnalysisProgram(request);
     if (analyzed.kind === "rejected") return analyzed;
     program = analyzed.value;
@@ -31,7 +33,7 @@ function analyze(body) {
     return emission.sourceFields.map(field => ({ ...field,
       name: fact.fields.find(selected => selected.storageIndex === field.storageIndex)?.sourceName }));
   };
-  return { program, nodes, literal, fields };
+  return { program, source, nodes, literal, fields };
 }
 
 test("nested literal values keep their own insertion order and exact source occurrence", () => {
@@ -82,7 +84,7 @@ test("an unrelated checked object occurrence cannot publish literal source field
   const node = current.literal("{ b: 1, a: 2 }");
   const producer = createRustObjectLiteralEmissionProducer(() => {});
   assert.throws(() => analyzeRustObjectLiteralEmission(current.program, [node], producer, () => undefined,
-    property => ({ element: property, objectLiteral: current.program.sourceFiles[0], elementKind: "property" })),
+    property => ({ element: property, objectLiteral: current.program.sourceFiles[0], elementKind: "property" }), current.source),
   /exact checked source occurrence/u, "a forged parent is an internal producer violation, not valid nested projection evidence");
   assert.equal(producer.records.objectLiteralEmission.get(node) === undefined, true,
     "rejected source correspondence publishes no literal implementation");

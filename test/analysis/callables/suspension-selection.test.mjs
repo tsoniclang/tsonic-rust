@@ -39,8 +39,8 @@ for (const [name, source] of [
   assert.equal(input.current.context.records.generator.get(input.declaration) === undefined, true);
   assert.equal(result.retainedEnvironment !== undefined, true);
   assert.equal(result.retainedEnvironment.lifetime.identity, input.environment.lifetime.identity);
-  assert.equal(result.retainedEnvironment.parameters.length, input.environment.parameters.length);
-  assert.equal(result.retainedEnvironment.parameters.every((node, index) => node === input.environment.parameters[index]), true);
+  assert.equal(result.retainedEnvironment.inputs.length, input.environment.inputs.length);
+  assert.equal(result.retainedEnvironment.inputs.every((value, index) => value.kind === "parameter" && input.environment.inputs[index].kind === "parameter" && value.declaration === input.environment.inputs[index].declaration), true);
   assert.equal(result.capturedParameters.length, 1);
 });
 
@@ -61,7 +61,7 @@ test("an incompatible contextual Promise cannot publish an environment and a lat
   assert.equal(selected?.kind, "js-promise");
   assert.equal(retained !== undefined, true);
   assert.equal(retained.lifetime.identity, input.environment.lifetime.identity);
-  assert.equal(retained.parameters.every((node, index) => node === input.environment.parameters[index]), true);
+  assert.equal(retained.inputs.every((value, index) => value.kind === "parameter" && input.environment.inputs[index].kind === "parameter" && value.declaration === input.environment.inputs[index].declaration), true);
   assert.equal(input.current.context.diagnostics.length, 1, "the original refusal is preserved, not erased by a retry");
 });
 

@@ -174,8 +174,8 @@ test("logical pre-retention requests reuse the complete physical return and nati
   const canonical = current.producer.records.get(current.declaration);
   const environment = current.environments.records.get(current.declaration);
   assert.equal(environment !== undefined, true, "the native returned callback retains its exact checked input");
-  assert.equal(environment.parameters.length, 1);
-  assert.equal(environment.parameters[0] === parameter, true);
+  assert.equal(environment.inputs.length, 1);
+  assert.equal(environment.inputs[0].declaration === parameter, true);
   assert.equal(rustTargetTypeRefEquals(canonical.returnCarrier, logical), false,
     "the request is logical input, not the completed physical return carrier");
   assert.equal(current.producer.resolve({}, current.declaration, logical), true);

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Type } from "@tsonic/target-api/source";
+import { Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -81,7 +81,8 @@ export function finalizeRustCallableSignature(
   }
   try {
     const { ast } = walk.context;
-    const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
+    const parameters = requireDenseSourceNodes(walk,
+      sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration)),
       "Function declaration contains an undefined or non-data parameter slot.");
     if (parameters === undefined || request?.parameterAbis !== undefined &&
       request.parameterAbis.length !== parameters.length) return undefined;
@@ -168,7 +169,7 @@ function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustC
     requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
       "suspended callable environment", "admitSuspension");
     records.retainedEnvironments.retain(declaration,
-      selection.retainedEnvironment.lifetime, selection.retainedEnvironment.parameters);
+      selection.retainedEnvironment.lifetime, selection.retainedEnvironment.inputs);
   }
   if (selection.kind === "async") {
     if (asynchronous === undefined) {

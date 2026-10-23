@@ -107,18 +107,18 @@ test("retained environments preserve exact parameter/lifetime identity and freez
   const declaration = {};
   const first = {};
   const second = {};
-  const parameters = [first, second];
+  const parameters = [{ kind: "parameter", declaration: first }, { kind: "parameter", declaration: second }];
   builder.retainedEnvironments.retain(declaration, lifetime, parameters);
   const fact = builder.retainedEnvironment.get(declaration);
-  assert.deepEqual(Object.keys(fact).sort(), ["lifetime", "parameters"]);
+  assert.deepEqual(Object.keys(fact).sort(), ["inputs", "lifetime"]);
   assert.equal(fact.lifetime === lifetime, true);
-  assert.equal(fact.parameters.length, 2);
-  assert.equal(fact.parameters[0] === first && fact.parameters[1] === second, true);
-  assert.equal(Object.isFrozen(fact) && Object.isFrozen(fact.parameters), true);
+  assert.equal(fact.inputs.length, 2);
+  assert.equal(fact.inputs[0].declaration === first && fact.inputs[1].declaration === second, true);
+  assert.equal(Object.isFrozen(fact) && Object.isFrozen(fact.inputs), true);
   parameters.reverse();
-  parameters.push({});
-  assert.equal(fact.parameters.length, 2);
-  assert.equal(fact.parameters[0] === first && fact.parameters[1] === second, true);
+  parameters.push({ kind: "parameter", declaration: {} });
+  assert.equal(fact.inputs.length, 2);
+  assert.equal(fact.inputs[0].declaration === first && fact.inputs[1].declaration === second, true);
   assert.equal(builder.retainedEnvironment.get(first) === undefined && builder.retainedEnvironment.get({}) === undefined, true);
   assert.equal(builder.minimumFoundation(), "core");
 });
@@ -127,16 +127,16 @@ test("retained environments preserve equality semantics including lifetime name 
   const builder = createRustProgramRecordBuilder();
   const declaration = {};
   const parameter = {};
-  builder.retainedEnvironments.retain(declaration, lifetime, [parameter]);
+  builder.retainedEnvironments.retain(declaration, lifetime, [{ kind: "parameter", declaration: parameter }]);
   const fact = builder.retainedEnvironment.get(declaration);
-  builder.retainedEnvironments.retain(declaration, { ...lifetime, name: "renamed" }, [parameter]);
+  builder.retainedEnvironments.retain(declaration, { ...lifetime, name: "renamed" }, [{ kind: "parameter", declaration: parameter }]);
   assert.equal(builder.retainedEnvironment.get(declaration) === fact, true);
   const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
-  child.retainedEnvironments.retain(declaration, { ...lifetime }, [parameter]);
+  child.retainedEnvironments.retain(declaration, { ...lifetime }, [{ kind: "parameter", declaration: parameter }]);
   assert.equal(child.retainedEnvironment.get(declaration) === fact, true);
   const other = {};
   child.retainedEnvironments.retain(other, lifetime, []);
-  assert.equal(child.retainedEnvironment.get(other)?.parameters.length, 0);
+  assert.equal(child.retainedEnvironment.get(other)?.inputs.length, 0);
   assert.equal(builder.retainedEnvironment.get(other) === undefined, true);
 });
 
@@ -146,13 +146,13 @@ for (const change of ["lifetime", "parameter", "count", "order"]) {
     const declaration = {};
     const first = {};
     const second = {};
-    builder.retainedEnvironments.retain(declaration, lifetime, [first, second]);
+    builder.retainedEnvironments.retain(declaration, lifetime, [{ kind: "parameter", declaration: first }, { kind: "parameter", declaration: second }]);
     const fact = builder.retainedEnvironment.get(declaration);
     const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
     const parameters = change === "count" ? [first] : change === "order" ? [second, first]
       : change === "parameter" ? [first, {}] : [first, second];
     assert.throws(() => child.retainedEnvironments.retain(declaration,
-      change === "lifetime" ? { ...lifetime, identity: "other-owned-environment" } : lifetime, parameters), /Conflicting Rust semantic plan/u);
+      change === "lifetime" ? { ...lifetime, identity: "other-owned-environment" } : lifetime, parameters.map(declaration => ({ kind: "parameter", declaration }))), /Conflicting Rust semantic plan/u);
     assert.equal(child.retainedEnvironment.get(declaration) === fact, true);
   });
 }

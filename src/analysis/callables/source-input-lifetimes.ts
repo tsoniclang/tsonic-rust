@@ -1,5 +1,5 @@
 import { type AstReader, type Node } from "@tsonic/tsts";
-import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { type RustProgramRecords } from "../../target-model/records/program.js";
 import { rustLifetimeKey, rustLifetimesEqual, type RustSourceGenericParameterContract, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { type RustTargetTypeResolutionContext } from "../source-evidence/types/resolution/model.js";
@@ -57,7 +57,7 @@ export function rustSourceInputLifetime(
   if (!returned && (!ast.is.IsFunctionDeclaration(owner) ||
     !ast.hasModifierKind(owner, "async") && context.semanticsFor(owner).operations.generator(owner) === undefined)) return undefined;
   const identity = sourceNodeIdentity(ast, owner);
-  if (identity === undefined || !ast.parameters(owner).includes(parameter)) return undefined;
+  if (identity === undefined || sourceCallableValueParameters(ast, owner, context.semanticsFor(owner))?.includes(parameter) !== true) return undefined;
   const names = new Set<string>();
   for (let enclosing: Node | undefined = owner; enclosing !== undefined; enclosing = ast.parent(enclosing)) {
     for (const selected of context.sourceLifetimes.contractFor(enclosing)?.parameters ?? [])

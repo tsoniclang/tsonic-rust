@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceExpressionResultDisposition, sourceLexicalEnvironment,
-  sourceNodeIdentity } from "@tsonic/target-api/source";
+  sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustAwaitedPromiseLocal } from "./promise-locals.js";
@@ -29,7 +29,9 @@ export function createRustRetainedEnvironmentQueries(
     if (suspended.has(declaration)) return suspended.get(declaration);
     if (!step()) { suspended.set(declaration, undefined); return undefined; }
     const retained: Node[] = [];
-    for (const parameter of ast.parameters(declaration)) {
+    const parameters = sourceCallableValueParameters(ast, declaration, input.source.semantics.forNode(declaration));
+    if (parameters === undefined) { suspended.set(declaration, undefined); return undefined; }
+    for (const parameter of parameters) {
       if (!step() || parameter === undefined) { suspended.set(declaration, undefined); return undefined; }
       const uses = navigation.parameterUseSummary(parameter);
       if (uses === undefined) { suspended.set(declaration, undefined); return undefined; }
@@ -127,8 +129,8 @@ export function createRustRetainedEnvironmentQueries(
   const select = (declaration: Node): RustRetainedEnvironmentSelection => {
     if (!step()) return unresolved();
     if (ast.body(declaration) === undefined) return none;
-    const parameters = ast.parameters(declaration);
-    if (parameters.some(parameter => parameter === undefined)) return unresolved();
+    const parameters = sourceCallableValueParameters(ast, declaration, input.source.semantics.forNode(declaration));
+    if (parameters === undefined) return unresolved();
     const candidates = new Set(parameters);
     const retained = new Set<Node>();
     if (isSuspended(declaration)) {
@@ -253,7 +255,8 @@ export function createRustRetainedEnvironmentQueries(
     }
     const environment: RustRetainedEnvironment = Object.freeze({
       lifetime: Object.freeze({ kind: "parameter", identity: `retained-environment\0${identity}`,
-        name: allocateRustGeneratedName(names, "environment") }), parameters: Object.freeze(selected) });
+        name: allocateRustGeneratedName(names, "environment") }), inputs: Object.freeze(selected.map(declaration =>
+          Object.freeze({ kind: "parameter" as const, declaration }))) });
     return Object.freeze({ kind: "selected", environment });
   };
   // Selected on demand by the analysis passes that need them, after the source storage facts they read exist

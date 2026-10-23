@@ -18,6 +18,7 @@ import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "..
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveTypeNodeCarrier } from "../source-evidence/types/source-carriers.js";
 import { requireDenseSourceNodes } from "../source-evidence/dense-nodes.js";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";
@@ -111,7 +112,8 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
       continue;
     }
     if (memberKind === "KindConstructor") {
-      const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
+      const parameters = requireDenseSourceNodes(walk,
+        sourceCallableValueParameters(ast, member, walk.context.semanticsFor(member)), "Class callable contains an undefined or non-data parameter slot.");
       if (parameters === undefined) {
         return;
       }

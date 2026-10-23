@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram, sourceProjectFiles } from "@tsonic/target-api/source";
+import { createRustSession, checkRustSession } from "../../../helpers/rust-session.mjs";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../../dist/target-model/types/carriers/callables.js";
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeChildren } from "../../../../dist/target-model/types/carriers/children.js";
@@ -95,13 +97,14 @@ test("ordinary structural method storage remains an owned callable without nativ
 });
 
 test("native retained storage never infers static from absent source retention or unknown generic inputs", () => {
-  const owner = {};
-  const input = {};
+  const checked = checkRustSession(createRustSession({ surfaces: [], files: {
+    "index.ts": "function owner<Value>(input: Value): Value { return input; }",
+  } }));
+  const source = createTargetSourceProgram(checked);
+  const owner = source.ast.statements(sourceProjectFiles(checked)[0])[0];
+  const input = source.ast.parameters(owner)[0];
   const context = {
-    ast: { body: () => ({}), parameters: () => [input], is: {
-      IsFunctionTypeNode: () => false, IsCallSignatureDeclaration: () => false,
-      IsConstructSignatureDeclaration: () => false, IsMethodSignatureDeclaration: () => false,
-    } },
+    ast: source.ast, source,
     sourceLifetimes: { contractFor: () => ({ declaration: owner, parameters: [] }) },
     retainedEnvironments: { environmentFor: () => ({ kind: "none" }) },
   };
@@ -118,7 +121,7 @@ test("native retained storage never infers static from absent source retention o
   const borrowed = { kind: "reference", mutable: false, referent: integer, lifetime };
   assert.equal(closeRustRetainedResult(owner, copied, [borrowed], context)?.carrier === copied, true,
     "an actual native copied environment is not constrained by an unrelated formal loan");
-  const environment = Object.freeze({ lifetime, parameters: Object.freeze([input]) });
+  const environment = Object.freeze({ lifetime, inputs: Object.freeze([{ kind: "parameter", declaration: input }]) });
   const retained = closeRustRetainedResult(owner, callback, [parameter], { ...context,
     retainedEnvironments: { environmentFor: () => ({ kind: "selected", environment }) } });
   assert.equal(retained !== undefined, true, "an actual captured generic input uses its exact symbolic environment");
@@ -126,6 +129,7 @@ test("native retained storage never infers static from absent source retention o
   assert.equal(rustCallableProtocol(retained.carrier).lifetime === lifetime, true,
     "a retained free generic input is not silently made static");
   const foreign = closeRustRetainedResult(owner, callback, [parameter], { ...context,
-    retainedEnvironments: { environmentFor: () => ({ kind: "selected", environment: { lifetime, parameters: [{}] } }) } });
+    retainedEnvironments: { environmentFor: () => ({ kind: "selected", environment: { lifetime,
+      inputs: [{ kind: "parameter", declaration: {} }] } }) } });
   assert.equal(foreign === undefined, true, "foreign source-retention parameters prove no native environment");
 });

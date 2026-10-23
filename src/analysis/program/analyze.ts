@@ -510,6 +510,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   });
   for (const issue of walk.context.records.objectLiteralMethodAdapters.finalize({
     ast: walk.context.ast,
+    source: walk.context.source,
     requiredRecords: walk.context.requiredRecords,
     sourceLifetimes: walk.context.sourceLifetimes,
     records: walk.context.records,

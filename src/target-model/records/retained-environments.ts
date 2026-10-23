@@ -4,7 +4,10 @@ import type { RustLifetimeRef } from "../lifetimes/index.js";
 
 export interface RustRetainedEnvironment {
   readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
-  readonly parameters: readonly Node[];
+  readonly inputs: readonly (
+    | { readonly kind: "parameter"; readonly declaration: Node }
+    | { readonly kind: "native-task-scope" }
+  )[];
 }
 
 export type RustRetainedEnvironmentSelection =

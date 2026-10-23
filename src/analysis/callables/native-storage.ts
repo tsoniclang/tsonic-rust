@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject, SourceStorageSubjectsSelection, SourceStorageProducersSelection } from "@tsonic/target-api/analysis";
-import { isSourceCallableBodyBoundary, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
@@ -566,7 +566,8 @@ export function createRustNativeStorageQueries(input: {
     const parameter = result?.borrowedParameter;
     if (parameter !== undefined) {
       const abi = input.records.sourceParameterAbi.get(parameter);
-      if (input.ast.parent(parameter) !== declaration || !input.ast.parameters(declaration).includes(parameter) ||
+      if (input.ast.parent(parameter) !== declaration || sourceCallableValueParameters(input.ast, declaration,
+        input.storage.source.semantics.forNode(declaration))?.includes(parameter) !== true ||
         abi?.parameterCarrier.kind !== "reference" || abi.parameterCarrier.mutable ||
         !rustTargetTypeRefEquals(abi.valueCarrier, result?.returnCarrier))
         return unresolved("Native paired return requires its exact source parameter and shared input ABI.");

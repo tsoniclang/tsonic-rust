@@ -1,7 +1,7 @@
 import type { Node, ResolvedSourceObjectLiteralElementInfo, SourceFile } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection } from "@tsonic/target-api/source";
+import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustObjectLiteralEmissionProducer } from "../program/records/object-literal-emission.js";
 import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustRecordLiteralFact, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
@@ -17,7 +17,7 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 
 export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
   producer: RustObjectLiteralEmissionProducer, propertyName: (node: Node) => SourcePropertyNameSelection | undefined,
-  objectLiteralElement: (node: Node) => ResolvedSourceObjectLiteralElementInfo | undefined): readonly TargetDiagnostic[] {
+  objectLiteralElement: (node: Node) => ResolvedSourceObjectLiteralElementInfo | undefined, source: TargetSourceProgram): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string, unsupported = false): void => {
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
@@ -173,7 +173,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
     if (form === undefined) return undefined;
     const sourceFields = sourceFieldsFor(node, fact);
     const selected: RustObjectLiteralEmission = form === "project"
-      ? Object.freeze({ kind: "project", node, sourceFields, selection: analyzeRustProjectLiteralEmission(program, node, fact) })
+      ? Object.freeze({ kind: "project", node, sourceFields, selection: analyzeRustProjectLiteralEmission(program, node, fact, source) })
       : Object.freeze({ kind: "structural", node, sourceFields, selection: structural(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
         contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : []))) });
     producer.literal(node, selected);

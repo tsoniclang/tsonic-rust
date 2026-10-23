@@ -40,7 +40,7 @@ test("callable/environment producers require semantic inputs and reject every re
   const positive = check(`
     builder.sourceCallableValues.function(reference, declaration, "input.ts", "keepMyCase", carrier, parameters, carrier);
     builder.directCallableReferences.function(reference, declaration, "input.ts", "keepMyCase", carrier, [], carrier);
-    builder.retainedEnvironments.retain(declaration, lifetime, [reference]);
+    builder.retainedEnvironments.retain(declaration, lifetime, [{ kind: 'parameter', declaration: reference }]);
     const callable: Node | undefined = records.sourceCallableValue.get(reference)?.sourceDeclaration;
     const direct: TargetTypeRef | undefined = records.directCallableReference.get(reference)?.resultCarrier;
     const retained: RustRetainedEnvironment["lifetime"] | undefined = records.retainedEnvironment.get(declaration)?.lifetime;
@@ -64,11 +64,11 @@ test("callable/environment producers require semantic inputs and reject every re
     invalid.push([`${producer} invalid parameters`, `builder.${producer}.function(reference, declaration, 'input.ts', 'step', carrier, [reference], carrier);`, /not assignable/u]);
     invalid.push([`${producer} invalid result`, `builder.${producer}.function(reference, declaration, 'input.ts', 'step', carrier, parameters, reference);`, /not assignable/u]);
   }
-  invalid.push(["environment DTO setter", "builder.retainedEnvironments.retain(declaration, { lifetime, parameters: [] });", /Expected 3 arguments/u]);
+  invalid.push(["environment DTO setter", "builder.retainedEnvironments.retain(declaration, { lifetime, inputs: [] });", /Expected 3 arguments/u]);
   invalid.push(["environment declaration", "builder.retainedEnvironments.retain(carrier, lifetime, []);", /not assignable/u]);
   invalid.push(["environment static lifetime", "builder.retainedEnvironments.retain(declaration, { kind: 'static' }, []);", /not assignable/u]);
   invalid.push(["environment placeholder lifetime", "builder.retainedEnvironments.retain(declaration, { kind: 'placeholder' }, []);", /not assignable/u]);
-  invalid.push(["environment parameter kind", "builder.retainedEnvironments.retain(declaration, lifetime, [carrier]);", /not assignable/u]);
+  invalid.push(["environment parameter kind", "builder.retainedEnvironments.retain(declaration, lifetime, [{ kind: 'parameter', declaration: carrier }]);", /not assignable/u]);
   invalid.push(["source callable old key", `import { rustSourceCallableValueFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u]);
   invalid.push(["direct callable old key", `import { rustDirectCallableReferenceFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u]);
   invalid.push(["retained environment old path/key", `import { rustRetainedEnvironmentFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";`, /Cannot find module/u]);

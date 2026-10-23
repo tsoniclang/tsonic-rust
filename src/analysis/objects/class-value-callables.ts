@@ -1,5 +1,5 @@
 import type { Node, TypeSignatureInfo } from "@tsonic/tsts";
-import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import { sourceCallableValueParameters, type SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustCallableParameterAbi, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
@@ -72,7 +72,8 @@ export function selectRustClassValueCallablePlan(
   const ownerCarrier = selectedOwnerCarrier ?? projectTypes.openCarrier(owner);
   const substitutions = projectOwnerTypeSubstitutions(owner, ownerCarrier);
   const sourceParameters = construction ? sourceConstructor!.parameters.map(parameter => parameter.parameterDeclaration)
-    : ast.parameters(declaration);
+    : sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
+  if (sourceParameters === undefined) return undefined;
   const implementationParameters = sourceParameters.map(parameter => {
     const abi = parameter === undefined ? undefined : resolveParameterAbi(walk, parameter);
     return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);

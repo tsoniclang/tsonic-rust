@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { KindArrayBindingPattern, KindObjectBindingPattern, Node_Initializer, Node_Name } from "@tsonic/target-api/source";
+import { KindArrayBindingPattern, KindObjectBindingPattern, Node_Initializer, Node_Name, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { requireRustRecord } from "../program/records/required-records.js";
@@ -44,7 +44,9 @@ function refuseRustParameterCarrier(walk: RustFactWalk, parameter: Node): void {
 
 /** A callable whose signature cannot be finalized is refused at each parameter that has no closed native carrier. */
 export function refuseRustUnresolvedParameterCarriers(walk: RustFactWalk, declaration: Node): void {
-  for (const parameter of walk.context.ast.parameters(declaration)) {
+  const parameters = sourceCallableValueParameters(walk.context.ast, declaration, walk.context.semanticsFor(declaration));
+  if (parameters === undefined) return;
+  for (const parameter of parameters) {
     if (parameter === undefined || walk.context.records.sourceParameterAbi.get(parameter) !== undefined) continue;
     if (resolveParameterAbi(walk, parameter) === undefined) refuseRustParameterCarrier(walk, parameter);
   }
@@ -86,7 +88,8 @@ export function recordRustParameterAbiSelection(
 
 export function recordCallableDefaultParameterFacts(walk: RustFactWalk, declaration: Node): boolean {
   const { ast, records } = walk.context;
-  const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
+  const parameters = requireDenseSourceNodes(walk,
+    sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration)),
     "Default parameter analysis requires exact callable parameter nodes.");
   if (parameters === undefined) return false;
   for (const parameter of parameters) {

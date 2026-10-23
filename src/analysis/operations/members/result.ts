@@ -1,4 +1,5 @@
 import { acceptRustOperation } from "../../program/records/selected-operation-values.js";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { requireRustRecord } from "../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { isRustAbsenceCarrier, isRustProgramErrorCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustOptionValueCarrier, isRustJsArrayCarrier, isRustVecCarrier } from "../../../target-model/types/index.js";
@@ -457,7 +458,7 @@ export function selectedArgumentMatchScore(
       const parameterCount = expected.kind === "function-pointer" || expected.kind === "closure"
         ? expected.args.length
         : callable!.parameters.length;
-      return context.ast.parameters(node).length === parameterCount ? 1 : undefined;
+      return sourceCallableValueParameters(context.ast, node, context.semanticsFor(node))?.length === parameterCount ? 1 : undefined;
     }
     if (actual === undefined) {
       return 10;

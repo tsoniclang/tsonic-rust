@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
@@ -240,7 +240,9 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const formal = rustGenericCallableProtocol(slotCarrier) ?? rustCallableProtocol(slotCarrier) ??
         rustNativeCallableProtocol(slotCarrier);
       if (formal === undefined) continue;
-      const parameters = walk.context.ast.parameters(producer.declaration);
+      const parameters = sourceCallableValueParameters(walk.context.ast, producer.declaration,
+        walk.context.sourceStorage.source.semantics.forNode(producer.declaration));
+      if (parameters === undefined) return undefined;
       for (const own of native.inputsFor(producer.declaration)) {
         if (types.has(own.implementation.identity)) continue;
         const position = parameters.indexOf(own.subject.node);

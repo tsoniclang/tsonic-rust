@@ -45,7 +45,7 @@ export function createRustSourceCallableReturnProducer(
         requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
           "returned callable environment", "sourceCallableReturns.resolve");
         retainedEnvironments.retain(declaration,
-          selection.retainedEnvironment.lifetime, selection.retainedEnvironment.parameters);
+          selection.retainedEnvironment.lifetime, selection.retainedEnvironment.inputs);
       }
       if (existing === undefined) family.writer.set(declaration, selection.fact);
       if (request !== undefined) {

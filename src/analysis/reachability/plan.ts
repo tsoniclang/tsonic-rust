@@ -2,6 +2,8 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
+import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
+import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import type { RustReachabilityInput } from "./model.js";
 import type { RustReachability } from "../../target-model/records/reachability.js";
 
@@ -19,7 +21,7 @@ type DeclarationOwner =
 
 export function analyzeRustReachability(program: RustReachabilityInput, nativeNodes: readonly Node[],
   conversionEmission: import("../program/records/conversion-emission.js").RustConversionEmissionProducer,
-  semanticsFor: (node: Node) => SourceFileSemantics): RustReachability {
+  semanticsFor: (node: Node) => SourceFileSemantics, runtimeValueUses: RustRuntimeValueUsePlan): RustReachability {
   const ast = program.source.ast;
   const nativeNodeSet = new Set(nativeNodes);
   const declarations = collectDeclarationUnits(ast, nativeNodes);
@@ -52,6 +54,28 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
   const edges = new Map<Node, Set<Node>>();
   const roots = new Set<Node>();
   const externallyReachable = new Set<Node>();
+  const promiseObjectUses: { readonly owner: Node | undefined; readonly declaration: Node }[] = [];
+  const promiseDeclaration = (declaration: Node): Node | undefined => {
+    if (program.promiseBodies.objects.has(declaration)) return declaration;
+    const binding = program.records.moduleBinding.get(declaration);
+    return binding?.storage === "native-callable" && program.promiseBodies.objects.has(binding.callableDeclaration)
+      ? binding.callableDeclaration : undefined;
+  };
+  const usesPromiseObject = (reference: Node, declaration: Node): boolean => {
+    let value = reference;
+    let parent = ast.parent(value);
+    while (parent !== undefined && (rustSourceValueWrapperContains(parent, value, ast) ||
+      ast.is.IsPropertyAccessExpression(parent) && ast.name(parent) === value)) {
+      value = parent;
+      parent = ast.parent(value);
+    }
+    if (parent !== undefined && ast.is.IsCallExpression(parent) && Node_Expression(ast, parent) === value) {
+      const operation = program.records.targetOperation.get(parent);
+      if (operation?.kind === "source-call" && operation.asyncBody?.declaration === declaration) return false;
+    }
+    return parent === undefined || !ast.is.IsVariableDeclaration(parent) || Node_Initializer(ast, parent) !== value ||
+      runtimeValueUses.promiseCallAliasTarget(parent) !== declaration;
+  };
   const runtimeInitializationRoots = program.sourceFiles.filter((sourceFile) =>
     program.moduleInitialization.requirementFor(sourceFile).kind === "required");
   const runtimeInitializationNodes = collectSubtreeNodes(ast, runtimeInitializationRoots, nativeNodeSet);
@@ -139,6 +163,11 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
       if (use.kind === "type-only" && owner.kind === "declaration" &&
         !runtimeUnionUsesDeclaration(owner.declaration, selected, program)) continue;
       addEdge(owner.kind === "root" ? undefined : owner.declaration, selected);
+      const promise = promiseDeclaration(selected);
+      if (promise !== undefined && use.kind !== "type-only" && runtimeValueUses.isRuntimeReference(declaration, use.reference) &&
+        usesPromiseObject(use.reference, promise)) promiseObjectUses.push({
+          owner: owner.kind === "root" ? undefined : canonical(owner.declaration), declaration: promise,
+        });
       if (ast.kindName(selected) === "KindClassDeclaration" &&
         isConstructionReference(ast, use.reference, use.role)) {
         for (const member of ast.members(selected)) {
@@ -200,6 +229,13 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
   for (const declaration of externallyReachable) roots.add(declaration);
 
   const reachable = transitivelyReachable(roots, edges);
+  const usedPromiseObjects = new Set<Node>();
+  for (const declaration of externallyReachable) {
+    const promise = promiseDeclaration(declaration);
+    if (promise !== undefined) usedPromiseObjects.add(promise);
+  }
+  for (const use of promiseObjectUses)
+    if (use.owner === undefined || reachable.has(use.owner)) usedPromiseObjects.add(use.declaration);
   const itemEdges = projectStandaloneItemEdges(itemUnits, graphUnits, edges);
   const suppressionRoots = deadComponentRoots(itemUnits, reachable, itemEdges, order);
   const suppressedDeclarations = new Set(suppressionRoots);
@@ -210,7 +246,7 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
     if (suppressionRoots.has(selected)) suppressedDeclarations.add(declaration);
     if (generatedUsage.readAuthoredFields.has(selected)) readAuthoredFields.add(declaration);
   }
-  return Object.freeze({ ...generatedUsage, externallyReachable, suppressedDeclarations, readAuthoredFields });
+  return Object.freeze({ ...generatedUsage, externallyReachable, suppressedDeclarations, readAuthoredFields, usedPromiseObjects });
 }
 
 function declarationParticipatesInRustLiveness(

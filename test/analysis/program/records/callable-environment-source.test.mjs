@@ -133,11 +133,11 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(declarations.length, 2);
     for (const declaration of declarations) {
       const environment = context.records.retainedEnvironment.get(declaration);
-      assert.equal(environment.parameters.length, 1);
-      assert.equal(environment.parameters[0] === context.ast.parameters(declaration)[0], true);
+      assert.equal(environment.inputs.length, 1);
+      assert.equal(environment.inputs[0].declaration === context.ast.parameters(declaration)[0], true);
       assert.equal(environment.lifetime.kind, "parameter");
-      assert.equal(Object.isFrozen(environment) && Object.isFrozen(environment.parameters), true);
-      assert.equal(environment.parameters.includes(context.ast.parameters(declaration)[1]), false);
+      assert.equal(Object.isFrozen(environment) && Object.isFrozen(environment.inputs), true);
+      assert.equal(environment.inputs.some(input => input.kind === "parameter" && input.declaration === context.ast.parameters(declaration)[1]), false);
     }
     const callee = declarations.find(node => context.ast.text(context.ast.name(node)) === "retain");
     const caller = declarations.find(node => context.ast.text(context.ast.name(node)) === "run");
@@ -169,13 +169,13 @@ for (const surfaces of [[], ["js"]]) {
       }
       assert.equal(environment !== undefined, true);
       assertRustRecordRequirement(context.requiredRecords, "retainedEnvironment", declaration);
-      assert.equal(environment.parameters.length, 1);
-      assert.equal(environment.parameters[0] === context.ast.parameters(declaration)[0], true);
-      assert.equal(Object.isFrozen(environment) && Object.isFrozen(environment.parameters), true);
+      assert.equal(environment.inputs.length, 1);
+      assert.equal(environment.inputs[0].declaration === context.ast.parameters(declaration)[0], true);
+      assert.equal(Object.isFrozen(environment) && Object.isFrozen(environment.inputs), true);
       assert.equal(selected.storage.kind, "lifetime");
       assert.equal(rustLifetimeKey(selected.storage.lifetime), rustLifetimeKey(environment.lifetime));
       assert.equal(selected.capturedParameters.length, 1);
-      assert.equal(selected.capturedParameters[0] === environment.parameters[0], true);
+      assert.equal(selected.capturedParameters[0] === environment.inputs[0].declaration, true);
     });
   }
 

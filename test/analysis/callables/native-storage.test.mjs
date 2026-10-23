@@ -35,12 +35,18 @@ function fixture(text, options = {}) {
     node => nativeNodeSet.has(node));
   const generic = genericRegistry.plan;
   let physical;
-  const input = { ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
+  const input = { source, ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
       physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
-  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
+  const genericImplementations = new Set(generic.definitions.flatMap(definition => definition.implementations.map(implementation => implementation.declaration)));
+  const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set(),
+    genericImplementations, ownedRetainedParameter: program.callableValues.native.isNativeRetainedParameter,
+    declaresGenericInputs: owner => source.ast.is.IsFunctionDeclaration(owner) || source.ast.is.IsMethodDeclaration(owner) ||
+      source.ast.is.IsConstructorDeclaration(owner) || source.ast.is.IsGetAccessorDeclaration(owner) ||
+      source.ast.is.IsSetAccessorDeclaration(owner) || genericImplementations.has(owner) ||
+      program.lexicalFunctions.forDeclaration(owner)?.kind === "resolved" });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
       const selected = queries.prepareReturn(declaration);

@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { isSourceCallableBodyBoundary, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -34,7 +34,7 @@ export function createRustNativeFutureInputPlan(input: {
   const select = (subject: SourceStorageSubject, carrier: TargetTypeRef): RustNativeFutureInput | undefined => {
     if (subject.kind !== "input" || !isRustNativeFutureCarrier(carrier)) return undefined;
     const owner = input.ast.parent(subject.node);
-    if (owner === undefined || !input.ast.parameters(owner).includes(subject.node)) return undefined;
+    if (owner === undefined || sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(subject.node) !== true) return undefined;
     const identity = closedMetadataKey(carrier);
     const members = subjects.get(subject) ?? new Map<string, RustNativeFutureInput>();
     const existing = members.get(identity);
@@ -121,7 +121,7 @@ export function createRustNativeFutureInputPlan(input: {
     const carrier = input.records.sourceParameterAbi.get(node)?.parameterCarrier;
     if (carrier === undefined) continue;
     const owner = input.ast.parent(node);
-    if (owner === undefined || !input.ast.parameters(owner).includes(node)) continue;
+    if (owner === undefined || sourceCallableValueParameters(input.ast, owner, input.storage.source.semantics.forNode(owner))?.includes(node) !== true) continue;
     if (!isRustTargetTypeRef(carrier)) {
       fail(owner, "Native Future input discovery requires a valid finalized carrier.");
       continue;

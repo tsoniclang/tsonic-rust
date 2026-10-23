@@ -315,7 +315,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         input.retainedEnvironments.ownsRetainedInputs(declaration) &&
         input.retainedEnvironments.suspendedParametersFor(declaration)?.includes(parameter) === true;
     } });
-  const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
+  const nativeProducers = createRustNativeCallableProducerPlan({ source: input.sourceStorage.source, ast: input.ast, records: input.records,
     nodes: input.nativeNodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {
       const selected = nativeStorageQueries.prepareReturn(declaration);

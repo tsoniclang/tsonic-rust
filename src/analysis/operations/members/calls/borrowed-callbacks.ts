@@ -1,6 +1,6 @@
 import { selectRustBorrowedCallbackOperation } from "../../../../policy/operations/members/callbacks.js";
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Initializer, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
 import { selectedCallArgumentNodes } from "../operators.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/model/contracts.js";
@@ -20,8 +20,8 @@ export function selectBorrowedCallbackParameters(
   const carrier = selection.parameterCarriers?.[callback.sourceArgumentIndex];
   if (expression === undefined || carrier?.kind !== "closure" ||
     !(context.ast.is.IsArrowFunction(expression) || context.ast.is.IsFunctionExpression(expression))) return selection;
-  const parameters = context.ast.parameters(expression);
-  if (parameters.length !== carrier.args.length || !carrier.args.every(isRustStringCarrier) ||
+  const parameters = sourceCallableValueParameters(context.ast, expression, context.semanticsFor(expression));
+  if (parameters === undefined || parameters.length !== carrier.args.length || !carrier.args.every(isRustStringCarrier) ||
     !parameters.every(parameter => parameter !== undefined &&
       context.ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken === undefined &&
       context.ast.questionToken(parameter) === undefined && Node_Initializer(context.ast, parameter) === undefined &&

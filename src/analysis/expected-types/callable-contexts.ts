@@ -1,5 +1,6 @@
 import { sourceClosedCallableArguments } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustOperationContext } from "../program/walk.js";
 import { rustCallableProtocol, rustClosureProtocol, rustOptionElementCarrier } from "../../target-model/types/index.js";
@@ -76,8 +77,8 @@ function selectClosedCallableInputs(
   contexts: ReturnType<typeof checkedCallableInputs>,
 ): readonly TargetTypeRef[] | undefined {
   const { ast } = walk.context;
-  const parameters = ast.parameters(expression);
-  if (contexts === undefined || !isDenseDataArray(parameters) || parameters.some(parameter => parameter === undefined)) return undefined;
+  const parameters = sourceCallableValueParameters(ast, expression, walk.context.semanticsFor(expression));
+  if (parameters === undefined || contexts === undefined || !isDenseDataArray(parameters)) return undefined;
   const broad = (parameters as readonly Node[]).map(parameter => {
     const syntax = ast.typeNode(parameter);
     const types = walk.context.semanticsFor(parameter).types;

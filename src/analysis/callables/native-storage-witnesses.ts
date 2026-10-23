@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindingsSelection, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { asSourceNode } from "@tsonic/target-api/source";
+import { asSourceNode, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -67,6 +67,7 @@ export function collectRustNativeAbsenceWitnesses(input: RustNativeStorageSource
 } {
   const absenceWitnesses = new Map<Node, Map<RustNativeCallableInput, TargetTypeRef>>();
   const argumentWitnesses = new Map<Node, Map<Node, TargetTypeRef>>();
+  const issues: RustSourceCallableSpecializationIssue[] = [];
   const witnessBudget = createRustEffectsWorkBudget();
   let witnessSubject: Node | undefined;
   const witnessFailure = witnessBudget.run(() => { for (const invocation of input.storage.invocations) {
@@ -79,7 +80,12 @@ export function collectRustNativeAbsenceWitnesses(input: RustNativeStorageSource
     for (const selected of input.native.inputsFor(declaration)) {
       witnessBudget.step();
       if (rustOptionElementCarrier(selected.carrier) === undefined) continue;
-      if (!omittedOptionalInput(input.ast, operation.parameters, selected)) {
+      const ownerParameters = sourceCallableValueParameters(input.ast, selected.owner, input.storage.source.semantics.forNode(selected.owner));
+      if (ownerParameters === undefined) {
+        issues.push({ subject: selected.owner, message: "Optional callable witnesses require exact checked value parameters." });
+        continue;
+      }
+      if (!omittedOptionalInput(ownerParameters, operation.parameters, selected)) {
         const bindings = invocationBindingsFor(selected.owner, invocation);
         const origins = bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
         if (origins.kind !== "resolved" || origins.subjects.length === 0 || origins.subjects.some(subject => subject.projection.length !== 0 ||
@@ -95,7 +101,7 @@ export function collectRustNativeAbsenceWitnesses(input: RustNativeStorageSource
       witnesses.set(selected, witness);
       absenceWitnesses.set(invocation, witnesses);
       if (selected.subject.projection.length === 0) {
-        const index = input.ast.parameters(selected.owner).indexOf(selected.subject.node);
+        const index = ownerParameters.indexOf(selected.subject.node);
         for (const supplied of operation.parameters[index]?.inputs ?? []) {
           witnessBudget.step();
           if (supplied.sourceForm !== "value") continue;
@@ -108,15 +114,15 @@ export function collectRustNativeAbsenceWitnesses(input: RustNativeStorageSource
       }
     }
   } });
-  return { absenceWitnesses, argumentWitnesses, issues: Object.freeze(witnessFailure === undefined || witnessSubject === undefined ? [] : [{
+  return { absenceWitnesses, argumentWitnesses, issues: Object.freeze([...issues, ...(witnessFailure === undefined || witnessSubject === undefined ? [] : [{
     subject: witnessSubject, message: witnessFailure.message,
-  }]) };
+  }])]) };
 }
 
 // An optional callable parameter the invocation supplies no argument for is absent at that call; no source node carries
 // its absence.
-function omittedOptionalInput(ast: AstReader, parameters: readonly RustSourceCallParameterPlan[], selected: RustNativeCallableInput): boolean {
+function omittedOptionalInput(ownerParameters: readonly Node[], parameters: readonly RustSourceCallParameterPlan[], selected: RustNativeCallableInput): boolean {
   if (selected.subject.projection.length !== 0) return false;
-  const plan = parameters[ast.parameters(selected.owner).indexOf(selected.subject.node)];
+  const plan = parameters[ownerParameters.indexOf(selected.subject.node)];
   return plan?.form === "optional" && plan.inputs.length === 0;
 }

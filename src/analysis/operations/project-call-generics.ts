@@ -18,6 +18,7 @@ import { recordCallableParameterSignatureFacts } from "../callables/parameter-si
 import { resolveExpressionCarrier } from "../source-evidence/types/resolution/expression-carriers.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import type { Node } from "@tsonic/tsts";
+import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
 import type { RustTargetGenericArgument, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
@@ -265,9 +266,9 @@ function projectSourceArgumentInferencePairs(
     if (actual.kind === "pending") return actual;
     const expected = rustCallableProtocol(pattern) ?? rustClosureProtocol(pattern);
     const selected = rustCallableProtocol(actual.value) ?? rustClosureProtocol(actual.value);
-    const parameters = ast.parameters(argument);
+    const parameters = sourceCallableValueParameters(ast, argument, walk.context.semanticsFor(argument));
     if (expected === undefined || selected === undefined || expected.parameters.length !== selected.parameters.length ||
-      parameters.some(parameter => parameter === undefined)) return { kind: "complete", value: undefined };
+      parameters === undefined || parameters.length !== selected.parameters.length) return { kind: "complete", value: undefined };
     return { kind: "complete", value: [{ pattern: expected.result, actual: selected.result }, ...parameters.flatMap((parameter, index) =>
       Node_Type(ast, parameter) === undefined || expected.parameters[index] === undefined ? []
         : [{ pattern: expected.parameters[index]!, actual: selected.parameters[index]! }])] };

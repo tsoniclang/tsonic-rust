@@ -1,4 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
@@ -24,6 +25,7 @@ export interface RustObjectLiteralMethodAdapterIssue {
 
 export interface RustObjectLiteralMethodAdapterInput {
   readonly ast: AstReader;
+  readonly source: TargetSourceProgram;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly records: RustProgramRecordBuilder;
   readonly projectTypes: RustProjectTypePolicy;
