@@ -1,7 +1,8 @@
 import type { SourceStorageEffects } from "@tsonic/target-api/analysis";
 import { createSourceGlobalCallStorageEffects } from "@tsonic/target-api/analysis";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import { selectJsSourceCallStorageEffect, jsSourceCallableParameterEffects, jsSourceNativeConstructorStorage } from "@tsonic/js-source-profile";
+import { selectJsSourceCallStorageEffect, jsSourceCallableParameterEffects, jsSourceNativeConstructorStorage,
+  jsSourceNativeStorageOperation } from "@tsonic/js-source-profile";
 import { resolveSelectedSourceProfileMember } from "../../../policy/identities/selected-source.js";
 import type { RustSourceProfileRegistry } from "../../../policy/types/model/source-profile.js";
 
@@ -19,7 +20,8 @@ export function createRustSourceProfileStorageEffects(
     const declaration = semantics.declarations.signatureDeclaration(call.selectedSignature);
     const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
     if (identity === undefined) return undefined;
-    return identity.profile === "js" || identity.memberName === "constructor" || identity.memberName === "call"
+    return identity.profile === "js" || jsSourceNativeStorageOperation(identity) ||
+      identity.memberName === "constructor" || identity.memberName === "call"
       ? selectJsSourceCallStorageEffect(identity, call) : undefined;
   }, declaration => {
     const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
@@ -30,11 +32,8 @@ export function createRustSourceProfileStorageEffects(
       const semantics = source.semantics.forNode(node);
       const declaration = semantics.declarations.signatureDeclaration(call.selectedSignature);
       const identity = resolveSelectedSourceProfileMember(context, declaration, sourceProfiles);
-      const nativeConstructor = identity?.profile === "native" && identity.ownerName === "PromiseConstructor" &&
-        identity.memberName === "constructor" && declaration !== undefined && identity.declaration === declaration &&
-        source.ast.is.IsNewExpression(node) && source.ast.is.IsConstructSignatureDeclaration(declaration) &&
-        call.sourceSelectedSignatureKind === "resolved";
-      return identity?.profile === "js" || nativeConstructor ? jsSourceCallableParameterEffects(identity) : undefined;
+      return identity?.profile === "js" || jsSourceNativeStorageOperation(identity)
+        ? jsSourceCallableParameterEffects(identity) : undefined;
     },
   } satisfies SourceStorageEffects);
 }

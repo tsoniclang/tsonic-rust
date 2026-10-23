@@ -54,6 +54,9 @@ import type { RustPromiseResultUses } from "../../target-model/records/promise-r
 import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
 import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { selectRustSourcePackageComponentIdentities, type SelectRustSourcePackageComponentIdentitiesResult } from "../source-modules/component-semantics.js";
+import { collectRustSourcePackageBoundaries } from "../source-modules/boundaries.js";
+import { selectRustNativeModuleCallables, type RustNativeModuleCallables } from "./module-bindings.js";
+import { analyzeRustNativeTaskGraph, type RustNativeTaskGraph } from "../callables/native-tasks.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceProfiles: import("../../policy/types/model/source-profile.js").RustSourceProfileRegistry;
@@ -62,6 +65,9 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly isNativeNode: (node: Node) => boolean;
   readonly promiseResultUses: RustPromiseResultUses;
   readonly promiseBodies: RustPromiseBodySelection;
+  readonly nativeTaskGraph: RustNativeTaskGraph;
+  readonly moduleCallables: RustNativeModuleCallables;
+  readonly sourceBoundaries: ReturnType<typeof collectRustSourcePackageBoundaries>;
   readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
   readonly callableOwnership: RustCallableOwnershipRegistry;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
@@ -117,6 +123,7 @@ export function createRustAnalysisContext(
   );
   const literalValues = analyzeSourceLiteralValues(ast, sourceFiles);
   const sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(input.sourcePackages, ast, sourceFiles);
+  if (sourcePackageComponentIdentities.kind === "rejected") return rejectedTargetStage(sourcePackageComponentIdentities.diagnostics);
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
     sourceFiles,
@@ -157,6 +164,20 @@ export function createRustAnalysisContext(
     sourceFiles,
     isNativeNode,
   });
+  const sourceCallables = createRustSourceCallableQueries(sourceStorage,
+    createRustExplicitUnsafeContexts(ast, sourceFiles, node => safetyApplications.operationForExpression(node)),
+    runtimeValueUses.promiseCallAliasTarget);
+  const sourceBoundaries = collectRustSourcePackageBoundaries({ ast, source: input.source,
+    sourcePackages: input.sourcePackages, rootPublishesLibrary }, sourceFiles,
+    sourcePackageComponentIdentities.identities.rootComponentId);
+  const moduleCallables = selectRustNativeModuleCallables({ ast, source: input.source, sourceFiles, names, runtimeValueUses });
+  if (moduleCallables.kind === "rejected") return moduleCallables;
+  const nativeTaskGraph = analyzeRustNativeTaskGraph({ context: { ast, source: input.source, sourceStorage,
+    nativeNodes, isNativeNode, promiseResultUses, sourceProfiles, providerSemantics, jsEnabled, runtimeValueUses,
+    sourceCallables, moduleCallables: moduleCallables.value }, publishedDeclarations: sourceBoundaries.publishedDeclarations,
+    lifecycleOwner: sourceFiles.find(file => sourcePackageComponentIdentities.identities.componentIdForFile(ast.getFileName(file)) ===
+      sourcePackageComponentIdentities.identities.rootComponentId) });
+  if (nativeTaskGraph.kind === "rejected") return nativeTaskGraph;
   records.sourceNamePlans.publish(nativeNodes, names);
   const lifetimes = analyzeRustLifetimes({
     source: input.source,
@@ -180,11 +201,12 @@ export function createRustAnalysisContext(
     nativeNodes,
     isNativeNode,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
-    sourceCallables: createRustSourceCallableQueries(sourceStorage,
-      createRustExplicitUnsafeContexts(ast, sourceFiles, node => safetyApplications.operationForExpression(node)),
-      runtimeValueUses.promiseCallAliasTarget),
+    sourceCallables,
+    sourceBoundaries,
+    moduleCallables: moduleCallables.value,
+    nativeTaskGraph: nativeTaskGraph.value,
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
-      sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
+      sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex, nativeTasks: nativeTaskGraph.value }),
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
       sourceProfiles, sourceStorage,
@@ -225,7 +247,6 @@ export function createRustAnalysisContext(
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
     diagnostics: [...numericLiteralAdmission, ...names.diagnostics, ...lifetimes.diagnostics,
-      ...(sourcePackageComponentIdentities.kind === "rejected" ? sourcePackageComponentIdentities.diagnostics : []),
       ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
         category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,
         evidence: ["target.capability=rust.analysis.ownership"] }] : []),

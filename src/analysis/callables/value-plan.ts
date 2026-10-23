@@ -30,6 +30,7 @@ import { createRustNativeStorageQueries, type RustNativeStorageConstruction, typ
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeCallableProducerPlan } from "../../target-model/records/native-producers.js";
+import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests } from "./native-generic-producers.js";
 import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
 import { createRustNativeCapturePlan } from "./native-captures.js";
@@ -371,9 +372,10 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
           const node = asSourceNode(subject, input.ast);
           return node === undefined ? undefined : effectsFor(node);
         } } } };
-      const storageIssues = structuralMethodStorage.complete({ producerError(reference) {
+      producerErrors = Object.freeze({ producerError(reference: RustProducerErrorReference) {
         return normalizeRustErrorType({ kind: "target-specific", target: "rust", name: "producer-error", value: reference }, context);
       } });
+      const storageIssues = structuralMethodStorage.complete(producerErrors);
       if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
         nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);
@@ -432,7 +434,6 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">) {
       if (structuralMethodStorage === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical storage requires selected callable families.");
       structuralMethodStorage.validateErrors(errors);
-      producerErrors = errors;
     },
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,

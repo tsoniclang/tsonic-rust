@@ -1,11 +1,7 @@
-import type { Node } from "@tsonic/tsts";
+import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustLexicalFunctionEnvironments } from "../../target-model/records/lexical-functions.js";
-import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
-import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
-import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustAwaitSelection } from "../../target-model/types/await.js";
@@ -14,6 +10,11 @@ import type { RustSourceErrorEffectSelection } from "../errors/source-error-effe
 import { finalizeRustDiscardedAwaitSelection } from "./await-values.js";
 import { rustFutureValueMatchesCarrier } from "./future-values.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
+import { resolveOwnedSourceProfileTypeName } from "../../policy/identities/source-types.js";
+import { selectRustSourceProfileCompletionKind } from "../../policy/operations/source-profiles/type-carriers.js";
+import { resolveProviderTypeIdentity } from "../../policy/identities/provider-types.js";
+import { providerCarrierFromRelations } from "../../policy/types/project/provider-instantiation.js";
+import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
 
 export interface RustNativeTaskSpawn {
   readonly node: Node;
@@ -26,6 +27,7 @@ export interface RustNativeTaskCompletion extends RustNativeTaskSpawn {
 }
 
 export interface RustNativeTaskGraph {
+  readonly lifecycleOwner: SourceFile | undefined;
   readonly spawns: readonly RustNativeTaskSpawn[];
   readonly owners: readonly Node[];
   readonly capturedOwners: ReadonlySet<Node>;
@@ -57,12 +59,13 @@ export function completeRustNativeTaskValues(
 }
 
 export function analyzeRustNativeTaskGraph(input: {
-  readonly context: RustAnalysisContext;
-  readonly lexicalFunctions: RustLexicalFunctionEnvironments;
+  readonly context: Pick<RustAnalysisContext, "ast" | "source" | "sourceStorage" | "nativeNodes" | "isNativeNode" |
+    "promiseResultUses" | "sourceProfiles" | "providerSemantics" | "jsEnabled" | "runtimeValueUses" | "sourceCallables" | "moduleCallables">;
   readonly publishedDeclarations: ReadonlySet<Node>;
+  readonly lifecycleOwner: SourceFile | undefined;
 }): TargetStageResult<RustNativeTaskGraph> {
-  const { context, lexicalFunctions } = input;
-  const { ast, records, sourceStorage: storage } = context;
+  const { context } = input;
+  const { ast, source, sourceStorage: storage } = context;
   const diagnostics: TargetDiagnostic[] = [];
   const reject = (node: Node, code: string, message: string): void => {
     diagnostics.push({ code, category: "error", source: "tsonic-rust", sourceNode: node, message,
@@ -74,25 +77,44 @@ export function analyzeRustNativeTaskGraph(input: {
     return selected;
   };
   const spawns: RustNativeTaskSpawn[] = [];
+  const nativeCompletion = (type: Type, node: Node, depth = 0): boolean => {
+    if (depth >= 128) return false;
+    const semantics = source.semantics.forNode(node);
+    if (semantics.types.isUnion(type)) return semantics.types.unionOrIntersectionTypes(type)
+      .some(member => nativeCompletion(member, node, depth + 1));
+    const symbol = semantics.declarations.typeAliasSymbol(type) ?? semantics.declarations.typeSymbol(type);
+    const name = resolveOwnedSourceProfileTypeName(symbol, { ast, currentSemantics: semantics }, context.sourceProfiles);
+    if (name !== undefined && selectRustSourceProfileCompletionKind(name, context.jsEnabled) === "native-future") return true;
+    const identity = resolveProviderTypeIdentity(semantics.facts.typeSubjects(type), { source });
+    const row = identity === undefined ? undefined : providerCarrierFromRelations(identity, { providerTypes: context.providerSemantics.types });
+    return isRustNativeFutureCarrier(row?.targetCarrier);
+  };
   for (const [operand, use] of context.promiseResultUses) {
     if (!context.isNativeNode(operand) || use.kind !== "discarded" || !ast.is.IsVoidExpression(use.use)) continue;
-    const topology = rustAwaitSelection(rustEffectiveValueCarrier(records, operand), context.typeDefinitions);
-    if (topology === undefined || !rustAwaitSelectionLeaves(topology).some(leaf => leaf.future !== undefined &&
-      rustJsPromiseOutputTargetType(leaf.future.futureCarrier) === undefined)) continue;
+    const checked = source.semantics.forNode(operand).types.expressionType(operand);
+    if (checked === undefined || !nativeCompletion(checked, operand)) continue;
     spawns.push(Object.freeze({ node: use.use, operand, owner: ownerFor(operand) }));
   }
-  if (spawns.length === 0) return resolvedTargetStage(Object.freeze({ spawns: Object.freeze([]),
+  if (spawns.length === 0) return resolvedTargetStage(Object.freeze({ lifecycleOwner: undefined, spawns: Object.freeze([]),
     owners: Object.freeze([]), capturedOwners: new Set<Node>(), calls: Object.freeze([]), entries: Object.freeze([]) }));
+  if (input.lifecycleOwner === undefined) return rejectedTargetStage([{ code: "RUST_LIFECYCLE_ERROR_OWNER_MISSING", category: "error", source: "tsonic-rust",
+    message: "Native task scope requires its actual root lifecycle source identity.", evidence: ["target.capability=rust.native-tasks"] }]);
   const edges: { readonly node: Node; readonly owner: Node; readonly targets: readonly Node[]; readonly exact: boolean }[] = [];
   for (const node of context.nativeNodes) {
-    if (records.targetOperation.get(node)?.kind !== "source-call") continue;
+    if (!ast.is.IsCallExpression(node) && !ast.is.IsNewExpression(node)) continue;
+    const semantics = source.semantics.forNode(node);
+    const call = semantics.operations.call(node);
+    const selectedDeclaration = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
+    const implementation = selectedDeclaration === undefined ? undefined : source.navigation.callableImplementation(selectedDeclaration);
+    if (implementation?.kind !== "resolved" || ast.body(implementation.implementation.declaration) === undefined) continue;
     const owner = ownerFor(node);
-    const bindings = ast.is.IsSourceFile(owner) ? storage.emptyBindings : context.callableValues.native.bindingsFor(owner);
-    if (bindings === undefined) {
+    const bindings = ast.is.IsSourceFile(owner) ? { kind: "resolved" as const, bindings: storage.emptyBindings }
+      : storage.bindingsForLexicalOwner(owner);
+    if (bindings.kind !== "resolved") {
       reject(node, "RUST_NATIVE_TASK_CALL_GRAPH_NOT_CLOSED", "Native task scope propagation requires the exact checked caller activation.");
       continue;
     }
-    const selected = storage.invocationImplementationsFor(node, bindings);
+    const selected = storage.invocationImplementationsFor(node, bindings.bindings);
     if (selected.kind === "unresolved") {
       reject(node, "RUST_NATIVE_TASK_CALL_GRAPH_NOT_CLOSED", selected.reason);
       continue;
@@ -103,12 +125,10 @@ export function analyzeRustNativeTaskGraph(input: {
   const capturesScope = (owner: Node): boolean => {
     const existing = captures.get(owner);
     if (existing !== undefined) return existing;
-    const lexical = lexicalFunctions.forDeclaration(owner);
-    const module = records.moduleBinding.get(ast.parent(owner));
-    const closure = records.targetOperation.get(owner)?.kind === "closure";
-    const observed = ast.is.IsFunctionDeclaration(owner) && context.source.navigation.declarationUseSummary(owner).aliasedOrStored;
-    const captured = module?.storage !== "native-callable" && (observed ||
-      lexical?.kind === "resolved" && lexical.valueObserved || closure && lexical === undefined);
+    const captured = !context.moduleCallables.isNativeCallableExpression(owner) &&
+      (ast.is.IsFunctionDeclaration(owner) ? context.runtimeValueUses.hasFirstClassUse(owner)
+        : (ast.is.IsArrowFunction(owner) || ast.is.IsFunctionExpression(owner)) && context.sourceCallables.directLexicalBinding(owner) === undefined ||
+          ast.is.IsMethodDeclaration(owner) && ast.is.IsObjectLiteralExpression(ast.parent(owner)));
     captures.set(owner, captured);
     return captured;
   };
@@ -148,6 +168,7 @@ export function analyzeRustNativeTaskGraph(input: {
     }
   }
   return diagnostics.length !== 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({
+    lifecycleOwner: input.lifecycleOwner,
     spawns: Object.freeze(spawns),
     owners: Object.freeze([...needed].filter(owner => !ast.is.IsSourceFile(owner))),
     capturedOwners: new Set([...needed].filter(owner => !ast.is.IsSourceFile(owner) && capturesScope(owner))),

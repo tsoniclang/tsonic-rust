@@ -2,7 +2,6 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableErrorJoin, rustUninhabitedError } from "../../policy/conversions/callable-physical.js";
 import { rustProducerErrorReference, type RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
@@ -92,9 +91,6 @@ export function createRustNativeStorageJoins(context: RustNativeStorageJoinConte
     if (!step(depth)) return undefined;
     if (visited.has(type)) return false;
     visited.add(type);
-    // A type-erased runtime callable has one physical layout whatever produced it (values are erased into it when
-    // stored), so an aggregate of erased callables (`JsArray<rt::Callable<..>>`) needs no producer selection.
-    if (type.kind === "target-named" && type.id === rustCallableTargetId) return false;
     if (rustCallableProtocol(type) !== undefined || rustGenericCallableValue(type) !== undefined || isRustNativeFutureCarrier(type)) return true;
     const variants = input.definitions.sourceUnionVariants(type);
     const shape = rustStructuralObjectCarrierValue(type);

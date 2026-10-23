@@ -85,7 +85,7 @@ export function selectRustGeneratorReentry(walk: RustFactWalk, declaration: Node
       if (created.kind === "unresolved") return "possible";
       for (const read of reads) {
         const executions = storage.contributingExecutionsFor(read, declaration, creation);
-        if (executions.kind !== "complete") return "possible";
+        if (executions.kind !== "complete" || executions.producers.length === 0) return "possible";
         for (const execution of executions.producers) {
           const producers = storage.storageProducersFor(read, execution.bindings);
           if (producers.kind !== "complete" || producers.producers.length === 0) return "possible";

@@ -32,6 +32,9 @@ import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignat
 import { rustAbsentFutureWitness } from "../../policy/conversions/native-callables.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
+import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
+import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
 
 import type { RustSourceCallableSpecializationIssue } from "../../target-model/records/callable-issues.js";
 import { rustNativeCallableInvocationArguments } from "../../policy/types/callables/native-invocations.js";
@@ -468,7 +471,10 @@ export function createRustNativeStorageQueries(input: {
           if (physical === undefined || rustTargetTypeRefEquals(physical, candidatePhysical)) physical = candidatePhysical;
           else distinct = true;
         }
-        if (!distinct) return physical ?? fail("Native callable storage has no selected physical input implementation.");
+        if (!distinct) return physical === undefined ? fail("Native callable storage has no selected physical input implementation.")
+          : current.kind === "target-named" && current.id === rustCallableTargetId && joinable &&
+            selectedSubject.projection.some(component => component.kind === "array-element")
+            ? joinProducers(selectedSubject, bindings, position, alternatives, absent) : physical;
         // Inputs and conversion boundaries keep one physical implementation: no signature-based choice among them.
         return joinable ? joinProducers(selectedSubject, bindings, position, alternatives, absent)
           : fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");
@@ -528,6 +534,13 @@ export function createRustNativeStorageQueries(input: {
         const component = project(selectedSubject, { kind: "array-element" });
         const element = component === undefined ? undefined : visit(current.element, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === current.element ? current : Object.freeze({ ...current, element });
+      }
+      const jsElement = rustJsArrayLikeElementTargetType(current);
+      if (jsElement !== undefined && current.kind === "target-named") {
+        const component = project(selectedSubject, { kind: "array-element" });
+        const element = component === undefined ? undefined : visit(jsElement, component, bindings, depth + 1, false, position);
+        return element === undefined ? undefined : element === jsElement ? current
+          : Object.freeze({ ...current, genericArguments: Object.freeze(rustTypeGenericArguments([element])) });
       }
       if (current.kind === "tuple") {
         const elements: TargetTypeRef[] = [];

@@ -16,7 +16,9 @@ class Box<T> { callback = (value: T): T => value; }
 ${order === "open-first" ? `${open}\n${closed}` : order === "closed-first" ? `${closed}\n${open}` : closed}
 export function run(value: string): string {
   const view: View<string> = new Box<string>();
-  return view.callback(value, 42);
+  const closedView = closed();
+  ${order === "closed-only" ? "" : "const openView = open(new Box<string>()); if (openView.callback(value, 42) !== value) throw new Error(\"open view\");"}
+  return view.callback(closedView.callback(value, 42), 42);
 }`;
 }
 
@@ -38,7 +40,8 @@ for (const surfaces of [[], ["js"]]) {
         program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
       };
       for (const file of program.sourceFiles) visit(file);
-      const read = nodes.find(node => program.source.ast.text(node) === "view.callback");
+      const read = nodes.find(node => program.source.ast.is.IsPropertyAccessExpression(node) &&
+        program.source.ast.text(node) === "view.callback");
       const operation = program.records.targetOperation.get(read);
       assert.equal(operation?.kind === "source-field" && operation.storage === "structural-object", true,
         "the read uses its exact selected structural field");

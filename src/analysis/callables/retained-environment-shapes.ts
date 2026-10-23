@@ -7,8 +7,11 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { rustAwaitedPromiseLocal } from "./promise-locals.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { RustRetainedEnvironmentSelection } from "../../target-model/records/retained-environments.js";
+import type { RustNativeTaskGraph } from "./native-tasks.js";
 
-type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes">;
+type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
+  readonly nativeTasks: RustNativeTaskGraph;
+};
 import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../target-model/records/retained-environments.js";
 
 export function createRustRetainedEnvironmentQueries(
@@ -19,6 +22,7 @@ export function createRustRetainedEnvironmentQueries(
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
   const suspended = new Map<Node, readonly Node[] | undefined>();
   const lexical = new Map<Node, RustRetainedLexicalSelection>();
+  const taskOwners = new Set(input.nativeTasks.owners);
   let opaqueInvocations: ReadonlySet<Node> | undefined;
   let remaining = Number.isSafeInteger(maximumSteps) && maximumSteps > 0 ? maximumSteps : 0;
   const step = (): boolean => remaining > 0 && --remaining >= 0;
@@ -244,7 +248,8 @@ export function createRustRetainedEnvironmentQueries(
       }
     }
     const selected = parameters.filter((parameter): parameter is Node => parameter !== undefined && retained.has(parameter));
-    if (selected.length === 0 || ownsRetainedInputs(declaration)) return none;
+    const retainsScope = taskOwners.has(declaration) && isSuspended(declaration) && !input.nativeTasks.capturedOwners.has(declaration);
+    if (selected.length === 0 && !retainsScope || ownsRetainedInputs(declaration)) return none;
     const identity = sourceNodeIdentity(ast, declaration);
     if (identity === undefined) return unresolved();
     const names = new Set<string>();
@@ -255,8 +260,10 @@ export function createRustRetainedEnvironmentQueries(
     }
     const environment: RustRetainedEnvironment = Object.freeze({
       lifetime: Object.freeze({ kind: "parameter", identity: `retained-environment\0${identity}`,
-        name: allocateRustGeneratedName(names, "environment") }), inputs: Object.freeze(selected.map(declaration =>
-          Object.freeze({ kind: "parameter" as const, declaration }))) });
+        name: allocateRustGeneratedName(names, "environment") }), inputs: Object.freeze([
+          ...selected.map(declaration => Object.freeze({ kind: "parameter" as const, declaration })),
+          ...retainsScope ? [Object.freeze({ kind: "native-task-scope" as const })] : [],
+        ]) });
     return Object.freeze({ kind: "selected", environment });
   };
   // Selected on demand by the analysis passes that need them, after the source storage facts they read exist

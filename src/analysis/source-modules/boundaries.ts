@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 
 export function collectRustSourcePackageBoundaries(
-  context: RustAnalysisContext,
+  context: Pick<RustAnalysisContext, "ast" | "source" | "sourcePackages" | "rootPublishesLibrary">,
   sourceFiles: readonly SourceFile[],
   rootComponentId: string,
 ): {
