@@ -124,6 +124,7 @@ export interface RustCallableValuePlanInput {
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
+  readonly frozenDataWrites: Pick<import("../../target-model/records/frozen-data.js").RustFrozenDataWritePlan, "capturesFieldIdentity">;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
