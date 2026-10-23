@@ -149,7 +149,8 @@ export function inspect(flag: boolean): string { return new Value(flag).read(); 
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
   program.sourceFiles.forEach(visit);
-  const first = nodes.find(node => ast.is.IsBinaryExpression(node) && ast.text(ast.as.AsBinaryExpression(node).Right) === '"kept"');
+  const first = nodes.find(node => ast.is.IsBinaryExpression(node) &&
+    ast.is.IsStringLiteral(ast.as.AsBinaryExpression(node).Right) && ast.text(ast.as.AsBinaryExpression(node).Right) === "kept");
   assert.equal(first !== undefined, true, `${name}: the original first store and its RHS remain`);
   const target = ast.as.AsBinaryExpression(first).Left;
   assert.equal(program.records.unobservedWrite.get(target), expected,
@@ -192,7 +193,8 @@ export function inspect(): string { return ${abstractBase ? "" : "new Base().val
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
   visit(constructor);
-  const first = nodes.find(node => ast.is.IsBinaryExpression(node) && ast.text(ast.as.AsBinaryExpression(node).Right) === '"kept"');
+  const first = nodes.find(node => ast.is.IsBinaryExpression(node) &&
+    ast.is.IsStringLiteral(ast.as.AsBinaryExpression(node).Right) && ast.text(ast.as.AsBinaryExpression(node).Right) === "kept");
   assert.equal(first !== undefined, true, `${name}: the first base store is preserved`);
   assert.equal(program.records.unobservedWrite.get(ast.as.AsBinaryExpression(first).Left), expected,
     `${name}: only conjunction over actual native contexts can publish a global warning expectation`);
@@ -228,7 +230,7 @@ export function inspect(count: int32): int32 {
   const liveness = program.records.bindingLiveness.get(counter);
   assert.equal(liveness !== undefined, true, `${label}: liveness is complete before publication`);
   assert.equal(liveness.unused, expectedUnused, `${label}: captures, body reads and after-loop reads stay observable`);
-  const count = nodes.find(node => ast.is.IsParameter(node) && ast.text(ast.name(node)) === "count");
+  const count = nodes.find(node => ast.is.IsParameterDeclaration(node) && ast.text(ast.name(node)) === "count");
   assert.equal(program.records.bindingLiveness.get(count)?.unused, false, `${label}: the actual bound is still evaluated`);
   if (expectedUnused) {
     const { result } = compileRust({ files: { "index.ts": source } });

@@ -25,7 +25,11 @@ function sourceNodes(program) {
 test("an already selected borrowed union field receiver uses native field autoderef", () => {
   const { program } = analyzeRust({ files: closedInstanceFiles });
   const ast = program.source.ast;
-  const node = sourceNodes(program).find(node => ast.is.IsPropertyAccessExpression(node) && ast.text(node) === "value.count");
+  const node = sourceNodes(program).find(node => {
+    if (!ast.is.IsPropertyAccessExpression(node)) return false;
+    const access = ast.as.AsPropertyAccessExpression(node);
+    return ast.text(access.Name) === "count" && ast.is.IsIdentifier(access.Expression) && ast.text(access.Expression) === "value";
+  });
   assert.equal(node !== undefined, true, "the actual narrowed nominal source field is present");
   const receiver = ast.as.AsPropertyAccessExpression(node).Expression;
   assert.equal(program.records.targetOperation.get(node)?.kind, "source-field", "the selected operation reads actual native storage");
