@@ -16,6 +16,7 @@ import { planRustBindingPattern } from "../bindings/binding-patterns.js";
 import { planRustModuleBindingStore, planRustPromotedStorageWrite } from "../expressions/typed-locations.js";
 import { planRustDirectStorage } from "../expressions/update-target.js";
 import { planRustRuntimeSetExpression } from "../expressions/runtime-setters.js";
+import { planRustSourceErrorPropagation } from "../expressions/calls/source-errors.js";
 
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
@@ -122,6 +123,10 @@ export function planForOfStatement(
   }
   const bindingMutable = selectedBinding.kind === "declaration" && selectedBinding.mutable ||
     resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref";
+  const generatorBody = fact.lowering.kind === "sync-generator" || fact.lowering.kind === "async-generator"
+    ? context.input.program.records.sourceErrorEffects.get(node)?.edges : undefined;
+  if ((fact.lowering.kind === "sync-generator" || fact.lowering.kind === "async-generator") && generatorBody?.length !== 1)
+    failRustPlannerInvariant("An admitted generator iteration requires its one selected original body error channel.", node);
   if (fact.lowering.kind === "async-generator") {
     if (context.asyncContext !== true || context.syntheticNames === undefined) {
       failRustPlannerInvariant("Admitted async iteration requires its native execution and name frame.", node);
@@ -136,6 +141,8 @@ export function planForOfStatement(
         args: [],
       },
     };
+    const nextValue = planRustSourceErrorPropagation(node, generatorBody![0]!, next, context);
+    if (nextValue === undefined) failRustPlannerInvariant("An admitted async generator requires its exact native Result consumption.", node);
     return [{
       kind: "scope",
       body: {
@@ -146,7 +153,7 @@ export function planForOfStatement(
             ...(target.used.value ? { label: target.label } : {}),
             binding,
             ...(bindingMutable ? { bindingMutable: true } : {}),
-            expression: next,
+            expression: nextValue,
             body,
           },
         ],
@@ -181,7 +188,13 @@ export function planForOfStatement(
       : iterable;
   let loopBinding = binding;
   let loopBindingMutable = bindingMutable;
-  if (fact.lowering.kind === "fallible-owned") {
+  if (fact.lowering.kind === "sync-generator") {
+    loopBinding = allocateRustSyntheticName(context.syntheticNames, "generator_item");
+    loopBindingMutable = false;
+    const value = planRustSourceErrorPropagation(node, generatorBody![0]!, { kind: "path", path: loopBinding }, context);
+    if (value === undefined) failRustPlannerInvariant("An admitted generator requires its exact native Result consumption.", node);
+    body = { statements: [{ kind: "let", name: binding, mutable: bindingMutable, init: value }, ...body.statements] };
+  } else if (fact.lowering.kind === "fallible-owned") {
     const activeErrorType = rustActiveErrorType(context);
     if (context.syntheticNames === undefined || activeErrorType === undefined) {
       failRustPlannerInvariant("Admitted fallible iteration requires its native error and name frame.", node);

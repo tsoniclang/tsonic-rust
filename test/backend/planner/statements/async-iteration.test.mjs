@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { nativeFunction, nativeNodes } from "../../../helpers/native-ast.mjs";
 
 const imports = `
 import type { int32 } from "@tsonic/core/types.js";
@@ -35,7 +36,12 @@ export async function main(): Promise<void> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /while let Some\(row\) = async_iterator(?:_\d+)?\.next_yield\(\)\.await/u);
+  const loop = nativeNodes(nativeFunction(result, "main").body, node => node.kind === "while-let-some")[0];
+  assert.equal(loop?.binding, "row", "the original yield binding is retained");
+  assert.equal(loop.expression.kind, "match", "the physical Result is decoded before Option iteration");
+  assert.equal(loop.expression.expression.kind, "await", "the original async resume is awaited once");
+  assert.equal(loop.expression.expression.expr.method, "next_yield", "the selected async generator operation is retained");
+  assert.match(source, /async_iterator(?:_\d+)?\.next_yield\(\)\.await/u);
   assert.equal(validateGeneratedProject("async-iteration", result.artifacts, { run: true }).status, 0);
 });
 
@@ -69,7 +75,11 @@ export async function main(): Promise<void> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /for row in rows\(\)/u);
+  assert.match(source, /for generator_item(?:_\d+)? in rows\(\)/u);
+  const loop = nativeNodes(nativeFunction(result, "main").body, node => node.kind === "for" && node.iterable.kind === "call")[0];
+  const row = loop.body.statements.find(statement => statement.kind === "let" && statement.name === "row");
+  assert.equal(row?.init.kind, "match", "the original row is the selected successful native generator payload");
+  assert.equal(row.init.expression.path, loop.binding, "each exact iterator result is decoded once");
   assert.match(source, /for value in rt::iter_copied\(&values\)/u);
   assert.doesNotMatch(source, /next_yield/u);
   assert.equal(validateGeneratedProject("sync-async-adaptation", result.artifacts, { run: true }).status, 0);

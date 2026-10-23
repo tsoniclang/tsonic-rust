@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustGeneratorSourceInvocationKind, selectRustGeneratorSourceCall } from "../../../dist/policy/operations/source-profiles/generator-source-profile.js";
+import { rustGeneratorTargetType, rustAsyncGeneratorTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+
+test("generator resume and return preserve their native Result ABI even with an infallible body", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const protocol = { yieldType: integer, returnType: integer, nextType: integer };
+  for (const [ownerName, receiverCarrier, asynchronous] of [
+    ["Generator", rustGeneratorTargetType(protocol), false],
+    ["AsyncGenerator", rustAsyncGeneratorTargetType(protocol), true],
+  ]) for (const [memberName, selectedParameterCount] of [["next", 0], ["next", 1], ["return", 1]]) {
+    const selected = selectRustGeneratorSourceCall({ ownerName, memberName, receiverCarrier,
+      selectedParameterCount, argumentCarriers: selectedParameterCount === 0 ? [] : [integer] });
+    assert.equal(selected.kind, "resolved", `${ownerName}.${memberName}/${selectedParameterCount}`);
+    assert.equal(selected.template.isAsync, asynchronous, "suspension stays on the existing protocol");
+    assert.equal(selected.template.isFallible, true, "the native runtime returns Result, including Infallible");
+    assert.equal(selected.template.errorBoundary, "source-program", "the existing original body edge selects E");
+  }
+});
 
 test("only the six registered generator body invocations carry native resume effects", () => {
   for (const kind of ["sync", "async"]) {

@@ -1,6 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 import { planRustErrorRegion, planRustErrorJoinDeclarations } from "./error-regions.js";
+import { planRustNativeTaskInitializer } from "./native-tasks.js";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -218,8 +219,9 @@ function planModuleItems(
   }
   const errorBoundary = region.boundary;
   const fallible = errorBoundary !== undefined;
+  const nativeTasks = planRustNativeTaskInitializer(context.sourceFile, context);
   const initializationContext: RustPlanContext = {
-    ...context,
+    ...nativeTasks.context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },
@@ -439,7 +441,7 @@ function planModuleItems(
     ],
     ...(asynchronous ? { isAsync: true } : {}),
     ...(errorBoundary === undefined ? {} : { errorType: errorBoundary.errorType }),
-    params: [],
+    params: nativeTasks.parameters,
     body: applyFallibleShape(
       { statements: initializationStatements },
       fallible

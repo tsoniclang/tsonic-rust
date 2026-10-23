@@ -129,7 +129,7 @@ export function selectRustIterationLowering(
       ? { kind: "js-array" }
       : target.kind === "fallible-owned"
         ? { kind: "fallible-owned" }
-        : { kind: "owned" };
+        : target.kind === "sync-generator" ? { kind: "sync-generator" } : { kind: "owned" };
   }
   if (source.mechanism.kind === "asynchronous-iterator-protocol") {
     return target.kind === "async-generator" ? { kind: "async-generator" } : undefined;
@@ -154,5 +154,5 @@ export function selectRustIterationLowering(
     ? { kind: "js-array" }
     : target.kind === "fallible-owned"
       ? { kind: "fallible-owned" }
-      : { kind: "owned" };
+      : target.kind === "sync-generator" ? { kind: "sync-generator" } : { kind: "owned" };
 }
