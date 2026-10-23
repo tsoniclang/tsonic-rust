@@ -8,7 +8,7 @@ export function selectRustProjectForwarder(source: TargetTypeRef | undefined, ta
   return !accessor && source === undefined || rustTargetTypeRefEquals(source, target) ? "adapter" : "direct";
 }
 
-export function selectRustProjectCallableSignature(input: RustProjectCallablePolicyInput): RustProjectCallableSignature | undefined {
+export function selectRustProjectCallableSignature(input: RustProjectCallablePolicyInput): Omit<RustProjectCallableSignature, "parameters"> | undefined {
   if (input.generator || input.asynchronous === "native-future" || input.authoredAsync && input.asynchronous !== "js-promise" ||
     input.typeParameters.some(identity => identity === undefined || identity.length === 0)) return undefined;
   return Object.freeze({ typeParameters: Object.freeze(input.typeParameters as readonly string[]), returnCarrier: input.result,
