@@ -120,10 +120,10 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
     const input = transitions[0]?.input ?? source;
     const fused = flow?.kind === "union-map" && contextual?.conversion.kind === "project-union-map" && rustTargetTypeRefEquals(flow.selectedCarrier, contextual.sourceCarrier) &&
       cast === undefined && downcast === undefined && lifetime === undefined && object === undefined ? flow : undefined;
-    const borrowable = flow !== undefined && ((flow.kind === "source-union" || flow.kind === "runtime-union") && flow.project === undefined ||
+    const ownership = program.records.readOwnership.get(node);
+    const borrowable = ownership?.value.kind !== "move" && flow !== undefined && ((flow.kind === "source-union" || flow.kind === "runtime-union") && flow.project === undefined ||
       flow.kind === "option-value" && rustOptionalStorageValue(flow.sourceCarrier) === undefined) && rustOptionElementCarrier(flow.selectedCarrier) === undefined &&
       cast === undefined && downcast === undefined && lifetime === undefined && optional === undefined && object === undefined;
-    const ownership = program.records.readOwnership.get(node);
     const plans: { readonly carrier: TargetTypeRef | undefined; readonly value: RustValueProjection }[] = [];
     const candidates = [undefined, input, ...transitions.flatMap(transition => [transition.input, transition.output]), presentGuards.get(node)];
     const seen = new Set<string>();
@@ -148,7 +148,7 @@ export function analyzeRustValueReads(program: Omit<RustAnalysisProgram, "reacha
         contextual: applied.has("contextual") ? contextual : undefined, option: applied.has("option") ? optional : undefined,
         fused: applied.has("flow") && applied.has("contextual") ? fused : undefined, borrowable: borrowable && applied.has("flow"),
         borrowConversion: borrowable && contextual !== undefined && rustTargetTypeRefEquals(flow?.selectedCarrier, contextual.sourceCarrier) &&
-          (runtime?.sourceMode === "ref" || contextual.conversion.kind === "project-union-map" && ownership?.value.kind !== "move"),
+          (runtime?.sourceMode === "ref" || contextual.conversion.kind === "project-union-map"),
         referenceReborrow: referenceReborrow !== undefined,
         contextualConsumesSource: applied.has("contextual") && runtime?.sourceMode === "value", contextualIdentity: contextual?.conversion.kind === "native-trait-object-upcast" || referenceReborrow !== undefined,
         preserveAbsenceEffect: ownership?.pure !== true, absenceDiscard: isRustUnitCarrier(optional?.sourceCarrier) ? "unit" : "value" }) });

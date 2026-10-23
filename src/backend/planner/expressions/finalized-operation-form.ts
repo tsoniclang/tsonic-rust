@@ -3,9 +3,7 @@ import type { RustProviderChainStep } from "../../../target-model/operations/mod
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
 import type { RustCallGenericArgument, RustExpr, RustGenericArgument, RustGenericParameter, RustItem, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
-import { rustPrimitiveTypeName } from "../../../target-model/types/carriers/primitives.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import {
@@ -56,7 +54,7 @@ export function planRustFinalizedOperationForm(
       }
       return {
         kind: "method-call",
-        receiver: typeUnsuffixedIntegerReceiver(rustAutoBorrowedReceiver(receiver), abi.targetReceiver.input.parameterCarrier),
+        receiver: rustAutoBorrowedReceiver(receiver),
         method: form.name,
         args,
         ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
@@ -313,16 +311,6 @@ function applyProviderOperationChain(
     result = { kind: "method-call", receiver: result, method: step.name, args: [] };
   }
   return result;
-}
-
-// An i32 literal is printed without a suffix; as a method receiver Rust cannot infer its type (E0689), so the
-// receiver literal takes the suffix of its selected native receiver carrier.
-function typeUnsuffixedIntegerReceiver(expression: RustExpr, carrier: TargetTypeRef): RustExpr {
-  if (expression.kind === "unary" && expression.operator === "-")
-    return { ...expression, operand: typeUnsuffixedIntegerReceiver(expression.operand, carrier) };
-  if (expression.kind !== "int-literal" || expression.text.includes("_") || carrier.kind !== "source-primitive") return expression;
-  const suffix = rustPrimitiveTypeName(carrier.name);
-  return suffix === undefined ? expression : { ...expression, text: `${expression.text}_${suffix}` };
 }
 
 // `promise.catch(rejected)` / `promise.then(fulfilled, rejected?)` on a native Promise body: a local async function

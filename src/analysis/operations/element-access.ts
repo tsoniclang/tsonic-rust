@@ -2,7 +2,6 @@ import { requireRustRecord } from "../program/records/required-records.js";
 
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
-import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
 import { Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { acceptRustMemberOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./members/result.js";
@@ -11,6 +10,7 @@ import { normalizeSelectedLiteralCarrier } from "../source-evidence/types/resolu
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./members/conversions.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import { selectRustNativeIndex } from "../../policy/operations/collections/native-indices.js";
+import { selectRustNativeArrayElementPlan } from "../../policy/operations/collections/native-arrays.js";
 import { rustProjectObjectIndexSignature } from "../project-types/object-layout.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -25,7 +25,6 @@ import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/model/contracts.js";
 
 import type { RustOperationsProviderOptions } from "./members/model.js";
-import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 
 import { selectRustNumberArrayUnionMember } from "./members/number-array-unions.js";
 
@@ -251,20 +250,7 @@ export function resolveRustCheckedElementAccess(
       return rejectSelectedOperation(request.expression, context, "RUST_NATIVE_INDEX_CARRIER_UNSUPPORTED",
         "Native indexing requires an exact integer carrier.");
     }
-    const template: RustProviderOperationTemplate = {
-      kind: "provider-operation",
-      operationId: `tsonic.rust.native.${nativeIndexIdentity.ownerName}.index`,
-      operationKind: "indexer",
-      target: { form: "index", ...(index.conversion === undefined ? {} : { indexConversion: index.conversion }) },
-      resultCarrier: nativeArrayReceiver.element,
-      parameterCarriers: [index.carrier],
-      evaluation: "pure",
-      isAsync: false,
-      isFallible: false,
-      errorBoundary: "none",
-      ...((request.accessMode === "read" || request.accessMode === "read-write") && !isRustCopyCarrier(nativeArrayReceiver.element)
-        ? { carrierRequirements: [{ carrier: nativeArrayReceiver.element, requirement: "clone" as const }] } : {}),
-    };
+    const template = selectRustNativeArrayElementPlan(nativeIndexIdentity.ownerName, nativeArrayReceiver.element, index, request.accessMode);
     const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier, [index.carrier]);
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", "Native array indexing cannot finalize one total Rust operation ABI.");
