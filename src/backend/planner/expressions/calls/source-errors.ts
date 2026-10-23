@@ -23,7 +23,7 @@ export function planRustSourceErrorPropagation(
   const selection = context.input.program.records.sourceErrorRegion.get(edge);
   if (selection === undefined) return reject(node, context);
   const channels = selection.channels;
-  const planned = planRustSelectedErrorRegion(selection.operand, context);
+  const planned = planRustSelectedErrorRegion(selection.operand, context, node);
   if (planned === undefined) return reject(node, context);
   const operand = planned.boundary;
   if (operand === undefined) {

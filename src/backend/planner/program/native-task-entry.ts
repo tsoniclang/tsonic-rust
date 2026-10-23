@@ -1,3 +1,4 @@
+import type { Node } from "@tsonic/tsts";
 import type { RustInitializerSelection, RustLifecycleErrorSelection } from "../../../target-model/records/error-regions.js";
 import type { RustNativeTaskUse } from "../../../target-model/records/native-tasks.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
@@ -8,6 +9,7 @@ import { planRustInitializerLifecycleResult } from "./initializer-lifecycle.js";
 import { planRustInitializerBoundary, type RustCrateInitializer, type RustModuleInitializer } from "./module-initialization.js";
 
 export function planRustNativeTaskEntry(input: {
+  readonly sourceNode: Node | undefined;
   readonly task: Extract<RustNativeTaskUse, { readonly kind: "entry" }>;
   readonly initialization: RustInitializerSelection;
   readonly initializer: RustCrateInitializer;
@@ -25,7 +27,7 @@ export function planRustNativeTaskEntry(input: {
   if (input.initialization.error.kind !== "infallible") {
     const operand = planRustInitializerBoundary(input.initialization, input.modules, input.initializer.functionName,
       input.initializer.errorJoinName, input.rendering, input.crateName);
-    const lifecycle = planRustSelectedErrorRegion(input.lifecycle.region, input.rendering, undefined, input.crateName)?.boundary;
+    const lifecycle = planRustSelectedErrorRegion(input.lifecycle.region, input.rendering, input.sourceNode, undefined, input.crateName)?.boundary;
     if (operand === undefined || lifecycle === undefined)
       failRustPlannerInvariant("An admitted native task entry requires its exact initializer-to-lifecycle error transport.");
     initialize = { kind: "try", operandErrorType: lifecycle.errorType, resultErrorType: lifecycle.errorType,

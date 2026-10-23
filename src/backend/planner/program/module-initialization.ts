@@ -36,7 +36,7 @@ export function planRustModuleInitializers(
       ? `crate::${contract.implementationModuleName}::${contract.implementationFunctionName}`
       : contract?.crateName !== undefined
         ? `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}` : undefined;
-    const region = planRustSelectedErrorRegion(selected.region, rendering);
+    const region = planRustSelectedErrorRegion(selected.region, rendering, selected.sourceFile);
     if (path === undefined || region === undefined) {
       failRustPlannerInvariant(
         `Completed initializer '${selected.identity}' has no exact native symbol or rendered error payload.`,
