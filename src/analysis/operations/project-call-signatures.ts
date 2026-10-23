@@ -216,10 +216,8 @@ export function acceptProjectSourceCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
       "A closed class union call requires one exact selected method implementation per arm.");
   }
-  const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration" || ast.kindName(callableDeclaration) === "KindClassExpression"
-    ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
-        parameter.parameterDeclaration)
-    : sourceCallableValueParameters(ast, callableDeclaration, context.semanticsFor(callableDeclaration));
+  const sourceParameters = sourceCallableValueParameters(ast, callableDeclaration, context.semanticsFor(callableDeclaration),
+    { kind: "selected-invocation", signature: request.source.selectedSignature });
   if (sourceParameters === undefined) return rejectSelectedOperation(request.source.call, context,
     "RUST_SOURCE_CALL_BINDINGS_MISSING", "A selected source call requires exact checked value-parameter declarations.");
   const parameters = sourceParameters.map((parameter, index) => {

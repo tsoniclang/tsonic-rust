@@ -60,9 +60,13 @@ export function analyzeRustSourceCallArguments(program: Omit<RustAnalysisProgram
     });
     const declaration = asSourceNode(selectedCall.sourceDeclaration, program.source.ast);
     const declarationParameters = declaration === undefined ? undefined
-      : sourceCallableValueParameters(program.source.ast, declaration, source.semantics.forNode(declaration));
-    if (declaration !== undefined && declarationParameters === undefined)
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted source call requires its exact checked value parameters.", call);
+      : selectedCall.sourceSignature === undefined ? undefined
+        : sourceCallableValueParameters(program.source.ast, declaration, source.semantics.forNode(declaration),
+            { kind: "selected-invocation", signature: selectedCall.sourceSignature });
+    if (declaration !== undefined && declarationParameters === undefined) {
+      refuse(call, "rust.source-call.checked-value-parameters", "A source call requires its exact checker-selected value-parameter declarations.");
+      continue;
+    }
     const elements = new Map<number, Map<number, "value" | "ref" | "mut-ref">>();
     const mutable = new Set<number>();
     const borrowedRoots = new Map<number, "identity" | "ref" | "mut-ref">();

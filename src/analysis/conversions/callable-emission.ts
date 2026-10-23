@@ -105,9 +105,11 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const call = ast.parent(node);
     if (call === undefined || !ast.is.IsCallExpression(call) || program.records.targetOperation.get(node)?.kind !== "closure") return undefined;
     const index = ast.arguments(call).indexOf(node);
-    const declaration = asSourceNode(program.records.selectedCall.get(call)?.sourceDeclaration, ast);
-    const parameter = declaration === undefined || index < 0 ? undefined
-      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration))?.[index];
+    const selected = program.records.selectedCall.get(call);
+    const declaration = asSourceNode(selected?.sourceDeclaration, ast);
+    const parameter = declaration === undefined || index < 0 || selected?.sourceSignature === undefined ? undefined
+      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration),
+          { kind: "selected-invocation", signature: selected.sourceSignature })?.[index];
     // A parameter that is not a native callable input takes its declared runtime callable.
     const slot = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.parameterCarrier;
     if (parameter === undefined || declaration === undefined || ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken !== undefined ||

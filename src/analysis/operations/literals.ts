@@ -43,9 +43,11 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     if (!ast.is.IsCallExpression(parent) || program.records.targetOperation.get(parent)?.kind !== "source-call") return false;
     // A source-call argument is typed only by a parameter declared with a closed carrier (not a type parameter).
     const index = ast.arguments(parent).indexOf(current);
-    const declaration = program.records.selectedCall.get(parent)?.sourceDeclaration;
-    const parameter = index < 0 || declaration === undefined ? undefined
-      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration))?.[index];
+    const selected = program.records.selectedCall.get(parent);
+    const declaration = selected?.sourceDeclaration;
+    const parameter = index < 0 || declaration === undefined || selected?.sourceSignature === undefined ? undefined
+      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration),
+          { kind: "selected-invocation", signature: selected.sourceSignature })?.[index];
     const declared = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.valueCarrier;
     return declared !== undefined && declared.kind === "source-primitive";
   };
