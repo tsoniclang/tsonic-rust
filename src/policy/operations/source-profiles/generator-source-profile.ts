@@ -34,6 +34,19 @@ const iteratorResultOwners = new Set([
   "IteratorReturnResult",
 ]);
 
+const generatorInvocationKinds = new Map<string, "sync" | "async">([
+  ["tsonic.rust.generator.next.sync.0", "sync"],
+  ["tsonic.rust.generator.next.sync.1", "sync"],
+  ["tsonic.rust.generator.return.sync", "sync"],
+  ["tsonic.rust.generator.next.async.0", "async"],
+  ["tsonic.rust.generator.next.async.1", "async"],
+  ["tsonic.rust.generator.return.async", "async"],
+]);
+
+export function rustGeneratorSourceInvocationKind(operationId: string): "sync" | "async" | undefined {
+  return generatorInvocationKinds.get(operationId);
+}
+
 export function selectRustGeneratorSourceCall(
   request: RustGeneratorSourceCallRequest,
 ): RustGeneratorSourceSelection {
