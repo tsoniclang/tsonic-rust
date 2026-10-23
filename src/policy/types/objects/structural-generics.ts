@@ -1,4 +1,5 @@
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
@@ -12,6 +13,21 @@ export interface RustStructuralGenericCarrierSelection {
     readonly source: TargetTypeRef;
     readonly carrier: TargetTypeRef;
   }[];
+}
+
+export function selectRustStructuralDispatchArguments(
+  arguments_: readonly RustTargetGenericArgument[], objectLifetime: RustLifetimeRef | undefined,
+): readonly RustTargetGenericArgument[] | undefined {
+  const selected: RustTargetGenericArgument[] = [];
+  for (const argument of arguments_) {
+    if (argument.kind !== "lifetime" || argument.lifetime.kind !== "placeholder" && argument.lifetime.kind !== "call-scoped-elision") {
+      selected.push(argument);
+      continue;
+    }
+    if (objectLifetime === undefined || objectLifetime.kind === "placeholder" || objectLifetime.kind === "call-scoped-elision") return undefined;
+    selected.push(Object.freeze({ kind: "lifetime", lifetime: objectLifetime }));
+  }
+  return Object.freeze(selected);
 }
 
 export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStructuralGenericCarrierSelection {

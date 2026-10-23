@@ -15,6 +15,7 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/targ
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { selectRustCallableValueAdapter } from "../../../dist/policy/conversions/callable-adapters.js";
+import { selectRustStructuralDispatchArguments } from "../../../dist/policy/types/objects/structural-generics.js";
 
 const parameter = { kind: "type-parameter", identity: "source:Value", name: "Value" };
 const otherParameter = { kind: "type-parameter", identity: "destination:Value", name: "Value" };
@@ -24,6 +25,36 @@ const source = (type, name = "Box") => rustSourceTypeCarrier("/model.ts", name, 
 const target = (type, options = {}) => rustStructuralObjectTargetType(options.file ?? "/view.ts", [
   { sourceName: "value", type, presence: options.presence ?? "required", readonly: options.readonly ?? true },
 ]);
+
+test("structural supertrait arguments close only inferred header lifetimes from the native object contract", () => {
+  const named = { kind: "parameter", identity: "native:lifetime", name: "native" };
+  const known = [
+    { kind: "lifetime", lifetime: named },
+    { kind: "lifetime", lifetime: { kind: "static" } },
+    { kind: "type", type: parameter },
+    { kind: "const", value: { kind: "integer", value: "3" } },
+  ];
+  const placeholders = [
+    { kind: "lifetime", lifetime: { kind: "placeholder" } },
+    { kind: "lifetime", lifetime: { kind: "call-scoped-elision", callIdentity: "call", parameterIdentity: "input" } },
+  ];
+  for (const objectLifetime of [named, { kind: "static" }]) {
+    const selected = selectRustStructuralDispatchArguments([...known, ...placeholders], objectLifetime);
+    assert.equal(selected !== undefined, true, "the actual native contract closes the supertrait header");
+    for (const [index, argument] of known.entries()) assert.equal(selected[index] === argument, true,
+      `known argument ${index} retains its exact type, const or authored lifetime identity`);
+    for (const argument of selected.slice(known.length)) assert.equal(argument.lifetime === objectLifetime, true,
+      "the header receives the selected native object lifetime, not an invented static bound");
+    assert.equal(Object.isFrozen(selected), true, "the selected header arguments are data only");
+    assert.equal(placeholders[0].lifetime.kind, "placeholder", "expression and implementation input carriers remain unchanged");
+  }
+  assert.equal(selectRustStructuralDispatchArguments(known, undefined)?.every((argument, index) => argument === known[index]), true,
+    "a fully authored header needs no substitute object lifetime");
+  for (const absent of [undefined, { kind: "placeholder" }, { kind: "call-scoped-elision", callIdentity: "call", parameterIdentity: "input" }]) {
+    assert.equal(selectRustStructuralDispatchArguments(placeholders, absent) === undefined, true,
+      "unknown native storage never grants static or inferred header lifetime permission");
+  }
+});
 
 test("native structural view selection instantiates the same exact source and destination binder", () => {
   const view = { sourceCarrier: source(parameter), targetCarrier: target(parameter) };
@@ -338,6 +369,18 @@ ${order === "open-first" ? `${open}\n${closed}` : `${closed}\n${open}`}`,
       assert.equal(view.fields.filter(field => field.readAdapter?.kind === "option-some").length, 1);
       assert.equal(view.fields.some(field => field.callable?.resultAdapter.kind === "option-some"), true);
       assert.equal(view.fields.some(field => field.readAdapter?.kind === "conversion" && field.readAdapter.conversion.kind === "callable-adapter"), true);
+      const dispatch = program.records.projectDispatchEmission.get(definition);
+      assert.equal(dispatch !== undefined, true, "the complete structural supertrait contract is published before the seal");
+      assert.equal(dispatch.structuralSupers.length, 1, "the original structural supertrait remains in the native class contract");
+      for (const supertrait of dispatch.structuralSupers) {
+        assert.equal(rustTargetTypeRefEquals(supertrait.carrier, view.targetCarrier), true,
+          "the exact native structural carrier and binder remain unchanged");
+        assert.equal(supertrait.genericArguments.every(argument => argument.kind !== "lifetime" ||
+          argument.lifetime.kind !== "placeholder" && argument.lifetime.kind !== "call-scoped-elision"), true,
+          "supertrait headers contain no unnameable expression lifetimes");
+        assert.equal(Object.isFrozen(supertrait.genericArguments), true, "the renderer consumes sealed header arguments");
+        assert.equal(supertrait.genericArguments.length > 0, true, "the exact generic class binder remains present");
+      }
     });
   }
 }

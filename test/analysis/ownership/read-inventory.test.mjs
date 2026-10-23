@@ -4,10 +4,36 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+
+for (const [name, body, moves] of [
+  ["terminal", "throw value;", [true]],
+  ["transparent", "throw (((value)));", [true]],
+  ["finally observed", "try { throw value; } finally { const retained = value; }", [false, true]],
+  ["catch observed", "try { throw value; } catch { const retained = value; }", [false, true]],
+]) {
+  test(`a ${name} throw follows the checked source consumption and last-use contract`, async () => {
+    const source = createTargetSourceProgram(await checkedSource("ownership-throw-consumption", {
+      "src/index.ts": `function run(value: string): void { ${body} }`,
+    }));
+    const storage = createSourceStorageQuery(source, source.sourceFiles);
+    const { ast } = source;
+    const parameter = storage.nodes.find(node => ast.is.IsParameterDeclaration(node));
+    const references = storage.nodes.filter(node => ast.is.IsIdentifier(node) &&
+      ast.parent(node) !== parameter && source.navigation.sourceReferenceFor(node)?.declaration === parameter);
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+      capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
+      isOwnedOperationResult: () => false });
+    assert.equal(selected.kind, "resolved", "the actual checked source graph closes before read publication");
+    assert.equal(references.length, moves.length, "every original thrown or retained source read remains covered");
+    for (const [index, reference] of references.entries()) assert.equal(selected.flow.movingReads.has(reference), moves[index],
+      `${name}: read ${index} preserves catch/finally and later-use liveness`);
+  });
+}
 
 async function fixture() {
   const source = createTargetSourceProgram(await checkedSource("ownership-read-inventory", {

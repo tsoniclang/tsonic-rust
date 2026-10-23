@@ -19,7 +19,7 @@ for (const surfaces of [[], ["js"]]) {
     test(`${label} native input invocation consumes its physical formal ABI in ${surfaces[0] ?? "native"}`, () => {
       const { program } = analyzeRust({ surfaces, files: { "index.ts": `
 function invoke(callback: (${parameter}) => number, ${parameter}): number { return callback(value); }
-console.log(invoke((value) => value === undefined ? 0 : value.length, "native"));` } });
+invoke((value) => value === undefined ? 0 : value === "native" ? 6 : 0, "native");` } });
       const call = invocation(program);
       const operation = program.records.targetOperation.get(call);
       const selected = program.records.nativeInputInvocation.get(call);
@@ -38,10 +38,10 @@ console.log(invoke((value) => value === undefined ? 0 : value.length, "native"))
   test(`a concrete callable is not relabelled as a generic native input in ${surfaces[0] ?? "native"}`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": `
 function invoke(value: string): number {
-  const callback: (value: string) => number = value => value.length;
+  const callback: (value: string) => number = value => value === "native" ? 6 : 0;
   return callback(value);
 }
-console.log(invoke("native"));` } });
+invoke("native");` } });
     const call = invocation(program);
     assert.equal(program.records.targetOperation.get(call)?.kind === "source-call", true,
       "the ordinary callable still has its exact source operation");

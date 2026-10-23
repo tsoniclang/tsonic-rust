@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustReachability } from "../../target-model/records/reachability.js";
 import type { RustDispatchMemberRole } from "../../target-model/records/reachability.js";
@@ -8,9 +8,24 @@ import type { RustProjectTypeDefinition } from "../../target-model/types/project
 import type { RustProjectDispatchEmission } from "../../target-model/records/project-classes.js";
 import type { RustDeadCodeDisposition } from "../../target-model/records/native-liveness.js";
 import { rustSourceItemIdentity } from "../../target-model/names/source-output-identities.js";
+import { selectRustStructuralDispatchArguments } from "../../policy/types/objects/structural-generics.js";
 
 export function analyzeRustProjectDispatchEmission(program: Omit<RustAnalysisProgram, "reachability">,
-  definition: RustProjectTypeDefinition, reachability: RustReachability, producer: RustProjectClassProducer): void {
+  definition: RustProjectTypeDefinition, reachability: RustReachability, producer: RustProjectClassProducer): readonly TargetDiagnostic[] {
+  const structuralSupers: RustProjectDispatchEmission["structuralSupers"][number][] = [];
+  const objectLifetime = program.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime;
+  for (const view of program.classValues.instanceViews) {
+    if (view.declaration !== definition.declaration) continue;
+    const shape = program.structuralShapes.definitionForCarrier(view.targetCarrier);
+    if (shape === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural supertrait requires its exact selected native shape.", definition.declaration);
+    const genericArguments = selectRustStructuralDispatchArguments(shape.genericArguments, objectLifetime);
+    if (genericArguments === undefined) return Object.freeze([{
+      code: "RUST_STRUCTURAL_SUPER_LIFETIME_UNRESOLVED", category: "error", source: "tsonic-rust", sourceNode: definition.declaration,
+      message: "A structural supertrait requires a proven native object lifetime for its captured callable storage.",
+      evidence: ["target.capability=rust.analysis.project-structural-dispatch"],
+    }]);
+    structuralSupers.push(Object.freeze({ carrier: view.targetCarrier, genericArguments }));
+  }
   const component = program.sourcePackageComponents.componentForFile(definition.fileName);
   if (component === undefined) failTargetAnalysisInvariant("tsonic-rust", "A native project dispatch trait requires its exact source component.", definition.declaration);
   const publiclyReachable = program.projectTypes.programErrorVariant(definition) !== undefined || component.publishesImplementationAbi ||
@@ -65,5 +80,6 @@ export function analyzeRustProjectDispatchEmission(program: Omit<RustAnalysisPro
       deadCode: publiclyReachable || suppressed || reachability.usedDowncasts.get(definition.declaration)?.has(route.target.declaration) === true
         ? undefined : "generated-unused-dispatch" }))), fields: selectedFields, accessors: Object.freeze(accessors), methods: Object.freeze(methods),
     methodWrites: Object.freeze(writes), projectSupers: Object.freeze(program.projectTypes.heritageForDefinition(definition).map(edge => edge.targetType)),
-    structuralSupers: Object.freeze(program.classValues.instanceViews.filter(view => view.declaration === definition.declaration).map(view => view.targetCarrier)) });
+    structuralSupers: Object.freeze(structuralSupers) });
+  return Object.freeze([]);
 }
