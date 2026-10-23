@@ -28,9 +28,9 @@ export function planRustBindingPattern(
     if (element === undefined || ast.kindName(element) === KindOmittedExpression) continue;
     if (ast.kindName(element) !== KindBindingElement || !ast.is.IsBindingElement(element))
       failRustPlannerInvariant("Binding pattern contains a non-binding element slot.", element);
-    const fact = context.input.program.records.bindingProjection.get(element);
+    if (ast.name(element) === undefined) continue;
+    const fact = context.input.program.records.bindingProjectionEmission.get(element)?.fact;
     if (fact === undefined) failRustPlannerInvariant("Binding element has no finalized Rust projection fact.", element);
-    if (!("bindingCarrier" in fact)) continue;
     const projected = planRustBindingProjection(source, fact, element, context);
     const normalized = normalizeRustBindingValue(projected, fact, element, Node_Initializer(ast, element), context, planExpression);
     const name = Node_Name(ast, element);

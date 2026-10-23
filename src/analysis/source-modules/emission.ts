@@ -2,6 +2,7 @@ import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/targ
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustSourceFileEmissionProducer } from "../program/records/source-file-emission.js";
 import type { Node } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustCarrierSupportsClone } from "../../policy/constraints/native-traits.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
@@ -61,11 +62,13 @@ export function analyzeRustSourceFileEmission(program: Omit<RustAnalysisProgram,
           refuse(statement, "rust.backend.default-export", "Default exports require one exact expression, binding name, and finalized module-cell snapshot.");
           continue;
         }
-        if (!rustCarrierSupportsClone(binding.valueCarrier, program.typeDefinitions)) {
+        const physical = program.callableValues.nativeStorage.valueFor(assignment.Expression);
+        if (physical.kind === "unresolved") failTargetAnalysisInvariant("tsonic-rust", physical.reason, statement);
+        if (!rustCarrierSupportsClone(physical.carrier, program.typeDefinitions)) {
           refuse(statement, "rust.backend.default-export-carrier", "Default export snapshots require one exact Clone-capable Rust value carrier.");
           continue;
         }
-        producer.export(statement, { expression: assignment.Expression, name, carrier: binding.valueCarrier });
+        producer.export(statement, { expression: assignment.Expression, name, carrier: physical.carrier });
       }
       if (!ast.is.IsFunctionDeclaration(statement) || program.records.nativeParticipation.get(statement) === "erased") continue;
       const binding = program.records.moduleBinding.get(statement);
@@ -113,7 +116,16 @@ export function analyzeRustSourceFileEmission(program: Omit<RustAnalysisProgram,
         producer.hoisted(declaration, carrier);
       }
     }
-    if (binding.storage === "module-cell" && !rustCarrierSupportsClone(binding.valueCarrier, program.typeDefinitions)) {
+    let physical: TargetTypeRef | undefined;
+    if (binding.storage !== "native-callable") {
+      if (isPatternLeaf) physical = program.records.bindingProjectionEmission.get(declaration)?.fact.bindingCarrier;
+      else {
+        const selected = program.records.localBinding.get(declaration);
+        if (selected?.kind === "value") physical = selected.nativeCarrier;
+      }
+      if (physical === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted module binding requires its completed physical native storage.", declaration);
+    }
+    if (binding.storage === "module-cell" && !rustCarrierSupportsClone(physical, program.typeDefinitions)) {
       refuse(declaration, "rust.backend.module-binding-carrier", "Runtime module bindings require one exact Clone-capable Rust value carrier.");
       return;
     }

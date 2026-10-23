@@ -107,7 +107,9 @@ export function planTopLevelVariableStatement(
       initialization.push(planned.initialization);
       continue;
     }
-    const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
+    const storage = context.input.program.records.localBinding.get(declaration);
+    if (storage?.kind !== "value") failRustPlannerInvariant("An admitted module value requires its exact physical native storage.", declaration);
+    const rustType = rustTypeFromCarrierInContext(storage.nativeCarrier, context);
     if (rustType === undefined) {
       failRustPlannerInvariant("Top-level value binding has no finalized renderable Rust carrier.", declaration);
     }
@@ -144,7 +146,7 @@ export function planTopLevelVariableStatement(
       value,
       visibility,
       context.syntheticNames,
-      rustModuleCellCallableAlias(binding.valueCarrier, context.input),
+      rustModuleCellCallableAlias(storage.nativeCarrier, context.input),
       [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
       ],
@@ -168,8 +170,8 @@ function planModuleBindingPattern(
   const sources = new Map<Node, RustExpr>([[declaration, { kind: "path", path: rootName }]]);
   for (const step of binding.steps) {
     const source = sources.get(step.source);
-    const projection = context.input.program.records.bindingProjection.get(step.declaration);
-    if (source === undefined || projection === undefined || !("bindingCarrier" in projection)) return failRustPlannerInvariant(
+    const projection = context.input.program.records.bindingProjectionEmission.get(step.declaration)?.fact;
+    if (source === undefined || projection === undefined) return failRustPlannerInvariant(
       "Module binding pattern has no sealed ordered projection source.", step.declaration);
     const projected = planRustBindingProjection(source, projection, step.declaration, context);
     const normalized = projected === undefined ? undefined :
@@ -185,13 +187,13 @@ function planModuleBindingPattern(
     if (leaf?.storage !== "module-cell" || leaf.initialization !== "value") return failRustPlannerInvariant(
       "Module binding leaf has no sealed initialized native module storage.", step.declaration);
     const emission = context.input.program.records.moduleBindingEmission.get(step.declaration);
-    const type = rustTypeFromCarrierInContext(leaf.valueCarrier, context);
+    const type = rustTypeFromCarrierInContext(projection.bindingCarrier, context);
     if (emission === undefined || type === undefined) return failRustPlannerInvariant(
       "Module binding leaf has no sealed native name and carrier.", step.declaration);
     const { name, visibility } = emission;
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(name, type, normalized, visibility, context.syntheticNames,
-      rustModuleCellCallableAlias(leaf.valueCarrier, context.input),
+      rustModuleCellCallableAlias(projection.bindingCarrier, context.input),
       isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]);
     items.push(...planned.items);
     initialization.push(planned.initialization);

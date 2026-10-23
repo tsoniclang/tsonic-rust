@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 
 import { moduleBindingPatternFiles, moduleBindingPublicationPrograms } from "../../../../tsonic/test/fixtures/module-binding-patterns.mjs";
 
@@ -90,4 +92,39 @@ export function run(): number { return value; }
         result.artifacts, { run: true }).status, 0, "actual generated Rust preserves native module evaluation");
     });
   }
+
+  test(`module callable snapshots retain their selected physical error carrier on ${surface}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
+      "index.ts": `
+import { callback, first, second } from "./values.js";
+if (callback(4) !== 5 || first(5) !== 6 || second(6) !== 7) throw new Error("physical module callable");
+`,
+      "values.ts": `
+function increment(value: number): number { return value + 1; }
+export const callback: (value: number) => number = increment;
+export const [first, { second }] = [increment, { second: increment }] as const;
+`,
+    } });
+    assert.equal(result.diagnostics.length, 0, "physical module callable publication is admitted");
+    assert.equal(result.program !== undefined && result.plan !== undefined, true, "the complete native program is published");
+    const program = result.program;
+    const carriers = new Map();
+    const visit = node => {
+      const binding = program.records.moduleBinding.get(node);
+      const name = program.names.nameForDeclaration(node);
+      if (binding?.storage === "module-cell" && ["callback", "first", "second"].includes(name)) {
+        const value = program.source.ast.is.IsBindingElement(node)
+          ? program.records.bindingProjectionEmission.get(node)?.fact.bindingCarrier
+          : program.records.localBinding.get(node)?.nativeCarrier;
+        carriers.set(name, rustCallableProtocol(value)?.error?.id);
+      }
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(carriers.size, 3, "all three actual module snapshots are checked");
+    for (const name of ["callback", "first", "second"])
+      assert.equal(carriers.get(name), rustInfallibleTargetId, `${name} uses its actual infallible implementation error`);
+    assert.equal(validateGeneratedProject(`module-callable-physical-${surface}`, result.artifacts, { run: true }).status,
+      0, "the physical module carriers compile and execute without an error adapter");
+  });
 }
