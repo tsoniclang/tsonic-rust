@@ -11,24 +11,47 @@ import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustCallArgumentMode } from "../callables/parameter-passing.js";
 import { rustContextualRuntimeConversionContract } from "../../policy/conversions/contextual.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 
 export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   ast: AstReader, records: RustProgramRecords): boolean {
   const mode = rustCallArgumentMode(argument, ast, records);
   const carrier = records.runtimeCarrier.get(argument)?.carrier;
-  if (mode !== "ref" && mode !== "mut-ref" && carrier?.kind !== "reference") return false;
-  let source = argument;
-  while (source !== reference) {
+  const pending = [{ source: argument, borrowed: mode === "ref" || mode === "mut-ref" || carrier?.kind === "reference" }];
+  const visited = new Map<Node, Set<boolean>>();
+  while (pending.length !== 0) {
+    const { source, borrowed } = pending.pop()!;
+    const states = visited.get(source) ?? new Set<boolean>();
+    if (states.has(borrowed)) continue;
+    states.add(borrowed);
+    visited.set(source, states);
+    if (source === reference && borrowed) return true;
     const operand = sourceTransparentExpressionOperand(ast, source);
     const operation = records.targetOperation.get(source);
-    const next = operand ?? (operation?.kind === "reference-operation" &&
-      (operation.operation === "shared-reference" || operation.operation === "mutable-reference")
-      ? operation.operandExpression : operation?.kind === "source-field" &&
-        operation.valueSemantics.kind === "stored" ? Node_Expression(ast, source) : undefined);
-    if (next === undefined) return false;
-    source = next;
+    if (operand !== undefined) pending.push({ source: operand, borrowed });
+    else if (operation?.kind === "reference-operation" &&
+      (operation.operation === "shared-reference" || operation.operation === "mutable-reference")) {
+      pending.push({ source: operation.operandExpression, borrowed: true });
+    } else if (borrowed && operation?.kind === "source-field" && operation.valueSemantics.kind === "stored") {
+      const receiver = Node_Expression(ast, source);
+      if (receiver !== undefined) pending.push({ source: receiver, borrowed: true });
+    } else if (operation?.kind === "source-call") {
+      const references = rustTargetGenericReferences(operation.resultCarrier);
+      const lifetimes = new Set([...references.lifetimes, ...references.callScopedElisions, ...references.elisionInputs]
+        .filter(lifetime => lifetime.kind !== "placeholder" && lifetime.kind !== "static").map(rustLifetimeKey));
+      const argumentsList = ast.arguments(source);
+      for (const parameter of operation.parameters) {
+        const native = parameter.parameterCarrier;
+        if (native.kind !== "reference" || native.lifetime === undefined || !lifetimes.has(rustLifetimeKey(native.lifetime))) continue;
+        for (const input of parameter.inputs) {
+          const actual = argumentsList[input.sourceArgumentIndex];
+          if (actual !== undefined) pending.push({ source: actual, borrowed: true });
+        }
+      }
+    }
   }
-  return true;
+  return false;
 }
 
 export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords,

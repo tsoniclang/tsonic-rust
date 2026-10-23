@@ -1,11 +1,16 @@
 import type { RustJsPromiseLowering } from "../../../../target-model/records/callables-and-resources.js";
 import type { RustBlock, RustExpr } from "../../../target-ast/syntax/nodes.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { isRustUnitCarrier } from "../../../../target-model/types/index.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 
 export function wrapRustJsPromiseBody(
   body: RustBlock,
   fallible: boolean,
   lowering: RustJsPromiseLowering,
+  nativeCompletion: TargetTypeRef,
 ): RustBlock {
+  if (nativeCompletion === undefined) failRustPlannerInvariant("A Promise body requires its sealed physical native completion.");
   if (lowering.kind === "settled") {
     // A settled body is evaluated in place; only a body that leaves early (return, `?`, throw or a completion
     // region) needs its own closure boundary, and an immediately invoked closure otherwise trips
@@ -17,7 +22,7 @@ export function wrapRustJsPromiseBody(
       : !attributed && tail?.kind === "tail" && (tail.attrs?.length ?? 0) === 0 ? tail.expr
         : !attributed && body.statements.length === 0 ? { kind: "tuple-literal", elements: [] }
           : { kind: "block", body };
-    return wrapRustJsPromiseCompletion(completion, fallible);
+    return wrapRustJsPromiseCompletion(completion, fallible, nativeCompletion);
   }
   return {
     statements: [{
@@ -31,12 +36,17 @@ export function wrapRustJsPromiseBody(
   };
 }
 
-export function wrapRustJsPromiseCompletion(completion: RustExpr, fallible: boolean): RustBlock {
-  return { statements: [{ kind: "tail", expr: {
+export function wrapRustJsPromiseCompletion(completion: RustExpr, fallible: boolean,
+  nativeCompletion: TargetTypeRef): RustBlock {
+  if (nativeCompletion === undefined) failRustPlannerInvariant("A Promise completion requires its sealed physical native carrier.");
+  const unit = !fallible && isRustUnitCarrier(nativeCompletion);
+  const promise: RustExpr = {
     kind: "call",
     path: fallible ? "js_abi::JsPromise::from_result" : "js_abi::JsPromise::resolved",
-    args: [completion],
-  } }] };
+    args: [unit ? { kind: "tuple-literal", elements: [] } : completion],
+  };
+  return { statements: [{ kind: "tail", expr: unit
+    ? { kind: "evaluate-then", effect: completion, discard: "unit", value: promise } : promise }] };
 }
 
 // Syntax that exits the enclosing callable; nested callables and items own their exits.
