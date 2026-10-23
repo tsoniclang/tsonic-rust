@@ -21,6 +21,8 @@ import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import { rustErrorBoundaryOperandType } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/carrier-syntax.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { qualifyRustCrateType } from "../../target-ast/syntax/type-paths.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type {
   RustPlannedArtifact,
@@ -204,12 +206,11 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       "The completed root initializer error composition has no exact native reconstruction.",
       entrySourceFile);
   }
-  const lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
-    kind: "named",
-    path: rootErrorDomain.errorDomain === "runtime"
-      ? "tsonic_rust_runtime::TsonicError" : `${emission.configuration.crateName}::${programModuleName}::TsonicError`,
-    identity: rootErrorTypeIdentity,
-  };
+  const selectedLifecycleError = rustTypeFromCarrierInContext(initialization.binary.lifecycle.carrier,
+    typeRenderingContextFor(rootComponentPlan));
+  if (selectedLifecycleError === undefined)
+    failRustPlannerInvariant("An admitted binary lifecycle requires its exact sealed native error carrier.", entrySourceFile);
+  const lifecycleErrorType = qualifyRustCrateType(selectedLifecycleError, emission.configuration.crateName);
   const rootArtifacts = materializeRustSourcePackageCrateArtifacts(
     input,
     rootCrateContent,

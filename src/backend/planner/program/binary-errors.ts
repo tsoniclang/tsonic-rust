@@ -19,11 +19,35 @@ export function planRustBinaryErrors(
 ): RustBinaryErrorPlan {
   const lifecycle = { identity: "lifecycle", errorType: lifecycleType };
   const nativeByIdentity = new Map(nativeSources.map(source => [source.identity, source.errorType]));
+  if (selection.sources.length === 0) {
+    if (selection.lifecycle?.region.kind !== "infallible" || nativeSources.length !== 0)
+      failRustPlannerInvariant("Binary startup requires a complete native error composition.");
+    const propagate = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr => {
+      if (source.identity !== lifecycle.identity || !rustTypeEquals(source.errorType, lifecycleType))
+        failRustPlannerInvariant("Binary startup propagation requires an exact selected native error channel.");
+      return { kind: "try", expr: result, operandErrorType: lifecycleType, resultErrorType: lifecycleType };
+    };
+    return Object.freeze({ errorType: lifecycleType, items: Object.freeze([]), propagate,
+      lifecycle(result: RustExpr, operandErrorType?: RustType): RustExpr {
+        if (operandErrorType === undefined || !rustTypeEquals(operandErrorType, lifecycleType))
+          failRustPlannerInvariant("Binary startup propagation requires an exact selected native error channel.");
+        return propagate(lifecycle, result);
+      },
+      lifecycleError(error: RustExpr, operandErrorType?: RustType): RustExpr {
+        if (operandErrorType === undefined || !rustTypeEquals(operandErrorType, lifecycleType))
+          failRustPlannerInvariant("Binary lifecycle errors require the exact selected native channel.");
+        return error;
+      },
+    });
+  }
+  const sources = selection.sources.map(source => {
+    const errorType = source.kind === "lifecycle" ? lifecycleType : nativeByIdentity.get(source.identity);
+    if (errorType === undefined)
+      failRustPlannerInvariant("Binary startup requires a complete native error composition.");
+    return { identity: source.identity, variant: source.variant, errorType };
+  });
   const join = planRustNativeErrorJoin({ identity: "binary-startup-errors", name: "StartupErrors",
-    visibility: "private", sources: selection.sources.map(source => ({
-      identity: source.identity, variant: source.variant,
-      errorType: source.kind === "lifecycle" ? lifecycleType : nativeByIdentity.get(source.identity)!,
-    })) });
+    visibility: "private", sources });
   if (join?.errorType === undefined) {
     failRustPlannerInvariant("Binary startup requires a complete native error composition.");
   }

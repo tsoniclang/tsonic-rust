@@ -11,6 +11,7 @@ import type { RustSourcePackageErrorRoute } from "../../../target-model/records/
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "../objects/checked-project-projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 type RustProgramErrorTypeTestFact = Extract<
   RustTargetOperationFact,
@@ -97,7 +98,7 @@ export function planRustProgramErrorTypeTest(
     const name = allocateRustSyntheticName(context.syntheticNames ?? failRustPlannerInvariant("An admitted optional Error test requires its hygienic scope.", node), "optional_error");
     const selected = planRustProgramErrorTypeTest(node, { kind: "path", path: name }, { ...fact, sourceCarrier: element }, context);
     return selected === undefined ? undefined : { kind: "method-call",
-      receiver: { kind: "method-call", receiver: expression, method: "as_ref", args: [] }, method: "is_some_and",
+      receiver: { kind: "method-call", receiver: rustAutoBorrowedReceiver(expression), method: "as_ref", args: [] }, method: "is_some_and",
       args: [{ kind: "closure", params: [{ name, byRefCopy: false }], body: selected }] };
   }
   const route = resolveProgramErrorFactRoute(

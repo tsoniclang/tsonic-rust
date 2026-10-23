@@ -5,6 +5,8 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import type { RustNativeErrorSource } from "../../../target-model/types/native-error-joins.js";
+import type { RustErrorJoinDeclaration } from "../../../target-model/records/error-regions.js";
+import { rustTargetRuntimeErrorType } from "./error-boundary.js";
 
 export type RustNativeErrorJoinSource = RustNativeErrorSource<RustType>;
 
@@ -20,6 +22,33 @@ export interface RustNativeErrorJoinPlan {
   propagate(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
   propagatedValue(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
   propagateReturn(source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr | undefined;
+}
+
+export function planRustNativeErrorRuntimeFrom(declaration: RustErrorJoinDeclaration): RustItem | undefined {
+  const arm = declaration.runtimeErrorArm;
+  if (arm === undefined) return undefined;
+  if (!Number.isInteger(arm) || arm < 0 || arm >= declaration.arity || declaration.arity < 2)
+    failRustPlannerInvariant("An admitted intrinsic error conversion requires its exact declared native join arm.");
+  const parameters = Array.from({ length: declaration.arity }, (_value, index) => ({
+    kind: "type" as const, name: `Error${index}`, bounds: [],
+  }));
+  const selected: RustType = { kind: "named", path: parameters[arm]!.name };
+  const from: RustType = { kind: "named", path: "core::convert::From",
+    genericArguments: [{ kind: "type", type: rustTargetRuntimeErrorType }] };
+  return {
+    kind: "impl", trait: from,
+    target: { kind: "named", path: declaration.name, genericArguments: parameters.map(parameter => ({
+      kind: "type", type: { kind: "named", path: parameter.name },
+    })) },
+    generics: { parameters, wherePredicates: [{ kind: "type", type: selected,
+      bounds: [{ kind: "trait-type", reference: { trait: from } }] }] },
+    members: [{ kind: "function", name: "from", visibility: "private", generics: emptyRustGenerics,
+      params: [{ name: "value", type: rustTargetRuntimeErrorType }], returnType: { kind: "named", path: "Self" },
+      body: { statements: [{ kind: "tail", expr: { kind: "call", path: `Self::Error${arm}`, args: [{
+        kind: "associated-call", owner: selected, trait: from, method: "from", args: [{ kind: "path", path: "value" }],
+      }] } }] },
+    }],
+  };
 }
 
 export function planRustNativeErrorJoin(input: {

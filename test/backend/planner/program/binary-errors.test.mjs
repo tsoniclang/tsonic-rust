@@ -4,6 +4,7 @@ import { planRustBinaryErrors } from "../../../../dist/backend/planner/program/b
 import { planRustAsyncExecution } from "../../../../dist/backend/planner/program/async-execution.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
+import { rustNeverTargetType } from "../../../../dist/target-model/types/carriers/native.js";
 
 const lifecycle = { kind: "named", path: "RuntimeError", identity: "runtime-error" };
 const provider = { kind: "named", path: "ProviderError", identity: "provider-error" };
@@ -64,6 +65,28 @@ test("an initialization-only executable has no unused lifecycle variant or error
   assert.equal(selected.items.length, 0, "no redundant error enum is emitted");
   assert.equal(printRustExpr(selected.propagate(source, result)), "operation()?");
   assert.throws(() => selected.lifecycle(result, lifecycle), /exact selected native error channel/u);
+});
+
+test("an explicitly sealed infallible lifecycle has no startup sum or invented runtime conversion", () => {
+  const infallible = { kind: "named", path: "core::convert::Infallible" };
+  const selection = { lifecycle: { carrier: rustNeverTargetType(), region: {
+    kind: "infallible", fileName: "/src/index.ts", localOwner: undefined, sources: [],
+  } }, sources: [] };
+  const selected = planRustBinaryErrors(selection, infallible);
+  assert.equal(selected.errorType === infallible, true, "the selected uninhabited carrier is retained");
+  assert.equal(selected.items.length, 0, "there is no empty enum or error facade");
+  assert.equal(printRustExpr(selected.lifecycle(result, infallible)), "operation()?", "the native Result is propagated directly");
+  const error = { kind: "path", path: "uninhabited_error" };
+  assert.equal(selected.lifecycleError(error, infallible) === error, true, "no conversion is invented for the impossible payload");
+  assert.throws(() => selected.lifecycle(result, provider), /exact selected native error channel/u,
+    "infallibility is not permission to discard a foreign error");
+  assert.throws(() => selected.lifecycleError(error, provider), /exact selected native channel/u,
+    "a real foreign error cannot enter the uninhabited lifecycle");
+  assert.throws(() => selected.propagate({ identity: "foreign", errorType: infallible }, result), /exact selected native error channel/u,
+    "even an equal carrier needs the selected lifecycle identity");
+  assert.throws(() => planRustBinaryErrors({ ...selection, lifecycle: { ...selection.lifecycle,
+    region: { ...selection.lifecycle.region, kind: "package" } } }, infallible), /complete native error composition/u,
+    "the sealed error region, not a printed type name, proves the empty composition");
 });
 
 test("native async executors propagate their own error exactly once without consuming the future output", () => {

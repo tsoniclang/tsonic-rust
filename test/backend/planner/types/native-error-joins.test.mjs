@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
+import { planRustNativeErrorJoin, planRustNativeErrorRuntimeFrom } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../../dist/backend/target-ast/syntax/type-equality.js";
 import { applyRustFallibleResultExpression } from "../../../../dist/backend/planner/types/fallible-shape.js";
@@ -17,6 +17,23 @@ const plan = (sources, options = {}) => planRustNativeErrorJoin({ identity: "reg
   visibility: "private", sources, ...options });
 const first = source("callback:first", "First");
 const second = source("callback:second", "Second");
+
+test("runtime intrinsic conversion uses only the exact join-owner arm and leaves foreign arms untouched", () => {
+  const declaration = { name: "NativeErrors3", arity: 3, clone: false, runtimeErrorArm: 2 };
+  const implementation = planRustNativeErrorRuntimeFrom(declaration);
+  assert.equal(implementation?.kind, "impl", "exactly one implementation represents the admitted runtime channel");
+  assert.equal(printRustType(implementation.trait), "core::convert::From<tsonic_rust_runtime::TsonicError>", "only the runtime intrinsic source is converted");
+  assert.equal(printRustType(implementation.target), "NativeErrors3<Error0, Error1, Error2>", "the selected native join remains generic over its original arms");
+  assert.equal(implementation.generics.wherePredicates.length, 1, "no blanket bounds for foreign errors");
+  assert.equal(printRustType(implementation.generics.wherePredicates[0].type), "Error2", "the record chooses the bound, not an Error0 convention");
+  assert.equal(printRustExpr(implementation.members[0].body.statements[0].expr),
+    "Self::Error2(<Error2 as core::convert::From<tsonic_rust_runtime::TsonicError>>::from(value))", "native payload injection targets the exact selected arm");
+  assert.equal(planRustNativeErrorRuntimeFrom({ ...declaration, runtimeErrorArm: undefined }) === undefined, true,
+    "no runtime-channel record means no runtime conversion implementation");
+  for (const runtimeErrorArm of [-1, 3, 0.5]) assert.throws(
+    () => planRustNativeErrorRuntimeFrom({ ...declaration, runtimeErrorArm }), /exact declared native join arm/u,
+    "corrupted sealed arm metadata is never guessed or clamped");
+});
 
 test("zero native error sources preserve pure code without an error type or items", () => {
   const joined = plan([]);

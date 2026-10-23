@@ -32,6 +32,7 @@ import { planRustCallableInputProducer } from "./callable-conversions.js";
 import { planRustPropertyValueProjection } from "./property-value-projection.js";
 import { planRustOptionBranch } from "./option-branch.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -105,7 +106,7 @@ export function lowerRustValueConversion(
       return { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
     case "borrowed-str-from-optional-string":
       return { kind: "method-call", receiver: {
-        kind: "method-call", receiver: source, method: "as_deref", args: [],
+        kind: "method-call", receiver: rustAutoBorrowedReceiver(source), method: "as_deref", args: [],
       }, method: "unwrap_or", args: [{ kind: "str-literal", value: "" }] };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
@@ -128,7 +129,7 @@ export function lowerRustValueConversion(
         (conversion, value) => lowerNestedRustValueConversion(conversion, value, context, node));
     case "js-array-backing": {
       const element = rustTypeFromCarrierInContext(contract.element, context);
-      return element === undefined ? undefined : { kind: "method-call", receiver: source,
+      return element === undefined ? undefined : { kind: "method-call", receiver: rustAutoBorrowedReceiver(source),
         method: contract.method, genericArguments: [{ kind: "type", type: element }], args: [] };
     }
     case "union-fold":

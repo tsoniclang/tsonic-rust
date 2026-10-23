@@ -8,6 +8,7 @@ import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
 import { rustStructuralViewInstance, rustStructuralViewRootType } from "./project-structural-roots.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustAutoBorrowedReceiver } from "../expressions/auto-borrowed-receivers.js";
 
 export interface RustClosedNativeProjection {
   readonly expression: RustExpr;
@@ -39,13 +40,13 @@ export function planRustClosedNativeProjection(
     if (selected.query === "none") {
       return { kind: "path", path: "None", genericArguments: [{ kind: "type", type: physical }] };
     }
-    return { kind: "method-call", receiver, method: selected.query,
+    return { kind: "method-call", receiver: rustAutoBorrowedReceiver(receiver), method: selected.query,
       genericArguments: [{ kind: "type", type: payload }], args: [] };
   };
   const name = !selected.optional ? undefined : allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []), "native_payload");
   const projected = name === undefined ? query(expression) : { kind: "method-call" as const,
-    receiver: { kind: "method-call" as const, receiver: expression, method: "as_ref", args: [] },
+    receiver: { kind: "method-call" as const, receiver: rustAutoBorrowedReceiver(expression), method: "as_ref", args: [] },
     method: "and_then", args: [{ kind: "closure" as const, params: [{ name, byRefCopy: false }],
       body: query({ kind: "path", path: name }) }] };
   if (!shared) return { expression: projected, recover: owner => owner };

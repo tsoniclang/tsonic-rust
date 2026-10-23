@@ -11,6 +11,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustAutoBorrowedReceiver } from "../expressions/auto-borrowed-receivers.js";
 import {
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
@@ -127,7 +128,7 @@ export function planRustProjectTypeTest(
     if (projected === undefined) return undefined;
     return {
       kind: "method-call",
-      receiver: { kind: "method-call", receiver: expression, method: "as_ref", args: [] },
+      receiver: { kind: "method-call", receiver: rustAutoBorrowedReceiver(expression), method: "as_ref", args: [] },
       method: "is_some_and",
       args: [{
         kind: "closure",
