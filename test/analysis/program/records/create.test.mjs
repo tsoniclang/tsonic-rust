@@ -143,7 +143,7 @@ test("sealed records publish only frozen typed family readers without a native k
     memoryLayoutObservation: () => model.memoryLayoutObservations.observe(subject, 0),
     generator: () => model.generators.suspend(subject,
       { kind: "sync", yieldType: carrier, returnType: carrier, nextType: carrier },
-      { capturedParameters: [], storage: { kind: "static" } }),
+      { capturedParameters: [], storage: { kind: "static" }, reentry: "excluded" }),
     sourceParameterAbi: () => model.sourceParameterAbis.parameter(subject,
       { form: "required", valueCarrier: carrier, parameterCarrier: carrier, mode: "value" }),
     sourceBinding: () => model.sourceBindings.lexical(subject, subject, "authored"),

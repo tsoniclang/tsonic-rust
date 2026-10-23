@@ -2,16 +2,17 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
 import { rustGeneratorFactEquals } from "../../../target-model/records/equality.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import { type RustGeneratorProtocol } from "../../../target-model/types/index.js";
-import { rustGeneratorStorageTargetType } from "../../../policy/types/callables/generators.js";
+import { rustGeneratorTargetType, rustAsyncGeneratorTargetType, type RustGeneratorProtocol } from "../../../target-model/types/index.js";
 import { createRustRecordFamily } from "./family.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
-type RustGeneratorStorage = Pick<RustGeneratorFact, "capturedParameters" | "storage" | "ownedReceiver">;
+type RustGeneratorStorage = Pick<RustGeneratorFact, "capturedParameters" | "storage" | "ownedReceiver" | "reentry">;
 
 export function rustGeneratorFact(protocol: RustGeneratorProtocol, retention: RustGeneratorStorage): RustGeneratorFact {
-  return Object.freeze({ kind: protocol.kind,
-    resultCarrier: rustGeneratorStorageTargetType(protocol, retention.storage.kind === "static" ? undefined
-      : retention.storage.kind === "receiver" ? { kind: "placeholder" } : retention.storage.lifetime),
+  if (retention.reentry !== "excluded" && retention.reentry !== "possible")
+    failTargetAnalysisInvariant("tsonic-rust", "A generator requires its pre-seal source-storage reentry selection.");
+  return Object.freeze({ kind: protocol.kind, reentry: retention.reentry,
+    resultCarrier: protocol.kind === "sync" ? rustGeneratorTargetType(protocol) : rustAsyncGeneratorTargetType(protocol),
     yieldType: protocol.yieldType, returnType: protocol.returnType, nextType: protocol.nextType,
     capturedParameters: retention.capturedParameters, storage: retention.storage,
     ...(retention.ownedReceiver === undefined ? {} : { ownedReceiver: retention.ownedReceiver }),

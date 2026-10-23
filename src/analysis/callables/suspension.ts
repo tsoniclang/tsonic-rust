@@ -18,6 +18,7 @@ import { rustGeneratorFact } from "../program/records/generator.js";
 import { selectedSourceCallableReturn } from "./signatures.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { selectRustAsyncBodyFacts } from "./async-results.js";
+import { selectRustGeneratorReentry } from "./generator-reentry.js";
 
 export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSourceErrorEffectSelection): void {
   walk.context.records.assertOpen();
@@ -136,7 +137,7 @@ export function selectRustCallableSuspension(
         ["target.capability=rust.generator.storage-lifetime"]);
       return undefined;
     }
-    return { kind: "generator", fact: rustGeneratorFact(protocol, storage), sourceCarrier: carrier,
+    return { kind: "generator", fact: rustGeneratorFact(protocol, { ...storage, reentry: selectRustGeneratorReentry(walk, declaration) }), sourceCarrier: carrier,
       ...(storage.retainedEnvironment === undefined ? {} : { retainedEnvironment: storage.retainedEnvironment }),
     };
   }
