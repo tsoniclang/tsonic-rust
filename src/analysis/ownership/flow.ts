@@ -144,8 +144,11 @@ function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipF
   const kind = ast.variableDeclarationKind(binding);
   if (kind === "using" || kind === "await using") return false;
   const summary = navigation.declarationUseSummary(binding);
-  return !summary.exported && (!summary.hasUnclassifiedValueUse || summary.uses.every(use =>
-    use.role !== "value" || awaitedReads.has(use.reference)));
+  return !summary.exported && (!summary.hasUnclassifiedValueUse || summary.uses.every(use => {
+    if (use.role !== "value" || awaitedReads.has(use.reference)) return true;
+    const disposition = sourceExpressionResultDisposition(ast, use.reference);
+    return disposition.kind === "consumed" && ast.is.IsThrowStatement(disposition.use);
+  }));
 }
 
 // A function-scoped `var` is one storage that stays readable after the loop reading it (RULINGS 2026-10-22), so a

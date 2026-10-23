@@ -168,16 +168,18 @@ export function planRustSharedReceiver(
     return { kind: "reference", expr: value };
   }
   const captured = rustCapturedBinding(node, context);
+  const ownership = requireRustReadOwnership(node, context);
   if (captured?.storage === "value" && captured.borrowed !== undefined) {
-    return captured.borrowed === "shared"
-      ? captured.referent !== undefined ? { kind: "reference", expr: value } : value
-      : { kind: "reference", expr: { kind: "dereference", pointer: value } };
+    if (ownership.source.kind === "borrow" && captured.borrowedCarrier !== undefined &&
+      context.input.program.records.typeEmission.get(captured.borrowedCarrier)?.sharedStringReference === true) return value;
+    if (captured.borrowed === "shared" && captured.referent === undefined && value.kind === "dereference" &&
+      ownership.source.kind === "borrow") return value.pointer;
+    return { kind: "reference", expr: value };
   }
   if (context.input.program.records.readOwnership.get(node)?.sharedReference === true) return value;
-  // A selected shared borrow is planned as the place behind its borrowed flow reference (*reference); its shared
-  // receiver is that reference itself, not &*reference (clippy::borrow_deref_ref).
-  const ownership = requireRustReadOwnership(node, context);
-  if (value.kind === "dereference" && (ownership.value.kind === "borrow" || ownership.source.kind === "borrow")) return value.pointer;
+  const projection = override === undefined && context.flowReadOverrides?.has(node) !== true
+    ? context.input.program.records.valueProjection.get(node) : undefined;
+  if (value.kind === "dereference" && projection?.borrowable === true && projection.contextual === undefined) return value.pointer;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")

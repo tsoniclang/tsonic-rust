@@ -223,11 +223,18 @@ export function rustRuntimeAliasUseItems(
   aliases: ReadonlySet<string>,
   programModuleName?: string,
 ): readonly Extract<RustItem, { readonly kind: "use" }>[] {
-  return [...aliases].map(alias => alias === "rt" && programModuleName !== undefined
-    ? { path: `crate::${programModuleName}`, alias: "rt" } : rustRuntimeAliasImports.get(alias))
-    .filter((entry): entry is { path: string; alias: string } => entry !== undefined)
+  const bindings = rustRuntimeAliasBindings(programModuleName);
+  return [...aliases].flatMap(alias => {
+    const path = bindings.get(alias);
+    return path === undefined ? [] : [{ path, alias }];
+  })
     .sort((left, right) => left.path.localeCompare(right.path, "en") || left.alias.localeCompare(right.alias, "en"))
     .map(entry => ({ kind: "use", path: entry.path, alias: entry.alias }));
+}
+
+export function rustRuntimeAliasBindings(programModuleName?: string): ReadonlyMap<string, string> {
+  return new Map([...rustRuntimeAliasImports].map(([alias, entry]) => [alias,
+    alias === "rt" && programModuleName !== undefined ? `crate::${programModuleName}` : entry.path]));
 }
 
 export function registerAliasFromPath(

@@ -48,18 +48,29 @@ export function planRustReceiverOwners(
       continue;
     }
     if (creation.syntheticNames === undefined) return undefined;
-    const source = planExpression(capture.reference, creation);
-    const value = source === undefined ? undefined : creation.projectDispatchRoot === undefined ||
-      creation.expressionOverrides?.has(capture.reference) === true ? source
-      : planRustReceiverAlias(source, capture.carrier, capture.carrier, creation, true);
-    if (value === undefined) {
+    const ownership = creation.input.program.records.captureOwnership.get(node)?.find(
+      selected => selected.declaration === capture.owner && selected.reference === capture.reference);
+    if (ownership === undefined) {
+      failRustPlannerInvariant("An admitted lexical receiver capture requires its sealed native ownership operation.", capture.reference);
+    }
+    const source = planExpression(capture.reference, creation, "value", "shared-place");
+    if (source === undefined) {
       failRustPlannerInvariant("An admitted lexical receiver capture requires its exact native ownership handle.", capture.reference);
     }
     const name = allocateRustSyntheticName(creation.syntheticNames, "captured_receiver");
-    // The retained environment owns a clone of the receiver handle (a captured receiver is never a value struct); the
-    // creation site reads the receiver as `self`, a borrow that cannot outlive the method.
-    bindings.push({ name, value: value.kind === "method-call" && value.method === "clone" ? value : cloneRustExpression(value) });
-    retained.push({ kind: "path", path: name });
+    bindings.push({ name, value: ownership.read.kind === "clone" ? cloneRustExpression(source) : source });
+    const retainedOwner: RustExpr = { kind: "path", path: name };
+    if (creation.projectDispatchRoot === undefined || creation.expressionOverrides?.has(capture.reference) === true) {
+      retained.push(retainedOwner);
+      continue;
+    }
+    const alias = planRustReceiverAlias(retainedOwner, capture.carrier, capture.carrier, creation, true);
+    if (alias === undefined) {
+      failRustPlannerInvariant("An admitted lexical receiver capture requires its exact native receiver alias.", capture.reference);
+    }
+    const aliasName = allocateRustSyntheticName(creation.syntheticNames, "captured_receiver_alias");
+    bindings.push({ name: aliasName, value: alias });
+    retained.push({ kind: "path", path: aliasName });
   }
   return { bindings, context: rustCapturedReceiverContext(receivers, invocation, index => retained[index]!) };
 }

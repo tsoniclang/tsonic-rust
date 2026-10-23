@@ -14,13 +14,14 @@ import { printRustExpr } from "../../../../dist/print/source/index.js";
 import { crossFileBranchUnionFiles } from "../../../../../tsonic/test/fixtures/cross-file-branch-unions.mjs";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../../../dist/target-model/types/carriers/optional.js";
+import { analyzeRustUnionEquality } from "../../../../dist/analysis/operations/union-equality.js";
+import { analyzeRustBinaryEmission } from "../../../../dist/analysis/operations/binary-emission.js";
+import { createRustUnionEqualityProducer } from "../../../../dist/analysis/program/records/union-equality.js";
+import { createRustBinaryEmissionProducer } from "../../../../dist/analysis/program/records/expression-binary.js";
 
-function planningContext(program, node, selected) {
+function planningContext(program, node) {
   const { ast } = program.source;
-  return { input: { program: { ...program,
-    records: createRustRecordFixture({
-targetOperation: { get: (subject) => subject === node
-    ? selected : program.records.targetOperation.get(subject) }}, program.records) } }, diagnostics: [],
+  return { input: { program }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
@@ -28,6 +29,56 @@ targetOperation: { get: (subject) => subject === node
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
   };
 }
+
+function assertRejectedBeforeSeal(program, node, fact, label) {
+  const changed = { ...program, records: createRustRecordFixture({
+    targetOperation: { get: subject => subject === node ? fact : program.records.targetOperation.get(subject) },
+  }, program.records) };
+  const binary = createRustBinaryEmissionProducer(() => {});
+  const issues = analyzeRustBinaryEmission(changed, [node], binary);
+  const union = createRustUnionEqualityProducer(() => {});
+  if (issues.length !== 0) {
+    assert.equal(issues.every(issue => issue.code === "RUST_MISSING_TARGET_FACT"), true, label + ": exact source-operation correspondence");
+    assert.equal(binary.records.binaryEmission.get(node) === undefined, true, label + ": invalid operands are not published");
+  } else {
+    assert.throws(() => analyzeRustUnionEquality(changed, [node], union), failure =>
+      failure?.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" &&
+      failure.message === "Union comparison requires exact sealed native operands, variants and equality operations.", label);
+  }
+  assert.equal(union.records.unionEquality.get(node) === undefined, true, label + ": no invalid union plan reaches the planner");
+}
+
+test("union equality publishes immutable borrows and same-owner snapshots through the binary read owner", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+class Token {}
+type Choice = string | Token;
+export function mutating(initial: Choice, replacement: Choice): boolean {
+  let current = initial;
+  const replace = (): Choice => { current = replacement; return initial; };
+  return current === replace();
+}
+export function stable(left: Choice, right: Choice): boolean { return left === right; }
+` } });
+  const { ast } = program.source;
+  const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile);
+  const selected = new Map();
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    const emission = program.records.binaryEmission.get(node);
+    if (emission?.fact.kind === "union-equality") selected.set(ast.text(emission.left), emission);
+    pending.push(...ast.children(node));
+  }
+  const mutating = selected.get("current");
+  const stable = selected.get("left");
+  assert.equal(mutating !== undefined, true, "the whole closed-union mutation is admitted");
+  assert.equal(stable !== undefined, true, "the native readonly union comparison is admitted");
+  const read = program.records.readOwnership.get(mutating.left);
+  assert.equal(read?.value.kind, "clone", "the original payload is captured before replacing its owner");
+  assert.equal(read.borrowedAcross.has(mutating.right), false, "the snapshot does not retain a lease across mutation");
+  assert.equal(mutating.leftShared, false, "union emission consumes the selected snapshot exactly once");
+  assert.equal(stable.leftShared, true, "the immutable native left operand stays shared");
+  assert.equal(stable.rightShared, true, "the immutable native right operand stays shared");
+});
 
 test("inferred cross-file optional unions retain absence and compare literals without enum injection", () => {
   const { program } = analyzeRust({ target: { id: "rust", options: { outputType: "bin" } }, files: {
@@ -71,8 +122,7 @@ export function same(value: string | Token): boolean { return value === "a"; }
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.arms) && fact.arms.every(Object.isFrozen));
-  const context = selected => planningContext(program, node, selected);
-  const valid = context(fact);
+  const valid = planningContext(program, node);
   assert.ok(planBinaryExpression(node, valid), JSON.stringify(valid.diagnostics));
   assertNoTargetDiagnostics(valid.diagnostics);
   const arm = fact.arms[0];
@@ -86,9 +136,7 @@ export function same(value: string | Token): boolean { return value === "a"; }
     { resultCarrier: rustSourcePrimitiveTargetType("int64") }, { operationId: "changed" },
   ];
   for (const mutation of mutations) {
-    const selected = context({ ...fact, ...mutation });
-    assert.equal(planBinaryExpression(node, selected), undefined, JSON.stringify(mutation));
-    assert.ok(selected.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+    assertRejectedBeforeSeal(program, node, { ...fact, ...mutation }, JSON.stringify(mutation));
   }
 });
 
@@ -119,12 +167,12 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
         assert.equal(program.records.contextualValueConversion.get(operand), undefined);
         assert.equal(program.records.optionProjection.get(operand), undefined);
       }
-      const nativeContext = planningContext(program, node, fact);
+      const nativeContext = planningContext(program, node);
       const native = planBinaryExpression(node, nativeContext);
       assert.ok(native, JSON.stringify(nativeContext.diagnostics));
       assertNoTargetDiagnostics(nativeContext.diagnostics);
       assert.doesNotMatch(printRustExpr(native), /\.clone\(|Box::|Arc::|Rc::|dyn |from_closed|\.map\(/u);
-      const context = planningContext(program, node, fact);
+      const context = planningContext(program, node);
       context.expressionOverrides = new Map([
         [binary.Left, { expression: { kind: "call", path: "produceLeft", args: [] }, carrier: fact.leftCarrier }],
         [binary.Right, { expression: { kind: "call", path: "produceRight", args: [] }, carrier: fact.rightCarrier }],
@@ -139,9 +187,7 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
       assert.match(output, /Some\([^)]*::Variant\d\(/u);
       assert.doesNotMatch(output, /\.clone\(|Box::|Arc::|Rc::|dyn |from_closed|\.map\(/u);
       if (fact.arms.some(arm => arm.left.path.length === 0 && arm.right.path.length === 0)) assert.match(output, /\(None, None\) => true/u);
-      const removed = planningContext(program, node, { ...fact, arms: fact.arms.slice(0, -1) });
-      assert.equal(planBinaryExpression(node, removed), undefined);
-      assert.ok(removed.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+      assertRejectedBeforeSeal(program, node, { ...fact, arms: fact.arms.slice(0, -1) }, "every optional native arm remains required");
     }
   }
 });

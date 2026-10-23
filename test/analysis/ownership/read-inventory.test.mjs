@@ -4,8 +4,36 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+
+for (const [name, body, moves] of [
+  ["terminal", "throw value;", [true]],
+  ["transparent", "throw (((value)));", [true]],
+  ["finally observed", "try { throw value; } finally { const retained = value; }", [false, true]],
+  ["catch observed", "try { throw value; } catch { const retained = value; }", [false, true]],
+]) {
+  test(`a ${name} throw follows the checked source consumption and last-use contract`, async () => {
+    const source = createTargetSourceProgram(await checkedSource("ownership-throw-consumption", {
+      "src/index.ts": `function run(value: string): void { ${body} }`,
+    }));
+    const storage = createSourceStorageQuery(source, source.sourceFiles);
+    const { ast } = source;
+    const parameter = storage.nodes.find(node => ast.is.IsParameterDeclaration(node));
+    const references = storage.nodes.filter(node => ast.is.IsIdentifier(node) &&
+      ast.parent(node) !== parameter && source.navigation.sourceReferenceFor(node)?.declaration === parameter);
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+      capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
+      isOwnedOperationResult: () => false });
+    assert.equal(selected.kind, "resolved", "the actual checked source graph closes before read publication");
+    assert.equal(references.length, moves.length, "every original thrown or retained source read remains covered");
+    for (const [index, reference] of references.entries()) assert.equal(selected.flow.movingReads.has(reference), moves[index],
+      `${name}: read ${index} preserves catch/finally and later-use liveness`);
+  });
+}
 
 async function fixture() {
   const source = createTargetSourceProgram(await checkedSource("ownership-read-inventory", {
@@ -29,6 +57,7 @@ async function fixture() {
     genericCallables: { definitionFor: () => undefined },
     capturesFor: () => undefined,
     invocationTransfersCapture: () => false,
+    ownsExternalArgument: () => false,
   };
   return { input, selected };
 }
@@ -66,3 +95,98 @@ test("storage-read materialization respects finite node, work and row budgets be
     assert.equal("ownership" in result, false);
   }
 });
+
+for (const projection of [false, true]) {
+  test(`an owned temporary transfers while a stored shared use retains its borrow (projection=${projection})`, async () => {
+    for (const [sourceType, payload, ownedKind] of [
+      ["string", rustStringTargetType(), "move"],
+      ["number", rustSourcePrimitiveTargetType("float64"), "copy"],
+    ]) {
+      const source = createTargetSourceProgram(await checkedSource("ownership-owned-call-read", {
+        "src/index.ts": `
+          declare function get_text(): ${sourceType} | undefined;
+          export function inspect(stored: ${sourceType} | undefined): void {
+            void (get_text()!);
+            void (stored!);
+          }
+        `,
+      }));
+      const storage = createSourceStorageQuery(source, source.sourceFiles);
+      const { ast } = source;
+      const temporary = storage.nodes.find(node => ast.is.IsCallExpression(node));
+      const stored = storage.nodes.find(node => ast.is.IsIdentifier(node) && ast.text(node) === "stored" &&
+        ast.is.IsNonNullExpression(ast.parent(node)));
+      assert.equal(temporary !== undefined, true, "the checked fixture has its actual source invocation");
+      assert.equal(stored !== undefined, true, "the checked fixture has its actual stored input read");
+      const builder = createRustProgramRecordBuilder();
+      const carrier = rustOptionTargetType(payload);
+      for (const subject of [temporary, stored]) {
+        builder.runtimeCarriers.selected(subject, carrier);
+        if (projection) builder.flowReadProjections.project(subject, carrier, payload, { kind: "option-value" });
+      }
+      for (const node of storage.nodes) {
+        if (ast.is.IsVoidExpression(node)) builder.targetOperations.source(node, {
+          kind: "void-expression", operationId: "ownership-read.discard", resultCarrier: rustUnitTargetType(),
+        });
+      }
+      const nativeNodes = new Set(storage.nodes);
+      const selected = analyzeRustReadOwnership({
+        storage, nativeNodes: storage.nodes, records: builder.seal([]),
+        flow: { movingReads: new Set(), captureTransfers: new Map() },
+        borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
+        borrowEffectsInput: { ast, isNativeNode: node => nativeNodes.has(node) },
+        definitions: emptyRustTypeDefinitions,
+        genericRequirements: { supportsClone: () => true },
+        genericCallables: { definitionFor: () => undefined },
+        capturesFor: () => undefined, invocationTransfersCapture: () => false, ownsExternalArgument: () => false,
+      });
+      assert.equal(selected.kind, "resolved", "the complete checked inventory admits the reads");
+      const owned = selected.ownership.reads.get(temporary);
+      const shared = selected.ownership.reads.get(stored);
+      assert.equal(owned?.readsStorage, false, "an invocation does not read a native source place");
+      assert.equal(owned?.value.kind, ownedKind, "the temporary payload is consumed without a borrowed adapter or hidden clone");
+      assert.equal(owned?.source.kind, ownedKind, "narrowing does not reborrow the owned temporary container");
+      assert.equal(shared?.readsStorage, true, "the input is a genuine native storage read");
+      assert.equal(shared?.value.kind, "borrow", "an existing shared use keeps the input's native borrow");
+      assert.equal(shared?.source.kind, "borrow", "a stored narrowed payload retains its container borrow");
+    }
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`an owned external base argument follows native stored-read liveness on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      export class RetainedFailure extends Error {
+        saved: string;
+        constructor(message: string) { super(message); this.saved = message; }
+      }
+      export class TerminalFailure extends Error {
+        constructor(message: string) { super(message); }
+      }
+    ` } });
+    const { ast } = program.source;
+    const constructors = new Map();
+    const visit = node => {
+      if (ast.is.IsConstructorDeclaration(node)) constructors.set(ast.text(ast.name(ast.parent(node))), node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    for (const [name, firstKind] of [["RetainedFailure", "clone"], ["TerminalFailure", "move"]]) {
+      const owner = constructors.get(name);
+      assert.equal(owner !== undefined, true, name + ": the actual native constructor is checked");
+      const statements = ast.statements(ast.body(owner));
+      const call = ast.as.AsExpressionStatement(statements[0]).Expression;
+      const argument = ast.arguments(call)[0];
+      const first = program.ownership.reads.get(argument);
+      assert.equal(first?.readsStorage, true, name + ": the original message is a stored native input");
+      assert.equal(first?.source.kind, firstKind, name + ": the owned field consumes one correctly selected native read");
+      assert.equal(first?.value.kind, firstKind, name + ": the old provider borrow cannot override actual field ownership");
+      if (name === "RetainedFailure") {
+        const assignment = ast.as.AsBinaryExpression(ast.as.AsExpressionStatement(statements[1]).Expression);
+        const last = program.ownership.reads.get(assignment.Right);
+        assert.equal(last?.source.kind, "move", "the final saved field consumes the original after the one required clone");
+        assert.equal(last?.value.kind, "move", "the final stored read never adds a second copy");
+      }
+    }
+  });
+}

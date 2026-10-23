@@ -36,9 +36,12 @@ export function analyzeRustProjectLiteralEmission(program: Omit<RustAnalysisProg
       const declaration = field.implementationDeclaration;
       const owner = declaration === undefined ? undefined : program.projectTypes.definitionContainingDeclaration(declaration);
       const preferredName = owner === undefined || declaration === undefined ? undefined : program.projectTypes.fieldStorageName(owner, declaration);
-      if (declaration === undefined || preferredName === undefined)
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted literal field requires its exact native storage identity.", node);
-      fields.push(Object.freeze({ declaration, contracts: field.contractDeclarations, storageIndex: field.storageIndex, preferredName, carrier: field.carrier }));
+      const ownerCarrier = owner === undefined ? undefined : program.records.projectRelationship.get(fact.resultCarrier, owner);
+      const physical = owner === undefined || ownerCarrier === undefined ? undefined
+        : program.records.projectClassFields.get(owner, ownerCarrier)?.find(candidate => candidate.declaration === declaration);
+      if (declaration === undefined || preferredName === undefined || physical === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted literal field requires its exact instantiated physical native storage identity.", node);
+      fields.push(Object.freeze({ declaration, contracts: field.contractDeclarations, storageIndex: field.storageIndex, preferredName, carrier: physical.carrier }));
     } else {
       const first = field.contractDeclarations[0];
       if (first === undefined || !selected.has("get") || selected.has("set") !== !field.readonly)

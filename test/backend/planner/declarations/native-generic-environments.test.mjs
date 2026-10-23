@@ -33,7 +33,7 @@ function fixture(body, name) {
 function seal({ program, declaration }, replace = {}) {
   const producer = createRustNativeGenericProducer(() => {});
   const values = program.callableValues;
-  const result = analyzeRustNativeCallableGenerics({ ast: program.source.ast, lifetimes: program.sourceLifetimes,
+  const result = analyzeRustNativeCallableGenerics({ source: program.source, ast: program.source.ast, lifetimes: program.sourceLifetimes,
     records: program.records, producer, native: { ...values.native, ...replace.native },
     nativeStorage: { ...values.nativeStorage, ...replace.nativeStorage }, nativeProducers: values.nativeProducers,
     nativeGenericProducers: values.nativeGenericProducers, retainedCallableInputs: program.retainedCallableInputs,

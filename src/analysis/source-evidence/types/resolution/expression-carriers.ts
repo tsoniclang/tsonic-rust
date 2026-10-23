@@ -24,8 +24,7 @@ import type { RustFactWalk } from "../../../program/walk.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { readRustSourceRawAddress } from "../../../../source/extension/raw-addresses.js";
 import { readRustRawLocation } from "../../../../source/extension/native-memory.js";
-import { selectRustMemoryLayoutObservation } from "../../../../policy/operations/pointers/layout-observations.js";
-import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
+import { resolveTsonicMemoryLayoutObservation, selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "../../../conversions/flow-read.js";
 import { resolveNativeProviderCallableArguments } from "../../../operations/members/calls/native-callables.js";
 import { selectRustUnionVariantByCheckedType } from "../../../expected-types/union-variants.js";
@@ -411,7 +410,7 @@ function resolveCallSelectionPrerequisites(
     selectTsonicMemoryFieldBinding(walk.context.ast, walk.context.source.sourceFacts, expression) !== undefined ||
     selectTsonicMemoryRecordBinding(walk.context.ast, walk.context.source.sourceFacts, expression) !== undefined ||
     readRustSourceRawAddress(walk.context.source.sourceFacts, expression) !== undefined ||
-    selectRustMemoryLayoutObservation(walk.context.source.sourceFacts, expression) !== undefined) return;
+    resolveTsonicMemoryLayoutObservation(walk.context.source.sourceFacts, expression) !== undefined) return;
   const source = walk.context.semantics(sourceFile).operations.call(expression);
   const receiver = source?.sourceReceiver?.expression;
   if (receiver !== undefined) {

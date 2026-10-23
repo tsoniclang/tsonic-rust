@@ -277,7 +277,7 @@ test("source style attributes are item-local and derived from exact Rust signatu
     text,
     /#\[expect\(clippy::too_many_arguments, reason = "checked source signature"\)\]\n    pub fn configure/u,
   );
-  assert.match(text, /pub struct Hidden \{\}/u);
+  assert.match(text, /pub\(crate\) struct Hidden \{\}/u);
   assert.doesNotMatch(text, /private_interfaces/u);
   assert.doesNotMatch(text, /^#!\[allow/mu);
 });

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
+import { asSourceNode, BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
@@ -144,9 +144,6 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
   return Object.freeze(issues);
 }
 
-// A closure passed directly to a provider operation or placed directly in an array literal is stored in that slot's
-// fixed type-erased callable (the provider ABI and the literal's element type are not producer-selected), so the
-// slot's error is the error the closure is written with.
 function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">, node: Node): TargetTypeRef | undefined {
   const { ast } = program.source;
   let value = node;
@@ -160,10 +157,19 @@ function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">
     return rustProgramErrorTargetType();
   const operation = program.records.targetOperation.get(owner);
   let slot: TargetTypeRef | undefined;
-  if (operation?.kind === "provider-operation" && ast.is.IsCallExpression(owner)) {
+  if (operation?.kind === "provider-operation" && (ast.is.IsCallExpression(owner) || ast.is.IsNewExpression(owner))) {
     const index = ast.arguments(owner).indexOf(value);
     slot = index < 0 ? undefined
       : operation.abi.sourceArguments.find(argument => argument.sourceIndex === index && argument.form === "value")?.carrier;
+  } else if (operation?.kind === "source-call" && (ast.is.IsCallExpression(owner) || ast.is.IsNewExpression(owner))) {
+    const index = ast.arguments(owner).indexOf(value);
+    const parameterIndex = operation.parameters.findIndex(parameter => parameter.inputs.some(input =>
+      input.sourceArgumentIndex === index && input.sourceForm === "value"));
+    const declaration = asSourceNode(program.records.selectedCall.get(owner)?.sourceDeclaration, ast);
+    const parameter = declaration === undefined || parameterIndex < 0 ? undefined
+      : program.records.callableDeclaration.get(declaration)?.contract.nativeParameters[parameterIndex]?.sourceParameter;
+    if (parameter !== undefined && program.callableValues.native.isConcreteCallableParameter(parameter))
+      slot = operation.parameters[parameterIndex]?.parameterCarrier;
   } else if (operation?.kind === "array-literal" && ast.is.IsArrayLiteralExpression(owner)) {
     const selected = program.callableValues.nativeStorage.valueFor(owner);
     if (selected.kind === "unresolved")
@@ -172,11 +178,14 @@ function fixedErasedSlotError(program: Omit<RustAnalysisProgram, "reachability">
       : rustJsArrayLikeElementTargetType(selected.carrier);
     return element === undefined ? undefined : rustCallablePhysicalSignature(rustOptionElementCarrier(element) ?? element)?.error;
   }
-  else if (ast.is.IsBinaryExpression(owner) && BinaryExpression_Right(ast, owner) === value) {
-    // A closure assigned to a writable method property is stored in the method's override slot.
+  else if (ast.is.IsPropertyDeclaration(owner)) {
+    slot = program.callableValues.projectFieldStorage.get(owner);
+  } else if (ast.is.IsBinaryExpression(owner) && BinaryExpression_Right(ast, owner) === value) {
     const left = BinaryExpression_Left(ast, owner);
     const target = left === undefined ? undefined : program.records.targetOperation.get(left);
     if (target?.kind === "source-method-property" && target.write !== undefined) slot = target.callableCarrier;
+    else if (target?.kind === "source-field" && target.declaration !== undefined && target.valueSemantics.kind === "stored")
+      slot = program.callableValues.projectFieldStorage.get(target.declaration);
   }
   const erased = slot === undefined ? undefined : rustOptionElementCarrier(slot) ?? slot;
   return erased?.kind === "target-named" && erased.id === rustCallableTargetId ? rustCallableProtocol(erased)?.error : undefined;

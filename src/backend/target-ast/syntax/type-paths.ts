@@ -1,11 +1,14 @@
 import type { RustConstArgument, RustGenericArgument, RustTraitReference, RustType, RustTypeBound } from "./nodes.js";
 
-export function qualifyRustCratePath(source: string, crateName: string): string {
-  return source.startsWith("crate::") ? `${crateName}::${source.slice(7)}` : source;
+export function qualifyRustReferencePath(source: string, references: ReadonlyMap<string, string>): string {
+  const separator = source.indexOf("::");
+  if (separator < 0) return source;
+  const owner = references.get(source.slice(0, separator));
+  return owner === undefined ? source : `${owner}${source.slice(separator)}`;
 }
 
-export function qualifyRustCrateType(source: RustType, crateName: string): RustType {
-  const path = (value: string): string => qualifyRustCratePath(value, crateName);
+export function qualifyRustReferenceType(source: RustType, references: ReadonlyMap<string, string>): RustType {
+  const path = (value: string): string => qualifyRustReferencePath(value, references);
   const constant = (value: RustConstArgument): RustConstArgument => value.kind === "path"
     ? { ...value, path: path(value.path) } : value;
   const trait = (value: RustTraitReference): RustTraitReference => ({ ...value, trait: type(value.trait) });

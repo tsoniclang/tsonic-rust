@@ -51,7 +51,7 @@ main();
   assert.deepEqual(result.diagnostics, []);
   const manifest = nativeFunction(result, "manifest_has");
   assert.equal(manifest.visibility, "public");
-  assert.deepEqual(manifest.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str")), nativeType("String")]);
+  assert.deepEqual(manifest.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str")), nativeBorrow(nativeType("str"))]);
   assert.deepEqual(manifest.returnType, nativeType("bool"));
   assert.equal(manifest.errorType.identity, "tsonic-rust-runtime:TsonicError");
   const main = nativeFunction(result, "main");

@@ -1,6 +1,7 @@
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
@@ -132,12 +133,12 @@ test("explicit native str conversion creates a view without copying or reevaluat
   }
 });
 
-test("typed shared identity inputs use native deref coercion without changing semantic views", () => {
+test("typed shared identity inputs borrow the exact guard payload without guessing its pointer carrier", () => {
   const pointer = { kind: "path", path: "guard" };
   const expression = { kind: "dereference", pointer };
   const selected = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage", storageForm: "plain" });
   assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, expression, input, false), {
-    kind: "reference", expr: pointer,
+    kind: "reference", expr: expression,
   });
   for (const other of [
     { ...input, conversion: { kind: "semantic", conversion: rustStringToBorrowedStrValueConversion } },
@@ -152,4 +153,35 @@ test("typed shared identity inputs use native deref coercion without changing se
   assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, copied, input, false), {
     kind: "reference", expr: copied,
   });
+});
+
+test("a sealed borrowed flow reference is re-used only without a storage or flow override", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function measure(value: string | number): number {
+  if (typeof value === "string") {
+    const length = value.length;
+    return length + value.length;
+  }
+  return 0;
+}
+` } });
+  const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile);
+  let subject;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (program.source.ast.is.IsIdentifier(node) && program.source.ast.text(node) === "value" &&
+      program.records.valueProjection.get(node)?.borrowable === true) subject = node;
+    pending.push(...program.source.ast.children(node));
+  }
+  assert.equal(subject !== undefined, true, "actual narrowed payload retains an admitted borrowed flow projection");
+  const pointer = { kind: "path", path: "payload_reference" };
+  const expression = { kind: "dereference", pointer };
+  const selected = context();
+  selected.input.program = program;
+  assert.equal(planRustSharedReceiver(subject, expression, selected) === pointer, true, "admitted native flow reference");
+  selected.flowReadOverrides = new Map([[subject, expression]]);
+  assert.deepEqual(planRustSharedReceiver(subject, expression, selected), { kind: "reference", expr: expression });
+  selected.flowReadOverrides = undefined;
+  selected.expressionOverrides = new Map([[subject, { expression, carrier: stringCarrier, valueForm: "storage", storageForm: "plain" }]]);
+  assert.deepEqual(planRustSharedReceiver(subject, expression, selected), { kind: "reference", expr: expression });
 });

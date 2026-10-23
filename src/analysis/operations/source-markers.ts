@@ -23,10 +23,9 @@ import { readRustSourceRawAddress } from "../../source/extension/raw-addresses.j
 import { readRustRawLocation } from "../../source/extension/native-memory.js";
 import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
 import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
-import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
+import { resolveTsonicMemoryLayoutObservation, selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
 import { readRustSourceRawPointerIdentity } from "../../source/extension/raw-pointers.js";
-import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 
@@ -40,7 +39,7 @@ export function isSharedSourceMarkerOperation(
     selectTsonicMemoryFieldBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectTsonicMemoryRecordBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     readRustRawLocation(walk.context.ast, sourceFacts, expression) !== undefined ||
-    selectRustMemoryLayoutObservation(sourceFacts, expression) !== undefined ||
+    resolveTsonicMemoryLayoutObservation(sourceFacts, expression) !== undefined ||
     readRustSourceRawPointerIdentity(expression, sourceFacts) !== undefined ||
     readRustSourceRawAddress(sourceFacts, expression) !== undefined ||
     readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
@@ -67,7 +66,7 @@ export function resolveSharedSourceMarkerCarrier(
   if (memoryBinding !== undefined) return memoryBinding;
   const rawLocation = resolveRustRawLocationCarrier(walk, expression, sourceFile);
   if (rawLocation !== undefined) return rawLocation;
-  const layout = selectRustMemoryLayoutObservation(sourceFacts, expression);
+  const layout = resolveTsonicMemoryLayoutObservation(sourceFacts, expression);
   if (layout !== undefined) {
     if (layout.kind === "rejected") {
       appendRustDiagnostic(walk, "RUST_MEMORY_LAYOUT_OBSERVATION_NOT_PROVEN", layout.reason, expression, []);

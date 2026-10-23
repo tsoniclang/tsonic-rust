@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { analyzeSourceWrites } from "@tsonic/target-api/analysis";
-import { Node_Expression, sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { ForStatement_Condition, ForStatement_Incrementor, Node_Expression, sourceEnclosingCallable, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
 import type { RustBindingLivenessProducer } from "../program/records/binding-liveness.js";
@@ -64,12 +64,17 @@ export function analyzeRustBindingLiveness(
     insideCompletionScope(reference, binding, { catchClause: write });
   // A read the native program never evaluates (in a decided guard condition, whose if statement emits only its
   // selected branch, or in a removed branch) does not keep the binding used.
-  const notEmitted = (reference: Node): boolean => {
+  const notEmitted = (reference: Node, binding: Node): boolean => {
     let child = reference;
     for (let current = source.ast.parent(reference); current !== undefined; child = current, current = source.ast.parent(current)) {
       if (records.nativeUnreachable.get(current) === true) return true;
       if (source.ast.is.IsIfStatement(current) && Node_Expression(source.ast, current) === child &&
         records.nativeGuardResult.get(child) !== undefined) return true;
+      if (source.ast.is.IsForStatement(current)) {
+        const counted = records.countedLoop.get(current);
+        if (counted?.counterDeclaration === binding &&
+          (child === ForStatement_Condition(source.ast, current) || child === ForStatement_Incrementor(source.ast, current))) return true;
+      }
       if (source.ast.is.IsBlock(current) || source.ast.is.IsSourceFile(current)) return false;
     }
     return false;
@@ -86,7 +91,7 @@ export function analyzeRustBindingLiveness(
       const operation = point.operation;
       // A discarded callable is erased from the native program, so its capture never reads the binding; an unemitted
       // read and a statically decided comparison operand are not evaluated natively.
-      if (operation.kind === "read" && (point.source === undefined || !notEmitted(point.source) &&
+      if (operation.kind === "read" && (point.source === undefined || !notEmitted(point.source, operation.binding) &&
           !rustStaticComparisonSkipsOperand(source.ast, records, point.source)) ||
         operation.kind === "capture" &&
         (point.source === undefined || records.nativeParticipation.get(point.source) !== "erased")) reads.add(operation.binding);

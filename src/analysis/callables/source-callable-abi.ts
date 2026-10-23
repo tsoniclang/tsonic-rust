@@ -191,34 +191,32 @@ export function createRustSourceCallableAbiResolver(input: {
   readonly isNativeCallableExpression: (expression: Node) => boolean;
   readonly parameterAbiFor: (parameter: Node) => RustSourceParameterAbiFact | undefined;
 }): RustSourceCallableAbiResolver {
-  const cache = new WeakMap<object, RustSourceParameterAbiFact | null>();
+  const cache = new WeakMap<Node, RustSourceParameterAbiFact>();
 
   return {
     canUseSharedBorrow(parameter, context, options) {
       return parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
     },
     resolveParameterAbi(parameter, context, options, contextualValueCarrier) {
-      const owner = context.ast.parent(parameter);
-      if (owner === undefined || sourceCallableValueParameters(context.ast, owner,
-        context.semanticsFor(owner))?.includes(parameter) !== true) return undefined;
       const finalized = input.parameterAbiFor(parameter);
       if (finalized !== undefined) return contextualValueCarrier === undefined ||
         rustTargetTypeRefEquals(finalized.valueCarrier, contextualValueCarrier) ? finalized : undefined;
+      const owner = context.ast.parent(parameter);
+      if (owner === undefined || sourceCallableValueParameters(context.ast, owner,
+        context.semanticsFor(owner))?.includes(parameter) !== true) return undefined;
       const cached = contextualValueCarrier === undefined ? cache.get(parameter) : undefined;
       if (cached !== undefined) {
-        return cached ?? undefined;
+        return cached;
       }
       const typeNode = Node_Type(context.ast, parameter);
       let base = contextualValueCarrier ?? (typeNode === undefined
         ? resolveRustTargetTypeRef(parameter, context, options)
         : resolveRustTargetTypeRef(typeNode, context, options));
       if (base === undefined) {
-        cache.set(parameter, null);
         return undefined;
       }
       const declaration = context.ast.as.AsParameterDeclaration(parameter);
       if (declaration === undefined) {
-        cache.set(parameter, null);
         return undefined;
       }
       const form = declaration.DotDotDotToken !== undefined
@@ -250,11 +248,10 @@ export function createRustSourceCallableAbiResolver(input: {
         !requiresOwnedValue && parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
       const abi = selectRustSourceParameterAbi(form, base, parameterLaneCarrier, sharedBorrow);
       if (abi === undefined) {
-        cache.set(parameter, null);
         return undefined;
       }
       const named = finalizeRustSourceParameterStorage(parameter, abi, context, options);
-      cache.set(parameter, named ?? null);
+      if (named !== undefined && contextualValueCarrier === undefined) cache.set(parameter, named);
       return named;
     },
   };

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createCompilerSessionFromFiles } from "@tsonic/tsts";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRustErrorRegions } from "../../../dist/analysis/errors/regions.js";
 import { rustJsPromiseTargetType, rustJsValueTargetType, rustProgramErrorTargetType,
   rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
@@ -9,15 +11,21 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 
 function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
-  const file = Object.freeze({ file: true });
-  const declaration = Object.freeze({ declaration: true });
   const fileName = "/src/index.ts";
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/src",
+    files: { [fileName]: "export function body(): number { return 1; }" },
+    compilerOptions: { strict: true, target: "es2022", module: "esnext" } }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, "the error-region owner receives checked source");
+  const source = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile(fileName);
+  assert.equal(file !== undefined, true, "the original checked source file exists");
+  const declaration = source.ast.statements(file).find(node => source.ast.is.IsFunctionDeclaration(node));
+  assert.equal(declaration !== undefined, true, "the original checked callable declaration exists");
   const empty = Object.freeze({ get: () => undefined });
   const effects = Object.freeze({ localErrors, nativeErrors });
   const outputCarrier = rustSourcePrimitiveTargetType("int32");
   const result = analyzeRustErrorRegions({
-    ast: { getSourceFile: () => file, getFileName: () => fileName,
-      forEachChild: (node, visit) => { if (node === file) visit(declaration); } },
+    ast: source.ast,
     sourceFiles: [file],
     nativeTasks: [], binaryHooks: [],
     isNativeNode: node => node === file || node === declaration,

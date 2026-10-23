@@ -4,6 +4,21 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { isRustStringCarrier } from "../../../dist/target-model/types/index.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { selectRustJsPromiseConstructor } from "../../../dist/policy/operations/source-profiles/js/promises.js";
+
+test("the synchronous native Promise executor is scoped while its settlement callbacks remain retained", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const selected = selectRustJsPromiseConstructor([integer], [integer]);
+  assert.equal(selected !== undefined, true, "one exact Promise constructor contract is selected");
+  const executor = rustCallableProtocol(selected.parameterCarriers[0]);
+  assert.equal(executor?.lifetime?.kind, "placeholder", "the native constructor borrows no executor beyond its call");
+  assert.equal(executor.parameters.length, 2, "the executor receives the existing resolve and reject callbacks");
+  assert.equal(rustCallableProtocol(executor.parameters[0])?.lifetime?.kind, "static", "resolve remains retained by pending work");
+  assert.equal(rustCallableProtocol(executor.parameters[1])?.lifetime?.kind, "static", "reject remains retained by pending work");
+  assert.equal(executor.error?.kind === "target-named" && executor.error.id === "rust.js.JsValue", true,
+    "scoping does not change the existing JS rejection carrier");
+});
 
 const measurement = `
 function measureInput(input: string, inspect: (value: string) => number): number { return inspect(input); }

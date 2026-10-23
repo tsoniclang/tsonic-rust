@@ -5,6 +5,7 @@ import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSu
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
+import { prepareRustProjectCallableFieldStorage } from "../../../dist/analysis/callables/project-field-storage.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
@@ -14,11 +15,40 @@ import { rustProducerErrorReference } from "../../../dist/target-model/types/car
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 
-import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
-import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustOptionElementCarrier, rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+import { createRustNativeStorageJoins } from "../../../dist/analysis/callables/native-storage-joins.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+
+test("native callback signatures do not masquerade as stored aggregate payloads", () => {
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const callback = rustCallableTargetType([integer], integer);
+  const selected = createRustNativeStorageJoins({
+    input: { storage: {}, definitions: emptyRustTypeDefinitions,
+      structuralShapes: { field() { throw new Error("A native call signature owns no structural storage fields."); } },
+      producerErrorFor: () => undefined },
+    boundaries: [], joinWrites: new Map(), step: () => true,
+    fail(message) { throw new Error(message); },
+  });
+  for (const callTrait of ["Fn", "FnMut", "FnOnce"]) {
+    for (const [name, args, result] of [["input", [callback], integer], ["output", [], callback], ["both", [callback], callback]]) {
+      const carrier = { kind: "closure", callTrait, args, result };
+      assert.equal(selected.containsCallable(carrier, 0), false,
+        `${callTrait} ${name}: callback ABI metadata is not a captured aggregate storage slot`);
+      assert.equal(carrier.args === args && carrier.result === result, true,
+        `${callTrait} ${name}: the exact native argument and result contracts remain unchanged`);
+    }
+  }
+  assert.equal(selected.containsCallable({ kind: "function-pointer", args: [callback], result: callback }, 0), false,
+    "a native function pointer keeps the same signature-only storage rule");
+  for (const carrier of [{ kind: "array", element: callback }, { kind: "tuple", elements: [callback] }]) {
+    assert.equal(selected.containsCallable(carrier, 0), true,
+      "actual aggregate callback payloads still require their physical stored-producer owner");
+  }
+});
 
 function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
@@ -74,6 +104,160 @@ function fixture(text, options = {}) {
     revokeSource: guardedAst.revoke, revokeQueries: guardedQueries.revoke };
 }
 
+for (const surfaces of [[], ["js"]]) {
+  test(`optional callable literal state consumes its complete native interface field contract on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      interface Operation { label?: string; enabled?: boolean; callback?: () => number; run(): number; }
+      export function absent(): Operation { return { run(): number { return 3; } }; }
+      export function present(): Operation {
+        return { label: "ready", enabled: false, callback: () => 7, run(): number { return 3; } };
+      }
+    ` } });
+    const { ast } = program.source;
+    const literals = [];
+    const visit = node => {
+      if (ast.is.IsObjectLiteralExpression(node)) literals.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(literals.length, 2, "omitted and present optional state both retain their original source literals");
+    for (const literal of literals) {
+      const selected = program.records.objectLiteralEmission.get(literal);
+      assert.equal(selected?.kind, "project", "the nominal method record keeps its existing native interface representation");
+      let callback;
+      for (const field of selected.selection.fields) {
+        const owner = program.projectTypes.definitionContainingDeclaration(field.declaration);
+        const ownerCarrier = program.records.projectRelationship.get(selected.selection.carrier, owner);
+        const physical = program.records.projectClassFields.get(owner, ownerCarrier)
+          .find(candidate => candidate.declaration === field.declaration);
+        assert.equal(field.carrier === physical?.carrier, true,
+          "literal state and native dispatch use one identical instantiated physical member carrier");
+        if (ast.text(ast.name(field.declaration)) === "callback") callback = field;
+      }
+      assert.equal(callback !== undefined, true, "an omitted callback still owns its original optional state slot");
+      const payload = rustOptionElementCarrier(callback.carrier);
+      const protocol = rustCallableProtocol(payload);
+      assert.equal(protocol !== undefined, true, "native absence wraps the complete physical callable storage");
+      assert.equal(protocol.lifetime.kind, "static", "the lifetime-free owning native interface has no unnameable state lifetime");
+      assert.equal(protocol.error !== undefined, true, "the original physical callable error channel is retained, not invented by rendering");
+    }
+  });
+}
+
+for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
+  test(`callable fields select their complete member storage (${genericParameters.length === 0 ? "owned" : "borrowed"})`, () => {
+    const declaration = {};
+    const unrequested = {};
+    const definition = { genericParameters };
+    const lifetime = { kind: "parameter", identity: "field:environment", name: "environment" };
+    const integer = rustSourcePrimitiveTargetType("int32");
+    const declared = rustCallableTargetType([integer], integer, lifetime);
+    const subjects = new Map([declaration, unrequested].map(node => [node, { node, kind: "member", projection: [] }]));
+    let queries = 0;
+    let selections = 0;
+    let open = true;
+    const fields = prepareRustProjectCallableFieldStorage({
+      ast: new Proxy({}, { get() { throw new Error("A field storage owner must query its complete member subject, not one initializer."); } }),
+      records: { runtimeCarrier: { get: node => {
+        assert.equal(open, true, "published field readers never read source carrier evidence");
+        return subjects.has(node) ? { carrier: declared } : undefined;
+      } } },
+      storage: { subject(node, kind) {
+        assert.equal(open && subjects.has(node), true, "the declared field owns all initializer and later assigned values");
+        assert.equal(kind, "member", "field selection has one canonical source-storage subject");
+        queries += 1;
+        return { kind: "resolved", subject: subjects.get(node) };
+      } },
+      projectTypes: { definitions: [definition], objectLayoutForDefinition: owner =>
+        owner === definition ? { fields: [{ declaration }, { declaration: unrequested }] } : undefined },
+    }, (selected, carrier) => {
+      assert.equal(open && subjects.get(selected.node) === selected && carrier === declared, true,
+        "physical selection keeps the exact declared member correspondence");
+      selections += 1;
+      return { kind: "identity", carrier };
+    });
+    const carrier = fields.get(declaration);
+    const protocol = rustCallableProtocol(carrier);
+    assert.equal(protocol !== undefined, true, "an uninitialized callable field still has a physical slot");
+    assert.equal(protocol.lifetime.kind, genericParameters.length === 0 ? "static" : "parameter",
+      "only an actually owning native class closes its field storage lifetime");
+    assert.equal(fields.get(declaration) === carrier, true, "a completed physical field selection is stable");
+    assert.equal(queries, 1, "one complete field domain is queried once");
+    assert.equal(selections, 1, "one native storage owner selects the field once");
+    assert.equal(fields.get({}) === undefined, true, "a foreign declaration is not a field storage subject");
+    const sealed = fields.seal();
+    assert.equal(sealed.kind, "resolved", "the complete callable member inventory closes before program publication");
+    assert.equal(queries, 2, "the seal also materializes a field nobody requested during analysis");
+    assert.equal(selections, 2, "every original declared callable field has one native selection");
+    open = false;
+    assert.equal(sealed.value.get(declaration) === carrier, true, "published readers are stable without analysis access");
+    assert.equal(sealed.value.get(unrequested) !== undefined, true, "unrequested fields cannot become post-seal computations");
+    assert.equal(fields.get(declaration) === carrier, true, "the private closed builder also performs only a lookup");
+  });
+}
+
+test("unresolved callable member storage is rejected by its producer before publication", () => {
+  const declaration = {};
+  const definition = { genericParameters: [] };
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const carrier = rustCallableTargetType([], integer);
+  const fields = prepareRustProjectCallableFieldStorage({ ast: {},
+    records: { runtimeCarrier: { get: node => node === declaration ? { carrier } : undefined } },
+    storage: { subject: node => ({ kind: "resolved", subject: { node, kind: "member", projection: [] } }),
+      failureReason: () => undefined },
+    projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+  }, () => ({ kind: "unresolved", reason: "The complete native field storage has incompatible actual producer contracts." }));
+  const selected = fields.seal();
+  assert.equal(selected.kind, "rejected", "missing physical member evidence never crosses the seal");
+  assert.equal(selected.diagnostics.length, 1, "the original field receives one producer rejection");
+  assert.equal(selected.diagnostics[0].sourceNode === declaration, true, "the diagnostic preserves the checked field identity");
+  assert.equal(selected.diagnostics[0].code, "RUST_CALLABLE_VALUE_NOT_CLOSED", "the existing native callable closure diagnostic is retained");
+  assert.equal(selected.diagnostics[0].message,
+    "The complete native field storage has incompatible actual producer contracts.", "the owning selection's reason is preserved exactly");
+});
+
+for (const [name, wrap, unwrap] of [
+  ["optional", rustOptionTargetType, rustOptionElementCarrier],
+  ["tuple", carrier => ({ kind: "tuple", elements: [carrier] }), carrier => carrier.elements[0]],
+]) {
+  test(`nested ${name} callable member storage is materialized and sealed through its actual field domain`, () => {
+    for (const ownsStorage of [true, false]) {
+      const declaration = {};
+      const definition = { genericParameters: ownsStorage ? [] : [{ kind: "lifetime" }] };
+      const integer = rustSourcePrimitiveTargetType("int32");
+      const lifetime = { kind: "parameter", identity: "nested-field:environment", name: "environment" };
+      const declared = wrap(rustCallableTargetType([integer], integer, lifetime));
+      let open = true;
+      let calls = 0;
+      const fields = prepareRustProjectCallableFieldStorage({ ast: {},
+        records: { runtimeCarrier: { get: node => {
+          assert.equal(open, true, "sealed readers never query the nested source field again");
+          return node === declaration ? { carrier: declared } : undefined;
+        } } },
+        storage: { subject(node, kind) {
+          assert.equal(node === declaration && kind === "member", true,
+            "the complete field, not a guessed initializer or optional payload, owns the native selection");
+          return { kind: "resolved", subject: { node, kind, projection: [] } };
+        } },
+        projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+      }, (_subject, carrier) => {
+        calls += 1;
+        assert.equal(carrier === declared, true, "the native storage selector receives the complete nested declared carrier");
+        return { kind: "identity", carrier };
+      });
+      const selected = fields.seal();
+      assert.equal(selected.kind, "resolved", "every unrequested nested callable field closes before publication");
+      open = false;
+      const carrier = selected.value.get(declaration);
+      assert.equal(carrier !== undefined, true, "nested callable storage is not skipped by a direct-callable-only guard");
+      assert.equal(rustCallableProtocol(unwrap(carrier))?.lifetime.kind, ownsStorage ? "static" : "parameter",
+        "the enclosing native field owns storage or retains its actual authored lifetime");
+      assert.equal(calls, 1, "one native field selection covers the entire nested shape");
+      assert.equal(selected.value.get(declaration) === carrier, true, "the published nested result is an identical stored record");
+    }
+  });
+}
+
 test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
   const current = fixture("export function read(value: number): number { return value; }");
   const owner = current.declaration("read");
@@ -84,6 +268,21 @@ test("finalized formal ABI storage is a stable owned lookup without caller carri
   assert.equal(current.plan.parameterFor(parameter) === selected, true);
   assert.equal(Object.isFrozen(selected), true);
   assert.equal(current.plan.parameterFor.length, 1, "the formal ABI owner supplies the carrier");
+});
+
+test("published concrete and retained parameter classifications never resume source queries", () => {
+  const current = fixture("export function read(value: number): number { return value; }");
+  const parameter = current.source.ast.parameters(current.declaration("read"))[0];
+  const concrete = current.native.isConcreteCallableParameter(parameter);
+  const retained = current.native.isNativeRetainedParameter(parameter);
+  current.revokeSource();
+  assert.equal(current.native.isConcreteCallableParameter(parameter), concrete,
+    "concrete parameter classification is a sealed set lookup");
+  assert.equal(current.native.isNativeRetainedParameter(parameter), retained,
+    "retention classification cannot invoke a captured analysis query");
+  const foreign = new Proxy({}, { get() { throw new Error("A published native parameter lookup cannot inspect foreign source."); } });
+  assert.equal(current.native.isConcreteCallableParameter(foreign), false, "foreign parameters have no concrete participation");
+  assert.equal(current.native.isNativeRetainedParameter(foreign), false, "foreign parameters have no retained participation");
 });
 
 test("finalized formal ABI storage never inspects revoked source or fabricates foreign parameters", () => {

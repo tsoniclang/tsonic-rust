@@ -1,4 +1,5 @@
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
@@ -14,16 +15,31 @@ export interface RustStructuralGenericCarrierSelection {
   }[];
 }
 
+export function selectRustStructuralDispatchArguments(
+  arguments_: readonly RustTargetGenericArgument[], objectLifetime: RustLifetimeRef | undefined,
+): readonly RustTargetGenericArgument[] | undefined {
+  const selected: RustTargetGenericArgument[] = [];
+  for (const argument of arguments_) {
+    if (argument.kind !== "lifetime" || argument.lifetime.kind !== "placeholder" && argument.lifetime.kind !== "call-scoped-elision") {
+      selected.push(argument);
+      continue;
+    }
+    if (objectLifetime === undefined || objectLifetime.kind === "placeholder" || objectLifetime.kind === "call-scoped-elision") return undefined;
+    selected.push(Object.freeze({ kind: "lifetime", lifetime: objectLifetime }));
+  }
+  return Object.freeze(selected);
+}
+
 export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStructuralGenericCarrierSelection {
   const references = rustTargetGenericReferences(carrier);
   const used = new Set(references.typeParameters.map(parameter => parameter.name));
   const lifetimeNames = new Set(references.lifetimes.map(parameter => parameter.name));
   let lifetimeCount = 0;
-  const storageLifetime = () => {
+  const storageLifetime = (names: Set<string>) => {
     let index = lifetimeCount++;
-    while (lifetimeNames.has(`storage${index}`)) index += 1;
+    while (names.has(`storage${index}`)) index += 1;
     const name = `storage${index}`;
-    lifetimeNames.add(name);
+    names.add(name);
     return { kind: "parameter" as const, identity: `structural-storage-lifetime:${index}`, name };
   };
   const parameters = new Map<string, TargetTypeRef>();
@@ -31,7 +47,7 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
   const selected = mapRustTargetTypes(carrier, (type, source) => {
     const callable = rustCallableProtocol(type);
     if (callable?.lifetime?.kind === "placeholder") {
-      type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime(), callable.error);
+      type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime(lifetimeNames), callable.error);
     }
     if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
       nestedCarriers.push(Object.freeze({ source, carrier: type }));

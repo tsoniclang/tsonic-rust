@@ -268,8 +268,6 @@ export function analyzeRustAnalysisProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
-  const bindingLivenessIssues = analyzeRustBindingLiveness(context.source, ownershipFlow.flow, records, context.names, context.records.bindingLivenessPlans);
-  if (bindingLivenessIssues.length !== 0) return rejectedTargetStage(bindingLivenessIssues);
   const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
@@ -332,6 +330,7 @@ export function analyzeRustAnalysisProgram(
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
   const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    ownsExternalArgument: projectConstructions.ownsExternalArgument,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
     capturesFor, invocationTransfersCapture: owner => {
       const selected = lexicalFunctions.forDeclaration(owner);
@@ -401,6 +400,8 @@ export function analyzeRustAnalysisProgram(
     countedLoops: analyzeRustCountedLoopRepresentations({ ast: context.ast, nativeNodes: context.nativeNodes,
       navigation: context.source.navigation, records: finalRecords, borrowedElementReads }) });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
+  const bindingLivenessIssues = analyzeRustBindingLiveness(context.source, ownershipFlow.flow, records, context.names, context.records.bindingLivenessPlans);
+  if (bindingLivenessIssues.length !== 0) return rejectedTargetStage(bindingLivenessIssues);
   const callableValues = context.callableValues.seal({
     nativeGenerics: context.records.nativeGenericPlans,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
