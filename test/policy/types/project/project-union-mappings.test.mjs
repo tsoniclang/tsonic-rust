@@ -21,7 +21,18 @@ import { analyzeRustGeneratedItemUsage } from "../../../../dist/analysis/reachab
 
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustProgramSourceFiles, rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
+import { rustProgramSourceFiles, rustSourceFilePlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
+import { createRustPlanningContext } from "../../../../dist/backend/planner/context.js";
+import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { analyzeRustProjectEmission } from "../../../../dist/analysis/project-types/emission.js";
+import { createRustProjectEmissionProducer } from "../../../../dist/analysis/program/records/project-emission.js";
+import { analyzeRustValueReads } from "../../../../dist/analysis/conversions/value-reads.js";
+import { createRustValueReadProducer } from "../../../../dist/analysis/program/records/value-read.js";
+import { createRustValueProjectionProducer } from "../../../../dist/analysis/program/records/value-projection.js";
+import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/conversion-emission.js";
+import { createRustOwnershipEmissionProducer } from "../../../../dist/analysis/program/records/ownership-emission.js";
+import { analyzeRustProjectUnionMappings } from "../../../../dist/analysis/conversions/project-union-mappings.js";
+import { createRustProjectUnionMappingProducer } from "../../../../dist/analysis/program/records/project-union-mappings.js";
 
 function fixture({ siblings = false, nested = false, retainDerived = false, relationKind = "related", includeRoot = false } = {}) {
   const fileName = "/src/index.ts";
@@ -205,7 +216,8 @@ test("canonical nominal union emission moves owned fields and borrows views with
     const [upcast] = upcasts;
     assert.equal(upcast.body.statements.length, 2);
     assert.equal(upcast.body.statements[0].kind, "let");
-    assert.equal(upcast.body.statements[0].init.kind, "path");
+    assert.equal(upcast.body.statements[0].init.kind, owned ? "path" : "reference");
+    if (!owned) assert.equal(upcast.body.statements[0].init.expr.kind, "path", "a borrowed native view binds the original payload reference");
     assert.equal(upcast.body.statements[1].kind, "tail");
     const constructed = upcast.body.statements[1].expr;
     assert.equal(constructed.kind, "struct-literal");
@@ -294,7 +306,8 @@ runtimeCarrier: { get: subject => unionCarriers.has(subject) ? { carrier: unionC
 });
 
 test("dispatcher fuses finalized narrowing and heritage without intermediate enum or identity clones", () => {
-  const { source, target, root, derived, definitions, projectTypes, fileName, declarationGenericRequirements } =
+  const { source, target, root, derived, base: baseCarrier, inner, string: stringCarrier,
+    definitions, projectTypes, fileName, declarationGenericRequirements } =
     fixture({ nested: true, includeRoot: true });
   const conversion = selectRustProjectUnionMapping(source, target, projectTypes, definitions);
   const correspondence = conversion.arms.map(({ upcast, ...mapping }) => mapping);
@@ -304,6 +317,32 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
   const ast = fakeAstReader([sourceFile]);
   Object.assign(ast.is, { IsIdentifier: current => current === node, IsAsExpression: () => false,
     IsSatisfiesExpression: () => false, IsNonNullExpression: () => false, IsTypeAssertion: () => false });
+  const base = rustProgramWithTypeEmissions([source, target, root, inner, derived, baseCarrier, stringCarrier,
+    rustOptionTargetType(root)], { typeDefinitions: definitions });
+  const prepare = raw => {
+    const ownership = createRustOwnershipEmissionProducer(() => {});
+    ownership.publish(raw.ownership);
+    const program = { ...base, ...raw, source: { ...base.source, ast },
+      projectTypes: { ...base.projectTypes, ...projectTypes },
+      callableValues: base.callableValues, classValues: base.classValues,
+      declarationGenericRequirements: base.declarationGenericRequirements,
+      names: { ...base.names, nameForSourceType: (_file, name) => name },
+      records: createRustRecordFixture({ flowReadProjection: raw.records.flowReadProjection,
+        contextualValueConversion: raw.records.contextualValueConversion, runtimeCarrier: raw.records.runtimeCarrier,
+        conversion: raw.records.conversion, ...ownership.records }, base.records) };
+    const projects = createRustProjectEmissionProducer(() => {});
+    analyzeRustProjectEmission({ program, nodes: [], producer: projects });
+    const admitted = { ...program, records: { ...program.records, ...projects.records } };
+    const reads = createRustValueReadProducer(() => {});
+    const projections = createRustValueProjectionProducer(() => {});
+    const conversions = createRustConversionEmissionProducer(() => {});
+    const issues = analyzeRustValueReads(admitted, [node], reads, projections, conversions);
+    assert.equal(issues.length, 0, "the actual pre-seal owner admits the ordered source-to-contextual composition");
+    const mappings = createRustProjectUnionMappingProducer(() => {});
+    const mappingIssues = analyzeRustProjectUnionMappings(admitted, [node], mappings);
+    assert.equal(mappingIssues.length, 0, "one actual native owner seals the exact composed arms");
+    return { ...admitted, records: { ...admitted.records, ...reads.records, ...projections.records, ...conversions.records, ...mappings.records } };
+  };
   for (const absent of [false, true]) {
     const rawCarrier = absent ? rustOptionTargetType(root) : root;
     const selectedFlow = selectRustFlowReadProjection(rawCarrier, source, projectTypes, definitions);
@@ -334,6 +373,9 @@ conversion: { get: () => undefined }}) } },
         expressionOverrides: new Map([[node, { expression, carrier: rawCarrier, valueForm: "owned" }]]),
         sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
         externalCrateNameByFileName: new Map() };
+      const raw = context.input.program;
+      context.input = createRustPlanningContext(prepare(raw));
+      context.syntheticNames = createRustSyntheticNameState(ast, node, []);
       const planned = planExpression(node, context);
       assert.equal(planned.kind, "match");
       assert.deepEqual(planned.expression, owned ? expression : { kind: "reference", expr: original });
@@ -350,9 +392,9 @@ conversion: { get: () => undefined }}) } },
       if (!absent && !owned) {
         const direct = planExpression(node, { ...context,
           expressionOverrides: new Map([[node, { expression, carrier: source, valueForm: "owned" }]]),
-          input: { program: { ...context.input.program, records: createRustRecordFixture({
+          input: createRustPlanningContext(prepare({ ...raw, records: createRustRecordFixture({
 flowReadProjection: { get: (subject) => undefined },
-runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined }}, context.input.program.records) } },
+runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined }}, raw.records) })),
         });
         assert.equal(direct.kind, "match");
         assert.deepEqual(direct.expression, { kind: "reference", expr: original });
@@ -362,8 +404,11 @@ runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : und
         definitions, (left, right) => relation(left, right) === "related"), undefined);
       assert.equal(composeRustUnionArmMappings(root, source, target, flow.arms, correspondence,
         definitions, () => false), undefined);
-      assert.equal(planRustProjectUnionMapping(node, original, conversion, source, target, context, false,
-        () => assert.fail("forged flow cannot reach native upcast"), { ...flow, arms: flow.arms.slice(1) }), undefined);
+      const missingComposition = error => error?.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+        error.diagnostic.sourceNode === node && error.diagnostic.message ===
+          "An admitted project union conversion requires its sealed native arm composition.";
+      assert.throws(() => planRustProjectUnionMapping(node, original, conversion, source, target, context, false,
+        () => assert.fail("forged flow cannot reach native upcast"), { ...flow, arms: flow.arms.slice(1) }), missingComposition);
       let getterCalls = 0;
       const getter = { ...flow };
       Object.defineProperty(getter, "selectedCarrier", { enumerable: true, get() { getterCalls++; return source; } });
@@ -371,8 +416,8 @@ runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : und
       cycle.sourceCarrier = cycle;
       for (const stale of [getter, cycle, { ...flow, extra: true }, { ...flow, selectedCarrier: target },
         { ...flow, sourceCarrier: rustOptionTargetType(derived) }]) {
-        assert.equal(planRustProjectUnionMapping(node, original, conversion, source, target, context, false,
-          () => assert.fail("malformed upstream metadata cannot reach native upcast"), stale), undefined);
+        assert.throws(() => planRustProjectUnionMapping(node, original, conversion, source, target, context, false,
+          () => assert.fail("malformed upstream metadata cannot reach native upcast"), stale), missingComposition);
       }
       assert.equal(getterCalls, 0);
     }

@@ -9,6 +9,8 @@ import { planRustUnionProjection } from "../../../dist/backend/planner/expressio
 import { planRustUnionConstruction } from "../../../dist/backend/planner/expressions/union-patterns.js";
 import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { selectRustUnionProjectionEmission } from "../../../dist/policy/conversions/union-mappings.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
 
 test("nested union payload paths are exact, immutable and independently checked", () => {
   const integer = rustSourcePrimitiveTargetType("uint64");
@@ -53,15 +55,17 @@ test("nested union payload paths are exact, immutable and independently checked"
   assert.deepEqual(constructed, [[nested, "Variant1"], [inner, "Variant0"]]);
   const node = fakeStatement({ kindName: "KindIdentifier" });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", statements: [node] });
-  const context = { input: { program: { typeDefinitions: definitions, records: createRustRecordFixture({}),
-    names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" },
-    source: { ast: fakeAstReader([sourceFile]) } } }, moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
-    externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(), diagnostics: [] };
+  const context = rustProgramPlanContext(rustProgramWithTypeEmissions([inner, nested, duplicate, integer, string, boolean], {
+    source: 'import type { uint64 } from "@tsonic/core/types.js";\ntype Inner = uint64 | string;\ntype Nested = boolean | Inner;\ntype Duplicate = uint64 | Inner;\nexport function probe(): void {}\n',
+    typeDefinitions: definitions,
+  }), { sourceFile });
   const expression = { kind: "path", path: "value" };
   assert.deepEqual(planRustUnionConstruction(contract.path, expression, context), {
     kind: "call", path: "Nested::Variant1", args: [{ kind: "call", path: "Inner::Variant0", args: [expression] }],
   });
-  const planned = planRustUnionProjection(node, expression, nested, integer, "shared-reference", context);
+  const emission = selectRustUnionProjectionEmission(nested, integer, definitions);
+  assert.equal(emission !== undefined, true, "the exact nested native path is admitted before rendering");
+  const planned = planRustUnionProjection(node, expression, emission, "shared-reference", context);
   assert.deepEqual(planned.expression, { kind: "reference", expr: expression });
   assert.equal(planned.arms[0].pattern.elements[0].path, "Inner::Variant0");
   assert.equal(planned.arms[0].expression.kind, "path");

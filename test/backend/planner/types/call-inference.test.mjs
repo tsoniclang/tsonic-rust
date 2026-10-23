@@ -7,6 +7,7 @@ import { rustNamedTargetType, rustVecTargetType, rustCallableInputTargetType, ru
 import { emptyRustTypeDefinitions, instantiateRustSourceUnionPayloads } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { createRustGeneratedUnionPlan } from "../../../../dist/analysis/objects/shapes/generated-union-plan.js";
+import { createRustStructuralShapePlan } from "../../../../dist/analysis/objects/shapes/structural-shape-plan.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 
@@ -61,6 +62,7 @@ const borrowedString = { kind: "reference", referent: { kind: "target-named", id
 const bottom = { kind: "target-specific", target: "rust", name: "never" };
 const context = rustProgramPlanContext(rustProgramWithTypeEmissions([
   scalar, input, { kind: "function-pointer", args: [input], result: scalar }, rustSourceOptionalTargetType(input),
+  rustSourceOptionalTargetType(rustCallableInputTargetType([{ kind: "opaque", id: "missing" }], scalar)),
   rustSourceOptionalTargetType(rustCallableInputTargetType([borrowedString], scalar)), callable, owner,
   bottom, rustVecTargetType(bottom),
 ]));
@@ -106,17 +108,19 @@ test("canonical physical union payloads retain enclosing anonymous type position
   for (const origin of ["authored", "generated"]) {
     const registry = createRustTypeDefinitionRegistry();
     const payloads = [scalar, rustFutureTargetType(scalar)];
-    const carrier = rustSourceUnionTargetType("/src/owner.ts", origin === "generated" ? "Union2" : "Completion", [], origin,
+    const carrier = rustSourceUnionTargetType("/src/index.ts", origin === "generated" ? "Union2" : "Completion", [], origin,
       origin === "generated" ? { kind: "physical", types: payloads } : { kind: "source" });
     const definition = { carrier, variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })) };
     assert.equal(registry.registerSourceUnion(definition, origin === "authored"), true);
     const physical = instantiateRustSourceUnionPayloads(carrier, [scalar, opaque], registry);
     assert.equal(physical !== undefined, true);
     const generated = createRustGeneratedUnionPlan(origin === "authored" ? [] : [definition], () => "owner", new Map());
-    const scope = { moduleName: "owner", moduleNameByFileName: new Map([["/src/owner.ts", "owner"]]),
-      structuralShapesModuleName: "shapes", externalCrateNameByFileName: new Map(), externalStructuralShapeModuleByFileName: new Map(),
-      input: { program: { typeDefinitions: registry.seal(), names: { nameForSourceType: (_file, name) => name },
-        callableValues: { native: { protocolForSourceItem: () => undefined } }, structuralShapes: generated } } };
+    const pointer = { kind: "function-pointer", args: [], result: physical };
+    const program = rustProgramWithTypeEmissions([carrier, physical, pointer], {
+      source: 'import type { nativeUint } from "@tsonic/core/types.js";\ntype Completion = nativeUint | Promise<nativeUint>;\nexport function probe(): void {}\n',
+      typeDefinitions: registry.seal(), structuralShapes: createRustStructuralShapePlan([], [], () => "owner", [], [], generated),
+    });
+    const scope = rustProgramPlanContext(program, { moduleName: "owner", moduleNameByFileName: new Map([["/src/index.ts", "owner"]]) });
     assert.equal(rustUnionTypePathInContext(carrier, scope), origin === "authored" ? "Completion"
       : `crate::shapes::${generated.unionForCarrier(carrier).targetName}`,
       "a nominal union pattern does not require a concrete Future payload annotation");
@@ -126,7 +130,7 @@ test("canonical physical union payloads retain enclosing anonymous type position
       assert.equal(rendered.genericArguments[1].type.kind, "impl-trait");
       assert.equal(rustUnionTypePathInContext(physical, scope), rendered.path,
         "patterns retain the canonical enum identity without emitting anonymous generic arguments");
-      assert.equal(rustTypeFromCarrierInContext({ kind: "function-pointer", args: [], result: physical }, scope, position) === undefined, true,
+      assert.equal(rustTypeFromCarrierInContext(pointer, scope, position) === undefined, true,
         "enclosing function pointer still rejects opaque types");
     }
     assert.equal(rustTypeFromCarrierInContext(physical, scope) === undefined, true, "anonymous storage is not admitted");

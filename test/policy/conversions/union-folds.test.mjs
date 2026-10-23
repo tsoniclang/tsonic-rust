@@ -19,6 +19,7 @@ import { materializeProviderOperationRow } from "../../../dist/providers/package
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
 
 test("union folds share exact generated/runtime paths and retain native integer leaf conversions", () => {
   const runtime = rustJsStringNumberTargetType();
@@ -126,9 +127,10 @@ test("native fold planning moves one input and emits unit constants without copy
     const conversion = selectRustSourceValueConversion(source, rustJsValueTargetType());
     const contract = rustValueConversionContract(conversion);
     const ast = fakeAstReader([sourceFile]);
-    const context = { input: { program: { source: { ast },
-      configuration: { edition: "2024" } } }, sourceFile, diagnostics: [], usedAliases: new Set(),
-      syntheticNames: createRustSyntheticNameState(ast, node, []) };
+    const program = rustProgramWithTypeEmissions([source, rustJsValueTargetType(),
+      ...contract.arms.flatMap(arm => [arm.carrier, ...arm.path.map(step => step.union)])], { surfaces: ["js"] });
+    const context = rustProgramPlanContext(program, { sourceFile,
+      syntheticNames: createRustSyntheticNameState(ast, node, []) });
     const expression = { kind: "call", path: "produce", args: [] };
     const planned = lowerRustValueConversion(contract, expression, context, node);
     assertNoTargetDiagnostics(context.diagnostics);
