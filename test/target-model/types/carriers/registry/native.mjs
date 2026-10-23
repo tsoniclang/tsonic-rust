@@ -1,6 +1,13 @@
 // Carrier registry rows (native): test and audit data for this compiler only; product code never reads it.
 export const nativeCarrierRegistry = Object.freeze([
   {
+    id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeTaskScopeTargetType",
+    kinds: ["target-specific"],
+    declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeTaskScopeTargetType" },
+    responsibility: "vocabulary/runtime-task-scope-target-type",
+    frozen: false,
+  },
+  {
     id: "src/target-model/types/carriers/native.ts#rustNativeTraitRef",
     kinds: ["trait-ref"],
     declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustNativeTraitRef" },
