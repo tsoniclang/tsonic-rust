@@ -6,6 +6,11 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustVecTargetType,
   rustJsArrayTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustCallablePhysicalCarrier, rustCallableConversionPhysical } from "../../../dist/policy/conversions/callable-physical.js";
+import { rustCallableConversionMatches } from "../../../dist/policy/conversions/callable.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 
 const projectTypes = Object.freeze({ definitionForCarrier: () => undefined, relationship: () => ({ kind: "unrelated" }) });
 const integer = rustSourcePrimitiveTargetType("int32");
@@ -83,4 +88,33 @@ test("native parameter admission refuses malformed and incompatible inputs befor
     "required native input cannot be manufactured");
   assert.equal(selectRustCallableParameterAdapters([ordinary], [parameter(text)], projectTypes, emptyRustTypeDefinitions) === undefined, true,
     "unrelated native inputs remain incompatible");
+});
+
+test("physical callable fields use one arity and uninhabited-error adapter into the fixed getter", () => {
+  const lifetime = { kind: "parameter", identity: "physical-field", name: "field" };
+  const infallible = { kind: "target-named", id: rustInfallibleTargetId };
+  const error = { kind: "target-named", id: "test:ExactGetterError" };
+  const source = rustCallablePhysicalCarrier(rustCallableTargetType([], integer, lifetime, infallible));
+  const target = rustCallableTargetType([integer], integer, undefined, error);
+  const adapter = selectRustCallableValueAdapter(source, target, projectTypes, emptyRustTypeDefinitions);
+  assert.equal(adapter?.kind, "conversion", "one adapter selects arity and error transport together");
+  assert.equal(adapter?.conversion.kind, "callable-adapter", "the canonical callable conversion owns the adaptation");
+  assert.equal(rustTargetTypeRefEquals(adapter?.sourceCarrier, source), true, "the actual two-type-argument physical field is retained");
+  assert.equal(adapter?.targetCarrier.genericArguments[0].lifetime === lifetime, true, "the getter retains the physical field lifetime");
+  assert.equal(adapter?.conversion.parameters.length, 0, "the original zero-argument source ignores the getter argument");
+  assert.equal(rustCallableConversionMatches(adapter?.conversion, source, adapter?.targetCarrier), true,
+    "the selected conversion admits the exact physical source");
+  const selected = rustCallableConversionPhysical(adapter?.conversion, rustCallablePhysicalSignature(source),
+    "physical-field.ts", emptyRustTypeDefinitions, true);
+  assert.equal(selected?.eliminatedInvokeError, true, "the uninhabited invocation error is eliminated natively");
+  assert.equal(rustTargetTypeRefEquals(selected?.error, error), true, "the target carries only its exact fixed error");
+  assert.equal(selected?.parameters.length, 1, "the getter keeps its full fixed parameter list");
+  assert.equal(selected?.arguments.length, 0, "the physical source is still invoked without arguments");
+  assert.equal(selected?.resultPlan.kind, "identity", "the native result is not boxed or converted");
+  for (const changed of [
+    rustCallablePhysicalCarrier(rustCallableTargetType([], integer, lifetime, { kind: "target-named", id: "test:OtherError" })),
+    rustCallablePhysicalCarrier(rustCallableTargetType([integer, integer], integer, lifetime, infallible)),
+    rustCallablePhysicalCarrier(rustCallableTargetType([], text, lifetime, infallible)),
+  ]) assert.equal(selectRustCallableValueAdapter(changed, target, projectTypes, emptyRustTypeDefinitions) === undefined, true,
+    "a real incompatible error, wider source arity or unrelated result is not silently repaired");
 });

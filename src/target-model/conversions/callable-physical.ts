@@ -8,6 +8,7 @@ import { type RustNativeErrorSource } from "../types/native-error-joins.js";
 import { type RustCallableConversion } from "./callable.js";
 
 import { type RustValueConversionContract } from "./contracts.js";
+import { rustCallableProtocol } from "../types/carriers/callables.js";
 
 export interface RustCallablePhysicalSignature {
   readonly parameters: readonly TargetTypeRef[];
@@ -46,4 +47,12 @@ export function rustCallablePhysicalSignature(carrier: TargetTypeRef): RustCalla
   return tuple?.kind !== "tuple" || resultArguments?.length !== 2 ? undefined : Object.freeze({
     parameters: tuple.elements, result: resultArguments[0]!, error: resultArguments[1]!,
   });
+}
+
+export function rustCallableConversionSource(carrier: TargetTypeRef): ReturnType<typeof rustCallableProtocol> {
+  const physical = rustCallablePhysicalSignature(carrier);
+  if (physical === undefined) return rustCallableProtocol(carrier);
+  const named = rustNamedTypeCarrierValue(carrier);
+  const lifetime = named?.genericArguments?.[0];
+  return Object.freeze({ ...physical, ...(lifetime?.kind === "lifetime" ? { lifetime: lifetime.lifetime } : {}) });
 }
