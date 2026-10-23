@@ -62,7 +62,7 @@ export function planRustSourceFieldUpdate(
         overrides.set(fieldExpression, {
           expression: storage,
           carrier: field.resultCarrier,
-          valueForm: "storage",
+          valueForm: "storage", storageForm: "plain",
         });
         const target = operand === fieldExpression
           ? storage
@@ -112,7 +112,7 @@ export function planRustSourceFieldUpdate(
   overrides.set(fieldExpression, {
     expression: fieldPath,
     carrier: field.resultCarrier,
-    valueForm: "storage",
+    valueForm: "storage", storageForm: "plain",
   });
   for (const override of projection.overrides) {
     overrides.set(override.node, override.value);

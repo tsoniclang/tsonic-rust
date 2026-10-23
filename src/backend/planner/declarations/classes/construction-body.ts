@@ -130,7 +130,7 @@ export function planRustConstructionBody(
           : storage.location(slot.expression);
         if (location === undefined) {
           if (projection.storage !== "value") failRustPlannerInvariant("Captured construction storage requires its admitted native owner syntax.", expression.node);
-          overrides.set(expression.node, { expression: slot.expression, carrier: slot.carrier, valueForm: "storage" });
+          overrides.set(expression.node, { expression: slot.expression, carrier: slot.carrier, valueForm: "storage", storageForm: "plain" });
         } else {
           const selectedPoint = plan.points.get(expression.node) ?? point;
           const initialized = selectedPoint.initializedFields.includes(slot.declaration);
@@ -152,7 +152,7 @@ export function planRustConstructionBody(
           if (receiverType?.kind !== "named") failRustPlannerInvariant("Construction requires its admitted same-root native view type syntax.", receiverNode);
           receiver = renderRustReceiverAlias(root, receiverType, false);
         }
-        overrides.set(receiverNode, { expression: receiver, carrier: substituted, valueForm: "storage" });
+        overrides.set(receiverNode, { expression: receiver, carrier: substituted, valueForm: "storage", storageForm: "plain" });
       }
     }
     const allocated = exposure?.expression !== node || frame === undefined || frameCounter === undefined || retainedFrame?.kind !== "path"

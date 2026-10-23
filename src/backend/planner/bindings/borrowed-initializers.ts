@@ -22,7 +22,7 @@ export function planRustBorrowedInitializer(
   const name = allocateRustSyntheticName(context.syntheticNames, "borrowed_owner");
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(selection.receiver, { expression: { kind: "path", path: name },
-    carrier: selection.carrier, valueForm: "storage" });
+    carrier: selection.carrier, valueForm: "storage", storageForm: "plain" });
   const value = planExpression(expression, { ...context, expressionOverrides: overrides });
   if (value === undefined) failRustPlannerInvariant("An admitted borrowed initializer requires its native selected value.", expression);
   return {

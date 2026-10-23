@@ -147,7 +147,7 @@ function planRustSourceUnionFieldUpdate(operand: Node, fieldExpression: Node,
       field.resultCarrier, storage => {
         const overrides = new Map(context.expressionOverrides ?? []);
         for (const override of projection.overrides) overrides.set(override.node, override.value);
-        overrides.set(fieldExpression, { expression: storage, carrier: field.resultCarrier, valueForm: "storage" });
+        overrides.set(fieldExpression, { expression: storage, carrier: field.resultCarrier, valueForm: "storage", storageForm: "plain" });
         const target = operand === fieldExpression ? storage : planRustDirectStorage(operand,
           { ...context, expressionOverrides: overrides }, projection.inputOverrides);
         return target === undefined ? undefined : planRustBorrowedUpdateLocation(target, update, step, returnsPrevious, context);

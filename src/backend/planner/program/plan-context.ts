@@ -20,11 +20,13 @@ import {
   rustTargetIdentifier,
 } from "../../../target-model/names/identifiers.js";
 
-export interface RustEffectiveExpressionOverride {
+export type RustEffectiveExpressionOverride = {
   readonly expression: RustExpr;
   readonly carrier: TargetTypeRef;
-  readonly valueForm: "value" | "shared-reference" | "storage";
-}
+} & (
+  | { readonly valueForm: "value" | "shared-reference" }
+  | { readonly valueForm: "storage"; readonly storageForm: "plain" | "borrow-guard" }
+);
 
 export interface RustFlowReadOverride {
   readonly expression: RustExpr;

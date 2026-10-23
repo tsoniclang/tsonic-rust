@@ -117,7 +117,7 @@ test("explicit native str conversion creates a view without copying or reevaluat
 test("typed shared identity inputs use native deref coercion without changing semantic views", () => {
   const pointer = { kind: "path", path: "guard" };
   const expression = { kind: "dereference", pointer };
-  const selected = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage" });
+  const selected = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage", storageForm: "plain" });
   assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, expression, input, false), {
     kind: "reference", expr: pointer,
   });
