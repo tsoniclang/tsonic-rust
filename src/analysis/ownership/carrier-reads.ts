@@ -46,6 +46,10 @@ export function analyzeRustCarrierReads(program: Omit<RustAnalysisProgram, "reac
       if (stored !== undefined) pending.push(stored);
     }
   }
+  for (const selected of program.classValues.instanceViewImplementations)
+    for (const view of program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName) ?? [])
+      for (const member of view.fields) if (member.readAdapter !== undefined)
+        pending.push(member.readAdapter.sourceCarrier, member.readAdapter.targetCarrier);
   for (const shape of program.structuralShapes.instances) {
     pending.push(shape.carrier, ...shape.fields.map(field => field.carrier));
     for (const field of shape.fields) if (field.nativeLayout !== undefined) pending.push(rustLocationTargetType(field.carrier));

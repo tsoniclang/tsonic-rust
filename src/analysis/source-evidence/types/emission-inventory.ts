@@ -53,6 +53,8 @@ export function rustDeclarationEmissionCarriers(program: Omit<RustAnalysisProgra
   for (const definition of new Set([...program.structuralShapes.definitions, ...program.structuralShapes.instances]))
     collect(program.records.structuralShapeEmission.get(definition));
   for (const sourceFile of program.sourceFiles) collect(program.records.frameDeclarations.get(sourceFile));
+  for (const selected of program.classValues.instanceViewImplementations)
+    collect(program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName));
   for (const node of nodes) {
     collect(program.records.nativeDeclaration.get(node));
     collect(program.records.lexicalFunction.get(node));

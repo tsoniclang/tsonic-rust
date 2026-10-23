@@ -20,6 +20,8 @@ import { rustCallableInputProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableOperand } from "../callables/native-conversions.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { asSourceNode } from "@tsonic/target-api/source";
+import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import { rustNativeCallablePhysicalSource } from "../../policy/conversions/native-callables.js";
 
 export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustCallableConversionProducer): void {
@@ -43,9 +45,8 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     producer.operand(node, source, value);
     return value;
   };
-  const contract = (node: Node, conversion: RustCallableConversion): void => {
+  const contract = (node: Node, conversion: RustCallableConversion, source: RustNativeCallablePhysicalSource | undefined): void => {
     if (producer.records.callableContract.get(node, conversion) !== undefined) return;
-    const source = operand(node, conversion.source)?.physical;
     const file = program.source.ast.getSourceFile(node);
     const fileName = file === undefined ? undefined : program.source.ast.getFileName(file);
     const physical = source === undefined || fileName === undefined ? undefined
@@ -126,12 +127,25 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
     const read = program.records.valueRead.get(node);
     for (const source of [program.records.runtimeCarrier.get(node)?.carrier, read?.source, read?.contextualInput]) operand(node, source);
     const selected = program.records.contextualValueConversion.get(node);
-    if (selected?.conversion.kind === "callable-adapter") contract(node, selected.conversion);
+    if (selected?.conversion.kind === "callable-adapter") contract(node, selected.conversion,
+      operand(node, selected.conversion.source)?.physical);
     const joinWrite = program.callableValues.nativeStorage.joinWriteFor(node) ?? erasedPayloadWrite(node) ?? concreteParameterWrite(node);
     if (joinWrite !== undefined) producer.joinWrite(node, joinWrite);
     const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "source-conversion" && operation.conversion?.kind === "callable-input") operand(node, operation.conversion.source);
   }
+  const structuralAdapter = (node: Node, adapter: RustCallableValueAdapter): void => {
+    if (adapter.kind === "option-some" || adapter.kind === "option-map") structuralAdapter(node, adapter.element);
+    else if (adapter.kind === "conversion" && adapter.conversion.kind === "callable-adapter")
+      contract(node, adapter.conversion, rustNativeCallablePhysicalSource(adapter.sourceCarrier,
+        { kind: "selected", carrier: adapter.sourceCarrier, inputs: [], erased: true }));
+  };
+  const views = new Set(program.classValues.instanceViewImplementations.flatMap(selected =>
+    program.records.structuralViewImplementations.get(selected.declaration, selected.ownerFileName) ?? []));
+  for (const view of views) for (const member of view.fields)
+    if (member.field !== undefined && member.readAdapter !== undefined &&
+      rustCallablePhysicalSignature(member.readAdapter.sourceCarrier) !== undefined)
+      structuralAdapter(member.declaration, member.readAdapter);
   for (const occurrence of program.physicalEmissionContexts.sourceOccurrences)
     for (const { slot, input } of occurrence.inputs) {
       const steps = input.conversion.kind === "semantic" ? [input.conversion]

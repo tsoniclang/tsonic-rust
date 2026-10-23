@@ -16,6 +16,9 @@ import { rustClassConstructorTargetType } from "../../target-model/types/carrier
 import { authoredTypeParameterNames, generatedTypeParameterNames } from "@tsonic/target-api/source";
 import { rustTypeParameterFromSourceContract } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import { rustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
+import { selectRustCallableValueAdapter } from "../../policy/conversions/callable-adapters.js";
 
 export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgram, "reachability">, producer: RustClassEmissionProducer, nodes: readonly Node[]): void {
   const contexts = new WeakMap<Node, Map<string, RustClassImplementationContext>>();
@@ -98,7 +101,30 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
   for (const view of program.classValues.instanceViewImplementations) {
     const requirements = program.declarationGenericRequirements.contractForStructuralView(view);
     if (requirements === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its sealed native generic requirements.", view.declaration);
-    producer.structuralViewRequirements(view, requirements);
+    const fields = view.fields.map(member => {
+      if (member.field === undefined || member.readAdapter === undefined ||
+        rustCallableProtocol(member.field.resultCarrier) === undefined) return member;
+      const stored = program.callableValues.projectFieldStorage.get(member.declaration);
+      const instantiated = stored === undefined ? undefined
+        : program.projectTypes.instantiateMemberCarrier(member.declaration, view.sourceCarrier, stored);
+      if (instantiated === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted callable field view requires its exact instantiated physical storage.", member.declaration);
+      const physical = mapRustTargetTypes(instantiated, carrier => {
+        const reference = rustProducerErrorReference(carrier);
+        if (reference === undefined) return carrier;
+        const error = program.errorRegions.producerError(reference);
+        if (error === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted callable field view requires its closed producer error.", member.declaration);
+        return error;
+      });
+      const readAdapter = selectRustCallableValueAdapter(physical, member.readAdapter.targetCarrier,
+        program.projectTypes, program.typeDefinitions);
+      if (readAdapter === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted callable field view requires its exact physical-to-getter adaptation.", member.declaration);
+      return Object.freeze({ ...member, readAdapter });
+    });
+    const published = Object.freeze({ ...view, fields: Object.freeze(fields) });
+    producer.structuralViewRequirements(published, requirements);
     const definition = program.projectTypes.definitionForDeclaration(view.declaration);
     const representation = program.objectRepresentations.representationFor(definition);
     if (definition === undefined || representation === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural view requires its exact source representation.", view.declaration);
@@ -110,7 +136,7 @@ export function analyzeRustClassImplementations(program: Omit<RustAnalysisProgra
     let files = instances.get(view.declaration);
     if (files === undefined) { files = new Map(); instances.set(view.declaration, files); }
     const views = files.get(view.ownerFileName) ?? [];
-    views.push(view);
+    views.push(published);
     files.set(view.ownerFileName, views);
     for (const member of view.fields) {
       const callable = member.callable;

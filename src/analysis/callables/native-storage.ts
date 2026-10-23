@@ -347,6 +347,21 @@ export function createRustNativeStorageQueries(input: {
       }
       if (rustCallableProtocol(current) !== undefined) {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
+        const operation = selectedSubject.kind === "value" && selectedSubject.projection.length === 0
+          ? input.records.targetOperation.get(selectedSubject.node) : undefined;
+        const property = operation?.kind === "source-field" && operation.storage === "structural-object"
+          ? input.structuralShapes.field(operation.receiverCarrier, operation.storageIndex) : undefined;
+        if (operation?.kind === "source-field" && property?.storage === "property" && property.method !== true) {
+          const generics = genericsFor(ownerFor(selectedSubject.node), bindings, depth + 1);
+          if (generics.kind === "unresolved") return fail(generics.reason);
+          const carrier = callableValueCarrier(substituteRustTargetGenerics(operation.resultCarrier,
+            generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts));
+          const physical = carrier === undefined || !rustCallableInvocationSignaturesMatch(current, carrier)
+            ? undefined : rustCallablePhysicalCarrier(carrier);
+          if (physical === undefined) return fail("A structural callable property requires its exact selected getter storage.");
+          erasedPhysicals.add(physical);
+          return physical;
+        }
         const selected = input.storage.boundValueFrontierFor(selectedSubject, bindings, boundaries, position);
         if (selected.kind === "unresolved") return fail(selected.reason);
         let physical: TargetTypeRef | undefined;
