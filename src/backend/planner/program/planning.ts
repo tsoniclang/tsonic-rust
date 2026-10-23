@@ -49,6 +49,7 @@ import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { applyRustFoundationImports } from "../../target-ast/normalization/foundation-imports.js";
 import { planRustAsyncExecution } from "./async-execution.js";
 import { planRustOwnedBinaryEntry, rustBinaryExitCodeType } from "./owned-entry.js";
+import { planRustNativeTaskEntry } from "./native-task-entry.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
@@ -151,6 +152,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const outputType = emission.configuration.outputType;
   const initialization = emission.initialization;
   const entrySourceFile = initialization.entrySourceFile;
+  const nativeTasks = entrySourceFile === undefined ? undefined : input.program.records.nativeTaskUse.get(entrySourceFile);
+  if (nativeTasks !== undefined && nativeTasks.kind !== "entry")
+    failRustPlannerInvariant("An admitted executable requires its selected native task entry role.", entrySourceFile);
   const moduleInitializers = initialization.root.modules.length === 0
     ? []
     : planRustModuleInitializers(
@@ -200,6 +204,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     crateInitializerFunctionName,
     typeRenderingContextFor(rootComponentPlan),
     rootBindings,
+    nativeTasks,
   );
   if (initialization.root.modules.length > 0 && crateInitializer === undefined) {
     failRustPlannerInvariant(
@@ -311,7 +316,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const propagateInitialization = (expression: import("../../target-ast/syntax/nodes.js").RustExpr) =>
       initializerError === undefined ? errors.lifecycle(expression, initializerOperandErrorType)
         : errors.propagate(initializerError, expression);
-    const initializationStatements = crateInitializer === undefined
+    const initializationStatements = nativeTasks !== undefined
+      ? crateInitializer === undefined
+        ? failRustPlannerInvariant("An admitted native task entry requires its exact generated initializer.", entrySourceFile)
+        : [{ kind: "expr" as const, expr: errors.lifecycle(executeAsync(planRustNativeTaskEntry({
+            task: nativeTasks, initialization: initialization.root, initializer: crateInitializer,
+            modules: moduleInitializers, lifecycle: initialization.binary.lifecycle, lifecycleType: lifecycleErrorType,
+            rendering: typeRenderingContextFor(rootComponentPlan), crateName,
+          })), lifecycleErrorType) }]
+      : crateInitializer === undefined
       ? []
       : [{
           kind: "expr" as const,
@@ -364,6 +377,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       return rejectedTargetStage(diagnostics);
     }
     const mainFallible = crateInitializer?.errorType !== undefined ||
+      nativeTasks !== undefined ||
       workerEntries.entries.length > 0 ||
       activeHooks.some((epilogue) => epilogue.isFallible === true);
     const completionStatements = mainFallible

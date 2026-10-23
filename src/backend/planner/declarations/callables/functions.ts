@@ -34,6 +34,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
+import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
 
 export interface RustFunctionItemPlan {
   readonly item: Extract<RustItem, { readonly kind: "function" }>;
@@ -59,12 +60,13 @@ function planRustFunctionParameters(
     return type === undefined ? undefined : { name: parameter.name, type };
   });
   if (leadingParams.some(parameter => parameter === undefined)) failRustPlannerInvariant("An admitted callable requires its complete native function plan.", node);
+  const tasks = planRustNativeTaskOwner(node, leading.context);
   return {
     params: [...leadingParams as NonNullable<typeof leadingParams[number]>[],
-      ...parameterPlan.params, ...environment.parameters],
+      ...parameterPlan.params, ...environment.parameters, ...tasks.parameters],
     parameterPlan,
     syntheticNames,
-    context: leading.context,
+    context: tasks.context,
   };
 }
 

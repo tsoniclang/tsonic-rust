@@ -13,6 +13,7 @@ import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.j
 import type { RustSourcePackageErrorBoundary, RustSourcePackageErrorPlan } from "../../../target-model/records/source-package-errors.js";
 import { rustSourceItemIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
+import type { RustNativeTaskScope } from "../../../target-model/records/native-tasks.js";
 import type { RustErrorDomain } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import {
@@ -98,6 +99,11 @@ export interface RustPlanContext {
   readonly publishesImplementationAbi: boolean;
   readonly diagnostics: TargetDiagnostic[];
   readonly errorDomain: RustErrorDomain;
+  readonly nativeTaskScope?: {
+    readonly scope: RustNativeTaskScope;
+    readonly expression: RustExpr;
+    readonly borrowed: boolean;
+  };
   readonly sourcePackageErrors: RustSourcePackageErrorPlan;
   readonly planBlock: RustBlockPlanner;
   readonly syntheticNames?: RustSyntheticNameState;

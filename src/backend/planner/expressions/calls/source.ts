@@ -26,6 +26,7 @@ import { planRustUnionMethodCall } from "./union-methods.js";
 import { planRustNativeInputInvocation, planRustNativeInputPropagation } from "./native-input.js";
 import { planRustGenericCallableErrorPropagation } from "./generic-errors.js";
 import { planRustSourceErrorPropagation } from "./source-errors.js";
+import { planRustNativeTaskCallArguments } from "../../program/native-tasks.js";
 
 export function planSelectedSourceCall(node: Node, callee: Node | undefined, argumentPlan: RustSourceArgumentEvaluation,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>, context: RustPlanContext): RustExpr | undefined {
@@ -75,6 +76,7 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
     retained = { kind: "path", path: name };
   }
   const native = context.input.program.records.nativeInputInvocation.get(node)?.call;
+  const taskArguments = planRustNativeTaskCallArguments(node, context);
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
     case "constructor-value": {
@@ -91,11 +93,13 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
       const captures = declaration === undefined ? [] : planRustLexicalFunctionArguments(declaration, context);
       if (path === undefined || captures === undefined) failRustPlannerInvariant("An admitted function call requires its native source path and capture arguments.", node);
       const environment = rustClassStaticEnvironmentForCall(declaration, context, retained);
-      planned = { kind: "call", path, args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped, ...captures],
+      planned = { kind: "call", path, args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped, ...captures, ...taskArguments],
         genericArguments: rustClassStaticCallGenericArguments(declaration, callGenerics, context) };
       break;
     }
     case "method": {
+      if (taskArguments.length !== 0)
+        failRustPlannerInvariant("A task-scoped method requires an admitted native direct-function ABI.", node);
       const name = bodyName ?? (fact.target.dispatch === undefined ? specialization?.targetName ?? fact.target.name : fact.target.name);
       const receiverNode = rustMemberAccessReceiver(context.input.program.source.ast, callee);
       if (fact.target.dispatch !== undefined) {
@@ -129,6 +133,8 @@ export function planSelectedSourceCall(node: Node, callee: Node | undefined, arg
       break;
     }
     case "static-method": {
+      if (taskArguments.length !== 0)
+        failRustPlannerInvariant("A task-scoped method requires an admitted native direct-function ABI.", node);
       const owner = rustCallTypeFromCarrierInContext(fact.target.typeCarrier, context);
       const environment = rustClassStaticEnvironmentForCall(declaration, context, retained);
       if (owner !== undefined) planned = { kind: "associated-call", owner, method: bodyName ?? specialization?.targetName ?? fact.target.name,

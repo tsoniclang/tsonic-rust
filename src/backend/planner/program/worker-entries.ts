@@ -86,6 +86,7 @@ export function planRustWorkerEntries(input: {
       functionName,
       input.typeRenderingContextFor(component),
       occupied,
+      undefined,
     );
     if (selection.modules.length > 0 && initializer === undefined) {
       failRustPlannerInvariant(

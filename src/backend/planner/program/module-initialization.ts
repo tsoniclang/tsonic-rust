@@ -2,11 +2,12 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
+import type { RustNativeTaskUse } from "../../../target-model/records/native-tasks.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustSourcePackageInitializerPlan } from "../../../target-model/records/source-packages.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
-import type { RustTypeRenderingContext } from "../types/render.js";
+import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { planRustSelectedErrorRegion } from "./error-regions.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
@@ -62,6 +63,7 @@ export function planRustCrateInitializer(
   functionName: string,
   rendering: RustTypeRenderingContext,
   occupiedNames: ReadonlySet<string>,
+  nativeTasks: Extract<RustNativeTaskUse, { readonly kind: "entry" }> | undefined,
 ): RustCrateInitializer | undefined {
   if (selection.modules.length === 0) return undefined;
   const selected = selection.error;
@@ -83,7 +85,12 @@ export function planRustCrateInitializer(
   for (const selectedModule of selection.modules) {
     const initializer = bySourceFile.get(selectedModule.sourceFile);
     if (initializer === undefined) failRustPlannerInvariant("An admitted initializer requires its exact sealed module invocation.", selectedModule.sourceFile);
-    const call = { kind: "call" as const, path: initializer.path, args: [] };
+    const task = rendering.input.program.records.nativeTaskUse.get(selectedModule.sourceFile);
+    if (task !== undefined && (task.kind !== "entry" || nativeTasks === undefined))
+      failRustPlannerInvariant("An admitted task-aware module requires its selected executable entry input.", selectedModule.sourceFile);
+    const call = { kind: "call" as const, path: initializer.path,
+      args: task?.kind === "entry" && task.initializer !== undefined
+        ? [{ kind: "path" as const, path: task.scope.name }] : [] };
     const execution = selectedModule.asynchronous ? { kind: "await" as const, expr: call } : call;
     const nativeSource = selected.kind === "native" ? selected.sources.find(source => source.kind === "module" &&
       source.sourceFile === selectedModule.sourceFile) : undefined;
@@ -101,8 +108,13 @@ export function planRustCrateInitializer(
     genericArguments: [{ kind: "type", type: { kind: "unit" } }, { kind: "type", type: errorType }],
     args: [{ kind: "path", path: "()" }],
   } });
+  const taskType = nativeTasks?.initializer === undefined ? undefined
+    : rustTypeFromCarrierInContext(nativeTasks.initializer.inputCarrier, rendering);
+  if (nativeTasks?.initializer !== undefined && taskType === undefined)
+    failRustPlannerInvariant("An admitted entry initializer requires its selected native scope input type.");
   items.push({ kind: "function", name: functionName, visibility: "public", generics: emptyRustGenerics,
-    attrs: [rustHiddenAttribute], ...(selection.asynchronous ? { isAsync: true } : {}), params: [],
+    attrs: [rustHiddenAttribute], ...(selection.asynchronous ? { isAsync: true } : {}),
+    params: taskType === undefined ? [] : [{ name: nativeTasks!.scope.name, type: taskType }],
     ...(errorType === undefined ? {} : { errorType }), body: { statements } });
   return Object.freeze({ functionName, asynchronous: selection.asynchronous, errorJoinName: joinName, errorBoundary: boundary,
     ...(errorType === undefined ? {} : { errorType }), ...(errorName === undefined ? {} : { errorName }),
