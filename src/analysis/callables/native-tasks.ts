@@ -7,6 +7,7 @@ import type { RustAnalysisContext } from "../program/context.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustAwaitSelection } from "../../target-model/types/await.js";
+import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
 import type { RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
 import { finalizeRustDiscardedAwaitSelection } from "./await-values.js";
@@ -17,6 +18,7 @@ import { selectRustSourceProfileCompletionKind } from "../../policy/operations/s
 import { resolveProviderTypeIdentity } from "../../policy/identities/provider-types.js";
 import { providerCarrierFromRelations } from "../../policy/types/project/provider-instantiation.js";
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
+import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 
 export interface RustNativeTaskCompletion extends SourceNativeTaskSpawn {
@@ -36,9 +38,10 @@ export function completeRustNativeTaskValues(
     const selection = carrier === undefined ? undefined : finalizeRustDiscardedAwaitSelection(carrier, branch =>
       known !== undefined && rustFutureValueMatchesCarrier(known, branch, walk.context.typeDefinitions)
         ? known : rustFutureValueForStoredBranch(walk, spawn.operand, branch, errors), walk.context.typeDefinitions);
-    if (selection === undefined) {
+    if (selection === undefined || rustAwaitSelectionLeaves(selection).some(leaf => leaf.future === undefined ||
+      leaf.future.errorBoundary === "js-rejection" || rustJsPromiseOutputTargetType(leaf.carrier) !== undefined)) {
       diagnostics.push({ code: "RUST_NATIVE_TASK_COMPLETION_NOT_CLOSED", category: "error", source: "tsonic-rust",
-        sourceNode: spawn.node, message: "A native task requires its complete existing future effects and discarded completion topology.",
+        sourceNode: spawn.node, message: "A native task requires its complete native future effects and discarded completion topology; provider-owned Promises retain their provider executor.",
         evidence: ["target.capability=rust.native-tasks"] });
     } else completed.push(Object.freeze({ ...spawn, selection }));
   }
@@ -67,7 +70,8 @@ export function analyzeRustNativeTaskGraph(input: {
       .some(member => nativeCompletion(member, node, depth + 1));
     const symbol = semantics.declarations.typeAliasSymbol(type) ?? semantics.declarations.typeSymbol(type);
     const name = resolveOwnedSourceProfileTypeName(symbol, { ast, currentSemantics: semantics }, context.sourceProfiles);
-    if (name !== undefined && selectRustSourceProfileCompletionKind(name, context.jsEnabled) === "native-future") return true;
+    const completion = name === undefined ? undefined : selectRustSourceProfileCompletionKind(name, context.jsEnabled);
+    if (completion !== undefined) return completion === "native-future";
     const identity = resolveProviderTypeIdentity(semantics.facts.typeSubjects(type), { source });
     const row = identity === undefined ? undefined : providerCarrierFromRelations(identity, { providerTypes: context.providerSemantics.types });
     return isRustNativeFutureCarrier(row?.targetCarrier);

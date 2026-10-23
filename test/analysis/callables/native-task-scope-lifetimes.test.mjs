@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 
 function declarationNamed(program, name) {
@@ -51,4 +51,45 @@ test("an ordinary task-free function gains no hidden input or retained lifetime"
   assert.equal(program.records.retainedEnvironment.get(declaration) === undefined, true, "no scope lifetime is introduced");
   assert.equal(program.callableValues.nativeProducers.forDeclaration(declaration).environment.length, 0,
     "the native producer retains its original empty environment");
+});
+
+test("a direct non-virtual concrete method uses the existing ordinary task scope argument", () => {
+  const { program } = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `async function body(): Promise<void> { return; }
+class Scheduler { schedule(): void { void body(); } }
+const scheduler = new Scheduler(); scheduler.schedule();`,
+  } });
+  const nodes = [];
+  const pending = program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile);
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    nodes.push(node);
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  const declaration = nodes.find(node => program.source.ast.is.IsMethodDeclaration(node));
+  assert.equal(declaration !== undefined, true, "the method owner is the actual checked declaration");
+  assert.equal(program.records.nativeTaskUse.get(declaration)?.kind === "owner", true,
+    "the concrete method receives the same ordinary hidden formal as a function");
+  const call = nodes.find(node => program.records.nativeTaskUse.get(node)?.kind === "call" &&
+    program.records.targetOperation.get(node)?.target?.form === "method");
+  assert.equal(call !== undefined, true, "the exact method call has the selected scope argument");
+  const spawn = nodes.find(node => program.records.nativeTaskUse.get(node)?.kind === "spawn");
+  assert.equal(spawn !== undefined, true, "the explicit void has one native task owner");
+  const selected = program.records.nativeTaskUse.get(spawn);
+  assert.equal(program.promiseResults.get(selected.operand)?.disposition.kind, "discarded",
+    "the original native future retains its checked source use");
+  assert.equal(program.promiseResults.get(selected.operand)?.discard === undefined, true,
+    "the selected native task is not also observed or spawned by the provider discard owner");
+});
+
+test("a transitive native task requirement cannot add scope parameters to a constructor", () => {
+  const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType: "bin" } }, files: {
+    "index.ts": `async function body(): Promise<void> { return; }
+function schedule(): void { void body(); }
+class Scheduler { constructor() { schedule(); } }
+new Scheduler();`,
+  } });
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED"), true,
+    "the unsupported constructor boundary is refused at its source owner");
+  assert.equal(result.artifacts.length, 0, "a rejected hidden constructor ABI emits nothing");
 });

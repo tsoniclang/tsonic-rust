@@ -5,10 +5,10 @@ import { createRustAnalysisContext } from "../../../dist/analysis/program/contex
 import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
 import { analyzeRustDispatchContextCatalog, analyzeRustRuntimeReferences } from "../../../dist/analysis/project/index.js";
 
-function analyze(text, outputType = "bin") {
+function analyze(text, outputType = "bin", surfaces = []) {
   let context;
   let stage;
-  const { result } = compileRust({ surfaces: [], target: { id: "rust", options: { outputType } },
+  const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType } },
     files: { "index.ts": text }, compileTarget(request) {
       const references = analyzeRustRuntimeReferences(request.input.runtimeReferences, request.configuration.foundation, request.runtimeCrates);
       assert.equal(references.kind, "resolved", "the native runtime references are admitted");
@@ -64,6 +64,15 @@ test("programs without native explicit void tasks have no scope participants", (
   const { graph } = admitted(analyze("function add(value: number): number { return value + 1; } add(1);"));
   assert.equal(graph.spawns.length + graph.owners.length + graph.calls.length + graph.entries.length, 0,
     "an unrelated native program has no executor ownership, parameters, captures or task queue work");
+});
+
+test("a provider-owned JS Promise keeps its existing executor instead of a native task scope", () => {
+  const { graph } = admitted(analyze(`async function body(): Promise<void> { return; }
+function schedule(): void { void body(); }
+schedule();`, "bin", ["js"]));
+  assert.equal(graph.spawns.length, 0, "the checked JS Promise representation is not a native task candidate");
+  assert.equal(graph.owners.length + graph.calls.length + graph.entries.length, 0,
+    "a provider-owned Promise introduces no competing scope signature or executor");
 });
 
 test("a public package scheduling function is refused before sealing its implicit ABI", () => {
