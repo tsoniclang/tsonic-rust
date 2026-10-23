@@ -8,7 +8,8 @@ import { createRustNativeStorageQueries } from "../../../dist/analysis/callables
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
-import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCaptureLayouts, createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -31,7 +32,11 @@ function fixture(text, options = {}) {
   assert.equal(participation.kind, "resolved", "the checked source has complete native participation");
   const nativeNodes = participation.nodes;
   const nativeNodeSet = new Set(nativeNodes);
-  const genericRegistry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), program.records, program.names, source.navigation,
+  const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] };
+  const layouts = createRustNativeCaptureLayouts({ records: program.records, nativeTasks,
+    retainedEnvironments: createRustRetainedEnvironmentQueries({ source, sourceStorage: storage,
+      sourceLifetimes: program.sourceLifetimes, nativeTasks }) });
+  const genericRegistry = createRustGenericCallablePlan(source.ast, layouts, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), program.records, program.names, source.navigation,
     node => nativeNodeSet.has(node));
   const generic = genericRegistry.plan;
   let physical;
@@ -56,7 +61,7 @@ function fixture(text, options = {}) {
   input.producers = producers;
   const guardedQueries = Proxy.revocable(createRustNativeStorageQueries({ ...input, native }), {});
   const queries = guardedQueries.proxy;
-  const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
+  const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries, layouts });
   physical = genericRegistry.initializePhysical({ ...input, native, captures,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const plan = finalizeRustNativeParameterStorage(input, queries);

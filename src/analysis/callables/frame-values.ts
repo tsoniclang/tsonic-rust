@@ -23,6 +23,7 @@ import type { RustProjectConstructionPlan } from "../project-types/construction-
 import { prepareRustRetainedFrameCounters } from "./frame-counter-storage.js";
 
 import type { RustFrameCallableImplementation, RustFrameCallableEntryDefinition, RustFrameCallableBinding, RustFrameCallableDefinition } from "../../target-model/records/frame-callables.js";
+import type { RustNativeCaptureLayouts } from "./native-captures.js";
 
 export interface RustFrameCallablePlanRegistry extends RustFrameCallablePlan {
   sealCounters(constructions: readonly RustProjectConstructionPlan[]): RustFrameCallablePlan;
@@ -38,6 +39,7 @@ export function createRustFrameCallablePlan(input: {
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
+  readonly layouts: RustNativeCaptureLayouts;
 }): RustFrameCallablePlanRegistry {
   const definitions: RustFrameCallableDefinition[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
@@ -109,14 +111,21 @@ export function createRustFrameCallablePlan(input: {
         .map(selected => Object.freeze({ ...selected, storageCarrier: selected.carrier })));
       const receivers = Object.freeze(capture.receivers.filter(selected => selected.owner !== classDefinition?.declaration)
         .map(selected => Object.freeze({ ...selected, storageCarrier: selected.carrier })));
-      const independent = input.ownership.isIndependentCallable(declaration);
+      const layout = input.layouts.forPayload(declaration, entryCaptures.length + receiverFields.length + receivers.length);
+      if (layout.kind === "unresolved") {
+        issue(declaration, layout.reason);
+        continue;
+      }
+      const independent = input.ownership.isIndependentCallable(declaration) && layout.taskScope === undefined;
       if (independent && (capture.captures.length !== 0 || capture.receiverFields.length !== 0 || capture.receivers.length !== 0)) {
         issue(declaration, "An independent frame alternative requires its exact capture-free environment.");
         continue;
       }
+      const ordinaryCopy = receivers.length === 0 && receiverFields.every(selected => selected.storage.kind === "copy") &&
+        entryCaptures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.carrier));
       const implementation = Object.freeze({ declaration, carrier, capture, captures: entryCaptures, receiverFields, receivers, independent,
-        copy: receivers.length === 0 && receiverFields.every(selected => selected.storage.kind === "copy") &&
-          entryCaptures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.carrier)),
+        storage: ordinaryCopy ? "value" as const : "shared" as const,
+        copy: ordinaryCopy && layout.taskScope?.storage !== "owned", taskScope: layout.taskScope,
         variantName: `Entry_${identity}`,
         functionName: allocateRustGeneratedName(usedNames, `tsonic_frame_entry_${prefix}_${identity}`),
         stateName: allocateRustGeneratedName(usedNames, `TsonicFrameState_${prefix}_${identity}`) });

@@ -40,7 +40,7 @@ function fixture(text, configure = input => input, maximumSteps) {
   assert.equal(sourceStorage.failureReason(), undefined);
   // The analysis host passes every native participating node; the source storage inventory is that set here.
   const input = configure({ source, sourceStorage, sourceLifetimes: emptyRustLifetimeIndex,
-    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), calls: [], entries: [] } });
+    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] } });
   const queries = createRustRetainedEnvironmentQueries(input, maximumSteps);
   const declarations = new Map(sourceStorage.nodes.filter(node => source.ast.is.IsFunctionDeclaration(node))
     .map(node => [source.ast.text(source.ast.name(node)), node]));

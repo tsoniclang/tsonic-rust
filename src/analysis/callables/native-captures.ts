@@ -9,8 +9,68 @@ import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/err
 
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
+import type { RustRetainedEnvironmentConstruction } from "./retained-environment-shapes.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
+
+type RustNativeScopeCapture = Extract<RustNativeCaptureSelection, { readonly kind: "resolved" }>["taskScope"];
+
+export type RustNativeCaptureLayoutSelection =
+  | { readonly kind: "resolved"; readonly taskScope: RustNativeScopeCapture }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
+export interface RustNativeCaptureLayouts {
+  forDeclaration(declaration: Node): RustNativeCaptureLayoutSelection;
+  forPayload(declaration: Node, position: number): RustNativeCaptureLayoutSelection;
+}
+
+export function createRustNativeCaptureLayouts(input: {
+  readonly records: RustProgramRecords;
+  readonly nativeTasks: SourceNativeTaskGraph;
+  readonly retainedEnvironments: RustRetainedEnvironmentConstruction;
+}): RustNativeCaptureLayouts {
+  const declarations = new Map<Node, RustNativeCaptureLayoutSelection>();
+  const payloads = new Map<Node, Map<number, RustNativeCaptureLayoutSelection>>();
+  const none = Object.freeze({ kind: "resolved" as const, taskScope: undefined });
+  const unresolved = (reason: string): RustNativeCaptureLayoutSelection => Object.freeze({ kind: "unresolved", reason });
+  const select = (declaration: Node): RustNativeCaptureLayoutSelection => {
+    if (!input.nativeTasks.capturedOwners.has(declaration)) return none;
+    const lifecycleOwner = input.nativeTasks.lifecycleOwner;
+    const fact = input.records.closureCapture.get(declaration);
+    if (lifecycleOwner === undefined || fact === undefined)
+      return unresolved("A native scope capture requires its actual lifecycle and exact finalized source capture layout.");
+    const retained = input.retainedEnvironments.callableRetentionFor(declaration);
+    if (retained.kind === "unresolved") return unresolved(retained.reason);
+    const position = fact.captures.length + fact.receiverFields.length + fact.receivers.length;
+    if (retained.retention === "retained") return Object.freeze({ kind: "resolved", taskScope:
+      Object.freeze({ lifecycleOwner, position, storage: "owned" }) });
+    const environment = input.retainedEnvironments.environmentFor(declaration);
+    if (environment.kind === "unresolved") return environment;
+    if (environment.kind !== "selected" || !environment.environment.inputs.some(selected => selected.kind === "native-task-scope"))
+      return unresolved("A scoped native capture requires its actual selected retained-input lifetime.");
+    return Object.freeze({ kind: "resolved", taskScope: Object.freeze({ lifecycleOwner, position,
+      storage: "borrow", lifetime: environment.environment.lifetime }) });
+  };
+  const forDeclaration = (declaration: Node): RustNativeCaptureLayoutSelection => {
+    const existing = declarations.get(declaration);
+    if (existing !== undefined) return existing;
+    const selected = select(declaration);
+    declarations.set(declaration, selected);
+    return selected;
+  };
+  return Object.freeze({ forDeclaration, forPayload(declaration: Node, position: number): RustNativeCaptureLayoutSelection {
+    const selected = forDeclaration(declaration);
+    if (selected.kind === "unresolved" || selected.taskScope === undefined || selected.taskScope.position === position) return selected;
+    if (!Number.isSafeInteger(position) || position < 0 || position > selected.taskScope.position)
+      return unresolved("A native capture payload requires its exact selected physical field position.");
+    const existing = payloads.get(declaration)?.get(position);
+    if (existing !== undefined) return existing;
+    const result = Object.freeze({ kind: "resolved" as const, taskScope: Object.freeze({ ...selected.taskScope, position }) });
+    const positions = payloads.get(declaration) ?? new Map<number, RustNativeCaptureLayoutSelection>();
+    positions.set(position, result);
+    payloads.set(declaration, positions);
+    return result;
+  } });
+}
 
 export interface RustNativeCaptureConstruction extends RustNativeCapturePlan {
   require(declaration: Node): RustNativeCaptureSelection;
@@ -27,9 +87,9 @@ export function completeRustNativeCaptureCarrier(
   const elements = [...physicalCaptures.captures, ...physicalCaptures.receiverFields, ...physicalCaptures.receivers];
   if (physicalCaptures.taskScope !== undefined) {
     const scope = errorTypes.records.nativeTaskUse.get(declaration);
-    if (scope?.kind !== "owner" || physicalCaptures.taskScope.position !== elements.length)
+    if (scope?.kind !== "owner" || scope.captureCarrier === undefined || physicalCaptures.taskScope.position !== elements.length)
       return Object.freeze({ kind: "unresolved", reason: "Native scope capture requires its one completed lifecycle input at the selected physical position." });
-    elements.push(scope.inputCarrier);
+    elements.push(scope.captureCarrier);
   }
   const captured: TargetTypeRef = { kind: "tuple",
     elements };
@@ -44,8 +104,7 @@ export function createRustNativeCapturePlan(input: {
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
-  readonly nativeTasks: SourceNativeTaskGraph;
-  readonly retainedEnvironments: RustRetainedEnvironmentQueries;
+  readonly layouts: RustNativeCaptureLayouts;
 }): RustNativeCaptureConstruction {
   const nodes = new Set(input.storage.nodes);
   const selections = new Map<Node, RustNativeCaptureSelection>();
@@ -58,6 +117,8 @@ export function createRustNativeCapturePlan(input: {
   const select = (declaration: Node): RustNativeCaptureSelection => {
     const fact = input.records.closureCapture.get(declaration);
     if (fact === undefined) return unresolved("A native capture environment requires its exact finalized capture declarations.");
+    const layout = input.layouts.forDeclaration(declaration);
+    if (layout.kind === "unresolved") return layout;
     const inputs = new Set<RustNativeCallableInput>();
     let failure: string | undefined;
     const carriers = (captures: readonly { readonly reference: Node; readonly carrier: TargetTypeRef }[]): readonly TargetTypeRef[] | undefined => {
@@ -80,17 +141,7 @@ export function createRustNativeCapturePlan(input: {
     const receivers = receiverFields === undefined ? undefined : carriers(fact.receivers);
     if (captures === undefined || receiverFields === undefined || receivers === undefined)
       return unresolved(failure ?? "A native capture lacks exact physical storage evidence.");
-    let taskScope: Extract<RustNativeCaptureSelection, { readonly kind: "resolved" }>["taskScope"];
-    if (input.nativeTasks.capturedOwners.has(declaration)) {
-      const lifecycleOwner = input.nativeTasks.lifecycleOwner;
-      const retained = input.retainedEnvironments.environmentFor(declaration);
-      if (lifecycleOwner === undefined || retained.kind === "unresolved")
-        return unresolved(retained.kind === "unresolved" ? retained.reason : "Native scope capture requires its actual lifecycle owner.");
-      const position = captures.length + receiverFields.length + receivers.length;
-      taskScope = retained.kind === "selected" && retained.environment.inputs.some(input => input.kind === "native-task-scope")
-        ? Object.freeze({ lifecycleOwner, position, storage: "borrow", lifetime: retained.environment.lifetime })
-        : Object.freeze({ lifecycleOwner, position, storage: "owned" });
-    }
+    const taskScope = layout.taskScope;
     const references = rustTargetGenericReferences({ kind: "tuple", elements: [...captures, ...receiverFields, ...receivers,
       ...[...inputs].map(input => input.trait)] });
     const scopeLifetime = taskScope?.storage === "borrow" && taskScope.lifetime.kind === "parameter" ? taskScope.lifetime : undefined;

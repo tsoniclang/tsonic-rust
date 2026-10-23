@@ -40,23 +40,37 @@ export function publishRustNativeTaskUses(input: {
   const borrow = (lifetime: RustLifetimeRef = rustPlaceholderLifetime): TargetTypeRef => Object.freeze({ kind: "reference", mutable: false, referent: carrier, lifetime });
   const owners = new Map<Node, Extract<RustNativeTaskUse, { readonly kind: "owner" }>>();
   for (const declaration of graph.owners) {
-    let selected: Extract<RustNativeTaskUse, { readonly kind: "owner" }>;
+    let captureCarrier: TargetTypeRef | undefined;
+    let captureBinding: "owned-capture" | "borrowed-capture" | undefined;
     if (graph.capturedOwners.has(declaration)) {
       const captures = input.captures.forDeclaration(declaration);
       if (captures.kind !== "resolved" || captures.taskScope === undefined || captures.taskScope.lifecycleOwner !== graph.lifecycleOwner)
         failTargetAnalysisInvariant("tsonic-rust", "A native task owner requires its one preselected scope capture layout.", declaration);
-      selected = captures.taskScope.storage === "owned"
-        ? Object.freeze({ kind: "owner", scope, binding: "owned-capture", inputCarrier: carrier })
-        : Object.freeze({ kind: "owner", scope, binding: "borrowed-capture", inputCarrier: borrow(captures.taskScope.lifetime) });
-    } else {
+      captureCarrier = captures.taskScope.storage === "owned" ? carrier : borrow(captures.taskScope.lifetime);
+      captureBinding = captures.taskScope.storage === "owned" ? "owned-capture" : "borrowed-capture";
+    }
+    let selected: Extract<RustNativeTaskUse, { readonly kind: "owner" }>;
+    if (graph.parameterOwners.has(declaration)) {
       const retained = context.retainedEnvironments.environmentFor(declaration);
       if (retained.kind === "unresolved") return rejectedTargetStage([{
         code: "RUST_NATIVE_TASK_RETENTION_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: declaration,
         message: retained.reason, evidence: ["target.capability=rust.native-tasks"],
       }]);
-      const owned = context.retainedEnvironments.ownsRetainedInputs(declaration);
+      const suspended = context.ast.hasModifierKind(declaration, "async") || context.records.generator.get(declaration) !== undefined;
+      const inputs = suspended ? context.retainedEnvironments.inputsFor(declaration)
+        : Object.freeze({ kind: "resolved" as const, ownership: "borrowed" as const });
+      if (inputs.kind === "unresolved") return rejectedTargetStage([{
+        code: "RUST_NATIVE_TASK_RETENTION_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: declaration,
+        message: inputs.reason, evidence: ["target.capability=rust.native-tasks"],
+      }]);
+      const owned = inputs.ownership === "owned";
       selected = Object.freeze({ kind: "owner", scope, binding: owned ? "owned-parameter" : "borrowed-parameter",
+        captureCarrier,
         inputCarrier: owned ? carrier : borrow(retained.kind === "selected" ? retained.environment.lifetime : rustPlaceholderLifetime) });
+    } else {
+      if (captureCarrier === undefined || captureBinding === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "A native task owner requires its selected source invocation or capture role.", declaration);
+      selected = Object.freeze({ kind: "owner", scope, binding: captureBinding, inputCarrier: captureCarrier, captureCarrier });
     }
     owners.set(declaration, selected);
     context.records.nativeTaskPlans.use(declaration, selected);

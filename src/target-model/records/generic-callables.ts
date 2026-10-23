@@ -5,6 +5,7 @@ import type { RustCallableOrigin, RustCallableSignature } from "../types/carrier
 import type { RustClosureCaptureFact } from "./operation-selections.js";
 import type { RustNativeCallableInput } from "./native-protocols.js";
 import type { RustTargetOperationFact } from "./operations.js";
+import type { RustNativeCaptureSelection } from "./native-captures.js";
 
 export interface RustGenericCallablePhysicalPlan {
   definitions(): readonly RustGenericCallablePhysicalDefinition[];
@@ -30,6 +31,8 @@ export interface RustGenericCallableImplementation {
   readonly stateName: string;
   readonly functionName: string;
   readonly storage: "value" | "shared";
+  readonly copy: boolean;
+  readonly taskScope: Extract<RustNativeCaptureSelection, { readonly kind: "resolved" }>["taskScope"];
   readonly creation: "declaration" | "activation";
   readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];

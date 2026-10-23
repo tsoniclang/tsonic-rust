@@ -5,6 +5,8 @@ import { independentFrameAlternativesSource } from "../../../../tsonic/test/fixt
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
+import { createRustNativeCaptureLayouts } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 
 test("native frame storage retains only counters required after construction", () => {
   const { program } = analyzeRust({ files: { "index.ts": independentFrameAlternativesSource } });
@@ -39,7 +41,10 @@ test("native frame counters close once before source revocation and require orig
   const frames = createRustFrameCallablePlan({ ast: guard(program.source.ast), records: guard(program.records),
     ownership: guard(program.callableOwnership), sourceStorage: guard(storage), nativeNodes: nodes, usedNames: new Set(),
     navigation: guard(source.navigation), projectTypes: guard(program.projectTypes),
-    objectRepresentations: guard(program.objectRepresentations) });
+    objectRepresentations: guard(program.objectRepresentations), layouts: createRustNativeCaptureLayouts({ records: program.records,
+      nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] },
+      retainedEnvironments: createRustRetainedEnvironmentQueries({ source, sourceStorage: storage, sourceLifetimes: program.sourceLifetimes,
+        nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] } }) }) });
   assert.equal(frames.definitions.length, 3, "the same three checked native frame owners");
   assert.throws(() => frames.counterNameFor(frames.definitions[0]), {
     message: "Native frame counter decisions require finalized construction plans before publication.",

@@ -65,7 +65,9 @@ export function closeRustRetainedParameter(
   const selected = context.retainedEnvironments.environmentFor(declaration);
   if (selected.kind === "unresolved") return undefined;
   if (selected.kind === "none") {
-    const retained = context.retainedEnvironments.ownsRetainedInputs(declaration)
+    const inputs = context.retainedEnvironments.inputsFor(declaration);
+    if (inputs.kind === "unresolved") return undefined;
+    const retained = inputs.ownership === "owned"
       ? context.retainedEnvironments.suspendedParametersFor(declaration) : undefined;
     return retained?.includes(parameter) === true ? closeRustRetainedCallableCarrier(carrier, { kind: "static" }) : carrier;
   }

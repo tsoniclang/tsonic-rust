@@ -24,6 +24,7 @@ import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysical
 import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 
 import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
+import type { RustNativeCaptureLayouts } from "./native-captures.js";
 
 export interface RustGenericCallablePlan {
   readonly definitions: readonly RustGenericCallableDefinition[];
@@ -40,7 +41,7 @@ export interface RustGenericCallableRegistry {
 }
 
 export function createRustGenericCallablePlan(
-  ast: AstReader, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
+  ast: AstReader, layouts: RustNativeCaptureLayouts, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
   navigation: SourceProgramNavigation,
   isNativeNode: (node: Node) => boolean,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
@@ -141,6 +142,11 @@ export function createRustGenericCallablePlan(
           rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !value.signature.environmentParameters.some(parameter => parameter.identity === identity)))) {
         issues.push({ subject: node, message: "A generic callable environment has no exact closed capture contract; recursive or hidden existential captures are not erased." });
       } else {
+        const layout = layouts.forDeclaration(node);
+        if (layout.kind === "unresolved") {
+          issues.push({ subject: node, message: layout.reason });
+          continue;
+        }
         const creation = ast.is.IsFunctionDeclaration(node) && sourceDeclarationIsModuleScoped(node, ast)
           ? "declaration" as const : "activation" as const;
         const functionName = creation === "declaration" ? names.functionNameForDeclaration(node)
@@ -149,14 +155,15 @@ export function createRustGenericCallablePlan(
           issues.push({ subject: node, message: "A declaration-owned generic callable has no exact native implementation name." });
           continue;
         }
+        const storage = selectRustGenericCallableStorage(Object.freeze({ identityObserved: identityFamilies.has(identity),
+          creation, asynchronous: records.asyncFunction.get(node) !== undefined, generator: records.generator.get(node) !== undefined,
+          result: value.signature.result, captures, receiverFields, receivers }));
         const implementation = Object.freeze({ declaration: node, carrier, sourceFileName,
           variantName: allocateRustGeneratedName(usedNames, `Implementation${implementationIdentity.slice(0, 12)}`),
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName,
           creation,
-          storage: selectRustGenericCallableStorage(Object.freeze({ identityObserved: identityFamilies.has(identity),
-            creation, asynchronous: records.asyncFunction.get(node) !== undefined, generator: records.generator.get(node) !== undefined,
-            result: value.signature.result, captures, receiverFields, receivers })),
+          storage, copy: storage === "value" && layout.taskScope?.storage !== "owned", taskScope: layout.taskScope,
           captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), receivers: Object.freeze(receivers), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);
@@ -178,7 +185,7 @@ export function createRustGenericCallablePlan(
       ...(rustNativeFutureCallableResult(group.signature.result) === undefined ? {} : {
         nativeFutureDispatchName: allocateRustGeneratedName(usedNames, `CallableFuture${nativeIdentity.slice(0, 12)}`),
       }),
-      copy: group.implementations.every(implementation => implementation.storage === "value"),
+      copy: group.implementations.every(implementation => implementation.copy),
       identityObserved: identityFamilies.has(identity),
       ownerFileName: group.implementations[0]!.sourceFileName, signature: group.signature,
       implementations: Object.freeze(group.implementations),

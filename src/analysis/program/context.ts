@@ -47,7 +47,7 @@ import { createRustSourceProfileStorageEffects } from "../operations/source-prof
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../callables/borrowed-returns.js";
 import { createRustExplicitUnsafeContexts } from "../safety/explicit-regions.js";
-import { createRustRetainedEnvironmentQueries } from "../callables/retained-environment-shapes.js";
+import { createRustRetainedEnvironmentQueries, type RustRetainedEnvironmentConstruction } from "../callables/retained-environment-shapes.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
@@ -66,6 +66,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly promiseResultUses: RustPromiseResultUses;
   readonly promiseBodies: RustPromiseBodySelection;
   readonly nativeTaskGraph: SourceNativeTaskGraph;
+  readonly retainedEnvironments: RustRetainedEnvironmentConstruction;
   readonly callableInvocationReferences: ReturnType<typeof createSourceCallableInvocationReferenceQuery>;
   readonly moduleCallables: RustNativeModuleCallables;
   readonly sourceBoundaries: ReturnType<typeof collectRustSourcePackageBoundaries>;

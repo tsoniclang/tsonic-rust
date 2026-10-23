@@ -154,7 +154,7 @@ export function createRustGenericCallablePhysicalPlan(
           { ast: input.ast, sourceLifetimes: input.lifetimes, physical: { environmentFor } }),
       })));
       definition = Object.freeze({ ...family, identity, familyIdentity: family.identity, ownerFileName,
-        copy: selected.every(member => member.implementation.storage === "value"),
+        copy: selected.every(member => member.implementation.copy),
         targetName: allocateRustGeneratedName(usedNames, `GenericCallable${suffix}`),
         ...(family.nativeFutureDispatchName === undefined ? {} : {
           nativeFutureDispatchName: allocateRustGeneratedName(usedNames, `CallableFuture${suffix}`) }),

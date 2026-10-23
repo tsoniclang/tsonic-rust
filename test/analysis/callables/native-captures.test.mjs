@@ -5,7 +5,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCaptureLayouts, createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native-captures.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustFixedArrayTargetType, rustFixedArrayCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
@@ -16,13 +16,14 @@ function fixture(text) {
   const source = program.source;
   const storage = program.sourceStorage;
   const native = program.callableValues.native;
-  const plan = createRustNativeCapturePlan({ records: program.records, storage,
-    nativeStorage: program.callableValues.nativeStorage, nativeTasks: program.nativeTaskGraph,
+  const layouts = createRustNativeCaptureLayouts({ records: program.records, nativeTasks: program.nativeTaskGraph,
     retainedEnvironments: program.retainedEnvironments });
+  const plan = createRustNativeCapturePlan({ records: program.records, storage,
+    nativeStorage: program.callableValues.nativeStorage, layouts });
   const closures = storage.nodes.filter(node => source.ast.is.IsArrowFunction(node));
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
-  return { program, native, storage, plan, closures, declaration };
+  return { program, native, storage, plan, layouts, closures, declaration };
 }
 
 test("native captured equal-signature inputs retain distinct physical types without rewriting logical facts", () => {
@@ -119,7 +120,7 @@ test("native capture query rejects foreign declarations without inspecting custo
   const missing = createRustNativeCapturePlan({ records: createRustRecordFixture({ closureCapture: {
     get: subject => subject === make ? undefined : current.program.records.closureCapture.get(subject),
   } }, current.program.records), storage: current.storage, nativeStorage: current.program.callableValues.nativeStorage,
-    nativeTasks: current.program.nativeTaskGraph, retainedEnvironments: current.program.retainedEnvironments });
+    layouts: current.layouts });
   const declaration = missing.forDeclaration(make);
   assert.equal(declaration.kind === "unresolved" && /exact finalized capture declarations/u.test(declaration.reason), true,
     "only declarations with finalized capture facts are accepted");
