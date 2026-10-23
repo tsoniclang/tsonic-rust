@@ -11,6 +11,13 @@ import { selectRustCapturedFieldStorage } from "../../../../dist/policy/ownershi
 
 const owner = { kind: "path", path: "payload" };
 const next = { kind: "path", path: "next" };
+const carrierReads = new Map([
+  [int32Carrier, Object.freeze({ copy: true, clone: true })],
+  [stringCarrier, Object.freeze({ copy: false, clone: true })],
+]);
+const fieldContext = { input: { program: { records: createRustRecordFixture({
+  carrierRead: { get: carrier => carrierReads.get(carrier) },
+}) } } };
 
 test("proven immutable scalar captures have no native heap owner or clone", () => {
   const storage = selectRustCapturedFieldStorage(int32Carrier, true, false, true);
@@ -18,7 +25,7 @@ test("proven immutable scalar captures have no native heap owner or clone", () =
   assert.equal(storage.kind, "copy");
   assert.equal(rustCapturedFieldType(storage, type) === type, true);
   assert.equal(createRustCapturedField(storage, next) === next, true);
-  assert.equal(readRustCapturedField(storage, owner, int32Carrier) === owner, true);
+  assert.equal(readRustCapturedField(storage, owner, int32Carrier, fieldContext) === owner, true);
   assert.equal(writeRustCapturedField(storage, owner, next), undefined);
   const retained = readRustProjectObjectFieldOwner(owner, "value", { kind: "shared-immutable" }, storage);
   assert.equal(countNodes(retained, node => node.method === "clone" || node.path === "alloc::rc::Rc::new"), 0);
@@ -111,8 +118,8 @@ test("shared readonly storage never manufactures a mutable replacement", () => {
 
 test("instantiated Copy reads from generic RefCell storage do not clone payloads", () => {
   const storage = { kind: "borrow-cell", initialization: "ready" };
-  const copied = readRustCapturedField(storage, owner, int32Carrier);
-  const cloned = readRustCapturedField(storage, owner, stringCarrier);
+  const copied = readRustCapturedField(storage, owner, int32Carrier, fieldContext);
+  const cloned = readRustCapturedField(storage, owner, stringCarrier, fieldContext);
   assert.equal(countNodes(copied, node => node.method === "clone"), 0);
   assert.equal(countNodes(copied, node => node.kind === "dereference"), 1);
   assert.equal(countNodes(cloned, node => node.method === "clone"), 1);

@@ -15,14 +15,25 @@ const stringCarrier = rustStringTargetType();
 const input = {
   source: { kind: "argument", sourceIndex: 0 },
   sourceCarrier: stringCarrier,
-  conversion: { kind: "identity" },
+  conversion: { kind: "identity", sourceCarrier: stringCarrier, targetCarrier: stringCarrier, fallible: false },
   mode: "ref",
   parameterCarrier: { kind: "reference", referent: stringCarrier, mutable: false },
+  sharedConversion: false,
+  elementView: "value",
 };
 const sourceNode = {};
+const identityProjection = Object.freeze({
+  exits: false, flow: undefined, upcast: undefined, downcast: undefined,
+  object: undefined, contextual: undefined, option: undefined, fused: undefined,
+  borrowable: false, borrowConversion: false, referenceReborrow: false,
+  contextualIdentity: true, contextualConsumesSource: false,
+  preserveAbsenceEffect: false, absenceDiscard: "value",
+});
 
 function context(parameter, override, capture) {
   const declaration = {};
+  const ownership = override?.valueForm === "storage"
+    ? { kind: "borrow", mutable: false } : { kind: "move" };
   return {
     capturedBindings: capture === undefined ? [] : [{ declaration, expression: { kind: "path", path: "capture" },
       storage: "value", valueCarrier: stringCarrier, borrowed: capture }],
@@ -30,9 +41,15 @@ function context(parameter, override, capture) {
       callableValues: { generic: { definitionFor: () => undefined } },
       records: createRustRecordFixture({sourceParameterAbi: { get: (_node) => parameter },
 sourceBinding: { get: (_node) => ({ sourceDeclaration: declaration }) },
-runtimeCarrier: { get: () => ({ carrier: stringCarrier }) }}),
+runtimeCarrier: { get: () => ({ carrier: stringCarrier }) },
+providerReference: { get: (_node, selected) => selected.conversion.kind === "identity" && selected.mode === "ref" &&
+  (parameter?.mode === "ref" || parameter?.mode === "mut-ref" || override?.valueForm === "shared-reference") },
+valueProjection: { get: () => identityProjection },
+readOwnership: { get: () => ({ carrier: stringCarrier, source: ownership, value: ownership,
+  snapshot: undefined, stablePlace: true, readsStorage: true, pure: true,
+  sharedReference: false, borrowedAcross: new Set() }) }}),
       source: { ast: { kindName: () => "KindIdentifier", is: {
-        IsIdentifier: () => true, IsElementAccessExpression: () => false,
+        IsIdentifier: () => true, IsParameterDeclaration: () => false, IsElementAccessExpression: () => false,
         IsParenthesizedExpression: () => false, IsAsExpression: () => false, IsSatisfiesExpression: () => false,
         IsNonNullExpression: () => false, IsTypeAssertion: () => false,
       } } } } },

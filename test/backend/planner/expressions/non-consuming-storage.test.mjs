@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustValueRead } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 
 test("selected reads emit their one ownership operation and never inspect authored expression syntax", () => {
   const node = {};
@@ -11,7 +12,10 @@ test("selected reads emit their one ownership operation and never inspect author
     { kind: "method-call", receiver: owner, method: "clone", args: [{ kind: "int-literal", text: "1" }] },
     { kind: "method-call", receiver: owner, method: "load", args: [] }];
   for (const mode of ["copy", "move", "borrow", "clone"]) {
-    const context = { input: { program: { ownership: createRustOwnershipFixture(node, carrier, mode) } } };
+    const ownership = createRustOwnershipFixture(node, carrier, mode);
+    const context = { input: { program: { records: createRustRecordFixture({
+      readOwnership: { get: selected => ownership.reads.get(selected) },
+    }) } } };
     for (const expression of expressions) {
       const actual = planRustValueRead(node, expression, context);
       if (mode === "clone") {
