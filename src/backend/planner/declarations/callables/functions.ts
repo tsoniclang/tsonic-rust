@@ -263,16 +263,13 @@ function planRustFunctionItem(
     completionBoundary: undefined,
     functionReturnType: bodyReturnType,
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? returnCarrier : undefined,
-    ...(isAsync ? { asyncContext: true } : {}),
-    ...(generatorFact === undefined
-      ? {}
-      : {
-          generator: {
-            declaration: node,
-            controllerName: generatorControllerName!,
-            protocol: generatorFact,
-          },
-        }),
+    asyncContext: asyncFact?.kind === "native-future" ||
+      asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory" || generatorFact?.kind === "async",
+    generator: generatorFact === undefined ? undefined : {
+      declaration: node,
+      controllerName: generatorControllerName!,
+      protocol: generatorFact,
+    },
     fallibleBoundary: callableErrorBoundary,
     returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },
   };
@@ -338,7 +335,7 @@ function planRustFunctionItem(
     ...(declarationAttributes.length === 0
       ? {}
       : { attrs: declarationAttributes }),
-    ...(isAsync && (!returnsJsPromise || nativeBody !== undefined && asyncFact.lowering.kind === "factory") ? { isAsync: true } : {}),
+    ...(emission.nativeAsync ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
     ...(callableErrorBoundary === undefined || returnsJsPromise && nativeBody === undefined
       ? {}

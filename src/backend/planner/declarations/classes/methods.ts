@@ -164,16 +164,13 @@ export function planProjectMethod(
     controlFlow: { nextLoopId: 0 },
     functionReturnType: bodyReturnType,
     functionAbsenceReturnCarrier: sourceReturn?.undefinedReturn === true ? returnCarrier : undefined,
-    ...(sourceAsync && generatorFact === undefined ? { asyncContext: true } : {}),
-    ...(generatorFact === undefined
-      ? {}
-      : {
-          generator: {
-            declaration: member,
-            controllerName: generatorControllerName!,
-            protocol: generatorFact,
-          },
-        }),
+    asyncContext: asyncFact?.kind === "native-future" ||
+      asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory" || generatorFact?.kind === "async",
+    generator: generatorFact === undefined ? undefined : {
+      declaration: member,
+      controllerName: generatorControllerName!,
+      protocol: generatorFact,
+    },
     fallibleBoundary: callableErrorBoundary,
     returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },
   };
@@ -241,8 +238,7 @@ export function planProjectMethod(
     ...(callableErrorBoundary === undefined || returnsJsPromise
       ? {}
       : { errorType: callableErrorBoundary.errorType }),
-    ...(sourceAsync && !returnsJsPromise && (asyncFact?.kind !== "js-promise" || asyncFact.lowering.kind === "factory")
-      ? { isAsync: true } : {}),
+    ...(callable.nativeAsync ? { isAsync: true } : {}),
     ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
     generics,
     params,
