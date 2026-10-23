@@ -3,24 +3,32 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { applyFinalizedValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
-import { finalizeValueConversion } from "../../../../dist/policy/operations/members/abi/conversions.js";
+import { finalizeValueConversion, finalizedConversionIsValid } from "../../../../dist/policy/operations/members/abi/conversions.js";
 import { rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
 import { rustTargetRuntimeErrorType } from "../../../../dist/backend/planner/types/error-boundary.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustStringToBorrowedStrValueConversion, rustBorrowedStrToStringValueConversion } from "../../../../dist/public/provider.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+import { admitRustConversionEmission } from "../../../../dist/analysis/conversions/emission.js";
+import { createRustConversionEmissionProducer } from "../../../../dist/analysis/program/records/conversion-emission.js";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
+import { rustJsErrorTargetType } from "../../../../dist/target-model/types/index.js";
 
 test("finalized conversions consume exact constructed inputs rather than rechecking an outer source node", () => {
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
+  const conversions = createRustConversionEmissionProducer(() => {});
   const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
     typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
-    records: createRustRecordFixture({runtimeCarrier: { get: () => { throw new Error("outer node is not the constructed input"); } }}),
+    records: createRustRecordFixture({ ...conversions.records,
+      runtimeCarrier: { get: () => { throw new Error("outer node is not the constructed input"); } } }),
   } }, sourceFile, diagnostics: [], usedAliases: new Set() };
   const source = { kind: "path", path: "selected_present_value" };
   const borrow = finalizeValueConversion(rustStringToBorrowedStrValueConversion, rustStringTargetType());
   const own = finalizeValueConversion(rustBorrowedStrToStringValueConversion, borrow.targetCarrier);
+  admitRustConversionEmission(conversions, borrow.conversion, emptyRustTypeDefinitions);
+  admitRustConversionEmission(conversions, own.conversion, emptyRustTypeDefinitions);
   const sequence = { kind: "sequence", sourceCarrier: borrow.sourceCarrier,
     targetCarrier: own.targetCarrier, fallible: false, steps: [borrow, own] };
   assert.equal(sequence.kind, "sequence");
@@ -36,18 +44,18 @@ test("finalized conversions consume exact constructed inputs rather than recheck
     ["wrong source", { ...borrow, sourceCarrier: borrow.targetCarrier }],
     ["reordered sequence", { ...sequence, steps: [...sequence.steps].reverse() }],
   ]) {
-    context.diagnostics.length = 0;
-    assert.equal(applyFinalizedValueConversion(context, { stage: "finalized", expression: source }, mutation, node, true), undefined, label);
-    assert.equal(context.diagnostics.length, 1, label);
-    assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT", label);
+    assert.equal(finalizedConversionIsValid(mutation, emptyRustTypeDefinitions), false,
+      label + ": exact finalized transition is rejected at admission before rendering");
   }
 });
 
 test("finalized fallible conversions retain their exact operand error type", () => {
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
-    typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
+  const conversions = createRustConversionEmissionProducer(() => {});
+  const program = rustProgramWithTypeEmissions([rustJsErrorTargetType()], { surfaces: ["js"] });
+  const context = { ...rustProgramPlanContext(program), input: { program: { ...program,
+    records: createRustRecordFixture({ ...conversions.records }, program.records),
   } }, sourceFile, diagnostics: [], usedAliases: new Set(),
     fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "project",
       errorTypePath: "crate::CurrentError", errorTypeIdentity: "test:CurrentError" }) };
@@ -62,6 +70,7 @@ test("finalized fallible conversions retain their exact operand error type", () 
   ];
   for (const [conversion, errorPath] of cases) {
     const finalized = finalizeValueConversion(conversion);
+    admitRustConversionEmission(conversions, conversion, program.typeDefinitions);
     const lowered = applyFinalizedValueConversion(context, { stage: "finalized", expression: { kind: "path", path: "value" } }, finalized, node, true);
     assert.equal(lowered?.kind, "try");
     assert.equal(lowered.operandErrorType.path, errorPath);

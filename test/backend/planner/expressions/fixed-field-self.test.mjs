@@ -125,13 +125,17 @@ function construction(expression, projection, issues = []) {
   const plan = { definition, fields: [sourceField], layers: [layer], issues, points: [point], expressions: [expression],
     completesNormally: true, publishesReceiver: false, mutatesPublishedFields: false,
     layerHasEarlyReturn: () => false, layerCompletes: () => true, mutatesUnpublishedField: () => false,
+    accessesUnpublishedField: candidate => candidate === declaration,
+    observesInitialValue: candidate => candidate === declaration,
     returnLayerFor: () => undefined,
     emission: { issues: [], frame: undefined, exposure: undefined, preparationFor: node => node === callable ? preparation : undefined } };
   const producer = createRustConstructionProducer(() => {});
   selected.diagnostics.push(...analyzeRustConstructionEmission({ program: {
     source: selected.input.program.source,
-    records: createRustRecordFixture({ classDeclaration: { get: node => node === classNode ? {} : undefined } }),
-    projectTypes: { definitions: [definition], openCarrier: () => carrier, externalBaseForDefinition: () => undefined },
+    records: createRustRecordFixture({ classDeclaration: { get: node => node === classNode ? {} : undefined },
+      projectFieldDispatch: { get: node => node === declaration ? { mutableContent: false } : undefined } }),
+    projectTypes: { definitions: [definition], openCarrier: () => carrier, externalBaseForDefinition: () => undefined,
+      constructorsForDefinition: () => [layer.signature] },
     projectConstructions: { forDefinition: candidate => candidate === definition ? plan : undefined },
     physicalEmissionContexts: { contexts: [{ use: { role: "constructor-layer", subject: layer } }] },
     objectRepresentations: { receiverCaptures: { storageDeclaration: node => node } },

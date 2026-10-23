@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustProjectClosedValue } from "../../../../dist/backend/planner/objects/project-closed-values.js";
-import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
-import { rustSourceTypeCarrier } from "../../../../dist/target-model/types/index.js";
+import { analyzeRust } from "../../../helpers/rust-session.mjs";
 
 test("exact project Error admission preserves its payload before passive object erasure", () => {
-  const carrier = rustSourceTypeCarrier("/src/failure.ts", "Failure", "object");
-  const definition = { kind: "class" };
-  const registry = createRustTypeDefinitionRegistry();
-  assert.equal(registry.registerProgramErrorOrigin(carrier, { kind: "project", variant: "Failure", sourceError: true }), true);
-  const context = { diagnostics: [], input: { program: { typeDefinitions: registry.seal(),
-    projectTypes: { definitionForCarrier: selected => selected === carrier ? definition : undefined,
-      sourceErrorDefinitions: [definition] },
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+class Failure extends Error {}
+export function erase(value: Failure): unknown { return value; }
+` } });
+  assert.equal(program.projectTypes.sourceErrorDefinitions.length, 1, "one actual source Error definition");
+  const carrier = program.projectTypes.openCarrier(program.projectTypes.sourceErrorDefinitions[0]);
+  assert.equal(program.records.projectClosedValue.get(carrier)?.kind, "error", "the admission owner preserves the native Error payload");
+  const context = { diagnostics: [], input: { program: { ...program,
     objectRepresentations: { representationFor() { assert.fail("Error admission must not erase passive object capabilities"); } },
   } } };
   const source = { kind: "path", path: "original" };
