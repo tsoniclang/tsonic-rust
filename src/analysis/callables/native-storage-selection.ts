@@ -449,16 +449,31 @@ export function createRustNativeStorageSelection(
         const callableSlots = storedSlots.filter(slot => containsCallable(slot.carrier, depth + 1) !== false);
         if (callableSlots.length === 0) return current;
         const producers = input.storage.storageProducersFor(selectedSubject, bindings);
-        if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
-          : "Opaque collection callable storage requires its actual closed native constructor inputs.");
-        const elements = new Map<number, TargetTypeRef>();
+        if (producers.kind === "unresolved") return fail(producers.reason);
+        const constructors: {
+          readonly producer: (typeof producers.producers)[number];
+          readonly storedInputs: ReturnType<typeof selectRustJsConstructorStoredInputs>;
+        }[] = [];
         for (const producer of producers.producers) {
+          if (!step(depth)) return undefined;
+          const subject = producer.subject;
+          const operation = subject.kind !== "value" || subject.projection.length !== 0 ||
+            !input.ast.is.IsNewExpression(subject.node) ? undefined : input.records.targetOperation.get(subject.node);
+          const storedInputs = operation?.kind !== "provider-operation" || operation.resultCarrier.kind !== "target-named" ||
+            operation.resultCarrier.id !== current.id ? undefined : selectRustJsConstructorStoredInputs(operation.operationId, current);
+          constructors.push({ producer, storedInputs });
+        }
+        if (producers.kind === "open" && producers.boundaries.some(boundary =>
+          boundary.kind !== "opaque-result" || !constructors.some(({ producer, storedInputs }) => {
+            if (!step(depth)) return false;
+            return storedInputs !== undefined && boundary.subject === producer.subject &&
+              boundary.exposure === producer.subject.node && boundary.bindings === producer.bindings;
+          }))) return fail("Opaque collection callable storage requires its actual closed native constructor inputs.");
+        const elements = new Map<number, TargetTypeRef>();
+        for (const { producer, storedInputs } of constructors) {
           if (!step(depth) || producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
             !input.ast.is.IsNewExpression(producer.subject.node))
             return fail("Opaque collection callable storage requires one exact checked native constructor occurrence.");
-          const operation = input.records.targetOperation.get(producer.subject.node);
-          const storedInputs = operation?.kind !== "provider-operation" ? undefined
-            : selectRustJsConstructorStoredInputs(operation.operationId, current);
           if (storedInputs === undefined) return fail("Opaque collection callable storage has no selected native constructor payload correspondence.");
           for (const slot of callableSlots) {
             const selectedInput = storedInputs.find(candidate => candidate.nativeArgumentIndex === slot.nativeArgumentIndex);
