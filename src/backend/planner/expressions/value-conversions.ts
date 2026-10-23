@@ -31,6 +31,7 @@ import { planRustProgramErrorClosedValue } from "./program-error-values.js";
 import { planRustCallableInputProducer } from "./callable-conversions.js";
 import { planRustPropertyValueProjection } from "./property-value-projection.js";
 import { planRustOptionBranch } from "./option-branch.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -398,20 +399,13 @@ function lowerStructuralObjectJsValueConversion(
   const sourceName = allocateConversionName(context, node, "js_object_source");
   const sourcePath = { kind: "path" as const, path: sourceName };
   const entries: RustExpr[] = [];
-  const literal = node === undefined ? undefined : context.input.program.records.targetOperation.get(node);
-  const positions = new Map<string, number>();
-  if (literal?.kind === "record-literal") {
-    for (const contribution of literal.contributions) {
-      const names = contribution.kind === "spread" ? contribution.fields.map(field => field.sourceName)
-        : contribution.kind === "method" ? literal.fields.filter(field =>
-          field.contractDeclarations.some(declaration => contribution.contractDeclarations.includes(declaration)))
-          .map(field => field.sourceName)
-        : [contribution.sourceName];
-      for (const name of names) if (!positions.has(name)) positions.set(name, positions.size);
-    }
-  }
-  const fields = literal?.kind !== "record-literal" ? contract.fields : [...contract.fields]
-    .sort((left, right) => (positions.get(left.sourceName) ?? positions.size) - (positions.get(right.sourceName) ?? positions.size));
+  const literal = node === undefined ? undefined : context.input.program.records.objectLiteralEmission.get(node);
+  const sourceFields = literal !== undefined && rustTargetTypeRefEquals(literal.selection.carrier, contract.source)
+    ? literal.sourceFields : undefined;
+  const positions = new Map(sourceFields?.map((field, index) => [field.storageIndex, index]));
+  const origins = new Map(sourceFields?.map(field => [field.storageIndex, field.value]));
+  const fields = sourceFields === undefined ? contract.fields : [...contract.fields]
+    .sort((left, right) => (positions.get(left.storageIndex) ?? positions.size) - (positions.get(right.storageIndex) ?? positions.size));
   for (const field of fields) {
     const plannedField = definition.fields[field.storageIndex];
     if (plannedField === undefined) failRustPlannerInvariant("An admitted closed value field requires its exact native storage.", node ?? context.sourceFile);
@@ -437,7 +431,7 @@ function lowerStructuralObjectJsValueConversion(
         field.conversion,
         { kind: "path", path: valueName },
         context,
-        node,
+        origins.get(field.storageIndex),
       );
       if (converted === undefined) {
         return undefined;
@@ -464,7 +458,7 @@ function lowerStructuralObjectJsValueConversion(
       field.conversion,
       stored,
       context,
-      node,
+      origins.get(field.storageIndex),
     );
     if (converted === undefined) {
       return undefined;
