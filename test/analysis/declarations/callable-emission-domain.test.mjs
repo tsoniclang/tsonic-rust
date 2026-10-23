@@ -49,11 +49,11 @@ export class Counter {
 });
 
 for (const [name, text, count] of [
-  ["explicit constructor", "export class Box { value: number; constructor(value: number) { this.value = value; } } console.log(new Box(7).value);", 1],
-  ["defaulted constructor", "export class Box { value: number; constructor(value: number = 7) { this.value = value; } } console.log(new Box().value);", 1],
-  ["rest constructor", "export class Box { value: number; constructor(...values: number[]) { this.value = values.length; } } console.log(new Box(7, 8).value);", 1],
-  ["parameter property constructor", "export class Box { constructor(public value: number) {} } console.log(new Box(7).value);", 1],
-  ["implicit constructor", "export class Box { value: number = 7; } console.log(new Box().value);", 0],
+  ["explicit constructor", "export class Box { value: number; constructor(value: number) { this.value = value; } } new Box(7).value;", 1],
+  ["defaulted constructor", "export class Box { value: number; constructor(value: number = 7) { this.value = value; } } new Box().value;", 1],
+  ["rest constructor", "export class Box { value: number; constructor(...values: number[]) { this.value = values.length; } } new Box(7, 8).value;", 1],
+  ["parameter property constructor", "export class Box { constructor(public value: number) {} } new Box(7).value;", 1],
+  ["implicit constructor", "export class Box { value: number = 7; } new Box().value;", 0],
 ]) {
   test(`${name} publishes its source value vector without an ordinary function result`, () => {
     const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
@@ -81,11 +81,11 @@ for (const [name, text] of [
   ["abstract method", `abstract class Base { abstract read(value: number): number; }
 class Derived extends Base { read(value: number): number { return value + 1; } }
 function run(value: Base): number { return value.read(2); }
-console.log(run(new Derived()));`],
+run(new Derived());`],
   ["interface method with receiver annotation", `interface Reader { read(this: void, value: number): number; }
 class Derived implements Reader { read(this: void, value: number): number { return value + 1; } }
 function run(value: Reader): number { return value.read(2); }
-console.log(run(new Derived()));`],
+run(new Derived());`],
 ]) {
   test(`${name} publishes value parameters on its contract signature without requiring a body`, () => {
     const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });

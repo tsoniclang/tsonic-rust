@@ -5,7 +5,7 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/retained-values.js";
-import { rustHasOpenOwnedStorage } from "../../../dist/policy/ownership/retained-storage.js";
+import { rustHasOpenOwnedStorage, selectRustClassEnvironmentStorage } from "../../../dist/policy/ownership/retained-storage.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -13,6 +13,28 @@ import { rustGenericCallableTargetType } from "../../../dist/target-model/types/
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+
+test("class environment native storage has one policy owner over the gathered source facts", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const text = { kind: "target-named", id: "rust.std.String" };
+  const capture = (storage, carrier) => Object.freeze({ storage, carrier });
+  for (const [name, captures, staticFields, constructorIdentity, storage, copy] of [
+    ["empty value", [], [], false, "value", true],
+    ["one copied value", [capture("value", integer)], [], false, "value", true],
+    ["two copied values", [capture("value", integer), capture("value", integer)], [], false, "value", true],
+    ["owned non-Copy value", [capture("value", text)], [], false, "shared", false],
+    ["one existing location", [capture("location", text)], [], false, "value", false],
+    ["two existing locations", [capture("location", text), capture("location", text)], [], false, "shared", false],
+    ["cell ownership", [capture("cell", integer)], [], false, "shared", false],
+    ["class static state", [capture("value", integer)], [{}], false, "shared", false],
+    ["observable constructor identity", [], [], true, "shared", false],
+  ]) {
+    const selected = selectRustClassEnvironmentStorage({ captures, staticFields, constructorIdentity });
+    assert.equal(selected.storage, storage, `${name}: native physical environment representation`);
+    assert.equal(selected.copy, copy, `${name}: native Copy contract`);
+    assert.equal(Object.isFrozen(selected), true, `${name}: one immutable policy decision`);
+  }
+});
 
 test("complete source capture carriers preserve the canonical generic and frame environment normalization", () => {
   const captured = { kind: "type-parameter", identity: "captured:value", name: "Captured" };

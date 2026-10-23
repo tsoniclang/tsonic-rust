@@ -6,6 +6,18 @@ import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../../policy/ty
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 import { type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
+import { isRustCopyCarrier } from "../constraints/native-traits.js";
+
+export function selectRustClassEnvironmentStorage(
+  input: Pick<RustClassEnvironment, "constructorIdentity" | "staticFields" | "captures">,
+): Pick<RustClassEnvironment, "storage" | "copy"> {
+  const copy = !input.constructorIdentity && input.staticFields.length === 0 &&
+    input.captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.carrier));
+  const storage = !input.constructorIdentity && (copy || input.staticFields.length === 0 &&
+    input.captures.length === 1 && input.captures[0]!.storage === "location") ? "value" : "shared";
+  return Object.freeze({ storage, copy });
+}
 
 export function rustHasOpenCallableEnvironment(carrier: TargetTypeRef): boolean {
   if (carrier.kind === "reference" || carrier.kind === "pointer" ||

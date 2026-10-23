@@ -6,9 +6,9 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 for (const surfaces of [[], ["js"]]) {
   const label = surfaces[0] ?? "native";
   for (const [name, text, expected] of [
-    ["ordinary declaration", "export function source(this: void, value: number): number { return value; } console.log(source(7));", 1],
-    ["defaulted contextual inputs", "const source: (value?: number, label?: string) => number = function(this: void, value = 1, label = 'x') { return value + label.length; }; console.log(source());", 2],
-    ["ordinary first value", "export function source(thisValue: number, label: string): number { return thisValue + label.length; } console.log(source(7, 'x'));", 2],
+    ["ordinary declaration", "export function source(this: void, value: number): number { return value; } source(7);", 1],
+    ["defaulted contextual inputs", "const source: (value?: number, label?: string) => number = function(this: void, value = 1, label = 'x') { return value + label.length; }; source();", 2],
+    ["ordinary first value", "export function source(thisValue: number, label: string): number { return thisValue + label.length; } source(7, 'x');", 2],
   ]) {
     test(`${label} ${name} publishes only checked native value parameters`, () => {
       const { source, program } = analyzeRust({ surfaces, files: { "index.ts": text } });

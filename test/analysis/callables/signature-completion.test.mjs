@@ -11,6 +11,26 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/analysis/source-evidence/types/resolution/callable-environments.js";
+import { rustSourceFunctionValueCarrier } from "../../../dist/analysis/callables/function-values.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+
+test("a named captured function retains its actual native borrow instead of a static environment", () => {
+  const { context, walk } = analyzeRustOperations(`
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function retain<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+  function read(): int32 { return load(value); }
+  return read;
+}`, { surfaces: [] });
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "read");
+  assert.equal(declaration !== undefined, true, "the original named callable owns its lexical capture");
+  const selected = rustSourceFunctionValueCarrier(walk, declaration, [], { kind: "source-primitive", name: "int32" });
+  const protocol = rustCallableProtocol(selected);
+  assert.equal(protocol?.lifetime?.kind, "parameter", "a retained native reference stays in its proven environment");
+  assert.equal(protocol.lifetime.name, "Region", "the captured authored native region is not widened to static");
+});
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`

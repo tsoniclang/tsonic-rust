@@ -78,26 +78,32 @@ function fixture(text, options = {}) {
 for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
   test(`callable fields select their complete member storage (${genericParameters.length === 0 ? "owned" : "borrowed"})`, () => {
     const declaration = {};
+    const unrequested = {};
     const definition = { genericParameters };
     const lifetime = { kind: "parameter", identity: "field:environment", name: "environment" };
     const integer = rustSourcePrimitiveTargetType("int32");
     const declared = rustCallableTargetType([integer], integer, lifetime);
-    const subject = { node: declaration, kind: "member", projection: [] };
+    const subjects = new Map([declaration, unrequested].map(node => [node, { node, kind: "member", projection: [] }]));
     let queries = 0;
     let selections = 0;
+    let open = true;
     const fields = prepareRustProjectCallableFieldStorage({
       ast: new Proxy({}, { get() { throw new Error("A field storage owner must query its complete member subject, not one initializer."); } }),
-      records: { runtimeCarrier: { get: node => node === declaration ? { carrier: declared } : undefined } },
+      records: { runtimeCarrier: { get: node => {
+        assert.equal(open, true, "published field readers never read source carrier evidence");
+        return subjects.has(node) ? { carrier: declared } : undefined;
+      } } },
       storage: { subject(node, kind) {
-        assert.equal(node === declaration, true, "the declared field owns all initializer and later assigned values");
+        assert.equal(open && subjects.has(node), true, "the declared field owns all initializer and later assigned values");
         assert.equal(kind, "member", "field selection has one canonical source-storage subject");
         queries += 1;
-        return { kind: "resolved", subject };
+        return { kind: "resolved", subject: subjects.get(node) };
       } },
       projectTypes: { definitions: [definition], objectLayoutForDefinition: owner =>
-        owner === definition ? { fields: [{ declaration }] } : undefined },
+        owner === definition ? { fields: [{ declaration }, { declaration: unrequested }] } : undefined },
     }, (selected, carrier) => {
-      assert.equal(selected === subject && carrier === declared, true, "physical selection keeps the exact declared member correspondence");
+      assert.equal(open && subjects.get(selected.node) === selected && carrier === declared, true,
+        "physical selection keeps the exact declared member correspondence");
       selections += 1;
       return { kind: "identity", carrier };
     });
@@ -110,8 +116,36 @@ for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
     assert.equal(queries, 1, "one complete field domain is queried once");
     assert.equal(selections, 1, "one native storage owner selects the field once");
     assert.equal(fields.get({}) === undefined, true, "a foreign declaration is not a field storage subject");
+    const sealed = fields.seal();
+    assert.equal(sealed.kind, "resolved", "the complete callable member inventory closes before program publication");
+    assert.equal(queries, 2, "the seal also materializes a field nobody requested during analysis");
+    assert.equal(selections, 2, "every original declared callable field has one native selection");
+    open = false;
+    assert.equal(sealed.value.get(declaration) === carrier, true, "published readers are stable without analysis access");
+    assert.equal(sealed.value.get(unrequested) !== undefined, true, "unrequested fields cannot become post-seal computations");
+    assert.equal(fields.get(declaration) === carrier, true, "the private closed builder also performs only a lookup");
   });
 }
+
+test("unresolved callable member storage is rejected by its producer before publication", () => {
+  const declaration = {};
+  const definition = { genericParameters: [] };
+  const integer = rustSourcePrimitiveTargetType("int32");
+  const carrier = rustCallableTargetType([], integer);
+  const fields = prepareRustProjectCallableFieldStorage({ ast: {},
+    records: { runtimeCarrier: { get: node => node === declaration ? { carrier } : undefined } },
+    storage: { subject: node => ({ kind: "resolved", subject: { node, kind: "member", projection: [] } }),
+      failureReason: () => undefined },
+    projectTypes: { definitions: [definition], objectLayoutForDefinition: () => ({ fields: [{ declaration }] }) },
+  }, () => ({ kind: "unresolved", reason: "The complete native field storage has incompatible actual producer contracts." }));
+  const selected = fields.seal();
+  assert.equal(selected.kind, "rejected", "missing physical member evidence never crosses the seal");
+  assert.equal(selected.diagnostics.length, 1, "the original field receives one producer rejection");
+  assert.equal(selected.diagnostics[0].sourceNode === declaration, true, "the diagnostic preserves the checked field identity");
+  assert.equal(selected.diagnostics[0].code, "RUST_CALLABLE_VALUE_NOT_CLOSED", "the existing native callable closure diagnostic is retained");
+  assert.equal(selected.diagnostics[0].message,
+    "The complete native field storage has incompatible actual producer contracts.", "the owning selection's reason is preserved exactly");
+});
 
 test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
   const current = fixture("export function read(value: number): number { return value; }");
