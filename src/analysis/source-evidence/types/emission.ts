@@ -11,7 +11,8 @@ import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../..
 import { isRustAbsenceCarrier, isRustUnitCarrier, isRustJsValueCarrier, rustOptionElementCarrier, rustOptionTargetType, rustAbsenceTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustUnionPayloadAdmission } from "../../../policy/conversions/union-injection.js";
-import { isRustNativeFutureCarrier, isRustNeverCarrier, rustJsPromiseTargetId } from "../../../target-model/types/index.js";
+import { isRustNativeFutureCarrier, rustJsPromiseTargetId } from "../../../target-model/types/index.js";
+import { rustUninhabitedError } from "../../../policy/conversions/callable-physical.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { rustSourceUnionPayloadArguments } from "../../../target-model/types/source-union-definitions.js";
@@ -39,6 +40,7 @@ import { substituteRustTargetTypeParameters } from "../../../target-model/types/
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
   const pending = [...extraTypes, ...nodes.flatMap(node => rustPhysicalEmissionRecordCarriers(program.records, node)), rustProgramErrorTargetType(), rustUnitTargetType()];
+  pending.push(program.errorRegions.initialization.binary.lifecycle.carrier);
   pending.push(...program.providerErrorCarriers, ...rustDeclarationEmissionCarriers(program, nodes));
   pending.push(...rustCapturedLifetimeEmissionCarriers(program, nodes, node =>
     [...rustPhysicalEmissionRecordCarriers(program.records, node), ...rustDeclarationEmissionCarriers(program, [node])]));
@@ -94,6 +96,9 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
   }
   for (const node of nodes) {
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
+    const task = program.records.nativeTaskUse.get(node);
+    if (task !== undefined) pending.push(task.scope.carrier, task.scope.errorCarrier,
+      ...(task.kind === "owner" ? [task.inputCarrier] : []));
     const parameter = program.records.callableParameter.get(node);
     if (parameter !== undefined) pending.push(parameter.carrier);
     const returned = program.records.callableReturn.get(node);
@@ -191,10 +196,10 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
       option: isRustOptionCarrier(carrier), anonymousOptional: rustNativeFutureCallableResult(carrier)?.optional === true, string: isRustStringCarrier(carrier),
       sharedStringReference: carrier.kind === "reference" && !carrier.mutable && isRustStringCarrier(carrier.referent),
       optionPayload: optionalElement === undefined ? undefined : Object.freeze({ str: payloadView(true), shared: payloadView(false) }),
-      completion: isRustUnitCarrier(carrier) ? "unit" : isRustNeverCarrier(carrier) ? "never" : "value",
+      completion: isRustUnitCarrier(carrier) ? "unit" : rustUninhabitedError(carrier) ? "never" : "value",
       promiseObject: carrier.kind === "target-named" && carrier.id === rustJsPromiseTargetId,
       // A never value has nothing to bind: evaluating it as a statement is the discard (let _ = never is let_unit_value).
-      discard: isRustNativeFutureCarrier(optionalElement ?? carrier) ? "drop" : isRustUnitCarrier(carrier) || isRustNeverCarrier(carrier) ? "unit" : "value",
+      discard: isRustNativeFutureCarrier(optionalElement ?? carrier) ? "drop" : isRustUnitCarrier(carrier) || rustUninhabitedError(carrier) ? "unit" : "value",
       optionalStorage: optionalStorage === undefined ? undefined : Object.freeze(optionalStorage), sourceOptional: Object.freeze(sourceOptional),
       emptyRecord: carrier.kind === "target-named" && carrier.id === rustEmptyObjectTargetId ? "native-empty"
         : shape?.fields.length === 0 && rustStructuralObjectCarrierValue(carrier)?.representation === "value" ? "structural" : undefined,

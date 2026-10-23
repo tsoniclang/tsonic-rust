@@ -7,13 +7,14 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
 
 export function analyzeRustSignatureVisibility(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustSourcePackageEmissionProducer): void {
   const components = program.records.sourcePackageComponents.get();
   if (components === undefined) failTargetAnalysisInvariant("tsonic-rust", "Native signature closure requires its exact source components.");
   const required = new Map<string, Map<string, Set<string>>>();
-  const pending: TargetTypeRef[] = [];
+  const pending: TargetTypeRef[] = [program.errorRegions.initialization.binary.lifecycle.carrier];
   const processed = new Set<string>();
   const expanded = new Set<Node>();
   const declarations = new Map<string, Node>();
@@ -35,6 +36,9 @@ export function analyzeRustSignatureVisibility(program: Omit<RustAnalysisProgram
     if (file !== undefined) declarations.set(closedMetadataKey([program.source.ast.getFileName(file), form.name]), node);
   }
   for (const node of nodes) {
+    const task = program.records.nativeTaskUse.get(node);
+    if (task !== undefined) pending.push(task.scope.carrier, task.scope.errorCarrier,
+      ...(task.kind === "owner" ? [task.inputCarrier] : []));
     const declaration = program.records.nativeDeclaration.get(node);
     if (declaration !== undefined && program.records.declarationLiveness.get(node)?.visibility === "public") {
       const file = program.source.ast.getSourceFile(node);
@@ -68,6 +72,12 @@ export function analyzeRustSignatureVisibility(program: Omit<RustAnalysisProgram
     if (processed.has(key)) continue;
     processed.add(key);
     pending.push(...rustTargetTypeChildren(carrier));
+    const errorJoin = rustNativeErrorJoinReference(carrier);
+    if (errorJoin !== undefined) {
+      const declaration = program.errorRegions.declarationsFor(errorJoin.fileName).find(value => value.arity === errorJoin.errors.length);
+      if (declaration === undefined) failTargetAnalysisInvariant("tsonic-rust", "A public native error join requires its single sealed declaration.");
+      expose(errorJoin.fileName, declaration.name);
+    }
     const definition = program.projectTypes.definitionForCarrier(carrier);
     if (definition !== undefined) {
       expose(definition.fileName, definition.targetName);
