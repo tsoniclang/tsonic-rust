@@ -61,7 +61,9 @@ export function inspect(marker: number, ready: boolean): number { use(marker); $
     ast.as.AsBinaryExpression(node).Right === call);
   assert.equal(write !== undefined, true, "the effect still belongs to its exact source assignment");
   const target = ast.as.AsBinaryExpression(write).Left;
-  assert.equal(program.records.unobservedWrite.get(target), dead,
+  const observation = program.records.unobservedWrite.get(target);
+  assert.equal(observation?.kind, "lexical", "ordinary writes retain their lexical native context");
+  assert.equal(observation.unobserved, dead,
     "the source flow owner decides observation across the actual control-flow successors before sealing");
   assert.equal(nodes.filter(node => node === call).length, 1, "the effect is never duplicated");
 }
@@ -90,7 +92,9 @@ export function inspect(): number { ${initial} ${body} }
   const write = nodes.find(node => ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === operator);
   assert.equal(write !== undefined, true, `${name}: preserve the exact original valued assignment`);
   const target = ast.as.AsBinaryExpression(write).Left;
-  assert.equal(program.records.unobservedWrite.get(target), dead, `${name}: the existing flow producer decides storage observation`);
+  const observation = program.records.unobservedWrite.get(target);
+  assert.equal(observation?.kind, "lexical", `${name}: the valued write retains its lexical native context`);
+  assert.equal(observation.unobserved, dead, `${name}: the existing flow producer decides storage observation`);
   const effect = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "step");
   assert.equal(effect !== undefined && ast.as.AsBinaryExpression(write).Right === effect, true,
     `${name}: the effect remains the exact one source RHS`);
@@ -118,7 +122,9 @@ export function inspect(): number { let marker = 1; const selected = ${update}; 
   const target = ast.is.IsPrefixUnaryExpression(selected) ? ast.as.AsPrefixUnaryExpression(selected).Operand
     : ast.as.AsPostfixUnaryExpression(selected).Operand;
   assert.equal(target !== undefined, true, `${name}: the update retains its exact source target`);
-  assert.equal(program.records.unobservedWrite.get(target), dead,
+  const observation = program.records.unobservedWrite.get(target);
+  assert.equal(observation?.kind, "lexical", `${name}: the update retains its lexical native context`);
+  assert.equal(observation.unobserved, dead,
     `${name}: result use never falsely makes the overwritten storage value live`);
 });
 
@@ -153,7 +159,11 @@ export function inspect(flag: boolean): string { return new Value(flag).read(); 
     ast.is.IsStringLiteral(ast.as.AsBinaryExpression(node).Right) && ast.text(ast.as.AsBinaryExpression(node).Right) === "kept");
   assert.equal(first !== undefined, true, `${name}: the original first store and its RHS remain`);
   const target = ast.as.AsBinaryExpression(first).Left;
-  assert.equal(program.records.unobservedWrite.get(target), expected,
+  const observation = program.records.unobservedWrite.get(target);
+  const layer = plan.layers.find(selected => selected.definition === definition);
+  assert.equal(layer !== undefined, true, `${name}: select the identical actual native root layer`);
+  assert.equal(observation?.kind, "construction", `${name}: the write retains its actual construction contexts`);
+  assert.equal(observation.layers.get(layer), expected,
     `${name}: explicit and implicit native observations are counted before publication`);
   const projection = plan.emission.preparations.get(target)?.projections.find(selected => selected.expression.node === target);
   assert.equal(projection?.kind === "local" && projection.storage === "value", true,
@@ -182,13 +192,15 @@ export function inspect(): string { return ${abstractBase ? "" : "new Base().val
   assert.equal(base !== undefined && derived !== undefined, true, `${name}: retain both actual checked definitions`);
   const derivedPlan = program.records.classConstruction.get(derived.declaration);
   assert.equal(derivedPlan !== undefined, true, `${name}: the real derived physical context is published`);
-  assert.equal(program.records.classConstruction.get(base.declaration) !== undefined, !abstractBase,
+  const basePlan = program.records.classConstruction.get(base.declaration);
+  assert.equal(basePlan !== undefined, !abstractBase,
     `${name}: abstract constructors are never invented as standalone emitting contexts`);
   const field = derivedPlan.fields.find(selected => ast.text(ast.name(selected.declaration)) === "value");
   assert.equal(field !== undefined, true, `${name}: retain the exact inherited physical field`);
   assert.equal(derivedPlan.localFieldDeclarations.has(field.declaration), exported,
     `${name}: native tuple observations come from the existing final binding-declaration plan`);
-  const constructor = derivedPlan.layers.find(layer => layer.definition === base)?.constructor;
+  const derivedBaseLayer = derivedPlan.layers.find(layer => layer.definition === base);
+  const constructor = derivedBaseLayer?.constructor;
   assert.equal(constructor !== undefined, true, `${name}: replay the identical checked base constructor AST`);
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
@@ -196,8 +208,31 @@ export function inspect(): string { return ${abstractBase ? "" : "new Base().val
   const first = nodes.find(node => ast.is.IsBinaryExpression(node) &&
     ast.is.IsStringLiteral(ast.as.AsBinaryExpression(node).Right) && ast.text(ast.as.AsBinaryExpression(node).Right) === "kept");
   assert.equal(first !== undefined, true, `${name}: the first base store is preserved`);
-  assert.equal(program.records.unobservedWrite.get(ast.as.AsBinaryExpression(first).Left), expected,
-    `${name}: only conjunction over actual native contexts can publish a global warning expectation`);
+  const observation = program.records.unobservedWrite.get(ast.as.AsBinaryExpression(first).Left);
+  assert.equal(observation?.kind, "construction", `${name}: native replay keeps its exact per-layer dispositions`);
+  assert.equal([...observation.layers.values()].every(value => value), expected,
+    `${name}: the old global conjunction remains a safety check over all actual native contexts`);
+  assert.equal(observation.layers.size, abstractBase ? 1 : 2, `${name}: every and only actual emitting context is recorded`);
+  assert.equal(observation.layers.get(derivedBaseLayer), !exported,
+    `${name}: only a real intermediate native export observes the inherited first store`);
+  if (basePlan !== undefined) {
+    const standaloneLayer = basePlan.layers.find(layer => layer.definition === base);
+    assert.equal(standaloneLayer !== undefined && standaloneLayer !== derivedBaseLayer, true,
+      `${name}: the same source constructor has distinct actual standalone and inherited layers`);
+    assert.equal(observation.layers.get(standaloneLayer), false,
+      `${name}: standalone final materialization observes the identical first store`);
+  }
+  const derivedLayer = derivedPlan.layers.find(layer => layer.definition === derived);
+  assert.equal(derivedLayer?.constructor !== undefined, true, `${name}: retain the actual final native constructor layer`);
+  const finalNodes = [];
+  const visitFinal = node => { finalNodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visitFinal(child); }); };
+  visitFinal(derivedLayer.constructor);
+  const finalWrite = finalNodes.find(node => ast.is.IsBinaryExpression(node) &&
+    ast.is.IsStringLiteral(ast.as.AsBinaryExpression(node).Right) && ast.text(ast.as.AsBinaryExpression(node).Right) === "done");
+  assert.equal(finalWrite !== undefined, true, `${name}: preserve the final store and its actual source RHS`);
+  const finalObservation = program.records.unobservedWrite.get(ast.as.AsBinaryExpression(finalWrite).Left);
+  assert.equal(finalObservation?.kind, "construction", `${name}: the final write has its actual layer record`);
+  assert.equal(finalObservation.layers.get(derivedLayer), false, `${name}: final materialization observes the derived store`);
 });
 
 for (const [label, declaration, body, after, expectedUnused, expectedCounted] of [

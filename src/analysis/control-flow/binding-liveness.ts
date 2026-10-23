@@ -9,6 +9,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustStaticComparisonSkipsOperand } from "../operations/static-comparison-operands.js";
 import type { RustAdmittedConstruction, RustConstructionLayer } from "../../target-model/records/construction.js";
 import type { RustCallableEmissionContexts } from "../../target-model/records/physical-emission-contexts.js";
+import { isRustNeverCarrier } from "../../target-model/types/index.js";
 
 export function analyzeRustBindingLiveness(
   source: TargetSourceProgram, flow: RustOwnershipFlow, records: RustProgramRecords, names: RustNamePlan,
@@ -78,16 +79,18 @@ export function analyzeRustBindingLiveness(
           repeatedByCompletionScope.has(binding) });
     }
   }
-  const constructionIssues = collectRustConstructionWriteLiveness(source, flow, records, contexts, writesBySource);
+  const constructionWrites = new Map<Node, Map<RustConstructionLayer, boolean>>();
+  const constructionIssues = collectRustConstructionWriteLiveness(source, flow, records, contexts, constructionWrites);
   if (constructionIssues.length !== 0) return constructionIssues;
   for (const [binding, value] of bindings) producer.binding(binding, value);
-  for (const [reference, unobserved] of writesBySource) producer.write(reference, unobserved);
+  for (const [reference, unobserved] of writesBySource) producer.write(reference, { kind: "lexical", unobserved });
+  for (const [reference, layers] of constructionWrites) producer.write(reference, { kind: "construction", layers });
   return [];
 }
 
 function collectRustConstructionWriteLiveness(
   source: TargetSourceProgram, flow: RustOwnershipFlow, records: RustProgramRecords,
-  contexts: RustCallableEmissionContexts, writesBySource: Map<Node, boolean>,
+  contexts: RustCallableEmissionContexts, writesBySource: Map<Node, Map<RustConstructionLayer, boolean>>,
 ): readonly TargetDiagnostic[] {
   const completion = createRustCompletionLivenessQueries(source);
   const layers = new Map<object, { readonly plan: RustAdmittedConstruction; readonly layer: RustConstructionLayer; readonly index: number }>();
@@ -234,7 +237,9 @@ function collectRustConstructionWriteLiveness(
       const unobserved = plainWrites.has(target) &&
         !solution.after.get(point.id)?.has(field) && !readsAfter.get(point.id)?.has(field) &&
         !completion.observed(target, field, graph.declaration, false) && !completion.repeated(target, field, graph.declaration);
-      writesBySource.set(target, (writesBySource.get(target) ?? true) && unobserved);
+      let selectedLayers = writesBySource.get(target);
+      if (selectedLayers === undefined) { selectedLayers = new Map(); writesBySource.set(target, selectedLayers); }
+      selectedLayers.set(layer, (selectedLayers.get(layer) ?? true) && unobserved);
     }
   }
   return [];
@@ -255,6 +260,10 @@ function rustLivenessReadEmitted(source: TargetSourceProgram, records: RustProgr
       records.nativeParticipation.get(current) === "erased") return false;
     if (source.ast.is.IsIfStatement(current) && Node_Expression(source.ast, current) === child &&
       records.nativeGuardResult.get(child) !== undefined) return false;
+    if (source.ast.is.IsBinaryExpression(current) && source.ast.as.AsBinaryExpression(current)?.Right === child) {
+      const operation = records.targetOperation.get(current);
+      if (operation?.kind === "sequence" && isRustNeverCarrier(operation.leftCarrier)) return false;
+    }
     if (source.ast.is.IsForStatement(current)) {
       const counted = records.countedLoop.get(current);
       if (counted?.counterDeclaration === binding &&
