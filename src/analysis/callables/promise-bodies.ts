@@ -13,13 +13,15 @@ import { rustUnparenthesizedExpression } from "../../target-model/syntax/express
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { selectRustPromiseBodyRecursion } from "./promise-recursion.js";
 import { rustAwaitedPromiseLocal } from "./promise-locals.js";
+import type { RustModuleBindingAnalysis } from "../program/module-bindings.js";
+import { rustCallableExpressionValueDeclaration } from "./function-values.js";
 
 type SourceCall = Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
 
 export interface RustPromiseBodySelection {
   readonly plan: RustPromiseBodies;
   readonly namesReady: boolean;
-  initializeNames(context: RustAnalysisContext): void;
+  initializeNames(context: RustAnalysisContext, modules: RustModuleBindingAnalysis): void;
   nativeNameForDeclaration(declaration: Node | undefined): string | undefined;
   nativeFormForDeclaration(declaration: Node): "function" | "method" | "static-method" | undefined;
   namesForScope(scope: Node): ReadonlySet<string>;
@@ -49,7 +51,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   return Object.freeze({
     plan: producer.records,
     get namesReady() { return namesReady; },
-    initializeNames(context: RustAnalysisContext): void {
+    initializeNames(context: RustAnalysisContext, modules: RustModuleBindingAnalysis): void {
       assertOpen();
       if (namesReady) failTargetAnalysisInvariant("tsonic-rust", "Native Promise names have one physical-scope producer.");
       const usedIn = (scope: Node): Set<string> => {
@@ -71,8 +73,10 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         const sourceFile = context.ast.getSourceFile(declaration);
         if (staticSlot !== undefined && sourceFile !== undefined) usedIn(sourceFile).add(staticSlot);
       }
-      if (context.jsEnabled) for (const declaration of context.nativeNodes) {
-        if ((!context.ast.is.IsFunctionDeclaration(declaration) && !context.ast.is.IsMethodDeclaration(declaration)) ||
+      if (context.jsEnabled) for (const namedDeclaration of context.nativeNodes) {
+        const module = context.ast.is.IsVariableDeclaration(namedDeclaration) ? modules.nativeCallable(namedDeclaration) : undefined;
+        const declaration = module?.callableDeclaration ?? namedDeclaration;
+        if ((module === undefined && !context.ast.is.IsFunctionDeclaration(declaration) && !context.ast.is.IsMethodDeclaration(declaration)) ||
           !context.ast.hasModifierKind(declaration, "async") || context.ast.body(declaration) === undefined) continue;
         if (context.ast.is.IsMethodDeclaration(declaration)) {
           const parent = context.ast.parent(declaration);
@@ -81,13 +85,13 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
           if (owner === undefined || !context.ast.hasModifierKind(declaration, "static") && context.projectTypes.isPolymorphic(owner)) continue;
         }
         const staticSlot = context.projectTypes.memberSlotName(declaration, "static");
-        const scope = staticSlot === undefined ? context.names.sourceScopeForDeclaration(declaration)
+        const scope = staticSlot === undefined ? context.names.sourceScopeForDeclaration(namedDeclaration)
           : context.ast.getSourceFile(declaration);
-        const name = staticSlot !== undefined ? staticSlot : context.ast.is.IsFunctionDeclaration(declaration)
+        const name = module !== undefined ? module.name : staticSlot !== undefined ? staticSlot : context.ast.is.IsFunctionDeclaration(declaration)
           ? context.names.functionNameForDeclaration(declaration) : context.names.nameForDeclaration(declaration);
         if (scope === undefined || name === undefined) continue;
         const base = name.startsWith("r#") ? name.slice(2) : name;
-        const form = context.ast.is.IsFunctionDeclaration(declaration) || staticSlot !== undefined ? "function"
+        const form = module !== undefined || context.ast.is.IsFunctionDeclaration(declaration) || staticSlot !== undefined ? "function"
           : context.ast.hasModifierKind(declaration, "static") ? "static-method" : "method";
         nativeDeclarations.set(declaration, Object.freeze({ name: allocateRustGeneratedName(usedIn(scope), `${base}_native`), form }));
       }
@@ -132,9 +136,12 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         if (asynchronous?.kind !== "js-promise") continue;
         const name = rustPromiseBodyNativeName(context, declaration);
         const selectedDemands = new Set(demands.get(declaration));
+        const binding = rustCallableExpressionValueDeclaration(declaration, context.ast);
         // An exported module async function is an authored export, retained in a binary as in a library: its
         // Promise-returning function keeps the authored name (direct awaits still call the native body).
-        if (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration) ||
+        if (name === undefined || context.runtimeValueUses.hasFirstClassUse(binding ?? declaration) ||
+          binding !== undefined && sourceDeclarationIsModuleScoped(binding, context.ast) &&
+          context.source.navigation.declarationUseSummary(binding).exported ||
           context.ast.is.IsFunctionDeclaration(declaration) && context.ast.hasModifierKind(declaration, "export") &&
           sourceDeclarationIsModuleScoped(declaration, context.ast))
           selectedDemands.add(declaration);
@@ -175,9 +182,10 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
   const signature = checked === undefined ? undefined : semantics.declarations.signatureDeclaration(checked.selectedSignature);
   const implementation = signature === undefined ? undefined : context.source.navigation.callableImplementation(signature);
   const declaration = implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
+  const valueBinding = declaration === undefined ? undefined : rustCallableExpressionValueDeclaration(declaration, ast);
   if (declaration === undefined || ast.body(declaration) === undefined || !ast.hasModifierKind(declaration, "async") ||
     !context.source.navigation.isProjectDeclaration(declaration) ||
-    context.source.navigation.declarationUseSummary(declaration).bindingWritten ||
+    context.source.navigation.declarationUseSummary(valueBinding ?? declaration).bindingWritten ||
     rustPromiseBodyNativeName(context, declaration) === undefined) return undefined;
   if (ast.is.IsFunctionDeclaration(declaration)) {
     const reference = context.source.navigation.sourceReferenceFor(callee)?.declaration;
@@ -187,6 +195,12 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
     if (reference !== declaration &&
       !(referencedBody?.kind === "resolved" && referencedBody.implementation.declaration === declaration) &&
       !(lexical !== undefined && lexical === reference) &&
+      !(reference !== undefined && context.runtimeValueUses.callAliasTarget(reference) === declaration) &&
+      !(binding?.storage === "native-callable" && binding.callableDeclaration === declaration)) return undefined;
+  } else if (valueBinding !== undefined) {
+    const reference = context.source.navigation.sourceReferenceFor(callee)?.declaration;
+    const binding = reference === undefined ? undefined : context.records.moduleBinding.get(reference);
+    if (reference !== valueBinding &&
       !(reference !== undefined && context.runtimeValueUses.callAliasTarget(reference) === declaration) &&
       !(binding?.storage === "native-callable" && binding.callableDeclaration === declaration)) return undefined;
   } else if (ast.is.IsMethodDeclaration(declaration) && ast.is.IsPropertyAccessExpression(callee)) {

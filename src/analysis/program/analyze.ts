@@ -263,7 +263,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (projectTypes.issues.length > 0) {
     return;
   }
-  context.promiseBodies.initializeNames(context);
+  context.promiseBodies.initializeNames(context, moduleBindings);
   const methodProperties = context.projectMethodProperties.initialize({
     ast,
     navigation: context.source.navigation,
