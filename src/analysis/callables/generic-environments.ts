@@ -2,7 +2,6 @@ import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef 
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 
 import type { RustNativeCaptureSelection } from "../../target-model/records/native-captures.js";
@@ -22,10 +21,7 @@ export function rustGenericCallableEnvironment(
   const types = new Map(implementation.substitutions);
   const lifetimes = new Map<string, RustLifetimeRef>();
   const consts = new Map<string, RustTargetConstArgument>();
-  const references = rustTargetGenericReferences({ kind: "tuple", elements: [
-    ...capture.captures, ...capture.receiverFields, ...capture.receivers,
-    ...capture.inputs.map(input => input.trait),
-  ] });
+  const references = capture.environment;
   if (references.hasUnnameableLifetime) return undefined;
   const arguments_: readonly RustTargetGenericArgument[] = [
     ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),

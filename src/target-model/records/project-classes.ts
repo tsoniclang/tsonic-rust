@@ -38,6 +38,7 @@ export interface RustProjectClassStateEmission {
 }
 
 export interface RustProjectCallableSignature {
+  readonly parameters: readonly Node[];
   readonly typeParameters: readonly string[];
   readonly returnCarrier: TargetTypeRef;
   readonly omitReturn: boolean;

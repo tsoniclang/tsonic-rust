@@ -13,6 +13,7 @@ import type { RustTargetProgram } from "../../target-model/records/target-progra
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 
 import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
+import { publishRustNativeTaskUses } from "../callables/native-task-uses.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -301,25 +302,7 @@ export function analyzeRustAnalysisProgram(
     classValues,
     errorTypes,
   );
-  const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
-    : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
-    storage: context.sourceStorage,
-    nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
-    nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
-    promiseBodies: context.promiseBodies.plan,
-    nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
-    sourceTypes: sourceStage.sourceTypes,
-    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies, jsEnabled: context.jsEnabled,
-    evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
-      classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });
-  if (declarationGenericRequirements.kind === "rejected" || retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
-    return rejectedTargetStage([...(declarationGenericRequirements.kind === "rejected" ? declarationGenericRequirements.diagnostics : []),
-      ...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
-        source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,
-        evidence: ["target.capability=rust.callable-value.exact-implementation"] })),
-      ...promiseResults.diagnostics]);
-  }
+  if (declarationGenericRequirements.kind === "rejected") return declarationGenericRequirements;
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
     sourceFiles: context.sourceFiles,
@@ -373,6 +356,25 @@ export function analyzeRustAnalysisProgram(
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
+  const taskUses = publishRustNativeTaskUses({ context, graph: sourceStage.nativeTasks, completions: sourceStage.nativeTaskCompletions,
+    captures: context.callableValues.selected.nativeCaptures, regions: errorRegions.value, initialization: initializationErrors.value });
+  if (taskUses.kind === "rejected") return taskUses;
+  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
+    storage: context.sourceStorage,
+    nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
+    nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+    promiseBodies: context.promiseBodies.plan,
+    nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
+    sourceTypes: sourceStage.sourceTypes,
+    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies, jsEnabled: context.jsEnabled,
+    evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
+      classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });
+  if (retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
+    return rejectedTargetStage([...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
+      source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,
+      evidence: ["target.capability=rust.callable-value.exact-implementation"] })), ...promiseResults.diagnostics]);
+  }
   const binaryExecution = analyzeRustBinaryExecution({ hooks: binaryHooks, outputType: configuration.outputType,
     jsEnabled, asynchronous: initializationErrors.value.root.asynchronous ||
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });

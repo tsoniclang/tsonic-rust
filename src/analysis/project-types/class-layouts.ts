@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { Node_Initializer, Node_Type, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { Node_Initializer, Node_Type, sourceParameterIsProperty, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectClassProducer } from "../program/records/project-classes.js";
 import type { RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../target-model/records/project-classes.js";
@@ -21,7 +21,8 @@ import { analyzeRustProjectRootEmission } from "./root-emission.js";
 import { analyzeRustProjectDispatchEmission } from "./dispatch-emission.js";
 import { analyzeRustProjectPolymorphicEmission } from "./polymorphism-emission.js";
 
-export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
+export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram, "reachability">, source: TargetSourceProgram,
+  nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const members = new Map<RustProjectTypeDefinition, readonly Node[]>();
@@ -71,6 +72,9 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
     return physical ?? logical;
   };
   for (const member of callableDeclarations) {
+    const parameters = sourceCallableValueParameters(ast, member, source.semantics.forNode(member));
+    if (parameters === undefined || parameters.some(parameter => program.records.callableParameter.get(parameter) === undefined))
+      failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact checked source value parameters and native formal ABI.", member);
     const asynchronous = program.records.asyncFunction.get(member);
     const typeParameters = ast.typeParameters(member).map(parameter => {
       const selected = program.sourceLifetimes.parameterFor(parameter);
@@ -97,7 +101,7 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
       issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: member,
         message: `Polymorphic project methods require an exact object-safe native invocation ABI. Node kind: ${ast.kindName(member)}.`,
         evidence: ["target.capability=rust.backend.project-dispatch-object-safety"] });
-    } else producer.callable(member, signature);
+    } else producer.callable(member, Object.freeze({ ...signature, parameters: Object.freeze([...parameters]) }));
   }
   // A field whose declared type has no native storage carrier (e.g. `never`) is refused here, as the checkpoint
   // planner refused it; it cannot become a stored slot.

@@ -172,11 +172,12 @@ closureCapture: { get: (node) => {
       projectFieldProjection() { assert.fail("logical carrier fixtures have no checked project-field projections"); },
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
       semantics: currentSource.semantics.forFile };
+    const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), calls: [], entries: [] };
     const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,
-      sourceLifetimes: emptyRustLifetimeIndex });
+      sourceLifetimes: emptyRustLifetimeIndex, nativeTasks });
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
       isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
-      structuralShapes, carrierHost, retainedEnvironments };
+      structuralShapes, carrierHost, retainedEnvironments, nativeTasks };
   };
   return { closures, planInput, materialize,
     create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names,

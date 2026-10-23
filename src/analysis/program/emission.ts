@@ -227,7 +227,7 @@ export function finalizeRustNativeEmission(
   if (providerMutableIssues.length !== 0) return rejectedTargetStage(providerMutableIssues);
   const providerEvaluationIssues = analyzeRustProviderEvaluation(program, context.records.providerEvaluationPlans);
   if (providerEvaluationIssues.length !== 0) return rejectedTargetStage(providerEvaluationIssues);
-  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
+  const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.source, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   const objectLiteralIssues = analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans,
     node => context.semanticsFor(node).propertyNames.get(node),

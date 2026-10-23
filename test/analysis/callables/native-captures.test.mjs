@@ -17,7 +17,8 @@ function fixture(text) {
   const storage = program.sourceStorage;
   const native = program.callableValues.native;
   const plan = createRustNativeCapturePlan({ records: program.records, storage,
-    nativeStorage: program.callableValues.nativeStorage });
+    nativeStorage: program.callableValues.nativeStorage, nativeTasks: program.nativeTaskGraph,
+    retainedEnvironments: program.retainedEnvironments });
   const closures = storage.nodes.filter(node => source.ast.is.IsArrowFunction(node));
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
@@ -117,7 +118,8 @@ test("native capture query rejects foreign declarations without inspecting custo
     "the actual native source has complete capture evidence before constructing a missing-fact inverse");
   const missing = createRustNativeCapturePlan({ records: createRustRecordFixture({ closureCapture: {
     get: subject => subject === make ? undefined : current.program.records.closureCapture.get(subject),
-  } }, current.program.records), storage: current.storage, nativeStorage: current.program.callableValues.nativeStorage });
+  } }, current.program.records), storage: current.storage, nativeStorage: current.program.callableValues.nativeStorage,
+    nativeTasks: current.program.nativeTaskGraph, retainedEnvironments: current.program.retainedEnvironments });
   const declaration = missing.forDeclaration(make);
   assert.equal(declaration.kind === "unresolved" && /exact finalized capture declarations/u.test(declaration.reason), true,
     "only declarations with finalized capture facts are accepted");
@@ -139,7 +141,7 @@ test("completed capture tuples bind every storage category before error normaliz
   const reference = { kind: "reference", mutable: false, referent: parameter, lifetime };
   const array = rustFixedArrayTargetType(parameter, length);
   const original = Object.freeze({ kind: "resolved", captures: Object.freeze([parameter]),
-    receiverFields: Object.freeze([reference]), receivers: Object.freeze([array]), inputs: Object.freeze([]),
+    receiverFields: Object.freeze([reference]), receivers: Object.freeze([array]), taskScope: undefined, inputs: Object.freeze([]),
     environment: rustTargetGenericReferences({ kind: "tuple", elements: [parameter, reference, array] }) });
   const bindings = { types: new Map([[parameter.identity, integer]]),
     lifetimes: new Map([[rustLifetimeKey(lifetime), selectedLifetime]]),
@@ -176,7 +178,7 @@ test("capture completion preserves unresolved evidence and refuses an unregister
     "unresolved evidence is not an empty successful environment");
   const error = rustProducerErrorTargetType({ identity: "missing:producer", fileName: "/missing.ts",
     channel: "invoke", genericArguments: [] });
-  const captures = { kind: "resolved", captures: [error], receiverFields: [], receivers: [], inputs: [],
+  const captures = { kind: "resolved", captures: [error], receiverFields: [], receivers: [], taskScope: undefined, inputs: [],
     environment: rustTargetGenericReferences(error) };
   let lookups = 0;
   const selected = completeRustNativeCaptureCarrier({}, captures, bindings, { producers: {

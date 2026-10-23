@@ -105,8 +105,9 @@ export function analyzeRustNativeTaskGraph(input: {
     const semantics = source.semantics.forNode(node);
     const call = semantics.operations.call(node);
     const selectedDeclaration = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
-    const implementation = selectedDeclaration === undefined ? undefined : source.navigation.callableImplementation(selectedDeclaration);
-    if (implementation?.kind !== "resolved" || ast.body(implementation.implementation.declaration) === undefined) continue;
+    const selectedFile = selectedDeclaration === undefined ? undefined : ast.getSourceFile(selectedDeclaration);
+    if (selectedDeclaration === undefined || selectedFile === undefined || ast.isDeclarationFile(selectedFile) ||
+      !source.semantics.includes(selectedFile)) continue;
     const owner = ownerFor(node);
     const bindings = ast.is.IsSourceFile(owner) ? { kind: "resolved" as const, bindings: storage.emptyBindings }
       : storage.bindingsForLexicalOwner(owner);

@@ -126,14 +126,16 @@ export function analyzeRustPromiseResults(input: {
       const owner = sourceEnclosingCallable(input.ast.parent(expression), input.ast);
       const generic = input.nativeStorage.genericBindingsFor(owner ?? expression, producer.bindings);
       if (generic.kind === "unresolved") return unresolved(subject.node, generic.reason);
-      const physical = completeRustNativeCaptureCarrier(expression, input.nativeCaptures.forDeclaration(expression),
-        generic.bindings, input.errorTypes);
+      const physicalCaptures = input.nativeCaptures.forDeclaration(expression);
+      const physical = completeRustNativeCaptureCarrier(expression, physicalCaptures, generic.bindings, input.errorTypes);
       if (physical.kind === "unresolved") return unresolved(subject.node, physical.reason);
       const sourceCaptures = input.records.closureCapture.get(expression);
       if (sourceCaptures === undefined) return unresolved(subject.node,
         "A retained native method requires its identical completed source capture inventory.");
       const references = [...sourceCaptures.captures, ...sourceCaptures.receiverFields, ...sourceCaptures.receivers];
-      if (physical.carrier.kind !== "tuple" || physical.carrier.elements.length !== references.length)
+      if (physicalCaptures.kind !== "resolved" || physical.carrier.kind !== "tuple" ||
+        physical.carrier.elements.length !== references.length + (physicalCaptures.taskScope === undefined ? 0 : 1) ||
+        physicalCaptures.taskScope !== undefined && physicalCaptures.taskScope.position !== references.length)
         return unresolved(subject.node, "A native capture tuple lost its exact source-to-physical component correspondence.");
       captures.push(physical.carrier);
       for (const [index, capture] of references.entries()) {

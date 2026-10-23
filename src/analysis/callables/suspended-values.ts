@@ -15,6 +15,7 @@ import { bindRustElidedCallableInput } from "../../policy/types/callables/lifeti
 import { resolveRustEnclosingGenericParameters } from "./generic-environment.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
+import type { RustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 
 import type { RustSuspendedCallableImplementation } from "../../target-model/records/suspended-callables.js";
 
@@ -71,8 +72,14 @@ export function createRustSuspendedCallablePlan(
       return capture.storage === "location" ? rustLocationTargetType(carrier) : carrier;
     }), ...physical.receiverFields.map(carrier => substituteElidedLifetime(carrier, rustStaticLifetime)),
     ...physical.receivers.map(carrier => substituteElidedLifetime(carrier, rustStaticLifetime))]);
-    const environment = rustTargetGenericReferences({ kind: "tuple", elements: storage });
-    const authoredSignature = rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...protocol.parameters, protocol.result] });
+    const withScope = (references: RustTargetGenericReferences): RustTargetGenericReferences => {
+      const lifetime = physical.taskScope?.storage === "borrow" ? physical.taskScope.lifetime : undefined;
+      if (lifetime?.kind !== "parameter" || references.lifetimeIdentities.includes(rustLifetimeKey(lifetime))) return references;
+      return Object.freeze({ ...references, lifetimes: Object.freeze([...references.lifetimes, lifetime]),
+        lifetimeIdentities: Object.freeze([...references.lifetimeIdentities, rustLifetimeKey(lifetime)]) });
+    };
+    const environment = withScope(rustTargetGenericReferences({ kind: "tuple", elements: storage }));
+    const authoredSignature = withScope(rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...protocol.parameters, protocol.result] }));
     const lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }> = {
       kind: "parameter", identity: `suspended-callable:${identity}:input`,
       name: allocateRustGeneratedName(new Set(authoredSignature.lifetimes.map(selected => selected.name)), "input"),
@@ -80,7 +87,7 @@ export function createRustSuspendedCallablePlan(
     const bound = authoredSignature.hasUnnameableLifetime && !environment.hasUnnameableLifetime
       ? bindRustElidedCallableInput(protocol.parameters, protocol.result, lifetime) : undefined;
     const signature = bound === undefined ? authoredSignature
-      : rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...bound.parameters, bound.result] });
+      : withScope(rustTargetGenericReferences({ kind: "tuple", elements: [...storage, ...bound.parameters, bound.result] }));
     if (signature.hasUnnameableLifetime) {
       issues.push({ subject: declaration, message: "A suspended callable signature has no nameable native lifetime contract." });
       continue;

@@ -56,7 +56,18 @@ export function selectRustAsyncBodyFacts(
   if (!isJsPromise) {
     const inner = !isRustNeverCarrier(inferred) || selectedContext === undefined ? inferred
       : rustFutureOutputCarrier(rustOptionElementCarrier(selectedContext) ?? selectedContext);
-    return inner === undefined ? undefined : { fact: rustNativeAsyncFunctionFact(inner) };
+    if (inner === undefined) return undefined;
+    const parameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration));
+    if (parameters === undefined) return undefined;
+    const environment = rustRetainedEnvironment(declaration, parameters.map(parameter =>
+      walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), walk.context);
+    if (environment.kind === "unresolved") {
+      appendRustDiagnostic(walk, "RUST_NATIVE_ASYNC_STORAGE_LIFETIME_NOT_PROVEN", environment.reason,
+        declaration, ["target.capability=rust.async.native-storage-lifetime"]);
+      return undefined;
+    }
+    return { fact: rustNativeAsyncFunctionFact(inner),
+      ...(environment.kind === "selected" ? { retainedEnvironment: environment.environment } : {}) };
   }
   const selected = selectRustAsyncBodyPromise(futureCarrier, inferred, selectedContext, walk.context.typeDefinitions);
   if (selected.kind === "rejected") {

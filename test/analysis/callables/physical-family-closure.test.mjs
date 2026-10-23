@@ -12,6 +12,7 @@ import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callab
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeChildren } from "../../../dist/target-model/types/carriers/children.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
@@ -109,7 +110,10 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
     } });
   producers.selectConstructionErrors(new Map());
   const queries = createRustNativeStorageQueries({ ...input, native, producers });
-  const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
+  const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), calls: [], entries: [] };
+  const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries, nativeTasks,
+    retainedEnvironments: createRustRetainedEnvironmentQueries({ source, sourceStorage: storage,
+      sourceLifetimes: program.sourceLifetimes, nativeTasks }) }));
   physical = registry.initializePhysical({ ...input, native, captures,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
@@ -845,6 +849,8 @@ function captureFixture(subjectFor) {
   const facts = new Map([[declaration, fact], [required, fact], [unrequired, fact]]);
   const state = { selections: 0, plan: undefined };
   state.plan = createRustNativeCapturePlan({
+    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), calls: [], entries: [] },
+    retainedEnvironments: { environmentFor() { throw new Error("A task-free capture fixture does not select scope retention."); } },
     records: createRustRecordFixture({ closureCapture: { get: node => facts.get(node) } }),
     storage: { nodes: [declaration, required, unrequired, reference],
       subjectFor: node => ({ kind: "resolved", subject: { node, kind: "value", projection: [] } }) },

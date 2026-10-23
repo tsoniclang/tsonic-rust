@@ -133,6 +133,15 @@ export function finalizeRustCallableSignature(
     else if (!records.sourceCallableReturns.resolve(walk, declaration, logical.carrier)) return undefined;
     const result = records.sourceCallableReturn.get(declaration);
     if (result === undefined) return undefined;
+    if (walk.context.nativeTaskGraph.capturedOwners.has(declaration)) {
+      const retained = walk.context.retainedEnvironments.environmentFor(declaration);
+      if (retained.kind === "unresolved") return undefined;
+      if (retained.kind === "selected" && retained.environment.inputs.some(input => input.kind === "native-task-scope")) {
+        requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
+          "native task capture environment", "finalizeRustCallableSignature");
+        records.retainedEnvironments.retain(declaration, retained.environment.lifetime, retained.environment.inputs);
+      }
+    }
     const invocation = rustCallableInvocationResult(records, declaration);
     const callableValue = invocation !== undefined && ast.body(declaration) !== undefined &&
       (ast.is.IsFunctionDeclaration(declaration) || ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration)) &&

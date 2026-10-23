@@ -117,9 +117,9 @@ export function rustRetainedCallLifetimes(
   };
   for (const retained of environment.inputs) {
     if (retained.kind === "native-task-scope") {
-      const selected = caller === undefined ? undefined : records.nativeTaskUse.get(caller);
-      if (selected?.kind !== "owner") return undefined;
-      carriers.push(selected.inputCarrier);
+      if (callerEnvironment.kind !== "selected" ||
+        !callerEnvironment.environment.inputs.some(input => input.kind === "native-task-scope")) return undefined;
+      carriers.push(reference(callerEnvironment.environment.lifetime));
       continue;
     }
     const parameter = retained.declaration;
@@ -155,9 +155,8 @@ export function rustRetainedCallLifetimes(
   }
   const contract = rustEnclosingStorageContract(invocation, ast, walk.context.sourceLifetimes);
   const retainedLifetimes = new Set((retainedCaller?.inputs ?? []).flatMap(input => {
-    const task = caller === undefined ? undefined : records.nativeTaskUse.get(caller);
-    const carrier = input.kind === "parameter" ? records.sourceParameterAbi.get(input.declaration)?.parameterCarrier
-      : task?.kind === "owner" ? task.inputCarrier : undefined;
+    if (input.kind === "native-task-scope") return retainedCaller === undefined ? [] : [rustLifetimeKey(retainedCaller.lifetime)];
+    const carrier = records.sourceParameterAbi.get(input.declaration)?.parameterCarrier;
     return carrier === undefined || rustHasOpenOwnedStorage(carrier) ? [] : rustTargetGenericReferences(carrier).lifetimeIdentities;
   }));
   const effective = retainedCaller === undefined ? contract : { ...contract, parameters: [

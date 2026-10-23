@@ -69,3 +69,33 @@ for (const [name, text, count] of [
       "constructors are not forced through ordinary function return admission");
   });
 }
+
+for (const [name, text] of [
+  ["abstract method", `abstract class Base { abstract read(value: number): number; }
+class Derived extends Base { read(value: number): number { return value + 1; } }
+function run(value: Base): number { return value.read(2); }
+console.log(run(new Derived()));`],
+  ["interface method with receiver annotation", `interface Reader { read(this: void, value: number): number; }
+class Derived implements Reader { read(this: void, value: number): number { return value + 1; } }
+function run(value: Reader): number { return value.read(2); }
+console.log(run(new Derived()));`],
+]) {
+  test(`${name} publishes value parameters on its contract signature without requiring a body`, () => {
+    const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+    const ast = program.source.ast;
+    const contracts = nodes(program).filter(node => ast.body(node) === undefined &&
+      (ast.is.IsMethodDeclaration(node) || ast.kindName(node) === "KindMethodSignature"));
+    assert.equal(contracts.length, 1, "one authored bodyless contract is covered");
+    const contract = contracts[0];
+    const selected = program.records.projectCallableSignature.get(contract);
+    assert.equal(selected !== undefined, true, "the existing contract owner publishes the selected signature");
+    assert.equal(selected.parameters.length, 1, "only the actual source value parameter enters the native ABI");
+    assert.equal(Object.isFrozen(selected.parameters), true, "the contract value vector is immutable");
+    assert.equal(selected.parameters.every(parameter => ast.parent(parameter) === contract), true,
+      "the vector retains its original checked contract declaration identities");
+    assert.equal(selected.parameters.every(parameter => program.records.callableParameter.get(parameter) !== undefined), true,
+      "every contract parameter has the complete native formal ABI");
+    assert.equal(program.records.callableDeclaration.get(contract) === undefined, true,
+      "signature-only contracts never require an ordinary body or return record");
+  });
+}
