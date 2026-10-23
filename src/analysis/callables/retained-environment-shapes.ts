@@ -1,15 +1,15 @@
 import type { Node } from "@tsonic/tsts";
-import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
+import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject,
+  type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceExpressionResultDisposition, sourceLexicalEnvironment,
   sourceNodeIdentity, sourceCallableValueParameters, sourceImmediatelyAwaitedLocal } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { RustRetainedEnvironmentSelection } from "../../target-model/records/retained-environments.js";
-import type { RustNativeTaskGraph } from "./native-tasks.js";
 
 type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
-  readonly nativeTasks: RustNativeTaskGraph;
+  readonly nativeTasks: SourceNativeTaskGraph;
 };
 import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../target-model/records/retained-environments.js";
 

@@ -59,15 +59,14 @@ import type { RustSourceCallableSpecializationIssue } from "../../target-model/r
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
-import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import { completeRustNativeTaskValues,
-  type RustNativeTaskGraph, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
+import { completeRustNativeTaskValues, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
 
 interface RustSourceStageOutput {
-  readonly nativeTasks: RustNativeTaskGraph;
+  readonly nativeTasks: SourceNativeTaskGraph;
   readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;

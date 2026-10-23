@@ -1,6 +1,8 @@
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
-import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
+import { Node_Expression } from "@tsonic/target-api/source";
+import { analyzeSourceNativeTaskGraph, createSourceStorageBudget, defaultSourceStorageLimits,
+  type SourceNativeTaskGraph, type SourceNativeTaskSpawn, type SourceNativeTaskOwnerUse } from "@tsonic/target-api/analysis";
 import type { RustAnalysisContext } from "../program/context.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -15,30 +17,15 @@ import { selectRustSourceProfileCompletionKind } from "../../policy/operations/s
 import { resolveProviderTypeIdentity } from "../../policy/identities/provider-types.js";
 import { providerCarrierFromRelations } from "../../policy/types/project/provider-instantiation.js";
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 
-export interface RustNativeTaskSpawn {
-  readonly node: Node;
-  readonly operand: Node;
-  readonly owner: Node;
-}
-
-export interface RustNativeTaskCompletion extends RustNativeTaskSpawn {
+export interface RustNativeTaskCompletion extends SourceNativeTaskSpawn {
   readonly selection: RustAwaitSelection<RustAwaitValueLeafFact>;
-}
-
-export interface RustNativeTaskGraph {
-  readonly lifecycleOwner: SourceFile | undefined;
-  readonly spawns: readonly RustNativeTaskSpawn[];
-  readonly owners: readonly Node[];
-  readonly capturedOwners: ReadonlySet<Node>;
-  readonly calls: readonly { readonly node: Node; readonly owner: Node;
-    readonly targets: readonly Node[] }[];
-  readonly entries: readonly Node[];
 }
 
 export function completeRustNativeTaskValues(
   walk: RustFactWalk,
-  graph: RustNativeTaskGraph,
+  graph: SourceNativeTaskGraph,
   errors: RustSourceErrorEffectSelection,
 ): TargetStageResult<readonly RustNativeTaskCompletion[]> {
   const completed: RustNativeTaskCompletion[] = [];
@@ -60,23 +47,14 @@ export function completeRustNativeTaskValues(
 
 export function analyzeRustNativeTaskGraph(input: {
   readonly context: Pick<RustAnalysisContext, "ast" | "source" | "sourceStorage" | "nativeNodes" | "isNativeNode" |
-    "promiseResultUses" | "sourceProfiles" | "providerSemantics" | "jsEnabled" | "runtimeValueUses" | "sourceCallables" | "moduleCallables">;
+    "promiseResultUses" | "sourceProfiles" | "providerSemantics" | "jsEnabled" | "runtimeValueUses" | "sourceCallables" |
+    "moduleCallables" | "callableInvocationReferences">;
   readonly publishedDeclarations: ReadonlySet<Node>;
   readonly lifecycleOwner: SourceFile | undefined;
-}): TargetStageResult<RustNativeTaskGraph> {
+}): TargetStageResult<SourceNativeTaskGraph> {
   const { context } = input;
   const { ast, source, sourceStorage: storage } = context;
-  const diagnostics: TargetDiagnostic[] = [];
-  const reject = (node: Node, code: string, message: string): void => {
-    diagnostics.push({ code, category: "error", source: "tsonic-rust", sourceNode: node, message,
-      evidence: ["target.capability=rust.native-tasks"] });
-  };
-  const ownerFor = (node: Node): Node => {
-    const selected = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
-    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted native task requires its original checked execution owner.", node);
-    return selected;
-  };
-  const spawns: RustNativeTaskSpawn[] = [];
+  const spawns: { readonly node: Node; readonly operand: Node }[] = [];
   const nativeCompletion = (type: Type, node: Node, depth = 0): boolean => {
     if (depth >= 128) return false;
     const semantics = source.semantics.forNode(node);
@@ -93,87 +71,46 @@ export function analyzeRustNativeTaskGraph(input: {
     if (!context.isNativeNode(operand) || use.kind !== "discarded" || !ast.is.IsVoidExpression(use.use)) continue;
     const checked = source.semantics.forNode(operand).types.expressionType(operand);
     if (checked === undefined || !nativeCompletion(checked, operand)) continue;
-    spawns.push(Object.freeze({ node: use.use, operand, owner: ownerFor(operand) }));
+    spawns.push(Object.freeze({ node: use.use, operand }));
   }
-  if (spawns.length === 0) return resolvedTargetStage(Object.freeze({ lifecycleOwner: undefined, spawns: Object.freeze([]),
-    owners: Object.freeze([]), capturedOwners: new Set<Node>(), calls: Object.freeze([]), entries: Object.freeze([]) }));
-  if (input.lifecycleOwner === undefined) return rejectedTargetStage([{ code: "RUST_LIFECYCLE_ERROR_OWNER_MISSING", category: "error", source: "tsonic-rust",
-    message: "Native task scope requires its actual root lifecycle source identity.", evidence: ["target.capability=rust.native-tasks"] }]);
-  const edges: { readonly node: Node; readonly owner: Node; readonly targets: readonly Node[]; readonly exact: boolean }[] = [];
-  for (const node of context.nativeNodes) {
+  const ownerUses = new Map<Node, SourceNativeTaskOwnerUse>();
+  const callInputs = new Map<Node, "parameter" | "capture" | "none">();
+  if (spawns.length !== 0) for (const node of context.nativeNodes) {
+    const expression = ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node);
+    const method = ast.is.IsMethodDeclaration(node) || ast.is.IsMethodSignatureDeclaration(node) ||
+      ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node);
+    const parent = ast.parent(node);
+    const nativeMethod = method && parent !== undefined && !ast.is.IsObjectLiteralExpression(parent);
+    if (expression || ast.is.IsFunctionDeclaration(node) || ast.is.IsConstructorDeclaration(node) || method) {
+      const referenceOwner = expression && parent !== undefined && ast.is.IsVariableDeclaration(parent) ? parent : node;
+      const references = ast.is.IsConstructorDeclaration(node) ? [] : context.runtimeValueUses.firstClassReferencesFor(referenceOwner);
+      const parameter = !expression && (ast.is.IsFunctionDeclaration(node) || ast.is.IsConstructorDeclaration(node) || nativeMethod) ||
+        context.moduleCallables.isNativeCallableExpression(node) || context.sourceCallables.directLexicalBinding(node) !== undefined;
+      const capture = references.length !== 0 || (expression || method && !nativeMethod) && !parameter;
+      ownerUses.set(node, Object.freeze({ capture, parameter,
+        creations: Object.freeze(expression || method && !nativeMethod ? capture ? [node] : [] : references) }));
+    }
     if (!ast.is.IsCallExpression(node) && !ast.is.IsNewExpression(node)) continue;
     const semantics = source.semantics.forNode(node);
     const call = semantics.operations.call(node);
-    const selectedDeclaration = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
-    const selectedFile = selectedDeclaration === undefined ? undefined : ast.getSourceFile(selectedDeclaration);
-    if (selectedDeclaration === undefined || selectedFile === undefined || ast.isDeclarationFile(selectedFile) ||
-      !source.semantics.includes(selectedFile)) continue;
-    const owner = ownerFor(node);
-    const bindings = ast.is.IsSourceFile(owner) ? { kind: "resolved" as const, bindings: storage.emptyBindings }
-      : storage.bindingsForLexicalOwner(owner);
-    if (bindings.kind !== "resolved") {
-      reject(node, "RUST_NATIVE_TASK_CALL_GRAPH_NOT_CLOSED", "Native task scope propagation requires the exact checked caller activation.");
-      continue;
-    }
-    const selected = storage.invocationImplementationsFor(node, bindings.bindings);
-    if (selected.kind === "unresolved") {
-      reject(node, "RUST_NATIVE_TASK_CALL_GRAPH_NOT_CLOSED", selected.reason);
-      continue;
-    }
-    edges.push(Object.freeze({ node, owner, targets: selected.nodes, exact: selected.exact }));
+    const declaration = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
+    const original = Node_Expression(ast, node);
+    const callee = original === undefined ? undefined : rustUnparenthesizedExpression(ast, original);
+    if (declaration === undefined || callee === undefined) continue;
+    const reference = context.callableInvocationReferences.forTarget(callee, declaration);
+    const member = ast.is.IsMethodDeclaration(declaration) || ast.is.IsMethodSignatureDeclaration(declaration);
+    const directMember = member && reference.directDeclaration &&
+      (ast.is.IsPropertyAccessExpression(callee) || ast.is.IsElementAccessExpression(callee)) &&
+      !ast.is.IsObjectLiteralExpression(ast.parent(declaration));
+    callInputs.set(node, ast.is.IsNewExpression(node) || reference.nativeFunction || directMember ? "parameter" : "capture");
   }
-  const captures = new Map<Node, boolean>();
-  const capturesScope = (owner: Node): boolean => {
-    const existing = captures.get(owner);
-    if (existing !== undefined) return existing;
-    const captured = !context.moduleCallables.isNativeCallableExpression(owner) &&
-      (ast.is.IsFunctionDeclaration(owner) ? context.runtimeValueUses.hasFirstClassUse(owner)
-        : (ast.is.IsArrowFunction(owner) || ast.is.IsFunctionExpression(owner)) && context.sourceCallables.directLexicalBinding(owner) === undefined ||
-          ast.is.IsMethodDeclaration(owner) && ast.is.IsObjectLiteralExpression(ast.parent(owner)));
-    captures.set(owner, captured);
-    return captured;
-  };
-  const needed = new Set<Node>();
-  const queue: Node[] = [];
-  const requireOwner = (owner: Node): void => {
-    if (needed.has(owner)) return;
-    needed.add(owner);
-    queue.push(owner);
-  };
-  for (const spawn of spawns) requireOwner(spawn.owner);
-  const incoming = new Map<Node, typeof edges>();
-  for (const edge of edges) for (const target of edge.targets) {
-    const callers = incoming.get(target) ?? [];
-    callers.push(edge);
-    incoming.set(target, callers);
-  }
-  const selectedCalls = new Map<Node, RustNativeTaskGraph["calls"][number]>();
-  for (let index = 0; index < queue.length; index++) {
-    const owner = queue[index]!;
-    if (ast.is.IsSourceFile(owner)) continue;
-    const captured = capturesScope(owner);
-    const authoredBinding = ast.parent(owner);
-    if (input.publishedDeclarations.has(owner) || authoredBinding !== undefined && input.publishedDeclarations.has(authoredBinding))
-      reject(owner, "RUST_NATIVE_TASK_PUBLIC_SCOPE_UNSUPPORTED",
-      "A public package function requiring native task scope cannot expose an implicit executor parameter in its source ABI.");
-    if (captured) requireOwner(ownerFor(ast.parent(owner) ?? owner));
-    for (const edge of incoming.get(owner) ?? []) {
-      if (!edge.exact || edge.targets.some(target => capturesScope(target) !== captured)) {
-        reject(edge.node, "RUST_NATIVE_TASK_CALL_GRAPH_NOT_CLOSED",
-          "A native task invocation requires one exact selected scope ownership contract for every callable alternative.");
-        continue;
-      }
-      if (captured) continue;
-      selectedCalls.set(edge.node, Object.freeze({ node: edge.node, owner: edge.owner, targets: edge.targets }));
-      requireOwner(edge.owner);
-    }
-  }
-  return diagnostics.length !== 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({
-    lifecycleOwner: input.lifecycleOwner,
-    spawns: Object.freeze(spawns),
-    owners: Object.freeze([...needed].filter(owner => !ast.is.IsSourceFile(owner))),
-    capturedOwners: new Set([...needed].filter(owner => !ast.is.IsSourceFile(owner) && capturesScope(owner))),
-    calls: Object.freeze([...selectedCalls.values()]),
-    entries: Object.freeze([...needed].filter(owner => ast.is.IsSourceFile(owner))),
-  }));
+  const selected = analyzeSourceNativeTaskGraph({ source, storage, nodes: context.nativeNodes, spawns,
+    lifecycleOwner: input.lifecycleOwner, ownerUses, callInputs, publishedDeclarations: input.publishedDeclarations,
+    budget: createSourceStorageBudget(defaultSourceStorageLimits) });
+  if (selected.kind === "resolved") return resolvedTargetStage(selected.graph);
+  return rejectedTargetStage(selected.issues.map(issue => ({ category: "error" as const, source: "tsonic-rust", sourceNode: issue.node,
+    code: issue.kind === "public-scope" ? "RUST_NATIVE_TASK_PUBLIC_SCOPE_UNSUPPORTED"
+      : issue.kind === "lifecycle-owner" ? "RUST_LIFECYCLE_ERROR_OWNER_MISSING"
+        : issue.kind === "scope-owner" ? "RUST_NATIVE_TASK_SCOPE_OWNER_NOT_CLOSED" : "RUST_NATIVE_TASK_CALL_GRAPH_NOT_CLOSED",
+    message: issue.reason, evidence: ["target.capability=rust.native-tasks"] })));
 }

@@ -376,7 +376,7 @@ export function analyzeRustAnalysisProgram(
       evidence: ["target.capability=rust.callable-value.exact-implementation"] })), ...promiseResults.diagnostics]);
   }
   const binaryExecution = analyzeRustBinaryExecution({ hooks: binaryHooks, outputType: configuration.outputType,
-    jsEnabled, asynchronous: initializationErrors.value.root.asynchronous ||
+    jsEnabled, asynchronous: sourceStage.nativeTaskCompletions.length !== 0 || initializationErrors.value.root.asynchronous ||
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
   analyzeRustStatementExits({ ast: context.ast, nodes: context.nativeNodes, sourceFiles: context.sourceFiles, records,

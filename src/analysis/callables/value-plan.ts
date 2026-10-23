@@ -67,7 +67,7 @@ import type { RustGenericCallableErrorIndex } from "../../target-model/records/g
 import { prepareRustProviderSourceOccurrences } from "../operations/provider-source-inputs.js";
 import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 import { prepareRustPhysicalCallableEmissionRequests } from "./emission-requests.js";
-import type { RustNativeTaskGraph } from "./native-tasks.js";
+import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 
 import { analyzeRustNativeCallableGenerics } from "./native-inputs.js";
 import type { RustNativeGenericProducer } from "../program/records/native-generics.js";
@@ -129,7 +129,7 @@ export interface RustCallableValuePlanInput {
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly carrierHost: RustValueDomainCarrierHost;
   readonly retainedEnvironments: RustRetainedEnvironmentQueries;
-  readonly nativeTasks: RustNativeTaskGraph;
+  readonly nativeTasks: SourceNativeTaskGraph;
   readonly normalizeTypeFamily: (carrier: TargetTypeRef) => TargetTypeRef;
 }
 

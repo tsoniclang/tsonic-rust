@@ -3,7 +3,7 @@ import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type T
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput, TargetSelection } from "@tsonic/target-api";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
+import { analyzeSourceLiteralValues, createSourceCallableInvocationReferenceQuery } from "@tsonic/target-api/source";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
@@ -40,7 +40,7 @@ import { analyzeRustLifetimes } from "../declarations/lifetimes.js";
 import { emptyRustLifetimeIndex, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { createRustGeneratedDeclarationUseRegistry, type RustGeneratedDeclarationUseRegistry } from "./records/generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
-import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { analyzeSourceReceiverOccurrences, createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries, type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../operations/source-profiles/source-storage-effects.js";
@@ -56,7 +56,7 @@ import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { selectRustSourcePackageComponentIdentities, type SelectRustSourcePackageComponentIdentitiesResult } from "../source-modules/component-semantics.js";
 import { collectRustSourcePackageBoundaries } from "../source-modules/boundaries.js";
 import { selectRustNativeModuleCallables, type RustNativeModuleCallables } from "./module-bindings.js";
-import { analyzeRustNativeTaskGraph, type RustNativeTaskGraph } from "../callables/native-tasks.js";
+import { analyzeRustNativeTaskGraph } from "../callables/native-tasks.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceProfiles: import("../../policy/types/model/source-profile.js").RustSourceProfileRegistry;
@@ -65,7 +65,8 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly isNativeNode: (node: Node) => boolean;
   readonly promiseResultUses: RustPromiseResultUses;
   readonly promiseBodies: RustPromiseBodySelection;
-  readonly nativeTaskGraph: RustNativeTaskGraph;
+  readonly nativeTaskGraph: SourceNativeTaskGraph;
+  readonly callableInvocationReferences: ReturnType<typeof createSourceCallableInvocationReferenceQuery>;
   readonly moduleCallables: RustNativeModuleCallables;
   readonly sourceBoundaries: ReturnType<typeof collectRustSourcePackageBoundaries>;
   readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
@@ -172,9 +173,12 @@ export function createRustAnalysisContext(
     sourcePackageComponentIdentities.identities.rootComponentId);
   const moduleCallables = selectRustNativeModuleCallables({ ast, source: input.source, sourceFiles, names, runtimeValueUses });
   if (moduleCallables.kind === "rejected") return moduleCallables;
+  const callableInvocationReferences = createSourceCallableInvocationReferenceQuery({ ast, navigation: input.source.navigation,
+    nativeCallableFor: declaration => moduleCallables.value.nativeCallable(declaration)?.callableDeclaration,
+    lexicalBindingFor: sourceCallables.directLexicalBinding, callAliasFor: sourceCallables.promiseCallAliasTarget });
   const nativeTaskGraph = analyzeRustNativeTaskGraph({ context: { ast, source: input.source, sourceStorage,
     nativeNodes, isNativeNode, promiseResultUses, sourceProfiles, providerSemantics, jsEnabled, runtimeValueUses,
-    sourceCallables, moduleCallables: moduleCallables.value }, publishedDeclarations: sourceBoundaries.publishedDeclarations,
+    sourceCallables, moduleCallables: moduleCallables.value, callableInvocationReferences }, publishedDeclarations: sourceBoundaries.publishedDeclarations,
     lifecycleOwner: sourceFiles.find(file => sourcePackageComponentIdentities.identities.componentIdForFile(ast.getFileName(file)) ===
       sourcePackageComponentIdentities.identities.rootComponentId) });
   if (nativeTaskGraph.kind === "rejected") return nativeTaskGraph;
@@ -204,6 +208,7 @@ export function createRustAnalysisContext(
     sourceCallables,
     sourceBoundaries,
     moduleCallables: moduleCallables.value,
+    callableInvocationReferences,
     nativeTaskGraph: nativeTaskGraph.value,
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex, nativeTasks: nativeTaskGraph.value }),

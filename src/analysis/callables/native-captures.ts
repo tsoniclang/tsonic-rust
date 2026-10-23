@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
+import type { SourceStorageQueries, SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
@@ -9,7 +9,6 @@ import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/err
 
 import type { RustNativeCallableInput } from "../../target-model/records/native-protocols.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import type { RustNativeTaskGraph } from "./native-tasks.js";
 import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 
@@ -45,7 +44,7 @@ export function createRustNativeCapturePlan(input: {
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
-  readonly nativeTasks: RustNativeTaskGraph;
+  readonly nativeTasks: SourceNativeTaskGraph;
   readonly retainedEnvironments: RustRetainedEnvironmentQueries;
 }): RustNativeCaptureConstruction {
   const nodes = new Set(input.storage.nodes);

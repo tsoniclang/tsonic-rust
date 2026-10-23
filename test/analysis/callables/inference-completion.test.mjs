@@ -6,7 +6,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { selectRustInferredReturn } from "../../../dist/analysis/callables/inferred-return.js";
-import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/signatures.js";
+import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";

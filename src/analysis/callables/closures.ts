@@ -23,7 +23,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closeRustRetainedCallableCarrier } from "../../policy/ownership/retained-storage.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rebindRustCallableCarrier } from "../../policy/types/callables/method-values.js";
-import { selectedSourceCallableReturn } from "./signatures.js";
+import { selectedSourceCallableReturn } from "./source-callable-abi.js";
 import { finalizeRustCallableSignature } from "./signature-query.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";

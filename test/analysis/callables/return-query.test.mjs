@@ -7,7 +7,7 @@ import { createRustRetainedEnvironmentProducer } from "../../../dist/analysis/pr
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../dist/analysis/source-evidence/types/resolution/source.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
-import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/signatures.js";
+import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/source-callable-abi.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };

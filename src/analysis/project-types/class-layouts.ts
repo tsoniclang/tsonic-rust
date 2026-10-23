@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { Node_Initializer, Node_Type, sourceParameterIsProperty, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { Node_Initializer, Node_Type, sourceParameterIsProperty, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustProjectClassProducer } from "../program/records/project-classes.js";
 import type { RustProjectFieldEmission, RustProjectMethodPropertyEmission, RustProjectClassStateEmission } from "../../target-model/records/project-classes.js";
@@ -9,9 +9,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustNeverCarrier } from "../../target-model/types/index.js";
-import { rustCallableInvocationResult } from "../../policy/types/callables/return-contexts.js";
-import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { selectRustProjectCallableSignature, selectRustProjectForwarder } from "../../policy/types/objects/project-dispatch-callables.js";
+import { selectRustProjectForwarder } from "../../policy/types/objects/project-dispatch-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustProjectInstanceContracts } from "./instance-contracts.js";
 import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
@@ -20,13 +18,13 @@ import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch
 import { analyzeRustProjectRootEmission } from "./root-emission.js";
 import { analyzeRustProjectDispatchEmission } from "./dispatch-emission.js";
 import { analyzeRustProjectPolymorphicEmission } from "./polymorphism-emission.js";
+import { closeRustProjectCallableContracts } from "./callable-contracts.js";
 
 export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram, "reachability">, source: TargetSourceProgram,
   nodes: readonly Node[], producer: RustProjectClassProducer, reachability: RustReachability): readonly TargetDiagnostic[] {
   const { ast } = program.source;
   const issues: TargetDiagnostic[] = [];
   const members = new Map<RustProjectTypeDefinition, readonly Node[]>();
-  const callableDeclarations = new Set<Node>();
   for (const [method, references] of reachability.projectThisReferences) producer.thisReferences(method, references);
   const instanceCache = new WeakMap<RustProjectTypeDefinition, Map<string, { readonly fields: readonly RustProjectFieldEmission[]; readonly properties: readonly RustProjectMethodPropertyEmission[] }>>();
   for (const definition of program.projectTypes.definitions) {
@@ -39,70 +37,8 @@ export function analyzeRustProjectClassLayouts(program: Omit<RustAnalysisProgram
       : ast.kindName(member) === "KindGetAccessor" ? [{ declaration: member, role: "read" as const }]
         : ast.kindName(member) === "KindSetAccessor" ? [{ declaration: member, role: "write" as const }] : []);
     producer.members(definition, Object.freeze([...selected]), Object.freeze(accessors));
-    // A polymorphic type dispatches every instance callable through its slot; a writable method property (the
-    // instance layout below stores it) needs the same object-safe slot signature on any class.
-    const polymorphic = program.projectTypes.isPolymorphic(definition);
-    for (const member of selected) {
-      if (ast.hasModifierKind(member, "static")) continue;
-      if (!polymorphic && program.projectMethodProperties.usageFor(member)?.writable !== true) continue;
-      if (ast.is.IsMethodDeclaration(member) || ast.kindName(member) === "KindMethodSignature" ||
-        ast.kindName(member) === "KindGetAccessor" || ast.kindName(member) === "KindSetAccessor") callableDeclarations.add(member);
-    }
   }
-  // A dispatch slot returning a callable value returns the physical callable every implementation of the slot produces,
-  // as callers' native storage selects it; the logical callable carrier would not match the implementations.
-  const classDefinitions = program.projectTypes.definitions.filter(definition => definition.kind === "class");
-  const slotResult = (member: Node): TargetTypeRef | undefined => {
-    const logical = rustCallableInvocationResult(program.records, member);
-    if (logical === undefined || rustCallableProtocol(logical) === undefined ||
-      program.records.asyncFunction.get(member) !== undefined || program.records.generator.get(member) !== undefined) return logical;
-    const implementations = new Set<Node>(ast.body(member) === undefined ? [] : [member]);
-    for (const definition of classDefinitions) {
-      const selected = program.projectTypes.memberImplementation(definition, member);
-      if (selected.kind === "resolved" && ast.body(selected.implementation.declaration) !== undefined)
-        implementations.add(selected.implementation.declaration);
-    }
-    let physical: TargetTypeRef | undefined;
-    for (const implementation of implementations) {
-      const selected = program.callableValues.nativeStorage.returnFor(implementation);
-      if (selected.kind === "unresolved" || selected.kind === "selected" && selected.inputs.length !== 0) return logical;
-      if (physical !== undefined && !rustTargetTypeRefEquals(physical, selected.carrier)) return logical;
-      physical = selected.carrier;
-    }
-    return physical ?? logical;
-  };
-  for (const member of callableDeclarations) {
-    const parameters = sourceCallableValueParameters(ast, member, source.semantics.forNode(member));
-    if (parameters === undefined || parameters.some(parameter => program.records.callableParameter.get(parameter) === undefined))
-      failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact checked source value parameters and native formal ABI.", member);
-    const asynchronous = program.records.asyncFunction.get(member);
-    const typeParameters = ast.typeParameters(member).map(parameter => {
-      const selected = program.sourceLifetimes.parameterFor(parameter);
-      return selected?.kind === "type" ? selected.identity : undefined;
-    });
-    const result = slotResult(member);
-    const effects = program.records.sourceCallEffects.get(member);
-    if (result === undefined || effects === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires its exact native result and invocation effects.", member);
-    const safety = (placement: "declaration" | "getter" | "setter"): boolean => {
-      const selected = program.safetyApplications.forDeclaration(member).filter(application => application.applicationPlacement === placement);
-      return selected.length !== 0 && selected.every(application => application.contract === "requires-unsafe");
-    };
-    let error: TargetTypeRef | undefined;
-    if (effects.invocation === "fallible") {
-      const selected = program.records.projectMemberError.get(member);
-      if (selected === undefined)
-        failTargetAnalysisInvariant("tsonic-rust", "An admitted project callable requires one exact declaration-owned native error ABI.", member);
-      error = selected.carrier;
-    }
-    const signature = selectRustProjectCallableSignature({ typeParameters, result, effects, error,
-      generator: program.records.generator.get(member) !== undefined, asynchronous: asynchronous?.kind, authoredAsync: ast.hasModifierKind(member, "async"),
-      safety: Object.freeze({ declaration: safety("declaration"), getter: safety("getter"), setter: safety("setter") }) });
-    if (signature === undefined) {
-      issues.push({ code: "RUST_UNSUPPORTED_AST", category: "error", source: "tsonic-rust", sourceNode: member,
-        message: `Polymorphic project methods require an exact object-safe native invocation ABI. Node kind: ${ast.kindName(member)}.`,
-        evidence: ["target.capability=rust.backend.project-dispatch-object-safety"] });
-    } else producer.callable(member, Object.freeze({ ...signature, parameters: Object.freeze([...parameters]) }));
-  }
+  issues.push(...closeRustProjectCallableContracts(program, source, members, producer));
   // A field whose declared type has no native storage carrier (e.g. `never`) is refused here, as the checkpoint
   // planner refused it; it cannot become a stored slot.
   for (const definition of program.projectTypes.definitions) for (const field of program.projectTypes.objectLayoutForDefinition(definition)?.fields ?? []) {

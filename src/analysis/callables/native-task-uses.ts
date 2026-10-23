@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustNativeTaskGraph, RustNativeTaskCompletion } from "./native-tasks.js";
+import type { RustNativeTaskCompletion } from "./native-tasks.js";
+import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
@@ -13,7 +14,7 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 
 export function publishRustNativeTaskUses(input: {
   readonly context: RustAnalysisContext;
-  readonly graph: RustNativeTaskGraph;
+  readonly graph: SourceNativeTaskGraph;
   readonly completions: readonly RustNativeTaskCompletion[];
   readonly captures: RustNativeCapturePlan;
   readonly regions: RustAnalyzedErrorRegions;
