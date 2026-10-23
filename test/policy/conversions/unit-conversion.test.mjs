@@ -11,7 +11,7 @@ import { rustAbsenceTargetType, rustUnitTargetType, rustOptionTargetType, rustFu
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { finalizeValueConversion, finalizedConversionIsValid } from "../../../dist/policy/operations/members/abi/conversions.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../helpers/plan-context.mjs";
 
 test("closed native array injection retains its exact payload and rejects forged carriers", () => {
   const source = rustJsArrayTargetType(rustJsValueTargetType());
@@ -137,12 +137,18 @@ test("optional injection validates and substitutes its exact selected payload co
 });
 
 test("optional payload lowering preserves borrowing and propagates native conversion failure before injection", () => {
-  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
-  const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
-    configuration: { edition: "2024" } } }, sourceFile, diagnostics: [], usedAliases: new Set() };
   const value = { kind: "path", path: "value" };
   const borrowedElement = { kind: "reference", referent: rustStrTargetType(), mutable: false };
+  const source = rustSourcePrimitiveTargetType("uint64");
+  const element = rustSourcePrimitiveTargetType("int64");
+  const carriers = [rustStringTargetType(), borrowedElement, rustOptionTargetType(borrowedElement),
+    source, element, rustOptionTargetType(element)];
+  const program = rustProgramWithTypeEmissions(carriers);
+  const context = rustProgramPlanContext(program);
+  const node = program.source.ast.statements(context.sourceFile)[0];
+  assert.equal(node !== undefined, true, "conversion rendering retains a real checked source owner");
+  for (const carrier of carriers) assert.equal(program.records.typeEmission.get(carrier) !== undefined, true,
+    "the actual pre-seal type owner admits every native source and payload before lowering");
   assert.equal(selectRustSourceValueConversion(rustStringTargetType(), rustOptionTargetType(borrowedElement)), undefined,
     "implicit optional borrowing cannot invent an escaping lifetime");
   assert.equal(selectRustSourceValueConversion(rustOptionTargetType(rustStringTargetType()), rustOptionTargetType(borrowedElement)), undefined,
@@ -162,8 +168,6 @@ test("optional payload lowering preserves borrowing and propagates native conver
   const borrowedValue = lowerRustValueConversion(borrowedContract, value, context, node);
   assert.deepEqual(borrowedValue, { kind: "call", path: "Some", args: [{ kind: "call",
     path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "reference", expr: value }] }] });
-  const source = rustSourcePrimitiveTargetType("uint64");
-  const element = rustSourcePrimitiveTargetType("int64");
   assert.equal(selectRustSourceValueConversion(source, rustOptionTargetType(element)), undefined,
     "implicit optional injection does not invent an integer narrowing");
   const conversion = { kind: "option-some", source, element,

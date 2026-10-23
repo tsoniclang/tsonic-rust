@@ -120,8 +120,7 @@ export function native(value: int32): string { return typeof value; }
 
 test("an actually unsupported native typeof carrier is rejected by its source owner before publication", () => {
   const { source, result } = compileRust({ files: { "index.ts": `
-enum Choice { First, Second }
-export function category(value: Choice): string { return typeof value; }
+export function category<Value>(value: Value): string { return typeof value; }
 ` } });
   assert.equal(result.diagnostics.length, 1, "there is one precise native typeof refusal, not a downstream render failure");
   const issue = result.diagnostics[0];
