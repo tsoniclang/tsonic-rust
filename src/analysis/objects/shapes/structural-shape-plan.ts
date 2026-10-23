@@ -23,10 +23,11 @@ import { rustStructuralGenericCarrier } from "../../../policy/types/objects/stru
 import { inferRustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/source-types.js";
+import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
 
 
 type RustStructuralMethodLayout = Exclude<RustStructuralMethodPlan, { readonly kind: "fixed" }> |
-  Omit<Extract<RustStructuralMethodPlan, { readonly kind: "fixed" }>, "payload" | "factoryReceiver">;
+  Omit<Extract<RustStructuralMethodPlan, { readonly kind: "fixed" }>, "payload" | "factoryReceiver" | "context">;
 type RustStructuralShapeLayout = RustStructuralShapeDefinition<RustStructuralMethodLayout>;
 type RustStructuralPhysicalCarrierSelection =
   | { readonly kind: "resolved"; readonly carrier: TargetTypeRef }
@@ -652,10 +653,11 @@ function createRustStructuralShapeConstruction(
                 return Object.freeze({ ...capture, storageCarrier: argument.type });
               })),
             });
-            if (captureIndex !== physical.genericArguments.length)
+            if (captureIndex !== physical.genericArguments.length || body.receiverFieldIdentities.length !== payload.receiverFields.length)
               failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its complete physical capture argument inventory.", methodPlan.declaration);
             return Object.freeze({ ...field, methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier,
-              payload, factoryReceiver: body.factoryReceiver, constructions }),
+              payload, context: selectRustStructuralMethodContextCarrier(payload, body.receiverFieldIdentities),
+              factoryReceiver: body.factoryReceiver, constructions }),
             });
           }));
         const references = rustTargetGenericReferences(carrier);
@@ -665,8 +667,7 @@ function createRustStructuralShapeConstruction(
         ] });
         const stateReferences = definition.dispatchName === undefined ? rustTargetGenericReferences({ kind: "tuple", elements: [
           ...selectedFields.flatMap(field => field.methodPlan?.kind === "fixed"
-            ? [...field.methodPlan.payload.captures, ...field.methodPlan.payload.receiverFields, ...field.methodPlan.payload.receivers]
-              .map(capture => capture.storageCarrier) : [field.methodPlan?.carrier ?? field.carrier]),
+            ? [field.methodPlan.context] : [field.methodPlan?.carrier ?? field.carrier]),
           ...(definition.construction === undefined ? [] : [definition.construction.carrier]),
         ] }) : references;
         const markerArguments = Object.freeze([

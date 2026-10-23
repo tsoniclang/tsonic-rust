@@ -36,7 +36,6 @@ import { rustCarrierProvidesErrorObservation } from "../../../policy/constraints
 import { rustCapturedLifetimeEmissionCarriers, rustDeclarationEmissionCarriers } from "./emission-inventory.js";
 import { rustProgramNodeIsOutsideNativeCode } from "../../control-flow/compile-time-statements.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
-import { selectRustStructuralMethodContextCarrier } from "../../../policy/types/objects/structural-emission.js";
 
 export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustTypeEmissionProducer, extraTypes: readonly TargetTypeRef[]): void {
@@ -220,9 +219,7 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
             : shape.fields.some(field => field.methodPlan?.kind === "fixed") ? Object.freeze({ kind: "tuple" as const,
               elements: Object.freeze(shape.fields.map(field => {
                 if (field.methodPlan?.kind !== "fixed") return rustUnitTargetType();
-                const payload = field.methodPlan.payload;
-                return selectRustStructuralMethodContextCarrier(payload, payload.receiverFields.map(capture =>
-                  program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference)));
+                return field.methodPlan.context;
               })) }) : rustUnitTargetType() }) });
     const frame = program.records.frameType.get(carrier);
     const children = [...rustTargetTypeChildren(carrier), ...(producerError === undefined ? [] : [producerError]),

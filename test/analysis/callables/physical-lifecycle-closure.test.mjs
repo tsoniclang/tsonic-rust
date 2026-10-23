@@ -261,9 +261,16 @@ for (const [name, source] of Object.entries(mixedErrorSources)) {
     for (const definition of program.structuralShapes.definitions) for (const field of definition.fields) {
       if (field.method !== true || field.methodPlan?.kind === "native-dispatch") continue;
       if (field.methodPlan.kind === "fixed") {
-        const reference = rustProducerErrorReference(program.callableValues.nativeProducers.errorFor(field.methodPlan.declaration, "invoke"));
-        assert.equal(rustTargetTypeRefEquals(methodInvocationError(program, field), program.errorRegions.producerError(reference)), true,
+        const declaration = field.methodPlan.declaration;
+        const index = methods.indexOf(declaration);
+        const effects = program.records.errorEffects.get(declaration);
+        assert.equal(index >= 0 && effects !== undefined, true, `${name}: the native body has its original checked method and source effects`);
+        const intrinsic = methodInvocationError(program, field);
+        assert.equal(intrinsic !== undefined, true, `${name}: the published native invocation error is complete`);
+        assert.equal(intrinsic.id === "rust.core.Infallible", effects.localErrors === false,
           `${name}: a direct fixed body retains its own intrinsic channel rather than the stored family's widened channel`);
+        if (effects.localErrors !== false) assert.equal(rustTargetTypeRefEquals(intrinsic, signatures[index].error), true,
+          `${name}: the actual throwing body agrees with its independent completed native signature`);
         continue;
       }
       const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan.carrier) : field.methodPlan.carrier);

@@ -707,6 +707,8 @@ test("nested structural methods retain the canonical physical layout through sto
     const sourceCarrier = current.program.records.runtimeCarrier.get(declaration).carrier;
     const expected = current.program.callableValues.nativeStorage.valueFor(declaration);
     const selected = plan.valueFor(declaration);
+    assert.equal(expected.kind !== "unresolved", true, `${name}: the canonical physical selection resolves`);
+    assert.equal(selected.kind !== "unresolved", true, `${name}: the independently constructed native storage query resolves`);
     assert.equal(selected.kind, expected.kind, selected.reason ?? `${name} uses its existing native structural layout`);
     assert.equal(rustTargetTypeRefEquals(selected.carrier, expected.carrier), true,
       `${name} reads the exact completed physical carrier rather than inventing an aggregate layout`);

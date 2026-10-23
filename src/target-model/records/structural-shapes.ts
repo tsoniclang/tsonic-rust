@@ -32,7 +32,7 @@ export type RustStructuralMethodPlan = {
   readonly receiver: "included" | "independent";
 } & (
   | { readonly kind: "fixed"; readonly declaration: Node; readonly payload: RustStructuralMethodPayload;
-      readonly factoryReceiver: "value" | "shared" }
+      readonly context: TargetTypeRef; readonly factoryReceiver: "value" | "shared" }
   | { readonly kind: "stored" }
   | { readonly kind: "native-dispatch"; readonly implementation: "fixed"; readonly declaration: Node }
   | { readonly kind: "native-dispatch"; readonly implementation: "stored" }
@@ -58,7 +58,7 @@ export interface RustStructuralMethodStorageSelection {
   readonly carrier: TargetTypeRef;
   readonly constructions: readonly RustStructuralMethodConstruction[];
   readonly nativeBody: { readonly declaration: Node; readonly payload: RustStructuralMethodPayload;
-    readonly factoryReceiver: "value" | "shared" } | undefined;
+    readonly receiverFieldIdentities: readonly boolean[]; readonly factoryReceiver: "value" | "shared" } | undefined;
 }
 
 export interface RustStructuralShapeDefinition<MethodPlan = RustStructuralMethodPlan> {

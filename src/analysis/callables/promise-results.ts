@@ -105,23 +105,30 @@ export function analyzeRustPromiseResults(input: {
       : "Native structural retention requires its complete same-activation method producer domain.");
     if (selected.producers.length === 0) return unresolved(subject.node,
       "Native structural retention requires its nonempty actual method construction evidence.");
-    const destination = field.presence === "optional" ? rustOptionElementCarrier(field.methodPlan?.carrier) : field.methodPlan?.carrier;
+    const method = field.methodPlan;
+    const destination = field.presence === "optional" ? rustOptionElementCarrier(method?.carrier) : method?.carrier;
     if (destination === undefined) return unresolved(subject.node, "A retained native method requires its completed physical destination.");
+    if (method === undefined) return unresolved(subject.node, "A retained native method requires its completed native representation.");
     const captures: TargetTypeRef[] = [];
     for (const producer of selected.producers) {
       if (!budget.step()) return unresolved(subject.node, budget.failure()!);
       const expression = producer.subject.node;
       if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 || input.ast.body(expression) === undefined)
         return unresolved(subject.node, "A retained native method requires its original checked implementation and creation bindings.");
-      const constructions = field.methodPlan?.constructions?.filter(construction => construction.expression === expression &&
-        construction.storageIndex === storageIndex && rustTargetTypeRefEquals(construction.destinationCarrier, destination));
-      if (constructions === undefined || constructions.length === 0) return unresolved(subject.node,
-        "A retained native method has no identical frozen physical field-construction witness.");
-      for (const construction of constructions) {
-        if (!budget.step()) return unresolved(subject.node, budget.failure()!);
-        const element = input.source.semantics.forNode(construction.property).operations.objectLiteralElement(construction.property);
-        if (element?.element !== construction.property || element.objectLiteral !== construction.object)
-          return unresolved(subject.node, "A retained native method lost its exact checked construction root and contribution.");
+      if (method.kind === "fixed") {
+        if (expression !== method.declaration) return unresolved(subject.node,
+          "A retained fixed native method requires its identical checked implementation and creation bindings.");
+      } else {
+        const constructions = method.constructions.filter(construction => construction.expression === expression &&
+          construction.storageIndex === storageIndex && rustTargetTypeRefEquals(construction.destinationCarrier, destination));
+        if (constructions.length === 0) return unresolved(subject.node,
+          "A retained native method has no identical frozen physical field-construction witness.");
+        for (const construction of constructions) {
+          if (!budget.step()) return unresolved(subject.node, budget.failure()!);
+          const element = input.source.semantics.forNode(construction.property).operations.objectLiteralElement(construction.property);
+          if (element?.element !== construction.property || element.objectLiteral !== construction.object)
+            return unresolved(subject.node, "A retained native method lost its exact checked construction root and contribution.");
+        }
       }
       const owner = sourceEnclosingCallable(input.ast.parent(expression), input.ast);
       const generic = input.nativeStorage.genericBindingsFor(owner ?? expression, producer.bindings);
@@ -136,7 +143,20 @@ export function analyzeRustPromiseResults(input: {
       if (physicalCaptures.kind !== "resolved" || physical.carrier.kind !== "tuple" ||
         physical.carrier.elements.length !== references.length)
         return unresolved(subject.node, "A native capture tuple lost its exact source-to-physical component correspondence.");
-      captures.push(physical.carrier);
+      if (method.kind === "fixed") {
+        const payload = [...method.payload.captures, ...method.payload.receiverFields, ...method.payload.receivers];
+        if (method.payload.captures.length !== sourceCaptures.captures.length ||
+          method.payload.receiverFields.length !== sourceCaptures.receiverFields.length ||
+          method.payload.receivers.length !== sourceCaptures.receivers.length || payload.some((capture, index) => {
+            const original = references[index];
+            return original === undefined || ("declaration" in capture) !== ("declaration" in original) ||
+              ("declaration" in capture ? capture.declaration : capture.owner) !==
+                ("declaration" in original ? original.declaration : original.owner) || capture.reference !== original.reference ||
+              !rustTargetTypeRefEquals(capture.storageCarrier, physical.carrier.kind === "tuple" ? physical.carrier.elements[index] : undefined);
+          }))
+          return unresolved(subject.node, "A retained fixed native context requires its exact same-activation physical captures.");
+      }
+      captures.push(method.kind === "fixed" ? method.context : physical.carrier);
       for (const [index, capture] of references.entries()) {
         if (!budget.step()) return unresolved(subject.node, budget.failure()!);
         const reference = input.storage.subjectFor(capture.reference);
@@ -245,10 +265,10 @@ export function analyzeRustPromiseResults(input: {
         const indexes = new Set<number>();
         for (const sourceField of template.fields) {
           if (!budget.step()) return unresolved(subject.node, budget.failure()!);
-          const index = sourceField.storageIndex;
+          const index = structural.fields.findIndex(field => field.sourceName === sourceField.sourceName);
           const sourceCarrier = substituteRustTargetGenerics(sourceField.resultCarrier, generic.bindings.types,
             generic.bindings.lifetimes, generic.bindings.consts);
-          const declared = layout.fields[index];
+          const declared = layout.fields[sourceField.storageIndex];
           const actualField = structural.fields[index];
           const physical = shapes.field(actual, index);
           if (!Number.isSafeInteger(index) || index < 0 || indexes.has(index) || declared === undefined || actualField === undefined ||

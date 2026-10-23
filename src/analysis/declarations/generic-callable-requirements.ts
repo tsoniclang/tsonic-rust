@@ -194,19 +194,20 @@ export function classifyRustCallableRequirements(input: RustCallableRequirementI
       const fixed = input.structuralShapes.definitions.flatMap(definition => definition.fields.flatMap(field =>
         field.methodPlan?.kind === "fixed" && field.methodPlan.declaration === declaration
           ? [{ carrier: definition.carrier, method: field.methodPlan }] : []));
-      if (fixed.length > 1) return { kind: "rejected", promiseStorage: true,
-        reason: "A fixed Promise method requires its one actual native implementation and receiver contract." };
-      const selectedReceiver = fixed[0];
-      if (lowering.storage.kind === "receiver" && selectedReceiver?.method.factoryReceiver !== "value") return { kind: "rejected", promiseStorage: true,
+      if (lowering.storage.kind === "receiver" && fixed.length !== 0 && fixed.some(selected => selected.method.factoryReceiver !== "value"))
+        return { kind: "rejected", promiseStorage: true,
         reason: "An owned Promise cannot retain an unowned method receiver." };
-      if (selectedReceiver?.method.factoryReceiver === "value") {
-        const receiverError = addUse(declaration, selectedReceiver.carrier, ["static"]);
+      for (const selected of fixed) if (selected.method.factoryReceiver === "value") {
+        const receiverError = addUse(declaration, selected.carrier, ["static"]);
         if (receiverError !== undefined) return { kind: "rejected", promiseStorage: true, reason: receiverError };
-      } else if (selectedReceiver === undefined && lowering.ownedReceiver !== undefined) {
+      }
+      if (fixed.length === 0 && lowering.ownedReceiver !== undefined) {
         const receiverError = addUse(declaration, lowering.ownedReceiver.carrier, ["static"]);
         if (receiverError !== undefined) return { kind: "rejected", promiseStorage: true, reason: receiverError };
       }
-      for (const carrier of selectedReceiver === undefined ? lowering.capturedCarriers : []) {
+      if (fixed.length === 0 && lowering.storage.kind === "receiver" && lowering.ownedReceiver === undefined)
+        return { kind: "rejected", promiseStorage: true, reason: "An owned Promise cannot retain an unowned method receiver." };
+      for (const carrier of fixed.length === 0 ? lowering.capturedCarriers : []) {
         const captureError = addUse(declaration, carrier, ["static"]);
         if (captureError !== undefined) return { kind: "rejected", promiseStorage: true, reason: captureError };
       }

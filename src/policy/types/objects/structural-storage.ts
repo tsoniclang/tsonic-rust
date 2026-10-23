@@ -27,7 +27,9 @@ export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (
 }
 
 export function instantiateStructuralDefinition<MethodPlan extends
-  Pick<RustStructuralMethodPlan, "kind" | "carrier" | "receiver" | "constructions"> & { readonly payload?: RustStructuralMethodPayload }>(
+  Pick<RustStructuralMethodPlan, "kind" | "carrier" | "receiver" | "constructions"> & {
+    readonly payload?: RustStructuralMethodPayload; readonly context?: TargetTypeRef;
+  }>(
   definition: RustStructuralShapeDefinition<MethodPlan>,
   carrier: TargetTypeRef,
 ): RustStructuralShapeDefinition<MethodPlan> | undefined {
@@ -74,6 +76,7 @@ export function instantiateStructuralDefinition<MethodPlan extends
       ...(field.methodPlan === undefined ? {} : { methodPlan: Object.freeze({ ...field.methodPlan,
         carrier: substitute(field.methodPlan.carrier),
         ...(field.methodPlan.kind !== "fixed" || field.methodPlan.payload === undefined ? {} : { payload: payload(field.methodPlan.payload) }),
+        ...(field.methodPlan.kind !== "fixed" || field.methodPlan.context === undefined ? {} : { context: substitute(field.methodPlan.context) }),
         constructions: Object.freeze(field.methodPlan.constructions.map(construction => Object.freeze({ ...construction,
           physicalCarrier: substitute(construction.physicalCarrier),
           destinationCarrier: substitute(construction.destinationCarrier),

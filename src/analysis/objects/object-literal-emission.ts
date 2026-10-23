@@ -61,6 +61,15 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       const field = fact.fields.find(field => field.storageIndex === part.targetStorageIndex);
       const physical = program.structuralShapes.field(fact.resultCarrier, part.targetStorageIndex);
       const raw = field?.presence === "optional" ? rustOptionElementCarrier(physical?.methodPlan?.carrier) : physical?.methodPlan?.carrier;
+      if (physical?.methodPlan?.kind === "fixed") {
+        const checked = objectLiteralElement(part.property);
+        if (field?.method !== true || physical.method !== true || raw === undefined ||
+          physical.sourceName !== part.sourceName || physical.methodPlan.declaration !== part.expression ||
+          checked?.objectLiteral !== node || checked.element !== part.property || checked.elementKind !== "method" ||
+          part.property !== part.expression)
+          refuse(part.property, "rust.backend.record-fields", "Object literal syntax does not match its finalized ordered contribution fact.");
+        continue;
+      }
       const construction = physical?.methodPlan?.constructions?.find(selected => selected.object === node && selected.property === part.property &&
         selected.expression === part.expression && selected.storageIndex === part.targetStorageIndex);
       // A generic method is stored as its generic callable family value, which its sealed implementation constructs.
