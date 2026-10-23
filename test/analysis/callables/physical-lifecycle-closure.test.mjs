@@ -582,7 +582,7 @@ test("every selected generic flow is one immutable physical application, includi
 });
 
 test("native producer publication reads completed results after source and return selection are revoked", () => {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+  const { source, program } = analyzeRust({ surfaces: [], files: { "index.ts": `
 export function identity(value: number): number { return value; }
 export function choose(): typeof identity { return identity; }
 ` } });
@@ -590,7 +590,7 @@ export function choose(): typeof identity { return identity; }
   const records = Proxy.revocable(program.records, {});
   let open = true;
   let selections = 0;
-  const construction = createRustNativeCallableProducerPlan({ source: { ...program.source, ast: ast.proxy }, ast: ast.proxy, nodes: sourceNodes(program), records: records.proxy,
+  const construction = createRustNativeCallableProducerPlan({ source: { ...createTargetSourceProgram(source), ast: ast.proxy }, ast: ast.proxy, nodes: sourceNodes(program), records: records.proxy,
     native: program.callableValues.native, definitions: program.typeDefinitions,
     returnCarrierFor(declaration) {
       assert.equal(open, true, "only private construction selects return storage");
