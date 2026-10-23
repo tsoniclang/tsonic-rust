@@ -16,13 +16,18 @@ const sourceNodes = new Set([first, second]);
 
 test("selected callable identity includes the exact generic owner independently of its receiver", () => {
   const signature = {
-    member: { id: "owner.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer },
+    member: { id: "owner.read", sourceName: "read", targetName: "read", kind: "method", parameters: [{ name: "value", type: integer }], returnType: integer },
+    nativeParameterDeclarations: [first],
     sourceSelectedOwnerCarrier: integer,
     sourceSelectedReceiverCarrier: text,
   };
   assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true);
   assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: text }), false);
   assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: undefined }), false);
+  assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, nativeParameterDeclarations: [second] }), false,
+    "a same-shape native parameter cannot replace the original checked node");
+  assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, nativeParameterDeclarations: [] }), false,
+    "a proven native input cannot disappear from the physical signature");
 });
 
 test("selected callable equality includes complete result projection correspondence", () => {
@@ -36,7 +41,7 @@ test("selected callable equality includes complete result projection corresponde
     { kind: "union-map", dispatchCarrier: text, arms: [] },
   ].map(projection => ({ ...projection, sourceCarrier: text, selectedCarrier: integer }));
   for (const projection of projections) {
-    const signature = { member, sourceResultProjection: projection };
+    const signature = { member, nativeParameterDeclarations: [], sourceResultProjection: projection };
     assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true, projection.kind);
     const changes = [undefined, { ...projection, extra: true }, { ...projection, sourceCarrier: integer }, { ...projection, selectedCarrier: text },
       { ...projection, kind: projection.kind === "closed-native" ? "option-value" : "closed-native" }];
@@ -50,9 +55,9 @@ test("selected callable equality includes complete result projection corresponde
       changes.push(absent);
     }
     for (const [index, changed] of changes.entries()) {
-      assert.equal(rustSelectedTargetSignatureEquals(signature, { member, sourceResultProjection: changed }), false,
+      assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceResultProjection: changed }), false,
         `${projection.kind} changed dimension ${index}`);
-      assert.equal(rustSelectedTargetSignatureEquals({ member, sourceResultProjection: changed }, signature), false,
+      assert.equal(rustSelectedTargetSignatureEquals({ ...signature, sourceResultProjection: changed }, signature), false,
         `${projection.kind} reverse correspondence ${index}`);
     }
   }
@@ -63,7 +68,7 @@ test("selected callable equality retains ordered union methods, opaque declarati
   const variant = { name: "First", carrier: integer, declaration: first, targetName: "read",
     returnType: integer, resultConversion: { kind: "numeric-promotion", source: "int32", target: "number" } };
   const other = { ...variant, name: "Second", carrier: text, declaration: second, targetName: "read_other" };
-  const signature = { member, sourceUnionMethods: { receiverCarrier: text, variants: [variant, other] } };
+  const signature = { member, nativeParameterDeclarations: [], sourceUnionMethods: { receiverCarrier: text, variants: [variant, other] } };
   assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true);
   const variants = [
     [other, variant], [variant],
@@ -86,6 +91,7 @@ test("selected-call admission rejects changed completion proof without replacing
   const subject = {};
   const signature = {
     member: { id: "union.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer },
+    nativeParameterDeclarations: [],
     sourceResultProjection: { kind: "closed-native", sourceCarrier: text, selectedCarrier: integer },
     sourceUnionMethods: { receiverCarrier: text, variants: [
       { name: "First", carrier: text, declaration: first, targetName: "read", returnType: integer, resultConversion: undefined },

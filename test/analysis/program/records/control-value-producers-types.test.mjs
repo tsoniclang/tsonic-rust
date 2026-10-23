@@ -72,7 +72,7 @@ builder.propertyProjection.get(subject);
     ["numeric foreign subject", "builder.genericNumerics.comparison({}, carrier, carrier, operation);", /missing.*properties.*Node/u],
     ["numeric malformed carrier", "builder.genericNumerics.comparison(subject, { kind: 'invalid' }, carrier, operation);", /not assignable/u],
     ["numeric malformed selection", "builder.genericNumerics.comparison(subject, carrier, carrier, { kind: 'invalid' });", /not assignable/u],
-    ["indexed missing signature", "recordRustIndexedCallKeyArguments(builder, [], {}, [subject], keys, () => false);", /Property 'member' is missing.*RustSelectedTargetSignature/u],
+    ["indexed missing signature", "recordRustIndexedCallKeyArguments(builder, [], { nativeParameterDeclarations: [] }, [subject], keys, () => false);", /Property 'member' is missing.*RustSelectedTargetSignature/u],
     ["indexed foreign source", "builder.indexedFieldKeys.selected({}, carrier, false);", /missing.*properties.*Node/u],
     ["indexed malformed keys", "recordRustIndexedCallKeyArguments(builder, [], selected, [subject], new Map([['Key', 1]]), () => false);", /not assignable/u],
     ["indexed malformed evaluation", "builder.indexedFieldKeys.selected(subject, carrier, 'yes');", /not assignable/u],
