@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustNativeComparisons } from "../../../dist/analysis/operations/native-comparisons.js";
 import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native-comparisons.js";
 
@@ -7,17 +8,20 @@ function select(operator, first, second, name = "int32") {
   const expression = {}, left = {}, right = {};
   const producer = createRustNativeComparisonProducer(() => {});
   const literals = new Map([[left, first], [right, second]]);
-  const ast = { is: { IsBinaryExpression: node => node === expression, IsParenthesizedExpression: () => false,
+  const ast = { parent: () => undefined, is: { IsBinaryExpression: node => node === expression, IsParenthesizedExpression: () => false,
     IsIdentifier: () => false, IsStringLiteral: () => false, IsNoSubstitutionTemplateLiteral: () => false },
     as: { AsBinaryExpression: node => node === expression ? { Left: left, Right: right } : undefined } };
   analyzeRustNativeComparisons({ source: { ast }, records: {
-    targetOperation: { get: node => node === expression ? { kind: "operator-token", operator } : undefined },
     literalValue: { get: node => {
       const integer = literals.get(node);
       return integer === undefined ? undefined : { form: "numeric", integer };
     } },
-    valueRead: { get: () => ({ value: { kind: "source-primitive", name } }) },
-  } }, [expression], producer);
+    ...createRustRecordFixture({
+      targetOperation: { get: node => node === expression ? { kind: "operator-token", operator } : undefined },
+      valueRead: { get: () => ({ value: { kind: "source-primitive", name } }) },
+    }),
+  }, ownership: { reads: { get: () => undefined } },
+    safetyApplications: { operationForExpression: () => undefined } }, [expression], producer);
   return producer.records.nativeComparison.get(expression);
 }
 

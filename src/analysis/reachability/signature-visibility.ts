@@ -38,7 +38,7 @@ export function analyzeRustSignatureVisibility(program: Omit<RustAnalysisProgram
   for (const node of nodes) {
     const task = program.records.nativeTaskUse.get(node);
     if (task !== undefined) pending.push(task.scope.carrier, task.scope.errorCarrier,
-      ...(task.kind === "owner" || task.kind === "entry" || task.kind === "initializer" ? [task.inputCarrier] : []),
+      ...(task.kind === "owner" || task.kind === "entry" ? [task.inputCarrier] : []),
       ...(task.kind === "entry" && task.initializer !== undefined ? [task.initializer.inputCarrier] : []));
     const declaration = program.records.nativeDeclaration.get(node);
     if (declaration !== undefined && program.records.declarationLiveness.get(node)?.visibility === "public") {

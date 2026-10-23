@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { analyzeRustNativeComparisons } from "../../../dist/analysis/operations/native-comparisons.js";
 import { createRustNativeComparisonProducer } from "../../../dist/analysis/program/records/native-comparisons.js";
 import { planRustNativeZeroComparison } from "../../../dist/backend/planner/expressions/native-zero-comparisons.js";
@@ -8,7 +9,7 @@ function select(operator, reversed, value, name, abi) {
   const expression = {}, subject = {}, literal = {}, receiver = {};
   const left = reversed ? literal : subject, right = reversed ? subject : literal;
   const producer = createRustNativeComparisonProducer(() => {});
-  const ast = { is: { IsBinaryExpression: node => node === expression, IsIdentifier: () => false,
+  const ast = { parent: () => undefined, is: { IsBinaryExpression: node => node === expression, IsIdentifier: () => false,
     IsExpressionStatement: () => false, IsReturnStatement: () => false, IsThrowStatement: () => false,
     IsIfStatement: () => false, IsWhileStatement: () => false, IsDoStatement: () => false,
     IsForOfStatement: () => false, IsForInStatement: () => false,
@@ -18,11 +19,14 @@ function select(operator, reversed, value, name, abi) {
       AsPropertyAccessExpression: node => node === subject ? { Expression: receiver } : undefined },
     expression: node => node === subject ? receiver : undefined };
   analyzeRustNativeComparisons({ source: { ast }, records: {
-    targetOperation: { get: node => node === expression ? { kind: "operator-token", operator }
-      : node === subject && abi !== undefined ? { kind: "provider-operation", abi } : undefined },
     literalValue: { get: node => node === literal ? { form: "numeric", integer: value } : undefined },
-    valueRead: { get: () => ({ value: { kind: "source-primitive", name } }) },
-  } }, [expression], producer);
+    ...createRustRecordFixture({
+      targetOperation: { get: node => node === expression ? { kind: "operator-token", operator }
+        : node === subject && abi !== undefined ? { kind: "provider-operation", abi } : undefined },
+      valueRead: { get: () => ({ value: { kind: "source-primitive", name } }) },
+    }),
+  }, ownership: { reads: { get: () => undefined } },
+    safetyApplications: { operationForExpression: () => undefined } }, [expression], producer);
   return { expression, selected: producer.records.nativeComparison.get(expression), records: producer.records };
 }
 

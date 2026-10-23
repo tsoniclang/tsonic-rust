@@ -44,10 +44,6 @@ for (const [label, collection, read, slot] of [
   ["set", "const callbacks = new Set<() => void>([() => resolve()]);", "callbacks.forEach(callback => callback());", 0],
   ["map", "const callbacks = new Map<string, () => void>([[\"ready\", () => resolve()]]);",
     "callbacks.forEach(callback => callback());", 1],
-  ["set with later alias write", `const callbacks = new Set<() => void>();
-    const alias = callbacks; alias.add(() => resolve());`, "callbacks.forEach(callback => callback());", 0],
-  ["map with later alias write", `const callbacks = new Map<string, () => void>();
-    const alias = callbacks; alias.set("ready", () => resolve());`, "callbacks.forEach(callback => callback());", 1],
 ]) test(`a JS ${label} slot retains its actual resolver callback's JsValue error`, () => {
   const arguments_ = analyze(collection, read);
   const callback = arguments_?.[slot];

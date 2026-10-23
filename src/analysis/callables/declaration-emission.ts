@@ -111,7 +111,7 @@ export function analyzeRustCallableDeclarationEmission(input: {
       canFallThrough,
       contract, parameterCarriers: Object.freeze(parameterCarriers), resultCarrier,
       nativeAsync: generator === undefined && (asyncFact?.kind === "native-future" || nativeBody !== undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"),
-      resultWrapped: !objectPromise && error.kind !== "infallible",
+      resultWrapped: generator === undefined && !objectPromise && error.kind !== "infallible",
     });
   }
   return Object.freeze(issues);

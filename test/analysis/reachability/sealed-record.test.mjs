@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { sealRustAnalysisProgram } from "../../../dist/analysis/program/target-program.js";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
 import * as directives from "../../../dist/backend/planner/program/reachability-directives.js";
 
 function fixture(outputType = "bin", publicBox = false) {
-  const { program } = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType } }, files: {
+  const analyzed = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType } }, files: {
     "index.ts": `import type { int32 } from "@tsonic/core/types.js";
       ${publicBox ? "export" : ""} class Box {
         value: int32; unread: int32;
@@ -21,6 +22,7 @@ function fixture(outputType = "bin", publicBox = false) {
       ${outputType === "lib" ? "export" : ""} function main(): void { const box = new Box(active()); box.unread = 2; if (box.read() !== 7) throw new Error("value"); }
       ${outputType === "bin" ? "main();" : ""}`,
   } });
+  const program = sealRustAnalysisProgram(analyzed.program);
   const declarations = new Map();
   const pending = [...program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile)];
   while (pending.length > 0) {

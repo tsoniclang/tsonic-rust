@@ -59,7 +59,9 @@ for (const [name, text, count] of [
     const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
     const declaration = nodes(program).find(program.source.ast.is.IsClassDeclaration);
     const selected = program.records.nativeClass.get(declaration);
-    const contract = selected.constructorContract;
+    assert.equal(selected.constructorContracts.length, 1);
+    assert.equal(Object.isFrozen(selected.constructorContracts), true);
+    const [contract] = selected.constructorContracts;
     assert.equal(contract.kind === "source" ? contract.parameters.length : contract.nativeParameters.length, count,
       "the exact authored or native value vector is complete");
     assert.equal(Object.isFrozen(contract) && Object.isFrozen(contract.nativeParameters) &&

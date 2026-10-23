@@ -57,6 +57,8 @@ import { selectRustSourceCallableInvocationBindings } from "./native-storage-gen
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
+import { selectRustJsConstructorStoredInputs } from "../../policy/operations/source-profiles/js/constructors.js";
+import { selectRustJsStoredTypeArgumentSlots } from "../../policy/operations/source-profiles/js/stored-slots.js";
 
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
@@ -541,6 +543,47 @@ export function createRustNativeStorageQueries(input: {
         const element = component === undefined ? undefined : visit(jsElement, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === jsElement ? current
           : Object.freeze({ ...current, genericArguments: Object.freeze(rustTypeGenericArguments([element])) });
+      }
+      const storedSlots = selectRustJsStoredTypeArgumentSlots(current);
+      if (storedSlots !== undefined && current.kind === "target-named") {
+        const arguments_ = current.genericArguments;
+        if (arguments_ === undefined) return fail("Opaque collection storage requires its selected native type arguments.");
+        const callableSlots = storedSlots.filter(slot => containsCallable(slot.carrier, depth + 1) !== false);
+        if (callableSlots.length === 0) return current;
+        const producers = input.storage.storageProducersFor(selectedSubject, bindings);
+        if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
+          : "Opaque collection callable storage requires its actual closed native constructor inputs.");
+        const elements = new Map<number, TargetTypeRef>();
+        for (const producer of producers.producers) {
+          if (!step(depth) || producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
+            !input.ast.is.IsNewExpression(producer.subject.node))
+            return fail("Opaque collection callable storage requires one exact checked native constructor occurrence.");
+          const operation = input.records.targetOperation.get(producer.subject.node);
+          const storedInputs = operation?.kind !== "provider-operation" ? undefined
+            : selectRustJsConstructorStoredInputs(operation.operationId, current);
+          if (storedInputs === undefined) return fail("Opaque collection callable storage has no selected native constructor payload correspondence.");
+          for (const slot of callableSlots) {
+            const selectedInput = storedInputs.find(candidate => candidate.nativeArgumentIndex === slot.nativeArgumentIndex);
+            const argument = selectedInput === undefined ? undefined : input.ast.arguments(producer.subject.node)[selectedInput.sourceIndex];
+            const projected = argument === undefined || selectedInput === undefined ? undefined
+              : input.storage.subject(argument, "value", selectedInput.projections);
+            if (projected?.kind !== "resolved") return fail(projected?.reason
+              ?? "Opaque collection callable storage requires the actual authored constructor payload.");
+            const element = visit(slot.carrier, projected.subject, producer.bindings, depth + 1, false, position);
+            if (element === undefined) return undefined;
+            const previous = elements.get(slot.nativeArgumentIndex);
+            if (previous !== undefined && !rustTargetTypeRefEquals(previous, element))
+              return fail("Opaque collection constructors require one exact shared physical callable payload and invocation error.");
+            elements.set(slot.nativeArgumentIndex, element);
+          }
+        }
+        if (callableSlots.some(slot => !elements.has(slot.nativeArgumentIndex)))
+          return fail("Opaque collection callable storage has no actual native payload producer.");
+        const genericArguments = arguments_.map((argument, index) => {
+          const element = elements.get(index);
+          return element === undefined ? argument : Object.freeze({ kind: "type" as const, type: element });
+        });
+        return Object.freeze({ ...current, genericArguments: Object.freeze(genericArguments) });
       }
       if (current.kind === "tuple") {
         const elements: TargetTypeRef[] = [];
