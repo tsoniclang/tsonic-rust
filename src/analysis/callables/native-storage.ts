@@ -57,7 +57,6 @@ import { selectRustSourceCallableInvocationBindings } from "./native-storage-gen
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustCallableJoinWrite } from "../../target-model/records/native-storage.js";
-import { selectRustJsStoredTypeArgumentSlots } from "../../policy/operations/source-profiles/js/stored-slots.js";
 
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
@@ -474,7 +473,7 @@ export function createRustNativeStorageQueries(input: {
         }
         if (!distinct) return physical === undefined ? fail("Native callable storage has no selected physical input implementation.")
           : current.kind === "target-named" && current.id === rustCallableTargetId && joinable &&
-            selectedSubject.projection.some(component => component.kind === "array-element" || component.kind === "type-argument-slot")
+            selectedSubject.projection.some(component => component.kind === "array-element")
             ? joinProducers(selectedSubject, bindings, position, alternatives, absent) : physical;
         // Inputs and conversion boundaries keep one physical implementation: no signature-based choice among them.
         return joinable ? joinProducers(selectedSubject, bindings, position, alternatives, absent)
@@ -542,21 +541,6 @@ export function createRustNativeStorageQueries(input: {
         const element = component === undefined ? undefined : visit(jsElement, component, bindings, depth + 1, false, position);
         return element === undefined ? undefined : element === jsElement ? current
           : Object.freeze({ ...current, genericArguments: Object.freeze(rustTypeGenericArguments([element])) });
-      }
-      const slots = selectRustJsStoredTypeArgumentSlots(current);
-      if (slots !== undefined && current.kind === "target-named" && current.genericArguments !== undefined) {
-        const arguments_ = [...current.genericArguments];
-        let changed = false;
-        for (const slot of slots) {
-          const component = project(selectedSubject, { kind: "type-argument-slot", index: slot.index });
-          const selected = component === undefined ? undefined : visit(slot.carrier, component, bindings, depth + 1, false, position);
-          if (selected === undefined) return undefined;
-          if (selected !== slot.carrier) {
-            arguments_[slot.nativeArgumentIndex] = Object.freeze({ kind: "type", type: selected });
-            changed = true;
-          }
-        }
-        return changed ? Object.freeze({ ...current, genericArguments: Object.freeze(arguments_) }) : current;
       }
       if (current.kind === "tuple") {
         const elements: TargetTypeRef[] = [];

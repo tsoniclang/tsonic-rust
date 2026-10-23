@@ -5,7 +5,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { createRustNativeCaptureLayouts, createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCapturePlan, completeRustNativeCaptureCarrier } from "../../../dist/analysis/callables/native-captures.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustFixedArrayTargetType, rustFixedArrayCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
@@ -16,14 +16,12 @@ function fixture(text) {
   const source = program.source;
   const storage = program.sourceStorage;
   const native = program.callableValues.native;
-  const layouts = createRustNativeCaptureLayouts({ records: program.records, nativeTasks: program.nativeTaskGraph,
-    retainedEnvironments: program.retainedEnvironments });
   const plan = createRustNativeCapturePlan({ records: program.records, storage,
-    nativeStorage: program.callableValues.nativeStorage, layouts });
+    nativeStorage: program.callableValues.nativeStorage });
   const closures = storage.nodes.filter(node => source.ast.is.IsArrowFunction(node));
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
-  return { program, native, storage, plan, layouts, closures, declaration };
+  return { program, native, storage, plan, closures, declaration };
 }
 
 test("native captured equal-signature inputs retain distinct physical types without rewriting logical facts", () => {
@@ -119,8 +117,7 @@ test("native capture query rejects foreign declarations without inspecting custo
     "the actual native source has complete capture evidence before constructing a missing-fact inverse");
   const missing = createRustNativeCapturePlan({ records: createRustRecordFixture({ closureCapture: {
     get: subject => subject === make ? undefined : current.program.records.closureCapture.get(subject),
-  } }, current.program.records), storage: current.storage, nativeStorage: current.program.callableValues.nativeStorage,
-    layouts: current.layouts });
+  } }, current.program.records), storage: current.storage, nativeStorage: current.program.callableValues.nativeStorage });
   const declaration = missing.forDeclaration(make);
   assert.equal(declaration.kind === "unresolved" && /exact finalized capture declarations/u.test(declaration.reason), true,
     "only declarations with finalized capture facts are accepted");
@@ -142,7 +139,7 @@ test("completed capture tuples bind every storage category before error normaliz
   const reference = { kind: "reference", mutable: false, referent: parameter, lifetime };
   const array = rustFixedArrayTargetType(parameter, length);
   const original = Object.freeze({ kind: "resolved", captures: Object.freeze([parameter]),
-    receiverFields: Object.freeze([reference]), receivers: Object.freeze([array]), taskScope: undefined, inputs: Object.freeze([]),
+    receiverFields: Object.freeze([reference]), receivers: Object.freeze([array]), inputs: Object.freeze([]),
     environment: rustTargetGenericReferences({ kind: "tuple", elements: [parameter, reference, array] }) });
   const bindings = { types: new Map([[parameter.identity, integer]]),
     lifetimes: new Map([[rustLifetimeKey(lifetime), selectedLifetime]]),
@@ -179,7 +176,7 @@ test("capture completion preserves unresolved evidence and refuses an unregister
     "unresolved evidence is not an empty successful environment");
   const error = rustProducerErrorTargetType({ identity: "missing:producer", fileName: "/missing.ts",
     channel: "invoke", genericArguments: [] });
-  const captures = { kind: "resolved", captures: [error], receiverFields: [], receivers: [], taskScope: undefined, inputs: [],
+  const captures = { kind: "resolved", captures: [error], receiverFields: [], receivers: [], inputs: [],
     environment: rustTargetGenericReferences(error) };
   let lookups = 0;
   const selected = completeRustNativeCaptureCarrier({}, captures, bindings, { producers: {

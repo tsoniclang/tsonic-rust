@@ -2,7 +2,6 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
-import { createRustNativeCaptureLayouts } from "../../../dist/analysis/callables/native-captures.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 
 
@@ -173,7 +172,7 @@ closureCapture: { get: (node) => {
       projectFieldProjection() { assert.fail("logical carrier fixtures have no checked project-field projections"); },
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
       semantics: currentSource.semantics.forFile };
-    const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] };
+    const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], parameterOwners: new Set(), calls: [], entries: [] };
     const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,
       sourceLifetimes: emptyRustLifetimeIndex, nativeTasks });
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
@@ -183,9 +182,7 @@ closureCapture: { get: (node) => {
   return { closures, planInput, materialize,
     create: (closed = new Set()) => {
       const current = materialize();
-      const layouts = createRustNativeCaptureLayouts({ records, nativeTasks: current.nativeTasks,
-        retainedEnvironments: current.retainedEnvironments });
-      return createRustGenericCallablePlan(ast, layouts, files, records, names,
+      return createRustGenericCallablePlan(ast, files, records, names,
         currentSource.navigation, current.isNativeNode, [], closed).plan;
     } };
 }

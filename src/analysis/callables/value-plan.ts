@@ -33,7 +33,7 @@ import type { RustNativeCallableProducerPlan } from "../../target-model/records/
 import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests } from "./native-generic-producers.js";
 import type { RustNativeGenericProducerPlan } from "../../target-model/records/native-generic-producers.js";
-import { createRustNativeCaptureLayouts, createRustNativeCapturePlan } from "./native-captures.js";
+import { createRustNativeCapturePlan } from "./native-captures.js";
 import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
 import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdentityRequests, prepareRustGenericCallableIdentitySources } from "./generic-identities.js";
@@ -51,7 +51,7 @@ import type { RustGenericCallableFlowProducer } from "../program/records/generic
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
 import type { RustValueDomainCarrierHost } from "../objects/value-domain-carriers.js";
-import type { RustRetainedEnvironmentConstruction } from "./retained-environment-shapes.js";
+import type { RustRetainedEnvironmentQueries } from "../../target-model/records/retained-environments.js";
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
@@ -128,7 +128,7 @@ export interface RustCallableValuePlanInput {
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly carrierHost: RustValueDomainCarrierHost;
-  readonly retainedEnvironments: RustRetainedEnvironmentConstruction;
+  readonly retainedEnvironments: RustRetainedEnvironmentQueries;
   readonly nativeTasks: SourceNativeTaskGraph;
   readonly normalizeTypeFamily: (carrier: TargetTypeRef) => TargetTypeRef;
 }
@@ -294,9 +294,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
-  const layouts = createRustNativeCaptureLayouts({ records: input.records, nativeTasks: input.nativeTasks,
-    retainedEnvironments: input.retainedEnvironments });
-  const genericRegistry = createRustGenericCallablePlan(input.ast, layouts, input.sourceFiles, input.records, input.names, input.navigation, input.isNativeNode,
+  const genericRegistry = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation, input.isNativeNode,
     flows, input.closedSourceFiles);
   const generic = genericRegistry.plan;
   for (const definition of generic.definitions) {
@@ -344,7 +342,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes,
     producerErrorFor: reference => producerErrors?.producerError(reference), normalizeTypeFamily: input.normalizeTypeFamily });
   const captures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
-    nativeStorage: nativeStorageQueries, layouts });
+    nativeStorage: nativeStorageQueries });
   const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,
     storage: input.sourceStorage, captures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
@@ -400,7 +398,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const suspended = createRustSuspendedCallablePlan(input.ast, input.nativeNodes, input.records, input.names, input.lifetimes,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
-      const frames = createRustFrameCallablePlan({ ...input, layouts, usedNames });
+      const frames = createRustFrameCallablePlan({ ...input, usedNames });
       frameConstruction = frames;
       const occurrences = prepareRustProviderSourceOccurrences({ ast: input.ast, nodes: input.nativeNodes,
         isNativeNode: input.isNativeNode, records: input.records, semantics: input.sourceStorage.source.semantics });
@@ -426,11 +424,6 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const identityRequests = prepareRustGenericCallableIdentityRequests({ sources: identitySources, nativeStorage: physicalLifecycle.prepared });
       const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.nativeNodes, generic,
         nativeStorage: physicalLifecycle.prepared });
-      const taskCaptureIssues: RustSourceCallableSpecializationIssue[] = [];
-      for (const declaration of input.nativeTasks.capturedOwners) {
-        const selected = captures.require(declaration);
-        if (selected.kind === "unresolved") taskCaptureIssues.push({ subject: declaration, message: selected.reason });
-      }
       physical.closeAdmission();
       const nativeCaptures = captures.complete();
       const nativeGenericProducers = createRustNativeGenericProducerPlan({ records: input.records, generic, nativeStorage,
@@ -438,7 +431,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const genericIdentities = createRustGenericCallableIdentityPlan({ physical: generic.physical, requests: identityRequests });
       const genericDispatch = createRustGenericCallableDispatchPlan({ ast: input.ast, generic, closedSourceFiles: input.closedSourceFiles,
         nativeGenericProducers, invocations: dispatchRequests });
-      const selectedIssues = Object.freeze([...suspended.issues, ...frames.issues, ...genericIdentities.issues, ...taskCaptureIssues]);
+      const selectedIssues = Object.freeze([...suspended.issues, ...frames.issues, ...genericIdentities.issues]);
       const plan: RustCallableValueSelection = Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers,
         nativeGenericProducers, genericDispatch, genericIdentities, nativeDispatch, get genericCompletions() { return completions(); },
         projectFieldStorage,

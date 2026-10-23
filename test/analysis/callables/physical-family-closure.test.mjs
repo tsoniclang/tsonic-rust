@@ -11,8 +11,7 @@ import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
-import { createRustNativeCaptureLayouts, createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
-import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeChildren } from "../../../dist/target-model/types/carriers/children.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
@@ -88,11 +87,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   assert.equal(participation.kind, "resolved", "the checked family domain has complete native participation");
   const nativeNodes = participation.nodes;
   const nativeNodeSet = new Set(nativeNodes);
-  const nativeTasks = { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] };
-  const layouts = createRustNativeCaptureLayouts({ records, nativeTasks,
-    retainedEnvironments: createRustRetainedEnvironmentQueries({ source, sourceStorage: storage,
-      sourceLifetimes: program.sourceLifetimes, nativeTasks }) });
-  const registry = createRustGenericCallablePlan(source.ast, layouts, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records, program.names, source.navigation,
+  const registry = createRustGenericCallablePlan(source.ast, program.records.sourceArtifacts.get().map(artifact => artifact.sourceFile), records, program.names, source.navigation,
     node => nativeNodeSet.has(node));
   let physical;
   const input = { source, ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
@@ -114,7 +109,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
     } });
   producers.selectConstructionErrors(new Map());
   const queries = createRustNativeStorageQueries({ ...input, native, producers });
-  const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries, layouts }));
+  const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
@@ -850,11 +845,8 @@ function captureFixture(subjectFor) {
   const facts = new Map([[declaration, fact], [required, fact], [unrequired, fact]]);
   const state = { selections: 0, plan: undefined };
   const records = createRustRecordFixture({ closureCapture: { get: node => facts.get(node) } });
-  const layouts = createRustNativeCaptureLayouts({ records,
-    nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] },
-    retainedEnvironments: { callableRetentionFor() { throw new Error("A task-free capture fixture does not select scope retention."); } } });
   state.plan = createRustNativeCapturePlan({
-    layouts, records,
+    records,
     storage: { nodes: [declaration, required, unrequired, reference],
       subjectFor: node => ({ kind: "resolved", subject: { node, kind: "value", projection: [] } }) },
     nativeStorage: { subjectFor(subject, selected, owner) {

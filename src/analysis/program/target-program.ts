@@ -357,7 +357,7 @@ export function analyzeRustAnalysisProgram(
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
   const taskUses = publishRustNativeTaskUses({ context, graph: sourceStage.nativeTasks, completions: sourceStage.nativeTaskCompletions,
-    captures: context.callableValues.selected.nativeCaptures, regions: errorRegions.value, initialization: initializationErrors.value });
+    regions: errorRegions.value, initialization: initializationErrors.value });
   if (taskUses.kind === "rejected") return taskUses;
   const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
   const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,

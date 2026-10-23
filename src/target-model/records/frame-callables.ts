@@ -5,7 +5,6 @@ import type { RustClosureCaptureFact } from "./operation-selections.js";
 import type { RustCallableActivation } from "./callable-ownership.js";
 import type { RustSourceCallableSpecializationIssue } from "./callable-issues.js";
 import type { RustFrameInputAdmission } from "./frame-emission.js";
-import type { RustNativeCaptureSelection } from "./native-captures.js";
 
 export interface RustFrameCallablePlan {
   readonly activationInputs: ReadonlyMap<Node, ReadonlyMap<RustFrameCallableDefinition, RustFrameInputAdmission>>;
@@ -44,8 +43,6 @@ export interface RustFrameCallableImplementation {
   readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly receivers: readonly (RustClosureCaptureFact["receivers"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly copy: boolean;
-  readonly storage: "value" | "shared";
-  readonly taskScope: Extract<RustNativeCaptureSelection, { readonly kind: "resolved" }>["taskScope"];
   readonly independent: boolean;
 }
 

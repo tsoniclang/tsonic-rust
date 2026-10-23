@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, createSourceStorageBudget, createSourceCallableRetentionQuery,
   type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject,
-  type SourceNativeTaskGraph, type SourceCallableRetentionSelection } from "@tsonic/target-api/analysis";
+  type SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import { Node_Initializer, sourceLexicalEnvironment,
   sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
@@ -14,13 +14,9 @@ type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sou
 };
 import type { RustRetainedEnvironmentQueries, RustRetainedLexicalSelection } from "../../target-model/records/retained-environments.js";
 
-export interface RustRetainedEnvironmentConstruction extends RustRetainedEnvironmentQueries {
-  callableRetentionFor(declaration: Node): SourceCallableRetentionSelection;
-}
-
 export function createRustRetainedEnvironmentQueries(
   input: RustRetainedEnvironmentHost, maximumSteps = defaultSourceStorageLimits.maximumSteps,
-): RustRetainedEnvironmentConstruction {
+): RustRetainedEnvironmentQueries {
   const { ast, navigation } = input.source;
   const storage = input.sourceStorage;
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
@@ -240,8 +236,7 @@ export function createRustRetainedEnvironmentQueries(
       }
     }
     const selected = parameters.filter((parameter): parameter is Node => parameter !== undefined && retained.has(parameter));
-    const scopeDemand = taskOwners.has(declaration) && (input.nativeTasks.capturedOwners.has(declaration) ||
-      input.nativeTasks.parameterOwners.has(declaration) && isSuspended(declaration));
+    const scopeDemand = taskOwners.has(declaration) && input.nativeTasks.parameterOwners.has(declaration) && isSuspended(declaration);
     const retention = scopeDemand ? callableRetention.forDeclaration(declaration) : undefined;
     if (retention?.kind === "unresolved") return unresolved(retention.reason);
     const retainsScope = retention?.kind === "resolved" && retention.retention === "scoped";
@@ -270,8 +265,7 @@ export function createRustRetainedEnvironmentQueries(
   // (the checkpoint behaviour). Selecting every declaration while the analysis context is still being created ran
   // source storage queries too early, and the first unresolved collector failed the shared storage budget for the
   // whole program.
-  return Object.freeze({ suspendedParametersFor, lexicalFor, inputsFor,
-    callableRetentionFor: callableRetention.forDeclaration, environmentFor(declaration: Node) {
+  return Object.freeze({ suspendedParametersFor, lexicalFor, inputsFor, environmentFor(declaration: Node) {
     const cached = environments.get(declaration);
     if (cached !== undefined) return cached;
     const selected = select(declaration);

@@ -1,6 +1,6 @@
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { Node_Expression, sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { analyzeSourceNativeTaskGraph, createSourceStorageBudget, defaultSourceStorageLimits,
   type SourceNativeTaskGraph, type SourceNativeTaskSpawn, type SourceNativeTaskOwnerUse } from "@tsonic/target-api/analysis";
 import type { RustAnalysisContext } from "../program/context.js";
@@ -55,6 +55,11 @@ export function analyzeRustNativeTaskGraph(input: {
   const { context } = input;
   const { ast, source, sourceStorage: storage } = context;
   const spawns: { readonly node: Node; readonly operand: Node }[] = [];
+  const unsupported: TargetDiagnostic[] = [];
+  const refuse = (node: Node): void => { unsupported.push({ code: "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED", category: "error",
+    source: "tsonic-rust", sourceNode: node,
+    message: "Native task spawning requires a direct future-producing call in an ordinary function or the executable entry; captured, generator and initializer contexts are unsupported.",
+    evidence: ["target.capability=rust.native-tasks"] }); };
   const nativeCompletion = (type: Type, node: Node, depth = 0): boolean => {
     if (depth >= 128) return false;
     const semantics = source.semantics.forNode(node);
@@ -71,8 +76,18 @@ export function analyzeRustNativeTaskGraph(input: {
     if (!context.isNativeNode(operand) || use.kind !== "discarded" || !ast.is.IsVoidExpression(use.use)) continue;
     const checked = source.semantics.forNode(operand).types.expressionType(operand);
     if (checked === undefined || !nativeCompletion(checked, operand)) continue;
+    const region = storage.enclosingRegionFor(use.use);
+    const owner = region === undefined ? undefined : ast.parent(region);
+    if (!ast.is.IsCallExpression(rustUnparenthesizedExpression(ast, operand)) || region === undefined ||
+      sourceExpressionResultDisposition(ast, use.use).kind !== "discarded" || owner !== undefined &&
+      (ast.is.IsPropertyDeclaration(owner) || ast.is.IsParameterDeclaration(owner) || ast.is.IsConstructorDeclaration(owner) ||
+        ast.is.IsClassStaticBlockDeclaration(owner) || source.semantics.forNode(owner).operations.generator(owner) !== undefined)) {
+      refuse(use.use);
+      continue;
+    }
     spawns.push(Object.freeze({ node: use.use, operand }));
   }
+  if (unsupported.length !== 0) return rejectedTargetStage(Object.freeze(unsupported));
   const ownerUses = new Map<Node, SourceNativeTaskOwnerUse>();
   const callInputs = new Map<Node, "parameter" | "capture" | "none">();
   if (spawns.length !== 0) for (const node of context.nativeNodes) {
@@ -87,8 +102,7 @@ export function analyzeRustNativeTaskGraph(input: {
       const parameter = !expression && (ast.is.IsFunctionDeclaration(node) || ast.is.IsConstructorDeclaration(node) || nativeMethod) ||
         context.moduleCallables.isNativeCallableExpression(node) || context.sourceCallables.directLexicalBinding(node) !== undefined;
       const capture = references.length !== 0 || (expression || method && !nativeMethod) && !parameter;
-      ownerUses.set(node, Object.freeze({ capture, parameter,
-        creations: Object.freeze(expression || method && !nativeMethod ? capture ? [node] : [] : references) }));
+      ownerUses.set(node, Object.freeze({ capture, parameter }));
     }
     if (!ast.is.IsCallExpression(node) && !ast.is.IsNewExpression(node)) continue;
     const semantics = source.semantics.forNode(node);
@@ -107,7 +121,11 @@ export function analyzeRustNativeTaskGraph(input: {
   const selected = analyzeSourceNativeTaskGraph({ source, storage, nodes: context.nativeNodes, spawns,
     lifecycleOwner: input.lifecycleOwner, ownerUses, callInputs, publishedDeclarations: input.publishedDeclarations,
     budget: createSourceStorageBudget(defaultSourceStorageLimits) });
-  if (selected.kind === "resolved") return resolvedTargetStage(selected.graph);
+  if (selected.kind === "resolved") {
+    for (const call of selected.graph.calls) if (ast.is.IsSourceFile(call.owner) &&
+      sourceExpressionResultDisposition(ast, call.node).kind !== "discarded") refuse(call.node);
+    return unsupported.length === 0 ? resolvedTargetStage(selected.graph) : rejectedTargetStage(Object.freeze(unsupported));
+  }
   return rejectedTargetStage(selected.issues.map(issue => ({ category: "error" as const, source: "tsonic-rust", sourceNode: issue.node,
     code: issue.kind === "public-scope" ? "RUST_NATIVE_TASK_PUBLIC_SCOPE_UNSUPPORTED"
       : issue.kind === "lifecycle-owner" ? "RUST_LIFECYCLE_ERROR_OWNER_MISSING"

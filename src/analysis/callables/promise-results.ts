@@ -134,8 +134,7 @@ export function analyzeRustPromiseResults(input: {
         "A retained native method requires its identical completed source capture inventory.");
       const references = [...sourceCaptures.captures, ...sourceCaptures.receiverFields, ...sourceCaptures.receivers];
       if (physicalCaptures.kind !== "resolved" || physical.carrier.kind !== "tuple" ||
-        physical.carrier.elements.length !== references.length + (physicalCaptures.taskScope === undefined ? 0 : 1) ||
-        physicalCaptures.taskScope !== undefined && physicalCaptures.taskScope.position !== references.length)
+        physical.carrier.elements.length !== references.length)
         return unresolved(subject.node, "A native capture tuple lost its exact source-to-physical component correspondence.");
       captures.push(physical.carrier);
       for (const [index, capture] of references.entries()) {

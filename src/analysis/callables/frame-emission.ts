@@ -64,8 +64,7 @@ export function analyzeRustFrameEmission(input: {
     input.producer.definition(definition, { counterName: frames.counterNameFor(definition), parameters: Object.freeze(parameters),
       associated: Object.freeze([...associated.values()]), projections: Object.freeze([...projections.values()]),
       payloads: new Map(implementations.map(implementation => [implementation,
-        implementation.captures.length !== 0 || implementation.receiverFields.length !== 0 || implementation.receivers.length !== 0 ||
-          implementation.taskScope !== undefined || definition.environmentParameters.length !== 0])),
+        implementation.captures.length !== 0 || implementation.receiverFields.length !== 0 || implementation.receivers.length !== 0 || definition.environmentParameters.length !== 0])),
     });
   }
   for (const [scope, definitions] of scopes) input.producer.scope(scope, definitions);

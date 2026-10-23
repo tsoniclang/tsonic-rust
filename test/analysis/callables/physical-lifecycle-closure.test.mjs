@@ -8,8 +8,7 @@ import { analyzeRustCheckedContext } from "../../helpers/rust-session-analysis-c
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
-import { createRustNativeCaptureLayouts, createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
-import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
@@ -662,8 +661,7 @@ test("a physical reader captured during construction becomes the same terminal l
   let open = true;
   let selections = 0;
   const captures = createRustNativeCapturePlan({ records: context.records, storage: context.sourceStorage,
-    nativeStorage: context.callableValues.nativeStorage, layouts: createRustNativeCaptureLayouts({ records: context.records,
-      nativeTasks: context.nativeTaskGraph, retainedEnvironments: context.retainedEnvironments }) });
+    nativeStorage: context.callableValues.nativeStorage });
   const construction = createRustGenericCallablePhysicalPlan(generic.definitions, carrier => {
     assert.equal(open, true, "logical family selection is construction-only");
     selections += 1;
@@ -718,10 +716,7 @@ export function escaped(): (count: number) => number {
   const frames = createRustFrameCallablePlan({ ast: guard(program.source.ast), records: guard(program.records),
     ownership: guard(program.callableOwnership), sourceStorage: guard(sourceStorage), nativeNodes: sourceNodes(program), usedNames: new Set(),
     navigation: guard(source.navigation), projectTypes: guard(program.projectTypes),
-    objectRepresentations: guard(program.objectRepresentations), layouts: createRustNativeCaptureLayouts({ records: program.records,
-      nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] },
-      retainedEnvironments: createRustRetainedEnvironmentQueries({ source, sourceStorage, sourceLifetimes: program.sourceLifetimes,
-        nativeTasks: { lifecycleOwner: undefined, spawns: [], owners: [], capturedOwners: new Set(), parameterOwners: new Set(), calls: [], entries: [] } }) }) });
+    objectRepresentations: guard(program.objectRepresentations) });
   const nodes = sourceNodes(program);
   const witnesses = frames.definitions.flatMap(definition => definition.entries.flatMap(entry => entry.implementations
     .map(implementation => ({ definition, entry, implementation }))));

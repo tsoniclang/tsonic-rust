@@ -24,7 +24,6 @@ import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysical
 import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 
 import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
-import type { RustNativeCaptureLayouts } from "./native-captures.js";
 
 export interface RustGenericCallablePlan {
   readonly definitions: readonly RustGenericCallableDefinition[];
@@ -41,7 +40,7 @@ export interface RustGenericCallableRegistry {
 }
 
 export function createRustGenericCallablePlan(
-  ast: AstReader, layouts: RustNativeCaptureLayouts, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
+  ast: AstReader, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
   navigation: SourceProgramNavigation,
   isNativeNode: (node: Node) => boolean,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
@@ -142,11 +141,6 @@ export function createRustGenericCallablePlan(
           rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !value.signature.environmentParameters.some(parameter => parameter.identity === identity)))) {
         issues.push({ subject: node, message: "A generic callable environment has no exact closed capture contract; recursive or hidden existential captures are not erased." });
       } else {
-        const layout = layouts.forDeclaration(node);
-        if (layout.kind === "unresolved") {
-          issues.push({ subject: node, message: layout.reason });
-          continue;
-        }
         const creation = ast.is.IsFunctionDeclaration(node) && sourceDeclarationIsModuleScoped(node, ast)
           ? "declaration" as const : "activation" as const;
         const functionName = creation === "declaration" ? names.functionNameForDeclaration(node)
@@ -163,7 +157,7 @@ export function createRustGenericCallablePlan(
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
           functionName,
           creation,
-          storage, copy: storage === "value" && layout.taskScope?.storage !== "owned", taskScope: layout.taskScope,
+          storage,
           captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), receivers: Object.freeze(receivers), substitutions: snapshotClosedMetadata([...substitutions]),
         });
         const group = groups.get(identity);
@@ -185,7 +179,7 @@ export function createRustGenericCallablePlan(
       ...(rustNativeFutureCallableResult(group.signature.result) === undefined ? {} : {
         nativeFutureDispatchName: allocateRustGeneratedName(usedNames, `CallableFuture${nativeIdentity.slice(0, 12)}`),
       }),
-      copy: group.implementations.every(implementation => implementation.copy),
+      copy: group.implementations.every(implementation => implementation.storage === "value"),
       identityObserved: identityFamilies.has(identity),
       ownerFileName: group.implementations[0]!.sourceFileName, signature: group.signature,
       implementations: Object.freeze(group.implementations),

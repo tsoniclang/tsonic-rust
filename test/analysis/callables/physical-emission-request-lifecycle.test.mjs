@@ -6,7 +6,7 @@ import { boolCarrier } from "../../helpers/rust-session.mjs";
 import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/physical-lifecycle.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
-import { createRustNativeCaptureLayouts, createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -63,9 +63,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
       physical.carrierFor(carrier, fileName, subject, bindings, selected),
     lifetimes: input.lifetimes, lexicalFunctions: input.lexicalFunctions, structuralShapes: context.structuralShapes,
     carrierHost: input.carrierHost });
-  const layouts = createRustNativeCaptureLayouts({ records, nativeTasks: context.nativeTaskGraph,
-    retainedEnvironments: context.retainedEnvironments });
-  const captures = createRustNativeCapturePlan({ records, storage: sourceStorage, nativeStorage: queries, layouts });
+  const captures = createRustNativeCapturePlan({ records, storage: sourceStorage, nativeStorage: queries });
   physical = createRustGenericCallablePhysicalPlan(generic.definitions, generic.definitionFor, {
     ast, lifetimes: input.lifetimes, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
   });

@@ -13,11 +13,9 @@ export interface RustNativeTaskScope {
 export type RustNativeTaskUse =
   | { readonly kind: "entry"; readonly scope: RustNativeTaskScope; readonly inputCarrier: TargetTypeRef;
       readonly initializer: { readonly inputCarrier: TargetTypeRef; readonly passing: "borrow" } | undefined }
-  | { readonly kind: "initializer"; readonly scope: RustNativeTaskScope; readonly inputCarrier: TargetTypeRef; readonly passing: "borrow" }
   | { readonly kind: "owner"; readonly scope: RustNativeTaskScope;
       readonly inputCarrier: TargetTypeRef;
-      readonly captureCarrier: TargetTypeRef | undefined;
-      readonly binding: "borrowed-parameter" | "owned-parameter" | "owned-capture" | "borrowed-capture" }
+      readonly binding: "borrowed-parameter" | "owned-parameter" }
   | { readonly kind: "call"; readonly scope: RustNativeTaskScope;
       readonly passing: "borrow" | "clone" | "move" }
   | { readonly kind: "spawn"; readonly scope: RustNativeTaskScope;

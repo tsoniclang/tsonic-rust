@@ -6,7 +6,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustJsArrayLikeElementTargetType } from "../../target-model/types/carriers/js.js";
 import { rustFixedArrayCarrierValue } from "../../target-model/types/carriers/native.js";
 import type { RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/model.js";
-import { selectRustJsStoredTypeArgumentSlots } from "../../policy/operations/source-profiles/js/stored-slots.js";
 
 export interface RustValueDomainCarrierHost {
   readonly sourceStorage?: SourceStorageQueries;
@@ -67,7 +66,7 @@ export function rustSourceStorageProjectedCarrier(
       : component.kind === "tuple-element"
         ? carrier?.kind === "tuple" ? carrier.elements[component.index] : undefined
         : component.kind === "type-argument-slot"
-          ? selectRustJsStoredTypeArgumentSlots(carrier)?.find(slot => slot.index === component.index)?.carrier
+          ? undefined
         : carrier === undefined ? undefined
           : projectedMemberCarrier(host, storage, subject, index, component.declaration, carrier);
   }

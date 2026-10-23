@@ -5,7 +5,6 @@ import type { RustNativeTaskCompletion } from "./native-tasks.js";
 import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
-import type { RustNativeCapturePlan } from "../../target-model/records/native-captures.js";
 import type { RustNativeTaskUse, RustNativeTaskScope } from "../../target-model/records/native-tasks.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRuntimeTaskScopeTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
@@ -16,7 +15,6 @@ export function publishRustNativeTaskUses(input: {
   readonly context: RustAnalysisContext;
   readonly graph: SourceNativeTaskGraph;
   readonly completions: readonly RustNativeTaskCompletion[];
-  readonly captures: RustNativeCapturePlan;
   readonly regions: RustAnalyzedErrorRegions;
   readonly initialization: RustInitializationErrorRecords;
 }): TargetStageResult<undefined> {
@@ -26,6 +24,12 @@ export function publishRustNativeTaskUses(input: {
   if (entry === undefined || graph.lifecycleOwner === undefined) return rejectedTargetStage([{
     code: "RUST_NATIVE_TASK_LIFECYCLE_OWNER_MISSING", category: "error", source: "tsonic-rust",
     message: "Native task scope requires its checked executable lifecycle entry.", evidence: ["target.capability=rust.native-tasks"],
+  }]);
+  if (graph.entries.some(file => file !== entry)) return rejectedTargetStage([{
+    code: "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED", category: "error", source: "tsonic-rust",
+    sourceNode: graph.entries.find(file => file !== entry),
+    message: "Native task spawning requires a direct ordinary function or the executable entry; captured callables and module initializers are unsupported.",
+    evidence: ["target.capability=rust.native-tasks"],
   }]);
   const names = new Set<string>();
   for (const node of context.nativeNodes) {
@@ -40,45 +44,29 @@ export function publishRustNativeTaskUses(input: {
   const borrow = (lifetime: RustLifetimeRef = rustPlaceholderLifetime): TargetTypeRef => Object.freeze({ kind: "reference", mutable: false, referent: carrier, lifetime });
   const owners = new Map<Node, Extract<RustNativeTaskUse, { readonly kind: "owner" }>>();
   for (const declaration of graph.owners) {
-    let captureCarrier: TargetTypeRef | undefined;
-    let captureBinding: "owned-capture" | "borrowed-capture" | undefined;
-    if (graph.capturedOwners.has(declaration)) {
-      const captures = input.captures.forDeclaration(declaration);
-      if (captures.kind !== "resolved" || captures.taskScope === undefined || captures.taskScope.lifecycleOwner !== graph.lifecycleOwner)
-        failTargetAnalysisInvariant("tsonic-rust", "A native task owner requires its one preselected scope capture layout.", declaration);
-      captureCarrier = captures.taskScope.storage === "owned" ? carrier : borrow(captures.taskScope.lifetime);
-      captureBinding = captures.taskScope.storage === "owned" ? "owned-capture" : "borrowed-capture";
-    }
-    let selected: Extract<RustNativeTaskUse, { readonly kind: "owner" }>;
-    if (graph.parameterOwners.has(declaration)) {
-      const retained = context.retainedEnvironments.environmentFor(declaration);
-      if (retained.kind === "unresolved") return rejectedTargetStage([{
-        code: "RUST_NATIVE_TASK_RETENTION_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: declaration,
-        message: retained.reason, evidence: ["target.capability=rust.native-tasks"],
-      }]);
-      const suspended = context.ast.hasModifierKind(declaration, "async") || context.records.generator.get(declaration) !== undefined;
-      const inputs = suspended ? context.retainedEnvironments.inputsFor(declaration)
-        : Object.freeze({ kind: "resolved" as const, ownership: "borrowed" as const });
-      if (inputs.kind === "unresolved") return rejectedTargetStage([{
-        code: "RUST_NATIVE_TASK_RETENTION_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: declaration,
-        message: inputs.reason, evidence: ["target.capability=rust.native-tasks"],
-      }]);
-      const owned = inputs.ownership === "owned";
-      selected = Object.freeze({ kind: "owner", scope, binding: owned ? "owned-parameter" : "borrowed-parameter",
-        captureCarrier,
-        inputCarrier: owned ? carrier : borrow(retained.kind === "selected" ? retained.environment.lifetime : rustPlaceholderLifetime) });
-    } else {
-      if (captureCarrier === undefined || captureBinding === undefined)
-        failTargetAnalysisInvariant("tsonic-rust", "A native task owner requires its selected source invocation or capture role.", declaration);
-      selected = Object.freeze({ kind: "owner", scope, binding: captureBinding, inputCarrier: captureCarrier, captureCarrier });
-    }
+    if (!graph.parameterOwners.has(declaration) || context.records.generator.get(declaration) !== undefined)
+      return rejectedTargetStage([{ code: "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED", category: "error", source: "tsonic-rust",
+        sourceNode: declaration, message: "Native task spawning requires a direct ordinary function; generator and captured contexts are unsupported.",
+        evidence: ["target.capability=rust.native-tasks"] }]);
+    const retained = context.retainedEnvironments.environmentFor(declaration);
+    if (retained.kind === "unresolved") return rejectedTargetStage([{
+      code: "RUST_NATIVE_TASK_RETENTION_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: declaration,
+      message: retained.reason, evidence: ["target.capability=rust.native-tasks"],
+    }]);
+    const inputs = context.ast.hasModifierKind(declaration, "async") ? context.retainedEnvironments.inputsFor(declaration)
+      : Object.freeze({ kind: "resolved" as const, ownership: "borrowed" as const });
+    if (inputs.kind === "unresolved") return rejectedTargetStage([{
+      code: "RUST_NATIVE_TASK_RETENTION_NOT_CLOSED", category: "error", source: "tsonic-rust", sourceNode: declaration,
+      message: inputs.reason, evidence: ["target.capability=rust.native-tasks"],
+    }]);
+    const owned = inputs.ownership === "owned";
+    const selected = Object.freeze({ kind: "owner" as const, scope, binding: owned ? "owned-parameter" as const : "borrowed-parameter" as const,
+      inputCarrier: owned ? carrier : borrow(retained.kind === "selected" ? retained.environment.lifetime : rustPlaceholderLifetime) });
     owners.set(declaration, selected);
     context.records.nativeTaskPlans.use(declaration, selected);
   }
   const initializer = graph.entries.includes(entry) ? Object.freeze({ inputCarrier: borrow(), passing: "borrow" as const }) : undefined;
   context.records.nativeTaskPlans.use(entry, Object.freeze({ kind: "entry", scope, inputCarrier: carrier, initializer }));
-  for (const file of graph.entries) if (file !== entry)
-    context.records.nativeTaskPlans.use(file, Object.freeze({ kind: "initializer", scope, inputCarrier: borrow(), passing: "borrow" }));
   for (const call of graph.calls) {
     const targets = call.targets.map(target => owners.get(target));
     if (targets.some(target => target === undefined) || targets.length === 0)
