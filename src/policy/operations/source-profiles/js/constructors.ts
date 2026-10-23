@@ -10,6 +10,17 @@ import { jsValueProjectionsAreValid, type JsCarrierRef, type JsOperationSelectio
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustJsTypedArrayName } from "../../../../target-model/types/index.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
+import { selectRustJsStoredTypeArgumentSlots } from "./stored-slots.js";
+
+export interface RustJsConstructorStoredInput {
+  readonly nativeArgumentIndex: number;
+  readonly carrier: TargetTypeRef;
+  readonly sourceIndex: number;
+  readonly projections: readonly (
+    | { readonly kind: "array-element" }
+    | { readonly kind: "tuple-element"; readonly index: number }
+  )[];
+}
 
 type JsConstructorResult =
   | { readonly kind: "map" }
@@ -40,6 +51,7 @@ interface JsConstructorRowData {
   readonly requiresObjectIdentityTypeArgument?: number;
   readonly valueProjections?: readonly JsValueProjection[];
   readonly variant?: string;
+  readonly storedInputs?: readonly Omit<RustJsConstructorStoredInput, "carrier">[];
 }
 
 function defineJsConstructorRows(
@@ -116,10 +128,16 @@ const jsConstructorRows = defineJsConstructorRows([
   { className: "SharedArrayBuffer", sourceOwnerName: "SharedArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new_shared", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "numeric-argument", index: 0 }] },
   { className: "Uint8Array", sourceOwnerName: "Uint8ArrayConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::Uint8Array::new", result: { kind: "typed-array", name: "Uint8Array" }, fallible: true, trailingArguments: [{ kind: "float64", value: 0 }], variant: "empty" },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsMap::new", result: { kind: "map" } },
-  { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsMap::from_array", result: { kind: "map" }, params: [{ ref: "js-map-entry-array" }], argModes: ["ref"], variant: "js-array" },
+  { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsMap::from_array", result: { kind: "map" }, params: [{ ref: "js-map-entry-array" }], argModes: ["ref"], variant: "js-array",
+    storedInputs: [
+      { nativeArgumentIndex: 0, sourceIndex: 0, projections: [{ kind: "array-element" }, { kind: "tuple-element", index: 0 }] },
+      { nativeArgumentIndex: 1, sourceIndex: 0, projections: [{ kind: "array-element" }, { kind: "tuple-element", index: 1 }] },
+    ] },
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 0, path: "js_abi::JsSet::new", result: { kind: "set" } },
-  { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_array", result: { kind: "set" }, params: [{ ref: "element-array" }], argModes: ["ref"], inputShape: "js-array-of-element", variant: "js-array" },
-  { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_fixed_array", result: { kind: "set" }, argModes: ["ref"], inputShape: "fixed-array-of-element", variant: "fixed-array" },
+  { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_array", result: { kind: "set" }, params: [{ ref: "element-array" }], argModes: ["ref"], inputShape: "js-array-of-element", variant: "js-array",
+    storedInputs: [{ nativeArgumentIndex: 0, sourceIndex: 0, projections: [{ kind: "array-element" }] }] },
+  { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_fixed_array", result: { kind: "set" }, argModes: ["ref"], inputShape: "fixed-array-of-element", variant: "fixed-array",
+    storedInputs: [{ nativeArgumentIndex: 0, sourceIndex: 0, projections: [{ kind: "array-element" }] }] },
   { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsWeakMap::new", result: { kind: "weak-map" }, requiresObjectIdentityTypeArgument: 0 },
   { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsWeakMap::from_null", result: { kind: "weak-map" }, params: [{ ref: "absence" }], requiresObjectIdentityTypeArgument: 0, variant: "null" },
   { className: "WeakMap", sourceOwnerName: "WeakMapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsWeakMap::from_array", result: { kind: "weak-map" }, params: [{ ref: "weak-map-entry-array" }], argModes: ["ref"], requiresObjectIdentityTypeArgument: 0, variant: "array" },
@@ -159,6 +177,27 @@ export interface JsConstructorRequest {
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
+}
+
+function jsConstructorOperationId(row: JsConstructorRowData): string {
+  return `tsonic.rust.js.${row.className}.constructor${row.variant === undefined ? "" : `.${row.variant}`}`;
+}
+
+export function selectRustJsConstructorStoredInputs(
+  operationId: string, resultCarrier: TargetTypeRef,
+): readonly RustJsConstructorStoredInput[] | undefined {
+  const row = jsConstructorRows.find(candidate => jsConstructorOperationId(candidate) === operationId);
+  if (row?.storedInputs === undefined) return undefined;
+  const slots = selectRustJsStoredTypeArgumentSlots(resultCarrier);
+  if (slots === undefined || slots.length !== row.storedInputs.length) return undefined;
+  const inputs: RustJsConstructorStoredInput[] = [];
+  for (const input of row.storedInputs) {
+    const slot = slots.find(candidate => candidate.nativeArgumentIndex === input.nativeArgumentIndex);
+    if (slot === undefined) return undefined;
+    inputs.push(Object.freeze({ ...input, carrier: slot.carrier,
+      projections: Object.freeze(input.projections.map(projection => Object.freeze({ ...projection }))) }));
+  }
+  return Object.freeze(inputs);
 }
 
 function resolveConstructorResult(
@@ -279,7 +318,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest, defini
   return {
     fact: {
       kind: "provider-operation",
-      operationId: `tsonic.rust.js.${row.className}.constructor${row.variant === undefined ? "" : `.${row.variant}`}`,
+      operationId: jsConstructorOperationId(row),
       operationKind: "constructor",
       target,
       resultCarrier,

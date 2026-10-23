@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustJsStoredTypeArgumentSlots } from "../../../dist/policy/operations/source-profiles/js/stored-slots.js";
+import { selectRustJsConstructorStoredInputs } from "../../../dist/policy/operations/source-profiles/js/constructors.js";
 import { rustJsMapTargetType, rustJsSetTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 const key = rustSourcePrimitiveTargetType("string");
@@ -59,4 +60,41 @@ test("stored-slot ABI refuses missing, extra and non-type native arguments", () 
     assert.equal(selectRustJsStoredTypeArgumentSlots({ ...carrier, genericArguments: arguments_ }) === undefined,
       true, "native argument kind and arity are exact, never filtered or inferred");
   }
+});
+
+test("a selected Map constructor maps its native slots to actual input array tuple components", () => {
+  const inputs = selectRustJsConstructorStoredInputs("tsonic.rust.js.Map.constructor.js-array", rustJsMapTargetType(key, value));
+  assert.equal(inputs?.length, 2, "the one selected constructor consumes key and value components");
+  for (const [index, input] of inputs.entries()) {
+    assert.equal(input.nativeArgumentIndex, index, "native result type argument ordinal");
+    assert.equal(input.sourceIndex, 0, "the actual constructor input, not a receiver read");
+    assert.equal(input.carrier === [key, value][index], true, "exact selected native payload carrier");
+    assert.deepEqual(input.projections, [{ kind: "array-element" }, { kind: "tuple-element", index }]);
+    assert.equal(Object.isFrozen(input) && Object.isFrozen(input.projections) && input.projections.every(Object.isFrozen), true,
+      "constructor correspondence is immutable policy data");
+  }
+  assert.equal(Object.isFrozen(inputs), true, "one closed constructor input inventory");
+});
+
+test("selected Set array constructors retain one actual input element correspondence", () => {
+  for (const variant of ["js-array", "fixed-array"]) {
+    const inputs = selectRustJsConstructorStoredInputs(`tsonic.rust.js.Set.constructor.${variant}`, rustJsSetTargetType(value));
+    assert.equal(inputs?.length, 1, variant + ": one actual stored input");
+    assert.equal(inputs[0].nativeArgumentIndex, 0, variant + ": exact native element argument");
+    assert.equal(inputs[0].sourceIndex, 0, variant + ": actual input array");
+    assert.equal(inputs[0].carrier === value, true, variant + ": exact carrier identity");
+    assert.deepEqual(inputs[0].projections, [{ kind: "array-element" }]);
+  }
+});
+
+test("constructor correspondence never makes opaque collection operations see-through", () => {
+  for (const operationId of ["tsonic.rust.js.Map.constructor", "tsonic.rust.js.Set.constructor",
+    "tsonic.rust.js.Map.get", "tsonic.rust.js.Map.set", "tsonic.rust.js.Set.forEach", "foreign.Map.constructor.js-array"]) {
+    assert.equal(selectRustJsConstructorStoredInputs(operationId, rustJsMapTargetType(key, value)) === undefined, true,
+      operationId + ": no invented receiver or future-write provenance");
+  }
+  assert.equal(selectRustJsConstructorStoredInputs("tsonic.rust.js.Map.constructor.js-array", rustJsSetTargetType(value)) === undefined,
+    true, "a selected constructor requires its native result slot arity");
+  assert.equal(selectRustJsConstructorStoredInputs("tsonic.rust.js.Set.constructor.js-array", rustJsMapTargetType(key, value)) === undefined,
+    true, "unrelated native type arguments cannot be substituted for a constructor slot");
 });
