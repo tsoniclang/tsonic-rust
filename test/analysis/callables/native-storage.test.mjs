@@ -75,6 +75,46 @@ function fixture(text, options = {}) {
     revokeSource: guardedAst.revoke, revokeQueries: guardedQueries.revoke };
 }
 
+for (const surfaces of [[], ["js"]]) {
+  test(`optional callable literal state consumes its complete native interface field contract on ${surfaces[0] ?? "native"}`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+      interface Operation { label?: string; enabled?: boolean; callback?: () => number; run(): number; }
+      export function absent(): Operation { return { run(): number { return 3; } }; }
+      export function present(): Operation {
+        return { label: "ready", enabled: false, callback: () => 7, run(): number { return 3; } };
+      }
+    ` } });
+    const { ast } = program.source;
+    const literals = [];
+    const visit = node => {
+      if (ast.is.IsObjectLiteralExpression(node)) literals.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(literals.length, 2, "omitted and present optional state both retain their original source literals");
+    for (const literal of literals) {
+      const selected = program.records.objectLiteralEmission.get(literal);
+      assert.equal(selected?.kind, "project", "the nominal method record keeps its existing native interface representation");
+      let callback;
+      for (const field of selected.selection.fields) {
+        const owner = program.projectTypes.definitionContainingDeclaration(field.declaration);
+        const ownerCarrier = program.records.projectRelationship.get(selected.selection.carrier, owner);
+        const physical = program.records.projectClassFields.get(owner, ownerCarrier)
+          .find(candidate => candidate.declaration === field.declaration);
+        assert.equal(field.carrier === physical?.carrier, true,
+          "literal state and native dispatch use one identical instantiated physical member carrier");
+        if (ast.text(ast.name(field.declaration)) === "callback") callback = field;
+      }
+      assert.equal(callback !== undefined, true, "an omitted callback still owns its original optional state slot");
+      const payload = rustOptionElementCarrier(callback.carrier);
+      const protocol = rustCallableProtocol(payload);
+      assert.equal(protocol !== undefined, true, "native absence wraps the complete physical callable storage");
+      assert.equal(protocol.lifetime.kind, "static", "the lifetime-free owning native interface has no unnameable state lifetime");
+      assert.equal(protocol.error !== undefined, true, "the original physical callable error channel is retained, not invented by rendering");
+    }
+  });
+}
+
 for (const genericParameters of [[], [{ kind: "lifetime" }]]) {
   test(`callable fields select their complete member storage (${genericParameters.length === 0 ? "owned" : "borrowed"})`, () => {
     const declaration = {};
