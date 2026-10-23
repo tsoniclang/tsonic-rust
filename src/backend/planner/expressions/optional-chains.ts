@@ -8,6 +8,7 @@ import { planExpression, planRawExpression } from "./entry.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { planRustAbsentValue, planRustCheckedSourceOptional } from "./optional-storage.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 export function effectiveMemberResultCarrier(node: Node, innerResultCarrier: TargetTypeRef,
   context: RustPlanContext): TargetTypeRef {
@@ -38,7 +39,7 @@ export function planOptionalChainExpression(node: Node, context: RustPlanContext
     carrier: structuralGuard?.selectedStorageCarrier ?? fact.selectedGuardCarrier, valueForm: ownedGuard ? "value" : "shared-reference" });
   const body = planInner({ ...context, expressionOverrides: overrides });
   if (body === undefined) failRustPlannerInvariant("An admitted optional chain requires its selected native body.", node);
-  let borrowedGuard: RustExpr = ownedGuard ? guard : { kind: "method-call", receiver: guard, method: "as_ref", args: [] };
+  let borrowedGuard: RustExpr = ownedGuard ? guard : { kind: "method-call", receiver: rustAutoBorrowedReceiver(guard), method: "as_ref", args: [] };
   for (let depth = 1; depth < fact.guardDepth; depth++) borrowedGuard = {
     kind: "method-call", receiver: borrowedGuard, method: "and_then",
     args: [{ kind: "path", path: "core::option::Option::as_ref" }],

@@ -37,7 +37,7 @@ function planTest(node: Node, expression: RustExpr, test: RustClosedTypeTestEmis
   const names = context.syntheticNames ?? failRustPlannerInvariant("An admitted type test requires its native binding scope.", node);
   if (test.kind === "option") {
     const name = allocateRustSyntheticName(names, "instance");
-    return { kind: "method-call", receiver: { kind: "method-call", receiver: expression, method: "as_ref", args: [] }, method: "is_some_and",
+    return { kind: "method-call", receiver: { kind: "method-call", receiver: rustAutoBorrowedReceiver(expression), method: "as_ref", args: [] }, method: "is_some_and",
       args: [{ kind: "closure", params: [{ name, byRefCopy: false }], body: planTest(node, { kind: "path", path: name }, test.test, context) }] };
   }
   const arms: Extract<RustExpr, { readonly kind: "match" }>["arms"][number][] = [];

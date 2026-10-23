@@ -7,6 +7,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
+import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
 
 type SequenceContract = Extract<RustValueConversionContract, { readonly lowering: "rest-sequence" }>;
 type ConvertElement = (contract: RustValueConversionContract, value: RustExpr) => RustExpr | undefined;
@@ -80,7 +81,7 @@ export function planRustSequenceAppend(
     effect = { kind: "method-call", receiver: destination, receiverMode: "mut-ref", method: "extend", args: [iterator] };
   }
   return contract.collection === "js-array" ? { kind: "method-call",
-    receiver: source, method: "with_values",
+    receiver: rustAutoBorrowedReceiver(source), method: "with_values",
     args: [{ kind: "closure", params: [{ name: sliceName, byRefCopy: false }], body: effect }],
   } : effect;
 }
