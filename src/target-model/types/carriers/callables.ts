@@ -1,4 +1,5 @@
 import { rustAsyncGeneratorTargetId, rustBorrowedAsyncGeneratorTargetId, rustBorrowedGeneratorTargetId, rustCallableTargetId, rustCallableInputTargetId, rustGeneratorTargetId, rustIteratorResultTargetId, rustLocationTargetId, rustInfallibleTargetId, rustRawPointerTargetId } from "./source-types.js";
+import { rustGeneratorMayReenterTargetId, rustGeneratorNoReentryTargetId } from "./source-types.js";
 import { rustOptionElementCarrier } from "./optional.js";
 
 import { rustProgramErrorTargetType } from "./js.js";
@@ -144,6 +145,10 @@ export interface RustGeneratorProtocol {
   readonly yieldType: TargetTypeRef;
   readonly returnType: TargetTypeRef;
   readonly nextType: TargetTypeRef;
+  readonly physical?: {
+    readonly errorCarrier: TargetTypeRef;
+    readonly reentry: "excluded" | "possible";
+  };
 }
 
 export interface RustIteratorResultProtocol {
@@ -152,7 +157,7 @@ export interface RustIteratorResultProtocol {
 }
 
 export function rustGeneratorTargetType(
-  protocol: Omit<RustGeneratorProtocol, "kind">,
+  protocol: Pick<RustGeneratorProtocol, "yieldType" | "returnType" | "nextType">,
 ): TargetTypeRef {
   return {
     kind: "target-named",
@@ -166,7 +171,7 @@ export function rustGeneratorTargetType(
 }
 
 export function rustAsyncGeneratorTargetType(
-  protocol: Omit<RustGeneratorProtocol, "kind">,
+  protocol: Pick<RustGeneratorProtocol, "yieldType" | "returnType" | "nextType">,
 ): TargetTypeRef {
   return {
     kind: "target-named",
@@ -203,13 +208,19 @@ export function getRustGeneratorProtocol(
   const genericArguments = borrowed
     ? carrier.genericArguments?.slice(1)
     : carrier.genericArguments;
-  if (borrowed && (carrier.genericArguments?.length !== 4 ||
+  if (borrowed && (carrier.genericArguments?.length !== 6 ||
     carrier.genericArguments[0]?.kind !== "lifetime")) {
     return undefined;
   }
   const arguments_ = rustOnlyTypeGenericArguments(genericArguments);
-  if (arguments_?.length !== 3) return undefined;
+  if (arguments_ === undefined || arguments_.length !== 3 && arguments_.length !== 5 || borrowed && arguments_.length !== 5) return undefined;
   const [yieldType, returnType, nextType] = arguments_;
+  const errorCarrier = arguments_[3];
+  const policy = arguments_[4];
+  const reentry = policy?.kind !== "target-named" || (policy.genericArguments?.length ?? 0) !== 0 ? undefined
+    : policy.id === rustGeneratorNoReentryTargetId ? "excluded"
+      : policy.id === rustGeneratorMayReenterTargetId ? "possible" : undefined;
+  if (arguments_.length === 5 && (errorCarrier === undefined || reentry === undefined)) return undefined;
   return yieldType === undefined || returnType === undefined || nextType === undefined
     ? undefined
     : {
@@ -220,6 +231,7 @@ export function getRustGeneratorProtocol(
         yieldType,
         returnType,
         nextType,
+        ...(errorCarrier === undefined || reentry === undefined ? {} : { physical: { errorCarrier, reentry } }),
       };
 }
 

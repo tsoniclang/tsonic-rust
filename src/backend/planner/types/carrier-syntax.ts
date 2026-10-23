@@ -14,6 +14,9 @@ import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructural
   rustJsPromiseTargetId, rustUnitTargetType, rustProgramErrorTargetId } from "../../../target-model/types/index.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
+import { getRustGeneratorProtocol } from "../../../target-model/types/carriers/callables.js";
+import { rustGeneratorTargetId, rustAsyncGeneratorTargetId, rustBorrowedGeneratorTargetId,
+  rustBorrowedAsyncGeneratorTargetId } from "../../../target-model/types/carriers/source-types.js";
 
 export const rustStrRefType: RustType = {
   kind: "reference",
@@ -112,6 +115,9 @@ export function rustTypeFromCarrier(
         };
   }
   if (carrier.kind === "target-named") {
+    if ((carrier.id === rustGeneratorTargetId || carrier.id === rustAsyncGeneratorTargetId ||
+      carrier.id === rustBorrowedGeneratorTargetId || carrier.id === rustBorrowedAsyncGeneratorTargetId) &&
+      getRustGeneratorProtocol(carrier)?.physical === undefined) return undefined;
     if (carrier.id === rustProgramErrorTargetId) {
       const owner = rustProgramErrorOwner(carrier);
       return owner === undefined ? undefined : resolveSourceTypePath?.programErrorType?.(owner);

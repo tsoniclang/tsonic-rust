@@ -7,6 +7,12 @@ export function rustRuntimeErrorTargetType(): TargetTypeRef {
   return rustNamedTargetType(rustRuntimeErrorTypeIdentity, "tsonic_rust_runtime::TsonicError");
 }
 
+export function rustRuntimeTaskScopeTargetType(error: TargetTypeRef): TargetTypeRef {
+  return rustNamedTargetType("rust.runtime.TaskScope", "rt::TaskScope", [{ kind: "type", type: error }], [], {
+    implementations: [{ trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] }],
+  });
+}
+
 export function rustRuntimeRecordFieldTargetType(value: TargetTypeRef, error: TargetTypeRef): TargetTypeRef {
   return rustNamedTargetType("rust.runtime.RecordField", "rt::RecordField", [
     { kind: "type", type: value }, { kind: "type", type: error },

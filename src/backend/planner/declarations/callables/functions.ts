@@ -5,7 +5,6 @@ import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
-import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
 import {
@@ -24,7 +23,7 @@ import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
 } from "./parameters.js";
-import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustJsPromiseReturnType } from "./return-types.js";
+import { resolveRustCallableBodyReturnType, resolveRustCallableOutwardReturnType, resolveRustGeneratorBodyErrorType, resolveRustJsPromiseReturnType } from "./return-types.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
@@ -33,7 +32,6 @@ import { planRustGeneratorBody } from "./generator-body.js";
 import { planRustCallableLeadingParameters } from "./leading-parameters.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
-import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
 
@@ -193,12 +191,11 @@ function planRustFunctionItem(
   const errorRegion = planRustErrorRegion(node, context);
   const fallible = errorRegion?.boundary !== undefined;
   const callableErrorBoundary = errorRegion?.boundary;
-  const generatorErrorOwner = generatorFact === undefined ? undefined : rustCurrentErrorBoundary(context);
-  const bodyErrorBoundary = callableErrorBoundary ?? (generatorErrorOwner === undefined
-    ? undefined : rustPackageFallibleBoundary(generatorErrorOwner));
-  if (errorRegion === undefined || generatorFact !== undefined && bodyErrorBoundary === undefined) {
+  if (errorRegion === undefined) {
     failRustPlannerInvariant("An admitted callable requires its exact native declaration, return, error and body contracts.", node);
   }
+  const bodyErrorType = generatorFact === undefined ? callableErrorBoundary?.errorType
+    : resolveRustGeneratorBodyErrorType(node, context);
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
   const returnType = isUnit || fallible && isNever
@@ -251,8 +248,8 @@ function planRustFunctionItem(
             protocol: generatorFact,
           },
         }),
-    fallibleBoundary: bodyErrorBoundary,
-    returnResult: bodyErrorBoundary === undefined ? undefined : { errorType: bodyErrorBoundary.errorType },
+    fallibleBoundary: callableErrorBoundary,
+    returnResult: bodyErrorType === undefined ? undefined : { errorType: bodyErrorType },
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -300,8 +297,7 @@ function planRustFunctionItem(
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
-          expr: planRustGeneratorBody(body, generatorFact, generatorControllerName!,
-            bodyErrorBoundary!.errorType),
+          expr: planRustGeneratorBody(body, generatorFact, generatorControllerName!),
         }],
       },
     };
