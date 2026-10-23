@@ -7,6 +7,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { applyFinalizedRustArgumentMode, applyRustArgumentMode, createRustSharedReferenceArgument,
   createRustMutableReferenceArgument } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
+import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
 import { printRustExpr } from "../../../../dist/print/source/index.js";
 
 function sourceNodes(program) {
@@ -140,7 +141,7 @@ test("operator-specific conversions survive reference shaping independently of n
       "the selected conversion is retained once, rather than replaced by the original BigInt storage");
     assert.match(printed, /JsNumeric::less_than\(&js_abi::JsNumeric::from_bigint\(/u,
       "the operator borrows its finalized JsNumeric, not the preconversion input");
-    assert.equal(program.records.argumentView.get(selected.left)?.borrowedStorage, true,
+    assert.equal(program.records.argumentView.get(selected.left)?.borrowedStorage !== undefined, true,
       "the inverse source-storage path really exists, so node identity alone cannot justify replanning");
     const finalized = { kind: "call", path: "selected_conversion_with_effect", args: [] };
     const argument = applyRustArgumentMode(context, { stage: "finalized", expression: finalized }, "ref");
@@ -157,4 +158,40 @@ test("finalized argument stages never consult original source storage or paramet
     assert.equal(mode === "value" ? planned === value : planned.kind === "reference" && planned.expr === value &&
       (planned.mutable === true) === (mode === "mut-ref"), true, `${mode}: exactly the selected expression survives`);
   }
+});
+
+test("transparent shared inputs retain the source-selected capture guard without cloning", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function make(seed: string): (next: string) => number {
+      return (next: string): number => {
+        seed = next;
+        return Number.parseInt(seed) + Number.parseInt((seed)) + Number.parseInt(((seed))) +
+          Number.parseInt(seed as string) + Number.parseInt(seed satisfies string) + Number.parseInt(seed!);
+      };
+    }
+    export function ordinary(value: string): number { return Number.parseInt((value)); }
+  ` } });
+  const calls = sourceNodes(program).filter(node => {
+    const operation = program.records.targetOperation.get(node);
+    return operation?.kind === "provider-operation" && operation.abi.target.form === "call" &&
+      operation.abi.target.path === "js_abi::number_parse_int";
+  });
+  assert.equal(calls.length, 7, "six actual capture views plus the ordinary native parameter inverse");
+  let guarded = 0;
+  for (const node of calls) {
+    const argument = program.source.ast.arguments(node)[0];
+    const view = program.records.argumentView.get(argument);
+    const expression = planExpression(node, rustSourceFilePlanContext(program, node));
+    assert.equal(expression !== undefined, true, "the selected native input is rendered");
+    const printed = printRustExpr(expression);
+    assert.doesNotMatch(printed, /\.clone\(/u, "borrow selection precedes native rendering, not clone-then-strip");
+    if (view.borrowedStorage === "borrow-guard") {
+      guarded += 1;
+      assert.match(printed, /AsRef::<str>::as_ref\(&\*/u, "transparent views keep the exact guard payload reference");
+      assert.equal((printed.match(/\.borrow\(\)/gu) ?? []).length, 1, "the selected guard is acquired once");
+    } else {
+      assert.doesNotMatch(printed, /\.borrow\(|&\*/u, "an ordinary native reference is not turned into a guard");
+    }
+  }
+  assert.equal(guarded, 6, "every identity wrapper retains the same physical source fact");
 });

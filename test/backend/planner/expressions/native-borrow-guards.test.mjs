@@ -19,6 +19,8 @@ function context(storage, override, ownership = borrowed) {
       records: createRustRecordFixture({
         sourceBinding: { get: () => ({ sourceDeclaration: declaration }) },
         bindingStorage: { get: () => storage === undefined ? undefined : { storage, valueCarrier: carrier } },
+        argumentView: { get: () => ({ slice: false,
+          borrowedStorage: storage === "borrow-cell" ? "borrow-guard" : "plain" }) },
         readOwnership: { get: () => ({ carrier, source: ownership, value: ownership,
           snapshot: undefined, stablePlace: true, readsStorage: true, pure: true,
           sharedReference: false, borrowedAcross: new Set() }) },

@@ -352,7 +352,7 @@ export function create(): () => int32 { return (): int32 => fail(); }
   const source = fixture.program.records.targetOperation.get(fixture.node).resultCarrier;
   const expression = fixture.plan();
   assert.equal(expression !== undefined, true);
-  const input = planRustCallableInputProducer(expression, source, fixture.context, fixture.node);
+  const input = planRustCallableInputProducer({ stage: "source", expression, node: fixture.node }, source, fixture.context, fixture.node);
   assert.equal(input !== undefined, true);
   const adapt = target => {
     const conversion = selectRustCallableConversion(source, target, () => undefined, fixture.program.typeDefinitions);
@@ -361,7 +361,7 @@ export function create(): () => int32 { return (): int32 => fail(); }
     assert.equal(converted !== undefined, true);
     return printRustExpr(converted);
   };
-  return { input: printRustExpr(input), borrowed: adapt(rustCallableInputTargetType([integer], integer)),
+  return { input: printRustExpr(input.expression), borrowed: adapt(rustCallableInputTargetType([integer], integer)),
     owned: adapt(rustCallableTargetType([integer], integer)) };
 }
 

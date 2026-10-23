@@ -164,7 +164,7 @@ export function planRustSharedReceiver(
     return value;
   }
   if (override?.valueForm === "storage" && override.storageForm === "borrow-guard" ||
-    override === undefined && value.kind === "dereference" && rustLocationStorageForReference(node, context)?.storage === "borrow-cell") {
+    override === undefined && context.input.program.records.argumentView.get(node)?.borrowedStorage === "borrow-guard") {
     return { kind: "reference", expr: value };
   }
   const captured = rustCapturedBinding(node, context);

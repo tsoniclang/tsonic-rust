@@ -94,7 +94,8 @@ export function run(): int32 { return invoke((): int32 => 3); }
 test("inline producers are planned from the sealed operand record, never from the shape of a generated expression", () => {
   const current = fixture();
   // Hygienic argument names advance with each planning; the producer shape is compared without the suffix.
-  const producer = expression => printRustExpr(planRustCallableInputProducer(expression, current.source, current.context, current.node))
+  const producer = expression => printRustExpr(planRustCallableInputProducer({ stage: "source", expression, node: current.node },
+    current.source, current.context, current.node).expression)
     .replace(/_callable_arguments_\d+/gu, "_callable_arguments");
   const planned = producer(current.expression);
   assert.doesNotMatch(planned, /::new/u);
@@ -115,7 +116,7 @@ test("unresolved physical storage cannot silently select a logical ambient-error
   // Unresolved physical storage leaves the operand unsealed; the planner refuses instead of choosing a constructor.
   const records = createRustRecordFixture({ callableOperand: { get: () => undefined } }, current.program.records);
   const context = { ...current.context, input: { ...current.context.input, program: { ...current.context.input.program, records } } };
-  assert.throws(() => planRustCallableInputProducer(current.expression, current.source, context, current.node),
+  assert.throws(() => planRustCallableInputProducer({ stage: "source", expression: current.expression, node: current.node }, current.source, context, current.node),
     failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
       failure.message === "An admitted callable input requires its exact physical source operand.");
 });

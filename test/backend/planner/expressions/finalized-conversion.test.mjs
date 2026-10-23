@@ -25,8 +25,8 @@ test("finalized conversions consume exact constructed inputs rather than recheck
     targetCarrier: own.targetCarrier, fallible: false, steps: [borrow, own] };
   assert.equal(sequence.kind, "sequence");
   const view = { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
-  assert.deepEqual(applyFinalizedValueConversion(context, source, borrow, node, true), view);
-  assert.deepEqual(applyFinalizedValueConversion(context, source, sequence, node, true), {
+  assert.deepEqual(applyFinalizedValueConversion(context, { stage: "finalized", expression: source }, borrow, node, true), view);
+  assert.deepEqual(applyFinalizedValueConversion(context, { stage: "finalized", expression: source }, sequence, node, true), {
     kind: "owned-string-from-borrowed-str", expression: view,
   });
   for (const [label, mutation] of [
@@ -37,7 +37,7 @@ test("finalized conversions consume exact constructed inputs rather than recheck
     ["reordered sequence", { ...sequence, steps: [...sequence.steps].reverse() }],
   ]) {
     context.diagnostics.length = 0;
-    assert.equal(applyFinalizedValueConversion(context, source, mutation, node, true), undefined, label);
+    assert.equal(applyFinalizedValueConversion(context, { stage: "finalized", expression: source }, mutation, node, true), undefined, label);
     assert.equal(context.diagnostics.length, 1, label);
     assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT", label);
   }
@@ -62,7 +62,7 @@ test("finalized fallible conversions retain their exact operand error type", () 
   ];
   for (const [conversion, errorPath] of cases) {
     const finalized = finalizeValueConversion(conversion);
-    const lowered = applyFinalizedValueConversion(context, { kind: "path", path: "value" }, finalized, node, true);
+    const lowered = applyFinalizedValueConversion(context, { stage: "finalized", expression: { kind: "path", path: "value" } }, finalized, node, true);
     assert.equal(lowered?.kind, "try");
     assert.equal(lowered.operandErrorType.path, errorPath);
     assert.equal(lowered.resultErrorType.path, "crate::CurrentError");

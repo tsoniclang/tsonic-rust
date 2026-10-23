@@ -111,7 +111,7 @@ export function createRustSharedReferenceArgument(
     const selected = context.input.program.records.argumentView.get(node);
     if (selected?.slice === true) return { kind: "reference", expr: planArrayLiteral(node, context, "slice") };
     // A by-reference parameter read is already a shared reference; borrowing its storage again is a needless borrow.
-    if (selected?.borrowedStorage === true && !rustReadsReferenceParameter(node, context)) {
+    if (selected?.borrowedStorage !== undefined && !rustReadsReferenceParameter(node, context)) {
       const place = planExpression(node, context, "value", "shared-receiver")
         ?? failRustPlannerInvariant("An admitted borrowed operand requires its native storage view.", node);
       return planRustSharedReceiver(node, place, context);
