@@ -62,6 +62,10 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
       ? binding.callableDeclaration : undefined;
   };
   const usesPromiseObject = (reference: Node, declaration: Node): boolean => {
+    if (ast.is.IsCallExpression(reference)) {
+      const operation = program.records.targetOperation.get(reference);
+      return operation?.kind !== "source-call" || operation.asyncBody?.declaration !== declaration;
+    }
     let value = reference;
     let parent = ast.parent(value);
     while (parent !== undefined && (rustSourceValueWrapperContains(parent, value, ast) ||
@@ -199,6 +203,10 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
         );
     if (owner.kind !== "erased") {
       addEdge(owner.kind === "root" ? undefined : owner.declaration, use.declaration);
+      const promise = promiseDeclaration(canonical(use.declaration));
+      if (promise !== undefined && usesPromiseObject(use.reference, promise)) promiseObjectUses.push({
+        owner: owner.kind === "root" ? undefined : canonical(owner.declaration), declaration: promise,
+      });
     }
   }
 

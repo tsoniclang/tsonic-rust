@@ -38,3 +38,28 @@ test("public package Promise adapters remain externally usable without a local c
   assert.equal(current.emission.promiseObjectDeadCode, undefined, "the public adapter is not unused");
   assert.equal(current.emission.deadCode, undefined, "the public native body remains available");
 });
+
+for (const live of [true, false]) {
+  test(`generated union-method edges retain both Promise adapters only for ${live ? "live" : "dead"} calls`, () => {
+    const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+class Left { async value(): Promise<int32> { return 1; } }
+class Right { async value(): Promise<int32> { return 2; } }
+function select(flag: boolean): Left | Right { return flag ? new Left() : new Right(); }
+async function read(value: Left | Right): Promise<int32> { return await value.value(); }
+${live ? "console.log(await read(select(true))); console.log(await read(select(false)));" : "console.log(select(true) === select(false));"}
+` } });
+    const methods = [];
+    const visit = node => {
+      if (program.source.ast.is.IsMethodDeclaration(node)) methods.push(node);
+      program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(methods.length, 2, "both actual union alternatives are inspected");
+    for (const method of methods) {
+      assert.equal(program.promiseBodies.objects.has(method), true, "each selected union alternative retains its required adapter");
+      assert.equal(program.reachability.usedPromiseObjects.has(method), live, "every generated role edge obeys its original caller liveness");
+      assert.equal(program.records.callableDeclaration.get(method).promiseObjectDeadCode, live ? undefined : "authored-declaration",
+        "the sealed adapter disposition matches the complete selected branch set");
+    }
+  });
+}
