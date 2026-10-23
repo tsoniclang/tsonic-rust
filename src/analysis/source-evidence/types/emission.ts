@@ -98,7 +98,8 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
     if (rustProgramNodeIsOutsideNativeCode(program, node)) continue;
     const task = program.records.nativeTaskUse.get(node);
     if (task !== undefined) pending.push(task.scope.carrier, task.scope.errorCarrier,
-      ...(task.kind === "owner" ? [task.inputCarrier] : []));
+      ...(task.kind === "owner" || task.kind === "entry" || task.kind === "initializer" ? [task.inputCarrier] : []),
+      ...(task.kind === "entry" && task.initializer !== undefined ? [task.initializer.inputCarrier] : []));
     const parameter = program.records.callableParameter.get(node);
     if (parameter !== undefined) pending.push(parameter.carrier);
     const returned = program.records.callableReturn.get(node);

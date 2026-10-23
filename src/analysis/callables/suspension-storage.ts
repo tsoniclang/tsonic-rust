@@ -138,14 +138,14 @@ export function resolveRustSuspendedCallableStorage(
   const environment = rustRetainedEnvironment(declaration, inputCarriers, walk.context);
   if (environment.kind === "unresolved") return { kind: "rejected", reason: environment.reason };
   if (requiredLifetime !== undefined) {
-    const captured = selectRustSuspendedStorageLifetime(carriers, contract);
+    const captured = selectRustSuspendedStorageLifetime({ carriers, lifetimes: [] }, contract);
     if (captured === undefined || !rustLifetimeOutlives(captured, requiredLifetime, contract)) return {
       kind: "rejected", reason: rustSuspendingPromiseBorrowReason,
     };
   }
   const lifetime = requiredLifetime ?? (environment.kind === "selected" ? environment.environment.lifetime
     : inputCarriers.some(carrier => carrier === undefined) ? undefined
-    : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract));
+    : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], { carriers, lifetimes: [] }, contract));
   if (lifetime === undefined) {
     return {
       kind: "rejected",

@@ -14,7 +14,9 @@ export function rustRetainedValueLifetime(
   walk: { readonly context: Pick<RustSourcePolicyContext, "ast" | "source" | "sourceLifetimes" | "records" | "retainedEnvironments"> },
 ): RustLifetimeRef | undefined {
   const { context } = walk;
-  if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime(captures,
+  const retainedScope = context.records.retainedEnvironment.get(declaration);
+  const scopeLifetimes = retainedScope?.inputs.some(input => input.kind === "native-task-scope") ? [retainedScope.lifetime] : [];
+  if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime({ carriers: captures, lifetimes: scopeLifetimes },
     rustEnclosingStorageContract(declaration, context.ast, context.sourceLifetimes));
   const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
   const parameters = owner === undefined ? []

@@ -2,7 +2,7 @@ import { createRustPromiseBodyProducer } from "../program/records/promise-bodies
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
-import { Node_Expression, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
+import { Node_Expression, sourceDeclarationIsModuleScoped, sourceImmediatelyAwaitedLocal } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -12,7 +12,6 @@ import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { selectRustPromiseBodyRecursion } from "./promise-recursion.js";
-import { rustAwaitedPromiseLocal } from "./promise-locals.js";
 import type { RustModuleBindingAnalysis } from "../program/module-bindings.js";
 import { rustCallableExpressionValueDeclaration } from "./function-values.js";
 
@@ -173,7 +172,7 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
   const use = context.promiseResultUses.get(call);
   const awaited = use?.kind === "awaited-in-scope" ? Node_Expression(ast, use.use) : undefined;
   if ((awaited === undefined || rustUnparenthesizedExpression(ast, awaited) !== call) &&
-    !rustAwaitedPromiseLocal(ast, context.source.navigation, call)) return undefined;
+    !sourceImmediatelyAwaitedLocal(ast, context.source.navigation, call)) return undefined;
   const expression = Node_Expression(ast, call);
   const callee = expression === undefined ? undefined : rustUnparenthesizedExpression(ast, expression);
   if (callee === undefined) return undefined;

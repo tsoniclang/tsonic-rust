@@ -1,10 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceExpressionResultDisposition, sourceLexicalEnvironment,
-  sourceNodeIdentity, sourceCallableValueParameters } from "@tsonic/target-api/source";
+  sourceNodeIdentity, sourceCallableValueParameters, sourceImmediatelyAwaitedLocal } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import { rustAwaitedPromiseLocal } from "./promise-locals.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { RustRetainedEnvironmentSelection } from "../../target-model/records/retained-environments.js";
 import type { RustNativeTaskGraph } from "./native-tasks.js";
@@ -64,7 +63,7 @@ export function createRustRetainedEnvironmentQueries(
     return selected;
   };
   // An async function's Promise stays within its callers' activations when every use is a direct call whose result
-  // is awaited there, directly or through a local awaited as the next evaluation (rustAwaitedPromiseLocal). Otherwise
+  // is awaited there, directly or through a local awaited as the next evaluation. Otherwise
   // the Promise escapes and its retained inputs must be owned.
   const resultEscapes = (declaration: Node): boolean => {
     if (!ast.is.IsFunctionDeclaration(declaration)) return false;
@@ -77,7 +76,7 @@ export function createRustRetainedEnvironmentQueries(
       if (use.kind !== "direct-call" || call === undefined || !ast.is.IsCallExpression(call) ||
         Node_Expression(ast, call) !== use.reference) return true;
       if (sourceExpressionResultDisposition(ast, call).kind !== "awaited-in-scope" &&
-        !rustAwaitedPromiseLocal(ast, navigation, call)) return true;
+        !sourceImmediatelyAwaitedLocal(ast, navigation, call)) return true;
     }
     return false;
   };
