@@ -1,4 +1,4 @@
-import { rustParameterModeForCarriers, selectRustSourceParameterAbi } from "../../policy/ownership/source-parameter-contracts.js";
+import { rustParameterModeForCarriers, selectRustSourceParameterAbi, selectRustSourceParameterBorrowCarrier } from "../../policy/ownership/source-parameter-contracts.js";
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import { flowStateFactKey } from "@tsonic/tsts";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
@@ -13,7 +13,7 @@ import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import { rustParameterLaneTargetType } from "../source-evidence/types/resolution/index.js";
 import { resolveRustTargetTypeRef } from "../source-evidence/types/resolution/source.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../source-evidence/types/resolution/index.js";
-import { Node_Initializer, Node_Expression, Node_Type, sourceCallableValueParameters } from "@tsonic/target-api/source";
+import { Node_Initializer, Node_Expression, Node_Type, sourceCallableValueParameters, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { selectJsSurfaceConstructorBySourceOwner } from "../../policy/operations/source-profiles/js/index.js";
@@ -243,10 +243,11 @@ export function createRustSourceCallableAbiResolver(input: {
           ? base
           : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;
-      const sharedBorrow = parameterLaneCarrier !== undefined &&
-        (isRustVecCarrier(base) || rustTargetTypeRefEquals(parameterLaneCarrier, base) && isRustStringCarrier(base)) &&
-        !requiresOwnedValue && parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
-      const abi = selectRustSourceParameterAbi(form, base, parameterLaneCarrier, sharedBorrow);
+      const borrowCarrier = requiresOwnedValue ? undefined : selectRustSourceParameterBorrowCarrier(base, parameterLaneCarrier);
+      const selectedParameterCarrier = borrowCarrier !== undefined &&
+        parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression)
+        ? borrowCarrier : parameterLaneCarrier;
+      const abi = selectRustSourceParameterAbi(form, base, selectedParameterCarrier);
       if (abi === undefined) {
         return undefined;
       }
@@ -401,6 +402,7 @@ function parameterUsesFlowState(
 }
 
 function parameterRetainsWholeValue(parameter: Node, context: RustTargetTypeResolutionContext): boolean {
+  if (sourceParameterIsProperty(context.ast, parameter)) return true;
   const callable = enclosingCallable(context.ast.parent(parameter), context);
   if (callable !== undefined && (context.ast.hasModifierKind(callable, "async") ||
     context.semanticsFor(callable).operations.generator(callable) !== undefined)) return true;
@@ -508,7 +510,8 @@ function parameterCanUseSharedBorrow(
           sourceStorageSubject: undefined }, options));
       if (callback !== undefined) {
         const input = callback.parameters[argumentIndex];
-        if (input?.kind !== "reference" || input.mutable || !isRustStringCarrier(input.referent)) return false;
+        if (input?.kind !== "reference" || input.mutable ||
+          selectRustSourceParameterBorrowCarrier(input.referent, input.referent) === undefined) return false;
         continue;
       }
       const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
@@ -529,7 +532,7 @@ function parameterCanUseSharedBorrow(
         currentSourceFile: destinationFile,
         currentSemantics: context.semanticsFor(destination),
       }, options);
-      if (carrier === undefined || !isRustStringCarrier(carrier) && !isRustVecCarrier(carrier)) return false;
+      if (carrier === undefined || selectRustSourceParameterBorrowCarrier(carrier, carrier) === undefined) return false;
       pending.push(destination);
     }
   }

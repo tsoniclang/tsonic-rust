@@ -1,6 +1,6 @@
 import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 
-import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType } from "../../target-model/types/index.js";
+import { inferRustTargetGenericBindings, rustTargetGenericReferences, substituteRustTargetGenerics, isRustVecCarrier, isRustStringCarrier, rustSourceOptionalTargetType, rustSliceElementCarrier, rustSliceRefTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -69,21 +69,22 @@ export function rustParameterModeForCarriers(
   return parameterCarrier.mutable ? "mut-ref" : "ref";
 }
 
+export function selectRustSourceParameterBorrowCarrier(
+  base: TargetTypeRef,
+  parameterLaneCarrier: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  if (parameterLaneCarrier === undefined) return undefined;
+  if (isRustVecCarrier(base)) return rustSliceRefTargetType(base.element);
+  return rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
+    (isRustStringCarrier(base) || rustStructuralObjectCarrierValue(base)?.representation === "reference")
+    ? { kind: "reference", referent: base, mutable: false } : undefined;
+}
+
 export function selectRustSourceParameterAbi(
   form: RustSourceParameterAbiFact["form"],
   base: TargetTypeRef,
-  parameterLaneCarrier: TargetTypeRef | undefined,
-  sharedBorrow: boolean,
+  requiredParameterCarrier: TargetTypeRef | undefined,
 ): RustSourceParameterAbiFact | undefined {
-  const requiredParameterCarrier = parameterLaneCarrier !== undefined &&
-      (isRustVecCarrier(base) || rustTargetTypeRefEquals(parameterLaneCarrier, base) && isRustStringCarrier(base)) &&
-      sharedBorrow
-    ? isRustVecCarrier(base) ? rustSliceRefTargetType(base.element) : {
-        kind: "reference" as const,
-        referent: base,
-        mutable: false,
-      }
-    : parameterLaneCarrier;
   const requiredMode = requiredParameterCarrier === undefined
     ? undefined
     : rustParameterModeForCarriers(base, requiredParameterCarrier);
