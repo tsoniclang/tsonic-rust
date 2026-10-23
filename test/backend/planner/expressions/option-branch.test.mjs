@@ -3,6 +3,7 @@ import test from "node:test";
 import { planRustOptionBranch } from "../../../../dist/backend/planner/expressions/option-branch.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { rustProgramPlanContext, rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
+import { rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
 
 // The planner reads each Option carrier's sealed storage and rendering; a real program selects them.
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
@@ -119,4 +120,53 @@ test("an identity Option branch uses the native empty String default without all
   const branch = planRustOptionBranch(option, carrier, "present", converted, empty, planContext());
   assert.equal(branch.kind, "match");
   assert.equal(branch.arms[0].expression === converted, true, "do not discard the selected conversion");
+});
+
+test("an exact custom optional identity arm returns its consuming native payload without an artificial local", () => {
+  const carrier = rustTsValueTargetType();
+  const selectedProgram = rustProgramWithTypeEmissions([carrier]);
+  assert.equal(selectedProgram.records.typeEmission.get(carrier)?.optionalStorage.kind, "custom",
+    "the real native type owner selects the consuming custom optional storage");
+  const context = rustProgramPlanContext(selectedProgram);
+  const option = { kind: "call", path: "produce", args: [] };
+  const present = { kind: "path", path: "present" };
+  const absent = { kind: "call", path: "fallback", args: [] };
+  const result = planRustOptionBranch(option, carrier, "present", present, absent, context);
+  assert.equal(result.kind, "block", "the source input retains its one existing storage binding");
+  const [binding, tail] = result.body.statements;
+  assert.equal(binding.kind, "let");
+  assert.equal(binding.init === option, true, "the complete source input is evaluated exactly once");
+  assert.equal(tail.kind, "tail");
+  const branch = tail.expr;
+  assert.equal(branch.kind, "conditional");
+  assert.equal(branch.condition.kind, "associated-call");
+  assert.equal(branch.condition.method, "is_absent");
+  assert.equal(branch.condition.args[0].kind, "reference");
+  assert.equal(branch.condition.args[0].expr.path, binding.name, "presence inspects that same native storage");
+  assert.equal(branch.whenTrue === absent, true, "fallback effects remain lazy and unchanged");
+  assert.equal(branch.whenFalse.kind, "associated-call", "the helper introduces no return-only payload binding");
+  assert.equal(branch.whenFalse.method, "into_present");
+  assert.equal(branch.whenFalse.args.length, 1);
+  assert.equal(branch.whenFalse.args[0].kind, "path", "the selected native ABI consumes the stored value by value");
+  assert.equal(branch.whenFalse.args[0].path, binding.name);
+  assert.equal(branch.whenFalse.trait.kind, "named");
+  assert.equal(branch.whenFalse.trait.path, "rt::OptionalStorage", "the already admitted native trait remains the sole payload contract");
+  for (const [label, mapped] of [
+    ["conversion effect", { kind: "call", path: "convert", args: [present] }],
+    ["borrowed address", { kind: "reference", expr: present }],
+    ["two payload uses", { kind: "binary", operator: "+", left: present, right: present }],
+    ["unrelated native path", { kind: "path", path: "other" }],
+    ["generic native item", { ...present, genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i32" } }] }],
+  ]) {
+    const selected = planRustOptionBranch(option, carrier, "present", mapped, absent, context).body.statements[1].expr;
+    assert.equal(selected.whenTrue === absent, true, `${label}: the fallback is never changed or eagerly evaluated`);
+    assert.equal(selected.whenFalse.kind, "block", `${label}: a nonidentity arm retains its original payload binding and scope`);
+    const [payload, returned] = selected.whenFalse.body.statements;
+    assert.equal(payload.kind, "let", label);
+    assert.equal(payload.name, "present", label);
+    assert.equal(payload.init.kind, "associated-call", label);
+    assert.equal(payload.init.method, "into_present", `${label}: the payload is still extracted exactly once`);
+    assert.equal(returned.kind, "tail", label);
+    assert.equal(returned.expr === mapped, true, `${label}: preserve the complete original mapped expression`);
+  }
 });

@@ -42,7 +42,7 @@ export function applyRustArgumentMode(
     return createRustSharedReferenceArgument(context, argument);
   }
   if (mode === "mut-ref") {
-    const node = rustArgumentSourceView(argument, context);
+    const node = rustSourceStorageView(argument, context);
     const sourceParameterAbi = node === undefined
       ? undefined
       : context.input.program.records.sourceParameterAbi.get(node);
@@ -54,7 +54,7 @@ export function applyRustArgumentMode(
 }
 
 export function createRustMutableReferenceArgument(context: RustPlanContext, argument: RustArgumentValue): RustExpr {
-  const node = rustArgumentSourceView(argument, context);
+  const node = rustSourceStorageView(argument, context);
   return {
     kind: "reference",
     expr: node !== undefined && context.expressionOverrides?.has(node) !== true && context.input.program.records.argumentView.get(node)?.slice === true
@@ -94,7 +94,7 @@ export function createRustSharedReferenceArgument(
   value: RustArgumentValue,
 ): RustExpr {
   const argument = value.expression;
-  const node = rustArgumentSourceView(value, context);
+  const node = rustSourceStorageView(value, context);
   if (node !== undefined && context.input.program.records.readOwnership.get(node)?.sharedReference === true) return argument;
   const errorField = node === undefined ? undefined : rustErrorFieldSharedView(node, argument, context);
   if (errorField !== undefined) return errorField;
@@ -121,11 +121,14 @@ export function createRustSharedReferenceArgument(
   return node === undefined ? { kind: "reference", expr: argument } : planRustSharedReceiver(node, argument, context);
 }
 
-function rustArgumentSourceView(value: RustArgumentValue, context: RustPlanContext): Node | undefined {
+export function rustSourceStorageView(
+  value: { readonly stage: "source"; readonly node: Node } | { readonly stage: "finalized" },
+  context: RustPlanContext,
+): Node | undefined {
   if (value.stage === "finalized") return undefined;
   const node = value.node;
   const projection = rustValueProjectionFor(node, context.expressionOverrides?.get(node)?.carrier, context)
-    ?? failRustPlannerInvariant("An admitted reference argument requires its sealed projection composition.", node);
+    ?? failRustPlannerInvariant("An admitted native source view requires its sealed projection composition.", node);
   return projection.exits || projection.flow !== undefined || projection.upcast !== undefined ||
     projection.downcast !== undefined || projection.object !== undefined || projection.option !== undefined ||
     projection.contextual !== undefined && !projection.contextualIdentity ||
