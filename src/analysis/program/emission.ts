@@ -129,10 +129,14 @@ export interface RustNativeEmissionResult {
 }
 import type { RustAnalysisContext } from "./context.js";
 import type { RustGenericCallableErrorIndex } from "../../target-model/records/generic-callable-errors.js";
+import type { RustOwnershipFlow } from "../../target-model/records/ownership-flow.js";
+import { analyzeRustBindingLiveness } from "../control-flow/binding-liveness.js";
+import { analyzeRustLocalBindings } from "../storage/local-bindings.js";
 
 export function finalizeRustNativeEmission(
   program: Omit<RustAnalysisProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords & SourceLiteralIndex },
   context: RustAnalysisContext, genericCallableErrors: RustGenericCallableErrorIndex,
+  flow: RustOwnershipFlow,
 ): TargetStageResult<RustNativeEmissionResult> {
   const { projectTypes, objectRepresentations, typeDefinitions } = program;
   const records = context.records.readers;
@@ -213,6 +217,15 @@ export function finalizeRustNativeEmission(
   analyzeRustSuspendedCallableEmission({ program, sourceFiles: context.sourceFiles, producer: context.records.suspendedCallablePlans });
   const constructionEmissionIssues = analyzeRustConstructionEmission({ program, producer: context.records.constructionPlans });
   if (constructionEmissionIssues.length !== 0) return rejectedTargetStage(constructionEmissionIssues);
+  const bindingLivenessIssues = analyzeRustBindingLiveness(context.source, flow, records, context.names,
+    program.physicalEmissionContexts, context.records.bindingLivenessPlans);
+  if (bindingLivenessIssues.length !== 0) return rejectedTargetStage(bindingLivenessIssues);
+  const localBindingIssues = analyzeRustLocalBindings({ ast: context.ast, nodes: context.nativeNodes, records,
+    navigation: context.source.navigation, names: context.names, aliases: program.localStorageAliases,
+    representations: objectRepresentations, projectTypes, nativeStorage: program.callableValues.nativeStorage,
+    lexicalFunctions: program.lexicalFunctions, producer: context.records.localBindings, required: context.requiredRecords,
+    runtimeValueUses: context.runtimeValueUses });
+  if (localBindingIssues.length !== 0) return rejectedTargetStage(localBindingIssues);
   const classEmissionIssues = analyzeRustClassEmission({ program, source: context.source, reachability, producer: context.records.classEmissionPlans });
   if (classEmissionIssues.length !== 0) return rejectedTargetStage(classEmissionIssues);
   analyzeRustClassValueEmission({ program, nodes: context.nativeNodes, producer: context.records.classEmissionPlans });
