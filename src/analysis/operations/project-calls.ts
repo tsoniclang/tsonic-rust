@@ -33,7 +33,6 @@ import { rustLifetimeKey, rustPlaceholderLifetime } from "../../target-model/lif
 
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
-import { sourceCallableValueParameters } from "@tsonic/target-api/source";
 import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js";
 
 export function applySelectedProjectSourceCall(
@@ -84,15 +83,7 @@ export function applySelectedProjectSourceCall(
     );
     return undefined;
   }
-  const declarationParameters = selectedSignature.sourceSignature === undefined ? undefined
-    : sourceCallableValueParameters(ast, selectedDeclaration, walk.context.semanticsFor(selectedDeclaration),
-        { kind: "selected-invocation", signature: selectedSignature.sourceSignature });
-  if (declarationParameters === undefined) {
-    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_BINDINGS_MISSING",
-      "Selected project-source call has no exact checked value-parameter declarations.", expression,
-      ["target.capability=rust.source-call.argument-bindings"]);
-    return undefined;
-  }
+  const declarationParameters = selectedSignature.nativeParameterDeclarations;
   const storageContext = bindRustSelectedCallTypeArguments(
     selectedSignature.sourceSelectedMethodTypeArguments ?? [], targetGenericArguments,
     rustResolutionContext(walk, expression),

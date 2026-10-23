@@ -71,10 +71,12 @@ export function selectRustClassValueCallablePlan(
   if (declaration === undefined) return undefined;
   const ownerCarrier = selectedOwnerCarrier ?? projectTypes.openCarrier(owner);
   const substitutions = projectOwnerTypeSubstitutions(owner, ownerCarrier);
-  const sourceParameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration),
+  const selectedSourceParameters = sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration),
     { kind: "selected-invocation", signature: sourceSignature });
-  if (sourceParameters === undefined) return undefined;
-  const implementationParameters = sourceParameters.map(parameter => {
+  const implementationSourceParameters = construction ? sourceConstructor!.parameters.map(parameter => parameter.parameterDeclaration)
+    : sourceCallableValueParameters(ast, declaration, walk.context.semanticsFor(declaration), { kind: "declaration" });
+  if (selectedSourceParameters === undefined || implementationSourceParameters === undefined) return undefined;
+  const implementationParameters = implementationSourceParameters.map(parameter => {
     const abi = parameter === undefined ? undefined : resolveParameterAbi(walk, parameter);
     return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);
   });

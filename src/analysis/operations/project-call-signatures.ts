@@ -216,11 +216,14 @@ export function acceptProjectSourceCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
       "A closed class union call requires one exact selected method implementation per arm.");
   }
-  const sourceParameters = sourceCallableValueParameters(ast, callableDeclaration, context.semanticsFor(callableDeclaration),
+  const selectedParameters = sourceCallableValueParameters(ast, callableDeclaration, context.semanticsFor(callableDeclaration),
     { kind: "selected-invocation", signature: request.source.selectedSignature });
-  if (sourceParameters === undefined) return rejectSelectedOperation(request.source.call, context,
+  const nativeParameters = callableImplementation?.kind === "resolved"
+    ? sourceCallableValueParameters(ast, callableDeclaration, context.semanticsFor(callableDeclaration), { kind: "declaration" })
+    : selectedParameters;
+  if (selectedParameters === undefined || nativeParameters === undefined) return rejectSelectedOperation(request.source.call, context,
     "RUST_SOURCE_CALL_BINDINGS_MISSING", "A selected source call requires exact checked value-parameter declarations.");
-  const parameters = sourceParameters.map((parameter, index) => {
+  const parameters = nativeParameters.map((parameter, index) => {
     if (parameter === undefined) {
       return undefined;
     }
@@ -360,6 +363,7 @@ export function acceptProjectSourceCall(
         }),
   };
   const selectedSignature = selectedRustCallSignature(request, member, {
+    sourceImplementationParameters: nativeParameters,
     ...(sourceResult.projection === undefined ? {} : { sourceResultProjection: sourceResult.projection }),
     ...(ownerCarrier === undefined ? {} : { sourceSelectedOwnerCarrier: ownerCarrier }),
     ...(unionContract === undefined ? {} : { sourceUnionMethods: { receiverCarrier: receiverCarrier!, variants: unionContract.methods } }),

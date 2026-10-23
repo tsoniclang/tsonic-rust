@@ -14,6 +14,7 @@ export interface RustTargetCallArgumentSlot {
 
 export interface RustSelectedTargetSignature {
   readonly member: RustTargetMember;
+  readonly nativeParameterDeclarations: readonly (Node | undefined)[];
   readonly sourceResultProjection?: RustFlowReadProjectionFact;
   readonly sourceUnionMethods?: {
     readonly receiverCarrier: RustTargetTypeRef;

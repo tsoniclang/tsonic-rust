@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Initializer, Node_Operand, Node_Type, sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Initializer, Node_Operand, Node_Type, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustLiteralEmissionProducer } from "../program/records/literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -10,7 +10,7 @@ import { isRustIntegerCarrier, isRustBigIntCarrier, rustPrimitiveTypeName } from
 export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">,
   nodes: readonly Node[], producer: RustLiteralEmissionProducer, source: TargetSourceProgram): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
-  const { ast } = program.source;
+  const { ast } = source;
   const refuse = (node: Node, message: string, unsupported = false): void => {
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
       message: `${message} Node kind: ${ast.kindName(node)}.`, evidence: ["target.capability=rust.backend.literal-carrier"] });
@@ -44,10 +44,7 @@ export function analyzeRustLiteralEmission(program: Omit<RustAnalysisProgram, "r
     // A source-call argument is typed only by a parameter declared with a closed carrier (not a type parameter).
     const index = ast.arguments(parent).indexOf(current);
     const selected = program.records.selectedCall.get(parent);
-    const declaration = selected?.sourceDeclaration;
-    const parameter = index < 0 || declaration === undefined || selected?.sourceSignature === undefined ? undefined
-      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration),
-          { kind: "selected-invocation", signature: selected.sourceSignature })?.[index];
+    const parameter = index < 0 ? undefined : selected?.nativeParameterDeclarations[index];
     const declared = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.valueCarrier;
     return declared !== undefined && declared.kind === "source-primitive";
   };
