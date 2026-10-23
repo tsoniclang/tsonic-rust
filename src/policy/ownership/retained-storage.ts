@@ -5,9 +5,20 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../../policy/types/storage/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
-import { type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustClassEnvironment } from "../../target-model/records/class-values.js";
 import { isRustCopyCarrier } from "../constraints/native-traits.js";
+
+export function selectRustNativeFutureEnvironmentRetention(input: {
+  readonly lifetime: RustLifetimeRef;
+  readonly carriers: readonly TargetTypeRef[];
+  readonly taskScope: boolean;
+}): boolean {
+  if (input.taskScope) return true;
+  const references = rustTargetGenericReferences({ kind: "tuple", elements: input.carriers });
+  return references.hasUnnameableLifetime || references.lifetimeIdentities.includes(rustLifetimeKey(input.lifetime));
+}
 
 export function selectRustClassEnvironmentStorage(
   input: Pick<RustClassEnvironment, "constructorIdentity" | "staticFields" | "captures">,

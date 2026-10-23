@@ -5,7 +5,8 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustSession, checkRustSession } from "../../helpers/rust-session.mjs";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/analysis/callables/retained-environment-shapes.js";
 import { closeRustRetainedParameter, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../../dist/analysis/callables/retained-values.js";
-import { rustHasOpenOwnedStorage, selectRustClassEnvironmentStorage } from "../../../dist/policy/ownership/retained-storage.js";
+import { rustHasOpenOwnedStorage, selectRustClassEnvironmentStorage,
+  selectRustNativeFutureEnvironmentRetention } from "../../../dist/policy/ownership/retained-storage.js";
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -13,6 +14,26 @@ import { rustGenericCallableTargetType } from "../../../dist/target-model/types/
 import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+
+test("native Future retention follows exact complete physical environment references, not a generic value's name", () => {
+  const environment = { kind: "parameter", identity: "retained:actual", name: "environment" };
+  const unrelated = { kind: "parameter", identity: "retained:other", name: "environment" };
+  const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+  const reference = lifetime => ({ kind: "reference", mutable: false, referent: value, lifetime });
+  for (const [name, carriers, taskScope, expected] of [
+    ["owned generic input and output", [value, value], false, false],
+    ["unrelated same-spelled lifetime", [reference(unrelated)], false, false],
+    ["borrowed input", [reference(environment), value], false, true],
+    ["borrowed output", [value, reference(environment)], false, true],
+    ["native error payload", [value, { kind: "tuple", elements: [reference(environment)] }], false, true],
+    ["captured native callable", [rustCallableTargetType([], value, environment)], false, true],
+    ["unresolved physical elision", [reference({ kind: "placeholder" })], false, true],
+    ["retained native task scope", [value], true, true],
+  ]) {
+    assert.equal(selectRustNativeFutureEnvironmentRetention({ lifetime: environment, carriers, taskScope }), expected,
+      `${name}: remove only a proven-unused native-Future environment, never assert generic static storage`);
+  }
+});
 
 test("class environment native storage has one policy owner over the gathered source facts", () => {
   const integer = { kind: "source-primitive", name: "int32" };
