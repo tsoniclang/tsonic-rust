@@ -11,7 +11,8 @@ import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../
 import { planRustSelectedErrorRegion } from "./error-regions.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
-import { qualifyRustCratePath, qualifyRustCrateType } from "../../target-ast/syntax/type-paths.js";
+import { qualifyRustReferencePath, qualifyRustReferenceType } from "../../target-ast/syntax/type-paths.js";
+import { rustSourcePackageReferenceScope } from "./source-package-components.js";
 import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   rustPropagateLocalError, rustPropagateNativeError, type RustFallibleBoundary } from "./fallible-boundaries.js";
 
@@ -132,12 +133,13 @@ export function planRustInitializerBoundary(
 ): RustFallibleBoundary | undefined {
   const selected = selection.error;
   if (selected.kind === "infallible") return undefined;
+  const references = referenceCrate === undefined ? undefined : rustSourcePackageReferenceScope(rendering, referenceCrate);
   const physicalOwner = resolveRustPhysicalProgramErrorBoundary(rendering.input.program.records,
     rendering.sourcePackageComponentId, selected.owner);
   if (physicalOwner === undefined)
     failRustPlannerInvariant("An admitted initializer requires its exact physical error owner.", selection.modules[0]?.sourceFile);
-  const owner = referenceCrate === undefined ? physicalOwner : {
-    ...physicalOwner, errorTypePath: qualifyRustCratePath(physicalOwner.errorTypePath, referenceCrate),
+  const owner = references === undefined ? physicalOwner : {
+    ...physicalOwner, errorTypePath: qualifyRustReferencePath(physicalOwner.errorTypePath, references),
   };
   if (selected.kind === "package") return rustPackageFallibleBoundary(owner);
   if (joinName === undefined)
@@ -149,7 +151,7 @@ export function planRustInitializerBoundary(
     if (type === undefined)
       failRustPlannerInvariant("An admitted initializer requires its finalized native error-source syntax.", source.kind === "module" ? source.sourceFile : selection.modules[0]?.sourceFile);
     return { identity: source.identity, variant: source.variant,
-      errorType: referenceCrate === undefined ? type : qualifyRustCrateType(type, referenceCrate) };
+      errorType: references === undefined ? type : qualifyRustReferenceType(type, references) };
   });
   const join = planRustNativeErrorJoin({
     identity: `initializer:${rendering.sourcePackageComponentId}:${functionName}`, name: joinName,
