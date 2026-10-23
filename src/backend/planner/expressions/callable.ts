@@ -398,7 +398,7 @@ export function planRustCallableExpressionBody(
   const bodyErrorType = suspended && fallible ? rustActiveErrorType(callableClosureContext) : invocationErrorType;
   const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(
     bodyWithBindings,
-    !emission.unitBody,
+    !emission.unitBody || bodyIsFallible,
   ), bodyIsFallible
     ? {
         fallible: true,

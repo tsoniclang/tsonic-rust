@@ -41,3 +41,15 @@ test("fallible value bodies preserve actual cross-domain error conversion", () =
   assert.equal(result.args[0].owner === errorType, true);
   assert.equal(result.args[0].name, "from");
 });
+
+test("unit values become one native Ok without a redundant unit effect", () => {
+  for (const unit of [{ kind: "path", path: "()" }, { kind: "tuple-literal", elements: [] }]) {
+    const body = applyFallibleShape({ statements: [{ kind: "tail", expr: unit }] }, {
+      fallible: true, hasReturnValue: false, errorType, inferErrorTypeFromReturnType: false, canFallThrough: false,
+    });
+    assert.equal(body.statements.length, 1, "one authored completion stays one native completion");
+    const result = body.statements[0].expr;
+    assert.equal(result.kind === "call" && result.path === "Ok" && result.args[0] === unit, true,
+      "the existing unit value is returned directly, not re-evaluated in a discarded scope");
+  }
+});
