@@ -20,6 +20,12 @@ const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
   [regExpIdentity.owners.jsRegExpNamedIndices, rustJsRegExpNamedIndicesTargetType],
 ]);
 
+export function selectRustSourceProfileCompletionKind(
+  name: string, jsEnabled: boolean,
+): "native-future" | "js-promise" | undefined {
+  return name === "Promise" || name === "PromiseLike" ? jsEnabled ? "js-promise" : "native-future" : undefined;
+}
+
 export function resolveSourceProfileCarrierFromArguments(
   name: string,
   arguments_: readonly TargetTypeRef[],
@@ -33,11 +39,12 @@ export function resolveSourceProfileCarrierFromArguments(
   if (arguments_.length === 0 && rustSourceProfileErrorCarrierNeeded(name, options.jsEnabled)) {
     return options.sourceErrorCarrier;
   }
-  if (name === "Promise" || name === "PromiseLike") {
+  const completion = selectRustSourceProfileCompletionKind(name, options.jsEnabled);
+  if (completion !== undefined) {
     const [output] = arguments_;
     return output === undefined
       ? undefined
-      : options.jsEnabled
+      : completion === "js-promise"
         ? rustJsPromiseTargetType(output)
         : rustFutureTargetType(output);
   }
