@@ -76,8 +76,8 @@ export function selectRustGeneratorSourceCall(
       resultCarrier,
       parameterCarriers,
       isAsync: protocol.kind === "async",
-      isFallible: false,
-      errorBoundary: "none",
+      isFallible: true,
+      errorBoundary: "source-program",
     }, parameterCarriers);
   }
   if (request.memberName === "return" && request.selectedParameterCount === 1) {
@@ -93,8 +93,8 @@ export function selectRustGeneratorSourceCall(
       resultCarrier,
       parameterCarriers: [protocol.returnType],
       isAsync: protocol.kind === "async",
-      isFallible: false,
-      errorBoundary: "none",
+      isFallible: true,
+      errorBoundary: "source-program",
     }, [protocol.returnType]);
   }
   return rejected("RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED", `The exact selected ${request.ownerName}.${request.memberName} signature has no Rust generator operation.`);

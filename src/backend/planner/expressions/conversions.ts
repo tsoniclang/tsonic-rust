@@ -21,6 +21,7 @@ import { applyFinalizedRustArgumentMode } from "./input-shaping.js";
 import { planRustBorrowedSingletonSlice, planRustRestAssembly } from "./calls/rest-assembly.js";
 import { planRustFinalizedOperationForm } from "./finalized-operation-form.js";
 import { rustAutoBorrowedReceiver } from "./auto-borrowed-receivers.js";
+import { planRustSourceErrorPropagation } from "./calls/source-errors.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr {
   switch (argument.kind) {
@@ -88,7 +89,12 @@ function mergeOverrides(left: RustFinalizedInputPlanOverrides | undefined, right
 export function finishProviderOperationExpression(context: RustPlanContext, fact: { readonly abi: RustFinalizedOperationAbi },
   expression: RustExpr, node: Node): RustExpr | undefined {
   let raw = expression;
-  if (fact.abi.effects.invocation === "fallible") {
+  const nativeResult = context.input.program.records.providerForm.get(node, fact.abi, context.promiseBody)?.nativeResult;
+  if (nativeResult !== undefined) {
+    const result = planRustSourceErrorPropagation(node, nativeResult, raw, context);
+    if (result === undefined) return undefined;
+    raw = result;
+  } else if (fact.abi.effects.invocation === "fallible") {
     const region = context.fallibleBoundary
       ?? failRustPlannerInvariant("An admitted fallible operation requires its finalized native error context.", node);
     if (fact.abi.effects.errorBoundary === "none") failRustPlannerInvariant("An admitted fallible operation requires its exact native error boundary.", node);

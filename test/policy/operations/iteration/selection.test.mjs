@@ -71,7 +71,7 @@ test("native lowering preserves every supported iterator form and rejects incomp
     [{ kind: "js-array", elementCarrier: integer }, { kind: "js-array" }],
     [{ kind: "owned-call", elementCarrier: string, path: "js_abi::NativeStringIterator::new" }, { kind: "owned-call", path: "js_abi::NativeStringIterator::new" }],
     [{ kind: "fallible-owned", elementCarrier: integer }, { kind: "fallible-owned" }],
-    [{ kind: "sync-generator", elementCarrier: integer }, { kind: "owned" }],
+    [{ kind: "sync-generator", elementCarrier: integer }, { kind: "sync-generator" }],
   ]) assert.deepEqual(selectRustIterationLowering(source(iterationKind), target, false), expected);
   const asynchronous = { kind: "async-generator", elementCarrier: integer };
   assert.equal(selectRustIterationLowering(source("for-of"), asynchronous, false), undefined);

@@ -241,6 +241,7 @@ export type RustTargetOperationFact =
         | { readonly kind: "owned-call"; readonly path: string }
         | { readonly kind: "owned" }
         | { readonly kind: "fallible-owned" }
+        | { readonly kind: "sync-generator" }
         | { readonly kind: "async-generator" };
     }
   | {
