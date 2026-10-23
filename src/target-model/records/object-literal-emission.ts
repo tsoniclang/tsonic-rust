@@ -23,8 +23,10 @@ export interface RustStructuralLiteralEmission {
 }
 
 export type RustObjectLiteralEmission =
-  | { readonly kind: "project"; readonly node: Node; readonly selection: RustProjectLiteralEmission }
-  | { readonly kind: "structural"; readonly node: Node; readonly selection: RustStructuralLiteralEmission };
+  | { readonly kind: "project"; readonly node: Node; readonly selection: RustProjectLiteralEmission;
+      readonly sourceFields: readonly { readonly storageIndex: number; readonly value: Node | undefined }[] }
+  | { readonly kind: "structural"; readonly node: Node; readonly selection: RustStructuralLiteralEmission;
+      readonly sourceFields: readonly { readonly storageIndex: number; readonly value: Node | undefined }[] };
 
 export type RustObjectLiteralEmissionRequest = RustObjectLiteralEmission |
   { readonly kind: "reference"; readonly node: Node; readonly selection: RustStructuralLiteralEmission };

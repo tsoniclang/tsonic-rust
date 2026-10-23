@@ -1,10 +1,10 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node, ResolvedSourceObjectLiteralElementInfo, SourceFile } from "@tsonic/tsts";
 import { rustProgramNodeIsOutsideNativeCode } from "../control-flow/compile-time-statements.js";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { ObjectLiteralProperty_Value, type SourcePropertyNameSelection } from "@tsonic/target-api/source";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustObjectLiteralEmissionProducer } from "../program/records/object-literal-emission.js";
-import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
+import type { RustObjectLiteralEmission, RustObjectLiteralEmissionRequest, RustRecordLiteralFact, RustStructuralLiteralEmission } from "../../target-model/records/object-literal-emission.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol, rustCallableTargetType, rustStructuralPropertyValueCarrier, rustUnitTargetType, rustEmptyObjectTargetId, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { isRustCopyCarrier } from "../../policy/constraints/native-traits.js";
@@ -16,7 +16,8 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgram, "reachability">, nodes: readonly Node[],
-  producer: RustObjectLiteralEmissionProducer, propertyName: (node: Node) => SourcePropertyNameSelection | undefined): readonly TargetDiagnostic[] {
+  producer: RustObjectLiteralEmissionProducer, propertyName: (node: Node) => SourcePropertyNameSelection | undefined,
+  objectLiteralElement: (node: Node) => ResolvedSourceObjectLiteralElementInfo | undefined): readonly TargetDiagnostic[] {
   const issues: TargetDiagnostic[] = [];
   const refuse = (node: Node, capability: string, message: string, unsupported = false): void => {
     issues.push({ code: unsupported ? "RUST_UNSUPPORTED_AST" : "RUST_MISSING_TARGET_FACT", category: "error", source: "tsonic-rust", sourceNode: node,
@@ -128,19 +129,61 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
     modules.set(file, requests);
   };
   const native = new Set(nodes);
+  const sourceFieldsFor = (node: Node, fact: RustRecordLiteralFact): RustObjectLiteralEmission["sourceFields"] => {
+    const fields = new Map<number, Node | undefined>();
+    for (const contribution of fact.contributions) {
+      if (contribution.kind === "spread") {
+        const sourceFact = program.records.targetOperation.get(contribution.expression);
+        const source = sourceFact?.kind === "record-literal" ? literalFor(contribution.expression, sourceFact) : undefined;
+        if (source !== undefined) for (const field of source.sourceFields) {
+          const destination = contribution.fields.find(selected => selected.sourceStorageIndex === field.storageIndex);
+          if (destination === undefined) continue;
+          const original = sourceFact?.kind === "record-literal"
+            ? sourceFact.fields.find(selected => selected.storageIndex === field.storageIndex) : undefined;
+          fields.set(destination.targetStorageIndex, original?.presence === "required" ? field.value : undefined);
+        }
+        for (const field of contribution.fields) {
+          if (source?.sourceFields.some(selected => selected.storageIndex === field.sourceStorageIndex)) continue;
+          fields.set(field.targetStorageIndex, undefined);
+        }
+      } else if (contribution.kind === "method") {
+        for (const field of fact.fields) if (field.contractDeclarations.some(declaration =>
+          contribution.contractDeclarations.includes(declaration))) fields.set(field.storageIndex, undefined);
+      } else {
+        const checked = objectLiteralElement(contribution.property);
+        if (checked?.objectLiteral !== node || checked.element !== contribution.property)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted object field requires its exact checked source occurrence.", contribution.property);
+        const value = contribution.kind === "property" && (checked.elementKind === "property" || checked.elementKind === "shorthand")
+          ? ObjectLiteralProperty_Value(program.source.ast, contribution.property) : undefined;
+        if (contribution.kind === "property" && value === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "An admitted data field requires its exact checked source value.", contribution.property);
+        fields.set(contribution.targetStorageIndex, value);
+      }
+    }
+    for (const field of fact.fields) if (!fields.has(field.storageIndex)) fields.set(field.storageIndex, undefined);
+    return Object.freeze([...fields].map(([storageIndex, value]) => Object.freeze({ storageIndex, value })));
+  };
+  const literalFor = (node: Node, fact: RustRecordLiteralFact): RustObjectLiteralEmission | undefined => {
+    const existing = producer.records.objectLiteralEmission.get(node);
+    if (existing !== undefined) return existing;
+    if (!native.has(node)) return undefined;
+    const project = program.projectTypes.definitionForCarrier(fact.resultCarrier);
+    const form = selectRustObjectLiteralDispatch({ fact, structuralDispatch: program.structuralShapes.definitionForCarrier(fact.resultCarrier)?.dispatchName !== undefined,
+      polymorphicProject: project !== undefined && program.projectTypes.isPolymorphic(project) });
+    if (form === undefined) return undefined;
+    const sourceFields = sourceFieldsFor(node, fact);
+    const selected: RustObjectLiteralEmission = form === "project"
+      ? Object.freeze({ kind: "project", node, sourceFields, selection: analyzeRustProjectLiteralEmission(program, node, fact) })
+      : Object.freeze({ kind: "structural", node, sourceFields, selection: structural(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
+        contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : []))) });
+    producer.literal(node, selected);
+    return selected;
+  };
   const visit = (node: Node): void => {
     const fact = program.records.targetOperation.get(node);
     if (native.has(node) && fact?.kind === "record-literal") {
-      const project = program.projectTypes.definitionForCarrier(fact.resultCarrier);
-      const form = selectRustObjectLiteralDispatch({ fact, structuralDispatch: program.structuralShapes.definitionForCarrier(fact.resultCarrier)?.dispatchName !== undefined,
-        polymorphicProject: project !== undefined && program.projectTypes.isPolymorphic(project) });
-      if (form !== undefined) {
-        const selected: RustObjectLiteralEmission = form === "project" ? Object.freeze({ kind: "project", node, selection: analyzeRustProjectLiteralEmission(program, node, fact) })
-          : Object.freeze({ kind: "structural", node, selection: structural(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
-            contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : []))) });
-        producer.literal(node, selected);
-        append(selected);
-      }
+      const selected = literalFor(node, fact);
+      if (selected !== undefined) append(selected);
     }
     const view = program.records.objectReferenceView.get(node);
     if (native.has(node) && view?.kind === "structural" && program.structuralShapes.definitionForCarrier(view.targetCarrier)?.dispatchName !== undefined)

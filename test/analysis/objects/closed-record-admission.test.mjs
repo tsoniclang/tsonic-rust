@@ -31,7 +31,7 @@ export function run(first: unknown, second: unknown): unknown {
   const integer = rustSourcePrimitiveTargetType("int32");
   const admit = records => {
     const producer = createRustObjectLiteralEmissionProducer(() => {});
-    const issues = analyzeRustObjectLiteralEmission({ ...program, records }, [literal], producer, () => undefined);
+    const issues = analyzeRustObjectLiteralEmission({ ...program, records }, [literal], producer, () => undefined, () => undefined);
     return { issues, closed: producer.records.closedRecord.get(literal) };
   };
   const accepted = admit(program.records);

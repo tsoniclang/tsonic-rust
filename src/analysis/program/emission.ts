@@ -230,7 +230,8 @@ export function finalizeRustNativeEmission(
   const projectClassLayoutIssues = analyzeRustProjectClassLayouts(program, context.nativeNodes, context.records.projectClassPlans, reachability);
   if (projectClassLayoutIssues.length !== 0) return rejectedTargetStage(projectClassLayoutIssues);
   const objectLiteralIssues = analyzeRustObjectLiteralEmission(program, context.nativeNodes, context.records.objectLiteralEmissionPlans,
-    node => context.semanticsFor(node).propertyNames.get(node));
+    node => context.semanticsFor(node).propertyNames.get(node),
+    node => context.semanticsFor(node).operations.objectLiteralElement(node));
   if (objectLiteralIssues.length !== 0) return rejectedTargetStage(objectLiteralIssues);
   analyzeRustCarrierReads(program, context.nativeNodes, context.records.carrierReadPlans);
   const sourceFileEmissionIssues = analyzeRustSourceFileEmission(program, context.records.sourceFileEmissionPlans);

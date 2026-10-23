@@ -11,7 +11,7 @@ test("object literal admission never requests property syntax from a non-object 
     records: { targetOperation: { get: () => undefined } },
     sourceFiles: [],
   };
-  const issues = analyzeRustObjectLiteralEmission(program, [file, parameter], {}, () => undefined);
+  const issues = analyzeRustObjectLiteralEmission(program, [file, parameter], {}, () => undefined, () => undefined);
   assert.equal(issues.length, 0, "unrelated admitted source nodes are not object literals");
   assert.equal(propertyReads, 0, "the checked syntax predicate precedes every property lookup");
 });
