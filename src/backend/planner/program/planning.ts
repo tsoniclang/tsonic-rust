@@ -50,6 +50,9 @@ import { applyRustFoundationImports } from "../../target-ast/normalization/found
 import { planRustAsyncExecution } from "./async-execution.js";
 import { planRustOwnedBinaryEntry, rustBinaryExitCodeType } from "./owned-entry.js";
 import { planRustNativeTaskEntry } from "./native-task-entry.js";
+import { planRustInitializerLifecycleResult } from "./initializer-lifecycle.js";
+import { planRustSelectedErrorRegion } from "./error-regions.js";
+import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
@@ -372,6 +375,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       successfulCompletion,
       binaryExecution.kind === "owned" ? [] : epilogueStatements,
       executeAsync,
+      nativeTasks === undefined ? undefined : planRustSelectedErrorRegion(initialization.binary.lifecycle.region,
+        typeRenderingContextFor(rootComponentPlan), undefined, crateName)?.boundary,
     );
     if (workerDispatchStatements === undefined || diagnostics.length > 0) {
       return rejectedTargetStage(diagnostics);
@@ -450,6 +455,7 @@ function planRustWorkerDispatch(
   successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr,
   epilogueStatements: readonly import("../../target-ast/syntax/nodes.js").RustStmt[],
   executeAsync: (future: import("../../target-ast/syntax/nodes.js").RustExpr) => import("../../target-ast/syntax/nodes.js").RustExpr,
+  nativeTaskLifecycle: RustFallibleBoundary | undefined,
 ): readonly import("../../target-ast/syntax/nodes.js").RustStmt[] | undefined {
   if (entries.length === 0) return Object.freeze([]);
   const mainErrorType = errors.errorType;
@@ -496,6 +502,10 @@ function planRustWorkerDispatch(
               : call;
             const invoke = entry.operandErrorType === undefined
               ? execution
+              : nativeTaskLifecycle !== undefined
+              ? errors.lifecycle(planRustInitializerLifecycleResult(entry.initializerError,
+                  entry.initializerBoundary ?? failRustPlannerInvariant("An admitted task-aware worker requires its selected initializer boundary.", entry.sourceFile),
+                  nativeTaskLifecycle, execution), nativeTaskLifecycle.errorType)
               : entry.nativeError ? errors.propagate({ identity: entry.errorIdentity, errorType: entry.operandErrorType }, execution)
                 : errors.lifecycle(execution);
             return {
