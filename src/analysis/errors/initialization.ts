@@ -10,6 +10,7 @@ import type { RustSourcePackageFacadeClassifications } from "../../target-model/
 import type { RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
 import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import type { RustAnalyzedErrorRegions } from "./regions.js";
 import type { RustBinaryErrorSelection, RustInitializationErrorRecords, RustInitializerErrorSelection,
   RustInitializerSelection, RustModuleErrorInitializer, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
@@ -96,8 +97,9 @@ export function analyzeRustInitializationErrors(input: {
       reject("RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
         `Runtime ES module dependency component '${names.join(" -> ")}' contains ${initialized.length} module initializer${initialized.length === 1 ? "" : "s"} and cannot be executed without finalized cyclic call, live-binding, and temporal-dead-zone evidence.`, first);
     }
-    const local = ordered.some(module => module.region.kind === "package");
-    const native = ordered.filter(module => module.region.kind === "native");
+    const local = ordered.some(module => module.region.kind === "package" && closedMetadataEquals(module.region.localOwner, owner));
+    const native = ordered.filter(module => module.region.kind === "native" ||
+      module.region.kind === "package" && !closedMetadataEquals(module.region.localOwner, owner));
     const error: RustInitializerErrorSelection = native.length > 0
       ? Object.freeze({ kind: "native", owner, sources: Object.freeze([
         ...(local ? [Object.freeze({ kind: "package" as const, identity: "local", variant: "Local" })] : []),
@@ -142,13 +144,13 @@ export function analyzeRustInitializationErrors(input: {
     workers.push(Object.freeze({ sourceFile, initializer }));
   }
   const sources: RustBinaryErrorSelection["sources"][number][] = [];
-  const lifecycle = input.lifecycleFor(root, rootOwner);
+  const lifecycle = input.lifecycleFor([root, ...workers.map(worker => worker.initializer)], rootOwner);
   if (lifecycle.kind === "rejected") return lifecycle;
   if (input.nativeTasks ? lifecycle.value.region.kind !== "infallible"
     : root.error.kind !== "native" || input.binaryHooks.some(hook => hook.isFallible === true) || workers.length > 0)
     sources.push(Object.freeze({ kind: "lifecycle", identity: "lifecycle", variant: "Lifecycle" }));
   if (root.error.kind === "native" && !input.nativeTasks) sources.push(Object.freeze({ kind: "initialization", identity: "initialization", variant: "Initialization" }));
-  const nativeWorkers = workers.filter(worker => worker.initializer.error.kind === "native");
+  const nativeWorkers = input.nativeTasks ? [] : workers.filter(worker => worker.initializer.error.kind === "native");
   for (const [index, worker] of nativeWorkers.entries()) sources.push(Object.freeze({ kind: "worker",
     identity: input.ast.getFileName(worker.sourceFile), variant: `Worker${index}`, sourceFile: worker.sourceFile }));
   return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ root, entrySourceFile,
