@@ -5,6 +5,8 @@ import { createRustSyntheticNameState } from "../../../../dist/backend/planner/n
 import { rustFutureTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+import { rustInfallibleTargetId } from "../../../../dist/target-model/types/carriers/source-types.js";
+import { rustProgramWithTypeEmissions } from "../../../helpers/plan-context.mjs";
 
 function discardedFixture() {
   const node = fakeStatement({ kindName: "VoidExpression", pos: 0, end: 10 });
@@ -94,3 +96,37 @@ test("a native Result with an uninhabited source error unwraps without inventing
   assert.throws(() => planRustAwaitBranches(node, operand, leaf, undefined, missing),
     /selected native error propagation/u, "missing body correspondence cannot masquerade as an uninhabited proof");
 });
+
+for (const errorBoundary of ["source-native", "provider-native"]) test(
+  `${errorBoundary} awaits eliminate a sealed uninhabited error before requiring an outer error channel`, () => {
+    const { node, context, selection } = discardedFixture();
+    const original = selection.alternatives[0].selection.value;
+    const errorCarrier = Object.freeze({ kind: "target-named", id: rustInfallibleTargetId });
+    const program = rustProgramWithTypeEmissions([errorCarrier, original.carrier, original.future.outputCarrier]);
+    const emitted = program.records.typeEmission.get(errorCarrier);
+    assert.equal(emitted !== undefined, true, "the native error has the existing complete type-emission evidence");
+    const selectedRecord = { ...emitted, completion: "never" };
+    const records = createRustRecordFixture({
+      typeEmission: { get: carrier => carrier === errorCarrier ? selectedRecord : program.records.typeEmission.get(carrier) },
+    });
+    const selectedContext = { ...context, input: { program: { ...context.input.program, records } } };
+    const leaf = { kind: "leaf", value: { ...original, future: {
+      ...original.future, awaiting: "fallible", errorBoundary, errorCarrier, errorSource: "provider:exact-empty-error",
+    } } };
+    const operand = { kind: "call", path: "native_pending", args: [] };
+    const planned = planRustAwaitBranches(node, operand, leaf, undefined, selectedContext);
+    assert.equal(planned.kind, "evaluate-then", "success is discarded only after its native effects");
+    assert.equal(planned.effect.kind, "match", "the physical Result is consumed rather than leaked");
+    assert.equal(planned.effect.expression.kind, "await", "the selected future is awaited once");
+    assert.equal(planned.effect.expression.expr === operand, true, "the original operand remains one evaluation");
+    const error = planned.effect.arms[1];
+    assert.equal(error.pattern.path, "Err", "the selected physical error arm is explicit");
+    assert.equal(error.expression.kind, "match", "the exact empty native enum is eliminated");
+    assert.equal(error.expression.arms.length, 0, "no panic, error wrapper, conversion or hidden channel is added");
+    const inhabited = { ...selectedContext, input: { program: { ...selectedContext.input.program,
+      records: createRustRecordFixture({ typeEmission: { get: carrier => carrier === errorCarrier
+        ? { ...selectedRecord, completion: "value" } : program.records.typeEmission.get(carrier) } }),
+    } } };
+    assert.throws(() => planRustAwaitBranches(node, operand, leaf, undefined, inhabited), /native error boundary/u,
+      "a possibly inhabited native error still requires the selected outer error transport");
+  });

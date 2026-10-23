@@ -8,7 +8,7 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
-import { rustBottomAfterEffect, rustBottomExpression } from "../types/fallible-shape.js";
+import { rustBottomAfterEffect, rustBottomExpression, rustEliminateInfallibleResult } from "../types/fallible-shape.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustAbsentValue } from "./optional-storage.js";
@@ -44,10 +44,15 @@ export function planRustAwaitBranches(
           failRustPlannerInvariant("An admitted fallible future requires its selected error channel.", node);
         }
         const operandError = rustTypeFromCarrierInContext(future.errorCarrier, context);
+        const errorCompletion = future.errorCarrier === undefined ? undefined
+          : context.input.program.records.typeEmission.get(future.errorCarrier);
         const sourceEdge = future.errorBoundary === "source-program"
           ? context.input.program.records.awaitErrorEdge.get(node, selected.carrier) : undefined;
         const propagated = future.errorBoundary === "source-program"
           ? sourceEdge === undefined ? undefined : planRustSourceErrorPropagation(node, sourceEdge, output, context)
+          : errorCompletion?.completion === "never"
+          ? rustEliminateInfallibleResult(output,
+              allocateRustSyntheticName(names, "future_value"), allocateRustSyntheticName(names, "future_error"))
           : region === undefined
           ? failRustPlannerInvariant("An admitted fallible await requires its native error boundary.", node)
           : future.errorBoundary === "source-native"
