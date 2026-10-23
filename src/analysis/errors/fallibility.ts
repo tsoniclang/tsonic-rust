@@ -54,6 +54,7 @@ import type { RustAwaitSourceErrorBranch } from "../../target-model/records/awai
 import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustNativeTaskGraph } from "../callables/native-tasks.js";
 
 export interface RustSourceFallibilityConstruction {
   readonly sourceErrors: RustSourceErrorEffectSelection;
@@ -64,12 +65,13 @@ export interface RustSourceFallibilityConstruction {
 export function recordFallibilityFacts(
   walk: RustFactWalk,
   projectSourceFiles: readonly SourceFile[],
+  nativeTasks: RustNativeTaskGraph,
   maximumWork = defaultRustEffectsWorkLimit,
 ): RustSourceFallibilityConstruction | undefined {
   walk.context.records.assertOpen();
   const budget = createRustEffectsWorkBudget(maximumWork);
   let construction: RustSourceFallibilityConstruction | undefined;
-  const failure = budget.run(() => { construction = collectFallibilityFacts(walk, projectSourceFiles, budget); });
+  const failure = budget.run(() => { construction = collectFallibilityFacts(walk, projectSourceFiles, nativeTasks, budget); });
   if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,
     ["target.capability=rust.native-error.bounded-effects"]);
   return failure === undefined ? construction : undefined;
@@ -78,6 +80,7 @@ export function recordFallibilityFacts(
 function collectFallibilityFacts(
   walk: RustFactWalk,
   projectSourceFiles: readonly SourceFile[],
+  nativeTasks: RustNativeTaskGraph,
   budget: RustEffectsWorkBudget,
 ): RustSourceFallibilityConstruction | undefined {
   budget.step();
@@ -646,6 +649,23 @@ function collectFallibilityFacts(
     requireRustRecord(walk.context.requiredRecords, "fallible", subject,
       "fallible-source", "recordFallibilityFacts");
     walk.context.records.fallibleSubjects.selected(subject);
+  }
+  for (const spawn of nativeTasks.spawns) {
+    budget.step();
+    const topology = rustAwaitSelection(walk.context.records.runtimeCarrier.get(spawn.operand)?.carrier, walk.context.typeDefinitions);
+    const branches = topology === undefined ? [] : rustAwaitSelectionLeaves(topology).filter(branch =>
+      branch.future !== undefined && rustFutureValueForSourceStorage(branch.carrier) === undefined);
+    const edges = selectRustAwaitSourceErrors(walk, spawn.operand, branches.map(branch => branch.carrier),
+      declarationEffects, selectSourceErrors, budget);
+    if (edges === undefined) {
+      appendRustDiagnostic(walk, "RUST_NATIVE_TASK_SOURCE_ERRORS_NOT_EXACT",
+        "A native task requires its exact stored producer activations and existing deferred error correspondence.", spawn.node,
+        ["target.capability=rust.native-tasks"]);
+      return undefined;
+    }
+    const selected = Object.freeze(edges.map(({ carrier, edge }) => Object.freeze({ carrier, edge })));
+    awaitSourceEdges.set(spawn.node, selected);
+    sourceErrorEdges.set(spawn.node, [...new Set(edges.map(source => source.edge))]);
   }
   const intrinsicEffects = new Map<Node, RustErrorEffectsFact>();
   for (const selections of [effectsByDeclaration, effectsByExpression, effectsByRegion, effectsByModule]) {

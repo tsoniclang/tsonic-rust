@@ -10,7 +10,7 @@ import { recordMethodSelfModeFacts } from "../../../dist/analysis/declarations/p
 
 for (const [name, invoke] of [
   ["carrier probe", walk => createRustCarrierProbe(walk)],
-  ["fallibility", walk => recordFallibilityFacts(walk, [], NaN)],
+  ["fallibility", walk => recordFallibilityFacts(walk, [], { spawns: [], owners: [], calls: [], entries: [] }, NaN)],
   ["resource management", walk => recordResourceManagementFacts(walk, [])],
   ["future values", walk => recordFutureValueFacts(walk, [])],
   ["deferred producer effects", walk => recordRustDeferredProducerEffects(walk)],

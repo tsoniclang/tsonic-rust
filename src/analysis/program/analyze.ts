@@ -64,8 +64,10 @@ import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/t
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
+import { analyzeRustNativeTaskGraph, type RustNativeTaskGraph } from "../callables/native-tasks.js";
 
 interface RustSourceStageOutput {
+  readonly nativeTasks: RustNativeTaskGraph;
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
@@ -590,7 +592,12 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const selectedIssuePosition = context.diagnostics.length;
   context.promiseBodies.seal(context);
   if (context.diagnostics.length !== selectedIssuePosition) return undefined;
-  const fallibility = recordFallibilityFacts(walk, projectSourceFiles);
+  const nativeTasks = analyzeRustNativeTaskGraph({ context, lexicalFunctions: lexical, publishedDeclarations });
+  if (nativeTasks.kind === "rejected") {
+    context.diagnostics.push(...nativeTasks.diagnostics);
+    return;
+  }
+  const fallibility = recordFallibilityFacts(walk, projectSourceFiles, nativeTasks.value);
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
   recordFutureValueFacts(walk, fallibility.sourceErrors);
@@ -623,6 +630,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
-  return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan,
+  return Object.freeze({ lexicalFunctions, nativeTasks: nativeTasks.value, sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }
