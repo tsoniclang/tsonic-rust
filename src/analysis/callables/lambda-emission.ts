@@ -61,7 +61,7 @@ export function analyzeRustLambdaEmission(program: Omit<RustAnalysisProgram, "re
       reject(node, "rust.backend.native-closure-recursion", "A native Rust closure passed to a provider operation cannot recursively invoke itself.");
       continue;
     }
-    const sourceParameters = program.records.callableDeclaration.get(node)?.parameters;
+    const sourceParameters = program.records.callableDeclaration.get(node)?.contract.parameters;
     if (sourceParameters === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted closure requires its exact checked value parameters.", node);
     const leading = closure.leadingParameters ?? [];
     if (parameters === undefined || resultCarrier === undefined || leading.length > parameters.length ||

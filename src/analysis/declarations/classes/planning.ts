@@ -124,7 +124,8 @@ export function analyzeRustClassEmission(input: {
     const constructor = implemented[0];
     const classCarrier = program.projectTypes.openCarrier(definition);
     const constructorContract = constructor === undefined ? (() => {
-      const signature = program.projectTypes.constructorsForDefinition(definition)[0];
+      const signatures = program.projectTypes.constructorsForDefinition(definition);
+      const signature = signatures.length === 1 ? signatures[0] : undefined;
       const parameters = signature === undefined ? undefined : program.records.implicitConstructorParameters.get(signature, classCarrier);
       if (signature === undefined || parameters === undefined) failTargetAnalysisInvariant("tsonic-rust",
         "An admitted implicit constructor requires its actual selected native signature and parameter ABI.", declaration);
@@ -149,7 +150,7 @@ export function analyzeRustClassEmission(input: {
       carrier: classCarrier, representation, publiclyReachable,
       visibility: ast.hasModifierKind(declaration, "export") || publiclyReachable ? "public" : "crate",
       explicitWrapperTraits: representation.kind !== "value" && (typeIdentities.size !== 0 || hasStorageParameters),
-      fields: Object.freeze(fields), constructor, constructorContract, methods: Object.freeze(methods), accessors: Object.freeze(accessors),
+      fields: Object.freeze(fields), constructor, constructorContracts: Object.freeze([constructorContract]), methods: Object.freeze(methods), accessors: Object.freeze(accessors),
       constructorVisibility: constructor === undefined || !ast.hasModifierKind(constructor, "private") && !ast.hasModifierKind(constructor, "protected") ? "public" : "private",
       constructorDeadCode: publiclyReachable ? undefined : constructor === undefined
         ? reachability.invokedProjectConstructors.has(declaration) ? undefined : "generated-retained-constructor"

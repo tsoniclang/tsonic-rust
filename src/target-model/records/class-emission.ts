@@ -34,7 +34,7 @@ export interface RustNativeClassEmission {
   readonly explicitWrapperTraits: boolean;
   readonly fields: readonly RustNativeClassField[];
   readonly constructor: Node | undefined;
-  readonly constructorContract: SourceCallableContract;
+  readonly constructorContracts: readonly SourceCallableContract[];
   readonly constructorDeadCode: RustDeadCodeDisposition | undefined;
   readonly constructorVisibility: "public" | "private";
   readonly methods: readonly Node[];
