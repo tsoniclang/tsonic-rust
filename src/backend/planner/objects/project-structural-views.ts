@@ -153,14 +153,17 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         }
         const path = rustDirectProjectFieldStoragePath(view.sourceCarrier, source.storageIndex, context);
         if (path === undefined || type === undefined || field.property === undefined) failRustPlannerInvariant("A structural field requires its sealed storage path and accessors.", member.declaration);
+        const adapter = member.readAdapter;
+        if (adapter === undefined) failRustPlannerInvariant("A structural field requires its admitted native read adaptation.", member.declaration);
+        const readCarrier = adapter.sourceCarrier;
         const captured = rustCapturedFieldStorage(member.declaration, local);
         const selected = path.reduce<RustExpr>((receiver, name) => ({ kind: "field", receiver, name }), { kind: "path", path: "state" });
         const read: RustExpr = { kind: "method-call", receiver: { kind: "path", path: "self" }, method: "with", args: [{
           kind: "closure", params: [{ name: "state", byRefCopy: false }],
-          body: captured !== undefined ? readRustCapturedField(captured, selected, source.resultCarrier, local)
-            : requireRustCarrierRead(source.resultCarrier, local, member.declaration).copy ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
+          body: captured !== undefined ? readRustCapturedField(captured, selected, readCarrier, local)
+            : requireRustCarrierRead(readCarrier, local, member.declaration).copy ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] },
         }] };
-        const adapted = member.readAdapter === undefined ? undefined : applyRustCallableValueAdapter(read, member.readAdapter, member.declaration, local);
+        const adapted = applyRustCallableValueAdapter(read, adapter, member.declaration, local);
         if (adapted === undefined) failRustPlannerInvariant("A structural field requires its admitted native read adaptation.", member.declaration);
         functions.push({ kind: "function", name: field.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
           selfParam: rustSelfParameter(field.property.selfMode), params: [], returnType: type, errorType: rustErrorType(boundary),

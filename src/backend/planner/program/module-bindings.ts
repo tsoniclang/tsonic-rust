@@ -60,17 +60,15 @@ export function planTopLevelVariableStatement(
     if (binding.storage === "native-callable" &&
       context.input.program.records.nativeParticipation.get(binding.callableDeclaration) === "erased") continue;
     if (binding.storage === "native-callable") {
-      const item = planNativeModuleFunction(
+      const callablePlan = planNativeModuleFunction(
         declaration,
         binding.callableDeclaration,
         binding.name,
         binding.value === undefined && visibility === "public",
         context,
       );
-      if (item === undefined) {
-        return undefined;
-      }
-      items.push(item);
+      items.push(callablePlan.item);
+      if (callablePlan.helper !== undefined) items.push(callablePlan.helper);
       const storage = context.input.program.records.moduleCallableStorage.get(declaration);
       if (binding.value !== undefined && storage === undefined) {
         failRustPlannerInvariant("Module callable values require their finalized native storage selection.", declaration);

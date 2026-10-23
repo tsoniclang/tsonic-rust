@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { RustBlock, RustExpr, RustImplFunction, RustItem, RustSourceFileModel, RustStmt, RustType } from "../syntax/nodes.js";
 import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { nameRustSignatureTypes, type RustNamedSignatureScope } from "./signature-aliases.js";
@@ -127,6 +128,7 @@ function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: 
     // Evaluating the unit literal has no effect, so `{ (); value }` is the value itself (syntax only).
     if (mapped.kind === "evaluate-then" && mapped.effect.kind === "tuple-literal" && mapped.effect.elements.length === 0)
       return mapped.value;
+    if (mapped.kind === "conditional") return foldRustIdenticalConditionalBranches(mapped);
     // A literal left operand decides a short-circuit operator: `true && value` is `value`, `false && value` is `false`
     // (syntax only; the right operand is evaluated exactly when the operator evaluates it).
     if (mapped.kind === "binary" && mapped.left.kind === "bool-literal" && (mapped.operator === "&&" || mapped.operator === "||"))
@@ -206,6 +208,18 @@ function createRustBodyStyler(isFunctionItem: RustFunctionItemQuery, nameType?: 
   return { block, expression, requiresNamingAllowance: () => namingAllowance };
 }
 
+
+function foldRustIdenticalConditionalBranches(source: Extract<RustExpr, { readonly kind: "conditional" }>): RustExpr {
+  if (isDeepStrictEqual(source.whenTrue, source.whenFalse))
+    return { kind: "evaluate-then", effect: source.condition, discard: "value", value: source.whenTrue };
+  let selected = source;
+  while (selected.whenFalse.kind === "conditional" && isDeepStrictEqual(selected.whenTrue, selected.whenFalse.whenTrue)) {
+    selected = { kind: "conditional", condition: {
+      kind: "binary", operator: "||", left: selected.condition, right: selected.whenFalse.condition,
+    }, whenTrue: selected.whenTrue, whenFalse: selected.whenFalse.whenFalse };
+  }
+  return selected;
+}
 
 // `let x: T;` followed by `x = value;` is `let x: T = value;` (clippy::needless_late_init). A run of such declarations
 // followed by their assignments folds the same way (`let a; let b; a = e1; b = e2;`), also across statements that do

@@ -398,7 +398,21 @@ function lowerStructuralObjectJsValueConversion(
   const sourceName = allocateConversionName(context, node, "js_object_source");
   const sourcePath = { kind: "path" as const, path: sourceName };
   const entries: RustExpr[] = [];
-  for (const field of contract.fields) {
+  const literal = node === undefined ? undefined : context.input.program.records.targetOperation.get(node);
+  const positions = new Map<string, number>();
+  if (literal?.kind === "record-literal") {
+    for (const contribution of literal.contributions) {
+      const names = contribution.kind === "spread" ? contribution.fields.map(field => field.sourceName)
+        : contribution.kind === "method" ? literal.fields.filter(field =>
+          field.contractDeclarations.some(declaration => contribution.contractDeclarations.includes(declaration)))
+          .map(field => field.sourceName)
+        : [contribution.sourceName];
+      for (const name of names) if (!positions.has(name)) positions.set(name, positions.size);
+    }
+  }
+  const fields = literal?.kind !== "record-literal" ? contract.fields : [...contract.fields]
+    .sort((left, right) => (positions.get(left.sourceName) ?? positions.size) - (positions.get(right.sourceName) ?? positions.size));
+  for (const field of fields) {
     const plannedField = definition.fields[field.storageIndex];
     if (plannedField === undefined) failRustPlannerInvariant("An admitted closed value field requires its exact native storage.", node ?? context.sourceFile);
     const storedCarrier = plannedField.carrier;

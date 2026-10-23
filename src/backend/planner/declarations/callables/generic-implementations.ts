@@ -77,10 +77,10 @@ function planImplementation(
   const owner = allocateRustSyntheticName(names, "environment");
   const suspended = emission.suspended;
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);
-  const helper = implementation.creation === "declaration" ? undefined
+  const planned = implementation.creation === "declaration" ? undefined
     : planNativeModuleFunction(implementation.declaration, implementation.declaration,
         implementation.functionName, true, bodyContext);
-  if (implementation.creation !== "declaration" && helper === undefined) failRustPlannerInvariant("An admitted generic implementation requires its native helper function.", implementation.declaration);
+  const helpers = planned === undefined ? [] : planned.helper === undefined ? [planned.item] : [planned.item, planned.helper];
   const contract = emission.requirements;
   const generics = rustGenericCallableEnvironmentGenerics(arguments_, helperContext);
   if (generics === undefined) failRustPlannerInvariant("An admitted generic callable requires its complete native environment and quantified call contract.");
@@ -112,10 +112,10 @@ function planImplementation(
   return [{ kind: "struct", name: implementation.stateName, visibility: "public",
     generics, fields,
   }, ...(implementation.storage === "value" ? genericCallableCopyStateItems(state, generics) : []),
-  ...(helper === undefined ? [] : [{ ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
+  ...helpers.map(helper => ({ ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
     helper.generics.wherePredicates),
     params: [...ownerParams, ...helper.params],
-  }])];
+  }))];
 }
 
 function planDefinition(definition: RustGenericCallablePhysicalDefinition, context: RustPlanContext): readonly RustItem[] {
