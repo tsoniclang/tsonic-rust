@@ -5,7 +5,7 @@ import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
 
-import { planRustSharedReceiver } from "../../../../dist/backend/planner/expressions/typed-locations.js";
+import { planRustIdentifierValue, planRustSharedReceiver } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { lowerRustValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
 import { rustValueConversionContract } from "../../../../dist/policy/conversions/contracts.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../../dist/public/provider.js";
@@ -81,7 +81,7 @@ test("ordinary String reference arguments are not silently changed to native str
   }
   assert.deepEqual(applyFinalizedRustArgumentMode(context(), sourceNode,
     { kind: "string-literal", value: "value" }, input, false),
-  { kind: "str-literal", value: "value" });
+  { kind: "reference", expr: { kind: "string-literal", value: "value" } });
 });
 
 test("shared retained payload fields are reborrowed rather than passed as owned values", () => {
@@ -89,8 +89,9 @@ test("shared retained payload fields are reborrowed rather than passed as owned 
   const selected = context(undefined, undefined, "shared");
   selected.capturedBindings = [{ ...selected.capturedBindings[0],
     expression: { kind: "reference", expr: payload },
+    referent: payload,
   }];
-  const read = { kind: "method-call", receiver: payload, method: "clone", args: [] };
+  const read = planRustIdentifierValue(sourceNode, "capture", selected, "shared-receiver");
   const expected = { kind: "reference", expr: payload };
   assert.deepEqual(planRustSharedReceiver(sourceNode, read, selected), expected);
   assert.deepEqual(applyFinalizedRustArgumentMode(selected, sourceNode, read, input, false), expected);

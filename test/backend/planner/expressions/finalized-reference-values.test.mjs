@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Node_Initializer } from "@tsonic/target-api/source";
 import { jsonNativeProjectionSource } from "../../../../../tsonic/test/fixtures/json-native-projection.mjs";
 import { analyzeRust, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
@@ -194,4 +195,31 @@ test("transparent shared inputs retain the source-selected capture guard without
     }
   }
   assert.equal(guarded, 6, "every identity wrapper retains the same physical source fact");
+});
+
+test("an owned snapshot before a captured write keeps its required selected clone", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+    export function snapshots(seed: string): (next: string) => string {
+      return (next: string): string => {
+        const before = seed;
+        seed = next;
+        return before;
+      };
+    }
+  ` } });
+  const snapshots = sourceNodes(program).filter(node => program.source.ast.is.IsVariableDeclaration(node) &&
+    program.source.ast.text(program.source.ast.name(node)) === "before");
+  assert.equal(snapshots.length, 1, "the authored snapshot has one exact source declaration");
+  const node = Node_Initializer(program.source.ast, snapshots[0]);
+  assert.equal(node !== undefined, true, "the snapshot reads the captured string before replacement");
+  const ownership = program.records.readOwnership.get(node);
+  assert.equal(ownership?.source.kind, "clone", "the owning analysis selects an owned snapshot, not a borrow across mutation");
+  const context = rustSourceFilePlanContext(program, node);
+  const snapshot = planExpression(node, context);
+  assert.equal(snapshot !== undefined, true, "the selected snapshot is rendered");
+  assert.equal((printRustExpr(snapshot).match(/\.clone\(/gu) ?? []).length, 1,
+    "the required source snapshot is taken exactly once");
+  const reference = applyRustArgumentMode(context, { stage: "finalized", expression: snapshot }, "ref");
+  assert.equal(reference.kind === "reference" && reference.expr === snapshot, true,
+    "a later reference borrows the owned snapshot, never the mutated original capture");
 });
