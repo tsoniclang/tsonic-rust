@@ -65,7 +65,8 @@ export function planRustAwaitBranches(
         }
         output = propagated;
       }
-      const converted = applyFinalizedValueConversion(context, output, future.awaitedConversion, node);
+      const converted = applyFinalizedValueConversion(context,
+        { stage: "finalized", expression: output }, future.awaitedConversion, node);
       if (converted === undefined) return undefined;
       output = completion.completion === "never"
         ? future.awaiting === "fallible" ? rustBottomAfterEffect(converted, "fallible never await returned")
@@ -79,7 +80,7 @@ export function planRustAwaitBranches(
     if (resultCarrier === undefined) failRustPlannerInvariant("A discarded await requires a sealed discard completion.", node);
     return selected.completion.kind === "absence"
       ? { kind: "evaluate-then", effect: output, discard: "unit", value: absent() }
-      : applyFinalizedValueConversion(context, output, selected.completion.conversion, node);
+      : applyFinalizedValueConversion(context, { stage: "finalized", expression: output }, selected.completion.conversion, node);
   };
   const plan = (selection: RustAwaitSelection<RustAwaitValueLeafFact>, value: RustExpr): RustExpr | undefined => {
     if (selection.kind === "leaf") return leaf(selection.value, value);

@@ -396,8 +396,8 @@ export function planRustCompoundAssignmentValue(
     if (planned === undefined) failRustPlannerInvariant("An admitted assignment requires its native operator call plan.", node);
     return planned;
   }
-  const left = applyRustValueConversion(context, current, selection.leftConversion, node);
-  const right = applyRustValueConversion(context, value, selection.rightConversion, node);
+  const left = applyRustValueConversion(context, { stage: "finalized", expression: current }, selection.leftConversion, node);
+  const right = applyRustValueConversion(context, { stage: "finalized", expression: value }, selection.rightConversion, node);
   if (left === undefined || right === undefined) failRustPlannerInvariant("An admitted assignment requires its native operand conversions.", node);
   return { kind: "binary", operator: selection.operator, left, right };
 }

@@ -45,7 +45,8 @@ export function planRustUnionMethodCall(node: Node, args: readonly RustExpr[],
       expression = rustPropagateLocalError(context.fallibleBoundary, rustErrorType(boundary), expression)
         ?? failRustPlannerInvariant("An admitted union method requires its native error propagation.", node);
     }
-    if (method.resultConversion !== undefined) expression = applyRustValueConversion(context, expression, method.resultConversion, node)
+    if (method.resultConversion !== undefined) expression = applyRustValueConversion(context,
+      { stage: "finalized", expression }, method.resultConversion, node)
       ?? failRustPlannerInvariant("An admitted union method requires its selected native result conversion.", node);
     arms.push({ pattern: { kind: "tuple-variant", path: `${path}::${method.name}`, elements: [{ kind: "binding", name: payload }] }, expression });
   }

@@ -425,7 +425,8 @@ export function planRustCallableExpressionBody(
     const tail = finalizedBlock.statements.length === 1 && (finalizedBlock.innerAttrs?.length ?? 0) === 0
       ? finalizedBlock.statements[0] : undefined;
     const bodyValue: RustExpr = tail?.kind === "tail" && (tail.attrs?.length ?? 0) === 0 ? tail.expr : { kind: "block", body: finalizedBlock };
-    const converted = applyFinalizedValueConversion(callableClosureContext, bodyValue, conversion, node);
+    const converted = applyFinalizedValueConversion(callableClosureContext,
+      { stage: "finalized", expression: bodyValue }, conversion, node);
     if (converted === undefined) return undefined;
     finalizedBlock = { statements: [{ kind: "tail", expr: converted }] };
   }

@@ -4,8 +4,10 @@ import { jsonNativeProjectionSource } from "../../../../../tsonic/test/fixtures/
 import { analyzeRust, acmeVectorsPackage } from "../../../helpers/rust-session.mjs";
 import { rustSourceFilePlanContext } from "../../../helpers/plan-context.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
-import { applyFinalizedRustArgumentMode, createRustSharedReferenceArgument,
+import { applyFinalizedRustArgumentMode, applyRustArgumentMode, createRustSharedReferenceArgument,
   createRustMutableReferenceArgument } from "../../../../dist/backend/planner/expressions/input-shaping.js";
+import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
+import { printRustExpr } from "../../../../dist/print/source/index.js";
 
 function sourceNodes(program) {
   const result = [];
@@ -89,10 +91,10 @@ test("projected reference values never recover an unprojected source view", () =
   for (const node of projected) {
     const context = rustSourceFilePlanContext(program, node);
     const value = { kind: "call", path: "already_projected_value", args: [] };
-    const shared = createRustSharedReferenceArgument(context, value, node);
+    const shared = createRustSharedReferenceArgument(context, { stage: "source", expression: value, node });
     assert.equal(shared.kind === "reference" && shared.expr === value && shared.mutable !== true, true,
       "shared shaping preserves the projection and its single evaluation");
-    const exclusive = createRustMutableReferenceArgument(context, value, node);
+    const exclusive = createRustMutableReferenceArgument(context, { stage: "source", expression: value, node });
     assert.equal(exclusive.kind === "reference" && exclusive.expr === value && exclusive.mutable === true, true,
       "exclusive shaping preserves the same selected value rather than a source slice");
   }
@@ -114,4 +116,45 @@ test("missing sealed provider-reference correspondence still fails closed", () =
   error => error.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
     error.message === "An admitted provider reference requires its exact source parameter and reborrow contract.",
   "missing correspondence is not reconstructed from a source name or carrier");
+});
+
+test("operator-specific conversions survive reference shaping independently of node projections", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function smaller(left: bigint, right: number | bigint): boolean {
+      return left < right && left < right;
+    }
+  ` } });
+  const comparisons = sourceNodes(program).filter(node => {
+    const selected = program.records.binaryEmission.get(node);
+    return selected?.fact.kind === "operator-call" && selected.fact.leftConversion?.kind === "semantic-conversion" &&
+      selected.fact.leftConversion.id === "js-numeric-from-bigint";
+  });
+  assert.equal(comparisons.length, 2, "both repeated reads use the real selected BigInt-to-JsNumeric operation");
+  for (const node of comparisons) {
+    const selected = program.records.binaryEmission.get(node);
+    const context = rustSourceFilePlanContext(program, node);
+    const expression = planBinaryExpression(node, context);
+    assert.equal(expression !== undefined, true, "the selected operator produces one native expression");
+    const printed = printRustExpr(expression);
+    assert.equal((printed.match(/JsNumeric::from_bigint/gu) ?? []).length, 1,
+      "the selected conversion is retained once, rather than replaced by the original BigInt storage");
+    assert.match(printed, /JsNumeric::less_than\(&js_abi::JsNumeric::from_bigint\(/u,
+      "the operator borrows its finalized JsNumeric, not the preconversion input");
+    assert.equal(program.records.argumentView.get(selected.left)?.borrowedStorage, true,
+      "the inverse source-storage path really exists, so node identity alone cannot justify replanning");
+    const finalized = { kind: "call", path: "selected_conversion_with_effect", args: [] };
+    const argument = applyRustArgumentMode(context, { stage: "finalized", expression: finalized }, "ref");
+    assert.equal(argument.kind === "reference" && argument.expr === finalized, true,
+      "a finalized value preserves both conversion and its single effectful evaluation");
+  }
+});
+
+test("finalized argument stages never consult original source storage or parameter ABI", () => {
+  const value = { kind: "call", path: "one_effect", args: [] };
+  const context = { get input() { throw new Error("finalized shaping must not recover original-node evidence"); } };
+  for (const mode of ["value", "ref", "mut-ref"]) {
+    const planned = applyRustArgumentMode(context, { stage: "finalized", expression: value }, mode);
+    assert.equal(mode === "value" ? planned === value : planned.kind === "reference" && planned.expr === value &&
+      (planned.mutable === true) === (mode === "mut-ref"), true, `${mode}: exactly the selected expression survives`);
+  }
 });

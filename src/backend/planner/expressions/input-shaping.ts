@@ -10,6 +10,10 @@ import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustErrorFieldSharedView, rustErrorFieldComparisonView } from "./error-field-borrows.js";
 import { planArrayLiteral } from "./array-literals/planning.js";
 
+export type RustArgumentValue =
+  | { readonly stage: "source"; readonly expression: RustExpr; readonly node: Node }
+  | { readonly stage: "finalized"; readonly expression: RustExpr };
+
 export function planRustCallArguments(
   node: Node,
   context: RustPlanContext,
@@ -31,32 +35,31 @@ export function planRustCallArguments(
 
 export function applyRustArgumentMode(
   context: RustPlanContext,
-  argument: RustExpr,
+  argument: RustArgumentValue,
   mode: RustArgumentMode,
-  node: Node | undefined,
 ): RustExpr {
-  node = rustArgumentSourceView(node, context);
   if (mode === "ref") {
-    return createRustSharedReferenceArgument(context, argument, node);
+    return createRustSharedReferenceArgument(context, argument);
   }
   if (mode === "mut-ref") {
+    const node = rustArgumentSourceView(argument, context);
     const sourceParameterAbi = node === undefined
       ? undefined
       : context.input.program.records.sourceParameterAbi.get(node);
     return sourceParameterAbi?.mode === "mut-ref"
-      ? argument
-      : createRustMutableReferenceArgument(context, argument, node);
+      ? argument.expression
+      : createRustMutableReferenceArgument(context, argument);
   }
-  return argument;
+  return argument.expression;
 }
 
-export function createRustMutableReferenceArgument(context: RustPlanContext, argument: RustExpr, node: Node | undefined): RustExpr {
-  node = rustArgumentSourceView(node, context);
+export function createRustMutableReferenceArgument(context: RustPlanContext, argument: RustArgumentValue): RustExpr {
+  const node = rustArgumentSourceView(argument, context);
   return {
     kind: "reference",
     expr: node !== undefined && context.expressionOverrides?.has(node) !== true && context.input.program.records.argumentView.get(node)?.slice === true
       ? planArrayLiteral(node, context, "slice")
-      : argument,
+      : argument.expression,
     mutable: true,
   };
 }
@@ -75,21 +78,23 @@ export function applyFinalizedRustArgumentMode(
   const passThrough = context.input.program.records.providerReference.get(sourceNode, input)
     ?? failRustPlannerInvariant("An admitted provider reference requires its exact source parameter and reborrow contract.", sourceNode);
   if (passThrough && !stabilized) return expression;
-  const viewNode = stabilized || input.conversion.kind !== "identity" ? undefined : sourceNode;
+  const argument: RustArgumentValue = stabilized || input.conversion.kind !== "identity"
+    ? { stage: "finalized", expression }
+    : { stage: "source", expression, node: sourceNode };
   if (sourceIsSharedReference && input.mode === "ref") {
-    return createRustSharedReferenceArgument(context, expression, viewNode);
+    return createRustSharedReferenceArgument(context, argument);
   }
   return input.mode === "mut-ref"
-    ? createRustMutableReferenceArgument(context, expression, viewNode)
-    : createRustSharedReferenceArgument(context, expression, viewNode);
+    ? createRustMutableReferenceArgument(context, argument)
+    : createRustSharedReferenceArgument(context, argument);
 }
 
 export function createRustSharedReferenceArgument(
   context: RustPlanContext,
-  argument: RustExpr,
-  node: Node | undefined,
+  value: RustArgumentValue,
 ): RustExpr {
-  node = rustArgumentSourceView(node, context);
+  const argument = value.expression;
+  const node = rustArgumentSourceView(value, context);
   if (node !== undefined && context.input.program.records.readOwnership.get(node)?.sharedReference === true) return argument;
   const errorField = node === undefined ? undefined : rustErrorFieldSharedView(node, argument, context);
   if (errorField !== undefined) return errorField;
@@ -116,8 +121,9 @@ export function createRustSharedReferenceArgument(
   return node === undefined ? { kind: "reference", expr: argument } : planRustSharedReceiver(node, argument, context);
 }
 
-function rustArgumentSourceView(node: Node | undefined, context: RustPlanContext): Node | undefined {
-  if (node === undefined) return undefined;
+function rustArgumentSourceView(value: RustArgumentValue, context: RustPlanContext): Node | undefined {
+  if (value.stage === "finalized") return undefined;
+  const node = value.node;
   const projection = rustValueProjectionFor(node, context.expressionOverrides?.get(node)?.carrier, context)
     ?? failRustPlannerInvariant("An admitted reference argument requires its sealed projection composition.", node);
   return projection.exits || projection.flow !== undefined || projection.upcast !== undefined ||

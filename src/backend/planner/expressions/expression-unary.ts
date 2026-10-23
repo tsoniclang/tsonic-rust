@@ -20,7 +20,8 @@ export function planUnaryExpression(node: Node, context: RustPlanContext, result
   const operand = selected.literal ? planNumericLiteralWithCarrier(selected.operand, carrier, context)
     : planExpression(selected.operand, context) ?? failRustPlannerInvariant("An admitted unary expression requires its native operand.", selected.operand);
   if (selected.kind === "identity") return operand;
-  const converted = applyRustValueConversion(context, operand, selected.fact.leftConversion, selected.operand)
+  const converted = applyRustValueConversion(context, selected.literal ? { stage: "finalized", expression: operand }
+    : { stage: "source", expression: operand, node: selected.operand }, selected.fact.leftConversion, selected.operand)
     ?? failRustPlannerInvariant("An admitted unary expression requires its native operand conversion.", selected.operand);
   if (selected.booleanNot) return negateRustPlannedBooleanExpression(selected.operand, converted, context);
   if (selected.fact.operator !== "-" && selected.fact.operator !== "!") failRustPlannerInvariant("An admitted native unary requires its selected operator.", node);

@@ -296,7 +296,8 @@ function planResourceDisposalExpression(
     position: "receiver" | "argument"): RustExpr | undefined => {
     if (input.source.kind !== "receiver") failRustPlannerInvariant("A zero-argument disposer requires its admitted resource input.", subject);
     const borrowed = alreadyBorrowed && target.receiverMode !== "value";
-    const converted = applyFinalizedValueConversion(context, receiver, input.conversion, subject, borrowed);
+    const converted = applyFinalizedValueConversion(context,
+      { stage: "source", expression: receiver, node: subject }, input.conversion, subject, borrowed);
     if (converted === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native input conversion.", subject);
     if (position === "receiver") return converted;
     if (borrowed && input.conversion.kind === "identity" && input.mode !== "value") return converted;
@@ -332,7 +333,8 @@ function planResourceDisposalExpression(
       completed = applyRustLocalErrorBoundary(completed, abi.effects.errorBoundary, region, providerErrorType);
       if (completed === undefined) failRustPlannerInvariant("An admitted resource disposer requires its native error conversion.", subject);
     }
-    completed = applyFinalizedValueConversion(context, completed, abi.result.awaitedConversion, subject);
+    completed = applyFinalizedValueConversion(context,
+      { stage: "finalized", expression: completed }, abi.result.awaitedConversion, subject);
     if (completed === undefined) failRustPlannerInvariant("An admitted async resource disposer requires its native result conversion.", subject);
   }
   return dispatch.apply(completed);

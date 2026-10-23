@@ -17,7 +17,7 @@ export function planRustBorrowedSingletonSlice(
   const value = planExpression(node, context, "value", "shared-place");
   if (value === undefined) return undefined;
   return { kind: "call", path: "core::slice::from_ref", args: [
-    createRustSharedReferenceArgument(context, value, node),
+    createRustSharedReferenceArgument(context, { stage: "source", expression: value, node }),
   ] };
 }
 

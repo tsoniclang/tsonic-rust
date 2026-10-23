@@ -35,8 +35,8 @@ export function planRustSwitchComparison(
       if (planned === undefined) failRustPlannerInvariant("An admitted switch comparison requires its native call plan.", node);
       return planned;
     }
-    const convertedLeft = applyRustValueConversion(context, left, operation.leftConversion, undefined);
-    const convertedRight = applyRustValueConversion(context, rightValue, operation.rightConversion, undefined);
+    const convertedLeft = applyRustValueConversion(context, { stage: "finalized", expression: left }, operation.leftConversion, undefined);
+    const convertedRight = applyRustValueConversion(context, { stage: "finalized", expression: rightValue }, operation.rightConversion, undefined);
     if (convertedLeft === undefined || convertedRight === undefined)
       failRustPlannerInvariant("An admitted switch comparison requires its operand conversions.", node);
     // A boolean discriminant compared with a boolean case literal is the discriminant itself (or its negation).
@@ -63,9 +63,9 @@ export function planRustSwitchComparison(
       { expression: rightReference, form: "shared-reference" }, node, context);
   } else {
     const convertedLeft = applyRustValueConversion(context,
-      { kind: "dereference", pointer: leftReference }, operation.leftConversion, undefined);
+      { stage: "finalized", expression: { kind: "dereference", pointer: leftReference } }, operation.leftConversion, undefined);
     const convertedRight = applyRustValueConversion(context,
-      { kind: "dereference", pointer: rightReference }, operation.rightConversion, undefined);
+      { stage: "finalized", expression: { kind: "dereference", pointer: rightReference } }, operation.rightConversion, undefined);
     if (convertedLeft !== undefined && convertedRight !== undefined) {
       value = { kind: "binary", operator: "==", left: convertedLeft, right: convertedRight };
     }

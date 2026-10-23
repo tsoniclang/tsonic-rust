@@ -15,19 +15,20 @@ import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 
-import { createRustSharedReferenceArgument } from "./input-shaping.js";
+import { createRustSharedReferenceArgument, type RustArgumentValue } from "./input-shaping.js";
 import { planRustNativeProtocolInvocation } from "./calls/native-input.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
 import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
 
 export function planRustCallableInputProducer(
-  expression: RustExpr, source: TargetTypeRef, context: RustPlanContext,
+  argument: RustArgumentValue, source: TargetTypeRef, context: RustPlanContext,
   node?: Node,
-): RustExpr | undefined {
-  if (node === undefined) return expression;
+): RustArgumentValue | undefined {
+  if (node === undefined) return argument;
   const selected = context.input.program.records.callableOperand.get(node, source)
     ?? failRustPlannerInvariant("An admitted callable input requires its exact physical source operand.", node);
-  return planCallableOperand(selected, expression, node, context).value;
+  const producer = planCallableOperand(selected, argument.expression, node, context);
+  return producer.inline ? { stage: "finalized", expression: producer.value } : argument;
 }
 
 export function planRustCallableConversion(
@@ -41,12 +42,14 @@ export function planRustCallableConversion(
   const operand = context.input.program.records.callableOperand.get(node, conversion.source)
     ?? failRustPlannerInvariant("An admitted callable adapter requires its exact physical source operand.", node);
   const producer = planCallableOperand(operand, expression, node, context);
-  return planSelectedRustCallableConversion(selected, producer.value, producer.inline, node, context);
+  return planSelectedRustCallableConversion(selected, producer.inline
+    ? { stage: "finalized", expression: producer.value }
+    : { stage: "source", expression: producer.value, node }, producer.inline, node, context);
 }
 
 function planSelectedRustCallableConversion(
   emission: RustCallableConversionEmission,
-  expression: RustExpr,
+  argument: RustArgumentValue,
   inline: boolean,
   node: Node,
   context: RustPlanContext,
@@ -141,9 +144,8 @@ function planSelectedRustCallableConversion(
     kind: "closure", move: true, params: native || argumentsType === undefined ? nativeParameters : [{ name: argumentsName, byRefCopy: false, type: argumentsType }], body,
   };
   const value = borrowed
-    ? createRustSharedReferenceArgument(context,
-      expression, node)
-    : expression;
+    ? createRustSharedReferenceArgument(context, argument)
+    : argument.expression;
   const adapted: RustExpr = { kind: "block", body: { statements: [{
     kind: "let", mutable: false, name: callable, init: value,
   }, { kind: "tail", expr: native || input ? closure : {
@@ -157,7 +159,7 @@ function planSelectedRustCallableConversion(
     if (selected.kind === "callable") {
       const nested = emission.nested.get(selected.conversion)
         ?? failRustPlannerInvariant("An admitted nested callable conversion requires its exact native contract.", node);
-      return planSelectedRustCallableConversion(nested, value, false, node, { ...context, syntheticNames: names });
+      return planSelectedRustCallableConversion(nested, { stage: "finalized", expression: value }, false, node, { ...context, syntheticNames: names });
     }
     if (selected.kind !== "value") return undefined;
     const converted = lowerRustValueConversion(selected.contract, value, context, node);
