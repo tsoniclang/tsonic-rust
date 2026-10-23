@@ -71,13 +71,15 @@ targetOperation: { get: (subject) => subject === node
   ];
   for (const [index, mutation] of mutations.entries()) {
     const selected = context(mutation);
-    const producer = createRustArrayLiteralProducer(() => {});
+    let publications = 0;
+    const producer = createRustArrayLiteralProducer(() => { publications += 1; });
     const issues = analyzeRustArrayLiterals(selected.input.program, [node], producer);
     assert.equal(issues.length, 1, `mutation ${index}: one admission rejection`);
     assert.equal(issues[0].code, "RUST_MISSING_TARGET_FACT", `mutation ${index}: exact diagnostic`);
     assert.equal(issues[0].sourceNode === node, true, `mutation ${index}: original source identity`);
     assert.equal(producer.records.borrowedSequenceEmission.get(input, fact.elementCarrier) === undefined, true,
       `mutation ${index}: invalid array input never reaches native rendering`);
+    assert.equal(publications, 0, `mutation ${index}: no invalid or partial branch is published`);
   }
   assert.equal(accessorReads, 0);
 });
