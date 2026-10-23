@@ -65,7 +65,7 @@ export function resolveRustCheckerTransformedType(
         authoredRoot,
       )
     );
-    return infos.length === 0 || elements.some((element) => element === undefined)
+    return elements.some((element) => element === undefined)
       ? undefined
       : rustTupleTargetType(elements as readonly TargetTypeRef[]);
   }

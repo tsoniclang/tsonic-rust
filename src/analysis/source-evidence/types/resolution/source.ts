@@ -367,7 +367,7 @@ export function resolveRustTargetTypeSyntax(
     }
     const elements = elementNodes.map((element, index) => resolveRustAuthoredTargetType(element,
       rustSourceStorageComponentContext(context, { kind: "tuple-element", index }), options, resolving));
-    return elements.length > 0 && elements.every((element) => element !== undefined)
+    return elements.every((element) => element !== undefined)
       ? rustTupleTargetType(elements as TargetTypeRef[])
       : undefined;
   }
