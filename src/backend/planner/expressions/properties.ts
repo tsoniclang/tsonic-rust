@@ -22,7 +22,7 @@ import { rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { planExpression } from "./entry.js";
 import { rustSourceStorageView } from "./input-shaping.js";
-import { planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver, requireRustReadOwnership } from "./typed-locations.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { planRustBorrowedElementRead } from "./borrowed-element-reads.js";
@@ -88,7 +88,9 @@ function planSourceFieldRead(node: Node, fact: Extract<RustTargetOperationFact, 
     if (read === undefined) failRustPlannerInvariant("An admitted borrowed field requires its native stored value.", node);
     return location.bindings.length === 0 ? read : rustValueBlock(location.bindings, read);
   }
-  const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context, "value",
+    fact.valueSemantics.kind === "stored" && requireRustReadOwnership(receiverNode, context).value.kind === "borrow"
+      ? "shared-receiver" : "value");
   if (receiverNode === undefined || receiver === undefined) failRustPlannerInvariant("An admitted source field requires its native receiver.", node);
   if (fact.valueSemantics.kind === "receiver-alias" && fact.dispatch === undefined) {
     if (fact.accessMode !== "read") failRustPlannerInvariant("An admitted receiver-alias value requires its exact native read role.", node);
