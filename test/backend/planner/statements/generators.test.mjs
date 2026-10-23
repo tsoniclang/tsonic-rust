@@ -24,7 +24,7 @@ export function* exchange(seed: int32): Generator<int32, int32, int32> {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::Generator<i32, i32, i32>/u);
+  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::Generator<i32, i32, i32, core::convert::Infallible>/u);
   assert.match(source, /rt::Generator::new\(move \|generator(?:_\d+)?\| async move \{/u);
   assert.match(source, /let resumed: i32 = match generator(?:_\d+)?\.yield_value\(seed\)\.await \{/u);
   assert.match(source, /rt::GeneratorResume::Next/u);
@@ -49,7 +49,7 @@ export async function* exchange(seed: int32): AsyncGenerator<int32, int32, int32
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::AsyncGenerator<i32, i32, i32>/u);
+  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::AsyncGenerator<i32, i32, i32, core::convert::Infallible>/u);
   assert.match(source, /rt::AsyncGenerator::new\(move \|generator(?:_\d+)?\| async move \{/u);
 });
 
@@ -293,13 +293,13 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("generator throw closes through the exact Rust error lane", { timeout: 300_000 }, () => {
+for (const asynchronous of [false, true]) test(`${asynchronous ? "async" : "sync"} generator source throw-in is refused before publication`, () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 ${generatorTypes}
 
-function* values(): Generator<int32, int32, int32> {
+${asynchronous ? "async " : ""}function* values(): ${asynchronous ? "AsyncGenerator" : "Generator"}<int32, int32, int32> {
   yield 1;
   return 2;
 }
@@ -315,11 +315,10 @@ export function close(): void {
     },
   });
 
-  assertNoTargetDiagnostics(result.diagnostics);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let operation_input_\d+ = rt::JsError::error\("stop"\);/u);
-  assert.match(source, /generator\.throw_value\(operation_input_\d+\)/u);
-  validateGeneratedProject("generator-throw", result.artifacts);
+  assert.equal(result.artifacts.length, 0, "source throw-in publishes no native artifact");
+  assert.equal(result.program === undefined, true, "source throw-in is refused before sealing");
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "TSONIC_GENERATOR_THROW_UNSUPPORTED" &&
+    diagnostic.message === "Generator throw-in is not supported."), true, "the exact builtin source operation is refused");
 });
 
 test("sync generator commands execute catch, finally, and delegated cleanup", { timeout: 300_000 }, () => {
@@ -345,6 +344,7 @@ function* guarded(): Generator<int32, int32, int32> {
 function* catches(): Generator<int32, int32, int32> {
   try {
     yield 3;
+    throw new Error("caught");
   } catch {
     yield 4;
   } finally {
@@ -375,7 +375,7 @@ export function main(): void {
 
   const caught = catches();
   caught.next();
-  const caughtResult = caught.throw(new Error("caught"));
+  const caughtResult = caught.next();
   check(caughtResult.done !== true && caughtResult.value === 4);
   const caughtCompletion = caught.next();
   check(caughtCompletion.done === true && caughtCompletion.value === 5);
@@ -399,7 +399,7 @@ export function main(): void {
   assert.equal(validateGeneratedProject("generator-cleanup", result.artifacts, { run: true }).status, 0);
 });
 
-test("async generator return and throw commands execute cleanup", { timeout: 300_000 }, () => {
+test("async generator return and body errors execute cleanup", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "async_generator_cleanup" } },
@@ -413,6 +413,7 @@ let cleanup: int32 = 0;
 async function* guarded(delta: int32): AsyncGenerator<int32, int32, int32> {
   try {
     yield delta;
+    if (delta === 10) throw new Error("stop");
     return 2;
   } finally {
     cleanup += delta;
@@ -430,7 +431,7 @@ export async function main(): Promise<void> {
   await thrown.next();
   let observed = false;
   try {
-    await thrown.throw(new Error("stop"));
+    await thrown.next();
   } catch {
     observed = true;
   }
@@ -444,7 +445,7 @@ export async function main(): Promise<void> {
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /return_value\(9\)\.await/u);
-  assert.match(source, /throw_value\(rt::JsError::error/u);
+  assert.doesNotMatch(source, /\.throw_value\(/u);
   assert.equal(validateGeneratedProject("async-generator-cleanup", result.artifacts, { run: true }).status, 0);
 });
 
@@ -471,7 +472,7 @@ export function run(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn items\(value: i32\) -> rt::Generator<i32, \(\), \(\)>/u);
+  assert.match(source, /pub fn items\(value: i32\) -> rt::Generator<i32, \(\), \(\), core::convert::Infallible>/u);
   validateGeneratedProject("static-generator-method", result.artifacts);
 });
 
@@ -503,7 +504,7 @@ export function run(): void {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /-> rt::BorrowedGenerator<'_, i32, \(\), \(\)>/u);
+  assert.match(source, /-> rt::BorrowedGenerator<'_, i32, \(\), \(\), core::convert::Infallible>/u);
   assert.match(source, /rt::BorrowedGenerator::new/u);
   validateGeneratedProject("instance-generator-method", result.artifacts);
 });
@@ -536,7 +537,7 @@ export async function run(): Promise<void> {
 
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /-> rt::BorrowedAsyncGenerator<'_, i32, \(\), \(\)>/u);
+  assert.match(source, /-> rt::BorrowedAsyncGenerator<'_, i32, \(\), \(\), core::convert::Infallible>/u);
   assert.match(source, /rt::BorrowedAsyncGenerator::new/u);
   validateGeneratedProject("instance-async-generator-method", result.artifacts);
 });
