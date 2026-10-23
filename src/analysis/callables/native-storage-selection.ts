@@ -532,9 +532,9 @@ export function createRustNativeStorageSelection(
           return physical ?? fail("A fixed structural contract has no actual native state producer.");
         }
         const methods: NonNullable<typeof structural.implementation>["methods"][number][] = [];
-        for (const [index, field] of structural.fields.entries()) {
+        for (const field of structural.fields) {
           if (field.method !== true) continue;
-          const selected = input.structuralShapes.field(current, index)?.methodPlan;
+          const selected = completed.fields.find(candidate => candidate.sourceName === field.sourceName)?.methodPlan;
           if (selected === undefined) return fail("A structural method requires its exact checked physical layout owner.");
           if (selected?.kind !== "fixed") {
             const body = structural.implementation?.methods.find(method => method.sourceName === field.sourceName);
@@ -591,7 +591,9 @@ export function createRustNativeStorageSelection(
           methods.length === 0 ? undefined : { kind: "physical", methods: Object.freeze(methods) });
         if (rustTargetTypeRefEquals(current, physical)) return current;
         const existing = input.structuralShapes.definitionForCarrier(physical);
-        return existing === undefined ? input.structuralShapes.completePhysicalCarrier(current, physical) : existing.carrier;
+        if (existing !== undefined) return existing.carrier;
+        const completion = input.structuralShapes.completePhysicalCarrier(current, physical);
+        return completion.kind === "resolved" ? completion.carrier : fail(completion.reason);
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {

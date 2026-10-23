@@ -43,7 +43,7 @@ export type RustStructuralMethodInvocation = {
   readonly parameterCount: number;
   readonly rawStorage: TargetTypeRef;
 } & (
-  | { readonly kind: "fixed"; readonly owner: TargetTypeRef }
+  | { readonly kind: "fixed"; readonly owner: TargetTypeRef; readonly factoryReceiver: "value" | "shared" }
   | { readonly kind: "native-dispatch"; readonly cloneDispatch: boolean }
   | { readonly kind: "stored"; readonly generic: boolean; readonly receiver: "included" | "independent" }
 );

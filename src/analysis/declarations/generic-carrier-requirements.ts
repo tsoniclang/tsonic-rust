@@ -360,6 +360,9 @@ function classifyStaticCarrier(
           if (structural !== undefined) {
             const fields = structural.fields.map((field, index) => {
               if (field.method !== true) return visit(field.type, bound);
+              const method = evidence?.structuralShapes?.field(value, index)?.methodPlan;
+              if (method?.kind === "fixed") return every([...method.payload.captures, ...method.payload.receiverFields, ...method.payload.receivers]
+                  .map(capture => visit(capture.storageCarrier, bound)));
               const selected = structuralMethodStorage(evidence?.structuralShapes, value, index);
               return selected === undefined
                 ? unresolved("A structural method requires its completed physical storage, not its logical call signature.")

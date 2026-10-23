@@ -117,8 +117,7 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       return Object.freeze({ field, copy: isRustCopyCarrier(field.carrier),
         frozen: program.frozenDataWrites.receiverFor("structural-object", carrier, storageIndex) !== undefined,
         method: protocol === undefined || storage === undefined ? undefined : field.methodPlan?.kind === "fixed"
-          ? field.methodPlan.payload === undefined ? failTargetAnalysisInvariant("tsonic-rust", "A fixed literal method requires its completed physical capture environment.", node)
-            : Object.freeze({ kind: "fixed", declaration: field.methodPlan.declaration, payload: field.methodPlan.payload,
+          ? Object.freeze({ kind: "fixed", declaration: field.methodPlan.declaration, payload: field.methodPlan.payload,
               parameters: protocol.parameters, result: protocol.result, storage })
           : Object.freeze({ kind: "stored", parameters: protocol.parameters, result: protocol.result, storage }),
         accessor: !accessor || value === undefined ? undefined : Object.freeze({ getter: rustCallableTargetType([shape.carrier], value),

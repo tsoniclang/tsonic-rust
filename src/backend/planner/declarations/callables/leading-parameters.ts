@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 export function planRustCallableLeadingParameters(
   declaration: Node,
   context: RustPlanContext,
-  nativeReceiver: { readonly name: string; readonly carrier: TargetTypeRef } | undefined,
+  nativeReceiver: { readonly name: string; readonly carrier: TargetTypeRef; readonly mode: "value" | "shared" } | undefined,
 ) {
   const completion = context.input.program.records.callableLeading.get(declaration);
   if (completion === undefined) failRustPlannerInvariant("An admitted callable requires its native leading-parameter selection.", declaration);
@@ -22,7 +22,8 @@ export function planRustCallableLeadingParameters(
     if (parameter.kind !== "this") continue;
     for (const node of parameter.reads) expressionOverrides.set(node, {
       carrier: parameter.carrier, valueForm: "storage", storageForm: "plain",
-      expression: { kind: "dereference", pointer: { kind: "path", path: nativeReceiver.name } },
+      expression: nativeReceiver.mode === "value" ? { kind: "path", path: nativeReceiver.name }
+        : { kind: "dereference", pointer: { kind: "path", path: nativeReceiver.name } },
     });
   }
   for (const parameter of parameters) {

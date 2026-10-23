@@ -62,14 +62,14 @@ export function createStructuralLiteralImplementation(
     const methods: RustImplFunction[] = [];
     for (const [storageIndex, field] of shape.fields.entries()) {
       const selected = field.methodPlan;
-      if (selected?.kind !== "fixed" || selected.payload === undefined) continue;
+      if (selected?.kind !== "fixed") continue;
       const scope = createRustSyntheticNameState(context.input.program.source.ast, selected.declaration, []);
       const receiverName = allocateRustSyntheticName(scope, "object_receiver");
       const captures: RustExpr = { kind: "field", name: String(storageIndex),
         receiver: { kind: "method-call", receiver: { kind: "path", path: receiverName }, method: "context", args: [] } };
       const bodyContext = rustCallablePayloadContext(selected.payload, captures, context, "tuple");
       const planned = planNativeModuleFunction(selected.declaration, selected.declaration, field.targetName, true,
-        bodyContext, { name: receiverName, carrier: shape.carrier, boundLifetimes });
+        bodyContext, { name: receiverName, carrier: shape.carrier, boundLifetimes, factoryReceiver: selected.factoryReceiver });
       methods.push({ ...planned.item, visibility: "public" },
         ...(planned.helper === undefined ? [] : [{ ...planned.helper, visibility: "public" as const }]));
     }

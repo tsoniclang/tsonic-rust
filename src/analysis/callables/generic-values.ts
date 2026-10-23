@@ -24,12 +24,12 @@ import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysical
 import type { RustGenericCallablePhysicalPlan } from "../../target-model/records/generic-callables.js";
 
 import type { RustGenericCallableImplementation, RustGenericCallableDefinition } from "../../target-model/records/generic-callables.js";
-import type { RustStructuralShapePlan } from "../objects/shapes/structural-shape-plan.js";
+import type { RustStructuralShapeLayoutPlan } from "../objects/shapes/structural-shape-plan.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 
 export function rustFixedStructuralMethodDeclarations(
   ast: AstReader,
-  shapes: Pick<RustStructuralShapePlan, "definitions">,
+  shapes: Pick<RustStructuralShapeLayoutPlan, "definitions">,
 ): ReadonlySet<Node> {
   const fixed = new Map<string, Node>();
   const retained = new Set<string>();

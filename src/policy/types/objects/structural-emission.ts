@@ -80,8 +80,6 @@ export function selectRustStructuralEmission(input: RustStructuralEmissionPolicy
   const fields: RustStructuralFieldEmission[] = [];
   for (const field of definition.fields) {
     if (field.methodPlan?.kind === "fixed") {
-      if (field.methodPlan.payload === undefined) return reject("RUST_STRUCTURAL_METHOD_ENVIRONMENT_MISSING",
-        `Structural shape '${definition.targetName}' has a fixed method without its completed native capture environment.`, "rust.backend.structural-shapes.methods");
       continue;
     }
     const storage = field.method === true ? field.methodPlan?.carrier : field.nativeLayout === undefined ? field.carrier : rustLocationTargetType(field.carrier);

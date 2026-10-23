@@ -281,7 +281,8 @@ export function invokeRustStructuralObjectMethod(
     if (state?.kind !== "named" || storageOverride !== undefined)
       failRustPlannerInvariant("A fixed structural method requires its selected concrete native owner.");
     return { kind: "associated-call", owner: { kind: "named", path: state.path }, method: nativeBodyName ?? field.targetName,
-      args: [{ kind: "reference", expr: receiver }, ...arguments_], ...(genericArguments.length === 0 ? {} : { genericArguments }) };
+      args: [nativeBodyName === undefined && selected.factoryReceiver === "value" ? receiver
+        : { kind: "reference", expr: receiver }, ...arguments_], ...(genericArguments.length === 0 ? {} : { genericArguments }) };
   }
   if (selected.kind === "native-dispatch") {
     if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored")

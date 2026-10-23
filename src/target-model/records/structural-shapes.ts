@@ -4,7 +4,7 @@ import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 import type { RustLifetimeRef } from "../lifetimes/model.js";
 import type { RustClosureCaptureFact } from "./operation-selections.js";
 
-export interface RustStructuralShapeField {
+export interface RustStructuralShapeField<MethodPlan = RustStructuralMethodPlan> {
   readonly nativeLayout?: RustNativeMemoryLayout;
   readonly sourceName: string;
   readonly targetName: string;
@@ -19,7 +19,7 @@ export interface RustStructuralShapeField {
     readonly selfMode: "ref" | "rc";
   };
   readonly method?: true;
-  readonly methodPlan?: RustStructuralMethodPlan;
+  readonly methodPlan?: MethodPlan;
 }
 
 export type RustStructuralMethodExposure =
@@ -31,7 +31,8 @@ export type RustStructuralMethodPlan = {
   readonly constructions: readonly RustStructuralMethodConstruction[];
   readonly receiver: "included" | "independent";
 } & (
-  | { readonly kind: "fixed"; readonly declaration: Node; readonly payload?: RustStructuralMethodPayload }
+  | { readonly kind: "fixed"; readonly declaration: Node; readonly payload: RustStructuralMethodPayload;
+      readonly factoryReceiver: "value" | "shared" }
   | { readonly kind: "stored" }
   | { readonly kind: "native-dispatch"; readonly implementation: "fixed"; readonly declaration: Node }
   | { readonly kind: "native-dispatch"; readonly implementation: "stored" }
@@ -56,10 +57,11 @@ export interface RustStructuralMethodConstruction {
 export interface RustStructuralMethodStorageSelection {
   readonly carrier: TargetTypeRef;
   readonly constructions: readonly RustStructuralMethodConstruction[];
-  readonly nativeBody: { readonly declaration: Node; readonly payload: RustStructuralMethodPayload } | undefined;
+  readonly nativeBody: { readonly declaration: Node; readonly payload: RustStructuralMethodPayload;
+    readonly factoryReceiver: "value" | "shared" } | undefined;
 }
 
-export interface RustStructuralShapeDefinition {
+export interface RustStructuralShapeDefinition<MethodPlan = RustStructuralMethodPlan> {
   readonly carrier: TargetTypeRef;
   readonly sourceCarriers: readonly TargetTypeRef[];
   readonly ownerFileName: string;
@@ -73,7 +75,7 @@ export interface RustStructuralShapeDefinition {
   readonly contextMarker: { readonly name: string; readonly arguments: readonly RustTargetGenericArgument[] } | undefined;
   readonly contextConstructor: { readonly name: string; readonly contextParameter: string;
     readonly identityName: string; readonly identityParameter: string } | undefined;
-  readonly fields: readonly RustStructuralShapeField[];
+  readonly fields: readonly RustStructuralShapeField<MethodPlan>[];
   readonly construction?: { readonly targetName: string; readonly carrier: TargetTypeRef };
 }
 

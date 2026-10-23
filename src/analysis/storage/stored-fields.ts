@@ -36,7 +36,7 @@ export function analyzeRustStoredFields(program: Omit<RustAnalysisProgram, "reac
     }
     if (field.methodPlan === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural method requires its selected native representation.");
     producer.invocation(carrier, index, arguments_, { result: protocol.result, parameterCount: protocol.parameters.length,
-      rawStorage, ...(field.methodPlan.kind === "fixed" ? { kind: "fixed", owner: shape!.carrier }
+      rawStorage, ...(field.methodPlan.kind === "fixed" ? { kind: "fixed", owner: shape!.carrier, factoryReceiver: field.methodPlan.factoryReceiver }
         : field.methodPlan.kind === "native-dispatch" ? { kind: "native-dispatch", cloneDispatch: shape!.construction === undefined }
           : { kind: "stored", generic: generic !== undefined, receiver: field.methodPlan.receiver }) });
   };

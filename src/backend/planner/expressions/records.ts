@@ -124,7 +124,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       const selected = context.input.program.records.structuralShape.get(fact.resultCarrier)?.fields[contribution.targetStorageIndex]?.methodPlan;
       let planned: RustExpr | undefined;
       if (selected?.kind === "fixed") {
-        if (selected.declaration !== contribution.expression || selected.payload === undefined)
+        if (selected.declaration !== contribution.expression)
           failRustPlannerInvariant("A fixed method requires its exact checked native body and captured environment.", contribution.expression);
         const payload = selected.payload;
         const captures = planRustCapturedEnvironment(contribution.expression, payload.captures, context,

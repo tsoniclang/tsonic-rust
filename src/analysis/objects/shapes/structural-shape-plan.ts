@@ -1,4 +1,5 @@
-import { structuralStorageKey, instantiateStructuralDefinition, bindRustStructuralImplementationContract } from "../../../policy/types/objects/structural-storage.js";
+import { structuralStorageKey, instantiateStructuralDefinition } from "../../../policy/types/objects/structural-storage.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { preferredShapeName, allocateSnakeName, allocatePascalName } from "../../names/structural-storage.js";
 import type { RustStructuralShapeField, RustStructuralShapeDefinition, RustStructuralMethodStorageSelection, RustStructuralMethodExposure, RustStructuralMethodPlan } from "../../../target-model/records/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -24,17 +25,26 @@ import { substituteRustTargetGenerics } from "../../../target-model/types/carrie
 import type { RustSourceObjectShape, RustStructuralFieldImplementation } from "../../../target-model/records/source-types.js";
 
 
-export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
-  readonly definitions: readonly RustStructuralShapeDefinition[];
-  readonly instances: readonly RustStructuralShapeDefinition[];
-  definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
-  templateForCarrier(carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined;
+type RustStructuralMethodLayout = Exclude<RustStructuralMethodPlan, { readonly kind: "fixed" }> |
+  Omit<Extract<RustStructuralMethodPlan, { readonly kind: "fixed" }>, "payload" | "factoryReceiver">;
+type RustStructuralShapeLayout = RustStructuralShapeDefinition<RustStructuralMethodLayout>;
+type RustStructuralPhysicalCarrierSelection =
+  | { readonly kind: "resolved"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
+export interface RustStructuralShapePlan<MethodPlan = RustStructuralMethodPlan> extends RustGeneratedUnionPlan {
+  readonly definitions: readonly RustStructuralShapeDefinition<MethodPlan>[];
+  readonly instances: readonly RustStructuralShapeDefinition<MethodPlan>[];
+  definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition<MethodPlan> | undefined;
+  templateForCarrier(carrier: TargetTypeRef): RustStructuralShapeDefinition<MethodPlan> | undefined;
   sharesStorage(left: TargetTypeRef, right: TargetTypeRef): boolean;
   fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
-  field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined;
+  field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField<MethodPlan> | undefined;
 }
 
-export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan {
+export type RustStructuralShapeLayoutPlan = RustStructuralShapePlan<RustStructuralMethodLayout>;
+
+export interface RustStructuralShapePlanRegistry extends RustStructuralShapeLayoutPlan {
   initialize(
     shapes: readonly RustSourceObjectShape[],
     implementations: readonly RustStructuralFieldImplementation[],
@@ -43,22 +53,23 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     instantiations: readonly RustStructuralInstantiation[],
     methodExposures: ReadonlyMap<string, RustStructuralMethodExposure>,
     receiverIndependentMethods?: ReadonlySet<string>,
-  ): RustStructuralShapePlan;
+  ): RustStructuralShapeLayoutPlan;
   initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
-  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): TargetTypeRef;
-  finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition,
+  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
+  finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>): void;
   isInitialized(): boolean;
+  readonly completed: RustStructuralShapePlan;
   seal(): RustStructuralShapePlan;
 }
 
 export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlanRegistry {
-  let current: RustStructuralShapePlan | undefined;
+  let current: RustStructuralShapeLayoutPlan | undefined;
   let sealed = false;
   let construction: ReturnType<typeof createRustStructuralShapeConstruction> | undefined;
   let unions: RustGeneratedUnionPlan | undefined;
   let componentForFile: ((fileName: string) => string) | undefined;
-  const requireCurrent = (): RustStructuralShapePlan => {
+  const requireCurrent = (): RustStructuralShapeLayoutPlan => {
     if (current === undefined) {
       throw new Error("Rust structural shape plan was read before source analysis initialized it.");
     }
@@ -106,10 +117,10 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       unions = createRustGeneratedUnionPlan(definitions, componentForFile, names);
     },
     completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
-      if (sealed || construction === undefined) throw new Error("Structural physical carriers require their open initialized builder.");
+      if (sealed || construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural physical carriers require their open initialized builder.");
       return construction.completePhysicalCarrier(source, physical);
     },
-    finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition,
+    finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
       ReadonlyMap<number, RustStructuralMethodStorageSelection>>) {
       // A second finalization is refused as such, also after sealing.
       if (construction?.methodStorageFinalized() === true || !sealed && construction !== undefined) {
@@ -121,12 +132,18 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     isInitialized() {
       return current !== undefined;
     },
+    get completed() {
+      if (construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Completed structural storage requires its initialized native owner.");
+      return construction.completed();
+    },
     seal() {
       if (sealed) throw new Error("Rust structural storage seals once.");
       requireUnions();
-      construction!.close();
+      if (construction === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural storage seals its initialized native owner.");
+      const complete = construction.close();
       sealed = true;
-      return requireCurrent();
+      current = complete;
+      return complete;
     },
     get definitions() {
       return requireCurrent().definitions;
@@ -167,7 +184,7 @@ export function createRustStructuralShapePlan(
   instantiations: readonly RustStructuralInstantiation[] = [],
   unions: RustGeneratedUnionPlan = createRustGeneratedUnionPlan([], componentForFile, new Map()),
   receiverIndependentMethods: ReadonlySet<string> = new Set(),
-): RustStructuralShapePlan {
+): RustStructuralShapeLayoutPlan {
   return createRustStructuralShapeConstruction(shapes, implementations, componentForFile, nativeFields,
     instantiations, unions, methodExposures, receiverIndependentMethods).plan;
 }
@@ -182,11 +199,12 @@ function createRustStructuralShapeConstruction(
   methodExposures: ReadonlyMap<string, RustStructuralMethodExposure>,
   receiverIndependentMethods: ReadonlySet<string>,
 ): {
-  readonly plan: RustStructuralShapePlan;
+  readonly plan: RustStructuralShapeLayoutPlan;
+  completed(): RustStructuralShapePlan;
   methodStorageFinalized(): boolean;
-  close(): void;
-  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): TargetTypeRef;
-  finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition,
+  close(): RustStructuralShapePlan;
+  completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef): RustStructuralPhysicalCarrierSelection;
+  finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeLayout,
     ReadonlyMap<number, RustStructuralMethodStorageSelection>>): void;
 } {
   const selections = new Map<TargetTypeRef, ReturnType<typeof rustStructuralGenericCarrier>>();
@@ -274,9 +292,9 @@ function createRustStructuralShapeConstruction(
   }
   const usedTypeNamesByComponent = new Map<string, Set<string>>();
   const nestedCarriers: { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
-  let definitions: readonly RustStructuralShapeDefinition[] = Object.freeze([...grouped]
+  let definitions: readonly RustStructuralShapeLayout[] = Object.freeze([...grouped]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
-    .map(([key, instances]): RustStructuralShapeDefinition => {
+    .map(([key, instances]): RustStructuralShapeLayout => {
       const sourceCarriers = Object.freeze([...instances]
         .sort(([left], [right]) => left.localeCompare(right, "en"))
         .map(([, carrier]) => carrier));
@@ -295,7 +313,7 @@ function createRustStructuralShapeConstruction(
       const usedFieldNames = new Set(fieldNames.values());
       const nativeDispatch = structural.construction !== undefined || implementations.some(implementation =>
         implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
-      const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
+      const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField<RustStructuralMethodLayout> => {
         const selectedNativeFields = nativeFields.filter(candidate => candidate.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(candidate.owner)));
         const nativeLayout = selectedNativeFields[0]?.layout;
@@ -316,7 +334,7 @@ function createRustStructuralShapeConstruction(
         const exposure = field.method !== true ? undefined : methodExposures.get(`${key}#${storageIndex}`);
         if (field.method === true && (methodStorageCarrier === undefined || exposure === undefined))
           throw new Error("A structural method requires its complete selected native exposure and signature.");
-        const methodPlan: RustStructuralMethodPlan | undefined = methodStorageCarrier === undefined || exposure === undefined
+        const methodPlan: RustStructuralMethodLayout | undefined = methodStorageCarrier === undefined || exposure === undefined
           ? undefined : Object.freeze({ carrier: methodStorageCarrier, constructions: Object.freeze([]),
             receiver: independent ? "independent" as const : "included" as const,
             ...(nativeDispatch ? exposure.kind === "fixed"
@@ -405,10 +423,10 @@ function createRustStructuralShapeConstruction(
         }) }),
       });
     }));
-  const byKey = new Map<string, RustStructuralShapeDefinition>();
-  const byStorageKey = new Map<string, RustStructuralShapeDefinition>();
-  const originsByKey = new Map<string, RustStructuralShapeDefinition>();
-  const registerCarrier = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef, origin: RustStructuralShapeDefinition): void => {
+  const byKey = new Map<string, RustStructuralShapeLayout>();
+  const byStorageKey = new Map<string, RustStructuralShapeLayout>();
+  const originsByKey = new Map<string, RustStructuralShapeLayout>();
+  const registerCarrier = (definition: RustStructuralShapeLayout, carrier: TargetTypeRef, origin: RustStructuralShapeLayout): void => {
     const key = closedMetadataKey(carrier);
     const existing = byKey.get(key);
     if (existing !== undefined && (existing.targetName !== definition.targetName ||
@@ -440,14 +458,16 @@ function createRustStructuralShapeConstruction(
   let publishedInstances = Object.freeze([...byKey.values()]);
   let closed = false;
   let methodStorageFinalized = false;
-  const completedCarriers = new Map<RustStructuralShapeDefinition, Map<string,
-    { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef; readonly template: RustStructuralShapeDefinition }>>();
-  const physicalTemplateFor = (definition: RustStructuralShapeDefinition): RustStructuralShapeDefinition | undefined => {
+  const completedCarriers = new Map<RustStructuralShapeLayout, Map<string,
+    { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef; readonly template: RustStructuralShapeLayout }>>();
+  const physicalTemplateFor = (definition: RustStructuralShapeLayout): RustStructuralShapeLayout | undefined => {
     const completed = completedCarriers.get(definition);
     return completed?.get(closedMetadataKey(definition.carrier))?.template ?? definition.sourceCarriers
       .map(source => completed?.get(closedMetadataKey(source))?.template).find(selected => selected !== undefined);
   };
-  const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
+  let completedPlan: RustStructuralShapePlan | undefined;
+  const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeLayout | undefined => {
+    if (completedPlan !== undefined) return completedPlan.definitionForCarrier(carrier);
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
     const key = closedMetadataKey(carrier);
     const registered = byKey.get(key);
@@ -472,7 +492,7 @@ function createRustStructuralShapeConstruction(
       const instance = instantiateStructuralDefinition(template, carrier);
       return instance === undefined ? [] : [{ template, instance, origin }];
     });
-    if (matches.length > 1) throw new Error("A structural physical instance has more than one checked native implementation template.");
+    if (matches.length > 1) return undefined;
     const instance = matches[0]?.instance;
     if (instance !== undefined) {
       registerCarrier(matches[0]!.template, carrier, matches[0]!.origin);
@@ -480,7 +500,7 @@ function createRustStructuralShapeConstruction(
     }
     return instance;
   };
-  const plan: RustStructuralShapePlan = Object.freeze({
+  const plan: RustStructuralShapeLayoutPlan = Object.freeze({
     get unionDefinitions() { return unions.unionDefinitions; },
     unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
     get definitions() { return definitions; },
@@ -498,7 +518,8 @@ function createRustStructuralShapeConstruction(
           rustTargetGenericArgumentEquals(argument, rightDefinition.genericArguments[index]!));
     },
     definitionForCarrier: definitionFor,
-    templateForCarrier: (carrier: TargetTypeRef) => originsByKey.get(closedMetadataKey(carrier)),
+    templateForCarrier: (carrier: TargetTypeRef) => completedPlan === undefined
+      ? originsByKey.get(closedMetadataKey(carrier)) : completedPlan.templateForCarrier(carrier),
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       const field = Number.isSafeInteger(storageIndex) && storageIndex >= 0
         ? rustStructuralObjectCarrierValue(carrier)?.fields[storageIndex] : undefined;
@@ -512,20 +533,25 @@ function createRustStructuralShapeConstruction(
       return field === undefined ? undefined : definitionFor(carrier)?.fields.find(candidate => candidate.sourceName === field.sourceName);
     },
   });
+  const requireCompleted = (): RustStructuralShapePlan => {
+    if (completedPlan === undefined) failTargetAnalysisInvariant("tsonic-rust", "Structural storage requires its completed native method selection.");
+    return completedPlan;
+  };
   return Object.freeze({ plan,
+    completed: requireCompleted,
     methodStorageFinalized: () => methodStorageFinalized,
     close() {
-      if (closed) throw new Error("Rust structural storage seals once.");
-      if (!methodStorageFinalized) throw new Error("Rust structural storage requires its complete physical method templates before sealing.");
-      if (definitions.some(definition => definition.fields.some(field => field.methodPlan?.kind === "fixed" && field.methodPlan.payload === undefined)))
-        throw new Error("A published fixed structural method requires its completed native body and capture environment.");
+      if (closed) failTargetAnalysisInvariant("tsonic-rust", "Rust structural storage seals once.");
+      const complete = requireCompleted();
       closed = true;
+      return complete;
     },
     completePhysicalCarrier(source: TargetTypeRef, physical: TargetTypeRef) {
+      const unresolved = (reason: string): RustStructuralPhysicalCarrierSelection => Object.freeze({ kind: "unresolved", reason });
       if (methodStorageFinalized) {
         const selected = definitionFor(physical);
-        if (selected === undefined) throw new Error("A completed structural physical carrier must have been admitted before finalization.");
-        return physical;
+        return selected === undefined ? unresolved("A structural physical carrier requires its exact admitted native implementation template.")
+          : Object.freeze({ kind: "resolved", carrier: physical });
       }
       const sourceKey = closedMetadataKey(source);
       const selected = definitionFor(source);
@@ -533,16 +559,21 @@ function createRustStructuralShapeConstruction(
         : definitions.find(definition => definition.targetName === selected.targetName && definition.componentId === selected.componentId));
       const value = rustStructuralObjectCarrierValue(physical);
       if (original === undefined || value === undefined || value.implementation !== undefined && value.implementation.kind !== "physical")
-        throw new Error("Structural physical completion requires its actual source owner and completed native capture arguments.");
+        return unresolved("Structural physical completion requires its actual source owner and completed native capture arguments.");
       const values = completedCarriers.get(original) ?? new Map();
       completedCarriers.set(original, values);
       const previous = values.get(sourceKey);
       if (previous !== undefined && !rustTargetTypeRefEquals(previous.carrier, physical))
-        throw new Error("A structural source instance has one completed physical implementation and capture environment.");
-      if (previous !== undefined) return previous.carrier;
+        return unresolved("A structural source instance requires one exact native implementation and capture environment.");
+      if (previous !== undefined) return Object.freeze({ kind: "resolved", carrier: previous.carrier });
       const carrier = rustStructuralGenericCarrier(physical).carrier;
       const references = rustTargetGenericReferences(carrier);
-      const template = Object.freeze({ ...original, carrier,
+      const physicalOwner = originsByKey.get(closedMetadataKey(physical));
+      const completedOwner = physicalOwner === undefined || physicalOwner === original ? undefined : physicalTemplateFor(physicalOwner);
+      if (physicalOwner !== undefined && physicalOwner !== original && completedOwner === undefined)
+        failTargetAnalysisInvariant("tsonic-rust", "An admitted structural implementation requires its actual completed native template.");
+      const template = physicalOwner !== undefined && physicalOwner !== original ? completedOwner!
+        : Object.freeze({ ...original, carrier,
         genericParameters: Object.freeze([
           ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime: lifetime as Extract<RustLifetimeRef, { kind: "parameter" }> })),
           ...references.typeParameters.map(parameter => ({ kind: "type" as const, identity: parameter.identity, name: parameter.name })),
@@ -553,40 +584,13 @@ function createRustStructuralShapeConstruction(
         ]),
       });
       values.set(sourceKey, Object.freeze({ source, carrier: physical, template }));
-      registerCarrier(template, physical, original);
+      if (physicalOwner === undefined || physicalOwner === original) registerCarrier(template, physical, original);
       publishedInstances = Object.freeze([...byKey.values()]);
-      return physical;
+      return Object.freeze({ kind: "resolved", carrier: physical });
     },
     finalizeMethodStorage(selections) {
       if (methodStorageFinalized) throw new Error("Structural method physical storage finalizes exactly once.");
-      for (const definition of definitions) {
-        if (physicalTemplateFor(definition) !== undefined ||
-          rustStructuralObjectCarrierValue(definition.carrier)?.implementation !== undefined ||
-          !definition.fields.some(field => field.methodPlan?.kind === "fixed")) continue;
-        const matches = definitions.flatMap(candidate => {
-          const template = physicalTemplateFor(candidate);
-          if (template === undefined || rustStructuralObjectCarrierValue(candidate.carrier)?.implementation === undefined ||
-            !definition.fields.every(field => {
-              const method = field.methodPlan;
-              return method?.kind !== "fixed" || candidate.fields.some(selected => selected.sourceName === field.sourceName &&
-                selected.methodPlan?.kind === "fixed" && selected.methodPlan.declaration === method.declaration);
-            })) return [];
-          const carrier = bindRustStructuralImplementationContract(template.carrier, definition.carrier);
-          return carrier === undefined ? [] : [{ template, carrier }];
-        });
-        if (matches.length !== 1)
-          throw new Error("A fixed structural contract requires its one checked complete native implementation template.");
-        const selected = matches[0]!;
-        const values = new Map<string, { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef;
-          readonly template: RustStructuralShapeDefinition }>();
-        for (const source of [definition.carrier, ...definition.sourceCarriers]) {
-          const carrier = bindRustStructuralImplementationContract(selected.template.carrier, source);
-          if (carrier === undefined) throw new Error("A structural contract requires its exact checked native implementation arguments.");
-          values.set(closedMetadataKey(source), Object.freeze({ source, carrier, template: selected.template }));
-        }
-        completedCarriers.set(definition, values);
-      }
-      const replacements = new Map<RustStructuralShapeDefinition, RustStructuralShapeDefinition>();
+      const replacements = new Map<RustStructuralShapeLayout, RustStructuralShapeDefinition>();
       for (const definition of definitions) {
         const fields = selections.get(definition);
         const completed = completedCarriers.get(definition);
@@ -595,17 +599,18 @@ function createRustStructuralShapeConstruction(
         if (template !== undefined && (template.template.targetName !== definition.targetName ||
           template.template.componentId !== definition.componentId)) continue;
         if (definition.fields.some(field => field.methodPlan?.kind === "fixed") && template === undefined)
-          throw new Error("A fixed structural method requires its completed physical template before publication.");
+          failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed physical template before publication.");
         const carrier = template === undefined ? definition.carrier : rustStructuralGenericCarrier(template.carrier).carrier;
         for (const [index] of fields ?? []) {
           if (definition.fields[index]?.method !== true)
             throw new Error("Structural method storage can replace only an admitted method slot.");
         }
-        const selectedFields = Object.freeze(definition.fields.map((field, index) => {
+        const selectedFields = Object.freeze(definition.fields.map((field, index): RustStructuralShapeField => {
             const selection = fields?.get(index);
             if (selection === undefined) {
-              if (field.methodPlan?.kind === "fixed") throw new Error("A fixed structural method requires its complete selected native body before publication.");
-              return field;
+              const methodPlan = field.methodPlan;
+              if (methodPlan?.kind === "fixed") failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its complete selected native body before publication.", methodPlan.declaration);
+              return Object.freeze({ ...field, methodPlan });
             }
             const destinationCarrier = field.presence === "optional" ? rustOptionElementCarrier(selection.carrier) : selection.carrier;
             const destination = rustCallableProtocol(destinationCarrier);
@@ -619,36 +624,39 @@ function createRustStructuralShapeConstruction(
                 !rustTargetTypeRefEquals(physical.result, destination.result) || !rustTargetTypeRefEquals(physical.error, destination.error))
                 throw new Error("Structural method construction requires its complete native source and destination signature.");
             }
-            if (field.methodPlan === undefined) throw new Error("A completed structural method requires its selected native exposure.");
+            const methodPlan = field.methodPlan;
+            if (methodPlan === undefined) failTargetAnalysisInvariant("tsonic-rust", "A completed structural method requires its selected native exposure.");
+            const constructions = Object.freeze(selection.constructions.map(construction => Object.freeze({ ...construction })));
+            if (methodPlan.kind !== "fixed") {
+              if (selection.nativeBody !== undefined) failTargetAnalysisInvariant("tsonic-rust", "Only a selected fixed method publishes a native body payload.");
+              return Object.freeze({ ...field, methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier, constructions }) });
+            }
             const physical = rustStructuralObjectCarrierValue(carrier)?.implementation?.methods.find(method => method.sourceName === field.sourceName);
-            const declaration = field.methodPlan.kind === "fixed" ? field.methodPlan.declaration : undefined;
             const body = selection.nativeBody;
-            if (field.methodPlan.kind === "fixed" && (physical === undefined || body?.declaration !== declaration) ||
-              field.methodPlan.kind !== "fixed" && body !== undefined)
-              throw new Error("A fixed structural method requires its exact native construction and physical capture environment.");
+            if (physical === undefined || body === undefined || body.declaration !== methodPlan.declaration)
+              failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its exact native construction and physical capture environment.", methodPlan.declaration);
             let captureIndex = 0;
-            const payload = body === undefined || physical === undefined ? undefined : Object.freeze({
+            const payload = Object.freeze({
               captures: Object.freeze(body.payload.captures.map(capture => {
                 const argument = physical.genericArguments[captureIndex++];
-                if (argument?.kind !== "type") throw new Error("A fixed structural method lost its physical capture argument.");
+                if (argument?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method lost its physical capture argument.", methodPlan.declaration);
                 return Object.freeze({ ...capture, storageCarrier: argument.type });
               })),
               receiverFields: Object.freeze(body.payload.receiverFields.map(capture => {
                 const argument = physical.genericArguments[captureIndex++];
-                if (argument?.kind !== "type") throw new Error("A fixed structural method lost its physical receiver-field argument.");
+                if (argument?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method lost its physical receiver-field argument.", methodPlan.declaration);
                 return Object.freeze({ ...capture, storageCarrier: argument.type });
               })),
               receivers: Object.freeze(body.payload.receivers.map(capture => {
                 const argument = physical.genericArguments[captureIndex++];
-                if (argument?.kind !== "type") throw new Error("A fixed structural method lost its physical receiver argument.");
+                if (argument?.kind !== "type") failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method lost its physical receiver argument.", methodPlan.declaration);
                 return Object.freeze({ ...capture, storageCarrier: argument.type });
               })),
             });
-            if (physical !== undefined && captureIndex !== physical.genericArguments.length)
-              throw new Error("A fixed structural method requires its complete physical capture argument inventory.");
-            return Object.freeze({ ...field, methodPlan: Object.freeze({ ...field.methodPlan, carrier: selection.carrier,
-              ...(payload === undefined ? {} : { payload }),
-              constructions: Object.freeze(selection.constructions.map(construction => Object.freeze({ ...construction }))) }),
+            if (captureIndex !== physical.genericArguments.length)
+              failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its complete physical capture argument inventory.", methodPlan.declaration);
+            return Object.freeze({ ...field, methodPlan: Object.freeze({ ...methodPlan, carrier: selection.carrier,
+              payload, factoryReceiver: body.factoryReceiver, constructions }),
             });
           }));
         const references = rustTargetGenericReferences(carrier);
@@ -657,7 +665,7 @@ function createRustStructuralShapeConstruction(
           ...(definition.construction === undefined ? [] : [definition.construction.carrier]),
         ] });
         const stateReferences = definition.dispatchName === undefined ? rustTargetGenericReferences({ kind: "tuple", elements: [
-          ...selectedFields.flatMap(field => field.methodPlan?.kind === "fixed" && field.methodPlan.payload !== undefined
+          ...selectedFields.flatMap(field => field.methodPlan?.kind === "fixed"
             ? [...field.methodPlan.payload.captures, ...field.methodPlan.payload.receiverFields, ...field.methodPlan.payload.receivers]
               .map(capture => capture.storageCarrier) : [field.methodPlan?.carrier ?? field.carrier]),
           ...(definition.construction === undefined ? [] : [definition.construction.carrier]),
@@ -707,7 +715,7 @@ function createRustStructuralShapeConstruction(
         const replacement = owner === undefined ? undefined : replacements.get(owner);
         const instance = completed === undefined || replacement === undefined ? undefined
           : instantiateStructuralDefinition(replacement, completed.carrier);
-        if (instance === undefined) throw new Error("A structural contract requires its completed actual native implementation owner.");
+        if (instance === undefined) failTargetAnalysisInvariant("tsonic-rust", "An admitted structural contract requires its completed actual native implementation owner.");
         replacements.set(definition, instance);
       }
       for (const definition of selections.keys()) {
@@ -720,7 +728,7 @@ function createRustStructuralShapeConstruction(
       const canonical = new Map(finalDefinitions.map(definition => [`${definition.componentId}\0${definition.targetName}`, definition]));
       const canonicalFor = (definition: RustStructuralShapeDefinition): RustStructuralShapeDefinition => {
         const selected = canonical.get(`${definition.componentId}\0${definition.targetName}`);
-        if (selected === undefined) throw new Error("A structural physical instance requires its one canonical native implementation owner.");
+        if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust", "A structural physical instance requires its one canonical native implementation owner.");
         return selected;
       };
       const instances = new Map<string, RustStructuralShapeDefinition>();
@@ -741,15 +749,64 @@ function createRustStructuralShapeConstruction(
         if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
         instances.set(key, instance);
       }
-      for (const [key, selected] of instances) byKey.set(key, selected);
-      for (const [key, definition] of byStorageKey) byStorageKey.set(key, canonicalFor(replacements.get(definition)!));
-      for (const [key, definition] of originsByKey) originsByKey.set(key, canonicalFor(replacements.get(definition)!));
+      const storageOwners = new Map([...byStorageKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
+      const instanceOwners = new Map([...originsByKey].map(([key, definition]) => [key, canonicalFor(replacements.get(definition)!)]));
+      let finalInstances = Object.freeze([...instances.values()]);
       definitions = finalDefinitions;
+      const registerFinal = (definition: RustStructuralShapeDefinition, carrier: TargetTypeRef): RustStructuralShapeDefinition | undefined => {
+        const selected = instantiateStructuralDefinition(definition, carrier);
+        if (selected === undefined) return undefined;
+        const key = closedMetadataKey(carrier);
+        instances.set(key, selected);
+        instanceOwners.set(key, definition);
+        storageOwners.set(structuralStorageKey(carrier, componentForFile), definition);
+        finalInstances = Object.freeze([...instances.values()]);
+        publishedInstances = finalInstances;
+        return selected;
+      };
       for (const [original, completed] of completedCarriers) for (const selected of completed.values()) {
         const replacement = canonicalFor(replacements.get(original)!);
-        registerCarrier(replacement, selected.carrier, replacement);
+        if (registerFinal(replacement, selected.carrier) === undefined)
+          failTargetAnalysisInvariant("tsonic-rust", "A completed structural method requires its admitted native template arguments.");
       }
-      publishedInstances = Object.freeze([...byKey.values()]);
+      finalInstances = Object.freeze([...instances.values()]);
+      publishedInstances = finalInstances;
+      const finalDefinitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
+        if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
+        const selected = instances.get(closedMetadataKey(carrier));
+        if (selected !== undefined || closed) return selected;
+        const implementation = rustStructuralObjectCarrierValue(carrier)?.implementation;
+        const templates = implementation?.kind !== "physical" ? [storageOwners.get(structuralStorageKey(carrier, componentForFile))]
+          : finalDefinitions.filter(definition => {
+            const physical = rustStructuralObjectCarrierValue(definition.carrier)?.implementation;
+            return physical?.kind === "physical" && physical.methods.length === implementation.methods.length &&
+              physical.methods.every((method, index) => method.sourceName === implementation.methods[index]?.sourceName &&
+                method.identity === implementation.methods[index]?.identity);
+          });
+        const matches = templates.flatMap(definition => definition === undefined ? [] :
+          instantiateStructuralDefinition(definition, carrier) === undefined ? [] : [definition]);
+        return matches.length === 1 ? registerFinal(matches[0]!, carrier) : undefined;
+      };
+      const finalField = (carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined => {
+        if (!Number.isSafeInteger(storageIndex) || storageIndex < 0) return undefined;
+        const field = rustStructuralObjectCarrierValue(carrier)?.fields[storageIndex];
+        return field === undefined ? undefined : finalDefinitionFor(carrier)?.fields.find(candidate => candidate.sourceName === field.sourceName);
+      };
+      completedPlan = Object.freeze({
+        get definitions() { return finalDefinitions; },
+        get instances() { return finalInstances; },
+        get unionDefinitions() { return unions.unionDefinitions; },
+        unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
+        definitionForCarrier: finalDefinitionFor,
+        templateForCarrier: (carrier: TargetTypeRef) => instanceOwners.get(closedMetadataKey(carrier)),
+        field: finalField,
+        fieldName: (carrier: TargetTypeRef, storageIndex: number) => finalField(carrier, storageIndex)?.targetName,
+        sharesStorage: plan.sharesStorage,
+      });
+      byKey.clear();
+      byStorageKey.clear();
+      originsByKey.clear();
+      completedCarriers.clear();
       methodStorageFinalized = true;
     },
   });

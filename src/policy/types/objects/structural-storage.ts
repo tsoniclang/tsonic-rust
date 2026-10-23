@@ -1,4 +1,4 @@
-import type { RustStructuralShapeDefinition } from "../../../target-model/records/structural-shapes.js";
+import type { RustStructuralShapeDefinition, RustStructuralMethodPlan, RustStructuralMethodPayload } from "../../../target-model/records/structural-shapes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -26,10 +26,11 @@ export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (
     rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation, shape.construction, shape.bases, shape.implementation));
 }
 
-export function instantiateStructuralDefinition(
-  definition: RustStructuralShapeDefinition,
+export function instantiateStructuralDefinition<MethodPlan extends
+  Pick<RustStructuralMethodPlan, "kind" | "carrier" | "receiver" | "constructions"> & { readonly payload?: RustStructuralMethodPayload }>(
+  definition: RustStructuralShapeDefinition<MethodPlan>,
   carrier: TargetTypeRef,
-): RustStructuralShapeDefinition | undefined {
+): RustStructuralShapeDefinition<MethodPlan> | undefined {
   if (rustTargetTypeRefEquals(definition.carrier, carrier)) {
     return definition;
   }
@@ -50,7 +51,7 @@ export function instantiateStructuralDefinition(
   const argument = (argument: RustStructuralShapeDefinition["genericArguments"][number]) => argument.kind === "lifetime"
     ? Object.freeze({ kind: "lifetime" as const, lifetime: bindings?.lifetimes.get(rustLifetimeKey(argument.lifetime)) ?? argument.lifetime })
     : argument.kind !== "type" ? argument : Object.freeze({ kind: "type" as const, type: substitute(argument.type) });
-  const payload = (selected: NonNullable<Extract<NonNullable<RustStructuralShapeDefinition["fields"][number]["methodPlan"]>, { kind: "fixed" }>["payload"]>) => Object.freeze({
+  const payload = (selected: RustStructuralMethodPayload) => Object.freeze({
     captures: Object.freeze(selected.captures.map(capture => Object.freeze({ ...capture, storageCarrier: substitute(capture.storageCarrier) }))),
     receiverFields: Object.freeze(selected.receiverFields.map(capture => Object.freeze({ ...capture, storageCarrier: substitute(capture.storageCarrier) }))),
     receivers: Object.freeze(selected.receivers.map(capture => Object.freeze({ ...capture, storageCarrier: substitute(capture.storageCarrier) }))),

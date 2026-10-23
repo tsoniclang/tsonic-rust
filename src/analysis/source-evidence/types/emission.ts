@@ -221,7 +221,6 @@ export function analyzeRustTypeEmission(program: Omit<RustAnalysisProgram, "reac
               elements: Object.freeze(shape.fields.map(field => {
                 if (field.methodPlan?.kind !== "fixed") return rustUnitTargetType();
                 const payload = field.methodPlan.payload;
-                if (payload === undefined) failTargetAnalysisInvariant("tsonic-rust", "A fixed structural method requires its completed native context before type publication.", field.methodPlan.declaration);
                 return selectRustStructuralMethodContextCarrier(payload, payload.receiverFields.map(capture =>
                   program.frozenDataWrites.capturesFieldIdentity(capture.declaration, capture.reference)));
               })) }) : rustUnitTargetType() }) });
