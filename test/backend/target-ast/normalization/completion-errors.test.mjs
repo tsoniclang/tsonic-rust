@@ -4,6 +4,7 @@ import { lowerRustCompletionScope } from "../../../../dist/backend/target-ast/no
 import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/syntax/module-references.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustBlockStatements } from "../../../../dist/print/source/statements.js";
+import { planRustSyntaxNormalization } from "../../../../dist/backend/planner/diagnostics.js";
 
 const nativeError = { kind: "qualified", owner: { kind: "named", path: "Producer" },
   trait: { kind: "named", path: "callback::Invoke" }, member: "Error" };
@@ -94,6 +95,34 @@ test("completion contracts reject absent evidence, pure catches and unplanned er
   assert.throws(() => lowerRustCompletionScope(region(nativeError, { finallyName: "finally_flow", finallyClause: {
     body: { statements: [] }, errorType: { kind: "named", path: "OtherError" }, terminates: false,
   } })), /one exact joined error/u);
+});
+
+test("native syntax boundary forwards only its typed invariant through the sole planner diagnostic owner", () => {
+  let calls = 0;
+  const malformed = region(nativeError);
+  delete malformed.bodyErrorType;
+  let failure;
+  try {
+    planRustSyntaxNormalization(() => { calls++; return lowerRustCompletionScope(malformed); });
+    assert.fail("malformed internal native syntax must not be published");
+  } catch (caught) {
+    failure = caught;
+  }
+  assert.equal(calls, 1, "normalization executes once");
+  assert.equal(failure?.diagnostic?.code, "TSONIC_INTERNAL_PLANNER_INVARIANT", "the shared planner owner classifies the internal failure");
+  assert.equal(failure.diagnostic.source, "tsonic-rust", "the exact native target is retained");
+  assert.equal(failure.diagnostic.category, "error", "an invariant is not a recoverable partial result");
+  assert.equal(failure.diagnostic.message, "Completion regions require explicit exact error types or explicit pure contracts.",
+    "the exact failing native contract is not replaced");
+  assert.equal(failure.diagnostic.sourceNode, undefined, "native syntax is not misattributed to an invented source node");
+  for (const unrelated of [new Error("unrelated native failure"), { code: "RUST_UNSUPPORTED_AST", message: "source rejection" }]) {
+    let observed;
+    try { planRustSyntaxNormalization(() => { throw unrelated; }); } catch (caught) { observed = caught; }
+    assert.equal(observed === unrelated, true, "other failures and reachable source rejections are never relabelled as invariants");
+  }
+  const completed = lowerRustCompletionScope(region(nativeError));
+  assert.equal(planRustSyntaxNormalization(() => completed) === completed, true,
+    "valid native syntax passes through the boundary without reconstruction or changed identity");
 });
 
 test("resource completion preserves the concrete selected suppression owner's exact error", () => {
