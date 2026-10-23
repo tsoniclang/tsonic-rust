@@ -191,9 +191,10 @@ export function analyzeRustObjectLiteralEmission(program: Omit<RustAnalysisProgr
       const selected = literalFor(node, fact);
       if (selected !== undefined) append(selected);
     }
-    const view = program.records.objectReferenceView.get(node);
-    if (native.has(node) && view?.kind === "structural" && program.structuralShapes.definitionForCarrier(view.targetCarrier)?.dispatchName !== undefined)
-      append(Object.freeze({ kind: "reference", node, selection: structural(node, view.targetCarrier, new Set(view.fields.map(field => field.destinationIndex))) }));
+    const reference = program.records.objectReferenceEmission.get(node);
+    if (native.has(node) && reference?.kind === "structural" && reference.dispatch)
+      append(Object.freeze({ kind: "reference", node, selection: structural(node, reference.view.targetCarrier,
+        new Set(reference.view.fields.map(field => field.destinationIndex))) }));
     program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of program.sourceFiles) visit(file);

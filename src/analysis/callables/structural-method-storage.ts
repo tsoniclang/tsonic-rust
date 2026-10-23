@@ -183,9 +183,36 @@ export function analyzeRustStructuralMethodExposures(input: {
     if (view?.kind === "structural") for (const field of view.fields) {
       if (field.source.valueSemantics.kind !== "method") continue;
       const destination = candidates.get(keyFor(view.targetCarrier, field.destinationIndex));
-      if (destination !== undefined) destination.extracted = true;
-      if (field.source.storage === "structural-object") {
-        const source = candidates.get(keyFor(field.source.receiverCarrier, field.source.storageIndex));
+      const source = field.source.storage === "structural-object"
+        ? candidates.get(keyFor(field.source.receiverCarrier, field.source.storageIndex)) : undefined;
+      const shape = input.shapes.find(candidate => rustTargetTypeRefEquals(candidate.carrier, field.source.receiverCarrier));
+      const original = shape?.fields[field.source.storageIndex];
+      const bindings = input.sourceStorage.bindingsForLexicalOwner(node);
+      let complete = source !== undefined && destination !== undefined && original?.method === true &&
+        original.declarations.length !== 0 && bindings.kind === "resolved";
+      if (complete && original !== undefined && bindings.kind === "resolved") {
+        for (const declaration of original.declarations) {
+          const subject = input.sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
+          const producers = subject.kind === "unresolved" ? subject
+            : rustStructuralMethodProducers(input.sourceStorage, subject.subject, bindings.bindings);
+          if (producers.kind !== "complete" || producers.producers.length === 0) {
+            complete = false;
+            break;
+          }
+          for (const producer of producers.producers) {
+            if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
+              !ast.is.IsMethodDeclaration(producer.subject.node) || ast.body(producer.subject.node) === undefined) {
+              complete = false;
+              break;
+            }
+            retain(field.source.receiverCarrier, field.source.storageIndex, producer.subject.node);
+            retain(view.targetCarrier, field.destinationIndex, producer.subject.node);
+          }
+          if (!complete) break;
+        }
+      }
+      if (!complete) {
+        if (destination !== undefined) destination.extracted = true;
         if (source !== undefined) source.extracted = true;
       }
     }

@@ -15,7 +15,7 @@ import {
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../../policy/operations/members/native-contracts.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/members/index.js";
-import { recordSelectedOperationInputs } from "../operations/inputs.js";
+import { recordFinalizedOperationInputEffects } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import { rustSourceCallCallableStorageCarrier } from "../../policy/operations/members/native-contracts.js";
@@ -51,6 +51,7 @@ import { rustGeneratorSourceInvocationKind } from "../../policy/operations/sourc
 import { getRustGeneratorProtocol } from "../../target-model/types/carriers/callables.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 import type { SourceNativeTaskGraph } from "@tsonic/target-api/analysis";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export interface RustSourceFallibilityConstruction {
   readonly sourceErrors: RustSourceErrorEffectSelection;
@@ -352,17 +353,6 @@ function collectFallibilityFacts(
       budget.step();
       ownedCallbackClosures.add(subject);
     }
-    const sourceFile = ast.getSourceFile(call);
-    if (sourceFile === undefined) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_CALLBACK_SOURCE_FILE_MISSING",
-        "Prepared callback operation has no owning checked source file.",
-        call,
-        ["target.capability=rust.callback.exact-source"],
-      );
-      continue;
-    }
     const callbackFallible = callbackAnalysis.fallible;
     const finalized = finalizeRustPreparedCheckedCall(
       pending.request,
@@ -376,7 +366,9 @@ function collectFallibilityFacts(
       continue;
     }
     const operation = walk.context.records.targetOperation.get(call);
-    recordSelectedOperationInputs(walk, call, sourceFile, operation);
+    if (operation?.kind !== "provider-operation") failTargetAnalysisInvariant("tsonic-rust",
+      "An admitted prepared callback requires its finalized native operation.", call);
+    recordFinalizedOperationInputEffects(walk, call, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
         fallibleSubjects.add(subject);

@@ -7,6 +7,7 @@ import { rustOperationContext } from "../../../program/walk.js";
 import { applySelectedProjectSourceCall, setCarrierFact } from "../../../operations/project-calls.js";
 
 import { prepareRustDeferredCheckedCall } from "../../../operations/members/index.js";
+import { recordPreparedOperationInputs } from "../../../operations/inputs.js";
 
 import { recordExportAssignmentFacts } from "../../../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./expression-carriers.js";
@@ -174,6 +175,7 @@ export function resolveCallLikeCarrier(
       );
       return undefined;
     }
+    if (!recordPreparedOperationInputs(walk, deferred.request, sourceFile, prepared.value)) return undefined;
     walk.preparedCallbackCalls.set(expression, {
       request: deferred.request,
       prepared: prepared.value,
