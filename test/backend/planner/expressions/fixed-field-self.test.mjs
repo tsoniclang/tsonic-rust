@@ -123,7 +123,7 @@ function construction(expression, projection, issues = []) {
     published: false, publishBefore: false, publishAfter: false, publishMissingElse: false };
   const preparation = { point, layer, retainsFrame: false, projections: [projection] };
   const plan = { definition, fields: [sourceField], layers: [layer], issues, points: [point], expressions: [expression],
-    completesNormally: true, publishesReceiver: false, mutatesPublishedFields: false,
+    completesNormally: true, publishesReceiver: false,
     layerHasEarlyReturn: () => false, layerCompletes: () => true, mutatesUnpublishedField: () => false,
     accessesUnpublishedField: candidate => candidate === declaration,
     observesInitialValue: candidate => candidate === declaration,

@@ -88,7 +88,7 @@ export interface RustAdmittedConstruction {
   readonly retainedReferenceIdentities: ReadonlySet<Node>;
   readonly completesNormally: boolean;
   readonly publishesReceiver: boolean;
-  readonly mutatesPublishedFields: boolean;
+  readonly mutableReceiver: boolean;
   readonly emission: {
     readonly frame: RustFrameCallableDefinition | undefined;
     readonly exposure: { readonly declaration: Node; readonly expression: Node; readonly carrier: TargetTypeRef } | undefined;

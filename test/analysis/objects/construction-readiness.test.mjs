@@ -10,6 +10,59 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
+test("published construction roots use their exact native representation and actual mutable uses", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+class Interior {
+  value: number = 1;
+  readonly owner: Interior = this;
+  constructor() { this.bump(); }
+  bump(): void { this.value++; }
+}
+class PlainRead {
+  value: number = 1;
+  constructor() { this.read(); }
+  read(): number { return this.value; }
+}
+class PlainWrite {
+  value: number = 1;
+  constructor() { this.bump(); }
+  bump(): void { this.value++; }
+}
+class PlainField {
+  value: number = 1;
+  constructor() { this.read(); this.value = 2; }
+  read(): number { return this.value; }
+}
+class PlainSetter {
+  value: number = 1;
+  constructor() { this.next = 2; }
+  set next(value: number) { this.value = value; }
+}
+export function run(): number {
+  const interior = new Interior();
+  const read = new PlainRead();
+  const write = new PlainWrite();
+  const field = new PlainField();
+  const setter = new PlainSetter();
+  return interior.value + read.value + write.value + field.value + setter.value;
+}
+` } });
+  for (const [name, nativeValue, mutable] of [["Interior", false, false], ["PlainRead", true, false],
+    ["PlainWrite", true, true], ["PlainField", true, true], ["PlainSetter", true, true]]) {
+    const definition = program.projectTypes.definitions.find(definition => {
+      const identifier = program.source.ast.name(definition.declaration);
+      return identifier !== undefined && program.source.ast.text(identifier) === name;
+    });
+    assert.equal(definition !== undefined, true, name);
+    assert.equal(program.objectRepresentations.representationFor(definition)?.kind === "value", nativeValue,
+      `${name}: the actual native owner, not a wrapper-name guess, determines the representation`);
+    const plan = program.records.classConstruction.get(definition.declaration);
+    assert.equal(plan?.publishesReceiver, true, `${name}: the native root is genuinely published in its constructor`);
+    assert.equal(plan.mutableReceiver, mutable, `${name}: only an actual mutable native binding use requires mut`);
+    assert.equal(Object.hasOwn(plan, "mutatesPublishedFields"), false, `${name}: the superseded aggregate is not published`);
+  }
+});
+
 async function readiness(name, statements) {
   const checked = await checkedSource(name, { "globals.d.ts": minimalSourceGlobals, "src/index.ts": `
 export function fail(): void { throw 1; }

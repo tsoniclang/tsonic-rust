@@ -384,6 +384,11 @@ export function selectRustBinaryOperator(
     const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "object" && rightEnum.shape === "object" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    if (sameObject) {
+      return { kind: "operator-call", rustOperator: equality, resultCarrier: boolCarrier,
+        path: `core::cmp::PartialEq::${equality === "==" ? "eq" : "ne"}`,
+        fallible: false, operandModes: ["ref", "ref"] };
+    }
     if ((rustCallableProtocol(left) !== undefined || rustGenericCallableValue(left) !== undefined) && rustTargetTypeRefEquals(left, right)) {
       return { kind: "operator-token", rustOperator: equality, resultCarrier: rustSourcePrimitiveTargetType("bool"), operandModes: ["ref", "ref"] };
     }
@@ -402,7 +407,7 @@ export function selectRustBinaryOperator(
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
       (rustTargetTypeRefEquals(left, right) &&
         rustCarrierSupportsTrait(left, "core::cmp::PartialEq")) ||
-      sameEnum || sameObject || sameStructuralObject;
+      sameEnum || sameStructuralObject;
     return comparable
       ? {
           kind: "operator-token",

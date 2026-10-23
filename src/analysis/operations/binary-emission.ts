@@ -170,7 +170,8 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
     const concatParts: Node[] | undefined = fact.kind === "string-concat" ? [] : undefined;
     if (concatParts !== undefined) parts(node, concatParts);
     const comparison = fact.kind === "operator-token" && (fact.operator === "==" || fact.operator === "!=");
-    const borrowedComparison = comparison || fact.kind === "union-equality";
+    const callComparison = fact.kind === "operator-call" && (fact.operator === "==" || fact.operator === "!=");
+    const borrowedComparison = comparison || callComparison || fact.kind === "union-equality";
     const shared = (operand: Node): boolean => {
       const selected = program.ownership.reads.get(operand)?.value;
       return selected?.kind === "borrow" && !selected.mutable;
@@ -180,8 +181,8 @@ export function analyzeRustBinaryEmission(program: Omit<RustAnalysisProgram, "re
       return value?.form === "string" || value?.form === "template" ? value.text : undefined;
     };
     producer.publish(node, { fact, left, right, leftUnit: isRustUnitCarrier(leftCarrier), rightUnit: isRustUnitCarrier(rightCarrier),
-      leftNever: isRustNeverCarrier(leftCarrier), leftShared: borrowedComparison && (!comparison || fact.leftConversion === undefined) && shared(left),
-      rightShared: borrowedComparison && (!comparison || fact.rightConversion === undefined) && shared(right),
+      leftNever: isRustNeverCarrier(leftCarrier), leftShared: borrowedComparison && (!(comparison || callComparison) || fact.leftConversion === undefined) && shared(left),
+      rightShared: borrowedComparison && (!(comparison || callComparison) || fact.rightConversion === undefined) && shared(right),
       int32Remainder: program.numericRepresentations.int32Remainder.get(node),
       compound: (fact.kind === "operator-token" || fact.kind === "operator-call") && fact.operator !== "=" && isRustAssignmentOperator(fact.operator),
       operator: fact.kind === "operator-token" && isRustBinaryOperator(fact.operator) ? fact.operator : undefined,

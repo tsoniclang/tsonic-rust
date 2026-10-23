@@ -95,7 +95,7 @@ export function planRustConstructionBody(
     return binding === undefined || retainedOwner === undefined ? undefined
       : rustFrameBindingLocation(binding, retainedOwner, selectedContext);
   };
-  if (plan.publishesReceiver) declarations.push({ kind: "let", name: rootName, mutable: true, type });
+  if (plan.publishesReceiver) declarations.push({ kind: "let", name: rootName, mutable: plan.mutableReceiver, type });
   const publication = (): readonly RustStmt[] => [{ kind: "assign", target: root, operator: "=", value: materialize(values, identity, frameCounter, retainedFrame) }];
   const overrideNodes = new Set(plan.expressions.flatMap(expression => expression.receiver === undefined
     ? [expression.node] : [expression.node, expression.receiver]));

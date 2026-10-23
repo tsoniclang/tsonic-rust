@@ -58,7 +58,6 @@ export interface RustConstructionReadinessInput {
 type RustConstructionReadiness = RustConstructionPointQueries & {
   readonly issues: readonly RustConstructionIssue[];
   readonly publishesReceiver: boolean;
-  readonly mutatesPublishedFields: boolean;
   readonly deferredCaptureFields: readonly Node[];
   readonly publishedFieldWrites: readonly Node[];
 };
@@ -113,7 +112,6 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
   let earlyReturns = 0;
   let visited = 0;
   let publishesReceiver = false;
-  let mutatesPublishedFields = false;
   let exceptionalStates: ConstructionState[] | undefined;
   const issue = (node: Node, reason: string): void => {
     if (!issues.some(existing => existing.node === node && existing.reason === reason))
@@ -223,7 +221,7 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
           record(left, afterValue);
           if (afterValue.possiblyInitialized.has(declaration) && !afterValue.initialized.has(declaration))
             deferredCaptureFields.add(declaration);
-          if (afterValue.published) { mutatesPublishedFields = true; publishedFieldWrites.add(declaration); }
+          if (afterValue.published) publishedFieldWrites.add(declaration);
           else if (afterValue.possiblyInitialized.has(declaration)) retainFieldUse(unpublishedFieldWrites, declaration);
           return Object.freeze({ ...afterValue, initialized: new Set([...afterValue.initialized, declaration]),
             possiblyInitialized: new Set([...afterValue.possiblyInitialized, declaration]) });
@@ -248,7 +246,7 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
         if (field !== undefined && field.accessMode !== "write" && !state.initialized.has(declaration))
           issue(node, "A native constructor field read has no dominating exact initialization.");
         if (field !== undefined && field.accessMode !== "read" && state.published) {
-          mutatesPublishedFields = true; publishedFieldWrites.add(declaration);
+          publishedFieldWrites.add(declaration);
         }
         if (field !== undefined && field.accessMode !== "read" && !state.published &&
           state.possiblyInitialized.has(declaration)) retainFieldUse(unpublishedFieldWrites, declaration);
@@ -484,7 +482,7 @@ function analyzeRustConstructionReadinessPass(input: RustConstructionReadinessIn
   record(input.definition.declaration, state);
   const indexedExpressions = new Map<Node, RustConstructionExpression>();
   for (const entries of expressions.values()) for (const entry of entries) indexedExpressions.set(entry.node, entry);
-  return Object.freeze({ issues: Object.freeze(issues), publishesReceiver, mutatesPublishedFields, completesNormally,
+  return Object.freeze({ issues: Object.freeze(issues), publishesReceiver, completesNormally,
     points: Object.freeze([...points.values()]),
     deferredCaptureFields: Object.freeze([...deferredCaptureFields]),
     publishedFieldWrites: Object.freeze([...publishedFieldWrites]),
