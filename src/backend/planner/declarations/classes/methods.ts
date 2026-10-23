@@ -31,6 +31,7 @@ import type { RustMethodEmissionVariant } from "../../../../target-model/records
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
 import type { RustSourceCallableSpecializationVariant } from "../../../../target-model/records/callable-emission.js";
+import { planRustNativeTaskOwner } from "../../program/native-tasks.js";
 
 export function planProjectMethod(
   member: Node,
@@ -80,6 +81,8 @@ export function planProjectMethod(
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   }
   context = genericPlan.context;
+  const nativeTasks = planRustNativeTaskOwner(member, context);
+  context = nativeTasks.context;
   const generatorFact = context.input.program.records.generator.get(member);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const asyncFact = context.input.program.records.asyncFunction.get(member);
@@ -88,7 +91,8 @@ export function planProjectMethod(
     failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   }
   const environmentParameter = planMethodEnvironmentParameter(member, context);
-  const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
+  const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params,
+    ...nativeTasks.parameters];
   const returnsJsPromise = asyncFact?.kind === "js-promise" && options?.promiseBody !== true;
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
@@ -266,14 +270,15 @@ function planProjectPromiseObjectMethod(
   const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.typeArgumentSubstitutions);
   if (genericPlan === undefined || nativeGenerics === undefined) failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
-  const context = { ...genericPlan.context, syntheticNames };
+  const nativeTasks = planRustNativeTaskOwner(member, { ...genericPlan.context, syntheticNames });
+  const context = nativeTasks.context;
   const parameterPlan = planRustCallableParameters(callable.contract, context, syntheticNames);
   if (parameterPlan === undefined) failRustPlannerInvariant("An admitted Promise method requires its native parameter plan.", member);
   const isStatic = emission.isStatic;
   const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);
   if (!isStatic && selfMode === undefined) failRustPlannerInvariant("An admitted native method requires its complete syntax plan.", member);
   const environment = planMethodEnvironmentParameter(member, context);
-  const params = [...(environment === undefined ? [] : [environment]), ...parameterPlan.params];
+  const params = [...(environment === undefined ? [] : [environment]), ...parameterPlan.params, ...nativeTasks.parameters];
   const arguments_: RustExpr[] = params.map(parameter => ({ kind: "path", path: parameter.name }));
   const receiverPlan = planRustSuspendedReceiver(asynchronous.lowering.kind === "factory"
     ? asynchronous.lowering.ownedReceiver : undefined, context);

@@ -68,3 +68,26 @@ export function add(value: int32): int32 { return value + 1; }
   assert.doesNotMatch(rustSourceText(result), /TaskScope|run_tasks|native_task_scope/u,
     "programs without native tasks do not pay for a scope, queue, TLS access or hidden parameter");
 });
+
+test("direct concrete native methods pass the same selected ordinary task input", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin", crateName: "native_method_tasks" } },
+    files: { "index.ts": `
+async function body(): Promise<void> { return; }
+class Scheduler {
+  schedule(): void { void body(); }
+  static scheduleStatic(): void { void body(); }
+}
+const scheduler = new Scheduler();
+scheduler.schedule();
+Scheduler.scheduleStatic();
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  for (const name of ["schedule", "scheduleStatic"]) {
+    const method = nativeFunction(result, name);
+    assert.equal(method.params.length, 1, `${name} receives its one existing selected hidden argument`);
+    assert.equal(method.params[0].type.kind, "reference", `${name} borrows the same lifecycle owner`);
+    assert.equal(nativeNodes(method.body, node => node.kind === "call" && node.path === "tsonic_rust_runtime::spawn").length,
+      1, `${name} has exactly one selected native discard owner`);
+  }
+  assert.equal(validateGeneratedProject("native-method-tasks", result.artifacts, { run: true }).status, 0);
+});
