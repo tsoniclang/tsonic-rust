@@ -64,10 +64,12 @@ import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/t
 import { analyzeRustSourcePackageComponents } from "../source-modules/component-semantics.js";
 import { type RustSourcePackageComponentClassifications } from "../../target-model/records/source-package-semantics.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-model.js";
-import { analyzeRustNativeTaskGraph, type RustNativeTaskGraph } from "../callables/native-tasks.js";
+import { analyzeRustNativeTaskGraph, completeRustNativeTaskValues,
+  type RustNativeTaskGraph, type RustNativeTaskCompletion } from "../callables/native-tasks.js";
 
 interface RustSourceStageOutput {
   readonly nativeTasks: RustNativeTaskGraph;
+  readonly nativeTaskCompletions: readonly RustNativeTaskCompletion[];
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
@@ -601,6 +603,11 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
   recordFutureValueFacts(walk, fallibility.sourceErrors);
+  const nativeTaskCompletions = completeRustNativeTaskValues(walk, nativeTasks.value, fallibility.sourceErrors);
+  if (nativeTaskCompletions.kind === "rejected") {
+    context.diagnostics.push(...nativeTaskCompletions.diagnostics);
+    return;
+  }
   const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
@@ -630,6 +637,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
-  return Object.freeze({ lexicalFunctions, nativeTasks: nativeTasks.value, sourcePackageComponents: sourcePackageComponents.plan,
+  return Object.freeze({ lexicalFunctions, nativeTasks: nativeTasks.value, nativeTaskCompletions: nativeTaskCompletions.value,
+    sourcePackageComponents: sourcePackageComponents.plan,
     sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }

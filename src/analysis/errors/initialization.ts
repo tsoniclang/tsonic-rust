@@ -22,7 +22,9 @@ export function analyzeRustInitializationErrors(input: {
   readonly sourceModules: RustSourceModuleConstructionIndex;
   readonly components: RustSourcePackageComponentClassifications;
   readonly facades: RustSourcePackageFacadeClassifications;
-  readonly regions: RustAnalyzedErrorRegions;
+  readonly regions: Pick<RustAnalyzedErrorRegions, "get">;
+  readonly lifecycleFor: RustAnalyzedErrorRegions["lifecycleFor"];
+  readonly nativeTasks: boolean;
   readonly binaryHooks: readonly RustBinaryHookPlan[];
   readonly outputType: "bin" | "lib";
   readonly projectRoot: string;
@@ -140,14 +142,17 @@ export function analyzeRustInitializationErrors(input: {
     workers.push(Object.freeze({ sourceFile, initializer }));
   }
   const sources: RustBinaryErrorSelection["sources"][number][] = [];
-  if (root.error.kind !== "native" || input.binaryHooks.some(hook => hook.isFallible === true) || workers.length > 0)
+  const lifecycle = input.lifecycleFor(root, rootOwner);
+  if (lifecycle.kind === "rejected") return lifecycle;
+  if (input.nativeTasks ? lifecycle.value.region.kind !== "infallible"
+    : root.error.kind !== "native" || input.binaryHooks.some(hook => hook.isFallible === true) || workers.length > 0)
     sources.push(Object.freeze({ kind: "lifecycle", identity: "lifecycle", variant: "Lifecycle" }));
-  if (root.error.kind === "native") sources.push(Object.freeze({ kind: "initialization", identity: "initialization", variant: "Initialization" }));
+  if (root.error.kind === "native" && !input.nativeTasks) sources.push(Object.freeze({ kind: "initialization", identity: "initialization", variant: "Initialization" }));
   const nativeWorkers = workers.filter(worker => worker.initializer.error.kind === "native");
   for (const [index, worker] of nativeWorkers.entries()) sources.push(Object.freeze({ kind: "worker",
     identity: input.ast.getFileName(worker.sourceFile), variant: `Worker${index}`, sourceFile: worker.sourceFile }));
   return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ root, entrySourceFile,
-    workers: Object.freeze(workers), binary: Object.freeze({ sources: Object.freeze(sources) }),
+    workers: Object.freeze(workers), binary: Object.freeze({ lifecycle: lifecycle.value, sources: Object.freeze(sources) }),
     moduleFor: (sourceFile: SourceFile) => modules.get(sourceFile),
     workerFor: (sourceFile: SourceFile) => workerByFile.get(sourceFile),
   }));

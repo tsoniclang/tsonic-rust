@@ -27,11 +27,18 @@ export interface RustErrorRegionSelection {
 
 export interface RustSourceErrorRegionSelection {
   readonly operand: RustErrorRegionSelection;
+  readonly local: { readonly kind: "local" } |
+    { readonly kind: "native"; readonly targetIdentity: string } | undefined;
   readonly channels: readonly {
     readonly sourceIdentity: string;
     readonly targetIdentity: string;
     readonly uninhabited: boolean;
   }[];
+}
+
+export interface RustLifecycleErrorSelection {
+  readonly carrier: TargetTypeRef;
+  readonly region: RustErrorRegionSelection;
 }
 
 export interface RustModuleErrorInitializer {
@@ -56,6 +63,7 @@ export interface RustInitializerSelection {
 }
 
 export interface RustBinaryErrorSelection {
+  readonly lifecycle: RustLifecycleErrorSelection;
   readonly sources: readonly (
     | { readonly kind: "lifecycle"; readonly identity: "lifecycle"; readonly variant: "Lifecycle" }
     | { readonly kind: "initialization"; readonly identity: "initialization"; readonly variant: "Initialization" }
@@ -76,9 +84,11 @@ export interface RustErrorJoinDeclaration {
   readonly name: string;
   readonly arity: number;
   readonly clone: boolean;
+  readonly runtimeErrorArm: number | undefined;
 }
 
 export interface RustErrorRegionRecords {
+  readonly lifecycle: RustLifecycleErrorSelection | undefined;
   readonly get: (declaration: Node) => RustErrorRegionSelection | undefined;
   readonly sourceFor: (edge: RustSourceErrorEffectEdge) => RustSourceErrorRegionSelection | undefined;
   readonly declarationsFor: (fileName: string) => readonly RustErrorJoinDeclaration[];

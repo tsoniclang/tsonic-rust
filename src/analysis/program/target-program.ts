@@ -274,6 +274,8 @@ export function analyzeRustAnalysisProgram(
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
     promiseBodies: context.promiseBodies.plan,
+    nativeTasks: sourceStage.nativeTaskCompletions,
+    binaryHooks,
     names: context.names, callables: context.callableValues.selected });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
@@ -367,6 +369,7 @@ export function analyzeRustAnalysisProgram(
   const initializationErrors = analyzeRustInitializationErrors({ ast: context.ast, sourceFiles: context.sourceFiles,
     navigation: context.source.navigation, moduleInitialization, sourceModules: sourceModuleConstructions.index,
     components: sourcePackageComponents, facades: sourcePackageFacades.plan, regions: errorRegions.value,
+    lifecycleFor: errorRegions.value.lifecycleFor, nativeTasks: sourceStage.nativeTaskCompletions.length !== 0,
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;

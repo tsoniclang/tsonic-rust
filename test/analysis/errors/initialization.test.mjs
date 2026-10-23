@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
+import { resolvedTargetStage } from "@tsonic/target-api/artifacts";
+import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 
 const owner = Object.freeze({ kind: "physical", domain: "runtime" });
 const failure = Object.freeze({ kind: "source-primitive", name: "int64" });
@@ -28,6 +30,9 @@ function fixture() {
       componentForFile: () => component },
     facades: { rootExports: [] },
     regions: { get: file => effects.get(file) },
+    nativeTasks: false,
+    lifecycleFor: (_root, selectedOwner) => resolvedTargetStage(Object.freeze({ carrier: rustProgramErrorTargetType(selectedOwner),
+      region: Object.freeze({ kind: "package", fileName: root.fileName, localOwner: selectedOwner, sources: Object.freeze([]) }) })),
     binaryHooks: [], outputType: "bin", projectRoot: "/src", entryPoint: "index.ts",
   };
   const native = file => effects.set(file, Object.freeze({ kind: "native", fileName: file.fileName,

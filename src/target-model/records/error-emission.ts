@@ -7,10 +7,12 @@ import type { RustRecordFamily } from "./program.js";
 import type { RustPhysicalErrorOwner } from "./error-regions.js";
 import type { RustErrorJoinDeclaration } from "./error-regions.js";
 import type { RustErrorRegionSelection } from "./error-regions.js";
+import type { RustSourceErrorRegionSelection } from "./error-regions.js";
 import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
 import type { Node } from "@tsonic/tsts";
 
 export interface RustSourceErrorRegionEmission {
+  readonly local: RustSourceErrorRegionSelection["local"];
   readonly operand: RustErrorRegionSelection;
   readonly channels: ReadonlyMap<string, {
     readonly targetIdentity: string;

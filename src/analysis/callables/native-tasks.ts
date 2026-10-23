@@ -7,11 +7,22 @@ import { rustAwaitSelection } from "../../policy/operations/flow/await.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import type { RustFactWalk } from "../program/walk.js";
+import type { RustAwaitSelection } from "../../target-model/types/await.js";
+import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
+import type { RustSourceErrorEffectSelection } from "../errors/source-error-effects.js";
+import { finalizeRustDiscardedAwaitSelection } from "./await-values.js";
+import { rustFutureValueMatchesCarrier } from "./future-values.js";
+import { rustFutureValueForStoredBranch } from "./future-storage.js";
 
 export interface RustNativeTaskSpawn {
   readonly node: Node;
   readonly operand: Node;
   readonly owner: Node;
+}
+
+export interface RustNativeTaskCompletion extends RustNativeTaskSpawn {
+  readonly selection: RustAwaitSelection<RustAwaitValueLeafFact>;
 }
 
 export interface RustNativeTaskGraph {
@@ -21,6 +32,28 @@ export interface RustNativeTaskGraph {
   readonly calls: readonly { readonly node: Node; readonly owner: Node;
     readonly targets: readonly Node[] }[];
   readonly entries: readonly Node[];
+}
+
+export function completeRustNativeTaskValues(
+  walk: RustFactWalk,
+  graph: RustNativeTaskGraph,
+  errors: RustSourceErrorEffectSelection,
+): TargetStageResult<readonly RustNativeTaskCompletion[]> {
+  const completed: RustNativeTaskCompletion[] = [];
+  const diagnostics: TargetDiagnostic[] = [];
+  for (const spawn of graph.spawns) {
+    const carrier = rustEffectiveValueCarrier(walk.context.records, spawn.operand);
+    const known = walk.context.records.futureValue.get(spawn.operand);
+    const selection = carrier === undefined ? undefined : finalizeRustDiscardedAwaitSelection(carrier, branch =>
+      known !== undefined && rustFutureValueMatchesCarrier(known, branch, walk.context.typeDefinitions)
+        ? known : rustFutureValueForStoredBranch(walk, spawn.operand, branch, errors), walk.context.typeDefinitions);
+    if (selection === undefined) {
+      diagnostics.push({ code: "RUST_NATIVE_TASK_COMPLETION_NOT_CLOSED", category: "error", source: "tsonic-rust",
+        sourceNode: spawn.node, message: "A native task requires its complete existing future effects and discarded completion topology.",
+        evidence: ["target.capability=rust.native-tasks"] });
+    } else completed.push(Object.freeze({ ...spawn, selection }));
+  }
+  return diagnostics.length === 0 ? resolvedTargetStage(Object.freeze(completed)) : rejectedTargetStage(diagnostics);
 }
 
 export function analyzeRustNativeTaskGraph(input: {

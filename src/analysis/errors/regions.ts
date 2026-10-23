@@ -1,10 +1,11 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, rejectedTargetStage, resolvedTargetStage } from "@tsonic/target-api/artifacts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorJoinDeclaration, RustErrorRegionRecords, RustErrorRegionSelection,
-  RustInitializationErrorRecords, RustSourceErrorRegionSelection } from "../../target-model/records/error-regions.js";
+  RustInitializationErrorRecords, RustSourceErrorRegionSelection, RustInitializerSelection,
+  RustLifecycleErrorSelection, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
@@ -19,21 +20,31 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustNativeCallableCompletion } from "../../policy/types/callables/native-completion.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner, type RustErrorTypeContext } from "./error-types.js";
-import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
+import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../../target-model/types/native-error-joins.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, isClosedMetadata, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
 import { selectRustJsRejectionRegion } from "../../policy/operations/flow/js-rejection.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
+import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../target-model/types/carriers/js.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import type { RustNativeTaskCompletion } from "../callables/native-tasks.js";
+import { mapRustAwaitSelection, type RustAwaitSelection } from "../../target-model/types/await.js";
+import type { RustAwaitValueLeafFact } from "../../target-model/records/await-values.js";
+import type { RustBinaryHookPlan } from "../project/index.js";
+import { rustRuntimeErrorTargetType } from "../../target-model/types/carriers/runtime-carriers.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 
-export type RustAnalyzedErrorRegions = Omit<RustErrorRegionRecords, "initialization">;
+export interface RustAnalyzedErrorRegions extends Pick<RustErrorRegionRecords, "get" | "sourceFor" | "producerError"> {
+  lifecycleFor(root: RustInitializerSelection, owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection>;
+  taskCompletionFor(node: Node): RustAwaitSelection<RustAwaitValueLeafFact> | undefined;
+  complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords;
+}
 
 export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly ast: AstReader;
@@ -43,19 +54,38 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly names: RustNamePlan;
   readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers">;
   readonly promiseBodies: RustPromiseBodies;
+  readonly nativeTasks: readonly RustNativeTaskCompletion[];
+  readonly binaryHooks: readonly RustBinaryHookPlan[];
 }): TargetStageResult<RustAnalyzedErrorRegions> {
   const regions = new Map<Node, RustErrorRegionSelection>();
   const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection>();
   const declarations = new Map<string, readonly RustErrorJoinDeclaration[]>();
   const demandedArities = new Map<string, Set<number>>();
+  const runtimeErrorArms = new Map<string, Map<number, number>>();
   const producers = new Map<string, {
     readonly producer: RustNativeCallableProducer;
     readonly channels: ReadonlyMap<RustProducerErrorReference["channel"], TargetTypeRef>;
   }>();
   const diagnostics: TargetDiagnostic[] = [];
+  const taskEdges = new Set(input.nativeTasks.flatMap(spawn => input.records.sourceErrorEffects.get(spawn.node)?.edges ?? []));
+  const taskCompletions = new Map<Node, RustAwaitSelection<RustAwaitValueLeafFact>>();
+  let lifecycle: RustLifecycleErrorSelection | undefined;
+  let lifecycleSelected = false;
+  let closed = false;
   const reject = (node: Node, message: string): void => {
     diagnostics.push({ code: "RUST_ERROR_REGION_UNRESOLVED", category: "error", source: "tsonic-rust",
       sourceNode: node, message, evidence: ["target.capability=rust.analysis.error-regions"] });
+  };
+  const registerRuntimeArm = (fileName: string, arity: number, arm: number, node: Node): void => {
+    if (arity < 2) return;
+    const entries = runtimeErrorArms.get(fileName) ?? new Map<number, number>();
+    const previous = entries.get(arity);
+    if (previous !== undefined && previous !== arm) {
+      reject(node, "One native error-join declaration requires a consistent proved runtime-intrinsic injection arm.");
+      return;
+    }
+    entries.set(arity, arm);
+    runtimeErrorArms.set(fileName, entries);
   };
   const inspectedCarriers = new Set<TargetTypeRef>();
   const inspectCarrier = (carrier: TargetTypeRef): void => {
@@ -100,7 +130,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       fileName: input.ast.getFileName(file), localOwner: owner,
       sources: selectedSources, ...(jsRejection === undefined ? {} : { jsRejection }) });
   };
-  const sourceRegionFor = (node: Node, edge: RustSourceErrorEffectEdge): void => {
+  const sourceRegionFor = (node: Node, edge: RustSourceErrorEffectEdge): RustSourceErrorRegionSelection | undefined => {
     const source = input.records.errorEffects.get(edge.declaration);
     if (source === undefined || source.localErrors !== edge.effects.localErrors ||
       source.nativeErrors.length !== edge.nativeErrors.length) {
@@ -123,10 +153,12 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     const operand = regionFor(edge.declaration, { localErrors: source.localErrors,
       nativeErrors: instantiated as NonNullable<typeof instantiated[number]>[] });
     if (operand === undefined) return;
-    sourceRegions.set(edge, Object.freeze({ operand, channels: Object.freeze(operand.sources.map(selected =>
+    return Object.freeze({ operand,
+      local: operand.localOwner === undefined ? undefined : Object.freeze({ kind: "local" as const }),
+      channels: Object.freeze(operand.sources.map(selected =>
       Object.freeze({ sourceIdentity: selected.identity, targetIdentity: channels.get(selected.identity)!.target.identity,
         uninhabited: isRustNeverCarrier(selected.errorType) || selected.errorType.kind === "target-named" &&
-          selected.errorType.id === rustInfallibleTargetId }))) }));
+          selected.errorType.id === rustInfallibleTargetId }))) });
   };
   for (const producer of input.producers.producers) {
     const asynchronous = input.records.asyncFunction.get(producer.declaration);
@@ -176,10 +208,15 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         if (effects.nativeErrors.length > 0 && plannedRegion && !settledPromise) {
           const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
           if (arity > 1) arities.add(arity);
+          if (effects.localErrors) registerRuntimeArm(fileName, arity, 0, node);
           if (asynchronous?.kind === "js-promise") clonedArities.add(arity);
         }
       }
-      for (const edge of input.records.sourceErrorEffects.get(node)?.edges ?? []) sourceRegionFor(node, edge);
+      for (const edge of input.records.sourceErrorEffects.get(node)?.edges ?? []) {
+        if (taskEdges.has(edge) || sourceRegions.has(edge)) continue;
+        const selected = sourceRegionFor(node, edge);
+        if (selected !== undefined) sourceRegions.set(edge, selected);
+      }
       const conversion = input.records.contextualValueConversion.get(node)?.conversion;
       if (conversion?.kind === "callable-adapter") registerConversion(node, conversion);
       for (const adapter of input.records.projectCallableAdapters.get(node) ?? []) {
@@ -203,17 +240,10 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     }
     fileDemands.push({ fileName, usedNames, arities, clonedArities });
   }
-  for (const { fileName, usedNames, arities, clonedArities } of fileDemands) {
-    for (const arity of demandedArities.get(fileName) ?? []) arities.add(arity);
-    declarations.set(fileName, Object.freeze([...arities].sort((left, right) => left - right).map(arity =>
-      Object.freeze({ name: allocateRustGeneratedName(usedNames, `NativeErrors${arity}`), arity,
-        clone: clonedArities.has(arity) }))));
-  }
   const empty: readonly RustErrorJoinDeclaration[] = Object.freeze([]);
-  return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({
+  const reads = Object.freeze({
     get: (declaration: Node) => regions.get(declaration),
     sourceFor: (edge: RustSourceErrorEffectEdge) => sourceRegions.get(edge),
-    declarationsFor: (fileName: string) => declarations.get(fileName) ?? empty,
     producerError(reference: RustProducerErrorReference): TargetTypeRef | undefined {
       if (!isClosedMetadata(reference) || rustProducerErrorReference({ kind: "target-specific", target: "rust",
         name: "producer-error", value: reference }) === undefined) return undefined;
@@ -224,6 +254,118 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       return carrier === undefined || bindings === undefined ? undefined
         : substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
     },
+  });
+  return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ ...reads,
+    lifecycleFor(root: RustInitializerSelection, owner: RustPhysicalErrorOwner): TargetStageResult<RustLifecycleErrorSelection> {
+      if (closed || lifecycleSelected) failTargetAnalysisInvariant("tsonic-rust", "The lifecycle error carrier has one selecting analysis owner before the error catalog seal.");
+      lifecycleSelected = true;
+      const file = input.sourceFiles.find(candidate => input.components.componentForFile(input.ast.getFileName(candidate))?.componentId === input.components.rootComponentId);
+      if (file === undefined) return rejectedTargetStage([{ code: "RUST_LIFECYCLE_ERROR_OWNER_MISSING", category: "error", source: "tsonic-rust",
+        message: "The program lifecycle requires its exact root component source owner.", evidence: ["target.capability=rust.analysis.error-regions"] }]);
+      const fileName = input.ast.getFileName(file);
+      if (input.nativeTasks.length === 0) return resolvedTargetStage(Object.freeze({ carrier: rustProgramErrorTargetType(owner),
+        region: Object.freeze({ kind: "package", fileName, localOwner: owner, sources: Object.freeze([]) }) }));
+      const pending = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection>();
+      for (const spawn of input.nativeTasks) for (const edge of input.records.sourceErrorEffects.get(spawn.node)?.edges ?? []) {
+        if (pending.has(edge)) continue;
+        const selected = sourceRegionFor(spawn.node, edge);
+        if (selected !== undefined) pending.set(edge, selected);
+      }
+      const rootLocal = root.error.kind === "package" || root.error.kind === "native" && root.error.sources.some(source => source.kind === "package") ||
+        input.binaryHooks.some(hook => hook.isFallible === true && hook.errorBoundary !== "provider-native") ||
+        [...pending.values()].some(selected => selected.operand.localOwner !== undefined &&
+          closedMetadataKey(selected.operand.localOwner) === closedMetadataKey(owner));
+      const localOwner = rootLocal ? owner : undefined;
+      const native = new Map<string, TargetTypeRef>();
+      const add = (identity: string, type: TargetTypeRef, node: Node): void => {
+        const carrier = normalizeRustErrorType(type, input, node);
+        if (carrier === undefined) { reject(node, "A native lifecycle source requires its exact completed error carrier."); return; }
+        if (isRustNeverCarrier(carrier) || carrier.kind === "target-named" && carrier.id === rustInfallibleTargetId) return;
+        const previous = native.get(identity);
+        if (previous !== undefined && !rustTargetTypeRefEquals(previous, carrier)) {
+          reject(node, "One native lifecycle source has inconsistent completed payload carriers.");
+          return;
+        }
+        native.set(identity, carrier);
+        inspectCarrier(carrier);
+      };
+      if (root.error.kind === "native") for (const source of root.error.sources) {
+        if (source.kind !== "module") continue;
+        const module = root.modules.find(candidate => candidate.sourceFile === source.sourceFile);
+        const carrier = module === undefined ? undefined : rustNativeErrorJoinTargetType(module.region.fileName,
+          [...module.region.localOwner === undefined ? [] : [rustProgramErrorTargetType(module.region.localOwner)],
+            ...module.region.sources.map(selected => selected.errorType)]);
+        if (carrier === undefined) reject(source.sourceFile, "A native initializer requires its exact selected module error region.");
+        else add(source.identity, carrier, source.sourceFile);
+      }
+      for (const [edge, selected] of pending) {
+        const sourceOwner = selected.operand.localOwner;
+        const sourceLocal = sourceOwner === undefined ? undefined : localOwner !== undefined &&
+          closedMetadataKey(sourceOwner) === closedMetadataKey(localOwner) ? Object.freeze({ kind: "local" as const })
+          : Object.freeze({ kind: "native" as const, targetIdentity: `native-task-local:${closedMetadataKey(sourceOwner)}` });
+        if (sourceLocal?.kind === "native") add(sourceLocal.targetIdentity, rustProgramErrorTargetType(sourceOwner!), edge.declaration);
+        for (const channel of selected.channels) {
+          const source = selected.operand.sources.find(source => source.identity === channel.sourceIdentity);
+          if (source === undefined) reject(edge.declaration, "A native task source requires its original instantiated error channel.");
+          else add(channel.targetIdentity, source.errorType, edge.declaration);
+        }
+        sourceRegions.set(edge, Object.freeze({ ...selected, local: sourceLocal }));
+      }
+      for (const spawn of input.nativeTasks) {
+        const branches = input.records.awaitSourceErrorEffects.get(spawn.node)?.branches ?? [];
+        const selection = mapRustAwaitSelection(spawn.selection, leaf => {
+          const future = leaf.future;
+          if (future === undefined || future.awaiting !== "fallible") return leaf;
+          if (future.errorBoundary === "source-program") {
+            if (!branches.some(branch => rustTargetTypeRefEquals(branch.carrier, leaf.carrier) && pending.has(branch.edge))) {
+              reject(spawn.node, "A native task body requires its exact original deferred source error edge.");
+              return undefined;
+            }
+            return leaf;
+          }
+          const source = future.errorBoundary === "js-rejection" ? rustJsRejectionErrorIdentity : future.errorSource;
+          const carrier = future.errorCarrier ?? (future.errorBoundary === "target-runtime" ? rustRuntimeErrorTargetType()
+            : future.errorBoundary === "js-rejection" ? rustJsValueTargetType() : undefined);
+          if (carrier === undefined) { reject(spawn.node, "A native task requires its actual provider or native error transport."); return undefined; }
+          const errorCarrier = normalizeRustErrorType(carrier, input, spawn.node);
+          if (errorCarrier === undefined) { reject(spawn.node, "A native task requires its closed physical native error payload."); return undefined; }
+          const errorSource = source ?? `native-task-error:${closedMetadataKey({ boundary: future.errorBoundary, carrier: errorCarrier })}`;
+          add(errorSource, errorCarrier, spawn.node);
+          return { ...leaf, future: Object.freeze({ ...future, errorBoundary: "source-native" as const, errorCarrier, errorSource }) };
+        });
+        if (selection !== undefined) taskCompletions.set(spawn.node, snapshotClosedMetadata(selection));
+      }
+      for (const hook of input.binaryHooks) if (hook.isFallible === true && hook.errorBoundary === "provider-native")
+        add(hook.id, hook.errorCarrier, file);
+      const sources = snapshotRustNativeErrorSources([...native].map(([identity, errorType], index) =>
+        ({ identity, errorType, variant: `Error${index + (localOwner === undefined ? 0 : 1)}` })), isRustTargetTypeRef);
+      const carrier = sources === undefined ? undefined : rustNativeErrorJoinTargetType(fileName,
+        [...localOwner === undefined ? [] : [rustProgramErrorTargetType(localOwner)], ...sources.map(source => source.errorType)]);
+      if (sources === undefined || carrier === undefined) reject(file, "The lifecycle requires one bounded exact native error join.");
+      if (diagnostics.length !== 0 || sources === undefined || carrier === undefined) return rejectedTargetStage(diagnostics);
+      const region = Object.freeze({ kind: sources.length > 0 ? "native" as const : localOwner === undefined ? "infallible" as const : "package" as const,
+        fileName, localOwner, sources });
+      lifecycle = Object.freeze({ carrier, region });
+      inspectCarrier(carrier);
+      if (localOwner !== undefined) registerRuntimeArm(fileName, sources.length + 1, 0, file);
+      return diagnostics.length === 0 ? resolvedTargetStage(lifecycle) : rejectedTargetStage(diagnostics);
+    },
+    taskCompletionFor(node: Node): RustAwaitSelection<RustAwaitValueLeafFact> | undefined {
+      if (!lifecycleSelected) failTargetAnalysisInvariant("tsonic-rust", "Native task completions are read after their lifecycle transport is selected.", node);
+      return taskCompletions.get(node);
+    },
+    complete(initialization: RustInitializationErrorRecords): RustErrorRegionRecords {
+      if (closed || !lifecycleSelected) failTargetAnalysisInvariant("tsonic-rust", "The error catalog seals once after initialization and lifecycle composition.");
+      closed = true;
+      for (const { fileName, usedNames, arities, clonedArities } of fileDemands) {
+        for (const arity of demandedArities.get(fileName) ?? []) arities.add(arity);
+        declarations.set(fileName, Object.freeze([...arities].sort((left, right) => left - right).map(arity =>
+          Object.freeze({ name: allocateRustGeneratedName(usedNames, `NativeErrors${arity}`), arity,
+            clone: clonedArities.has(arity), runtimeErrorArm: runtimeErrorArms.get(fileName)?.get(arity) }))));
+      }
+      return Object.freeze({ ...reads, lifecycle, initialization,
+        declarationsFor: (fileName: string) => declarations.get(fileName) ?? empty });
+    },
   }));
 }
 
@@ -231,5 +373,5 @@ export function completeRustErrorRegionRecords(
   regions: RustAnalyzedErrorRegions,
   initialization: RustInitializationErrorRecords,
 ): RustErrorRegionRecords {
-  return Object.freeze({ ...regions, initialization });
+  return regions.complete(initialization);
 }

@@ -25,7 +25,7 @@ export function analyzeRustSourceErrorRegions(program: Omit<RustAnalysisProgram,
       return [channel.sourceIdentity, Object.freeze({ targetIdentity: channel.targetIdentity, uninhabited: channel.uninhabited,
         jsRejection: channel.targetIdentity === rustJsRejectionErrorIdentity && rustTargetTypeRefEquals(source.errorType, rustJsValueTargetType()) })] as const;
     }));
-    producer.sourceRegion(edge, { operand: selected.operand, channels });
+    producer.sourceRegion(edge, { operand: selected.operand, local: selected.local, channels });
     published.add(edge);
   }
   for (const node of nodes) {
