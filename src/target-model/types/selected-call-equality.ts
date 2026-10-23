@@ -8,6 +8,8 @@ export function rustSelectedTargetSignatureEquals(
   right: RustSelectedTargetSignature,
 ): boolean {
   return closedMetadataEquals(left.member, right.member) &&
+    left.nativeParameterDeclarations.length === right.nativeParameterDeclarations.length &&
+    left.nativeParameterDeclarations.every((parameter, index) => parameter === right.nativeParameterDeclarations[index]) &&
     rustTargetTypeRefEquals(left.sourceConstructorCarrier, right.sourceConstructorCarrier) &&
     rustTargetTypeRefEquals(left.sourceSelectedOwnerCarrier, right.sourceSelectedOwnerCarrier) &&
     rustTargetTypeRefEquals(left.sourceSelectedReceiverCarrier, right.sourceSelectedReceiverCarrier) &&

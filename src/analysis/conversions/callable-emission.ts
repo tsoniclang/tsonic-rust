@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { sourceCallableValueParameters, type TargetSourceProgram } from "@tsonic/target-api/source";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustAnalysisProgram } from "../program/model.js";
 import type { RustCallableConversionProducer } from "../program/records/callable-conversions.js";
@@ -101,13 +101,13 @@ export function analyzeRustCallableEmission(program: Omit<RustAnalysisProgram, "
   // A closure argument for a concrete callable parameter is built with its own error; when that error is uninhabited and
   // the parameter's program error is not, the argument is written through the eliminating adapter.
   const concreteParameterWrite = (node: Node): RustCallableJoinWrite | undefined => {
-    const { ast } = program.source;
+    const { ast } = source;
     const call = ast.parent(node);
     if (call === undefined || !ast.is.IsCallExpression(call) || program.records.targetOperation.get(node)?.kind !== "closure") return undefined;
     const index = ast.arguments(call).indexOf(node);
-    const declaration = asSourceNode(program.records.selectedCall.get(call)?.sourceDeclaration, ast);
-    const parameter = declaration === undefined || index < 0 ? undefined
-      : sourceCallableValueParameters(ast, declaration, source.semantics.forNode(declaration))?.[index];
+    const selected = program.records.selectedCall.get(call);
+    const declaration = asSourceNode(selected?.sourceDeclaration, ast);
+    const parameter = index < 0 ? undefined : selected?.nativeParameterDeclarations[index];
     // A parameter that is not a native callable input takes its declared runtime callable.
     const slot = parameter === undefined ? undefined : program.records.sourceParameterAbi.get(parameter)?.parameterCarrier;
     if (parameter === undefined || declaration === undefined || ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken !== undefined ||

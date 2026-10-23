@@ -11,7 +11,7 @@ import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../source-evidence/types/resolution/source.js";
 
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedCallArgumentNodes, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
 import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/model/contracts.js";
@@ -343,25 +343,15 @@ export function mapRustSourceMarkerCall(
   const evidence = [{ message: `rust selected flow marker ${markerName}` }];
   return acceptRustPolicy({
     targetFact: fact,
-    selectedSignature: {
-      member: {
-        id: fact.operationId,
-        sourceName: markerName,
-        targetName: "marker",
-        kind: "method",
-        parameters: [{ name: "value", type: carrier, passingMode: "by-value" }],
-        returnType: carrier,
-        providerDeclaration: provider,
-      },
+    selectedSignature: selectedRustCallSignature(request, {
+      id: fact.operationId,
+      sourceName: markerName,
+      targetName: "marker",
+      kind: "method",
+      parameters: [{ name: "value", type: carrier, passingMode: "by-value" }],
+      returnType: carrier,
       providerDeclaration: provider,
-      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
-      ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
-      sourceArgumentBindings: request.source.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    },
+    }),
   }, evidence);
 }
 
