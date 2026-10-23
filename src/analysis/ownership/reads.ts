@@ -167,7 +167,8 @@ export function analyzeRustReadOwnership(input: {
       }));
     }
     const selectedCaptures: RustCaptureReadOwnership[] = [];
-    for (const capture of input.capturesFor(node)?.captures ?? []) {
+    const sourceCaptures = input.capturesFor(node);
+    for (const capture of sourceCaptures?.captures ?? []) {
       const physicalCarrier = capture.storage === "location" ? rustLocationTargetType(capture.carrier) : capture.carrier;
       const copy = isRustCopyCarrier(physicalCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
       const clone = rustCarrierSupportsClone(physicalCarrier, input.definitions) ||
@@ -190,6 +191,20 @@ export function analyzeRustReadOwnership(input: {
       selectedCaptures.push(Object.freeze({ declaration: capture.declaration, reference: capture.reference,
         carrier: capture.carrier, read, invocation,
         borrowed: selectRustValueReadOwnership({ copy, clone, transfer: capture.storage === "cell" || capture.storage === "borrow-cell" }) }));
+    }
+    for (const receiver of sourceCaptures?.receivers ?? []) {
+      if (!budget.step()) return rejectedBudget();
+      const copy = isRustCopyCarrier(receiver.carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
+      const clone = rustCarrierSupportsClone(receiver.carrier, input.definitions) ||
+        input.genericRequirements.supportsClone(node, receiver.carrier);
+      const read = selectRustValueReadOwnership({ copy, clone, transfer: false });
+      if (read === undefined) return { kind: "rejected", diagnostics: [{
+        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
+        sourceNode: receiver.reference, message: "A retained receiver requires a proven native Copy or Clone ownership contract.",
+        evidence: ["target.capability=rust.analysis.ownership"],
+      }] };
+      selectedCaptures.push(Object.freeze({ declaration: receiver.owner, reference: receiver.reference,
+        carrier: receiver.carrier, read, invocation: read, borrowed: read }));
     }
     if (selectedCaptures.length > 0) captures.set(node, Object.freeze(selectedCaptures));
     const write = borrowEffects.fieldWrites.get(node);
