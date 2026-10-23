@@ -60,6 +60,28 @@ void schedule();`);
   assert.equal(graph.spawns.length, 2, "each authored explicit void has one spawn selection");
 });
 
+test("an immediately awaited entry call keeps its ordinary scope owner and original invocation", () => {
+  const { graph, ast, names } = admitted(analyze(`async function body(): Promise<void> { return; }
+async function schedule(): Promise<void> { void body(); }
+await schedule();`));
+  assert.equal(names.join(","), "schedule", "the actual scheduling body is the only scoped callable");
+  assert.equal(graph.spawns.length, 1, "the existing inner void is the one spawned task");
+  assert.equal(graph.calls.length, 1, "the directly awaited source call has one hidden scope argument");
+  assert.equal(ast.is.IsSourceFile(graph.calls[0].owner), true, "the call belongs to the actual entry module");
+  assert.equal(ast.text(graph.calls[0].node), "schedule()", "the scope use preserves the original checked invocation");
+  assert.equal(graph.entries.length, 1, "the executable entry retains its aggregate lifetime");
+});
+
+test("storing an entry scheduling future remains refused instead of gaining an escaping scope ABI", () => {
+  const current = analyze(`async function body(): Promise<void> { return; }
+async function schedule(): Promise<void> { void body(); }
+const pending = schedule(); await pending;`);
+  assert.equal(current.result.diagnostics.some(diagnostic => diagnostic.code === "RUST_NATIVE_TASK_CONTEXT_UNSUPPORTED"), true,
+    "the original stored scheduling call is still refused at its source owner");
+  assert.equal(current.stage === undefined, true, "unsupported stored scope input never reaches physical publication");
+  assert.equal(current.result.artifacts.length, 0, "an unsupported stored future emits nothing");
+});
+
 test("programs without native explicit void tasks have no scope participants", () => {
   const { graph } = admitted(analyze("function add(value: number): number { return value + 1; } add(1);"));
   assert.equal(graph.spawns.length + graph.owners.length + graph.calls.length + graph.entries.length, 0,

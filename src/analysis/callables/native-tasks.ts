@@ -126,8 +126,11 @@ export function analyzeRustNativeTaskGraph(input: {
     lifecycleOwner: input.lifecycleOwner, ownerUses, callInputs, publishedDeclarations: input.publishedDeclarations,
     budget: createSourceStorageBudget(defaultSourceStorageLimits) });
   if (selected.kind === "resolved") {
-    for (const call of selected.graph.calls) if (ast.is.IsSourceFile(call.owner) &&
-      sourceExpressionResultDisposition(ast, call.node).kind !== "discarded") refuse(call.node);
+    for (const call of selected.graph.calls) {
+      if (!ast.is.IsSourceFile(call.owner)) continue;
+      const use = sourceExpressionResultDisposition(ast, call.node);
+      if (use.kind !== "discarded" && (use.kind !== "awaited-in-scope" || use.completionReturned)) refuse(call.node);
+    }
     return unsupported.length === 0 ? resolvedTargetStage(selected.graph) : rejectedTargetStage(Object.freeze(unsupported));
   }
   return rejectedTargetStage(selected.issues.map(issue => ({ category: "error" as const, source: "tsonic-rust", sourceNode: issue.node,
